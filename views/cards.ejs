@@ -1,0 +1,25 @@
+<%- include("partials/header", { title: "Cartões" }) %>
+<div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+  <h1 class="text-xl font-semibold mb-4">Cartões</h1>
+  <form method="post" action="/cards" class="grid md:grid-cols-3 gap-2 mb-4">
+    <input name="name" class="border border-slate-300 rounded-xl px-3 py-2" placeholder="Nome do cartão (ex.: Inter)" />
+    <input name="due_day" type="number" min="1" max="31" class="border border-slate-300 rounded-xl px-3 py-2" placeholder="Dia vencimento (ex.: 12)" />
+    <button class="px-4 py-2 rounded-xl bg-slate-900 text-white">Adicionar</button>
+    <div class="md:col-span-3 text-xs text-slate-500">Feriados considerados: nacionais (BR) + fim de semana.</div>
+  </form>
+  <div class="space-y-2">
+    <% cards.forEach(c => { %>
+      <div class="border border-slate-200 rounded-xl p-3 flex items-center justify-between">
+        <div>
+          <div class="font-medium"><%= c.name %></div>
+          <div class="text-xs text-slate-600">Dia vencimento: <%= c.due_day || "-" %></div>
+        </div>
+        <form method="post" action="/cards/<%= c.id %>/update" class="flex items-center gap-2">
+          <input name="due_day" type="number" min="1" max="31" value="<%= c.due_day || '' %>" class="w-24 border border-slate-300 rounded-lg px-2 py-1" />
+          <button class="px-3 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Salvar</button>
+        </form>
+      </div>
+    <% }) %>
+  </div>
+</div>
+<%- include("partials/footer") %>

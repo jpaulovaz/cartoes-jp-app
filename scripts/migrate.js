@@ -1,0 +1,93 @@
+const db = require("../src/db");
+
+function columnExists(table, col) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(r => r.name);
+  return cols.includes(col);
+}
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS cards (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS people (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS imports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  card_id INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  original_filename TEXT,
+  FOREIGN KEY (card_id) REFERENCES cards(id)
+);
+
+CREATE TABLE IF NOT EXISTS transactions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  import_id INTEGER NOT NULL,
+  card_id INTEGER NOT NULL,
+  txn_date TEXT,
+  description TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  card_number TEXT,
+  raw_json TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (import_id) REFERENCES imports(id),
+  FOREIGN KEY (card_id) REFERENCES cards(id)
+);
+
+CREATE TABLE IF NOT EXISTS allocations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transaction_id INTEGER NOT NULL,
+  person_id INTEGER NOT NULL,
+  share_cents INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(transaction_id, person_id),
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id),
+  FOREIGN KEY (person_id) REFERENCES people(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_txn_card ON transactions(card_id);
+CREATE INDEX IF NOT EXISTS idx_txn_import ON transactions(import_id);
+CREATE INDEX IF NOT EXISTS idx_alloc_txn ON allocations(transaction_id);
+`);
+
+if (!columnExists("cards", "due_day")) db.exec(`ALTER TABLE cards ADD COLUMN due_day INTEGER`);
+if (!columnExists("cards", "holiday_scope")) db.exec(`ALTER TABLE cards ADD COLUMN holiday_scope TEXT`);
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS card_statements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  card_id INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  computed_due_date TEXT,
+  override_due_date TEXT,
+  paid_cents INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(card_id, month, year),
+  FOREIGN KEY (card_id) REFERENCES cards(id)
+);
+`);
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS person_payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  person_id INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  paid_cents INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(person_id, month, year),
+  FOREIGN KEY (person_id) REFERENCES people(id)
+);
+`);
+
+console.log("✅ Migração concluída");

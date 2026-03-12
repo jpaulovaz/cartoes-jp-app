@@ -1,0 +1,106 @@
+<%- include("partials/header", { title: `Itens ${String(month).padStart(2,'0')}/${year}` }) %>
+
+<div class="flex items-center justify-between mb-4">
+  <div>
+    <h1 class="text-xl font-semibold">Itens — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
+    <div id="allocMsg" class="text-xs text-slate-600 mt-1"></div>
+  </div>
+  <div class="flex gap-2">
+    <a class="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50" href="/summary/<%= year %>/<%= month %>">Resumo</a>
+    <a class="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50" href="/import">Importar mais</a>
+  </div>
+</div>
+
+<div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-4">
+  <form method="get" action="/month/<%= year %>/<%= month %>" class="grid md:grid-cols-6 gap-2">
+    <input type="hidden" name="sort" value="<%= sort %>"/>
+    <input type="hidden" name="dir" value="<%= dir %>"/>
+
+    <div>
+      <label class="text-xs text-slate-600">Data</label>
+      <input name="f_date" value="<%= filters.f_date || '' %>" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm" placeholder="2026-03"/>
+    </div>
+    <div class="md:col-span-2">
+      <label class="text-xs text-slate-600">Descrição</label>
+      <input name="f_desc" value="<%= filters.f_desc || '' %>" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm" placeholder="Uber"/>
+    </div>
+    <div>
+      <label class="text-xs text-slate-600">Cartão</label>
+      <input name="f_card" value="<%= filters.f_card || '' %>" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm" placeholder="Inter"/>
+    </div>
+    <div>
+      <label class="text-xs text-slate-600">Nº</label>
+      <input name="f_number" value="<%= filters.f_number || '' %>" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm" placeholder="****"/>
+    </div>
+    <div>
+      <label class="text-xs text-slate-600">Valor</label>
+      <input name="f_amount" value="<%= filters.f_amount || '' %>" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm" placeholder="49,90"/>
+    </div>
+
+    <div>
+      <label class="text-xs text-slate-600">Distribuído</label>
+      <input name="f_allocated" value="<%= filters.f_allocated || '' %>" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm" placeholder="sim ou nao"/>
+    </div>
+
+    <div class="md:col-span-5 flex items-end gap-2">
+      <button class="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm">Filtrar</button>
+      <a class="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm" href="/month/<%= year %>/<%= month %>">Limpar</a>
+      <div class="text-xs text-slate-500 ml-auto">Filtros são por “contém” (LIKE).</div>
+    </div>
+  </form>
+</div>
+
+<div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 text-slate-600">
+      <tr>
+        <th class="text-left px-4 py-3"><a class="hover:underline" href="<%= sortLink('date') %>">Data</a></th>
+        <th class="text-left px-4 py-3"><a class="hover:underline" href="<%= sortLink('desc') %>">Descrição</a></th>
+        <th class="text-left px-4 py-3"><a class="hover:underline" href="<%= sortLink('card') %>">Cartão</a></th>
+        <th class="text-left px-4 py-3"><a class="hover:underline" href="<%= sortLink('number') %>">Nº</a></th>
+        <th class="text-right px-4 py-3"><a class="hover:underline" href="<%= sortLink('amount') %>">Valor</a></th>
+        <th class="text-center px-4 py-3"><a class="hover:underline" href="<%= sortLink('allocated') %>">Distribuído?</a></th>
+        <th class="text-left px-4 py-3">Distribuição (inline)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% txns.forEach(t => { %>
+        <tr class="border-t border-slate-200 align-top hover:bg-slate-50">
+          <td class="px-4 py-3 whitespace-nowrap"><%= t.txn_date || "-" %></td>
+          <td class="px-4 py-3"><%= t.description %></td>
+          <td class="px-4 py-3"><span class="badge"><%= t.card_name %></span></td>
+          <td class="px-4 py-3 text-xs text-slate-600"><%= t.card_number || "-" %></td>
+          <td class="px-4 py-3 text-right"><%= formatBRLFromCents(t.amount_cents) %></td>
+          <td class="px-4 py-3 text-center"><span class="badge"><%= t.alloc_count > 0 ? "sim" : "não" %></span></td>
+          <td class="px-4 py-3">
+            <form method="post" action="/txn/<%= t.id %>/alloc" data-alloc-form="<%= t.id %>" class="border border-slate-200 rounded-xl p-2 bg-white">
+              <div class="flex flex-wrap gap-2">
+                <% people.forEach(p => { %>
+                  <label class="flex items-center gap-1 border border-slate-200 rounded-lg px-2 py-1">
+                    <input type="checkbox" name="person_ids" value="<%= p.id %>" <%= (t.selected_ids && t.selected_ids.includes(p.id)) ? "checked" : "" %> />
+                    <span class="text-xs"><%= p.name %></span>
+                  </label>
+                <% }) %>
+              </div>
+
+              <div class="mt-2 flex items-center gap-2">
+                <button class="px-3 py-1 text-xs rounded-lg bg-slate-900 text-white">Salvar</button>
+                <button type="button" onclick="copyAlloc(<%= t.id %>)" class="px-3 py-1 text-xs rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Copiar</button>
+                <button type="button" onclick="pasteAlloc(<%= t.id %>)" class="px-3 py-1 text-xs rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Colar</button>
+                <a class="ml-auto px-3 py-1 text-xs rounded-lg border border-slate-300 bg-white hover:bg-slate-50" href="/txn/<%= t.id %>">Detalhe</a>
+              </div>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<% if (txns.length === 0) { %>
+  <div class="mt-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-sm text-slate-700">
+    Nenhum item encontrado com os filtros atuais.
+  </div>
+<% } %>
+
+<%- include("partials/footer") %>

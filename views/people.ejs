@@ -1,0 +1,22 @@
+<%- include("partials/header", { title: "Pessoas" }) %>
+<div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+  <h1 class="text-xl font-semibold mb-4">Pessoas</h1>
+  <form method="post" action="/people" class="flex gap-2 mb-4">
+    <input name="name" class="flex-1 border border-slate-300 rounded-xl px-3 py-2" placeholder="Nome (ex.: Cleiton)" />
+    <button class="px-4 py-2 rounded-xl bg-slate-900 text-white">Adicionar</button>
+  </form>
+  <div class="space-y-2">
+    <% people.forEach(p => { %>
+      <div class="border border-slate-200 rounded-xl p-3 flex items-center justify-between">
+        <div>
+          <div class="font-medium"><%= p.name %></div>
+          <div class="text-xs text-slate-600"><%= p.active ? "Ativo" : "Inativo" %></div>
+        </div>
+        <form method="post" action="/people/<%= p.id %>/toggle">
+          <button class="px-3 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50"><%= p.active ? "Desativar" : "Ativar" %></button>
+        </form>
+      </div>
+    <% }) %>
+  </div>
+</div>
+<%- include("partials/footer") %>

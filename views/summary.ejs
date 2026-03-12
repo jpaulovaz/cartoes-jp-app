@@ -1,0 +1,137 @@
+<%- include("partials/header", { title: `Resumo ${String(month).padStart(2,'0')}/${year}` }) %>
+
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-semibold">Resumo — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
+  <a class="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50" href="/month/<%= year %>/<%= month %>">Itens</a>
+</div>
+
+<!-- Quadro por cartão -->
+<div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-4">
+  <form method="post" action="/summary/<%= year %>/<%= month %>/cards">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-slate-600">
+        <tr>
+          <th class="text-left px-4 py-3">Cartão</th>
+          <th class="text-left px-4 py-3">Vencimento</th>
+          <th class="text-right px-4 py-3">Valor</th>
+          <th class="text-right px-4 py-3">Valor pago</th>
+          <th class="text-right px-4 py-3">Falta</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% cardsPanel.forEach(cp => { 
+             const falta = (cp.total_cents || 0) - (cp.paid_cents || 0);
+        %>
+          <tr class="border-t border-slate-200">
+            <td class="px-4 py-3 font-medium">
+              <%= cp.card_name %>
+              <input type="hidden" name="card_id" value="<%= cp.card_id %>"/>
+            </td>
+            <td class="px-4 py-3">
+              <div class="text-xs text-slate-500">calculado: <%= cp.computed_due_date || "-" %></div>
+              <input name="override_due" type="date"
+                     value="<%= (cp.due_date || '') %>"
+                     class="border border-slate-300 rounded-lg px-2 py-1 bg-white" />
+            </td>
+            <td class="px-4 py-3 text-right"><%= formatBRLFromCents(cp.total_cents) %></td>
+            <td class="px-4 py-3 text-right">
+              <input name="paid" inputmode="decimal"
+                     value="<%= ((cp.paid_cents||0)/100).toFixed(2).replace('.', ',') %>"
+                     class="w-28 text-right border border-slate-300 rounded-lg px-2 py-1 bg-white"/>
+            </td>
+            <td class="px-4 py-3 text-right font-semibold"><%= formatBRLFromCents(falta) %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <div class="p-3 flex justify-end">
+      <button class="px-4 py-2 rounded-xl bg-slate-900 text-white">Salvar (cartões)</button>
+    </div>
+  </form>
+</div>
+
+<!-- Quadro por pessoa (controle de quem já pagou) -->
+<div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-4">
+  <form method="post" action="/summary/<%= year %>/<%= month %>/people">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-slate-600">
+        <tr>
+          <th class="text-left px-4 py-3">Pessoa</th>
+          <th class="text-right px-4 py-3">Total (deve)</th>
+          <th class="text-right px-4 py-3">Já pagou</th>
+          <th class="text-right px-4 py-3">Falta</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% personPanel.forEach(pp => { 
+             const falta = (pp.total_cents || 0) - (pp.paid_cents || 0);
+        %>
+          <tr class="border-t border-slate-200">
+            <td class="px-4 py-3 font-medium">
+              <%= pp.person_name %>
+              <input type="hidden" name="person_id" value="<%= pp.person_id %>"/>
+            </td>
+            <td class="px-4 py-3 text-right"><%= formatBRLFromCents(pp.total_cents) %></td>
+            <td class="px-4 py-3 text-right">
+              <input name="paid" inputmode="decimal"
+                     value="<%= ((pp.paid_cents||0)/100).toFixed(2).replace('.', ',') %>"
+                     class="w-28 text-right border border-slate-300 rounded-lg px-2 py-1 bg-white"/>
+            </td>
+            <td class="px-4 py-3 text-right font-semibold"><%= formatBRLFromCents(falta) %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <div class="p-3 flex justify-end">
+      <button class="px-4 py-2 rounded-xl bg-slate-900 text-white">Salvar (pessoas)</button>
+    </div>
+  </form>
+</div>
+
+<% if (unassigned && unassigned.length > 0) { %>
+  <div class="mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200">
+    <div class="font-semibold mb-1">Atenção: itens não atribuídos</div>
+    <div class="text-sm text-slate-700 space-y-1">
+      <% unassigned.forEach(u => { %>
+        <div><span class="badge"><%= u.card_name %></span> <b><%= formatBRLFromCents(u.total_cents) %></b></div>
+      <% }) %>
+    </div>
+  </div>
+<% } %>
+
+<!-- Pessoa x Cartão -->
+<div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 text-slate-600">
+      <tr>
+        <th class="text-left px-4 py-3">Pessoa</th>
+        <% cards.forEach(c => { %>
+          <th class="text-right px-4 py-3"><%= c.name %></th>
+        <% }) %>
+        <th class="text-right px-4 py-3">Total</th>
+        <th class="text-right px-4 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% people.forEach(p => { 
+           const perRow = rows.filter(r => r.person_id === p.id);
+           const byCard = {};
+           perRow.forEach(r => byCard[r.card_id] = r.total_cents);
+           const total = Object.values(byCard).reduce((a,b)=>a+b,0);
+      %>
+        <tr class="border-t border-slate-200 hover:bg-slate-50">
+          <td class="px-4 py-3 font-medium"><%= p.name %></td>
+          <% cards.forEach(c => { %>
+            <td class="px-4 py-3 text-right"><%= formatBRLFromCents(byCard[c.id] || 0) %></td>
+          <% }) %>
+          <td class="px-4 py-3 text-right font-semibold"><%= formatBRLFromCents(total) %></td>
+          <td class="px-4 py-3 text-right">
+            <a class="px-3 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50" href="/whatsapp/<%= year %>/<%= month %>/<%= p.id %>">WhatsApp</a>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<%- include("partials/footer") %>

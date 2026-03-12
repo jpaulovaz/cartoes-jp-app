@@ -42,7 +42,7 @@ passport.use('oidc', new Strategy({
 }, (issuer, profile, done) => {
   // SEGURANÇA: Só permite o SEU e-mail.
   // ALTERE O EMAIL ABAIXO PARA O SEU
-  const authorizedEmails = ['seu-email@exemplo.com'];
+  const authorizedEmails = ['jpmcvs@gmail.com'];
   const userEmail = profile.emails && profile.emails[0].value;
 
   if (authorizedEmails.includes(userEmail)) {

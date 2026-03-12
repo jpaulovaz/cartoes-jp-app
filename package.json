@@ -1,24 +1,23 @@
 {
   "name": "cartoes-jp-app",
-  "version": "0.6.0",
-  "private": true,
+  "version": "1.0.0",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.1.0",
+    "better-sqlite3": "^11.5.0",
+    "body-parser": "^1.20.3",
     "csv-parse": "^5.5.6",
-    "dayjs": "^1.11.11",
-    "date-holidays": "^3.25.1",
+    "dotenv": "^16.4.5",
     "ejs": "^3.1.10",
-    "express": "^4.19.2",
-    "multer": "^1.4.5-lts.1"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.3"
+    "express": "^4.21.1",
+    "multer": "^1.4.5-lts.1",
+    "express-session": "^1.18.1",
+    "connect-sqlite3": "^0.9.15",
+    "passport": "^0.7.0",
+    "passport-openidconnect": "^0.1.2"
   }
 }

@@ -1,8 +1,14 @@
-
+require('dotenv').config(); // Carrega as variáveis do .env
 const path = require("path");
 const express = require("express");
 const multer = require("multer");
 const dayjs = require("dayjs");
+
+// Novas dependências para Auth
+const session = require('express-session');
+const passport = require('passport');
+const { Strategy } = require('passport-openidconnect');
+const SQLiteStore = require('connect-sqlite3')(session);
 
 const db = require("./src/db");
 const { parseCsvByCardName } = require("./src/importers");
@@ -11,6 +17,61 @@ const { computeDueDate } = require("./src/dueDate");
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
+
+// --- CONFIGURAÇÃO DE SESSÃO E AUTH ---
+app.use(session({
+  store: new SQLiteStore({ db: 'sessions.sqlite', dir: './' }),
+  secret: process.env.SESSION_SECRET || 'chave-secreta-padrao',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 } // Login dura 7 dias
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.use('oidc', new Strategy({
+  issuer: process.env.POCKET_ID_URL,
+  authorizationURL: `${process.env.POCKET_ID_URL}/api/oidc/authorize`,
+  tokenURL: `${process.env.POCKET_ID_URL}/api/oidc/token`,
+  userInfoURL: `${process.env.POCKET_ID_URL}/api/oidc/userinfo`,
+  clientID: process.env.CLIENT_ID,
+  clientSecret: process.env.CLIENT_SECRET,
+  callbackURL: process.env.CALLBACK_URL,
+  scope: 'profile email'
+}, (issuer, profile, done) => {
+  // SEGURANÇA: Só permite o SEU e-mail. Adicione outros se precisar.
+  const authorizedEmails = ['seu-email@exemplo.com'];
+  const userEmail = profile.emails && profile.emails[0].value;
+
+  if (authorizedEmails.includes(userEmail)) {
+    return done(null, profile);
+  }
+  return done(null, false, { message: 'Usuário não autorizado.' });
+}));
+
+passport.serializeUser((user, done) => done(null, user));
+passport.deserializeUser((obj, done) => done(null, obj));
+
+// Função para proteger as páginas
+function ensureAuthenticated(req, res, next) {
+  if (req.isAuthenticated()) return next();
+  res.redirect('/login');
+}
+
+// --- ROTAS DE AUTH ---
+app.get('/login', ensureAuthenticated, passport.authenticate('oidc'));
+
+app.get('/auth/callback', passport.authenticate('oidc', {
+  successRedirect: '/',
+  failureRedirect: '/login'
+}));
+
+app.get('/logout', (req, res) => {
+  req.logout(() => {
+    res.redirect(process.env.POCKET_ID_URL + '/logout');
+  });
+});
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
@@ -23,7 +84,7 @@ function getPeopleAll() { return db.prepare("SELECT id, name, active FROM people
 function getPeopleActive() { return db.prepare("SELECT id, name FROM people WHERE active=1 ORDER BY name").all(); }
 function likeParam(s) { return `%${String(s).trim()}%`; }
 
-app.get("/", (req, res) => {
+app.get("/", ensureAuthenticated, (req, res) => {
   // 1. Puxamos todas as importações e somamos o total de cada uma
   const recent = db.prepare(`
     SELECT i.id, i.month, i.year, i.created_at, i.original_filename, c.name AS card_name, c.id AS card_id,
@@ -82,20 +143,20 @@ app.get("/", (req, res) => {
 });
 
 // People
-app.get("/people", (req, res) => res.render("people", { people: getPeopleAll() }));
-app.post("/people", (req, res) => {
+app.get("/people", ensureAuthenticated, (req, res) => res.render("people", { people: getPeopleAll() }));
+app.post("/people", ensureAuthenticated, (req, res) => {
   const name = (req.body.name || "").trim();
   if (name) db.prepare("INSERT OR IGNORE INTO people(name, active) VALUES (?, 1)").run(name);
   res.redirect("/people");
 });
-app.post("/people/:id/toggle", (req, res) => {
+app.post("/people/:id/toggle", ensureAuthenticated, (req, res) => {
   db.prepare("UPDATE people SET active = CASE active WHEN 1 THEN 0 ELSE 1 END WHERE id=?").run(Number(req.params.id));
   res.redirect("/people");
 });
 
 // Cards
-app.get("/cards", (req, res) => res.render("cards", { cards: getCards() }));
-app.post("/cards", (req, res) => {
+app.get("/cards", ensureAuthenticated, (req, res) => res.render("cards", { cards: getCards() }));
+app.post("/cards", ensureAuthenticated, (req, res) => {
   const name = (req.body.name || "").trim();
   const dueDay = Number(req.body.due_day) || null;
   if (name) db.prepare("INSERT OR IGNORE INTO cards(name, due_day, holiday_scope) VALUES (?, ?, ?)").run(name, dueDay, "BR");
@@ -107,9 +168,9 @@ app.post("/cards/:id/update", (req, res) => {
 });
 
 // Import
-app.get("/import", (req, res) => res.render("import", { cards: getCards(), error: null }));
+app.get("/import", ensureAuthenticated, (req, res) => res.render("import", { cards: getCards(), error: null }));
 
-app.post("/import", upload.single("csvfile"), (req, res) => {
+app.post("/import", ensureAuthenticated, upload.single("csvfile"), (req, res) => {
   const cards = getCards();
   try {
     const cardId = Number(req.body.card_id);
@@ -165,7 +226,7 @@ function buildOrder(sort, dir) {
   return `${col} ${d}, t.id ${d}`;
 }
 
-app.get("/month/:year/:month", (req, res) => {
+app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   const parsed = parseMonthYear(req.params.month, req.params.year);
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
@@ -236,7 +297,7 @@ app.get("/month/:year/:month", (req, res) => {
   res.render("month", { month, year, txns, people, cards, formatBRLFromCents, sort, dir, sortLink, filters });
 });
 
-app.post("/txn/:id/alloc", (req, res) => {
+app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
   const txn = db.prepare("SELECT id, amount_cents, import_id FROM transactions WHERE id=?").get(id);
   if (!txn) return res.status(404).send("Transação não encontrada.");
@@ -265,7 +326,7 @@ app.post("/txn/:id/alloc", (req, res) => {
 });
 
 // Detail page
-app.get("/txn/:id", (req, res) => {
+app.get("/txn/:id", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
   const txn = db.prepare(`
     SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name, i.month, i.year
@@ -281,7 +342,7 @@ app.get("/txn/:id", (req, res) => {
   res.render("txn", { txn, people, selected, formatBRLFromCents });
 });
 
-app.post("/txn/:id", (req, res) => {
+app.post("/txn/:id", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
   const txn = db.prepare("SELECT id, amount_cents, import_id FROM transactions WHERE id=?").get(id);
   if (!txn) return res.status(404).send("Transação não encontrada.");
@@ -310,7 +371,7 @@ app.post("/txn/:id", (req, res) => {
 });
 
 // Summary (minimal)
-app.get("/summary/:year/:month", (req, res) => {
+app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
   const parsed = parseMonthYear(req.params.month, req.params.year);
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
@@ -405,7 +466,7 @@ app.get("/summary/:year/:month", (req, res) => {
   res.render("summary", { month, year, people, cards, rows, unassigned, cardsPanel, personPanel, formatBRLFromCents });
 });
 
-app.post("/summary/:year/:month/cards", (req, res) => {
+app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {
   const parsed = parseMonthYear(req.params.month, req.params.year);
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
@@ -443,7 +504,7 @@ app.post("/summary/:year/:month/cards", (req, res) => {
   res.redirect(`/summary/${year}/${month}`);
 });
 
-app.post("/summary/:year/:month/people", (req, res) => {
+app.post("/summary/:year/:month/people", ensureAuthenticated, (req, res) => {
   const parsed = parseMonthYear(req.params.month, req.params.year);
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
@@ -473,7 +534,7 @@ app.post("/summary/:year/:month/people", (req, res) => {
 });
 
 // WhatsApp
-app.get("/whatsapp/:year/:month/:personId", (req, res) => {
+app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
   const parsed = parseMonthYear(req.params.month, req.params.year);
   const personId = Number(req.params.personId);
   if (!parsed) return res.status(400).send("Parâmetros inválidos.");

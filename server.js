@@ -32,16 +32,15 @@ app.use(passport.session());
 
 passport.use('oidc', new Strategy({
   issuer: process.env.POCKET_ID_URL,
-  authorizationURL: `${process.env.POCKET_ID_URL}/api/oidc/authorize`,
-  tokenURL: `${process.env.POCKET_ID_URL}/api/oidc/token`,
-  userInfoURL: `${process.env.POCKET_ID_URL}/api/oidc/userinfo`,
+  authorizationURL: `${process.env.POCKET_ID_URL}/oidc/authorize`, // removido /api
+  tokenURL: `${process.env.POCKET_ID_URL}/oidc/token`,             // removido /api
+  userInfoURL: `${process.env.POCKET_ID_URL}/oidc/userinfo`,       // removido /api
   clientID: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
   callbackURL: process.env.CALLBACK_URL,
   scope: 'profile email'
 }, (issuer, profile, done) => {
   // SEGURANÇA: Só permite o SEU e-mail.
-  // ALTERE O EMAIL ABAIXO PARA O SEU
   const authorizedEmails = ['jpmcvs@gmail.com'];
   const userEmail = profile.emails && profile.emails[0].value;
 

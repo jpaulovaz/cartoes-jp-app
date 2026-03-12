@@ -32,20 +32,20 @@ app.use(passport.session());
 
 passport.use('oidc', new Strategy({
   issuer: process.env.POCKET_ID_URL,
-  // Caminhos oficiais para o Pocket ID v2
   authorizationURL: `${process.env.POCKET_ID_URL}/oidc/authorize`,
   tokenURL: `${process.env.POCKET_ID_URL}/oidc/token`,
   userInfoURL: `${process.env.POCKET_ID_URL}/oidc/userinfo`,
   clientID: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
   callbackURL: process.env.CALLBACK_URL,
-  scope: 'openid profile email'
-}, (issuer, profile, done) => {
+  scope: ['profile', 'email'] // Removido 'openid' daqui (o Passport já adiciona sozinho)
+}, (issuer, ui, profile, done) => { // Adicionado 'ui' (userinfo) nos argumentos
   const authorizedEmails = ['jpmcvs@gmail.com'];
-  // O Pocket ID v2 pode retornar o email de formas diferentes dependendo da versão
-  const userEmail = (profile.emails && profile.emails[0].value) || profile._json.email || profile.id;
 
-  if (authorizedEmails.includes(userEmail)) {
+  // Tenta pegar o email de todos os lugares possíveis que o Pocket ID envia
+  const userEmail = profile.emails?.[0]?.value || profile._json?.email || ui?.email;
+
+  if (userEmail && authorizedEmails.includes(userEmail)) {
     return done(null, profile);
   }
   return done(null, false, { message: 'Usuário não autorizado.' });

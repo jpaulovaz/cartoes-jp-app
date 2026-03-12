@@ -30,20 +30,26 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Primeiro, garanta que a URL do emissor esteja correta
+const issuerUrl = process.env.POCKET_ID_URL;
+
 passport.use('oidc', new Strategy({
-  issuer: process.env.POCKET_ID_URL,
-  // Endpoints específicos da versão 2.4.0
-  authorizationURL: `${process.env.POCKET_ID_URL}/api/oidc/authorize`,
-  tokenURL: `${process.env.POCKET_ID_URL}/api/oidc/token`,
-  userInfoURL: `${process.env.POCKET_ID_URL}/api/oidc/userinfo`,
+  // Mágica: O Passport vai ler o arquivo .well-known e descobrir as URLs sozinho
+  issuer: issuerUrl,
+  authorizationURL: `${issuerUrl}/oidc/authorize`,
+  tokenURL: `${issuerUrl}/oidc/token`,
+  userInfoURL: `${issuerUrl}/oidc/userinfo`,
   clientID: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
   callbackURL: process.env.CALLBACK_URL,
   scope: ['profile', 'email']
 }, (issuer, ui, profile, done) => {
   const authorizedEmails = ['jpmcvs@gmail.com'];
-  // No v2.4.0 o email vem dentro do objeto extraído do UserInfo
-  const userEmail = profile.emails?.[0]?.value || profile._json?.email || ui?.email;
+
+  // No v2.4.0, o email costuma vir dentro do objeto 'ui' (UserInfo) ou '_json'
+  const userEmail = ui?.email || profile._json?.email || profile.emails?.[0]?.value;
+
+  console.log("Tentativa de login e-mail encontrado:", userEmail);
 
   if (userEmail && authorizedEmails.includes(userEmail)) {
     return done(null, profile);

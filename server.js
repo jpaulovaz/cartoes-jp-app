@@ -34,22 +34,19 @@ app.use(passport.session());
 const issuerUrl = process.env.POCKET_ID_URL;
 
 passport.use('oidc', new Strategy({
-  // Mágica: O Passport vai ler o arquivo .well-known e descobrir as URLs sozinho
-  issuer: issuerUrl,
-  authorizationURL: `${issuerUrl}/oidc/authorize`,
-  tokenURL: `${issuerUrl}/oidc/token`,
-  userInfoURL: `${issuerUrl}/oidc/userinfo`,
+  issuer: 'https://pocket-id.johnflix.com.br', // Deve ser exatamente igual ao seu POCKET_ID_URL
+  authorizationURL: 'https://pocket-id.johnflix.com.br/authorize', // Conforme sua lista
+  tokenURL: 'https://pocket-id.johnflix.com.br/api/oidc/token',    // Conforme sua lista
+  userInfoURL: 'https://pocket-id.johnflix.com.br/api/oidc/userinfo', // Conforme sua lista
   clientID: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
   callbackURL: process.env.CALLBACK_URL,
-  scope: ['profile', 'email']
-}, (issuer, ui, profile, done) => {
+  scope: 'openid profile email'
+}, (issuer, profile, done) => {
   const authorizedEmails = ['jpmcvs@gmail.com'];
 
-  // No v2.4.0, o email costuma vir dentro do objeto 'ui' (UserInfo) ou '_json'
-  const userEmail = ui?.email || profile._json?.email || profile.emails?.[0]?.value;
-
-  console.log("Tentativa de login e-mail encontrado:", userEmail);
+  // No Pocket ID 2.4.0, o email costuma vir em profile._json.email
+  const userEmail = profile._json?.email || (profile.emails && profile.emails[0].value);
 
   if (userEmail && authorizedEmails.includes(userEmail)) {
     return done(null, profile);

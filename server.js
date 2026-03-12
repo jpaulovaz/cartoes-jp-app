@@ -24,15 +24,61 @@ function getPeopleActive() { return db.prepare("SELECT id, name FROM people WHER
 function likeParam(s) { return `%${String(s).trim()}%`; }
 
 app.get("/", (req, res) => {
+  // 1. Puxamos todas as importações e somamos o total de cada uma
   const recent = db.prepare(`
-    SELECT i.id, i.month, i.year, i.created_at, i.original_filename, c.name AS card_name,
-           (SELECT COUNT(*) FROM transactions t WHERE t.import_id=i.id) AS txn_count
+    SELECT i.id, i.month, i.year, i.created_at, i.original_filename, c.name AS card_name, c.id AS card_id,
+           (SELECT COUNT(*) FROM transactions t WHERE t.import_id=i.id) AS txn_count,
+           (SELECT COALESCE(SUM(amount_cents), 0) FROM transactions t WHERE t.import_id=i.id) AS import_total
     FROM imports i
     JOIN cards c ON c.id=i.card_id
-    ORDER BY i.id DESC
-    LIMIT 10
+    ORDER BY i.year DESC, i.month DESC, i.id DESC
   `).all();
-  res.render("home", { recent });
+
+  // 2. Puxamos o que já foi marcado como pago na tela de Resumo
+  const statementsRows = db.prepare("SELECT card_id, month, year, paid_cents FROM card_statements").all();
+  const statements = {};
+  statementsRows.forEach(s => {
+    statements[`${s.year}-${s.month}-${s.card_id}`] = s.paid_cents || 0;
+  });
+
+  // 3. Agrupamos por Mês/Ano e calculamos os totais
+  const groupedMap = new Map();
+
+  recent.forEach(r => {
+    const key = `${r.year}-${r.month}`;
+    if (!groupedMap.has(key)) {
+      groupedMap.set(key, {
+        year: r.year,
+        month: r.month,
+        label: `${String(r.month).padStart(2, '0')}/${r.year}`,
+        cards: [],
+        total_cents: 0,
+        paid_cents: 0,
+        unique_cards: new Set()
+      });
+    }
+    const group = groupedMap.get(key);
+    group.cards.push(r);
+    group.total_cents += r.import_total;
+    // Registramos quais cartões estão neste mês para não duplicar pagamentos
+    group.unique_cards.add(r.card_id);
+  });
+
+  // 4. Calculamos o Total Pago e o que Falta Pagar por Mês
+  for (const group of groupedMap.values()) {
+    for (const cid of group.unique_cards) {
+      const paid = statements[`${group.year}-${group.month}-${cid}`] || 0;
+      group.paid_cents += paid;
+    }
+    group.remaining_cents = Math.max(0, group.total_cents - group.paid_cents);
+  }
+
+  // 5. Transformamos em array e ordenamos (mais recentes primeiro)
+  const groupedRecent = Array.from(groupedMap.values());
+  groupedRecent.sort((a, b) => (b.year !== a.year) ? b.year - a.year : b.month - a.month);
+
+  // Enviamos para o frontend, incluindo a função de formatar dinheiro
+  res.render("home", { groupedRecent, formatBRLFromCents });
 });
 
 // People
@@ -174,9 +220,9 @@ app.get("/month/:year/:month", (req, res) => {
   });
 
   const people = getPeopleActive();
-
+  const cards = getCards(); // <-- ADICIONE ESTA LINHA
   const baseParams = new URLSearchParams();
-  Object.entries(filters).forEach(([k,v]) => { if (v) baseParams.set(k, v); });
+  Object.entries(filters).forEach(([k, v]) => { if (v) baseParams.set(k, v); });
 
   const sortLink = (key) => {
     const p = new URLSearchParams(baseParams);
@@ -187,7 +233,7 @@ app.get("/month/:year/:month", (req, res) => {
     return `/month/${year}/${month}${qs ? `?${qs}` : ""}`;
   };
 
-  res.render("month", { month, year, txns, people, formatBRLFromCents, sort, dir, sortLink, filters });
+  res.render("month", { month, year, txns, people, cards, formatBRLFromCents, sort, dir, sortLink, filters });
 });
 
 app.post("/txn/:id/alloc", (req, res) => {
@@ -459,8 +505,15 @@ app.get("/whatsapp/:year/:month/:personId", (req, res) => {
   `).all(month, year, personId);
 
   const total = totalsByCard.reduce((acc, r) => acc + r.total_cents, 0);
-  res.render("whatsapp", { month, year, person, items, totalsByCard, total, formatBRLFromCents });
+
+  // BUSCA O VALOR PAGO NO BANCO DE DADOS
+  const paymentRow = db.prepare("SELECT paid_cents FROM person_payments WHERE person_id=? AND month=? AND year=?").get(personId, month, year);
+  const paid_cents = paymentRow ? paymentRow.paid_cents : 0;
+  const remaining_cents = Math.max(0, total - paid_cents);
+
+  // AGORA ENVIA TUDO PARA A TELA
+  res.render("whatsapp", { month, year, person, items, totalsByCard, total, paid_cents, remaining_cents, formatBRLFromCents });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`✅ Rodando em http://localhost:${PORT}`));

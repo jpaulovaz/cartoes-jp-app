@@ -12,8 +12,6 @@ const { Strategy } = require('passport-openidconnect');
 const SQLiteStore = require('connect-sqlite3')(session);
 const db = require("./src/db");
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Adiciona a coluna de telefone na tabela people se ela não existir
 try { db.prepare("ALTER TABLE people ADD COLUMN phone TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -96,7 +94,11 @@ app.get('/logout', (req, res) => {
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
-app.use(express.urlencoded({ extended: true }));
+
+// CONFIGURAÇÃO DE LIMITES PARA IMAGENS 
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
 app.use(express.static(path.join(__dirname, "public")));
 
 // Middleware Global: Deixa o nome do Titular disponível para todas as telas automaticamente

@@ -7,13 +7,86 @@
       <p class="text-slate-500 mt-2 font-medium">Suas faturas agrupadas por mês de vencimento.</p>
     </div>
 
-    <a href="/import"
-      class="inline-flex items-center justify-center px-6 py-3 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5">
-      <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-      </svg>
-      Nova Importação
-    </a>
+    <div class="flex flex-wrap gap-3">
+      <button onclick="document.getElementById('modalManual').classList.remove('hidden')"
+        class="inline-flex items-center justify-center px-6 py-3 text-sm font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 shadow-sm transition-all hover:-translate-y-0.5">
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        + Novo Item
+      </button>
+
+      <a href="/import"
+        class="inline-flex items-center justify-center px-6 py-3 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5">
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+        </svg>
+        Nova Importação
+      </a>
+    </div>
+  </div>
+
+  <div id="modalManual"
+    class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-xl font-black text-slate-800">Novo Gasto Manual</h2>
+        <button type="button" onclick="document.getElementById('modalManual').classList.add('hidden')"
+          class="text-slate-400 hover:text-slate-600 text-2xl">✕</button>
+      </div>
+
+      <form action="/txn/manual" method="POST" class="space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Data da Compra</label>
+            <input type="date" name="date" required
+              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Valor Total (R$)</label>
+            <input type="text" name="amount" placeholder="0,00" required
+              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1º Vencimento</label>
+            <input type="month" name="first_due" required
+              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Parcelas</label>
+            <input type="number" name="installments" value="1" min="1" max="99" required
+              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição</label>
+          <input type="text" name="description" placeholder="Ex: Monitor Dell" required
+            class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cartão Utilizado</label>
+          <select name="card_id"
+            class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+            <% cards.forEach(c=> { %>
+              <option value="<%= c.id %>">
+                <%= c.name %>
+              </option>
+              <% }) %>
+          </select>
+        </div>
+
+        <button type="submit"
+          class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all">
+          Criar Lançamento
+        </button>
+      </form>
+    </div>
   </div>
 
   <div>

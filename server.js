@@ -852,28 +852,58 @@ app.post("/finances/toggle-close", ensureAuthenticated, express.json(), (req, re
 });
 
 app.post("/txn/manual", ensureAuthenticated, (req, res) => {
-  const { date, description, amount, card_id, month, year } = req.body;
-  const amountCents = centsFromPtBrMoney(amount);
+  const { date, description, amount, card_id, first_due, installments } = req.body;
+
+  // Converte valor total para centavos e calcula valor da parcela
+  const totalCents = centsFromPtBrMoney(amount);
+  const numInstallments = parseInt(installments) || 1;
+  const installmentValue = Math.floor(totalCents / numInstallments);
+  const remainder = totalCents % numInstallments; // Para a última parcela não perder centavos
+
+  // Pega o mês e ano inicial do input type="month" (YYYY-MM)
+  let [startYear, startMonth] = first_due.split('-').map(Number);
 
   db.transaction(() => {
-    const info = db.prepare(`
-            INSERT INTO transactions (card_id, txn_date, description, amount_cents, created_at)
-            VALUES (?, ?, ?, ?, ?)
-        `).run(card_id, date, description, amountCents, new Date().toISOString());
-
-    const txnId = info.lastInsertRowid;
-
-    // Auto-Atribuição: se só existe 1 pessoa ativa, atribui 100%
     const activePeople = db.prepare("SELECT id FROM people WHERE active = 1").all();
-    if (activePeople.length === 1) {
-      db.prepare(`
-                INSERT INTO allocations (transaction_id, person_id, share_cents, created_at)
-                VALUES (?, ?, ?, ?)
-            `).run(txnId, activePeople[0].id, amountCents, new Date().toISOString());
+
+    for (let i = 0; i < numInstallments; i++) {
+      // Calcula o mês de vencimento da parcela atual
+      let currentMonth = startMonth + i;
+      let currentYear = startYear;
+
+      while (currentMonth > 12) {
+        currentMonth -= 12;
+        currentYear += 1;
+      }
+
+      // Ajusta a descrição para compras parceladas
+      const finalDesc = numInstallments > 1
+        ? `${description} (${String(i + 1).padStart(2, '0')}/${String(numInstallments).padStart(2, '0')})`
+        : description;
+
+      // Valor da parcela (adiciona o resto na última)
+      const currentAmount = (i === numInstallments - 1) ? installmentValue + remainder : installmentValue;
+
+      // 1. Insere a Transação com metadados de vencimento
+      const info = db.prepare(`
+                INSERT INTO transactions (card_id, txn_date, description, amount_cents, due_month, due_year, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run(card_id, date, finalDesc, currentAmount, currentMonth, currentYear, new Date().toISOString());
+
+      const txnId = info.lastInsertRowid;
+
+      // 2. Auto-atribuição (Se apenas 1 pessoa ativa)
+      if (activePeople.length === 1) {
+        db.prepare(`
+                    INSERT INTO allocations (transaction_id, person_id, share_cents, created_at)
+                    VALUES (?, ?, ?, ?)
+                `).run(txnId, activePeople[0].id, currentAmount, new Date().toISOString());
+      }
     }
   })();
 
-  res.redirect(`/month/${year}/${month}`);
+  // Redireciona para o mês do primeiro vencimento para o usuário ver o que criou
+  res.redirect(`/month/${startYear}/${startMonth}`);
 });
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`✅ Rodando em http://localhost:${PORT}`));

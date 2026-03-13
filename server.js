@@ -11,6 +11,16 @@ const { Strategy } = require('passport-openidconnect');
 const SQLiteStore = require('connect-sqlite3')(session);
 
 const db = require("./src/db");
+
+// Cria a tabela de meses fechados se não existir
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS closed_months (
+    month INTEGER,
+    year INTEGER,
+    PRIMARY KEY (month, year)
+  )
+`).run();
+
 const { parseCsvByCardName } = require("./src/importers");
 const { formatBRLFromCents, parseMonthYear, toISOFromBRDate, centsFromPtBrMoney } = require("./src/utils");
 const { computeDueDate } = require("./src/dueDate");
@@ -310,20 +320,25 @@ app.get("/desmembramento/:year/:month", ensureAuthenticated, (req, res) => {
   const categories = db.prepare("SELECT * FROM finance_categories WHERE is_active = 1").all();
 
   // 4. Busca Bloco de Notas
-  let notes = db.prepare("SELECT * FROM scratchpad WHERE month = ? AND year = ?").get(month, year);
+  let notes = db.prepare("SELECT * FROM scratchpad WHERE month = ? AND year = ?").get(currentMonth, currentYear);
   if (!notes) {
-    db.prepare("INSERT INTO scratchpad (month, year, content_text, content_math) VALUES (?, ?, '', '')").run(month, year);
+    db.prepare("INSERT INTO scratchpad (month, year, content_text, content_math) VALUES (?, ?, '', '')").run(currentMonth, currentYear);
     notes = { content_text: '', content_math: '' };
   }
 
+  // Verifica se o mês está trancado
+  const closedCheck = db.prepare("SELECT * FROM closed_months WHERE month = ? AND year = ?").get(currentMonth, currentYear);
+  const isClosed = !!closedCheck;
+
   res.render("desmembramento", {
     title: "Meu Desmembramento",
-    year,
-    month,
+    year: currentYear,
+    month: currentMonth,
     owner,
-    cardTotalCents: cardTotal.total || 0,
+    cardTotalCents: cardTotal ? cardTotal.total : 0,
     finances, categories, notes,
-    formatBRLFromCents
+    formatBRLFromCents,
+    isClosed // <-- O SEGREDO ESTÁ AQUI
   });
 });
 
@@ -743,6 +758,18 @@ app.post("/finances/notes/:year/:month", ensureAuthenticated, express.json(), (r
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Tranca ou Destranca um mês
+app.post("/finances/toggle-close", ensureAuthenticated, express.json(), (req, res) => {
+  try {
+    const { month, year, status } = req.body;
+    if (status === 'close') {
+      db.prepare("INSERT OR IGNORE INTO closed_months (month, year) VALUES (?, ?)").run(month, year);
+    } else {
+      db.prepare("DELETE FROM closed_months WHERE month = ? AND year = ?").run(month, year);
+    }
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`✅ Rodando em http://localhost:${PORT}`));

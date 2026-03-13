@@ -269,16 +269,41 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
     group.remaining_cents = Math.max(0, group.total_cents - group.paid_cents);
   }
 
-  // 5. Transformamos em array e ordenamos (mais recentes primeiro)
+  // 5. Transformamos em array e ordenamos com lógica especial
   const groupedRecent = Array.from(groupedMap.values());
-  groupedRecent.sort((a, b) => (b.year !== a.year) ? b.year - a.year : b.month - a.month);
+  
+  // Pega a data atual
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  
+  // Separa em dois grupos: mês atual/próximo e outros
+  const currentOrNext = [];
+  const others = [];
+  
+  groupedRecent.forEach(group => {
+    const isCurrentOrNext = (group.year === currentYear && group.month >= currentMonth) ||
+                            (group.year === currentYear + 1 && group.month < currentMonth);
+    if (isCurrentOrNext) {
+      currentOrNext.push(group);
+    } else {
+      others.push(group);
+    }
+  });
+  
+  // Ordena cada grupo
+  currentOrNext.sort((a, b) => (a.year !== b.year) ? a.year - b.year : a.month - b.month);
+  others.sort((a, b) => (b.year !== a.year) ? b.year - a.year : b.month - a.month);
+  
+  // Junta os dois grupos
+  const groupedRecent_final = [...currentOrNext, ...others];
 
   const cards = db.prepare("SELECT id, name FROM cards ORDER BY name ASC").all();
 
   // Enviamos para o frontend, incluindo a função de formatar dinheiro
   //res.render("home", { groupedRecent, formatBRLFromCents });
   res.render("home", {
-    groupedRecent,
+    groupedRecent: groupedRecent_final,
     formatBRLFromCents,
     cards, // <--- ADICIONE ESTA LINHA
     user: req.user || req.session.user
@@ -431,14 +456,17 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const owner = db.prepare("SELECT * FROM people WHERE is_owner = 1 LIMIT 1").get();
   if (!owner) return res.status(400).send("Defina um titular na aba Pessoas primeiro.");
 
-  // 2. Calcula total de cartões do titular para o mês
+  // 2. Calcula total de cartões do titular para o mês (incluindo transações manuais)
   const cardTotal = db.prepare(`
     SELECT SUM(a.share_cents) as total
     FROM allocations a
     JOIN transactions t ON t.id = a.transaction_id
-    JOIN imports i ON i.id = t.import_id
-    WHERE a.person_id = ? AND i.month = ? AND i.year = ?
-  `).get(owner.id, month, year);
+    LEFT JOIN imports i ON i.id = t.import_id
+    WHERE a.person_id = ? AND (
+      (i.month = ? AND i.year = ?) OR
+      (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+    )
+  `).get(owner.id, month, year, month, year);
 
   // 3. Busca Entradas e Gastos Fixos (Agora ele vai achar as contas que foram clonadas acima!)
   const finances = db.prepare(`
@@ -764,23 +792,30 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
     CROSS JOIN cards c
     LEFT JOIN allocations a ON a.person_id=p.id
     LEFT JOIN transactions t ON t.id=a.transaction_id AND t.card_id=c.id
-    LEFT JOIN imports i ON i.id=t.import_id AND i.month=? AND i.year=?
+    LEFT JOIN imports i ON i.id=t.import_id
     WHERE p.active=1
-      AND (i.id IS NOT NULL OR a.id IS NULL)
+      AND (
+        (i.month=? AND i.year=?) OR
+        (t.import_id IS NULL AND t.due_month=? AND t.due_year=?) OR
+        a.id IS NULL
+      )
     GROUP BY p.id, c.id
     ORDER BY p.name, c.name
-  `).all(month, year);
+  `).all(month, year, month, year);
 
   const unassigned = db.prepare(`
     SELECT c.name AS card_name, COALESCE(SUM(t.amount_cents),0) AS total_cents
     FROM transactions t
     JOIN cards c ON c.id=t.card_id
-    JOIN imports i ON i.id=t.import_id
-    WHERE i.month=? AND i.year=?
+    LEFT JOIN imports i ON i.id=t.import_id
+    WHERE (
+      (i.month=? AND i.year=?) OR
+      (t.import_id IS NULL AND t.due_month=? AND t.due_year=?)
+    )
       AND NOT EXISTS (SELECT 1 FROM allocations a WHERE a.transaction_id=t.id)
     GROUP BY c.id
     ORDER BY c.name
-  `).all(month, year);
+  `).all(month, year, month, year);
 
   // Card panel
   const cardTotals = db.prepare(`
@@ -788,10 +823,15 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
            COALESCE(SUM(t.amount_cents),0) as total_cents
     FROM cards c
     LEFT JOIN transactions t ON t.card_id=c.id
-    LEFT JOIN imports i ON i.id=t.import_id AND i.month=? AND i.year=?
+    LEFT JOIN imports i ON i.id=t.import_id
+    WHERE (
+      (i.month=? AND i.year=?) OR
+      (t.import_id IS NULL AND t.due_month=? AND t.due_year=?) OR
+      t.id IS NULL
+    )
     GROUP BY c.id
     ORDER BY c.name
-  `).all(month, year);
+  `).all(month, year, month, year);
 
   const stmtRows = db.prepare(`
     SELECT card_id, computed_due_date, override_due_date, paid_cents
@@ -821,11 +861,15 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
     FROM people p
     LEFT JOIN allocations a ON a.person_id=p.id
     LEFT JOIN transactions t ON t.id=a.transaction_id
-    LEFT JOIN imports i ON i.id=t.import_id AND i.month=? AND i.year=?
-    WHERE p.active=1 AND (i.id IS NOT NULL OR a.id IS NULL)
+    LEFT JOIN imports i ON i.id=t.import_id
+    WHERE p.active=1 AND (
+      (i.month=? AND i.year=?) OR
+      (t.import_id IS NULL AND t.due_month=? AND t.due_year=?) OR
+      a.id IS NULL
+    )
     GROUP BY p.id
     ORDER BY p.name
-  `).all(month, year);
+  `).all(month, year, month, year);
 
   const payRows = db.prepare(`
     SELECT person_id, paid_cents

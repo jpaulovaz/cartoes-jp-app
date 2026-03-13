@@ -525,7 +525,7 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
            COALESCE(t.due_year, i.year) as year
     FROM transactions t
     JOIN cards c ON c.id=t.card_id
-    LEFT JOIN imports i ON i.id=t.import_id -- MUDANÇA: LEFT JOIN
+    LEFT JOIN imports i ON i.id=t.import_id 
     WHERE t.id=?
   `).get(id);
 
@@ -539,9 +539,11 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
 app.post("/txn/:id", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
 
-  // Busca segura de dados e redirecionamento
-  const dateInfo = db.prepare(`
-    SELECT COALESCE(i.month, t.due_month) as month, COALESCE(i.year, t.due_year) as year 
+  // 1. Busca os dados (Usando COALESCE para suportar manual e import)
+  const txn = db.prepare(`
+    SELECT t.id, t.amount_cents, 
+           COALESCE(i.month, t.due_month) as month, 
+           COALESCE(i.year, t.due_year) as year 
     FROM transactions t 
     LEFT JOIN imports i ON i.id = t.import_id 
     WHERE t.id = ?
@@ -549,6 +551,7 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
 
   if (!txn) return res.status(404).send("Transação não encontrada.");
 
+  // 2. Processa alocações
   let personIds = req.body.person_ids || [];
   if (!Array.isArray(personIds)) personIds = [personIds];
   personIds = personIds.map(Number).filter(Boolean);
@@ -568,7 +571,8 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
     }
   })();
 
-  res.redirect(`/month/${dateInfo.year}/${dateInfo.month}`);
+  // 3. Redireciona usando a variável txn que definimos lá em cima
+  res.redirect(`/month/${txn.year}/${txn.month}`);
 });
 
 // Summary (minimal)
@@ -924,10 +928,9 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
     })();
     res.redirect(`/month/${startYear}/${startMonth}`);
   } catch (err) {
+    console.error("Erro ao inserir manualmente:", err);
     res.status(500).send("Erro ao processar transação manual.");
   }
-  console.log("Inserção manual concluída com sucesso.");
-  res.redirect(`/month/${startYear}/${startMonth}`);
 });
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`✅ Rodando em http://localhost:${PORT}`));

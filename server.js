@@ -2,6 +2,7 @@ require('dotenv').config(); // Carrega as variáveis do .env
 const path = require("path");
 const express = require("express");
 const multer = require("multer");
+const axios = require('axios');
 const dayjs = require("dayjs");
 
 // Novas dependências para Auth
@@ -717,6 +718,31 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
   res.render("whatsapp", { month, year, person, items, totalsByCard, total, paid_cents, remaining_cents, formatBRLFromCents });
 });
 
+app.post("/whatsapp/send-automation", ensureAuthenticated, express.json(), async (req, res) => {
+  try {
+    const { personPhone, message } = req.body;
+
+    const apiUrl = process.env.EVOLUTION_API_URL;
+    const apiKey = process.env.EVOLUTION_API_KEY;
+    const instance = process.env.EVOLUTION_INSTANCE_NAME;
+
+    if (!apiUrl || !apiKey || !instance) {
+      return res.status(400).json({ error: "Configurações da Evolution API não encontradas no .env" });
+    }
+
+    // Chamada para a Evolution API
+    await axios.post(`${apiUrl}/message/sendText/${instance}`, {
+      number: personPhone,
+      options: { delay: 1200, presence: "composing" },
+      textMessage: { text: message }
+    }, { headers: { apikey: apiKey } });
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error("Erro Evolution API:", e.response?.data || e.message);
+    res.status(500).json({ error: "Falha ao enviar via Evolution API" });
+  }
+});
 // --- ROTAS DO detalhamento ---
 
 // Define quem é o titular (Dono do detalhamento)

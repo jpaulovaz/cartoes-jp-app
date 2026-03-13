@@ -29,15 +29,13 @@ CREATE TABLE IF NOT EXISTS imports (
 
 CREATE TABLE IF NOT EXISTS transactions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  import_id INTEGER,
+  import_id INTEGER NOT NULL,
   card_id INTEGER NOT NULL,
   txn_date TEXT,
   description TEXT NOT NULL,
   amount_cents INTEGER NOT NULL,
   card_number TEXT,
   raw_json TEXT,
-  due_month INTEGER,
-  due_year INTEGER,
   created_at TEXT NOT NULL,
   FOREIGN KEY (import_id) REFERENCES imports(id),
   FOREIGN KEY (card_id) REFERENCES cards(id)
@@ -61,10 +59,6 @@ CREATE INDEX IF NOT EXISTS idx_alloc_txn ON allocations(transaction_id);
 
 if (!columnExists("cards", "due_day")) db.exec(`ALTER TABLE cards ADD COLUMN due_day INTEGER`);
 if (!columnExists("cards", "holiday_scope")) db.exec(`ALTER TABLE cards ADD COLUMN holiday_scope TEXT`);
-
-// Adiciona colunas de vencimento manual para transacoes manuais
-if (!columnExists("transactions", "due_month")) db.exec(`ALTER TABLE transactions ADD COLUMN due_month INTEGER`);
-if (!columnExists("transactions", "due_year")) db.exec(`ALTER TABLE transactions ADD COLUMN due_year INTEGER`);
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS card_statements (

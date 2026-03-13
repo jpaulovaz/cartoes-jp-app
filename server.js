@@ -402,6 +402,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 
 app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   const parsed = parseMonthYear(req.params.month, req.params.year);
+
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
 
@@ -418,8 +419,8 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     f_allocated: (req.query.f_allocated || "").toString().trim()
   };
 
-  const where = ["i.month=? AND i.year=?"];
-  const params = [month, year];
+  const where = ["((t.due_month=? AND t.due_year=?) OR (i.month=? AND i.year=?))"];
+  const params = [month, year, month, year];
 
   if (filters.f_desc) { where.push("t.description LIKE ?"); params.push(likeParam(filters.f_desc)); }
   if (filters.f_card) { where.push("c.name LIKE ?"); params.push(likeParam(filters.f_card)); }
@@ -445,7 +446,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
            (SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id=t.id) AS selected_csv
     FROM transactions t
     JOIN cards c ON c.id=t.card_id
-    JOIN imports i ON i.id=t.import_id
+    LEFT JOIN imports i ON i.id=t.import_id  
     WHERE ${where.join(" AND ")}
     ORDER BY ${orderBy}
   `).all(...params);
@@ -503,12 +504,15 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
 app.get("/txn/:id", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
   const txn = db.prepare(`
-    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name, i.month, i.year
+    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name, 
+           COALESCE(t.due_month, i.month) as month, 
+           COALESCE(t.due_year, i.year) as year
     FROM transactions t
     JOIN cards c ON c.id=t.card_id
-    JOIN imports i ON i.id=t.import_id
+    LEFT JOIN imports i ON i.id=t.import_id -- Mudança crucial aqui
     WHERE t.id=?
   `).get(id);
+
   if (!txn) return res.status(404).send("Transação não encontrada.");
 
   const people = getPeopleActive();
@@ -518,7 +522,16 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
 
 app.post("/txn/:id", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
-  const txn = db.prepare("SELECT id, amount_cents, import_id FROM transactions WHERE id=?").get(id);
+  // Buscamos os dados da transação com LEFT JOIN para garantir que pegamos o mês/ano manual ou do import
+  const txn = db.prepare(`
+    SELECT t.id, t.amount_cents, t.import_id, 
+           COALESCE(t.due_month, i.month) as month, 
+           COALESCE(t.due_year, i.year) as year
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id
+    WHERE t.id=?
+  `).get(id);
+
   if (!txn) return res.status(404).send("Transação não encontrada.");
 
   let personIds = req.body.person_ids || [];
@@ -540,8 +553,8 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
     }
   })();
 
-  const imp = db.prepare("SELECT month, year FROM imports WHERE id=?").get(txn.import_id);
-  res.redirect(`/month/${imp.year}/${imp.month}`);
+  // Redireciona usando a informação que o COALESCE trouxe lá em cima
+  res.redirect(`/month/${txn.year}/${txn.month}`);
 });
 
 // Summary (minimal)

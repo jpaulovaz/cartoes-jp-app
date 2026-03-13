@@ -450,15 +450,15 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   // Query corrigida com LEFT JOIN e contagem exata de parâmetros
   const txns = db.prepare(`
-  SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
-         (SELECT COUNT(*) FROM allocations a WHERE a.transaction_id=t.id) AS alloc_count,
-         (SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id=t.id) AS selected_csv
-  FROM transactions t
-  JOIN cards c ON c.id=t.card_id
-  LEFT JOIN imports i ON i.id=t.import_id -- MUDANÇA AQUI
-  WHERE ((i.month=? AND i.year=?) OR (t.due_month=? AND t.due_year=?)) -- MUDANÇA AQUI
-  ORDER BY ${orderBy}
-`).all(month, year, month, year);
+    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
+           (SELECT COUNT(*) FROM allocations a WHERE a.transaction_id=t.id) AS alloc_count,
+           (SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id=t.id) AS selected_csv
+    FROM transactions t
+    JOIN cards c ON c.id=t.card_id
+    LEFT JOIN imports i ON i.id=t.import_id
+    WHERE ( (i.month=? AND i.year=?) OR (t.due_month=? AND t.due_year=?) )
+    ORDER BY ${orderBy}
+  `).all(month, year, month, year); // Note que passamos month/year DUAS VEZES aqui
 
   txns.forEach(t => {
     t.selected_ids = (t.selected_csv ? t.selected_csv.split(",").map(x => Number(x)) : []).filter(Boolean);
@@ -916,9 +916,9 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
 
         // Note: import_id fica NULL para itens manuais
         const info = db.prepare(`
-          INSERT INTO transactions (card_id, txn_date, description, amount_cents, due_month, due_year, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(card_id, date, finalDesc, currentAmount, currentMonth, currentYear, new Date().toISOString());
+            INSERT INTO transactions (card_id, txn_date, description, amount_cents, due_month, due_year, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+           `).run(card_id, date, finalDesc, currentAmount, currentMonth, currentYear, new Date().toISOString());
 
         if (activePeople.length === 1) {
           db.prepare(`INSERT INTO allocations (transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?)`)

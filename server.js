@@ -27,7 +27,7 @@ db.prepare(`
 
 const { parseCsvByCardName } = require("./src/importers");
 const { formatBRLFromCents, parseMonthYear, toISOFromBRDate, centsFromPtBrMoney } = require("./src/utils");
-const formatDateBR = (dateStr) => { if (!dateStr) return "-"; return dayjs(dateStr).format("DD/MM/AAAA"); };
+const formatDateBR = (dateStr) => { if (!dateStr) return "-"; return dayjs(dateStr).format("DD/MM/YYYY"); };
 const { computeDueDate } = require("./src/dueDate");
 
 const app = express();

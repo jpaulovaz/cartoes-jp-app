@@ -208,14 +208,25 @@ app.get("/", ensureAuthenticated, (req, res) => {
 });
 
 app.get("/geral", ensureAuthenticated, (req, res) => {
-  // 1. Puxamos todas as importações e somamos o total de cada uma
+  // 1. Puxamos todas as importacoes E transacoes manuais
   const recent = db.prepare(`
     SELECT i.id, i.month, i.year, i.created_at, i.original_filename, c.name AS card_name, c.id AS card_id,
            (SELECT COUNT(*) FROM transactions t WHERE t.import_id=i.id) AS txn_count,
            (SELECT COALESCE(SUM(amount_cents), 0) FROM transactions t WHERE t.import_id=i.id) AS import_total
     FROM imports i
     JOIN cards c ON c.id=i.card_id
-    ORDER BY i.year DESC, i.month DESC, i.id DESC
+    
+    UNION ALL
+    
+    SELECT NULL as id, t.due_month as month, t.due_year as year, t.created_at, 'Manual' as original_filename,
+           c.name AS card_name, c.id AS card_id,
+           1 AS txn_count,
+           t.amount_cents AS import_total
+    FROM transactions t
+    JOIN cards c ON c.id=t.card_id
+    WHERE t.import_id IS NULL
+    
+    ORDER BY year DESC, month DESC, id DESC
   `).all();
 
   // 2. Puxamos o que já foi marcado como pago na tela de Resumo

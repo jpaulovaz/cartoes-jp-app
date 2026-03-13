@@ -93,6 +93,18 @@ app.set("views", path.join(__dirname, "views"));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
+// Middleware Global: Deixa o nome do Titular disponível para todas as telas automaticamente
+app.use((req, res, next) => {
+  try {
+    const owner = db.prepare("SELECT name FROM people WHERE is_owner = 1 LIMIT 1").get();
+    // Pega só o primeiro nome se for muito grande, ou o nome todo. Ex: "Cartões João"
+    res.locals.nomeTitular = owner ? `Cartões ${owner.name.split(' ')[0]}` : "Cartões JP";
+  } catch (e) {
+    res.locals.nomeTitular = "Cartões JP";
+  }
+  next();
+});
+
 function nowIso() { return dayjs().toISOString(); }
 function getCards() { return db.prepare("SELECT id, name, due_day, holiday_scope FROM cards ORDER BY name").all(); }
 function getPeopleAll() { return db.prepare("SELECT id, name, active FROM people ORDER BY active DESC, name").all(); }

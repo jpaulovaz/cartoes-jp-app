@@ -5,7 +5,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>
-    <%= typeof title !=='undefined' ? title : "DESDOBRAMENTO CARTÕES JP" %>
+    <%= typeof title !=='undefined' ? title : nomeTitular.toUpperCase() %>
   </title>
 
   <link rel="manifest" href="/manifest.json">
@@ -115,7 +115,9 @@
                   d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
               </svg>
             </div>
-            <span class="text-xl font-extrabold text-white tracking-tight">Cartões J.PauloVaz</span>
+            <span class="text-xl font-extrabold text-white tracking-tight">
+              Detalhamento <%= nomeTitular %>
+            </span>
           </a>
 
           <div class="hidden sm:flex items-center gap-2">

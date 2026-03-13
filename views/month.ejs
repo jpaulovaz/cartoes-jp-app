@@ -142,34 +142,36 @@
                   <form method="post" action="/txn/<%= t.id %>/alloc" data-alloc-form="<%= t.id %>"
                     class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 shadow-inner transition-colors duration-300">
 
-                    <div class="flex flex-wrap gap-2 mb-3">
+                    <div class="grid grid-cols-3 gap-1.5 mb-3 min-w-[320px]">
                       <% people.forEach(p=> { %>
                         <label
-                          class="flex items-center gap-1.5 border border-slate-200 bg-white rounded-lg px-2.5 py-1.5 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors has-[:checked]:bg-blue-100 has-[:checked]:border-blue-500 has-[:checked]:text-blue-800 select-none">
+                          class="flex items-center gap-1.5 border border-slate-200 bg-white rounded-lg px-2 py-1 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors has-[:checked]:bg-blue-100 has-[:checked]:border-blue-500 has-[:checked]:text-blue-800 select-none">
                           <input type="checkbox" name="person_ids" value="<%= p.id %>" <%=(t.selected_ids &&
-                            t.selected_ids.includes(p.id)) ? "checked" : "" %> class="w-3.5 h-3.5 text-blue-600 rounded
-                          border-slate-300 focus:ring-blue-500" />
-                          <span class="text-[11px] font-bold">
-                            <%= p.name %>
-                          </span>
-                        </label>
-                        <% }) %>
-                    </div>
+                            t.selected_ids.includes(p.id)) ? "checked" : "" %>
+                          class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+
+                          <span class="text-[10px] font-bold truncate">
+                            <%= p.name.split(' ')[0] %>
+                        </span>
+                      </label>
+                   <% }) %>
+                  </div>
 
                     <div class="flex items-center gap-2">
                       <button type="submit"
                         class="px-4 py-1.5 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-transform active:scale-95 btn-salvar-indiv">Salvar</button>
 
-                      <button type="button" onclick="copyAlloc('<%= t.id %>')"
-                        class="px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
-                        title="Copiar atribuição">Copiar</button>
+                      <button type="button" onclick="copyAlloc(' <%=t.id %>')"
+                              class="px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white
+                              text-slate-600 hover:bg-slate-100 transition-colors"
+                              title="Copiar atribuição">Copiar</button>
 
-                      <button type="button" onclick="pasteAlloc('<%= t.id %>')"
-                        class="px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
-                        title="Colar atribuição">Colar</button>
+                              <button type="button" onclick="pasteAlloc('<%= t.id %>')"
+                                class="px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
+                                title="Colar atribuição">Colar</button>
 
-                      <a class="ml-auto px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
-                        href="/txn/<%= t.id %>">Detalhe</a>
+                              <a class="ml-auto px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
+                                href="/txn/<%= t.id %>">Detalhe</a>
                     </div>
                   </form>
                 </td>

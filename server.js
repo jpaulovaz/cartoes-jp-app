@@ -55,26 +55,31 @@ app.use(passport.session());
 // Primeiro, garanta que a URL do emissor esteja correta
 const issuerUrl = process.env.POCKET_ID_URL;
 
-passport.use('oidc', new Strategy({
-  issuer: 'https://pocket-id.johnflix.com.br', // Deve ser exatamente igual ao seu POCKET_ID_URL
-  authorizationURL: 'https://pocket-id.johnflix.com.br/authorize', // Conforme sua lista
-  tokenURL: 'https://pocket-id.johnflix.com.br/api/oidc/token',    // Conforme sua lista
-  userInfoURL: 'https://pocket-id.johnflix.com.br/api/oidc/userinfo', // Conforme sua lista
-  clientID: process.env.CLIENT_ID,
-  clientSecret: process.env.CLIENT_SECRET,
-  callbackURL: process.env.CALLBACK_URL,
-  scope: 'openid profile email'
-}, (issuer, profile, done) => {
-  const authorizedEmails = ['jpmcvs@gmail.com'];
+// Só registra a estratégia OIDC se as variáveis de ambiente estiverem configuradas
+if (process.env.CLIENT_ID && process.env.CLIENT_SECRET && process.env.CALLBACK_URL) {
+  passport.use('oidc', new Strategy({
+    issuer: 'https://pocket-id.johnflix.com.br', // Deve ser exatamente igual ao seu POCKET_ID_URL
+    authorizationURL: 'https://pocket-id.johnflix.com.br/authorize', // Conforme sua lista
+    tokenURL: 'https://pocket-id.johnflix.com.br/api/oidc/token',    // Conforme sua lista
+    userInfoURL: 'https://pocket-id.johnflix.com.br/api/oidc/userinfo', // Conforme sua lista
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    callbackURL: process.env.CALLBACK_URL,
+    scope: 'openid profile email'
+  }, (issuer, profile, done) => {
+    const authorizedEmails = ['jpmcvs@gmail.com'];
 
-  // No Pocket ID 2.4.0, o email costuma vir em profile._json.email
-  const userEmail = profile._json?.email || (profile.emails && profile.emails[0].value);
+    // No Pocket ID 2.4.0, o email costuma vir em profile._json.email
+    const userEmail = profile._json?.email || (profile.emails && profile.emails[0].value);
 
-  if (userEmail && authorizedEmails.includes(userEmail)) {
-    return done(null, profile);
-  }
-  return done(null, false, { message: 'Usuário não autorizado.' });
-}));
+    if (userEmail && authorizedEmails.includes(userEmail)) {
+      return done(null, profile);
+    }
+    return done(null, false, { message: 'Usuário não autorizado.' });
+  }));
+} else {
+  console.log('⚠️  Pocket ID não configurado. Usando login local.');
+}
 
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
@@ -107,14 +112,24 @@ app.post('/login', (req, res) => {
   res.render('login', { error: 'Usuário ou senha incorretos.' });
 });
 
-app.get('/auth/callback', passport.authenticate('oidc', {
-  successRedirect: '/',
-  failureRedirect: '/login'
-}));
+// Rota de callback do Pocket ID (só se configurado)
+if (process.env.CLIENT_ID && process.env.CLIENT_SECRET) {
+  app.get('/auth/callback', passport.authenticate('oidc', {
+    successRedirect: '/',
+    failureRedirect: '/login'
+  }));
+}
 
 app.get('/logout', (req, res) => {
   req.logout(() => {
-    res.redirect(process.env.POCKET_ID_URL + '/logout');
+    if (process.env.POCKET_ID_URL) {
+      res.redirect(process.env.POCKET_ID_URL + '/logout');
+    } else {
+      // Se usando login local, apenas limpa a sessão
+      req.session.destroy(() => {
+        res.redirect('/login');
+      });
+    }
   });
 });
 

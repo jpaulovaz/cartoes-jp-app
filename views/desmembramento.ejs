@@ -1,0 +1,204 @@
+<%- include('partials/header') %>
+
+    <div class="container-fluid mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>👑 Meu Desmembramento: <%= month %>/<%= year %>
+            </h2>
+            <div class="text-end">
+                <span class="badge bg-primary fs-6">Titular: <%= owner.name %></span>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-white bg-success shadow">
+                    <div class="card-body">
+                        <h6 class="card-title">Total Recebido (Caixa)</h6>
+                        <h3 id="total-income">R$ 0,00</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-danger shadow">
+                    <div class="card-body">
+                        <h6 class="card-title">Total Contas + Cartões</h6>
+                        <h3 id="total-out">R$ 0,00</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-info shadow">
+                    <div class="card-body">
+                        <h6 class="card-title">Saldo Final</h6>
+                        <h3 id="balance">R$ 0,00</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-dark bg-warning shadow">
+                    <div class="card-body">
+                        <h6 class="card-title">Minha Parte Cartões (Auto)</h6>
+                        <h3>
+                            <%= formatBRLFromCents(cardTotalCents) %>
+                        </h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card shadow mb-4">
+                    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">📥 Entradas (Caixa)</h5>
+                        <button class="btn btn-sm btn-outline-light" onclick="addRow('income')">+ Nova Entrada</button>
+                    </div>
+                    <div class="card-body">
+                        <table class="table align-middle" id="table-income">
+                            <thead>
+                                <tr>
+                                    <th>Descrição</th>
+                                    <th style="width: 200px;">Fórmula / Valor</th>
+                                    <th style="width: 50px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% finances.filter(f=> f.type === 'income').forEach(fin => { %>
+                                    <tr data-id="<%= fin.id %>">
+                                        <td><input type="text" class="form-control-plaintext border-bottom"
+                                                value="<%= fin.description %>"
+                                                onchange="updateRow(<%= fin.id %>, 'description', this.value)"></td>
+                                        <td><input type="text" class="form-control math-input"
+                                                value="<%= fin.formula || (fin.amount_cents/100) %>"
+                                                onblur="saveMath(<%= fin.id %>, this.value)"></td>
+                                        <td><button class="btn btn-sm text-danger"
+                                                onclick="deleteRow(<%= fin.id %>)">×</button></td>
+                                    </tr>
+                                    <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card shadow mb-4">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0">🏠 Contas Domésticas / Fixas</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Conta</th>
+                                    <th style="width: 200px;">Fórmula / Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% categories.forEach(cat=> {
+                                    const val = finances.find(f => f.category_id === cat.id);
+                                    %>
+                                    <tr>
+                                        <td>
+                                            <%= cat.name %>
+                                        </td>
+                                        <td>
+                                            <input type="text" class="form-control math-input" placeholder="0.00"
+                                                value="<%= val ? (val.formula || val.amount_cents/100) : '' %>"
+                                                onblur="saveFixed(<%= cat.id %>, this.value)">
+                                        </td>
+                                    </tr>
+                                    <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card shadow mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">🧮 Calculadora de Rascunho (Valores)</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small italic">Use este espaço para guardar somas rápidas (ex: 50+20+15)</p>
+                        <textarea class="form-control font-monospace" rows="5"
+                            onchange="saveNotes('math', this.value)"><%= notes.content_math %></textarea>
+                    </div>
+                </div>
+
+                <div class="card shadow mb-4">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0">📝 Lembretes e Notas</h5>
+                    </div>
+                    <div class="card-body">
+                        <textarea class="form-control" rows="8"
+                            placeholder="Escreva aqui seus lembretes para este mês..."
+                            onchange="saveNotes('text', this.value)"><%= notes.content_text %></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Funções de Cálculo e Persistência
+        async function saveMath(id, formula) {
+            const result = evaluateFormula(formula);
+            await fetch(`/finances/update/${id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ formula, amount_cents: Math.round(result * 100) })
+            });
+            calculateTotals();
+        }
+
+        async function saveFixed(categoryId, formula) {
+            const result = evaluateFormula(formula);
+            await fetch(`/finances/fixed/<%= year %>/<%= month %>`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ categoryId, formula, amount_cents: Math.round(result * 100) })
+            });
+            calculateTotals();
+        }
+
+        async function saveNotes(type, content) {
+            await fetch(`/finances/notes/<%= year %>/<%= month %>`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type, content })
+            });
+        }
+
+        function evaluateFormula(str) {
+            try {
+                // Limpa a string para aceitar apenas números e operadores básicos
+                const clean = str.replace(/[^-+*/().0-9]/g, '');
+                return Function(`'use strict'; return (${clean || 0})`)();
+            } catch (e) { return 0; }
+        }
+
+        function calculateTotals() {
+            // Lógica para somar todos os inputs da tela e atualizar o dashboard no topo
+            // (Pode ser implementada via JS para ser instantâneo)
+        }
+
+        // Inicializa os totais ao carregar
+        window.onload = calculateTotals;
+    </script>
+
+    <style>
+        .math-input {
+            font-family: monospace;
+            font-weight: bold;
+        }
+
+        .card {
+            border-radius: 12px;
+        }
+
+        .shadow {
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
+        }
+    </style>
+
+    <%- include('partials/footer') %>

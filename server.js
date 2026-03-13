@@ -148,7 +148,12 @@ app.get("/", ensureAuthenticated, (req, res) => {
 });
 
 // People
-app.get("/people", ensureAuthenticated, (req, res) => res.render("people", { people: getPeopleAll() }));
+app.get("/people", ensureAuthenticated, (req, res) => {
+  // Verifique se o SELECT tem o is_owner ou use *
+  const people = db.prepare("SELECT * FROM people ORDER BY name ASC").all();
+  res.render("people", { people, title: "Pessoas" });
+});
+
 app.post("/people", ensureAuthenticated, (req, res) => {
   const name = (req.body.name || "").trim();
   if (name) db.prepare("INSERT OR IGNORE INTO people(name, active) VALUES (?, 1)").run(name);
@@ -259,7 +264,11 @@ app.get("/desmembramento/:year/:month", ensureAuthenticated, (req, res) => {
   `).get(owner.id, month, year);
 
   // 3. Busca Entradas e Gastos Fixos
-  const finances = db.prepare("SELECT * FROM monthly_finances WHERE month = ? AND year = ?").all(month, year);
+  const finances = db.prepare(`
+    SELECT * FROM monthly_finances 
+    WHERE month = ? AND year = ?
+`).all(month, year);
+
   const categories = db.prepare("SELECT * FROM finance_categories WHERE is_active = 1").all();
 
   // 4. Busca Bloco de Notas

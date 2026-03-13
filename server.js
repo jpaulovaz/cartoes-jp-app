@@ -430,10 +430,10 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   const params = [month, year, month, year];
 
   // Filtros dinâmicos
-  if (filters.f_desc) { where.push("t.description LIKE ?"); params.push(likeParam(filters.f_desc)); }
-  if (filters.f_card) { where.push("c.name LIKE ?"); params.push(likeParam(filters.f_card)); }
-  if (filters.f_number) { where.push("COALESCE(t.card_number,'') LIKE ?"); params.push(likeParam(filters.f_number)); }
-  if (filters.f_date) { where.push("COALESCE(t.txn_date,'') LIKE ?"); params.push(likeParam(filters.f_date)); }
+  if (filters.f_desc) { where.push("t.description LIKE ?"); params.push(`%${filters.f_desc}%`); }
+  if (filters.f_card) { where.push("c.name LIKE ?"); params.push(`%${filters.f_card}%`); }
+  if (filters.f_number) { where.push("COALESCE(t.card_number,'') LIKE ?"); params.push(`%${filters.f_number}%`); }
+  if (filters.f_date) { where.push("COALESCE(t.txn_date,'') LIKE ?"); params.push(`%${filters.f_date}%`); }
 
   if (filters.f_amount) {
     const s = filters.f_amount.replace(/\s+/g, "");
@@ -455,10 +455,10 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
            (SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id=t.id) AS selected_csv
     FROM transactions t
     JOIN cards c ON c.id=t.card_id
-    LEFT JOIN imports i ON i.id=t.import_id
-    WHERE ( (i.month=? AND i.year=?) OR (t.due_month=? AND t.due_year=?) )
+    LEFT JOIN imports i ON i.id=t.import_id 
+    WHERE ${where.join(" AND ")}
     ORDER BY ${orderBy}
-  `).all(month, year, month, year); // Note que passamos month/year DUAS VEZES aqui
+  `).all(...params);
 
   txns.forEach(t => {
     t.selected_ids = (t.selected_csv ? t.selected_csv.split(",").map(x => Number(x)) : []).filter(Boolean);

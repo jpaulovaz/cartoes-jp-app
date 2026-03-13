@@ -409,7 +409,6 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 
 app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   const parsed = parseMonthYear(req.params.month, req.params.year);
-
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
 
@@ -426,11 +425,11 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     f_allocated: (req.query.f_allocated || "").toString().trim()
   };
 
-  // 1. Definimos a base da busca (Importação OU Manual)
+  // Base da busca: Importação OU Manual
   const where = ["((i.month=? AND i.year=?) OR (t.due_month=? AND t.due_year=?))"];
   const params = [month, year, month, year];
 
-  // 2. Adicionamos os filtros dinâmicos ao array 'where' e ao array 'params'
+  // Filtros dinâmicos
   if (filters.f_desc) { where.push("t.description LIKE ?"); params.push(likeParam(filters.f_desc)); }
   if (filters.f_card) { where.push("c.name LIKE ?"); params.push(likeParam(filters.f_card)); }
   if (filters.f_number) { where.push("COALESCE(t.card_number,'') LIKE ?"); params.push(likeParam(filters.f_number)); }
@@ -443,8 +442,13 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     params.push(likeParam(s.replace(",", ".")));
   }
 
-  // 3. Executamos a query usando o .join(" AND ") para que todos os filtros funcionem juntos
-  // Usamos LEFT JOIN para garantir que transações manuais (sem import_id) apareçam.
+  if (filters.f_allocated) {
+    const f = filters.f_allocated.toLowerCase();
+    if (f.startsWith("s")) where.push("alloc_count > 0");
+    else if (f.startsWith("n")) where.push("alloc_count = 0");
+  }
+
+  // Query corrigida com LEFT JOIN e contagem exata de parâmetros
   const txns = db.prepare(`
     SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
            (SELECT COUNT(*) FROM allocations a WHERE a.transaction_id=t.id) AS alloc_count,
@@ -454,7 +458,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     LEFT JOIN imports i ON i.id=t.import_id
     WHERE ${where.join(" AND ")}
     ORDER BY ${orderBy}
-  `).all(...params); // O spread operator (...) garante que passamos todos os parâmetros na ordem certa
+  `).all(...params);
 
   txns.forEach(t => {
     t.selected_ids = (t.selected_csv ? t.selected_csv.split(",").map(x => Number(x)) : []).filter(Boolean);
@@ -480,7 +484,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
 
-  // 1. Buscamos os dados da transação e a data (vinda do import ou manual)
+  // Busca segura de dados e redirecionamento
   const txn = db.prepare(`
     SELECT t.id, t.amount_cents, 
            COALESCE(i.month, t.due_month) as month, 
@@ -492,7 +496,6 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
 
   if (!txn) return res.status(404).send("Transação não encontrada.");
 
-  // 2. Processa os IDs das pessoas
   let personIds = req.body.person_ids || [];
   if (!Array.isArray(personIds)) personIds = [personIds];
   personIds = personIds.map(Number).filter(Boolean);
@@ -512,7 +515,6 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
     }
   })();
 
-  // 3. Redireciona usando os dados que o COALESCE encontrou
   res.redirect(`/month/${txn.year}/${txn.month}`);
 });
 
@@ -539,6 +541,7 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
 app.post("/txn/:id", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
 
+  // Busca segura de dados e redirecionamento
   const txn = db.prepare(`
     SELECT t.id, t.amount_cents, 
            COALESCE(i.month, t.due_month) as month, 

@@ -944,6 +944,7 @@ app.post("/finances/toggle-close", ensureAuthenticated, express.json(), (req, re
 });
 
 app.post("/txn/manual", ensureAuthenticated, (req, res) => {
+  console.log('\n\n🚀🚀🚀 ROTA /txn/manual CHAMADA! 🚀🚀🚀');
   console.log('\n========================================');
   console.log('DEBUG: POST /txn/manual - INICIADO');
   console.log('========================================');

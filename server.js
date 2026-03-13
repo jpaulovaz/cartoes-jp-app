@@ -12,6 +12,17 @@ const { Strategy } = require('passport-openidconnect');
 const SQLiteStore = require('connect-sqlite3')(session);
 const db = require("./src/db");
 
+// --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
+require('./scripts/migrate.js');
+
+// --- OPCIONAL: EXECUTA SEED AUTOMÁTICO (comentar se não quiser dados de exemplo) ---
+// require('./scripts/seed.js');
+
+// Migrações adicionais específicas
+
+try { db.prepare("ALTER TABLE transactions ADD COLUMN due_month INTEGER").run(); } catch (e) { }
+try { db.prepare("ALTER TABLE transactions ADD COLUMN due_year INTEGER").run(); } catch (e) { }
+try { db.prepare("ALTER TABLE transactions ADD COLUMN parent_txn_id INTEGER").run(); } catch (e) { }
 
 // Adiciona a coluna de telefone na tabela people se ela não existir
 try { db.prepare("ALTER TABLE people ADD COLUMN phone TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -33,13 +44,24 @@ const { computeDueDate } = require("./src/dueDate");
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
+// --- MIDDLEWARES DE BODY PARSER (DEVE VIR ANTES DAS ROTAS) ---
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+// --- MIDDLEWARE DE LOGGING GLOBAL ---
+app.use((req, res, next) => {
+  if (req.method === 'POST' && req.path === '/txn/manual') {
+  }
+  next();
+});
+
 // --- CONFIGURAÇÃO DE SESSÃO E AUTH ---
 app.use(session({
   store: new SQLiteStore({ db: 'sessions.sqlite', dir: './' }),
   secret: process.env.SESSION_SECRET || 'chave-secreta-padrao',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 } // Login dura 7 dias
+  cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 } // 30 dias
 }));
 
 app.use(passport.initialize());
@@ -48,57 +70,96 @@ app.use(passport.session());
 // Primeiro, garanta que a URL do emissor esteja correta
 const issuerUrl = process.env.POCKET_ID_URL;
 
-passport.use('oidc', new Strategy({
-  issuer: 'https://pocket-id.johnflix.com.br', // Deve ser exatamente igual ao seu POCKET_ID_URL
-  authorizationURL: 'https://pocket-id.johnflix.com.br/authorize', // Conforme sua lista
-  tokenURL: 'https://pocket-id.johnflix.com.br/api/oidc/token',    // Conforme sua lista
-  userInfoURL: 'https://pocket-id.johnflix.com.br/api/oidc/userinfo', // Conforme sua lista
-  clientID: process.env.CLIENT_ID,
-  clientSecret: process.env.CLIENT_SECRET,
-  callbackURL: process.env.CALLBACK_URL,
-  scope: 'openid profile email'
-}, (issuer, profile, done) => {
-  const authorizedEmails = ['jpmcvs@gmail.com'];
+// Só registra a estratégia OIDC se as variáveis de ambiente estiverem configuradas
+if (process.env.CLIENT_ID && process.env.CLIENT_SECRET && process.env.CALLBACK_URL && process.env.POCKET_ID_URL) {
+  const pocketIdUrl = process.env.POCKET_ID_URL.replace(/\/$/, ''); // Remove trailing slash
+  passport.use('oidc', new Strategy({
+    issuer: pocketIdUrl,
+    authorizationURL: `${pocketIdUrl}/authorize`,
+    tokenURL: `${pocketIdUrl}/api/oidc/token`,
+    userInfoURL: `${pocketIdUrl}/api/oidc/userinfo`,
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    callbackURL: process.env.CALLBACK_URL,
+    scope: 'openid profile email'
+  }, (issuer, profile, done) => {
+    const authorizedEmails = ['jpmcvs@gmail.com'];
 
-  // No Pocket ID 2.4.0, o email costuma vir em profile._json.email
-  const userEmail = profile._json?.email || (profile.emails && profile.emails[0].value);
+    // No Pocket ID 2.4.0, o email costuma vir em profile._json.email
+    const userEmail = profile._json?.email || (profile.emails && profile.emails[0].value);
 
-  if (userEmail && authorizedEmails.includes(userEmail)) {
-    return done(null, profile);
-  }
-  return done(null, false, { message: 'Usuário não autorizado.' });
-}));
+    if (userEmail && authorizedEmails.includes(userEmail)) {
+      return done(null, profile);
+    }
+    return done(null, false, { message: 'Usuário não autorizado.' });
+  }));
+} else {
+}
 
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
 
 // Função para proteger as páginas
 function ensureAuthenticated(req, res, next) {
-  if (req.isAuthenticated()) return next();
+  // Se estiver autenticado via Passport (PocketID) ou via Sessão Local
+  if (req.method === 'POST' && req.path === '/txn/manual') {
+  }
+  
+  if (req.isAuthenticated() || req.session.localAuth) {
+    if (req.method === 'POST' && req.path === '/txn/manual') {
+    }
+    return next();
+  }
+  
+  if (req.method === 'POST' && req.path === '/txn/manual') {
+  }
   res.redirect('/login');
 }
 
 // --- ROTAS DE AUTH ---
 // CORREÇÃO: Removido ensureAuthenticated daqui para evitar loop
-app.get('/login', passport.authenticate('oidc'));
+app.get('/login', (req, res) => {
+  if (process.env.POCKET_ID_URL) {
+    return passport.authenticate('oidc')(req, res);
+  }
+  res.render('login', { error: null });
+});
 
-app.get('/auth/callback', passport.authenticate('oidc', {
-  successRedirect: '/',
-  failureRedirect: '/login'
-}));
+// Processamento do Login Local
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === process.env.LOCAL_ADMIN_USER && password === process.env.LOCAL_ADMIN_PASS) {
+    req.session.localAuth = true;
+    return res.redirect('/');
+  }
+  res.render('login', { error: 'Usuário ou senha incorretos.' });
+});
+
+// Rota de callback do Pocket ID (só se configurado)
+if (process.env.CLIENT_ID && process.env.CLIENT_SECRET) {
+  app.get('/auth/callback', passport.authenticate('oidc', {
+    successRedirect: '/',
+    failureRedirect: '/login'
+  }));
+}
 
 app.get('/logout', (req, res) => {
   req.logout(() => {
-    res.redirect(process.env.POCKET_ID_URL + '/logout');
+    if (process.env.POCKET_ID_URL) {
+      res.redirect(process.env.POCKET_ID_URL + '/logout');
+    } else {
+      // Se usando login local, apenas limpa a sessão
+      req.session.destroy(() => {
+        res.redirect('/login');
+      });
+    }
   });
 });
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
-// CONFIGURAÇÃO DE LIMITES PARA IMAGENS 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+// NOTA: Middlewares de body-parser já foram configurados no início do arquivo
 
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -122,6 +183,14 @@ function getPeopleActive() { return db.prepare("SELECT id, name FROM people WHER
 function likeParam(s) { return `%${String(s).trim()}%`; }
 
 app.get("/", ensureAuthenticated, (req, res) => {
+  // Verifica se existe um titular cadastrado
+  const owner = db.prepare("SELECT id FROM people WHERE is_owner = 1 LIMIT 1").get();
+  
+  // Se não houver titular, redireciona para a página de Pessoas para criar um
+  if (!owner) {
+    return res.redirect('/people');
+  }
+  
   const d = new Date();
   const year = d.getFullYear();
   const month = d.getMonth() + 1;
@@ -129,14 +198,25 @@ app.get("/", ensureAuthenticated, (req, res) => {
 });
 
 app.get("/geral", ensureAuthenticated, (req, res) => {
-  // 1. Puxamos todas as importações e somamos o total de cada uma
+  // 1. Puxamos todas as importacoes E transacoes manuais
   const recent = db.prepare(`
     SELECT i.id, i.month, i.year, i.created_at, i.original_filename, c.name AS card_name, c.id AS card_id,
            (SELECT COUNT(*) FROM transactions t WHERE t.import_id=i.id) AS txn_count,
            (SELECT COALESCE(SUM(amount_cents), 0) FROM transactions t WHERE t.import_id=i.id) AS import_total
     FROM imports i
     JOIN cards c ON c.id=i.card_id
-    ORDER BY i.year DESC, i.month DESC, i.id DESC
+    
+    UNION ALL
+    
+    SELECT NULL as id, t.due_month as month, t.due_year as year, t.created_at, 'Manual' as original_filename,
+           c.name AS card_name, c.id AS card_id,
+           1 AS txn_count,
+           t.amount_cents AS import_total
+    FROM transactions t
+    JOIN cards c ON c.id=t.card_id
+    WHERE t.import_id IS NULL
+    
+    ORDER BY year DESC, month DESC, id DESC
   `).all();
 
   // 2. Puxamos o que já foi marcado como pago na tela de Resumo
@@ -146,44 +226,77 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
     statements[`${s.year}-${s.month}-${s.card_id}`] = s.paid_cents || 0;
   });
 
-  // 3. Agrupamos por Mês/Ano e calculamos os totais
+  // 3. Agrupamos por Mes/Ano E POR CARTAO, e calculamos os totais
   const groupedMap = new Map();
 
   recent.forEach(r => {
-    const key = `${r.year}-${r.month}`;
+    // Agrupa por year-month-card_id para nao misturar cartoes diferentes
+    const key = `${r.year}-${r.month}-${r.card_id}`;
     if (!groupedMap.has(key)) {
       groupedMap.set(key, {
         year: r.year,
         month: r.month,
+        card_id: r.card_id,
+        card_name: r.card_name,
         label: `${String(r.month).padStart(2, '0')}/${r.year}`,
         cards: [],
         total_cents: 0,
-        paid_cents: 0,
-        unique_cards: new Set()
+        paid_cents: 0
       });
     }
     const group = groupedMap.get(key);
     group.cards.push(r);
     group.total_cents += r.import_total;
-    // Registramos quais cartões estão neste mês para não duplicar pagamentos
-    group.unique_cards.add(r.card_id);
   });
 
-  // 4. Calculamos o Total Pago e o que Falta Pagar por Mês
+  // 4. Calculamos o Total Pago e o que Falta Pagar por Cartao/Mes
   for (const group of groupedMap.values()) {
-    for (const cid of group.unique_cards) {
-      const paid = statements[`${group.year}-${group.month}-${cid}`] || 0;
-      group.paid_cents += paid;
-    }
+    const paid = statements[`${group.year}-${group.month}-${group.card_id}`] || 0;
+    group.paid_cents = paid;
     group.remaining_cents = Math.max(0, group.total_cents - group.paid_cents);
   }
 
-  // 5. Transformamos em array e ordenamos (mais recentes primeiro)
+  // 5. Transformamos em array e ordenamos com lógica especial
   const groupedRecent = Array.from(groupedMap.values());
-  groupedRecent.sort((a, b) => (b.year !== a.year) ? b.year - a.year : b.month - a.month);
+  
+  // Pega a data atual
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  
+  // Encontra o mes atual ou proximo (o mais proximo)
+  let currentOrNextGroup = null;
+  const others = [];
+  
+  groupedRecent.forEach(group => {
+    const isCurrentOrNext = (group.year === currentYear && group.month === currentMonth) ||
+                            (group.year === currentYear && group.month > currentMonth) ||
+                            (group.year === currentYear + 1 && group.month < currentMonth);
+    
+    if (isCurrentOrNext && !currentOrNextGroup) {
+      // Pega o primeiro mes atual/proximo (o mais proximo)
+      currentOrNextGroup = group;
+    } else {
+      others.push(group);
+    }
+  });
+  
+  // Ordena os outros em ordem decrescente
+  others.sort((a, b) => (b.year !== a.year) ? b.year - a.year : b.month - a.month);
+  
+  // Junta: primeiro o mes atual/proximo, depois os outros
+  const groupedRecent_final = currentOrNextGroup ? [currentOrNextGroup, ...others] : others;
+
+  const cards = db.prepare("SELECT id, name FROM cards ORDER BY name ASC").all();
 
   // Enviamos para o frontend, incluindo a função de formatar dinheiro
-  res.render("home", { groupedRecent, formatBRLFromCents });
+  //res.render("home", { groupedRecent, formatBRLFromCents });
+  res.render("home", {
+    groupedRecent: groupedRecent_final,
+    formatBRLFromCents,
+    cards, // <--- ADICIONE ESTA LINHA
+    user: req.user || req.session.user
+  });
 });
 
 // People
@@ -332,14 +445,17 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const owner = db.prepare("SELECT * FROM people WHERE is_owner = 1 LIMIT 1").get();
   if (!owner) return res.status(400).send("Defina um titular na aba Pessoas primeiro.");
 
-  // 2. Calcula total de cartões do titular para o mês
+  // 2. Calcula total de cartões do titular para o mês (incluindo transações manuais)
   const cardTotal = db.prepare(`
     SELECT SUM(a.share_cents) as total
     FROM allocations a
     JOIN transactions t ON t.id = a.transaction_id
-    JOIN imports i ON i.id = t.import_id
-    WHERE a.person_id = ? AND i.month = ? AND i.year = ?
-  `).get(owner.id, month, year);
+    LEFT JOIN imports i ON i.id = t.import_id
+    WHERE a.person_id = ? AND (
+      (i.month = ? AND i.year = ?) OR
+      (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+    )
+  `).get(owner.id, month, year, month, year);
 
   // 3. Busca Entradas e Gastos Fixos (Agora ele vai achar as contas que foram clonadas acima!)
   const finances = db.prepare(`
@@ -392,13 +508,15 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     f_allocated: (req.query.f_allocated || "").toString().trim()
   };
 
-  const where = ["i.month=? AND i.year=?"];
-  const params = [month, year];
+  // Base da busca: Importação OU Manual
+  const where = ["((i.month=? AND i.year=?) OR (t.due_month=? AND t.due_year=?))"];
+  const params = [month, year, month, year];
 
-  if (filters.f_desc) { where.push("t.description LIKE ?"); params.push(likeParam(filters.f_desc)); }
-  if (filters.f_card) { where.push("c.name LIKE ?"); params.push(likeParam(filters.f_card)); }
-  if (filters.f_number) { where.push("COALESCE(t.card_number,'') LIKE ?"); params.push(likeParam(filters.f_number)); }
-  if (filters.f_date) { where.push("COALESCE(t.txn_date,'') LIKE ?"); params.push(likeParam(filters.f_date)); }
+  // Filtros dinâmicos
+  if (filters.f_desc) { where.push("t.description LIKE ?"); params.push(`%${filters.f_desc}%`); }
+  if (filters.f_card) { where.push("c.name LIKE ?"); params.push(`%${filters.f_card}%`); }
+  if (filters.f_number) { where.push("COALESCE(t.card_number,'') LIKE ?"); params.push(`%${filters.f_number}%`); }
+  if (filters.f_date) { where.push("COALESCE(t.txn_date,'') LIKE ?"); params.push(`%${filters.f_date}%`); }
 
   if (filters.f_amount) {
     const s = filters.f_amount.replace(/\s+/g, "");
@@ -413,16 +531,17 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     else if (f.startsWith("n")) where.push("alloc_count = 0");
   }
 
+  // Query corrigida com LEFT JOIN e contagem exata de parâmetros
   const txns = db.prepare(`
     SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
            (SELECT COUNT(*) FROM allocations a WHERE a.transaction_id=t.id) AS alloc_count,
            (SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id=t.id) AS selected_csv
     FROM transactions t
-    JOIN cards c ON c.id=t.card_id
-    JOIN imports i ON i.id=t.import_id
-    WHERE ${where.join(" AND ")}
+    LEFT JOIN cards c ON c.id=t.card_id
+    LEFT JOIN imports i ON i.id=t.import_id 
+    WHERE ((i.month=? AND i.year=?) OR (t.due_month=? AND t.due_year=?))
     ORDER BY ${orderBy}
-  `).all(...params);
+  `).all(month, year, month, year);
 
   txns.forEach(t => {
     t.selected_ids = (t.selected_csv ? t.selected_csv.split(",").map(x => Number(x)) : []).filter(Boolean);
@@ -445,9 +564,84 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   res.render("month", { month, year, txns, people, cards, formatBRLFromCents, sort, dir, sortLink, filters });
 });
 
+app.post("/txn/manual", ensureAuthenticated, (req, res) => {
+  
+  const { date, description, amount, card_id, first_due, installments } = req.body;
+
+  try {
+    // Validacao: card_id deve ser um numero valido
+    const cardIdNum = Number(card_id);
+    
+    if (!cardIdNum || isNaN(cardIdNum)) {
+      return res.status(400).send("Cartao invalido. Selecione um cartao valido.");
+    }
+    
+    // Validacao: verifica se o cartao existe
+    const cardExists = db.prepare("SELECT id FROM cards WHERE id = ?").get(cardIdNum);
+    
+    if (!cardExists) {
+      return res.status(400).send("Cartao nao encontrado no sistema.");
+    }
+    
+    // Conversao de valores
+    const totalCents = centsFromPtBrMoney(amount);
+    
+    const numInstallments = parseInt(installments) || 1;
+    
+    const installmentValue = Math.floor(totalCents / numInstallments);
+    const remainder = totalCents % numInstallments;
+    
+    let [startYear, startMonth] = first_due.split('-').map(Number);
+
+    db.transaction(() => {
+      const activePeople = db.prepare("SELECT id FROM people WHERE active = 1").all();
+
+      for (let i = 0; i < numInstallments; i++) {
+        
+        let currentMonth = startMonth + i;
+        let currentYear = startYear;
+        while (currentMonth > 12) { currentMonth -= 12; currentYear += 1; }
+
+        const finalDesc = numInstallments > 1
+          ? `${description} (${String(i + 1).padStart(2, '0')}/${String(numInstallments).padStart(2, '0')})`
+          : description;
+
+        const currentAmount = (i === numInstallments - 1) ? installmentValue + remainder : installmentValue;
+
+        // Note: import_id fica NULL para itens manuais
+        const info = db.prepare(`
+            INSERT INTO transactions (card_id, txn_date, description, amount_cents, due_month, due_year, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+           `).run(cardIdNum, date, finalDesc, currentAmount, currentMonth, currentYear, new Date().toISOString());
+
+        if (activePeople.length === 1) {
+          db.prepare(`INSERT INTO allocations (transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?)`)
+            .run(info.lastInsertRowid, activePeople[0].id, currentAmount, new Date().toISOString());
+        }
+      }
+    })();
+
+    
+    // APENAS UM REDIRECT AQUI:
+    res.redirect(`/month/${startYear}/${startMonth}`);
+
+  } catch (err) {
+    res.status(500).send("Erro ao processar transacao manual: " + err.message);
+  }
+  
+});
+
 app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
-  const txn = db.prepare("SELECT id, amount_cents, import_id FROM transactions WHERE id=?").get(id);
+
+  // Busca os dados da transação E as informações de mês/ano
+  const txn = db.prepare(`
+    SELECT t.id, t.amount_cents, COALESCE(i.month, t.due_month) as month, COALESCE(i.year, t.due_year) as year 
+    FROM transactions t 
+    LEFT JOIN imports i ON i.id = t.import_id 
+    WHERE t.id = ?
+  `).get(id);
+
   if (!txn) return res.status(404).send("Transação não encontrada.");
 
   let personIds = req.body.person_ids || [];
@@ -469,20 +663,22 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
     }
   })();
 
-  const imp = db.prepare("SELECT month, year FROM imports WHERE id=?").get(txn.import_id);
-  res.redirect(`/month/${imp.year}/${imp.month}`);
+  res.redirect(`/month/${txn.year}/${txn.month}`);
 });
 
 // Detail page
 app.get("/txn/:id", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
   const txn = db.prepare(`
-    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name, i.month, i.year
+    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name, 
+           COALESCE(t.due_month, i.month) as month, 
+           COALESCE(t.due_year, i.year) as year
     FROM transactions t
-    JOIN cards c ON c.id=t.card_id
-    JOIN imports i ON i.id=t.import_id
+    LEFT JOIN cards c ON c.id=t.card_id
+    LEFT JOIN imports i ON i.id=t.import_id 
     WHERE t.id=?
   `).get(id);
+
   if (!txn) return res.status(404).send("Transação não encontrada.");
 
   const people = getPeopleActive();
@@ -492,7 +688,17 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
 
 app.post("/txn/:id", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
-  const txn = db.prepare("SELECT id, amount_cents, import_id FROM transactions WHERE id=?").get(id);
+
+  // 1. Buscamos os dados da transação (Manual ou Import)
+  const txn = db.prepare(`
+    SELECT t.id, t.amount_cents, 
+           COALESCE(i.month, t.due_month) as month, 
+           COALESCE(i.year, t.due_year) as year 
+    FROM transactions t 
+    LEFT JOIN imports i ON i.id = t.import_id 
+    WHERE t.id = ?
+  `).get(id);
+
   if (!txn) return res.status(404).send("Transação não encontrada.");
 
   let personIds = req.body.person_ids || [];
@@ -514,8 +720,8 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
     }
   })();
 
-  const imp = db.prepare("SELECT month, year FROM imports WHERE id=?").get(txn.import_id);
-  res.redirect(`/month/${imp.year}/${imp.month}`);
+  // 2. Redireciona usando o mês/ano que o COALESCE encontrou
+  res.redirect(`/month/${txn.year}/${txn.month}`);
 });
 
 // Summary (minimal)
@@ -534,23 +740,30 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
     CROSS JOIN cards c
     LEFT JOIN allocations a ON a.person_id=p.id
     LEFT JOIN transactions t ON t.id=a.transaction_id AND t.card_id=c.id
-    LEFT JOIN imports i ON i.id=t.import_id AND i.month=? AND i.year=?
+    LEFT JOIN imports i ON i.id=t.import_id
     WHERE p.active=1
-      AND (i.id IS NOT NULL OR a.id IS NULL)
+      AND (
+        (i.month=? AND i.year=?) OR
+        (t.import_id IS NULL AND t.due_month=? AND t.due_year=?) OR
+        a.id IS NULL
+      )
     GROUP BY p.id, c.id
     ORDER BY p.name, c.name
-  `).all(month, year);
+  `).all(month, year, month, year);
 
   const unassigned = db.prepare(`
     SELECT c.name AS card_name, COALESCE(SUM(t.amount_cents),0) AS total_cents
     FROM transactions t
     JOIN cards c ON c.id=t.card_id
-    JOIN imports i ON i.id=t.import_id
-    WHERE i.month=? AND i.year=?
+    LEFT JOIN imports i ON i.id=t.import_id
+    WHERE (
+      (i.month=? AND i.year=?) OR
+      (t.import_id IS NULL AND t.due_month=? AND t.due_year=?)
+    )
       AND NOT EXISTS (SELECT 1 FROM allocations a WHERE a.transaction_id=t.id)
     GROUP BY c.id
     ORDER BY c.name
-  `).all(month, year);
+  `).all(month, year, month, year);
 
   // Card panel
   const cardTotals = db.prepare(`
@@ -558,10 +771,15 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
            COALESCE(SUM(t.amount_cents),0) as total_cents
     FROM cards c
     LEFT JOIN transactions t ON t.card_id=c.id
-    LEFT JOIN imports i ON i.id=t.import_id AND i.month=? AND i.year=?
+    LEFT JOIN imports i ON i.id=t.import_id
+    WHERE (
+      (i.month=? AND i.year=?) OR
+      (t.import_id IS NULL AND t.due_month=? AND t.due_year=?) OR
+      t.id IS NULL
+    )
     GROUP BY c.id
     ORDER BY c.name
-  `).all(month, year);
+  `).all(month, year, month, year);
 
   const stmtRows = db.prepare(`
     SELECT card_id, computed_due_date, override_due_date, paid_cents
@@ -591,11 +809,15 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
     FROM people p
     LEFT JOIN allocations a ON a.person_id=p.id
     LEFT JOIN transactions t ON t.id=a.transaction_id
-    LEFT JOIN imports i ON i.id=t.import_id AND i.month=? AND i.year=?
-    WHERE p.active=1 AND (i.id IS NOT NULL OR a.id IS NULL)
+    LEFT JOIN imports i ON i.id=t.import_id
+    WHERE p.active=1 AND (
+      (i.month=? AND i.year=?) OR
+      (t.import_id IS NULL AND t.due_month=? AND t.due_year=?) OR
+      a.id IS NULL
+    )
     GROUP BY p.id
     ORDER BY p.name
-  `).all(month, year);
+  `).all(month, year, month, year);
 
   const payRows = db.prepare(`
     SELECT person_id, paid_cents
@@ -697,21 +919,27 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
     FROM allocations a
     JOIN transactions t ON t.id=a.transaction_id
     JOIN cards c ON c.id=t.card_id
-    JOIN imports i ON i.id=t.import_id
-    WHERE i.month=? AND i.year=? AND a.person_id=?
+    LEFT JOIN imports i ON i.id=t.import_id
+    WHERE (
+      (i.month=? AND i.year=?) OR
+      (t.import_id IS NULL AND t.due_month=? AND t.due_year=?)
+    ) AND a.person_id=?
     ORDER BY t.txn_date IS NULL, t.txn_date, c.name, t.id
-  `).all(month, year, personId);
+  `).all(month, year, month, year, personId);
 
   const totalsByCard = db.prepare(`
     SELECT c.name AS card_name, COALESCE(SUM(a.share_cents),0) AS total_cents
     FROM allocations a
     JOIN transactions t ON t.id=a.transaction_id
     JOIN cards c ON c.id=t.card_id
-    JOIN imports i ON i.id=t.import_id
-    WHERE i.month=? AND i.year=? AND a.person_id=?
+    LEFT JOIN imports i ON i.id=t.import_id
+    WHERE (
+      (i.month=? AND i.year=?) OR
+      (t.import_id IS NULL AND t.due_month=? AND t.due_year=?)
+    ) AND a.person_id=?
     GROUP BY c.id
     ORDER BY c.name
-  `).all(month, year, personId);
+  `).all(month, year, month, year, personId);
 
   const total = totalsByCard.reduce((acc, r) => acc + r.total_cents, 0);
 
@@ -750,7 +978,6 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
 
     res.json({ success: true });
   } catch (e) {
-    console.error("Erro Evolution API:", e.response?.data || e.message);
     res.status(500).json({ error: "Falha ao enviar imagem via WhatsApp" });
   }
 });
@@ -834,4 +1061,7 @@ app.post("/finances/toggle-close", ensureAuthenticated, express.json(), (req, re
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`✅ Rodando em http://localhost:${PORT}`));
+
+app.listen(PORT, () => {
+  console.log(`✅ Rodando em http://localhost:${PORT}`);
+});

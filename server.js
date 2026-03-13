@@ -76,12 +76,13 @@ app.use(passport.session());
 const issuerUrl = process.env.POCKET_ID_URL;
 
 // Só registra a estratégia OIDC se as variáveis de ambiente estiverem configuradas
-if (process.env.CLIENT_ID && process.env.CLIENT_SECRET && process.env.CALLBACK_URL) {
+if (process.env.CLIENT_ID && process.env.CLIENT_SECRET && process.env.CALLBACK_URL && process.env.POCKET_ID_URL) {
+  const pocketIdUrl = process.env.POCKET_ID_URL.replace(/\/$/, ''); // Remove trailing slash
   passport.use('oidc', new Strategy({
-    issuer: 'https://pocket-id.johnflix.com.br', // Deve ser exatamente igual ao seu POCKET_ID_URL
-    authorizationURL: 'https://pocket-id.johnflix.com.br/authorize', // Conforme sua lista
-    tokenURL: 'https://pocket-id.johnflix.com.br/api/oidc/token',    // Conforme sua lista
-    userInfoURL: 'https://pocket-id.johnflix.com.br/api/oidc/userinfo', // Conforme sua lista
+    issuer: pocketIdUrl,
+    authorizationURL: `${pocketIdUrl}/authorize`,
+    tokenURL: `${pocketIdUrl}/api/oidc/token`,
+    userInfoURL: `${pocketIdUrl}/api/oidc/userinfo`,
     clientID: process.env.CLIENT_ID,
     clientSecret: process.env.CLIENT_SECRET,
     callbackURL: process.env.CALLBACK_URL,

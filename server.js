@@ -484,9 +484,9 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
 
-  // Busca segura de dados e redirecionamento
-  const dateInfo = db.prepare(`
-    SELECT COALESCE(i.month, t.due_month) as month, COALESCE(i.year, t.due_year) as year 
+  // Busca os dados da transação E as informações de mês/ano
+  const txn = db.prepare(`
+    SELECT t.id, t.amount_cents, COALESCE(i.month, t.due_month) as month, COALESCE(i.year, t.due_year) as year 
     FROM transactions t 
     LEFT JOIN imports i ON i.id = t.import_id 
     WHERE t.id = ?
@@ -513,7 +513,7 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
     }
   })();
 
-  res.redirect(`/month/${dateInfo.year}/${dateInfo.month}`);
+  res.redirect(`/month/${txn.year}/${txn.month}`);
 });
 
 // Detail page

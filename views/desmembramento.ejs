@@ -1,10 +1,11 @@
 <%- include('partials/header') %>
 
-    <% // Esta mágica de EJS calcula o seu saldo instantaneamente antes da página abrir let incCents=0, expCents=0;
+    <% // Esta mágica de EJS calcula o seu saldo instantaneamente antes da página abrir let incCents=0; let expCents=0;
         finances.forEach(f=> {
         if(f.type === 'income') incCents += f.amount_cents;
         if(f.type === 'expense') expCents += f.amount_cents;
         });
+
         let saldoCents = incCents - expCents - cardTotalCents;
         %>
 

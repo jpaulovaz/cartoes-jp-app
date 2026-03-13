@@ -441,15 +441,15 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   }
 
   const txns = db.prepare(`
-    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
-           (SELECT COUNT(*) FROM allocations a WHERE a.transaction_id=t.id) AS alloc_count,
-           (SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id=t.id) AS selected_csv
-    FROM transactions t
-    JOIN cards c ON c.id=t.card_id
-    LEFT JOIN imports i ON i.id=t.import_id  
-    WHERE ${where.join(" AND ")}
-    ORDER BY ${orderBy}
-  `).all(...params);
+  SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
+         (SELECT COUNT(*) FROM allocations a WHERE a.transaction_id=t.id) AS alloc_count,
+         (SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id=t.id) AS selected_csv
+  FROM transactions t
+  JOIN cards c ON c.id=t.card_id
+  LEFT JOIN imports i ON i.id=t.import_id -- IMPORTANTE: Mudar para LEFT JOIN
+  WHERE (i.month=? AND i.year=?) OR (t.due_month=? AND t.due_year=?) -- Filtra os dois tipos
+  ORDER BY ${orderBy}
+`).all(month, year, month, year);
 
   txns.forEach(t => {
     t.selected_ids = (t.selected_csv ? t.selected_csv.split(",").map(x => Number(x)) : []).filter(Boolean);
@@ -928,13 +928,13 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
     })();
 
     console.log("Inserção manual concluída com sucesso.");
-    // Redireciona para a página do mês inicial para confirmar a criação
     res.redirect(`/month/${startYear}/${startMonth}`);
 
   } catch (err) {
     console.error("Erro ao inserir manualmente:", err);
     res.status(500).send("Erro ao processar transação manual.");
   }
+
 });
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`✅ Rodando em http://localhost:${PORT}`));

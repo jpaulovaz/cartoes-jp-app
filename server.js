@@ -655,66 +655,71 @@ app.post("/people/:id/set-owner", ensureAuthenticated, (req, res) => {
 // --- ROTAS DO DESMEMBRAMENTO ---
 
 // 1. Salva/Atualiza valores das Contas Domésticas Fixas
-app.post("/finances/save-item", ensureAuthenticated, (req, res) => {
-  const { month, year, type, category_id, formula, amount_cents } = req.body;
-  db.transaction(() => {
-    // Limpa a conta anterior para evitar duplicidade e insere a nova atualizada
-    db.prepare("DELETE FROM monthly_finances WHERE month = ? AND year = ? AND type = ? AND category_id = ?")
-      .run(month, year, type, category_id);
+app.post("/finances/save-item", ensureAuthenticated, express.json(), (req, res) => {
+  try {
+    const { month, year, type, category_id, formula, amount_cents } = req.body;
+    db.transaction(() => {
+      db.prepare("DELETE FROM monthly_finances WHERE month = ? AND year = ? AND type = ? AND category_id = ?")
+        .run(month, year, type, category_id);
 
+      db.prepare(`
+                INSERT INTO monthly_finances (month, year, type, category_id, formula, amount_cents, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run(month, year, type, category_id, formula, amount_cents, new Date().toISOString());
+    })();
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+});
+
+// 2. Adiciona nova linha de Entrada (Caixa)
+app.post("/finances/add-income", ensureAuthenticated, express.json(), (req, res) => {
+  try {
+    const { month, year, description } = req.body;
     db.prepare(`
-            INSERT INTO monthly_finances (month, year, type, category_id, formula, amount_cents, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(month, year, type, category_id, formula, amount_cents, new Date().toISOString());
-  })();
-  res.json({ success: true });
+            INSERT INTO monthly_finances (month, year, type, description, formula, amount_cents, created_at)
+            VALUES (?, ?, 'income', ?, '', 0, ?)
+        `).run(month, year, description, new Date().toISOString());
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
 });
 
-// 2. Adiciona nova linha de Entrada (Caixa) - O botão +Nova
-app.post("/finances/add-income", ensureAuthenticated, (req, res) => {
-  const { month, year, description } = req.body;
-  db.prepare(`
-        INSERT INTO monthly_finances (month, year, type, description, formula, amount_cents, created_at)
-        VALUES (?, ?, 'income', ?, '0', 0, ?)
-    `).run(month, year, description, new Date().toISOString());
-  res.json({ success: true });
+// 3. Atualiza texto ou fórmula de uma Entrada
+app.post("/finances/update/:id", ensureAuthenticated, express.json(), (req, res) => {
+  try {
+    const id = req.params.id;
+    const { field, value, formula, amount_cents } = req.body;
+    if (field === 'description') {
+      db.prepare("UPDATE monthly_finances SET description = ? WHERE id = ?").run(value, id);
+    } else if (field === 'formula_and_value') {
+      db.prepare("UPDATE monthly_finances SET formula = ?, amount_cents = ? WHERE id = ?").run(formula, amount_cents, id);
+    }
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
 });
 
-// 3. Atualiza uma linha de Entrada (Nome ou Valor)
-app.post("/finances/update/:id", ensureAuthenticated, (req, res) => {
-  const id = req.params.id;
-  const { field, value, formula, amount_cents } = req.body;
-
-  if (field === 'description') {
-    db.prepare("UPDATE monthly_finances SET description = ? WHERE id = ?").run(value, id);
-  } else if (field === 'formula_and_value') {
-    db.prepare("UPDATE monthly_finances SET formula = ?, amount_cents = ? WHERE id = ?").run(formula, amount_cents, id);
-  }
-  res.json({ success: true });
-});
-
-// 4. Exclui uma linha de Entrada
+// 4. Deleta uma Entrada
 app.post("/finances/delete/:id", ensureAuthenticated, (req, res) => {
   db.prepare("DELETE FROM monthly_finances WHERE id = ?").run(req.params.id);
   res.json({ success: true });
 });
 
-// 5. Salva Lembretes e Rascunhos (Calculadora) sem sumir
-app.post("/finances/notes/:year/:month", ensureAuthenticated, (req, res) => {
-  const { year, month } = req.params;
-  const { type, content } = req.body;
-  const column = type === 'math' ? 'content_math' : 'content_text';
+// 5. Salva Lembretes e Calculadora
+app.post("/finances/notes/:year/:month", ensureAuthenticated, express.json(), (req, res) => {
+  try {
+    const { year, month } = req.params;
+    const { type, content } = req.body;
+    const column = type === 'math' ? 'content_math' : 'content_text';
 
-  // Checa manualmente e atualiza (mais seguro que ON CONFLICT do SQLite)
-  db.transaction(() => {
     const existing = db.prepare("SELECT id FROM scratchpad WHERE month = ? AND year = ?").get(month, year);
     if (existing) {
       db.prepare(`UPDATE scratchpad SET ${column} = ? WHERE id = ?`).run(content, existing.id);
     } else {
-      db.prepare(`INSERT INTO scratchpad (month, year, ${column}) VALUES (?, ?, ?)`).run(month, year, content);
+      const mathVal = type === 'math' ? content : '';
+      const textVal = type === 'text' ? content : '';
+      db.prepare(`INSERT INTO scratchpad (month, year, content_math, content_text) VALUES (?, ?, ?, ?)`).run(month, year, mathVal, textVal);
     }
-  })();
-  res.json({ success: true });
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
 });
 
 

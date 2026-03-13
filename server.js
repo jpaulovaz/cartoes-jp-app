@@ -681,7 +681,7 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
   const personId = Number(req.params.personId);
   if (!parsed) return res.status(400).send("Parâmetros inválidos.");
 
-  const person = db.prepare("SELECT id, name FROM people WHERE id=?").get(personId);
+  const person = db.prepare("SELECT * FROM people WHERE id=?").get(personId);
   if (!person) return res.status(400).send("Pessoa inválida.");
 
   const { month, year } = parsed;

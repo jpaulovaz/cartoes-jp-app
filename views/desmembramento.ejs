@@ -14,14 +14,12 @@
 
             /* Funções visuais para os campos */
             function getDisplayValue(fin) {
-            // Se tiver símbolo matemático, mostra a fórmula. Se não, mostra como Moeda.
             const hasMath = fin.formula && /[-+*/]/.test(fin.formula);
             if (hasMath) return fin.formula;
             return formatBRLFromCents(fin.amount_cents);
             }
 
             function getDesc(fin) {
-            // Mantém compatibilidade com as contas fixas antigas que você já tinha salvo
             if (fin.description) return fin.description;
             if (fin.category_id) {
             const cat = categories.find(c => c.id === fin.category_id);
@@ -53,29 +51,40 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                    <div class="bg-emerald-500 p-6 rounded-3xl text-white shadow-sm border border-emerald-600">
+                <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+                    <div class="bg-emerald-500 p-5 rounded-3xl text-white shadow-sm border border-emerald-600">
                         <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Total Recebido</p>
-                        <h3 class="text-2xl font-black mt-1">
+                        <h3 class="text-xl xl:text-2xl font-black mt-1">
                             <%= formatBRLFromCents(incCents) %>
                         </h3>
                     </div>
-                    <div class="bg-rose-500 p-6 rounded-3xl text-white shadow-sm border border-rose-600">
-                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Contas + Cartões</p>
-                        <h3 class="text-2xl font-black mt-1">
+
+                    <div class="bg-violet-500 p-5 rounded-3xl text-white shadow-sm border border-violet-600">
+                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Contas Fixas</p>
+                        <h3 class="text-xl xl:text-2xl font-black mt-1">
+                            <%= formatBRLFromCents(expCents) %>
+                        </h3>
+                    </div>
+
+                    <div class="bg-amber-500 p-5 rounded-3xl text-white shadow-sm border border-amber-600">
+                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Meus Cartões</p>
+                        <h3 class="text-xl xl:text-2xl font-black mt-1">
+                            <%= formatBRLFromCents(cardTotalCents) %>
+                        </h3>
+                    </div>
+
+                    <div class="bg-rose-500 p-5 rounded-3xl text-white shadow-sm border border-rose-600">
+                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Contas+Cartões</p>
+                        <h3 class="text-xl xl:text-2xl font-black mt-1">
                             <%= formatBRLFromCents(expCents + cardTotalCents) %>
                         </h3>
                     </div>
-                    <div class="bg-blue-600 p-6 rounded-3xl text-white shadow-sm border border-blue-700">
+
+                    <div
+                        class="bg-blue-600 p-5 rounded-3xl text-white shadow-sm border border-blue-700 col-span-2 lg:col-span-1">
                         <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Saldo Final</p>
-                        <h3 class="text-2xl font-black mt-1">
+                        <h3 class="text-xl xl:text-2xl font-black mt-1">
                             <%= formatBRLFromCents(saldoCents) %>
-                        </h3>
-                    </div>
-                    <div class="bg-amber-500 p-6 rounded-3xl text-white shadow-sm border border-amber-600">
-                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Meus Cartões (Auto)</p>
-                        <h3 class="text-2xl font-black mt-1">
-                            <%= formatBRLFromCents(cardTotalCents) %>
                         </h3>
                     </div>
                 </div>
@@ -184,17 +193,13 @@
             </div>
 
             <script>
-                // Agora o calculador entende a formatação Brasileira (Vírgulas, pontos e R$)
                 function evaluateFormula(str) {
                     try {
-                        // Remove R$ e espaços
                         let clean = str.replace(/R\$\s?/g, '').replace(/\s/g, '');
-                        // Se tiver vírgula, trocamos ponto por vazio (separador de milhar) e vírgula por ponto (decimal)
                         if (clean.includes(',')) {
                             clean = clean.replace(/\./g, '');
                             clean = clean.replace(/,/g, '.');
                         }
-                        // Limpa tudo que não for matemática
                         clean = clean.replace(/[^-+*/().0-9]/g, '');
                         return Function(`'use strict'; return (${clean || 0})`)();
                     } catch (e) { return 0; }
@@ -212,7 +217,6 @@
                     document.getElementById('calc-result').innerText = `Soma Total: ` + sum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 }
 
-                // Função unificada para Entradas e Contas
                 async function addRow(type, promptMsg) {
                     const desc = prompt(promptMsg);
                     if (!desc) return;
@@ -232,7 +236,6 @@
                     });
                 }
 
-                // Função unificada para salvar valores de Entradas e Contas
                 async function saveMath(id, inputStr) {
                     const result = evaluateFormula(inputStr);
                     await fetch(`/finances/update/${id}`, {

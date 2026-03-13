@@ -188,8 +188,14 @@ app.get("/people", ensureAuthenticated, (req, res) => {
 
 app.post("/people", ensureAuthenticated, (req, res) => {
   const name = (req.body.name || "").trim();
-  const phone = (req.body.phone || "").trim().replace(/\D/g, ''); // Remove parênteses e espaços
-  if (name) {
+  const phone = (req.body.phone || "").trim().replace(/\D/g, '');
+  const id = req.body.id; // Pegaremos o ID se for uma edição
+
+  if (id) {
+    // Se enviamos um ID, estamos editando um usuário existente
+    db.prepare("UPDATE people SET name = ?, phone = ? WHERE id = ?").run(name, phone, id);
+  } else if (name) {
+    // Se não tem ID, é um novo cadastro
     db.prepare("INSERT OR IGNORE INTO people(name, phone, active) VALUES (?, ?, 1)").run(name, phone);
   }
   res.redirect("/people");

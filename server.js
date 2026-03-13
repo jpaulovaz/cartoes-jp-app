@@ -456,9 +456,9 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     FROM transactions t
     JOIN cards c ON c.id=t.card_id
     LEFT JOIN imports i ON i.id=t.import_id 
-    WHERE ${where.join(" AND ")}
+    WHERE ((i.month=? AND i.year=?) OR (t.due_month=? AND t.due_year=?))
     ORDER BY ${orderBy}
-  `).all(...params);
+  `).all(month, year, month, year); // Passamos os parâmetros duas vezes para cobrir CSV e Manual
 
   txns.forEach(t => {
     t.selected_ids = (t.selected_csv ? t.selected_csv.split(",").map(x => Number(x)) : []).filter(Boolean);
@@ -930,6 +930,8 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
   } catch (err) {
     res.status(500).send("Erro ao processar transação manual.");
   }
+  console.log("Inserção manual concluída com sucesso.");
+  res.redirect(`/month/${startYear}/${startMonth}`);
 });
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`✅ Rodando em http://localhost:${PORT}`));

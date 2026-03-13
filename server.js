@@ -12,9 +12,14 @@ const { Strategy } = require('passport-openidconnect');
 const SQLiteStore = require('connect-sqlite3')(session);
 const db = require("./src/db");
 
-try { db.exec("ALTER TABLE transactions ADD COLUMN due_month INTEGER;"); } catch (e) { }
-try { db.exec("ALTER TABLE transactions ADD COLUMN due_year INTEGER;"); } catch (e) { }
-try { db.exec("ALTER TABLE transactions ADD COLUMN parent_txn_id INTEGER;"); } catch (e) { }
+// --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
+console.log('🔄 Executando migração automática...');
+require('./scripts/migrate.js');
+
+// --- OPCIONAL: EXECUTA SEED AUTOMÁTICO (comentar se não quiser dados de exemplo) ---
+// require('./scripts/seed.js');
+
+// Migrações adicionais específicas
 
 try { db.prepare("ALTER TABLE transactions ADD COLUMN due_month INTEGER").run(); } catch (e) { }
 try { db.prepare("ALTER TABLE transactions ADD COLUMN due_year INTEGER").run(); } catch (e) { }
@@ -164,6 +169,14 @@ function getPeopleActive() { return db.prepare("SELECT id, name FROM people WHER
 function likeParam(s) { return `%${String(s).trim()}%`; }
 
 app.get("/", ensureAuthenticated, (req, res) => {
+  // Verifica se existe um titular cadastrado
+  const owner = db.prepare("SELECT id FROM people WHERE is_owner = 1 LIMIT 1").get();
+  
+  // Se não houver titular, redireciona para a página de Pessoas para criar um
+  if (!owner) {
+    return res.redirect('/people');
+  }
+  
   const d = new Date();
   const year = d.getFullYear();
   const month = d.getMonth() + 1;

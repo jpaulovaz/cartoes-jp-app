@@ -7,7 +7,6 @@
     <div class="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Exportar Resumo</h1>
-        <p class="text-red-500 font-bold">Debug Telefone: [<%= person.phone %>]</p>
         <p class="text-slate-500 dark:text-slate-400 mt-1 font-medium">Gere uma imagem ou envie via WhatsApp para <%=
             person.name %>.</p>
       </div>
@@ -165,38 +164,51 @@
     async function sendViaEvolution() {
       const btn = document.getElementById('btnEvolution');
       const originalContent = btn.innerHTML;
-
-      const total = "<%= formatBRLFromCents(remaining_cents > 0 ? remaining_cents : total) %>";
-      const mesAno = "<%= String(month).padStart(2,'0') %>/<%= year %>";
-
-      let msg = `*Olá, <%= person.name %>!* 💳\n\n`;
-      msg += `O resumo da sua fatura de *${mesAno}* está pronto.\n`;
-      msg += `Valor total a pagar: *${total}*.\n\n`;
-      msg += `Você pode ver o detalhamento completo no link abaixo:\n`;
-      msg += `${window.location.href}\n\n`;
-      msg += `_Mensagem enviada via Cartões JP_`;
+      const cardEl = document.getElementById('card'); // O elemento do recibo
 
       try {
         btn.disabled = true;
-        btn.innerHTML = "Enviando...";
+        btn.innerHTML = "📸 Gerando Imagem...";
 
+        // 1. "Fotografa" o recibo em alta qualidade
+        const originalClasses = cardEl.className;
+        cardEl.classList.remove('shadow-xl'); // Remove sombra para ficar limpo
+        const canvas = await html2canvas(cardEl, { scale: 2, backgroundColor: "#ffffff" });
+        cardEl.className = originalClasses;
+
+        const imageBase64 = canvas.toDataURL("image/png");
+
+        // 2. Monta a legenda
+        const total = "<%= formatBRLFromCents(remaining_cents > 0 ? remaining_cents : total) %>";
+        const mesAno = "<%= String(month).padStart(2,'0') %>/<%= year %>";
+
+        let msg = `*Olá, <%= person.name %>!* 💳\n\n`;
+        msg += `Segue o fechamento da sua fatura de *${mesAno}*.\n`;
+        msg += `Total a pagar: *${total}*.\n\n`;
+        msg += `_Detalhes técnicos no link:_ ${window.location.href}`;
+
+        btn.innerHTML = "🚀 Enviando WhatsApp...";
+
+        // 3. Envia tudo para o seu servidor
         const response = await fetch('/whatsapp/send-automation', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             personPhone: "<%= person.phone %>",
-            message: msg
+            message: msg,
+            imageBase64: imageBase64 // Aqui vai a foto!
           })
         });
 
         const result = await response.json();
         if (result.success) {
-          alert("✅ Enviado com sucesso!");
+          alert("✅ Recibo enviado com imagem com sucesso!");
         } else {
-          alert("❌ Erro: " + (result.error || "Falha no envio"));
+          alert("❌ Erro no envio: " + (result.error || "Falha na API"));
         }
       } catch (e) {
-        alert("❌ Erro de conexão com o servidor.");
+        console.error(e);
+        alert("❌ Erro ao processar imagem ou conexão.");
       } finally {
         btn.disabled = false;
         btn.innerHTML = originalContent;

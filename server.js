@@ -718,29 +718,35 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
   res.render("whatsapp", { month, year, person, items, totalsByCard, total, paid_cents, remaining_cents, formatBRLFromCents });
 });
 
-app.post("/whatsapp/send-automation", ensureAuthenticated, express.json(), async (req, res) => {
+app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit: '10mb' }), async (req, res) => {
   try {
-    const { personPhone, message } = req.body;
+    const { personPhone, message, imageBase64 } = req.body;
 
     const apiUrl = process.env.EVOLUTION_API_URL;
     const apiKey = process.env.EVOLUTION_API_KEY;
     const instance = process.env.EVOLUTION_INSTANCE_NAME;
 
     if (!apiUrl || !apiKey || !instance) {
-      return res.status(400).json({ error: "Configurações da Evolution API não encontradas no .env" });
+      return res.status(400).json({ error: "Configurações da Evolution API não encontradas." });
     }
 
-    // Chamada para a Evolution API
-    await axios.post(`${apiUrl}/message/sendText/${instance}`, {
-      number: personPhone,
-      options: { delay: 1200, presence: "composing" },
-      textMessage: { text: message }
+    // Limpa o número (apenas números)
+    const cleanNumber = personPhone.replace(/\D/g, '');
+
+    // Envia como Mídia (Imagem + Legenda)
+    await axios.post(`${apiUrl}/message/sendMedia/${instance}`, {
+      number: cleanNumber,
+      media: imageBase64, // A string Base64 da imagem
+      mediaType: "image",
+      caption: message,   // O texto vira a legenda da foto
+      delay: 1200,
+      quoted: null
     }, { headers: { apikey: apiKey } });
 
     res.json({ success: true });
   } catch (e) {
     console.error("Erro Evolution API:", e.response?.data || e.message);
-    res.status(500).json({ error: "Falha ao enviar via Evolution API" });
+    res.status(500).json({ error: "Falha ao enviar imagem via WhatsApp" });
   }
 });
 // --- ROTAS DO detalhamento ---

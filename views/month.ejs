@@ -161,14 +161,9 @@
                       <button type="submit"
                         class="px-4 py-1.5 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-transform active:scale-95 btn-salvar-indiv">Salvar</button>
 
-                      <button type="button" onclick="copyAlloc(' <%=t.id %>')"
-                              class="px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white
-                              text-slate-600 hover:bg-slate-100 transition-colors"
-                              title="Copiar atribuição">Copiar</button>
+                      <button type="button" onclick="copyAlloc(' <%=t.id %>')" ...>Copiar</button>
 
-                              <button type="button" onclick="pasteAlloc('<%= t.id %>')"
-                                class="px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
-                                title="Colar atribuição">Colar</button>
+                              <button type="button" onclick="pasteAlloc('<%= t.id %>')" ...>Colar</button>
 
                               <a class="ml-auto px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
                                 href="/txn/<%= t.id %>">Detalhe</a>
@@ -303,31 +298,42 @@
       };
 
       // Melhorando as funções de Copiar e Colar para interagir com o "Salvar Todos"
+      // Função de Copiar Corrigida
       window.copyAlloc = function (txnId) {
-        const form = document.querySelector(`form[data-alloc-form="${txnId}"]`);
+        // O .trim() remove espaços acidentais que possam vir do HTML
+        const form = document.querySelector(`form[data-alloc-form="${txnId.trim()}"]`);
         if (!form) return;
+
         const cbs = form.querySelectorAll('input[name="person_ids"]:checked');
-        window.copiedIds = Array.from(cbs).map(cb => cb.value);
-        allocMsg.innerHTML = '<span class="text-blue-600">Atribuição copiada! Agora clique em Colar nos outros itens.</span>';
+        const values = Array.from(cbs).map(cb => cb.value);
+
+        // Salva no localStorage para persistir entre páginas e recarregamentos
+        localStorage.setItem("allocClipboard", JSON.stringify(values));
+
+        allocMsg.innerHTML = '<span class="text-blue-600 font-bold">Atribuição copiada!</span>';
         setTimeout(() => allocMsg.innerHTML = '', 3000);
       };
 
+      // Função de Colar Corrigida
       window.pasteAlloc = function (txnId) {
-        if (!window.copiedIds) {
-          allocMsg.innerHTML = '<span class="text-amber-600">Nenhuma atribuição copiada. Use o botão Copiar antes.</span>';
+        const raw = localStorage.getItem("allocClipboard");
+        if (!raw) {
+          allocMsg.innerHTML = '<span class="text-amber-600 font-bold">Nenhuma atribuição copiada. Use o botão Copiar antes.</span>';
           return;
         }
-        const form = document.querySelector(`form[data-alloc-form="${txnId}"]`);
+
+        const ids = JSON.parse(raw);
+        const form = document.querySelector(`form[data-alloc-form="${txnId.trim()}"]`);
         if (!form) return;
 
         const cbs = form.querySelectorAll('input[name="person_ids"]');
         cbs.forEach(cb => {
-          cb.checked = window.copiedIds.includes(cb.value);
+          cb.checked = ids.includes(cb.value);
         });
 
-        // Automaticamente marca o item colado como pendente para ser salvo em massa
+        // Marca como modificado para que a barra de "Salvar Tudo" apareça
         markAsModified(form);
-        allocMsg.innerHTML = '<span class="text-blue-600">Colado! Não esqueça de Salvar.</span>';
+        allocMsg.innerHTML = '<span class="text-blue-600 font-bold">Colado! Não esqueça de Salvar.</span>';
       };
     });
   </script>

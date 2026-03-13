@@ -142,20 +142,21 @@
                   <form method="post" action="/txn/<%= t.id %>/alloc" data-alloc-form="<%= t.id %>"
                     class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 shadow-inner transition-colors duration-300">
 
-                    <div class="grid grid-cols-3 gap-1.5 mb-3 min-w-[320px]">
+                    <div
+                      class="grid grid-cols-3 gap-x-3 gap-y-0.5 mb-2 min-w-[300px] border border-slate-100 rounded-xl p-2 bg-slate-50/50">
                       <% people.forEach(p=> { %>
-                        <label
-                          class="flex items-center gap-1.5 border border-slate-200 bg-white rounded-lg px-2 py-1 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors has-[:checked]:bg-blue-100 has-[:checked]:border-blue-500 has-[:checked]:text-blue-800 select-none">
+                        <label class="flex items-center gap-1.5 cursor-pointer select-none group py-0.5">
                           <input type="checkbox" name="person_ids" value="<%= p.id %>" <%=(t.selected_ids &&
                             t.selected_ids.includes(p.id)) ? "checked" : "" %>
-                          class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                          class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 bg-white" />
 
-                          <span class="text-[10px] font-bold truncate">
+                          <span
+                            class="text-[10px] font-semibold text-slate-600 group-hover:text-blue-600 truncate leading-tight">
                             <%= p.name.split(' ')[0] %>
-                        </span>
-                      </label>
-                   <% }) %>
-                  </div>
+      </span>
+    </label>
+  <% }) %>
+</div>
 
                     <div class="flex items-center gap-2">
                       <button type="submit"

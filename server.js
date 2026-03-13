@@ -651,51 +651,69 @@ app.post("/people/:id/set-owner", ensureAuthenticated, (req, res) => {
   res.redirect("/people");
 });
 
-// Atualiza ou Cria um gasto fixo/entrada
-app.post("/finances/save", ensureAuthenticated, (req, res) => {
-  const { month, year, type, category_id, description, formula, amount_cents } = req.body;
 
-  const now = new Date().toISOString();
+// --- ROTAS DO DESMEMBRAMENTO ---
 
-  // Upsert: Se já existir para este mês/ano/categoria, atualiza. Se não, insere.
-  const sql = `
-        INSERT INTO monthly_finances (month, year, type, category_id, description, formula, amount_cents, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(month, year, type, category_id) DO UPDATE SET
-            formula = excluded.formula,
-            amount_cents = excluded.amount_cents,
-            description = excluded.description
-    `;
+// 1. Salva/Atualiza valores das Contas Domésticas Fixas
+app.post("/finances/save-item", ensureAuthenticated, (req, res) => {
+  const { month, year, type, category_id, formula, amount_cents } = req.body;
+  db.transaction(() => {
+    // Limpa a conta anterior para evitar duplicidade e insere a nova atualizada
+    db.prepare("DELETE FROM monthly_finances WHERE month = ? AND year = ? AND type = ? AND category_id = ?")
+      .run(month, year, type, category_id);
 
-  // Nota: Para o ON CONFLICT funcionar, você deve garantir que as tabelas tenham UNIQUE(month, year, type, category_id)
-  // Se não tiver, use um DELETE seguido de INSERT.
-  db.prepare("DELETE FROM monthly_finances WHERE month=? AND year=? AND type=? AND COALESCE(category_id,0)=? AND COALESCE(description,'')=?")
-    .run(month, year, type, category_id || 0, description || '');
-
-  db.prepare("INSERT INTO monthly_finances (month, year, type, category_id, description, formula, amount_cents, created_at) VALUES (?,?,?,?,?,?,?,?)")
-    .run(month, year, type, category_id, description, formula, amount_cents, now);
-
+    db.prepare(`
+            INSERT INTO monthly_finances (month, year, type, category_id, formula, amount_cents, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(month, year, type, category_id, formula, amount_cents, new Date().toISOString());
+  })();
   res.json({ success: true });
 });
 
-// Salva Notas e Rascunho Matemático
+// 2. Adiciona nova linha de Entrada (Caixa) - O botão +Nova
+app.post("/finances/add-income", ensureAuthenticated, (req, res) => {
+  const { month, year, description } = req.body;
+  db.prepare(`
+        INSERT INTO monthly_finances (month, year, type, description, formula, amount_cents, created_at)
+        VALUES (?, ?, 'income', ?, '0', 0, ?)
+    `).run(month, year, description, new Date().toISOString());
+  res.json({ success: true });
+});
+
+// 3. Atualiza uma linha de Entrada (Nome ou Valor)
+app.post("/finances/update/:id", ensureAuthenticated, (req, res) => {
+  const id = req.params.id;
+  const { field, value, formula, amount_cents } = req.body;
+
+  if (field === 'description') {
+    db.prepare("UPDATE monthly_finances SET description = ? WHERE id = ?").run(value, id);
+  } else if (field === 'formula_and_value') {
+    db.prepare("UPDATE monthly_finances SET formula = ?, amount_cents = ? WHERE id = ?").run(formula, amount_cents, id);
+  }
+  res.json({ success: true });
+});
+
+// 4. Exclui uma linha de Entrada
+app.post("/finances/delete/:id", ensureAuthenticated, (req, res) => {
+  db.prepare("DELETE FROM monthly_finances WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
+});
+
+// 5. Salva Lembretes e Rascunhos (Calculadora) sem sumir
 app.post("/finances/notes/:year/:month", ensureAuthenticated, (req, res) => {
   const { year, month } = req.params;
   const { type, content } = req.body;
-  const col = type === 'math' ? 'content_math' : 'content_text';
+  const column = type === 'math' ? 'content_math' : 'content_text';
 
-  db.prepare(`
-        INSERT INTO scratchpad (month, year, ${col}) 
-        VALUES (?, ?, ?)
-        ON CONFLICT(month, year) DO UPDATE SET ${col} = excluded.${col}
-    `).run(month, year, content);
-
-  res.json({ success: true });
-});
-
-// Rota para deletar uma entrada manual
-app.post("/finances/delete/:id", ensureAuthenticated, (req, res) => {
-  db.prepare("DELETE FROM monthly_finances WHERE id = ?").run(req.params.id);
+  // Checa manualmente e atualiza (mais seguro que ON CONFLICT do SQLite)
+  db.transaction(() => {
+    const existing = db.prepare("SELECT id FROM scratchpad WHERE month = ? AND year = ?").get(month, year);
+    if (existing) {
+      db.prepare(`UPDATE scratchpad SET ${column} = ? WHERE id = ?`).run(content, existing.id);
+    } else {
+      db.prepare(`INSERT INTO scratchpad (month, year, ${column}) VALUES (?, ?, ?)`).run(month, year, content);
+    }
+  })();
   res.json({ success: true });
 });
 

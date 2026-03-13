@@ -270,7 +270,10 @@ app.get("/desmembramento/:year/:month", ensureAuthenticated, (req, res) => {
   }
 
   res.render("desmembramento", {
-    year, month, owner,
+    title: "Meu Desmembramento",
+    year,
+    month,
+    owner,
     cardTotalCents: cardTotal.total || 0,
     finances, categories, notes,
     formatBRLFromCents

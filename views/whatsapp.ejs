@@ -111,6 +111,7 @@
                   <tr>
                     <th class="px-4 py-3 w-20">Data</th>
                     <th class="px-4 py-3">Descrição</th>
+                    <th class="px-4 py-3">Cartão</th>
                     <th class="px-4 py-3 text-right">Valor</th>
                   </tr>
                 </thead>
@@ -123,6 +124,14 @@
                       <td class="px-4 py-3 font-bold text-slate-800">
                         <%= it.description %>
                       </td>
+
+                      <td class="px-4 py-3">
+                        <span
+                          class="inline-flex items-center px-2 py-1 rounded bg-slate-100 text-slate-600 font-bold text-[10px] border border-slate-200">
+                          <%= it.card_name %>
+                        </span>
+                      </td>
+
                       <td class="px-4 py-3 text-right font-black text-slate-900">
                         <%= formatBRLFromCents(it.share_cents) %>
                       </td>
@@ -183,9 +192,8 @@
         const mesAno = "<%= String(month).padStart(2,'0') %>/<%= year %>";
 
         let msg = `*Olá, <%= person.name %>!* 💳\n\n`;
-        msg += `Segue o fechamento da sua fatura de *${mesAno}*.\n`;
+        msg += `Segue o fechamento da fatura de *${mesAno}*.\n`;
         msg += `Total a pagar: *${total}*.\n\n`;
-        msg += `_Detalhes técnicos no link:_ ${window.location.href}`;
 
         btn.innerHTML = "🚀 Enviando WhatsApp...";
 

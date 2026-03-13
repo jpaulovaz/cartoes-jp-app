@@ -90,6 +90,13 @@ function getPeopleActive() { return db.prepare("SELECT id, name FROM people WHER
 function likeParam(s) { return `%${String(s).trim()}%`; }
 
 app.get("/", ensureAuthenticated, (req, res) => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1;
+  res.redirect(`/desmembramento/${year}/${month}`);
+});
+
+app.get("/geral", ensureAuthenticated, (req, res) => {
   // 1. Puxamos todas as importações e somamos o total de cada uma
   const recent = db.prepare(`
     SELECT i.id, i.month, i.year, i.created_at, i.original_filename, c.name AS card_name, c.id AS card_id,

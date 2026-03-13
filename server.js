@@ -27,6 +27,7 @@ db.prepare(`
 
 const { parseCsvByCardName } = require("./src/importers");
 const { formatBRLFromCents, parseMonthYear, toISOFromBRDate, centsFromPtBrMoney } = require("./src/utils");
+const formatDateBR = (dateStr) => { if (!dateStr) return "-"; return dayjs(dateStr).format("DD/MM/AAAA"); };
 const { computeDueDate } = require("./src/dueDate");
 
 const app = express();
@@ -107,6 +108,7 @@ app.use((req, res, next) => {
     const owner = db.prepare("SELECT name FROM people WHERE is_owner = 1 LIMIT 1").get();
     // Pega só o primeiro nome se for muito grande, ou o nome todo. Ex: "Cartões João"
     res.locals.nomeTitular = owner ? `Detalhamento ${owner.name}` : "Detalhamento Contas";
+    res.locals.formatDateBR = formatDateBR;
   } catch (e) {
     res.locals.nomeTitular = "Detalhamento Contas";
   }

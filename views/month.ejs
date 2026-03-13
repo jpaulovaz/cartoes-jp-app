@@ -161,9 +161,14 @@
                       <button type="submit"
                         class="px-4 py-1.5 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-transform active:scale-95 btn-salvar-indiv">Salvar</button>
 
-                      <button type="button" onclick="copyAlloc(' <%=t.id %>')" ...>Copiar</button>
+                      <button type="button" onclick="copyAlloc(' <%=t.id %>')"
+                              class="px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white
+                              text-slate-600 hover:bg-slate-100 transition-colors"
+                              title="Copiar atribuição">Copiar</button>
 
-                              <button type="button" onclick="pasteAlloc('<%= t.id %>')" ...>Colar</button>
+                              <button type="button" onclick="pasteAlloc('<%= t.id %>')"
+                                class="px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
+                                title="Colar atribuição">Colar</button>
 
                               <a class="ml-auto px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
                                 href="/txn/<%= t.id %>">Detalhe</a>

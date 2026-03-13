@@ -10,8 +10,10 @@ const session = require('express-session');
 const passport = require('passport');
 const { Strategy } = require('passport-openidconnect');
 const SQLiteStore = require('connect-sqlite3')(session);
-
 const db = require("./src/db");
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Adiciona a coluna de telefone na tabela people se ela não existir
 try { db.prepare("ALTER TABLE people ADD COLUMN phone TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -732,15 +734,14 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
 
     // Limpa o número (apenas números)
     const cleanNumber = personPhone.replace(/\D/g, '');
-
+    const base64Data = imageBase64.split(',')[1];
     // Envia como Mídia (Imagem + Legenda)
     await axios.post(`${apiUrl}/message/sendMedia/${instance}`, {
       number: cleanNumber,
-      media: imageBase64, // A string Base64 da imagem
-      mediaType: "image",
-      caption: message,   // O texto vira a legenda da foto
-      delay: 1200,
-      quoted: null
+      mediatype: "image", // TUDO MINÚSCULO (O erro estava aqui)
+      media: base64Data,   // Apenas a string Base64 limpa
+      caption: message,
+      delay: 1200
     }, { headers: { apikey: apiKey } });
 
     res.json({ success: true });

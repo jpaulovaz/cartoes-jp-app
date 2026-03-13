@@ -484,7 +484,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
            (SELECT COUNT(*) FROM allocations a WHERE a.transaction_id=t.id) AS alloc_count,
            (SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id=t.id) AS selected_csv
     FROM transactions t
-    JOIN cards c ON c.id=t.card_id
+    LEFT JOIN cards c ON c.id=t.card_id
     LEFT JOIN imports i ON i.id=t.import_id 
     WHERE ((i.month=? AND i.year=?) OR (t.due_month=? AND t.due_year=?))
     ORDER BY ${orderBy}
@@ -923,6 +923,18 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
   const { date, description, amount, card_id, first_due, installments } = req.body;
 
   try {
+    // Validacao: card_id deve ser um numero valido
+    const cardIdNum = Number(card_id);
+    if (!cardIdNum || isNaN(cardIdNum)) {
+      return res.status(400).send("Cartao invalido. Selecione um cartao valido.");
+    }
+    
+    // Validacao: verifica se o cartao existe
+    const cardExists = db.prepare("SELECT id FROM cards WHERE id = ?").get(cardIdNum);
+    if (!cardExists) {
+      return res.status(400).send("Cartao nao encontrado no sistema.");
+    }
+    
     const totalCents = centsFromPtBrMoney(amount);
     const numInstallments = parseInt(installments) || 1;
     const installmentValue = Math.floor(totalCents / numInstallments);
@@ -947,7 +959,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
         const info = db.prepare(`
             INSERT INTO transactions (card_id, txn_date, description, amount_cents, due_month, due_year, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)
-           `).run(card_id, date, finalDesc, currentAmount, currentMonth, currentYear, new Date().toISOString());
+           `).run(cardIdNum, date, finalDesc, currentAmount, currentMonth, currentYear, new Date().toISOString());
 
         if (activePeople.length === 1) {
           db.prepare(`INSERT INTO allocations (transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?)`)

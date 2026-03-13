@@ -458,7 +458,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     LEFT JOIN imports i ON i.id=t.import_id 
     WHERE ((i.month=? AND i.year=?) OR (t.due_month=? AND t.due_year=?))
     ORDER BY ${orderBy}
-  `).all(month, year, month, year); // Passamos os parâmetros duas vezes para cobrir CSV e Manual
+  `).all(month, year, month, year);
 
   txns.forEach(t => {
     t.selected_ids = (t.selected_csv ? t.selected_csv.split(",").map(x => Number(x)) : []).filter(Boolean);
@@ -485,10 +485,8 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
 
   // Busca segura de dados e redirecionamento
-  const txn = db.prepare(`
-    SELECT t.id, t.amount_cents, 
-           COALESCE(i.month, t.due_month) as month, 
-           COALESCE(i.year, t.due_year) as year 
+  const dateInfo = db.prepare(`
+    SELECT COALESCE(i.month, t.due_month) as month, COALESCE(i.year, t.due_year) as year 
     FROM transactions t 
     LEFT JOIN imports i ON i.id = t.import_id 
     WHERE t.id = ?
@@ -515,7 +513,7 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
     }
   })();
 
-  res.redirect(`/month/${txn.year}/${txn.month}`);
+  res.redirect(`/month/${dateInfo.year}/${dateInfo.month}`);
 });
 
 // Detail page
@@ -542,10 +540,8 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
 
   // Busca segura de dados e redirecionamento
-  const txn = db.prepare(`
-    SELECT t.id, t.amount_cents, 
-           COALESCE(i.month, t.due_month) as month, 
-           COALESCE(i.year, t.due_year) as year 
+  const dateInfo = db.prepare(`
+    SELECT COALESCE(i.month, t.due_month) as month, COALESCE(i.year, t.due_year) as year 
     FROM transactions t 
     LEFT JOIN imports i ON i.id = t.import_id 
     WHERE t.id = ?
@@ -572,7 +568,7 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
     }
   })();
 
-  res.redirect(`/month/${txn.year}/${txn.month}`);
+  res.redirect(`/month/${dateInfo.year}/${dateInfo.month}`);
 });
 
 // Summary (minimal)

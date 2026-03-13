@@ -1061,3 +1061,7 @@ app.post("/finances/toggle-close", ensureAuthenticated, express.json(), (req, re
 });
 
 const PORT = process.env.PORT || 3001;
+
+app.listen(PORT, () => {
+  console.log(`✅ Rodando em http://localhost:${PORT}`);
+});

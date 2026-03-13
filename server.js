@@ -12,6 +12,9 @@ const SQLiteStore = require('connect-sqlite3')(session);
 
 const db = require("./src/db");
 
+// Adiciona a coluna de telefone na tabela people se ela não existir
+try { db.prepare("ALTER TABLE people ADD COLUMN phone TEXT").run(); } catch (e) { /* Coluna já existe */ }
+
 // Cria a tabela de meses fechados se não existir
 db.prepare(`
   CREATE TABLE IF NOT EXISTS closed_months (
@@ -185,9 +188,13 @@ app.get("/people", ensureAuthenticated, (req, res) => {
 
 app.post("/people", ensureAuthenticated, (req, res) => {
   const name = (req.body.name || "").trim();
-  if (name) db.prepare("INSERT OR IGNORE INTO people(name, active) VALUES (?, 1)").run(name);
+  const phone = (req.body.phone || "").trim().replace(/\D/g, ''); // Remove parênteses e espaços
+  if (name) {
+    db.prepare("INSERT OR IGNORE INTO people(name, phone, active) VALUES (?, ?, 1)").run(name, phone);
+  }
   res.redirect("/people");
 });
+
 app.post("/people/:id/toggle", ensureAuthenticated, (req, res) => {
   db.prepare("UPDATE people SET active = CASE active WHEN 1 THEN 0 ELSE 1 END WHERE id=?").run(Number(req.params.id));
   res.redirect("/people");

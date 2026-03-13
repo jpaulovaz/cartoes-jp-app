@@ -1,7 +1,7 @@
 <%- include("partials/header", { title: "Cartões JP | Início" }) %>
 
   <div
-    class="mb-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 bg-white dark:bg-slate-800 p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
+    class="mb-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
     <div>
       <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Visão Geral</h1>
       <p class="text-slate-500 mt-2 font-medium">Suas faturas agrupadas por mês de vencimento.</p>
@@ -18,7 +18,7 @@
 
   <div>
     <% if (!groupedRecent || groupedRecent.length===0) { %>
-      <div class="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200">
+      <div class="text-center py-20 bg-white rounded-3xl shadow-sm border border-slate-200">
         <div class="w-20 h-20 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-6">
           <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -37,7 +37,7 @@
         <div class="space-y-5">
           <% groupedRecent.forEach((group)=> { %>
             <details
-              class="group bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 overflow-hidden transition-all">
+              class="group bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden transition-all">
 
               <summary
                 class="cursor-pointer select-none p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between hover:bg-slate-50 transition-colors border-b border-transparent group-open:border-slate-100 relative">
@@ -64,7 +64,7 @@
                   </div>
 
                   <div
-                    class="flex flex-wrap gap-6 lg:gap-10 mt-4 lg:mt-2 ml-0 lg:ml-16 bg-white dark:bg-slate-800 border border-slate-100 p-3 rounded-xl lg:border-none lg:bg-transparent lg:p-0">
+                    class="flex flex-wrap gap-6 lg:gap-10 mt-4 lg:mt-2 ml-0 lg:ml-16 bg-white border border-slate-100 p-3 rounded-xl lg:border-none lg:bg-transparent lg:p-0">
                     <div class="flex flex-col">
                       <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total do
                         Mês</span>
@@ -119,7 +119,7 @@
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <% group.cards.forEach(card=> { %>
                     <div
-                      class="bg-white dark:bg-slate-800 border border-slate-200 rounded-xl p-5 hover:border-slate-300 hover:shadow-md transition-all flex flex-col relative">
+                      class="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-300 hover:shadow-md transition-all flex flex-col relative">
 
                       <div class="flex justify-between items-start mb-3">
                         <div class="font-extrabold text-slate-800 text-lg truncate">
@@ -136,7 +136,7 @@
 
                       <div class="mt-auto">
                         <a href="/month/<%= card.year %>/<%= card.month %>?f_card=<%= card.card_name %>"
-                          class="block w-full text-center px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 text-slate-700 font-semibold text-sm rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors">
+                          class="block w-full text-center px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-semibold text-sm rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors">
                           Ver transações deste cartão
                         </a>
                       </div>

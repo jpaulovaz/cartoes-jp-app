@@ -1,240 +1,223 @@
-<% /* Calculo de saldo */ let incCents=0; let expCents=0; finances.forEach(f=> {
-    if(f.type === 'income') incCents += f.amount_cents;
-    if(f.type === 'expense') expCents += f.amount_cents;
-    });
+<%- include('partials/header') %>
 
-    let saldoCents = incCents - expCents - cardTotalCents;
-    %>
+    <% /* Calculo de saldo */ let incCents=0; let expCents=0; finances.forEach(f=> {
+        if(f.type === 'income') incCents += f.amount_cents;
+        if(f.type === 'expense') expCents += f.amount_cents;
+        });
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div class="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">👑 Meu Desmembramento: <%= month %>/
-                        <%= year %>
-                </h1>
-                <p class="text-slate-500 mt-2 font-medium">Titular: <span class="text-blue-600">
-                        <%= owner.name %>
-                    </span></p>
+        let saldoCents = incCents - expCents - cardTotalCents;
+        %>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">👑 Meu Desmembramento: <%= month
+                            %>/<%= year %>
+                    </h1>
+                    <p class="text-slate-500 mt-2 font-medium">Titular: <span class="text-blue-600">
+                            <%= owner.name %>
+                        </span></p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-emerald-500 p-6 rounded-3xl text-white shadow-sm border border-emerald-600">
+                    <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Total Recebido</p>
+                    <h3 class="text-2xl font-black mt-1">
+                        <%= formatBRLFromCents(incCents) %>
+                    </h3>
+                </div>
+                <div class="bg-rose-500 p-6 rounded-3xl text-white shadow-sm border border-rose-600">
+                    <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Contas + Cartões</p>
+                    <h3 class="text-2xl font-black mt-1">
+                        <%= formatBRLFromCents(expCents + cardTotalCents) %>
+                    </h3>
+                </div>
+                <div class="bg-blue-600 p-6 rounded-3xl text-white shadow-sm border border-blue-700">
+                    <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Saldo Final</p>
+                    <h3 class="text-2xl font-black mt-1">
+                        <%= formatBRLFromCents(saldoCents) %>
+                    </h3>
+                </div>
+                <div class="bg-amber-500 p-6 rounded-3xl text-white shadow-sm border border-amber-600">
+                    <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Meus Cartões (Auto)</p>
+                    <h3 class="text-2xl font-black mt-1">
+                        <%= formatBRLFromCents(cardTotalCents) %>
+                    </h3>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="space-y-8">
+                    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-slate-900 px-6 py-4 flex justify-between items-center">
+                            <h5 class="text-white font-bold">📥 Entradas (Caixa)</h5>
+                            <button onclick="addRow()"
+                                class="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1 rounded-lg transition-colors">+
+                                Nova</button>
+                        </div>
+                        <div class="p-6">
+                            <table class="w-full text-left" id="table-income">
+                                <tbody class="divide-y divide-slate-100">
+                                    <% finances.filter(f=> f.type === 'income').forEach(fin => { %>
+                                        <tr data-id="<%= fin.id %>">
+                                            <td class="py-3">
+                                                <input type="text"
+                                                    class="w-full bg-transparent border-b border-transparent focus:border-blue-500 outline-none"
+                                                    value="<%= fin.description %>"
+                                                    onchange="updateRow(<%= fin.id %>, 'description', this.value)">
+                                            </td>
+                                            <td class="py-3 w-40">
+                                                <input type="text"
+                                                    class="w-full font-mono font-bold text-right bg-slate-50 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    value="<%= fin.formula || (fin.amount_cents/100) %>"
+                                                    onblur="saveMath(<%= fin.id %>, this.value)">
+                                            </td>
+                                            <td class="py-3 pl-2 text-right">
+                                                <button onclick="deleteRow(<%= fin.id %>)"
+                                                    class="text-rose-500 hover:text-rose-700 font-bold">×</button>
+                                            </td>
+                                        </tr>
+                                        <% }) %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-slate-800 px-6 py-4">
+                            <h5 class="text-white font-bold">🏠 Contas Domésticas</h5>
+                        </div>
+                        <div class="p-6">
+                            <table class="w-full text-left">
+                                <tbody class="divide-y divide-slate-100">
+                                    <% categories.forEach(cat=> {
+                                        const val = finances.find(f => f.category_id === cat.id && f.type ===
+                                        'expense');
+                                        %>
+                                        <tr>
+                                            <td class="py-3 font-medium text-slate-700">
+                                                <%= cat.name %>
+                                            </td>
+                                            <td class="py-3 w-40">
+                                                <input type="text"
+                                                    class="w-full font-mono font-bold text-right bg-slate-50 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    placeholder="0.00"
+                                                    value="<%= val ? (val.formula || (val.amount_cents/100).toFixed(2)) : '' %>"
+                                                    onblur="saveFixed(<%= cat.id %>, this.value)">
+                                            </td>
+                                        </tr>
+                                        <% }) %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-8">
+                    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-blue-700 px-6 py-4">
+                            <h5 class="text-white font-bold">🧮 Calculadora de Rascunho</h5>
+                        </div>
+                        <div class="p-6">
+                            <textarea id="calc-pad"
+                                class="w-full font-mono text-sm bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:ring-2 focus:ring-blue-500 outline-none"
+                                rows="5" placeholder="Ex: 50 + 20" oninput="calculatePad()"
+                                onchange="saveNotes('math', this.value)"><%= notes.content_math %></textarea>
+                            <div class="mt-3 text-right text-lg font-black text-blue-700" id="calc-result">Soma Total:
+                                R$ 0,00</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-slate-600 px-6 py-4">
+                            <h5 class="text-white font-bold">📝 Lembretes</h5>
+                        </div>
+                        <div class="p-6">
+                            <textarea
+                                class="w-full text-sm bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:ring-2 focus:ring-blue-500 outline-none"
+                                rows="8" placeholder="Notas do mês..."
+                                onchange="saveNotes('text', this.value)"><%= notes.content_text %></textarea>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <div class="bg-emerald-500 p-6 rounded-3xl text-white shadow-sm border border-emerald-600">
-                <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Total Recebido</p>
-                <h3 class="text-2xl font-black mt-1">
-                    <%= formatBRLFromCents(incCents) %>
-                </h3>
-            </div>
-            <div class="bg-rose-500 p-6 rounded-3xl text-white shadow-sm border border-rose-600">
-                <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Contas + Cartões</p>
-                <h3 class="text-2xl font-black mt-1">
-                    <%= formatBRLFromCents(expCents + cardTotalCents) %>
-                </h3>
-            </div>
-            <div class="bg-blue-600 p-6 rounded-3xl text-white shadow-sm border border-blue-700">
-                <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Saldo Final</p>
-                <h3 class="text-2xl font-black mt-1">
-                    <%= formatBRLFromCents(saldoCents) %>
-                </h3>
-            </div>
-            <div class="bg-amber-500 p-6 rounded-3xl text-white shadow-sm border border-amber-600">
-                <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Meus Cartões (Auto)</p>
-                <h3 class="text-2xl font-black mt-1">
-                    <%= formatBRLFromCents(cardTotalCents) %>
-                </h3>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div class="space-y-8">
-                <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div class="bg-slate-900 px-6 py-4 flex justify-between items-center">
-                        <h5 class="text-white font-bold">📥 Entradas (Caixa)</h5>
-                        <button onclick="addRow()"
-                            class="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1 rounded-lg transition-colors">+
-                            Nova</button>
-                    </div>
-                    <div class="p-6">
-                        <table class="w-full text-left" id="table-income">
-                            <tbody class="divide-y divide-slate-100">
-                                <% finances.filter(f=> f.type === 'income').forEach(fin => { %>
-                                    <tr data-id="<%= fin.id %>">
-                                        <td class="py-3">
-                                            <input type="text"
-                                                class="w-full bg-transparent border-b border-transparent focus:border-blue-500 outline-none"
-                                                value="<%= fin.description %>"
-                                                onchange="updateRow(<%= fin.id %>, 'description', this.value)">
-                                        </td>
-                                        <td class="py-3 w-40">
-                                            <input type="text"
-                                                class="w-full font-mono font-bold text-right bg-slate-50 rounded-lg px-2 py-1"
-                                                value="<%= fin.formula || (fin.amount_cents/100) %>"
-                                                onblur="saveMath(<%= fin.id %>, this.value)">
-                                        </td>
-                                        <td class="py-3 pl-2 text-right">
-                                            <button onclick="deleteRow(<%= fin.id %>)"
-                                                class="text-rose-500 hover:text-rose-700 font-bold">×</button>
-                                        </td>
-                                    </tr>
-                                    <% }) %>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div class="bg-slate-800 px-6 py-4">
-                        <h5 class="text-white font-bold">🏠 Contas Domésticas</h5>
-                    </div>
-                    <div class="p-6">
-                        <table class="w-full text-left">
-                            <tbody class="divide-y divide-slate-100">
-                                <% categories.forEach(cat=> {
-                                    const val = finances.find(f => f.category_id === cat.id && f.type ===
-                                    'expense');
-                                    %>
-                                    <tr>
-                                        <td class="py-3 font-medium text-slate-700">
-                                            <%= cat.name %>
-                                        </td>
-                                        <td class="py-3 w-40">
-                                            <input type="text"
-                                                class="w-full font-mono font-bold text-right bg-slate-50 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
-                                                placeholder="0.00"
-                                                value="<%= val ? (val.formula || (val.amount_cents/100).toFixed(2)) : '' %>"
-                                                onblur="saveFixed(<%= cat.id %>, this.value)">
-                                        </td>
-                                    </tr>
-                                    <% }) %>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div class="space-y-8">
-                <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div class="bg-blue-700 px-6 py-4">
-                        <h5 class="text-white font-bold">🧮 Calculadora de Rascunho</h5>
-                    </div>
-                    <div class="p-6">
-                        <textarea id="calc-pad"
-                            class="w-full font-mono text-sm bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:ring-2 focus:ring-blue-500 outline-none"
-                            rows="5" placeholder="Ex: 50 + 20" oninput="calculatePad()"
-                            onchange="saveNotes('math', this.value)"><%= notes.content_math %></textarea>
-
-                        <div class="mt-3 text-right text-lg font-black text-blue-700" id="calc-result">Soma Total:
-                            R$ 0,00</div>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div class="bg-slate-600 px-6 py-4">
-                        <h5 class="text-white font-bold">📝 Lembretes</h5>
-                    </div>
-                    <div class="p-6">
-                        <textarea
-                            class="w-full text-sm bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:ring-2 focus:ring-blue-500 outline-none"
-                            rows="8" placeholder="Notas do mês..."
-                            onchange="saveNotes('text', this.value)"><%= notes.content_text %></textarea>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // 1. Resolve cálculos matemáticos
-        function evaluateFormula(str) {
-            try {
-                const clean = str.replace(/[^-+*/().0-9]/g, '');
-                return Function(`'use strict'; return (${clean || 0})`)();
-            } catch (e) { return 0; }
-        }
-
-        // 2. Faz a calculadora somar todas as linhas em tempo real
-        function calculatePad() {
-            const text = document.getElementById('calc-pad').value;
-            let sum = 0;
-            text.split('\n').forEach(line => {
+        <script>
+            function evaluateFormula(str) {
                 try {
-                    const clean = line.replace(/[^-+*/().0-9]/g, '');
-                    if (clean) sum += Function(`'use strict'; return (${clean})`)();
-                } catch (e) { }
-            });
-            document.getElementById('calc-result').innerText = `Soma Total: R$ ` + sum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        }
+                    const clean = str.replace(/[^-+*/().0-9]/g, '');
+                    return Function(`'use strict'; return (${clean || 0})`)();
+                } catch (e) { return 0; }
+            }
 
-        // 3. Adiciona nova Entrada (Botão +Nova)
-        async function addRow() {
-            const desc = prompt("Nome da nova entrada (ex: Venda, Pix):");
-            if (!desc) return;
-            await fetch('/finances/add-income', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ month: <%= month %>, year: <%= year %>, description: desc })
-        });
-        location.reload(); // Recarrega para mostrar a nova linha e atualizar o Dashboard
+            function calculatePad() {
+                const text = document.getElementById('calc-pad').value;
+                let sum = 0;
+                text.split('\n').forEach(line => {
+                    try {
+                        const clean = line.replace(/[^-+*/().0-9]/g, '');
+                        if (clean) sum += Function(`'use strict'; return (${clean})`)();
+                    } catch (e) { }
+                });
+                document.getElementById('calc-result').innerText = `Soma Total: R$ ` + sum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            async function addRow() {
+                const desc = prompt("Nome da nova entrada (ex: Venda, Pix):");
+                if (!desc) return;
+                await fetch('/finances/add-income', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ month: <%= month %>, year: <%= year %>, description: desc })
+            });
+            location.reload(); 
     }
 
-        // 4. Atualiza texto de uma Entrada
-        async function updateRow(id, field, value) {
-            await fetch(`/finances/update/${id}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ field, value })
+            async function updateRow(id, field, value) {
+                await fetch(`/finances/update/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ field, value })
+                });
+            }
+
+            async function saveMath(id, formula) {
+                const result = evaluateFormula(formula);
+                await fetch(`/finances/update/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ field: 'formula_and_value', formula, amount_cents: Math.round(result * 100) })
+                });
+                location.reload();
+            }
+
+            async function deleteRow(id) {
+                if (!confirm("Deseja mesmo apagar esta entrada?")) return;
+                await fetch(`/finances/delete/${id}`, { method: 'POST' });
+                location.reload();
+            }
+
+            async function saveFixed(categoryId, formula) {
+                const result = evaluateFormula(formula);
+                await fetch('/finances/save-item', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ month: <%= month %>, year: <%= year %>, type: 'expense', category_id: categoryId, formula, amount_cents: Math.round(result * 100) })
             });
-        }
-
-        // 5. Salva fórmula/valor de uma Entrada
-        async function saveMath(id, formula) {
-            const result = evaluateFormula(formula);
-            await fetch(`/finances/update/${id}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ field: 'formula_and_value', formula, amount_cents: Math.round(result * 100) })
-            });
-            location.reload(); // Atualiza o Dashboard com o novo valor
-        }
-
-        // 6. Deleta uma Entrada
-        async function deleteRow(id) {
-            if (!confirm("Deseja mesmo apagar esta entrada?")) return;
-            await fetch(`/finances/delete/${id}`, { method: 'POST' });
-            location.reload();
-        }
-
-        // 7. Salva valor das Contas Fixas
-        async function saveFixed(categoryId, formula) {
-            const result = evaluateFormula(formula);
-            await fetch('/finances/save-item', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    month: <%= month %>,
-                    year: <%= year %>,
-                    type: 'expense',
-                    category_id: categoryId,
-                    formula,
-                    amount_cents: Math.round(result * 100) 
-            })
-        });
-        location.reload(); // Atualiza o Dashboard com o novo gasto
+            location.reload(); 
     }
 
-        // 8. Salva Lembretes e textos em segundo plano
-        async function saveNotes(type, content) {
-            await fetch(`/finances/notes/<%= year %>/<%= month %>`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type, content })
-            });
-        }
+            async function saveNotes(type, content) {
+                await fetch(`/finances/notes/<%= year %>/<%= month %>`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type, content })
+                });
+            }
 
-        // Ativa a soma da calculadora assim que a página abre
-        window.onload = () => {
-            calculatePad();
-        };
-    </script>
+            window.onload = () => { calculatePad(); };
+        </script>
 
-    <%- include('partials/footer') %>
+        <%- include('partials/footer') %>

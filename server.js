@@ -554,7 +554,7 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
            COALESCE(t.due_month, i.month) as month, 
            COALESCE(t.due_year, i.year) as year
     FROM transactions t
-    JOIN cards c ON c.id=t.card_id
+    LEFT JOIN cards c ON c.id=t.card_id
     LEFT JOIN imports i ON i.id=t.import_id 
     WHERE t.id=?
   `).get(id);

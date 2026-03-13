@@ -12,6 +12,10 @@ const { Strategy } = require('passport-openidconnect');
 const SQLiteStore = require('connect-sqlite3')(session);
 const db = require("./src/db");
 
+try { db.exec("ALTER TABLE transactions ADD COLUMN due_month INTEGER;"); } catch (e) { }
+try { db.exec("ALTER TABLE transactions ADD COLUMN due_year INTEGER;"); } catch (e) { }
+try { db.exec("ALTER TABLE transactions ADD COLUMN parent_txn_id INTEGER;"); } catch (e) { }
+
 
 // Adiciona a coluna de telefone na tabela people se ela não existir
 try { db.prepare("ALTER TABLE people ADD COLUMN phone TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -419,7 +423,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     f_allocated: (req.query.f_allocated || "").toString().trim()
   };
 
-  const where = ["((t.due_month=? AND t.due_year=?) OR (i.month=? AND i.year=?))"];
+  const where = ["((i.month=? AND i.year=?) OR (t.due_month=? AND t.due_year=?))"];
   const params = [month, year, month, year];
 
   if (filters.f_desc) { where.push("t.description LIKE ?"); params.push(likeParam(filters.f_desc)); }
@@ -441,15 +445,15 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   }
 
   const txns = db.prepare(`
-  SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
-         (SELECT COUNT(*) FROM allocations a WHERE a.transaction_id=t.id) AS alloc_count,
-         (SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id=t.id) AS selected_csv
-  FROM transactions t
-  JOIN cards c ON c.id=t.card_id
-  LEFT JOIN imports i ON i.id=t.import_id -- IMPORTANTE: Mudar para LEFT JOIN
-  WHERE (i.month=? AND i.year=?) OR (t.due_month=? AND t.due_year=?) -- Filtra os dois tipos
-  ORDER BY ${orderBy}
-`).all(month, year, month, year);
+    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
+           (SELECT COUNT(*) FROM allocations a WHERE a.transaction_id=t.id) AS alloc_count,
+           (SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id=t.id) AS selected_csv
+    FROM transactions t
+    JOIN cards c ON c.id=t.card_id
+    LEFT JOIN imports i ON i.id=t.import_id -- MUDANÇA: LEFT JOIN para não ignorar manuais
+    WHERE ${where.join(" AND ")}
+    ORDER BY ${orderBy}
+  `).all(...params);
 
   txns.forEach(t => {
     t.selected_ids = (t.selected_csv ? t.selected_csv.split(",").map(x => Number(x)) : []).filter(Boolean);
@@ -509,7 +513,7 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
            COALESCE(t.due_year, i.year) as year
     FROM transactions t
     JOIN cards c ON c.id=t.card_id
-    LEFT JOIN imports i ON i.id=t.import_id -- Mudança crucial aqui
+    LEFT JOIN imports i ON i.id=t.import_id -- MUDANÇA: LEFT JOIN
     WHERE t.id=?
   `).get(id);
 
@@ -523,14 +527,14 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
 app.post("/txn/:id", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
   // Buscamos os dados da transação com LEFT JOIN para garantir que pegamos o mês/ano manual ou do import
-  const txn = db.prepare(`
-    SELECT t.id, t.amount_cents, t.import_id, 
-           COALESCE(t.due_month, i.month) as month, 
-           COALESCE(t.due_year, i.year) as year
-    FROM transactions t
-    LEFT JOIN imports i ON i.id = t.import_id
-    WHERE t.id=?
+  const dateInfo = db.prepare(`
+    SELECT COALESCE(i.month, t.due_month) as month, COALESCE(i.year, t.due_year) as year 
+    FROM transactions t 
+    LEFT JOIN imports i ON i.id = t.import_id 
+    WHERE t.id = ?
   `).get(id);
+
+  res.redirect(`/month/${dateInfo.year}/${dateInfo.month}`);
 
   if (!txn) return res.status(404).send("Transação não encontrada.");
 

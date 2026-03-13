@@ -90,4 +90,50 @@ CREATE TABLE IF NOT EXISTS person_payments (
 );
 `);
 
+// Adiciona flag de titular na tabela people
+try { db.exec("ALTER TABLE people ADD COLUMN is_owner INTEGER DEFAULT 0"); } catch (e) { }
+
+// Tabela de Categorias (Luz, Internet, etc)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS finance_categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1
+  )
+`);
+
+// Tabela de Movimentações (Entradas e Gastos Fixos)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS monthly_finances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    type TEXT NOT NULL, -- 'income' ou 'expense'
+    category_id INTEGER,
+    description TEXT,
+    formula TEXT,
+    amount_cents INTEGER DEFAULT 0,
+    created_at TEXT
+  )
+`);
+
+// Tabela de Bloco de Notas (Rascunhos)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS scratchpad (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    content_text TEXT,
+    content_math TEXT,
+    UNIQUE(month, year)
+  )
+`);
+
+// Categorias Padrão
+const categories = ['Prestação Apartamento', 'Luz', 'Internet', 'Condomínio', 'Tim'];
+const insertCat = db.prepare("INSERT OR IGNORE INTO finance_categories (name) VALUES (?)");
+categories.forEach(cat => insertCat.run(cat));
+
+console.log("✅ Migração do Desmembramento concluída!");
+
 console.log("✅ Migração concluída");

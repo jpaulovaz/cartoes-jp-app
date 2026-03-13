@@ -231,6 +231,52 @@ function buildOrder(sort, dir) {
   return `${col} ${d}, t.id ${d}`;
 }
 
+// Rota para definir o Titular
+app.post("/people/:id/set-owner", ensureAuthenticated, (req, res) => {
+  const id = Number(req.params.id);
+  db.transaction(() => {
+    db.prepare("UPDATE people SET is_owner = 0").run();
+    db.prepare("UPDATE people SET is_owner = 1 WHERE id = ?").run(id);
+  })();
+  res.redirect("/people");
+});
+
+// Rota Principal do Desmembramento
+app.get("/desmembramento/:year/:month", ensureAuthenticated, (req, res) => {
+  const { year, month } = req.params;
+
+  // 1. Busca o titular
+  const owner = db.prepare("SELECT * FROM people WHERE is_owner = 1 LIMIT 1").get();
+  if (!owner) return res.status(400).send("Defina um titular na aba Pessoas primeiro.");
+
+  // 2. Calcula total de cartões do titular para o mês
+  const cardTotal = db.prepare(`
+    SELECT SUM(a.share_cents) as total
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id
+    JOIN imports i ON i.id = t.import_id
+    WHERE a.person_id = ? AND i.month = ? AND i.year = ?
+  `).get(owner.id, month, year);
+
+  // 3. Busca Entradas e Gastos Fixos
+  const finances = db.prepare("SELECT * FROM monthly_finances WHERE month = ? AND year = ?").all(month, year);
+  const categories = db.prepare("SELECT * FROM finance_categories WHERE is_active = 1").all();
+
+  // 4. Busca Bloco de Notas
+  let notes = db.prepare("SELECT * FROM scratchpad WHERE month = ? AND year = ?").get(month, year);
+  if (!notes) {
+    db.prepare("INSERT INTO scratchpad (month, year, content_text, content_math) VALUES (?, ?, '', '')").run(month, year);
+    notes = { content_text: '', content_math: '' };
+  }
+
+  res.render("desmembramento", {
+    year, month, owner,
+    cardTotalCents: cardTotal.total || 0,
+    finances, categories, notes,
+    formatBRLFromCents
+  });
+});
+
 app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   const parsed = parseMonthYear(req.params.month, req.params.year);
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");

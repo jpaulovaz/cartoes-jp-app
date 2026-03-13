@@ -119,7 +119,7 @@
                   <% items.forEach(it=> { %>
                     <tr>
                       <td class="px-4 py-3 font-medium text-slate-500 whitespace-nowrap">
-                        <%= it.txn_date || "-" %>
+                        <%= formatDateBR(it.txn_date) %>
                       </td>
                       <td class="px-4 py-3 font-bold text-slate-800">
                         <%= it.description %>

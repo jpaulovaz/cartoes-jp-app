@@ -115,7 +115,7 @@ app.get("/", ensureAuthenticated, (req, res) => {
   const d = new Date();
   const year = d.getFullYear();
   const month = d.getMonth() + 1;
-  res.redirect(`/desmembramento/${year}/${month}`);
+  res.redirect(`/detalhamento/${year}/${month}`);
 });
 
 app.get("/geral", ensureAuthenticated, (req, res) => {
@@ -275,8 +275,8 @@ app.post("/people/:id/set-owner", ensureAuthenticated, (req, res) => {
   res.redirect("/people");
 });
 
-// Rota Principal do Desmembramento
-app.get("/desmembramento/:year/:month", ensureAuthenticated, (req, res) => {
+// Rota Principal do detalhamento
+app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const { year, month } = req.params;
   const currentMonth = parseInt(month);
   const currentYear = parseInt(year);
@@ -342,7 +342,7 @@ app.get("/desmembramento/:year/:month", ensureAuthenticated, (req, res) => {
   const closedCheck = db.prepare("SELECT * FROM closed_months WHERE month = ? AND year = ?").get(currentMonth, currentYear);
   const isClosed = !!closedCheck;
 
-  res.render("desmembramento", {
+  res.render("detalhamento", {
     title: "Meu Detalhamento",
     year: currentYear,
     month: currentMonth,
@@ -704,9 +704,9 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
   res.render("whatsapp", { month, year, person, items, totalsByCard, total, paid_cents, remaining_cents, formatBRLFromCents });
 });
 
-// --- ROTAS DO DESMEMBRAMENTO ---
+// --- ROTAS DO detalhamento ---
 
-// Define quem é o titular (Dono do Desmembramento)
+// Define quem é o titular (Dono do detalhamento)
 app.post("/people/:id/set-owner", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
   db.transaction(() => {
@@ -717,7 +717,7 @@ app.post("/people/:id/set-owner", ensureAuthenticated, (req, res) => {
 });
 
 
-// --- ROTAS DO DESMEMBRAMENTO ---
+// --- ROTAS DO detalhamento ---
 
 // 1. Adiciona nova linha (Tanto para Entradas quanto para Contas)
 app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) => {

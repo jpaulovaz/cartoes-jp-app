@@ -237,35 +237,33 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
     statements[`${s.year}-${s.month}-${s.card_id}`] = s.paid_cents || 0;
   });
 
-  // 3. Agrupamos por Mês/Ano e calculamos os totais
+  // 3. Agrupamos por Mes/Ano E POR CARTAO, e calculamos os totais
   const groupedMap = new Map();
 
   recent.forEach(r => {
-    const key = `${r.year}-${r.month}`;
+    // Agrupa por year-month-card_id para nao misturar cartoes diferentes
+    const key = `${r.year}-${r.month}-${r.card_id}`;
     if (!groupedMap.has(key)) {
       groupedMap.set(key, {
         year: r.year,
         month: r.month,
+        card_id: r.card_id,
+        card_name: r.card_name,
         label: `${String(r.month).padStart(2, '0')}/${r.year}`,
         cards: [],
         total_cents: 0,
-        paid_cents: 0,
-        unique_cards: new Set()
+        paid_cents: 0
       });
     }
     const group = groupedMap.get(key);
     group.cards.push(r);
     group.total_cents += r.import_total;
-    // Registramos quais cartões estão neste mês para não duplicar pagamentos
-    group.unique_cards.add(r.card_id);
   });
 
-  // 4. Calculamos o Total Pago e o que Falta Pagar por Mês
+  // 4. Calculamos o Total Pago e o que Falta Pagar por Cartao/Mes
   for (const group of groupedMap.values()) {
-    for (const cid of group.unique_cards) {
-      const paid = statements[`${group.year}-${group.month}-${cid}`] || 0;
-      group.paid_cents += paid;
-    }
+    const paid = statements[`${group.year}-${group.month}-${group.card_id}`] || 0;
+    group.paid_cents = paid;
     group.remaining_cents = Math.max(0, group.total_cents - group.paid_cents);
   }
 
@@ -277,26 +275,28 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
   
-  // Separa em dois grupos: mês atual/próximo e outros
-  const currentOrNext = [];
+  // Encontra o mes atual ou proximo (o mais proximo)
+  let currentOrNextGroup = null;
   const others = [];
   
   groupedRecent.forEach(group => {
-    const isCurrentOrNext = (group.year === currentYear && group.month >= currentMonth) ||
+    const isCurrentOrNext = (group.year === currentYear && group.month === currentMonth) ||
+                            (group.year === currentYear && group.month > currentMonth) ||
                             (group.year === currentYear + 1 && group.month < currentMonth);
-    if (isCurrentOrNext) {
-      currentOrNext.push(group);
+    
+    if (isCurrentOrNext && !currentOrNextGroup) {
+      // Pega o primeiro mes atual/proximo (o mais proximo)
+      currentOrNextGroup = group;
     } else {
       others.push(group);
     }
   });
   
-  // Ordena cada grupo
-  currentOrNext.sort((a, b) => (a.year !== b.year) ? a.year - b.year : a.month - b.month);
+  // Ordena os outros em ordem decrescente
   others.sort((a, b) => (b.year !== a.year) ? b.year - a.year : b.month - a.month);
   
-  // Junta os dois grupos
-  const groupedRecent_final = [...currentOrNext, ...others];
+  // Junta: primeiro o mes atual/proximo, depois os outros
+  const groupedRecent_final = currentOrNextGroup ? [currentOrNextGroup, ...others] : others;
 
   const cards = db.prepare("SELECT id, name FROM cards ORDER BY name ASC").all();
 
@@ -971,21 +971,27 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
     FROM allocations a
     JOIN transactions t ON t.id=a.transaction_id
     JOIN cards c ON c.id=t.card_id
-    JOIN imports i ON i.id=t.import_id
-    WHERE i.month=? AND i.year=? AND a.person_id=?
+    LEFT JOIN imports i ON i.id=t.import_id
+    WHERE (
+      (i.month=? AND i.year=?) OR
+      (t.import_id IS NULL AND t.due_month=? AND t.due_year=?)
+    ) AND a.person_id=?
     ORDER BY t.txn_date IS NULL, t.txn_date, c.name, t.id
-  `).all(month, year, personId);
+  `).all(month, year, month, year, personId);
 
   const totalsByCard = db.prepare(`
     SELECT c.name AS card_name, COALESCE(SUM(a.share_cents),0) AS total_cents
     FROM allocations a
     JOIN transactions t ON t.id=a.transaction_id
     JOIN cards c ON c.id=t.card_id
-    JOIN imports i ON i.id=t.import_id
-    WHERE i.month=? AND i.year=? AND a.person_id=?
+    LEFT JOIN imports i ON i.id=t.import_id
+    WHERE (
+      (i.month=? AND i.year=?) OR
+      (t.import_id IS NULL AND t.due_month=? AND t.due_year=?)
+    ) AND a.person_id=?
     GROUP BY c.id
     ORDER BY c.name
-  `).all(month, year, personId);
+  `).all(month, year, month, year, personId);
 
   const total = totalsByCard.reduce((acc, r) => acc + r.total_cents, 0);
 

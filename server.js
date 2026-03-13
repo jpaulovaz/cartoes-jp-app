@@ -40,6 +40,10 @@ const { computeDueDate } = require("./src/dueDate");
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
+// --- MIDDLEWARES DE BODY PARSER (DEVE VIR ANTES DAS ROTAS) ---
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
 // --- CONFIGURAÇÃO DE SESSÃO E AUTH ---
 app.use(session({
   store: new SQLiteStore({ db: 'sessions.sqlite', dir: './' }),
@@ -136,9 +140,7 @@ app.get('/logout', (req, res) => {
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
-// CONFIGURAÇÃO DE LIMITES PARA IMAGENS 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+// NOTA: Middlewares de body-parser já foram configurados no início do arquivo
 
 app.use(express.static(path.join(__dirname, "public")));
 

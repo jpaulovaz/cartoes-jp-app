@@ -539,7 +539,7 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
 app.post("/txn/:id", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
 
-  // 1. Busca os dados (Usando COALESCE para suportar manual e import)
+  // 1. Buscamos os dados da transação (Manual ou Import)
   const txn = db.prepare(`
     SELECT t.id, t.amount_cents, 
            COALESCE(i.month, t.due_month) as month, 
@@ -551,7 +551,6 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
 
   if (!txn) return res.status(404).send("Transação não encontrada.");
 
-  // 2. Processa alocações
   let personIds = req.body.person_ids || [];
   if (!Array.isArray(personIds)) personIds = [personIds];
   personIds = personIds.map(Number).filter(Boolean);
@@ -571,7 +570,7 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
     }
   })();
 
-  // 3. Redireciona usando a variável txn que definimos lá em cima
+  // 2. Redireciona usando o mês/ano que o COALESCE encontrou
   res.redirect(`/month/${txn.year}/${txn.month}`);
 });
 
@@ -926,7 +925,10 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
         }
       }
     })();
+
+    // APENAS UM REDIRECT AQUI:
     res.redirect(`/month/${startYear}/${startMonth}`);
+
   } catch (err) {
     console.error("Erro ao inserir manualmente:", err);
     res.status(500).send("Erro ao processar transação manual.");

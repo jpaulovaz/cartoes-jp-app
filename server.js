@@ -16,6 +16,9 @@ try { db.exec("ALTER TABLE transactions ADD COLUMN due_month INTEGER;"); } catch
 try { db.exec("ALTER TABLE transactions ADD COLUMN due_year INTEGER;"); } catch (e) { }
 try { db.exec("ALTER TABLE transactions ADD COLUMN parent_txn_id INTEGER;"); } catch (e) { }
 
+try { db.prepare("ALTER TABLE transactions ADD COLUMN due_month INTEGER").run(); } catch (e) { }
+try { db.prepare("ALTER TABLE transactions ADD COLUMN due_year INTEGER").run(); } catch (e) { }
+try { db.prepare("ALTER TABLE transactions ADD COLUMN parent_txn_id INTEGER").run(); } catch (e) { }
 
 // Adiciona a coluna de telefone na tabela people se ela não existir
 try { db.prepare("ALTER TABLE people ADD COLUMN phone TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -450,10 +453,14 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
            (SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id=t.id) AS selected_csv
     FROM transactions t
     JOIN cards c ON c.id=t.card_id
-    LEFT JOIN imports i ON i.id=t.import_id -- MUDANÇA: LEFT JOIN para não ignorar manuais
-    WHERE ${where.join(" AND ")}
+    LEFT JOIN imports i ON i.id=t.import_id
+    WHERE ((i.month=? AND i.year=?) OR (t.due_month=? AND t.due_year=?))
+      ${filters.f_desc ? " AND t.description LIKE ?" : ""}
+      ${filters.f_card ? " AND c.name LIKE ?" : ""}
+      ${filters.f_number ? " AND COALESCE(t.card_number,'') LIKE ?" : ""}
+      ${filters.f_date ? " AND COALESCE(t.txn_date,'') LIKE ?" : ""}
     ORDER BY ${orderBy}
-  `).all(...params);
+  `).all(month, year, month, year, ...params.slice(2));
 
   txns.forEach(t => {
     t.selected_ids = (t.selected_csv ? t.selected_csv.split(",").map(x => Number(x)) : []).filter(Boolean);
@@ -478,9 +485,20 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
 app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
-  const txn = db.prepare("SELECT id, amount_cents, import_id FROM transactions WHERE id=?").get(id);
+
+  // 1. Buscamos os dados da transação e a data (vinda do import ou manual)
+  const txn = db.prepare(`
+    SELECT t.id, t.amount_cents, 
+           COALESCE(i.month, t.due_month) as month, 
+           COALESCE(i.year, t.due_year) as year 
+    FROM transactions t 
+    LEFT JOIN imports i ON i.id = t.import_id 
+    WHERE t.id = ?
+  `).get(id);
+
   if (!txn) return res.status(404).send("Transação não encontrada.");
 
+  // 2. Processa os IDs das pessoas
   let personIds = req.body.person_ids || [];
   if (!Array.isArray(personIds)) personIds = [personIds];
   personIds = personIds.map(Number).filter(Boolean);
@@ -500,8 +518,8 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
     }
   })();
 
-  const imp = db.prepare("SELECT month, year FROM imports WHERE id=?").get(txn.import_id);
-  res.redirect(`/month/${imp.year}/${imp.month}`);
+  // 3. Redireciona usando os dados que o COALESCE encontrou
+  res.redirect(`/month/${txn.year}/${txn.month}`);
 });
 
 // Detail page
@@ -526,18 +544,20 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
 
 app.post("/txn/:id", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
-  // Buscamos os dados da transação com LEFT JOIN para garantir que pegamos o mês/ano manual ou do import
-  const dateInfo = db.prepare(`
-    SELECT COALESCE(i.month, t.due_month) as month, COALESCE(i.year, t.due_year) as year 
+
+  // 1. Busca os dados necessários
+  const txn = db.prepare(`
+    SELECT t.id, t.amount_cents, 
+           COALESCE(i.month, t.due_month) as month, 
+           COALESCE(i.year, t.due_year) as year 
     FROM transactions t 
     LEFT JOIN imports i ON i.id = t.import_id 
     WHERE t.id = ?
   `).get(id);
 
-  res.redirect(`/month/${dateInfo.year}/${dateInfo.month}`);
-
   if (!txn) return res.status(404).send("Transação não encontrada.");
 
+  // 2. Lógica de alocação (mesma da rota acima)
   let personIds = req.body.person_ids || [];
   if (!Array.isArray(personIds)) personIds = [personIds];
   personIds = personIds.map(Number).filter(Boolean);
@@ -557,7 +577,7 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
     }
   })();
 
-  // Redireciona usando a informação que o COALESCE trouxe lá em cima
+  // 3. Redireciona para o mês correto
   res.redirect(`/month/${txn.year}/${txn.month}`);
 });
 

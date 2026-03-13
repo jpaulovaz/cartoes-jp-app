@@ -343,7 +343,7 @@ app.get("/desmembramento/:year/:month", ensureAuthenticated, (req, res) => {
   const isClosed = !!closedCheck;
 
   res.render("desmembramento", {
-    title: "Meu Desmembramento",
+    title: "Meu Detalhamento",
     year: currentYear,
     month: currentMonth,
     owner,

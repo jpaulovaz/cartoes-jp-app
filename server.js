@@ -249,6 +249,35 @@ app.post("/people/:id/set-owner", ensureAuthenticated, (req, res) => {
 // Rota Principal do Desmembramento
 app.get("/desmembramento/:year/:month", ensureAuthenticated, (req, res) => {
   const { year, month } = req.params;
+  const currentMonth = parseInt(month);
+  const currentYear = parseInt(year);
+
+  // ================================================================
+  // NOVA LÓGICA: CLONAR CONTAS FIXAS DO MÊS ANTERIOR
+  // ================================================================
+  const existingExpenses = db.prepare("SELECT COUNT(*) as count FROM monthly_finances WHERE month = ? AND year = ? AND type = 'expense'").get(currentMonth, currentYear);
+
+  if (existingExpenses.count === 0) {
+    let prevM = currentMonth - 1;
+    let prevY = currentYear;
+    if (prevM < 1) { prevM = 12; prevY--; }
+
+    const prevExpenses = db.prepare("SELECT * FROM monthly_finances WHERE month = ? AND year = ? AND type = 'expense'").all(prevM, prevY);
+
+    if (prevExpenses.length > 0) {
+      const insertClone = db.prepare(`
+              INSERT INTO monthly_finances (month, year, type, description, category_id, formula, amount_cents, created_at)
+              VALUES (?, ?, 'expense', ?, ?, '', 0, ?)
+          `);
+
+      db.transaction(() => {
+        for (const exp of prevExpenses) {
+          insertClone.run(currentMonth, currentYear, exp.description, exp.category_id, new Date().toISOString());
+        }
+      })();
+    }
+  }
+  // ================================================================
 
   // 1. Busca o titular
   const owner = db.prepare("SELECT * FROM people WHERE is_owner = 1 LIMIT 1").get();
@@ -263,11 +292,13 @@ app.get("/desmembramento/:year/:month", ensureAuthenticated, (req, res) => {
     WHERE a.person_id = ? AND i.month = ? AND i.year = ?
   `).get(owner.id, month, year);
 
-  // 3. Busca Entradas e Gastos Fixos
+  // 3. Busca Entradas e Gastos Fixos (Agora ele vai achar as contas que foram clonadas acima!)
   const finances = db.prepare(`
     SELECT * FROM monthly_finances 
     WHERE month = ? AND year = ?
-`).all(month, year);
+  `).all(currentMonth, currentYear);
+
+  // (O resto do seu código continua a partir daqui com as buscas das anotações e o res.render...)
 
   const categories = db.prepare("SELECT * FROM finance_categories WHERE is_active = 1").all();
 

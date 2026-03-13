@@ -5,30 +5,59 @@ function columnExists(table, col) {
   return cols.includes(col);
 }
 
+// ===== TABELA DE USUÁRIOS (NOVA) =====
+db.exec(`
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL UNIQUE,
+  name TEXT,
+  google_id TEXT UNIQUE,
+  role TEXT DEFAULT 'user',
+  created_at TEXT NOT NULL,
+  last_login TEXT
+);
+`);
+
+// ===== TABELAS EXISTENTES COM user_id =====
 db.exec(`
 CREATE TABLE IF NOT EXISTS cards (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  due_day INTEGER,
+  holiday_scope TEXT,
+  created_at TEXT,
+  UNIQUE(user_id, name),
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS people (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE,
-  active INTEGER NOT NULL DEFAULT 1
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  phone TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  is_owner INTEGER DEFAULT 0,
+  created_at TEXT,
+  UNIQUE(user_id, name),
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS imports (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
   card_id INTEGER NOT NULL,
   month INTEGER NOT NULL,
   year INTEGER NOT NULL,
   created_at TEXT NOT NULL,
   original_filename TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (card_id) REFERENCES cards(id)
 );
 
 CREATE TABLE IF NOT EXISTS transactions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
   import_id INTEGER,
   card_id INTEGER NOT NULL,
   txn_date TEXT,
@@ -38,37 +67,29 @@ CREATE TABLE IF NOT EXISTS transactions (
   raw_json TEXT,
   due_month INTEGER,
   due_year INTEGER,
+  parent_txn_id INTEGER,
   created_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (import_id) REFERENCES imports(id),
   FOREIGN KEY (card_id) REFERENCES cards(id)
 );
 
 CREATE TABLE IF NOT EXISTS allocations (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
   transaction_id INTEGER NOT NULL,
   person_id INTEGER NOT NULL,
   share_cents INTEGER NOT NULL,
   created_at TEXT NOT NULL,
   UNIQUE(transaction_id, person_id),
+  FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (transaction_id) REFERENCES transactions(id),
   FOREIGN KEY (person_id) REFERENCES people(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_txn_card ON transactions(card_id);
-CREATE INDEX IF NOT EXISTS idx_txn_import ON transactions(import_id);
-CREATE INDEX IF NOT EXISTS idx_alloc_txn ON allocations(transaction_id);
-`);
-
-if (!columnExists("cards", "due_day")) db.exec(`ALTER TABLE cards ADD COLUMN due_day INTEGER`);
-if (!columnExists("cards", "holiday_scope")) db.exec(`ALTER TABLE cards ADD COLUMN holiday_scope TEXT`);
-
-// Adiciona colunas de vencimento manual para transacoes manuais
-if (!columnExists("transactions", "due_month")) db.exec(`ALTER TABLE transactions ADD COLUMN due_month INTEGER`);
-if (!columnExists("transactions", "due_year")) db.exec(`ALTER TABLE transactions ADD COLUMN due_year INTEGER`);
-
-db.exec(`
 CREATE TABLE IF NOT EXISTS card_statements (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
   card_id INTEGER NOT NULL,
   month INTEGER NOT NULL,
   year INTEGER NOT NULL,
@@ -78,13 +99,13 @@ CREATE TABLE IF NOT EXISTS card_statements (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE(card_id, month, year),
+  FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (card_id) REFERENCES cards(id)
 );
-`);
 
-db.exec(`
 CREATE TABLE IF NOT EXISTS person_payments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
   person_id INTEGER NOT NULL,
   month INTEGER NOT NULL,
   year INTEGER NOT NULL,
@@ -92,54 +113,72 @@ CREATE TABLE IF NOT EXISTS person_payments (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE(person_id, month, year),
+  FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (person_id) REFERENCES people(id)
+);
+
+CREATE TABLE IF NOT EXISTS finance_categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  is_active INTEGER DEFAULT 1,
+  UNIQUE(user_id, name),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS monthly_finances (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  category_id INTEGER,
+  description TEXT,
+  formula TEXT,
+  amount_cents INTEGER DEFAULT 0,
+  created_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (category_id) REFERENCES finance_categories(id)
+);
+
+CREATE TABLE IF NOT EXISTS scratchpad (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  content_text TEXT,
+  content_math TEXT,
+  UNIQUE(user_id, month, year),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS closed_months (
+  user_id INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  PRIMARY KEY (user_id, month, year),
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 `);
 
-// Adiciona flag de titular na tabela people
-try { db.exec("ALTER TABLE people ADD COLUMN is_owner INTEGER DEFAULT 0"); } catch (e) { }
-
-// Tabela de Categorias (Luz, Internet, etc)
+// ===== ÍNDICES =====
 db.exec(`
-  CREATE TABLE IF NOT EXISTS finance_categories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    is_active INTEGER DEFAULT 1
-  )
+CREATE INDEX IF NOT EXISTS idx_cards_user ON cards(user_id);
+CREATE INDEX IF NOT EXISTS idx_people_user ON people(user_id);
+CREATE INDEX IF NOT EXISTS idx_imports_user ON imports(user_id);
+CREATE INDEX IF NOT EXISTS idx_txn_user ON transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_txn_card ON transactions(card_id);
+CREATE INDEX IF NOT EXISTS idx_txn_import ON transactions(import_id);
+CREATE INDEX IF NOT EXISTS idx_alloc_user ON allocations(user_id);
+CREATE INDEX IF NOT EXISTS idx_alloc_txn ON allocations(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_statements_user ON card_statements(user_id);
+CREATE INDEX IF NOT EXISTS idx_payments_user ON person_payments(user_id);
 `);
 
-// Tabela de Movimentações (Entradas e Gastos Fixos)
-db.exec(`
-  CREATE TABLE IF NOT EXISTS monthly_finances (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    month INTEGER NOT NULL,
-    year INTEGER NOT NULL,
-    type TEXT NOT NULL, -- 'income' ou 'expense'
-    category_id INTEGER,
-    description TEXT,
-    formula TEXT,
-    amount_cents INTEGER DEFAULT 0,
-    created_at TEXT
-  )
-`);
+// ===== CATEGORIAS PADRÃO =====
+// Nota: Categorias agora são por usuário, então não inserimos padrão aqui
+// Cada usuário terá suas categorias criadas na primeira vez que acessar
 
-// Tabela de Bloco de Notas (Rascunhos)
-db.exec(`
-  CREATE TABLE IF NOT EXISTS scratchpad (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    month INTEGER NOT NULL,
-    year INTEGER NOT NULL,
-    content_text TEXT,
-    content_math TEXT,
-    UNIQUE(month, year)
-  )
-`);
-
-// Categorias Padrão
-const categories = ['Prestação Apartamento', 'Luz', 'Internet', 'Condomínio', 'Tim'];
-const insertCat = db.prepare("INSERT OR IGNORE INTO finance_categories (name) VALUES (?)");
-categories.forEach(cat => insertCat.run(cat));
-
-console.log("✅ Migração do Desmembramento concluída!");
-
-console.log("✅ Migração concluída");
+console.log("✅ Migração Multi-Usuário concluída!");
+console.log("✅ Tabela de usuários criada");
+console.log("✅ user_id adicionado a todas as tabelas");

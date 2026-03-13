@@ -98,9 +98,9 @@ app.use((req, res, next) => {
   try {
     const owner = db.prepare("SELECT name FROM people WHERE is_owner = 1 LIMIT 1").get();
     // Pega só o primeiro nome se for muito grande, ou o nome todo. Ex: "Cartões João"
-    res.locals.nomeTitular = owner ? `Cartões ${owner.name.split(' ')[0]}` : "Cartões JP";
+    res.locals.nomeTitular = owner ? `Detalhamento ${owner.name.split(' ')[0]}` : "Detalhamento Contas";
   } catch (e) {
-    res.locals.nomeTitular = "Cartões JP";
+    res.locals.nomeTitular = "Detalhamento Contas";
   }
   next();
 });

@@ -39,7 +39,7 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'chave-secreta-padrao',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 } // Login dura 7 dias
+  cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 } // 30 dias
 }));
 
 app.use(passport.initialize());
@@ -74,13 +74,31 @@ passport.deserializeUser((obj, done) => done(null, obj));
 
 // Função para proteger as páginas
 function ensureAuthenticated(req, res, next) {
-  if (req.isAuthenticated()) return next();
+  // Se estiver autenticado via Passport (PocketID) ou via Sessão Local
+  if (req.isAuthenticated() || req.session.localAuth) {
+    return next();
+  }
   res.redirect('/login');
 }
 
 // --- ROTAS DE AUTH ---
 // CORREÇÃO: Removido ensureAuthenticated daqui para evitar loop
-app.get('/login', passport.authenticate('oidc'));
+app.get('/login', (req, res) => {
+  if (process.env.POCKET_ID_URL) {
+    return passport.authenticate('oidc')(req, res);
+  }
+  res.render('login', { error: null });
+});
+
+// Processamento do Login Local
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === process.env.LOCAL_ADMIN_USER && password === process.env.LOCAL_ADMIN_PASS) {
+    req.session.localAuth = true;
+    return res.redirect('/');
+  }
+  res.render('login', { error: 'Usuário ou senha incorretos.' });
+});
 
 app.get('/auth/callback', passport.authenticate('oidc', {
   successRedirect: '/',
@@ -833,5 +851,29 @@ app.post("/finances/toggle-close", ensureAuthenticated, express.json(), (req, re
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.post("/txn/manual", ensureAuthenticated, (req, res) => {
+  const { date, description, amount, card_id, month, year } = req.body;
+  const amountCents = centsFromPtBrMoney(amount);
+
+  db.transaction(() => {
+    const info = db.prepare(`
+            INSERT INTO transactions (card_id, txn_date, description, amount_cents, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        `).run(card_id, date, description, amountCents, new Date().toISOString());
+
+    const txnId = info.lastInsertRowid;
+
+    // Auto-Atribuição: se só existe 1 pessoa ativa, atribui 100%
+    const activePeople = db.prepare("SELECT id FROM people WHERE active = 1").all();
+    if (activePeople.length === 1) {
+      db.prepare(`
+                INSERT INTO allocations (transaction_id, person_id, share_cents, created_at)
+                VALUES (?, ?, ?, ?)
+            `).run(txnId, activePeople[0].id, amountCents, new Date().toISOString());
+    }
+  })();
+
+  res.redirect(`/month/${year}/${month}`);
+});
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`✅ Rodando em http://localhost:${PORT}`));

@@ -450,15 +450,15 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   // Query corrigida com LEFT JOIN e contagem exata de parâmetros
   const txns = db.prepare(`
-    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
-           (SELECT COUNT(*) FROM allocations a WHERE a.transaction_id=t.id) AS alloc_count,
-           (SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id=t.id) AS selected_csv
-    FROM transactions t
-    JOIN cards c ON c.id=t.card_id
-    LEFT JOIN imports i ON i.id=t.import_id
-    WHERE ${where.join(" AND ")}
-    ORDER BY ${orderBy}
-  `).all(...params);
+  SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
+         (SELECT COUNT(*) FROM allocations a WHERE a.transaction_id=t.id) AS alloc_count,
+         (SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id=t.id) AS selected_csv
+  FROM transactions t
+  JOIN cards c ON c.id=t.card_id
+  LEFT JOIN imports i ON i.id=t.import_id -- MUDANÇA AQUI
+  WHERE ((i.month=? AND i.year=?) OR (t.due_month=? AND t.due_year=?)) -- MUDANÇA AQUI
+  ORDER BY ${orderBy}
+`).all(month, year, month, year);
 
   txns.forEach(t => {
     t.selected_ids = (t.selected_csv ? t.selected_csv.split(",").map(x => Number(x)) : []).filter(Boolean);
@@ -891,22 +891,13 @@ app.post("/finances/toggle-close", ensureAuthenticated, express.json(), (req, re
 });
 
 app.post("/txn/manual", ensureAuthenticated, (req, res) => {
-  // Pegando os dados do formulário
   const { date, description, amount, card_id, first_due, installments } = req.body;
-
-  console.log("Recebendo inserção manual:", { description, amount, installments, first_due });
 
   try {
     const totalCents = centsFromPtBrMoney(amount);
     const numInstallments = parseInt(installments) || 1;
     const installmentValue = Math.floor(totalCents / numInstallments);
     const remainder = totalCents % numInstallments;
-
-    // Caso o campo first_due venha vazio (segurança)
-    if (!first_due) {
-      return res.status(400).send("Mês de vencimento inicial é obrigatório.");
-    }
-
     let [startYear, startMonth] = first_due.split('-').map(Number);
 
     db.transaction(() => {
@@ -915,11 +906,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
       for (let i = 0; i < numInstallments; i++) {
         let currentMonth = startMonth + i;
         let currentYear = startYear;
-
-        while (currentMonth > 12) {
-          currentMonth -= 12;
-          currentYear += 1;
-        }
+        while (currentMonth > 12) { currentMonth -= 12; currentYear += 1; }
 
         const finalDesc = numInstallments > 1
           ? `${description} (${String(i + 1).padStart(2, '0')}/${String(numInstallments).padStart(2, '0')})`
@@ -927,32 +914,22 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
 
         const currentAmount = (i === numInstallments - 1) ? installmentValue + remainder : installmentValue;
 
-        // INSERT na tabela transactions
+        // Note: import_id fica NULL para itens manuais
         const info = db.prepare(`
-                    INSERT INTO transactions (card_id, txn_date, description, amount_cents, due_month, due_year, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                `).run(card_id, date, finalDesc, currentAmount, currentMonth, currentYear, new Date().toISOString());
+          INSERT INTO transactions (card_id, txn_date, description, amount_cents, due_month, due_year, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(card_id, date, finalDesc, currentAmount, currentMonth, currentYear, new Date().toISOString());
 
-        const txnId = info.lastInsertRowid;
-
-        // Auto-atribuição
         if (activePeople.length === 1) {
-          db.prepare(`
-                        INSERT INTO allocations (transaction_id, person_id, share_cents, created_at)
-                        VALUES (?, ?, ?, ?)
-                    `).run(txnId, activePeople[0].id, currentAmount, new Date().toISOString());
+          db.prepare(`INSERT INTO allocations (transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?)`)
+            .run(info.lastInsertRowid, activePeople[0].id, currentAmount, new Date().toISOString());
         }
       }
     })();
-
-    console.log("Inserção manual concluída com sucesso.");
     res.redirect(`/month/${startYear}/${startMonth}`);
-
   } catch (err) {
-    console.error("Erro ao inserir manualmente:", err);
     res.status(500).send("Erro ao processar transação manual.");
   }
-
 });
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`✅ Rodando em http://localhost:${PORT}`));

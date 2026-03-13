@@ -627,5 +627,66 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
   res.render("whatsapp", { month, year, person, items, totalsByCard, total, paid_cents, remaining_cents, formatBRLFromCents });
 });
 
+// --- ROTAS DO DESMEMBRAMENTO ---
+
+// Define quem é o titular (Dono do Desmembramento)
+app.post("/people/:id/set-owner", ensureAuthenticated, (req, res) => {
+  const id = Number(req.params.id);
+  db.transaction(() => {
+    db.prepare("UPDATE people SET is_owner = 0").run();
+    db.prepare("UPDATE people SET is_owner = 1 WHERE id = ?").run(id);
+  })();
+  res.redirect("/people");
+});
+
+// Atualiza ou Cria um gasto fixo/entrada
+app.post("/finances/save", ensureAuthenticated, (req, res) => {
+  const { month, year, type, category_id, description, formula, amount_cents } = req.body;
+
+  const now = new Date().toISOString();
+
+  // Upsert: Se já existir para este mês/ano/categoria, atualiza. Se não, insere.
+  const sql = `
+        INSERT INTO monthly_finances (month, year, type, category_id, description, formula, amount_cents, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(month, year, type, category_id) DO UPDATE SET
+            formula = excluded.formula,
+            amount_cents = excluded.amount_cents,
+            description = excluded.description
+    `;
+
+  // Nota: Para o ON CONFLICT funcionar, você deve garantir que as tabelas tenham UNIQUE(month, year, type, category_id)
+  // Se não tiver, use um DELETE seguido de INSERT.
+  db.prepare("DELETE FROM monthly_finances WHERE month=? AND year=? AND type=? AND COALESCE(category_id,0)=? AND COALESCE(description,'')=?")
+    .run(month, year, type, category_id || 0, description || '');
+
+  db.prepare("INSERT INTO monthly_finances (month, year, type, category_id, description, formula, amount_cents, created_at) VALUES (?,?,?,?,?,?,?,?)")
+    .run(month, year, type, category_id, description, formula, amount_cents, now);
+
+  res.json({ success: true });
+});
+
+// Salva Notas e Rascunho Matemático
+app.post("/finances/notes/:year/:month", ensureAuthenticated, (req, res) => {
+  const { year, month } = req.params;
+  const { type, content } = req.body;
+  const col = type === 'math' ? 'content_math' : 'content_text';
+
+  db.prepare(`
+        INSERT INTO scratchpad (month, year, ${col}) 
+        VALUES (?, ?, ?)
+        ON CONFLICT(month, year) DO UPDATE SET ${col} = excluded.${col}
+    `).run(month, year, content);
+
+  res.json({ success: true });
+});
+
+// Rota para deletar uma entrada manual
+app.post("/finances/delete/:id", ensureAuthenticated, (req, res) => {
+  db.prepare("DELETE FROM monthly_finances WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
+});
+
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`✅ Rodando em http://localhost:${PORT}`));

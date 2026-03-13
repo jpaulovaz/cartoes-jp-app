@@ -119,6 +119,15 @@
 
       </div>
     </div>
+
+    <% const now=new Date(); const currentMonth=now.getMonth() + 1; const currentYear=now.getFullYear(); %>
+      <li class="nav-item">
+        <a class="nav-link flex items-center gap-2 font-bold text-slate-700 hover:text-blue-600 transition-colors"
+          href="/desmembramento/<%= currentYear %>/<%= currentMonth %>">
+          <span>👑</span> Meu Desmembramento
+        </a>
+      </li>
+
   </nav>
 
   <main class="max-w-[1600px] mx-auto px-4 py-8 flex-grow w-full">

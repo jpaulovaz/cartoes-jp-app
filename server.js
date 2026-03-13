@@ -200,8 +200,16 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
   const groupedRecent = Array.from(groupedMap.values());
   groupedRecent.sort((a, b) => (b.year !== a.year) ? b.year - a.year : b.month - a.month);
 
+  const cards = db.prepare("SELECT id, name FROM cards ORDER BY name ASC").all();
+
   // Enviamos para o frontend, incluindo a função de formatar dinheiro
-  res.render("home", { groupedRecent, formatBRLFromCents });
+  //res.render("home", { groupedRecent, formatBRLFromCents });
+  res.render("home", {
+    groupedRecent,
+    formatBRLFromCents,
+    cards, // <--- ADICIONE ESTA LINHA
+    user: req.user || req.session.user
+  });
 });
 
 // People

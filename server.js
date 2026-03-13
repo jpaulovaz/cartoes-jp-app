@@ -107,8 +107,21 @@ passport.deserializeUser((obj, done) => done(null, obj));
 // Função para proteger as páginas
 function ensureAuthenticated(req, res, next) {
   // Se estiver autenticado via Passport (PocketID) ou via Sessão Local
+  if (req.method === 'POST' && req.path === '/txn/manual') {
+    console.log('ensureAuthenticated para /txn/manual:');
+    console.log('  - req.isAuthenticated():', req.isAuthenticated());
+    console.log('  - req.session.localAuth:', req.session.localAuth);
+  }
+  
   if (req.isAuthenticated() || req.session.localAuth) {
+    if (req.method === 'POST' && req.path === '/txn/manual') {
+      console.log('  - AUTENTICADO! Deixando passar.');
+    }
     return next();
+  }
+  
+  if (req.method === 'POST' && req.path === '/txn/manual') {
+    console.log('  - NÃO AUTENTICADO! Redirecionando para /login');
   }
   res.redirect('/login');
 }

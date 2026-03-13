@@ -13,7 +13,6 @@ const SQLiteStore = require('connect-sqlite3')(session);
 const db = require("./src/db");
 
 // --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
-console.log('🔄 Executando migração automática...');
 require('./scripts/migrate.js');
 
 // --- OPCIONAL: EXECUTA SEED AUTOMÁTICO (comentar se não quiser dados de exemplo) ---
@@ -52,10 +51,6 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 // --- MIDDLEWARE DE LOGGING GLOBAL ---
 app.use((req, res, next) => {
   if (req.method === 'POST' && req.path === '/txn/manual') {
-    console.log('\n========================================');
-    console.log('🔍 INTERCEPTADO: POST /txn/manual');
-    console.log('========================================');
-    console.log('req.body:', JSON.stringify(req.body, null, 2));
   }
   next();
 });
@@ -99,7 +94,6 @@ if (process.env.CLIENT_ID && process.env.CLIENT_SECRET && process.env.CALLBACK_U
     return done(null, false, { message: 'Usuário não autorizado.' });
   }));
 } else {
-  console.log('⚠️  Pocket ID não configurado. Usando login local.');
 }
 
 passport.serializeUser((user, done) => done(null, user));
@@ -109,20 +103,15 @@ passport.deserializeUser((obj, done) => done(null, obj));
 function ensureAuthenticated(req, res, next) {
   // Se estiver autenticado via Passport (PocketID) ou via Sessão Local
   if (req.method === 'POST' && req.path === '/txn/manual') {
-    console.log('ensureAuthenticated para /txn/manual:');
-    console.log('  - req.isAuthenticated():', req.isAuthenticated());
-    console.log('  - req.session.localAuth:', req.session.localAuth);
   }
   
   if (req.isAuthenticated() || req.session.localAuth) {
     if (req.method === 'POST' && req.path === '/txn/manual') {
-      console.log('  - AUTENTICADO! Deixando passar.');
     }
     return next();
   }
   
   if (req.method === 'POST' && req.path === '/txn/manual') {
-    console.log('  - NÃO AUTENTICADO! Redirecionando para /login');
   }
   res.redirect('/login');
 }
@@ -576,111 +565,70 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 });
 
 app.post("/txn/manual", ensureAuthenticated, (req, res) => {
-  console.log('\n\n🚀🚀🚀 ROTA /txn/manual CHAMADA! 🚀🚀🚀');
-  console.log('\n========================================');
-  console.log('DEBUG: POST /txn/manual - INICIADO');
-  console.log('========================================');
-  console.log('Dados recebidos (req.body):', JSON.stringify(req.body, null, 2));
   
   const { date, description, amount, card_id, first_due, installments } = req.body;
-  console.log('Parametros extraidos:', { date, description, amount, card_id, first_due, installments });
 
   try {
     // Validacao: card_id deve ser um numero valido
     const cardIdNum = Number(card_id);
-    console.log('Validacao card_id:');
-    console.log('  - card_id original:', card_id, '(tipo:', typeof card_id + ')');
-    console.log('  - cardIdNum:', cardIdNum);
-    console.log('  - isNaN(cardIdNum):', isNaN(cardIdNum));
-    console.log('  - !cardIdNum:', !cardIdNum);
     
     if (!cardIdNum || isNaN(cardIdNum)) {
-      console.error('ERRO: card_id invalido');
       return res.status(400).send("Cartao invalido. Selecione um cartao valido.");
     }
     
     // Validacao: verifica se o cartao existe
-    console.log('Procurando cartao com ID:', cardIdNum);
     const cardExists = db.prepare("SELECT id FROM cards WHERE id = ?").get(cardIdNum);
-    console.log('Resultado da busca:', cardExists);
     
     if (!cardExists) {
-      console.error('ERRO: Cartao nao encontrado no banco');
       return res.status(400).send("Cartao nao encontrado no sistema.");
     }
-    console.log('Cartao validado com sucesso');
     
     // Conversao de valores
-    console.log('\nConversao de valores:');
     const totalCents = centsFromPtBrMoney(amount);
-    console.log('  - amount original:', amount);
-    console.log('  - totalCents:', totalCents);
     
     const numInstallments = parseInt(installments) || 1;
-    console.log('  - installments original:', installments);
-    console.log('  - numInstallments:', numInstallments);
     
     const installmentValue = Math.floor(totalCents / numInstallments);
     const remainder = totalCents % numInstallments;
-    console.log('  - installmentValue:', installmentValue);
-    console.log('  - remainder:', remainder);
     
     let [startYear, startMonth] = first_due.split('-').map(Number);
-    console.log('  - first_due original:', first_due);
-    console.log('  - startYear:', startYear, '| startMonth:', startMonth);
 
-    console.log('\nIniciando transacao de banco de dados...');
     db.transaction(() => {
       const activePeople = db.prepare("SELECT id FROM people WHERE active = 1").all();
-      console.log('Pessoas ativas encontradas:', activePeople.length);
 
       for (let i = 0; i < numInstallments; i++) {
-        console.log(`\n  Parcela ${i + 1}/${numInstallments}:`);
         
         let currentMonth = startMonth + i;
         let currentYear = startYear;
         while (currentMonth > 12) { currentMonth -= 12; currentYear += 1; }
-        console.log(`    - Mes/Ano: ${currentMonth}/${currentYear}`);
 
         const finalDesc = numInstallments > 1
           ? `${description} (${String(i + 1).padStart(2, '0')}/${String(numInstallments).padStart(2, '0')})`
           : description;
-        console.log(`    - Descricao: ${finalDesc}`);
 
         const currentAmount = (i === numInstallments - 1) ? installmentValue + remainder : installmentValue;
-        console.log(`    - Valor: ${currentAmount} centavos`);
 
         // Note: import_id fica NULL para itens manuais
-        console.log(`    - Inserindo transacao com card_id: ${cardIdNum}`);
         const info = db.prepare(`
             INSERT INTO transactions (card_id, txn_date, description, amount_cents, due_month, due_year, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)
            `).run(cardIdNum, date, finalDesc, currentAmount, currentMonth, currentYear, new Date().toISOString());
-        console.log(`    - Transacao inserida com ID: ${info.lastInsertRowid}`);
 
         if (activePeople.length === 1) {
-          console.log(`    - Alocando para pessoa ID: ${activePeople[0].id}`);
           db.prepare(`INSERT INTO allocations (transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?)`)
             .run(info.lastInsertRowid, activePeople[0].id, currentAmount, new Date().toISOString());
-          console.log(`    - Alocacao criada`);
         }
       }
     })();
 
-    console.log('\nTransacao de banco de dados concluida com sucesso');
-    console.log(`Redirecionando para: /month/${startYear}/${startMonth}`);
     
     // APENAS UM REDIRECT AQUI:
     res.redirect(`/month/${startYear}/${startMonth}`);
 
   } catch (err) {
-    console.error("\nERRO ao inserir manualmente:");
-    console.error("Mensagem:", err.message);
-    console.error("Stack:", err.stack);
     res.status(500).send("Erro ao processar transacao manual: " + err.message);
   }
   
-  console.log('========================================\n');
 });
 
 app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
@@ -1030,7 +978,6 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
 
     res.json({ success: true });
   } catch (e) {
-    console.error("Erro Evolution API:", e.response?.data || e.message);
     res.status(500).json({ error: "Falha ao enviar imagem via WhatsApp" });
   }
 });
@@ -1114,4 +1061,3 @@ app.post("/finances/toggle-close", ensureAuthenticated, express.json(), (req, re
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`✅ Rodando em http://localhost:${PORT}`));

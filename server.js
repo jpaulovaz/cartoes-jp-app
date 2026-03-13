@@ -49,6 +49,17 @@ const upload = multer({ storage: multer.memoryStorage() });
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
+// --- MIDDLEWARE DE LOGGING GLOBAL ---
+app.use((req, res, next) => {
+  if (req.method === 'POST' && req.path === '/txn/manual') {
+    console.log('\n========================================');
+    console.log('🔍 INTERCEPTADO: POST /txn/manual');
+    console.log('========================================');
+    console.log('req.body:', JSON.stringify(req.body, null, 2));
+  }
+  next();
+});
+
 // --- CONFIGURAÇÃO DE SESSÃO E AUTH ---
 app.use(session({
   store: new SQLiteStore({ db: 'sessions.sqlite', dir: './' }),

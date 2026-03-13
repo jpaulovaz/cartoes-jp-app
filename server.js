@@ -654,36 +654,19 @@ app.post("/people/:id/set-owner", ensureAuthenticated, (req, res) => {
 
 // --- ROTAS DO DESMEMBRAMENTO ---
 
-// 1. Salva/Atualiza valores das Contas Domésticas Fixas
-app.post("/finances/save-item", ensureAuthenticated, express.json(), (req, res) => {
+// 1. Adiciona nova linha (Tanto para Entradas quanto para Contas)
+app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) => {
   try {
-    const { month, year, type, category_id, formula, amount_cents } = req.body;
-    db.transaction(() => {
-      db.prepare("DELETE FROM monthly_finances WHERE month = ? AND year = ? AND type = ? AND category_id = ?")
-        .run(month, year, type, category_id);
-
-      db.prepare(`
-                INSERT INTO monthly_finances (month, year, type, category_id, formula, amount_cents, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            `).run(month, year, type, category_id, formula, amount_cents, new Date().toISOString());
-    })();
-    res.json({ success: true });
-  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
-});
-
-// 2. Adiciona nova linha de Entrada (Caixa)
-app.post("/finances/add-income", ensureAuthenticated, express.json(), (req, res) => {
-  try {
-    const { month, year, description } = req.body;
+    const { month, year, type, description } = req.body;
     db.prepare(`
             INSERT INTO monthly_finances (month, year, type, description, formula, amount_cents, created_at)
-            VALUES (?, ?, 'income', ?, '', 0, ?)
-        `).run(month, year, description, new Date().toISOString());
+            VALUES (?, ?, ?, ?, '', 0, ?)
+        `).run(month, year, type, description, new Date().toISOString());
     res.json({ success: true });
-  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 3. Atualiza texto ou fórmula de uma Entrada
+// 2. Atualiza texto ou valor/fórmula de uma linha
 app.post("/finances/update/:id", ensureAuthenticated, express.json(), (req, res) => {
   try {
     const id = req.params.id;
@@ -694,16 +677,16 @@ app.post("/finances/update/:id", ensureAuthenticated, express.json(), (req, res)
       db.prepare("UPDATE monthly_finances SET formula = ?, amount_cents = ? WHERE id = ?").run(formula, amount_cents, id);
     }
     res.json({ success: true });
-  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 4. Deleta uma Entrada
+// 3. Deleta uma linha (Entrada ou Conta)
 app.post("/finances/delete/:id", ensureAuthenticated, (req, res) => {
   db.prepare("DELETE FROM monthly_finances WHERE id = ?").run(req.params.id);
   res.json({ success: true });
 });
 
-// 5. Salva Lembretes e Calculadora
+// 4. Salva Lembretes e Calculadora
 app.post("/finances/notes/:year/:month", ensureAuthenticated, express.json(), (req, res) => {
   try {
     const { year, month } = req.params;
@@ -719,7 +702,7 @@ app.post("/finances/notes/:year/:month", ensureAuthenticated, express.json(), (r
       db.prepare(`INSERT INTO scratchpad (month, year, content_math, content_text) VALUES (?, ?, ?, ?)`).run(month, year, mathVal, textVal);
     }
     res.json({ success: true });
-  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 

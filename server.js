@@ -596,7 +596,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
     ]
     : groupedRecent.sort(sortDesc);
 
-  const cards = getActiveCards(userId).map(({ id, name }) => ({ id, name }));
+  const cards = getActiveCards(userId).map(({ id, name, close_day }) => ({ id, name, close_day }));
 
   res.render("home", {
     groupedRecent: groupedRecentFinal,

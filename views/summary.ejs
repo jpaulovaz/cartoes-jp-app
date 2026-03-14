@@ -59,6 +59,12 @@
               Fechamento de Cartões
             </h2>
             <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+              <% const cardsPanelTotals = cardsPanel.reduce((acc, cp) => {
+                   acc.total_cents += cp.total_cents || 0;
+                   acc.paid_cents += cp.paid_cents || 0;
+                   acc.remaining_cents += (cp.total_cents || 0) - (cp.paid_cents || 0);
+                   return acc;
+                 }, { total_cents: 0, paid_cents: 0, remaining_cents: 0 }); %>
               <form method="post" action="/summary/<%= year %>/<%= month %>/cards">
                 <div class="overflow-x-auto">
                   <table class="w-full text-sm text-left">
@@ -82,8 +88,8 @@
                               <input type="hidden" name="card_id" value="<%= cp.card_id %>" />
                           </td>
                           <td class="px-2 py-3">
-                            <div class="text-[10px] font-bold text-slate-400 uppercase mb-1">Calc: <%=
-                                cp.computed_due_date || "-" %>
+                            <div class="text-[10px] font-bold text-slate-400 uppercase mb-1">Calculado: <%=
+                                formatDateBR(cp.computed_due_date) %>
                             </div>
                             <input name="override_due" type="date" value="<%= (cp.due_date || '') %>"
                               class="border border-slate-300 rounded-lg px-2 py-1 bg-white text-sm font-medium focus:ring-2 focus:ring-emerald-500 outline-none w-full min-w-[110px]" />
@@ -103,6 +109,15 @@
                         </tr>
                         <% }) %>
                     </tbody>
+                    <tfoot class="bg-slate-50 border-t border-slate-200">
+                      <tr>
+                        <td class="px-3 py-3 font-black text-slate-800">Total</td>
+                        <td class="px-2 py-3 text-xs font-bold uppercase text-slate-500">Ordenado por vencimento</td>
+                        <td class="px-3 py-3 text-right font-black text-slate-900 whitespace-nowrap"><%= formatBRLFromCents(cardsPanelTotals.total_cents) %></td>
+                        <td class="px-3 py-3 text-right font-black text-emerald-700 whitespace-nowrap"><%= formatBRLFromCents(cardsPanelTotals.paid_cents) %></td>
+                        <td class="px-3 py-3 text-right font-black whitespace-nowrap <%= cardsPanelTotals.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(cardsPanelTotals.remaining_cents) %></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
                 <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
@@ -124,6 +139,12 @@
               Controle de Pessoas
             </h2>
             <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+              <% const personPanelTotals = personPanel.reduce((acc, pp) => {
+                   acc.total_cents += pp.total_cents || 0;
+                   acc.paid_cents += pp.paid_cents || 0;
+                   acc.remaining_cents += (pp.total_cents || 0) - (pp.paid_cents || 0);
+                   return acc;
+                 }, { total_cents: 0, paid_cents: 0, remaining_cents: 0 }); %>
               <form method="post" action="/summary/<%= year %>/<%= month %>/people">
                 <div class="overflow-x-auto">
                   <table class="w-full text-sm text-left">
@@ -160,6 +181,14 @@
                         </tr>
                         <% }) %>
                     </tbody>
+                    <tfoot class="bg-slate-50 border-t border-slate-200">
+                      <tr>
+                        <td class="px-4 py-3 font-black text-slate-800">Total</td>
+                        <td class="px-4 py-3 text-right font-black text-slate-900 whitespace-nowrap"><%= formatBRLFromCents(personPanelTotals.total_cents) %></td>
+                        <td class="px-4 py-3 text-right font-black text-indigo-700 whitespace-nowrap"><%= formatBRLFromCents(personPanelTotals.paid_cents) %></td>
+                        <td class="px-4 py-3 text-right font-black whitespace-nowrap <%= personPanelTotals.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(personPanelTotals.remaining_cents) %></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
                 <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">

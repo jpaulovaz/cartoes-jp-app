@@ -26,6 +26,7 @@ try { db.prepare("ALTER TABLE transactions ADD COLUMN parent_txn_id INTEGER").ru
 
 // Adiciona a coluna de telefone na tabela people se ela não existir
 try { db.prepare("ALTER TABLE people ADD COLUMN phone TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 
 // Cria a tabela de meses fechados se não existir
 // Em ambiente multi-usuário, o fechamento precisa ser isolado por user_id.
@@ -93,6 +94,11 @@ function renderAdmin(res, { error = null, success = null } = {}) {
     error,
     success
   });
+}
+
+function setFlash(req, type, message) {
+  if (!req.session) return;
+  req.session.flash = { type, message };
 }
 
 // --- MIDDLEWARES DE BODY PARSER (DEVE VIR ANTES DAS ROTAS) ---
@@ -217,6 +223,11 @@ app.use((req, res, next) => {
   res.locals.isAdmin = false;
   res.locals.nomeTitular = "Detalhamento Contas";
   res.locals.formatDateBR = formatDateBR;
+  res.locals.flash = req.session?.flash || null;
+
+  if (req.session?.flash) {
+    delete req.session.flash;
+  }
 
   if (req.isAuthenticated() && req.user?.id) {
     const currentUser = getUserRecord(req.user.id);
@@ -245,15 +256,166 @@ app.use((req, res, next) => {
 function nowIso() { return dayjs().toISOString(); }
 
 function getCards(userId) {
-  return db.prepare("SELECT id, name, due_day, holiday_scope FROM cards WHERE user_id = ? ORDER BY name").all(userId);
+  return db.prepare(`
+    SELECT id, name, due_day, holiday_scope, COALESCE(active, 1) AS active
+    FROM cards
+    WHERE user_id = ?
+    ORDER BY COALESCE(active, 1) DESC, name
+  `).all(userId);
+}
+
+function getActiveCards(userId) {
+  return db.prepare(`
+    SELECT id, name, due_day, holiday_scope, COALESCE(active, 1) AS active
+    FROM cards
+    WHERE user_id = ? AND COALESCE(active, 1) = 1
+    ORDER BY name
+  `).all(userId);
+}
+
+function getCardsByIds(userId, ids) {
+  const uniqueIds = Array.from(new Set((ids || []).map(Number).filter(Boolean)));
+  if (!uniqueIds.length) return [];
+
+  const placeholders = uniqueIds.map(() => "?").join(", ");
+  return db.prepare(`
+    SELECT id, name, due_day, holiday_scope, COALESCE(active, 1) AS active
+    FROM cards
+    WHERE user_id = ? AND id IN (${placeholders})
+    ORDER BY COALESCE(active, 1) DESC, name
+  `).all(userId, ...uniqueIds);
 }
 
 function getPeopleAll(userId) {
-  return db.prepare("SELECT id, name, active FROM people WHERE user_id = ? ORDER BY active DESC, name").all(userId);
+  return db.prepare(`
+    SELECT id, name, active, is_owner, phone
+    FROM people
+    WHERE user_id = ?
+    ORDER BY is_owner DESC, active DESC, name
+  `).all(userId);
 }
 
 function getPeopleActive(userId) {
-  return db.prepare("SELECT id, name FROM people WHERE user_id = ? AND active=1 ORDER BY name").all(userId);
+  return db.prepare("SELECT id, name, active FROM people WHERE user_id = ? AND active = 1 ORDER BY name").all(userId);
+}
+
+function getPeopleByIds(userId, ids) {
+  const uniqueIds = Array.from(new Set((ids || []).map(Number).filter(Boolean)));
+  if (!uniqueIds.length) return [];
+
+  const placeholders = uniqueIds.map(() => "?").join(", ");
+  return db.prepare(`
+    SELECT id, name, active, is_owner, phone
+    FROM people
+    WHERE user_id = ? AND id IN (${placeholders})
+    ORDER BY active DESC, name
+  `).all(userId, ...uniqueIds);
+}
+
+function getVisiblePeopleForMonth(userId, month, year, { includePayments = false } = {}) {
+  const visibleIds = new Set(getPeopleActive(userId).map(person => person.id));
+
+  const allocatedRows = db.prepare(`
+    SELECT DISTINCT a.person_id
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND (
+        (i.month = ? AND i.year = ?) OR
+        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+      )
+  `).all(userId, month, year, month, year);
+
+  allocatedRows.forEach(row => visibleIds.add(row.person_id));
+
+  if (includePayments) {
+    const paymentRows = db.prepare(`
+      SELECT DISTINCT person_id
+      FROM person_payments
+      WHERE user_id = ? AND month = ? AND year = ?
+    `).all(userId, month, year);
+
+    paymentRows.forEach(row => visibleIds.add(row.person_id));
+  }
+
+  return getPeopleByIds(userId, Array.from(visibleIds));
+}
+
+function getVisiblePeopleForTransaction(userId, txnId) {
+  const visibleIds = new Set(getPeopleActive(userId).map(person => person.id));
+  const selectedRows = db.prepare(`
+    SELECT DISTINCT person_id
+    FROM allocations
+    WHERE user_id = ? AND transaction_id = ?
+  `).all(userId, txnId);
+
+  selectedRows.forEach(row => visibleIds.add(row.person_id));
+
+  return getPeopleByIds(userId, Array.from(visibleIds));
+}
+
+function getVisibleCardsForMonth(userId, month, year) {
+  const visibleIds = new Set(getActiveCards(userId).map(card => card.id));
+
+  const txnRows = db.prepare(`
+    SELECT DISTINCT t.card_id
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (
+        (i.month = ? AND i.year = ?) OR
+        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+      )
+  `).all(userId, month, year, month, year);
+
+  txnRows.forEach(row => visibleIds.add(row.card_id));
+
+  const statementRows = db.prepare(`
+    SELECT DISTINCT card_id
+    FROM card_statements
+    WHERE user_id = ? AND month = ? AND year = ?
+  `).all(userId, month, year);
+
+  statementRows.forEach(row => visibleIds.add(row.card_id));
+
+  return getCardsByIds(userId, Array.from(visibleIds));
+}
+
+function deleteTransactionsAndAllocations(userId, rows) {
+  const uniqueRows = Array.from(new Map(
+    (rows || [])
+      .map(row => ({ id: Number(row.id), import_id: row.import_id ? Number(row.import_id) : null }))
+      .filter(row => row.id)
+      .map(row => [row.id, row])
+  ).values());
+
+  if (!uniqueRows.length) return 0;
+
+  const deleteAllocation = db.prepare("DELETE FROM allocations WHERE transaction_id = ? AND user_id = ?");
+  const deleteTransaction = db.prepare("DELETE FROM transactions WHERE id = ? AND user_id = ?");
+  const deleteImportIfEmpty = db.prepare(`
+    DELETE FROM imports
+    WHERE id = ? AND user_id = ?
+      AND NOT EXISTS (
+        SELECT 1 FROM transactions t
+        WHERE t.import_id = imports.id AND t.user_id = imports.user_id
+      )
+  `);
+
+  db.transaction((items) => {
+    const importIds = new Set();
+
+    items.forEach(item => {
+      deleteAllocation.run(item.id, userId);
+      deleteTransaction.run(item.id, userId);
+      if (item.import_id) importIds.add(item.import_id);
+    });
+
+    importIds.forEach(importId => deleteImportIfEmpty.run(importId, userId));
+  })(uniqueRows);
+
+  return uniqueRows.length;
 }
 
 function likeParam(s) { return `%${String(s).trim()}%`; }
@@ -404,7 +566,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
     ]
     : groupedRecent.sort(sortDesc);
 
-  const cards = db.prepare("SELECT id, name FROM cards WHERE user_id = ? ORDER BY name ASC").all(userId);
+  const cards = getActiveCards(userId).map(({ id, name }) => ({ id, name }));
 
   res.render("home", {
     groupedRecent: groupedRecentFinal,
@@ -414,10 +576,49 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
   });
 });
 
+app.post("/geral/:year/:month/card/:cardId/delete", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const year = Number(req.params.year);
+  const month = Number(req.params.month);
+  const cardId = Number(req.params.cardId);
+
+  if (!cardId || !month || month < 1 || month > 12 || !year) {
+    setFlash(req, "error", "Parâmetros inválidos para excluir os lançamentos do cartão.");
+    return res.redirect("/geral");
+  }
+
+  const card = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ?").get(cardId, userId);
+  if (!card) {
+    setFlash(req, "error", "Cartão não encontrado.");
+    return res.redirect("/geral");
+  }
+
+  const txns = db.prepare(`
+    SELECT t.id, t.import_id
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND t.card_id = ?
+      AND (
+        (i.month = ? AND i.year = ?) OR
+        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+      )
+  `).all(userId, cardId, month, year, month, year);
+
+  if (!txns.length) {
+    setFlash(req, "info", `Nenhum lançamento foi encontrado para ${card.name} em ${String(month).padStart(2, "0")}/${year}.`);
+    return res.redirect("/geral");
+  }
+
+  const deletedCount = deleteTransactionsAndAllocations(userId, txns);
+  setFlash(req, "success", `${deletedCount} lançamento(s) de ${card.name} em ${String(month).padStart(2, "0")}/${year} foram excluídos.`);
+  return res.redirect("/geral");
+});
+
 // People
 app.get("/people", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const people = db.prepare("SELECT * FROM people WHERE user_id = ? ORDER BY name ASC").all(userId);
+  const people = getPeopleAll(userId);
   res.render("people", { people, title: "Pessoas" });
 });
 
@@ -441,6 +642,32 @@ app.post("/people/:id/toggle", ensureAuthenticated, (req, res) => {
   db.prepare("UPDATE people SET active = CASE active WHEN 1 THEN 0 ELSE 1 END WHERE id = ? AND user_id = ?")
     .run(Number(req.params.id), userId);
   res.redirect("/people");
+});
+
+app.post("/people/:id/delete", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const personId = Number(req.params.id);
+  const person = db.prepare("SELECT id, name FROM people WHERE id = ? AND user_id = ?").get(personId, userId);
+
+  if (!person) {
+    setFlash(req, "error", "Pessoa não encontrada.");
+    return res.redirect("/people");
+  }
+
+  const usage = db.prepare(`
+    SELECT
+      EXISTS(SELECT 1 FROM allocations WHERE user_id = ? AND person_id = ?) AS has_allocations,
+      EXISTS(SELECT 1 FROM person_payments WHERE user_id = ? AND person_id = ?) AS has_payments
+  `).get(userId, personId, userId, personId);
+
+  if (usage.has_allocations || usage.has_payments) {
+    setFlash(req, "info", `Não foi possível excluir ${person.name} porque já existe histórico vinculado. Use Desativar para ocultar sem perder os dados passados.`);
+    return res.redirect("/people");
+  }
+
+  db.prepare("DELETE FROM people WHERE id = ? AND user_id = ?").run(personId, userId);
+  setFlash(req, "success", `${person.name} foi removido(a) com sucesso.`);
+  return res.redirect("/people");
 });
 
 // Cards
@@ -469,15 +696,72 @@ app.post("/cards/:id/update", ensureAuthenticated, (req, res) => {
   res.redirect("/cards");
 });
 
+app.post("/cards/:id/toggle", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const cardId = Number(req.params.id);
+  const card = db.prepare("SELECT id, name, COALESCE(active, 1) AS active FROM cards WHERE id = ? AND user_id = ?").get(cardId, userId);
+
+  if (!card) {
+    setFlash(req, "error", "Cartão não encontrado.");
+    return res.redirect("/cards");
+  }
+
+  db.prepare(`
+    UPDATE cards
+    SET active = CASE COALESCE(active, 1) WHEN 1 THEN 0 ELSE 1 END
+    WHERE id = ? AND user_id = ?
+  `).run(cardId, userId);
+
+  const becameActive = card.active !== 1;
+  setFlash(
+    req,
+    "success",
+    becameActive
+      ? `${card.name} foi reativado e voltou a aparecer nos novos lançamentos.`
+      : `${card.name} foi desativado e ficará oculto em novos lançamentos/importações, sem afetar o histórico.`
+  );
+  return res.redirect("/cards");
+});
+
+app.post("/cards/:id/delete", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const cardId = Number(req.params.id);
+  const card = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ?").get(cardId, userId);
+
+  if (!card) {
+    setFlash(req, "error", "Cartão não encontrado.");
+    return res.redirect("/cards");
+  }
+
+  const usage = db.prepare(`
+    SELECT
+      EXISTS(SELECT 1 FROM transactions WHERE user_id = ? AND card_id = ?) AS has_transactions,
+      EXISTS(SELECT 1 FROM card_statements WHERE user_id = ? AND card_id = ?) AS has_statements
+  `).get(userId, cardId, userId, cardId);
+
+  if (usage.has_transactions || usage.has_statements) {
+    setFlash(req, "info", `Não foi possível excluir ${card.name} porque já existe histórico vinculado. Use Desativar para ocultar o cartão sem perder dados passados.`);
+    return res.redirect("/cards");
+  }
+
+  db.transaction(() => {
+    db.prepare("DELETE FROM imports WHERE user_id = ? AND card_id = ?").run(userId, cardId);
+    db.prepare("DELETE FROM cards WHERE id = ? AND user_id = ?").run(cardId, userId);
+  })();
+
+  setFlash(req, "success", `${card.name} foi excluído com sucesso.`);
+  return res.redirect("/cards");
+});
+
 // Import
 app.get("/import", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  res.render("import", { cards: getCards(userId), error: null });
+  res.render("import", { cards: getActiveCards(userId), error: null });
 });
 
 app.post("/import", ensureAuthenticated, upload.single("csvfile"), (req, res) => {
   const userId = req.user.id;
-  const cards = getCards(userId);
+  const cards = getActiveCards(userId);
 
   try {
     const cardId = Number(req.body.card_id);
@@ -489,8 +773,8 @@ app.post("/import", ensureAuthenticated, upload.single("csvfile"), (req, res) =>
     if (!month || month < 1 || month > 12) throw new Error("Mês inválido.");
     if (!year || year < 2000 || year > 2100) throw new Error("Ano inválido.");
 
-    const card = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ?").get(cardId, userId);
-    if (!card) throw new Error("Cartão inválido.");
+    const card = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(cardId, userId);
+    if (!card) throw new Error("Cartão inválido ou desativado.");
 
     const txns = parseCsvByCardName(card.name, req.file.buffer);
 
@@ -715,8 +999,8 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     t.selected_ids = (t.selected_csv ? t.selected_csv.split(",").map(x => Number(x)) : []).filter(Boolean);
   });
 
-  const people = getPeopleActive(userId);
-  const cards = getCards(userId);
+  const people = getVisiblePeopleForMonth(userId, month, year);
+  const cards = getActiveCards(userId);
   const baseParams = new URLSearchParams();
   Object.entries(filters).forEach(([k, v]) => { if (v) baseParams.set(k, v); });
 
@@ -742,9 +1026,9 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
       return res.status(400).send("Cartao invalido. Selecione um cartao valido.");
     }
 
-    const cardExists = db.prepare("SELECT id FROM cards WHERE id = ? AND user_id = ?").get(cardIdNum, userId);
+    const cardExists = db.prepare("SELECT id FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(cardIdNum, userId);
     if (!cardExists) {
-      return res.status(400).send("Cartao nao encontrado no sistema.");
+      return res.status(400).send("Cartao nao encontrado no sistema ou esta desativado.");
     }
 
     const totalCents = centsFromPtBrMoney(amount);
@@ -842,7 +1126,7 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
 
   if (!txn) return res.status(404).send("Transação não encontrada.");
 
-  const people = getPeopleActive(userId);
+  const people = getVisiblePeopleForTransaction(userId, id);
   const selected = db.prepare("SELECT person_id FROM allocations WHERE transaction_id = ? AND user_id = ?")
     .all(id, userId)
     .map(r => r.person_id);
@@ -888,6 +1172,29 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
   res.redirect(`/month/${txn.year}/${txn.month}`);
 });
 
+app.post("/txn/:id/delete", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const id = Number(req.params.id);
+
+  const txn = db.prepare(`
+    SELECT t.id, t.import_id, t.description,
+           COALESCE(i.month, t.due_month) AS month,
+           COALESCE(i.year, t.due_year) AS year
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.id = ? AND t.user_id = ?
+  `).get(id, userId);
+
+  if (!txn) {
+    setFlash(req, "error", "Lançamento não encontrado.");
+    return res.redirect("/geral");
+  }
+
+  deleteTransactionsAndAllocations(userId, [txn]);
+  setFlash(req, "success", "Lançamento excluído com sucesso.");
+  return res.redirect(`/month/${txn.year}/${txn.month}`);
+});
+
 // Summary (minimal)
 app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
@@ -895,29 +1202,43 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
 
-  const people = getPeopleActive(userId);
-  const cards = getCards(userId);
+  const people = getVisiblePeopleForMonth(userId, month, year, { includePayments: true });
+  const cards = getVisibleCardsForMonth(userId, month, year);
 
-  const rows = db.prepare(`
-    SELECT p.id AS person_id, p.name AS person_name, c.id AS card_id, c.name AS card_name,
-           COALESCE(alloc.total_cents, 0) AS total_cents
-    FROM people p
-    CROSS JOIN cards c
-    LEFT JOIN (
-      SELECT a.person_id, t.card_id, SUM(a.share_cents) AS total_cents
-      FROM allocations a
-      JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
-      LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
-      WHERE a.user_id = ?
-        AND (
-          (i.month = ? AND i.year = ?) OR
-          (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
-        )
-      GROUP BY a.person_id, t.card_id
-    ) alloc ON alloc.person_id = p.id AND alloc.card_id = c.id
-    WHERE p.user_id = ? AND c.user_id = ? AND p.active = 1
-    ORDER BY p.name, c.name
-  `).all(userId, month, year, month, year, userId, userId);
+  const allocRows = db.prepare(`
+    SELECT a.person_id, t.card_id, SUM(a.share_cents) AS total_cents
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND (
+        (i.month = ? AND i.year = ?) OR
+        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+      )
+    GROUP BY a.person_id, t.card_id
+  `).all(userId, month, year, month, year);
+
+  const allocByPersonCard = new Map();
+  const personTotalsMap = new Map();
+
+  allocRows.forEach(row => {
+    const total = row.total_cents || 0;
+    allocByPersonCard.set(`${row.person_id}-${row.card_id}`, total);
+    personTotalsMap.set(row.person_id, (personTotalsMap.get(row.person_id) || 0) + total);
+  });
+
+  const rows = [];
+  people.forEach(person => {
+    cards.forEach(card => {
+      rows.push({
+        person_id: person.id,
+        person_name: person.name,
+        card_id: card.id,
+        card_name: card.name,
+        total_cents: allocByPersonCard.get(`${person.id}-${card.id}`) || 0
+      });
+    });
+  });
 
   const unassigned = db.prepare(`
     SELECT c.name AS card_name, COALESCE(SUM(t.amount_cents), 0) AS total_cents
@@ -936,78 +1257,60 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
     ORDER BY c.name
   `).all(userId, month, year, month, year);
 
-  const cardTotals = db.prepare(`
-    SELECT c.id AS card_id, c.name AS card_name, c.due_day, c.holiday_scope,
-           COALESCE(curr.total_cents, 0) AS total_cents
-    FROM cards c
-    LEFT JOIN (
-      SELECT t.card_id, SUM(t.amount_cents) AS total_cents
-      FROM transactions t
-      LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
-      WHERE t.user_id = ?
-        AND (
-          (i.month = ? AND i.year = ?) OR
-          (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
-        )
-      GROUP BY t.card_id
-    ) curr ON curr.card_id = c.id
-    WHERE c.user_id = ?
-    ORDER BY c.name
-  `).all(userId, month, year, month, year, userId);
+  const cardTotalsRows = db.prepare(`
+    SELECT t.card_id, SUM(t.amount_cents) AS total_cents
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (
+        (i.month = ? AND i.year = ?) OR
+        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+      )
+    GROUP BY t.card_id
+  `).all(userId, month, year, month, year);
+  const cardTotalsMap = new Map(cardTotalsRows.map(row => [row.card_id, row.total_cents || 0]));
 
   const stmtRows = db.prepare(`
     SELECT card_id, computed_due_date, override_due_date, paid_cents
     FROM card_statements
     WHERE user_id = ? AND month = ? AND year = ?
   `).all(userId, month, year);
-  const stmtByCard = new Map(stmtRows.map(r => [r.card_id, r]));
+  const stmtByCard = new Map(stmtRows.map(row => [row.card_id, row]));
 
-  const cardsPanel = cardTotals.map(ct => {
-    const stmt = stmtByCard.get(ct.card_id);
-    const computed = computeDueDate({ year, month, dueDay: ct.due_day, holidayScope: ct.holiday_scope || "BR" });
-    const due_date = stmt?.override_due_date || stmt?.computed_due_date || computed;
-    return {
-      card_id: ct.card_id,
-      card_name: ct.card_name,
-      computed_due_date: computed,
-      due_date,
-      paid_cents: stmt ? stmt.paid_cents : 0,
-      total_cents: ct.total_cents
-    };
-  });
-
-  const personTotals = db.prepare(`
-    SELECT p.id AS person_id, p.name AS person_name,
-           COALESCE(alloc.total_cents, 0) AS total_cents
-    FROM people p
-    LEFT JOIN (
-      SELECT a.person_id, SUM(a.share_cents) AS total_cents
-      FROM allocations a
-      JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
-      LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
-      WHERE a.user_id = ?
-        AND (
-          (i.month = ? AND i.year = ?) OR
-          (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
-        )
-      GROUP BY a.person_id
-    ) alloc ON alloc.person_id = p.id
-    WHERE p.user_id = ? AND p.active = 1
-    ORDER BY p.name
-  `).all(userId, month, year, month, year, userId);
+  const cardsPanel = cards
+    .map(card => {
+      const stmt = stmtByCard.get(card.id);
+      const computed = computeDueDate({ year, month, dueDay: card.due_day, holidayScope: card.holiday_scope || "BR" });
+      const due_date = stmt?.override_due_date || stmt?.computed_due_date || computed;
+      return {
+        card_id: card.id,
+        card_name: card.name,
+        computed_due_date: computed,
+        due_date,
+        paid_cents: stmt ? stmt.paid_cents : 0,
+        total_cents: cardTotalsMap.get(card.id) || 0
+      };
+    })
+    .sort((a, b) => {
+      const aTime = a.due_date ? dayjs(a.due_date).valueOf() : Number.MAX_SAFE_INTEGER;
+      const bTime = b.due_date ? dayjs(b.due_date).valueOf() : Number.MAX_SAFE_INTEGER;
+      if (aTime !== bTime) return aTime - bTime;
+      return a.card_name.localeCompare(b.card_name, "pt-BR", { sensitivity: "base" });
+    });
 
   const payRows = db.prepare(`
     SELECT person_id, paid_cents
     FROM person_payments
     WHERE user_id = ? AND month = ? AND year = ?
   `).all(userId, month, year);
-  const payByPerson = new Map(payRows.map(r => [r.person_id, r.paid_cents]));
+  const payByPerson = new Map(payRows.map(row => [row.person_id, row.paid_cents]));
 
-  const personPanel = personTotals.map(pt => ({
-    person_id: pt.person_id,
-    person_name: pt.person_name,
-    total_cents: pt.total_cents,
-    paid_cents: payByPerson.get(pt.person_id) || 0
+  const personPanel = people.map(person => ({
+    person_id: person.id,
+    person_name: person.name,
+    total_cents: personTotalsMap.get(person.id) || 0,
+    paid_cents: payByPerson.get(person.id) || 0,
+    active: person.active
   }));
 
   res.render("summary", { month, year, people, cards, rows, unassigned, cardsPanel, personPanel, formatBRLFromCents });
@@ -1123,7 +1426,7 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
         (i.month = ? AND i.year = ?) OR
         (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
       )
-    ORDER BY t.txn_date IS NULL, t.txn_date, c.name, t.id
+    ORDER BY t.txn_date IS NULL ASC, t.txn_date DESC, c.name ASC, t.id DESC
   `).all(userId, personId, month, year, month, year);
 
   const totalsByCard = db.prepare(`

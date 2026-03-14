@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS cards (
   name TEXT NOT NULL,
   due_day INTEGER,
   holiday_scope TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT,
   UNIQUE(user_id, name),
   FOREIGN KEY (user_id) REFERENCES users(id)
@@ -174,6 +175,10 @@ CREATE INDEX IF NOT EXISTS idx_alloc_txn ON allocations(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_statements_user ON card_statements(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_user ON person_payments(user_id);
 `);
+
+if (!columnExists("cards", "active")) {
+  db.exec("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1;");
+}
 
 // ===== CATEGORIAS PADRÃO =====
 // Nota: Categorias agora são por usuário, então não inserimos padrão aqui

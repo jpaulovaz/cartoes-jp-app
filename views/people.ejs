@@ -101,6 +101,14 @@
                   <%= p.active ? "Desativar" : "Reativar" %>
                 </button>
               </form>
+              <form method="post" action="/people/<%= p.id %>/delete"
+                data-confirm-prompt="Excluir <%= p.name %>? A exclusão só será concluída se não houver histórico vinculado."
+                data-confirm-phrase="Eu confirmo">
+                <button
+                  class="w-full px-3 py-1.5 text-xs font-bold rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors bg-white dark:bg-slate-700 shadow-sm">
+                  Excluir
+                </button>
+              </form>
             </div>
           </div>
           <% }) %>

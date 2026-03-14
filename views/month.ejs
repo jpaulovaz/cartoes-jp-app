@@ -224,7 +224,7 @@
                     <% }) %>
                   </div>
 
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-2 flex-wrap">
                     <button type="submit"
                       class="px-4 py-1.5 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-transform active:scale-95 btn-salvar-indiv">Salvar</button>
 
@@ -237,10 +237,15 @@
                                 class="px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
                                 title="Colar atribuição">Colar</button>
 
-                              <a class="ml-auto px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
-                                href="/txn/<%= t.id %>">Detalhe</a>
+                              <button type="submit" form="delete-txn-<%= t.id %>"
+                                class="ml-auto px-3 py-1.5 text-[11px] font-bold rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
+                                Excluir
+                              </button>
                     </div>
                   </form>
+                  <form id="delete-txn-<%= t.id %>" method="post" action="/txn/<%= t.id %>/delete"
+                    data-confirm-prompt="Excluir este lançamento? Esta ação remove o item e a distribuição associada."
+                    data-confirm-phrase="Eu confirmo"></form>
                 </td>
               </tr>
               <% }) %>

@@ -56,3 +56,37 @@
   window.copyAlloc = copyAlloc;
   window.pasteAlloc = pasteAlloc;
 })();
+
+
+(function () {
+  function confirmTypedAction(message, phrase = "Eu confirmo") {
+    const typed = window.prompt(`${message}
+
+Digite exatamente: ${phrase}`, "");
+    const ok = typeof typed === "string" && typed.trim().toLowerCase() === phrase.trim().toLowerCase();
+
+    if (!ok) {
+      if (typed !== null) {
+        alert("Confirmação não informada corretamente. Nenhuma ação foi executada.");
+      }
+      return false;
+    }
+
+    return true;
+  }
+
+  document.addEventListener("submit", (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+
+    const message = form.dataset.confirmPrompt;
+    if (!message) return;
+
+    const phrase = form.dataset.confirmPhrase || "Eu confirmo";
+    if (!confirmTypedAction(message, phrase)) {
+      event.preventDefault();
+    }
+  });
+
+  window.confirmTypedAction = confirmTypedAction;
+})();

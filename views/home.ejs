@@ -1,10 +1,10 @@
 <%- include("partials/header", { title: "Cartões JP | Início" }) %>
 
   <div
-    class="mb-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
+    class="mb-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 bg-white dark:bg-slate-800 p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700">
     <div>
       <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Visão Geral</h1>
-      <p class="text-slate-500 mt-2 font-medium">Suas faturas agrupadas por mês de vencimento.</p>
+      <p class="text-slate-500 dark:text-slate-400 mt-2 font-medium">Suas faturas agrupadas por mês de vencimento.</p>
     </div>
 
     <div class="flex flex-wrap gap-3">
@@ -29,24 +29,24 @@
 
   <div id="modalManual"
     class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl">
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
       <div class="flex justify-between items-center mb-6">
-        <h2 class="text-xl font-black text-slate-800">Novo Gasto Manual</h2>
+        <h2 class="text-xl font-black text-slate-800 dark:text-white">Novo Gasto Manual</h2>
         <button type="button" onclick="document.getElementById('modalManual').classList.add('hidden')"
-          class="text-slate-400 hover:text-slate-600 text-2xl">✕</button>
+          class="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-2xl">✕</button>
       </div>
 
       <form action="/txn/manual" method="POST" class="space-y-4" data-auto-first-due-form>
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Data da Compra</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data da Compra</label>
             <input type="date" name="date" required data-manual-date-input
-              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
           <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cartão Utilizado</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cartão Utilizado</label>
             <select name="card_id" data-manual-card-select
-              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
               <% cards.forEach(c=> { %>
                 <option value="<%= c.id %>" data-close-day="<%= c.close_day || '' %>" data-due-day="<%= c.due_day || '' %>">
                   <%= c.name %>
@@ -58,28 +58,28 @@
 
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Valor Total (R$)</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
             <input type="text" name="amount" placeholder="0,00" required
-              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
           <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Parcelas</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Parcelas</label>
             <input type="number" name="installments" value="1" min="1" max="99" required
-              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
         </div>
 
         <div>
-          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1º Vencimento</label>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">1º Vencimento</label>
           <input type="month" name="first_due" required data-manual-first-due
-            class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
-          <p class="mt-1 text-[11px] font-medium text-slate-400">Preenchido automaticamente pela data da compra e pelo fechamento do cartão, mas você pode alterar manualmente.</p>
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
+          <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Preenchido automaticamente pela data da compra e pelo fechamento do cartão, mas você pode alterar manualmente.</p>
         </div>
 
         <div>
-          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição</label>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Descrição</label>
           <input type="text" name="description" placeholder="Ex: Monitor Dell" required
-            class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
         </div>
 
         <button type="submit"
@@ -92,16 +92,16 @@
 
   <div>
     <% if (!groupedRecent || groupedRecent.length===0) { %>
-      <div class="text-center py-20 bg-white rounded-3xl shadow-sm border border-slate-200">
-        <div class="w-20 h-20 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-6">
+      <div class="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700">
+        <div class="w-20 h-20 bg-slate-50 dark:bg-slate-900 text-slate-400 dark:text-slate-500 rounded-full flex items-center justify-center mx-auto mb-6">
           <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
             </path>
           </svg>
         </div>
-        <h3 class="text-xl font-bold text-slate-800 mb-2">Nenhuma fatura encontrada</h3>
-        <p class="text-slate-500 mb-6 max-w-sm mx-auto">Comece importando o primeiro arquivo CSV gerado pelos seus
+        <h3 class="text-xl font-bold text-slate-800 dark:text-white mb-2">Nenhuma fatura encontrada</h3>
+        <p class="text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">Comece importando o primeiro arquivo CSV gerado pelos seus
           cartões.</p>
         <a class="text-blue-600 font-bold hover:text-blue-800 transition-colors" href="/import">Fazer primeira
           importação &rarr;</a>
@@ -111,10 +111,10 @@
         <div class="space-y-5">
           <% groupedRecent.forEach((group)=> { %>
             <details
-              class="group bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden transition-all">
+              class="group bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-all">
 
               <summary
-                class="cursor-pointer select-none p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between hover:bg-slate-50 transition-colors border-b border-transparent group-open:border-slate-100 relative">
+                class="cursor-pointer select-none p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors border-b border-transparent group-open:border-slate-100 dark:group-open:border-slate-700 relative">
 
                 <div class="flex-1">
                   <div class="flex items-center gap-4 mb-3">
@@ -127,10 +127,10 @@
                       </svg>
                     </div>
                     <div>
-                      <h2 class="text-2xl font-extrabold text-slate-800">
+                      <h2 class="text-2xl font-extrabold text-slate-800 dark:text-white">
                         <%= group.label %>
                       </h2>
-                      <p class="text-sm font-medium text-slate-500">
+                      <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
                         <%= group.cards.length %>
                           <%= group.cards.length===1 ? 'cartão importado' : 'cartões importados' %>
                       </p>
@@ -138,11 +138,11 @@
                   </div>
 
                   <div
-                    class="flex flex-wrap gap-6 lg:gap-10 mt-4 lg:mt-2 ml-0 lg:ml-16 bg-white border border-slate-100 p-3 rounded-xl lg:border-none lg:bg-transparent lg:p-0">
+                    class="flex flex-wrap gap-6 lg:gap-10 mt-4 lg:mt-2 ml-0 lg:ml-16 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 rounded-xl lg:border-none lg:bg-transparent lg:dark:bg-transparent lg:p-0">
                     <div class="flex flex-col">
-                      <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total do
+                      <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-0.5">Total do
                         Mês</span>
-                      <span class="text-base font-bold text-slate-800">
+                      <span class="text-base font-bold text-slate-800 dark:text-white">
                         <%= formatBRLFromCents(group.total_cents) %>
                       </span>
                     </div>
@@ -163,7 +163,7 @@
                   </div>
                 </div>
 
-                <div class="flex items-center gap-3 mt-5 lg:mt-0 pt-5 lg:pt-0 border-t border-slate-100 lg:border-none">
+                <div class="flex items-center gap-3 mt-5 lg:mt-0 pt-5 lg:pt-0 border-t border-slate-100 dark:border-slate-700 lg:border-none">
                   <a href="/month/<%= group.year %>/<%= group.month %>"
                     class="flex-1 lg:flex-none text-center px-5 py-2.5 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5"
                     onclick="event.stopPropagation()">
@@ -177,7 +177,7 @@
                   </a>
 
                   <div
-                    class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-open:rotate-180 transition-transform duration-300 ml-2">
+                    class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-300 group-open:rotate-180 transition-transform duration-300 ml-2">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                     </svg>
@@ -186,42 +186,42 @@
 
               </summary>
 
-              <div class="p-5 sm:p-6 bg-slate-50/50">
-                <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Cartões Importados neste mês
+              <div class="p-5 sm:p-6 bg-slate-50/50 dark:bg-slate-900/50">
+                <h3 class="text-sm font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4">Cartões Importados neste mês
                 </h3>
 
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <% group.cards.forEach(card=> { %>
                     <div
-                      class="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-300 hover:shadow-md transition-all flex flex-col relative">
+                      class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-md transition-all flex flex-col relative">
 
                       <div class="flex justify-between items-start gap-3 mb-3">
-                        <div class="font-extrabold text-slate-800 text-lg break-words leading-tight">
+                        <div class="font-extrabold text-slate-800 dark:text-white text-lg break-words leading-tight">
                           <%= card.card_name %>
                         </div>
-                        <span class="bg-slate-100 text-slate-600 text-xs font-bold px-2 py-1 rounded-md whitespace-nowrap">
+                        <span class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold px-2 py-1 rounded-md whitespace-nowrap">
                           <%= card.txn_count %> itens
                         </span>
                       </div>
 
-                      <div class="text-xs font-medium text-slate-400 mb-4 break-all">
+                      <div class="text-xs font-medium text-slate-400 dark:text-slate-500 mb-4 break-all">
                         Arquivo: <%= card.original_filename || "N/A" %>
                       </div>
 
                       <div class="grid grid-cols-2 gap-3 mb-4">
-                        <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total de Itens</div>
-                          <div class="text-lg font-black text-slate-800"><%= card.txn_count %></div>
+                        <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2">
+                          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Total de Itens</div>
+                          <div class="text-lg font-black text-slate-800 dark:text-white"><%= card.txn_count %></div>
                         </div>
-                        <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Valor do Cartão</div>
-                          <div class="text-sm font-black text-slate-800"><%= formatBRLFromCents(card.import_total) %></div>
+                        <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2">
+                          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Valor do Cartão</div>
+                          <div class="text-sm font-black text-slate-800 dark:text-white"><%= formatBRLFromCents(card.import_total) %></div>
                         </div>
                       </div>
 
                       <div class="mt-auto space-y-2">
                         <a href="/month/<%= card.year %>/<%= card.month %>?f_card=<%= card.card_name %>"
-                          class="block w-full text-center px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-semibold text-sm rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors">
+                          class="block w-full text-center px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-sm rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 hover:border-slate-300 dark:hover:border-slate-500 transition-colors">
                           Ver transações deste cartão
                         </a>
                         <form method="post" action="/geral/<%= card.year %>/<%= card.month %>/card/<%= card.card_id %>/delete"

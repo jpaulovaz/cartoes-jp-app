@@ -3,7 +3,7 @@
   <div class="max-w-7xl mx-auto pb-24">
     <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
-        <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Lançamentos — <%=
+        <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Lançamentos — <%=
             String(month).padStart(2,'0') %>/<%= year %>
         </h1>
         <div id="allocMsg" class="text-sm font-bold text-emerald-600 mt-2 h-5 transition-all duration-300"></div>
@@ -18,31 +18,31 @@
           class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all hover:-translate-y-0.5">Resumo
           do Mês</a>
         <a href="/import"
-          class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-sm transition-all">Importar
+          class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 shadow-sm transition-all">Importar
           Mais</a>
       </div>
     </div>
 
     <div id="modalManual"
       class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl">
+      <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
         <div class="flex justify-between items-center mb-6">
-          <h2 class="text-xl font-black text-slate-800">Novo Gasto Manual</h2>
+          <h2 class="text-xl font-black text-slate-800 dark:text-white">Novo Gasto Manual</h2>
           <button onclick="document.getElementById('modalManual').classList.add('hidden')"
-            class="text-slate-400 hover:text-slate-600 text-2xl">✕</button>
+            class="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-2xl">✕</button>
         </div>
 
         <form action="/txn/manual" method="POST" class="space-y-4" data-auto-first-due-form>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Data da Compra</label>
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data da Compra</label>
               <input type="date" name="date" required data-manual-date-input
-                class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+                class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cartão Utilizado</label>
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cartão Utilizado</label>
               <select name="card_id" data-manual-card-select
-                class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+                class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                 <% cards.forEach(c=> { %>
                   <option value="<%= c.id %>" data-close-day="<%= c.close_day || '' %>" data-due-day="<%= c.due_day || '' %>">
                     <%= c.name %>
@@ -54,28 +54,28 @@
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Valor Total (R$)</label>
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
               <input type="text" name="amount" placeholder="0,00" required
-                class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+                class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Parcelas</label>
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Parcelas</label>
               <input type="number" name="installments" value="1" min="1" max="99" required
-                class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+                class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
             </div>
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1º Vencimento</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">1º Vencimento</label>
             <input type="month" name="first_due" value="<%= year %>-<%= String(month).padStart(2, '0') %>" required data-manual-first-due
-              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
-            <p class="mt-1 text-[11px] font-medium text-slate-400">Preenchido automaticamente pela data da compra e pelo fechamento do cartão, mas você pode alterar manualmente.</p>
+              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
+            <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Preenchido automaticamente pela data da compra e pelo fechamento do cartão, mas você pode alterar manualmente.</p>
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Descrição</label>
             <input type="text" name="description" placeholder="Ex: Monitor Dell" required
-              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
 
           <button type="submit"
@@ -86,46 +86,46 @@
       </div>
     </div>
 
-    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5 mb-6">
+    <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6">
       <form method="get" action="/month/<%= year %>/<%= month %>" class="grid md:grid-cols-6 gap-4">
         <input type="hidden" name="sort" value="<%= sort %>" />
         <input type="hidden" name="dir" value="<%= dir %>" />
 
         <div>
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Data</label>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Data</label>
           <input name="f_date" value="<%= filters.f_date || '' %>"
-            class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
             placeholder="Ex: 2026-03" />
         </div>
         <div class="md:col-span-2">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Descrição</label>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Descrição</label>
           <input name="f_desc" value="<%= filters.f_desc || '' %>"
-            class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
             placeholder="Ex: Uber, Mercado..." />
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Cartão</label>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Cartão</label>
           <input name="f_card" value="<%= filters.f_card || '' %>"
-            class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
             placeholder="Ex: Nubank" />
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Nº (Final)</label>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Nº (Final)</label>
           <input name="f_number" value="<%= filters.f_number || '' %>"
-            class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
             placeholder="****" />
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Valor</label>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Valor</label>
           <input name="f_amount" value="<%= filters.f_amount || '' %>"
-            class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
             placeholder="49,90" />
         </div>
 
         <div class="md:col-span-1">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Distribuído</label>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Distribuído</label>
           <select name="f_allocated"
-            class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none">
             <option value="">Todos</option>
             <option value="sim" <%=filters.f_allocated==='sim' ? 'selected' : '' %>>Sim</option>
             <option value="nao" <%=filters.f_allocated==='nao' ? 'selected' : '' %>>Não</option>
@@ -135,17 +135,17 @@
         <div class="md:col-span-5 flex flex-col sm:flex-row sm:items-end gap-3">
           <button
             class="w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 transition-all shadow-sm">Filtrar</button>
-          <a class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-2.5 rounded-xl font-bold text-slate-600 border border-slate-300 bg-white hover:bg-slate-50 transition-colors"
+          <a class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-2.5 rounded-xl font-bold text-slate-600 dark:text-slate-200 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
             href="/month/<%= year %>/<%= month %>">Limpar</a>
         </div>
       </form>
     </div>
 
-    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
       <div class="overflow-x-auto md:overflow-visible">
         <table class="block md:table w-full text-sm text-left">
           <thead
-            class="hidden md:table-header-group bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold text-[11px] tracking-wider">
+            class="hidden md:table-header-group bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-[11px] tracking-wider">
             <tr>
               <th class="px-4 py-4"><a class="hover:text-blue-600 transition-colors flex items-center"
                   href="<%= sortLink('date') %>">Data</a></th>
@@ -165,36 +165,36 @@
           </thead>
           <tbody class="block md:table-row-group">
             <% txns.forEach(t=> { %>
-              <tr class="block md:table-row p-4 md:p-0 border-b border-slate-100 last:border-b-0 hover:bg-slate-50/50 transition-colors group align-middle space-y-1 md:space-y-0">
-                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-medium text-slate-600 whitespace-nowrap">
+              <tr class="block md:table-row p-4 md:p-0 border-b border-slate-100 dark:border-slate-700 last:border-b-0 hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors group align-middle space-y-1 md:space-y-0">
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
                   <div class="flex items-center justify-between gap-3 md:block">
-                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Data</span>
+                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Data</span>
                     <span><%= formatDateBR(t.txn_date) %></span>
                   </div>
                 </td>
-                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-bold text-slate-800" title="<%= t.description %>">
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-bold text-slate-800 dark:text-white" title="<%= t.description %>">
                   <div class="flex items-start justify-between gap-3 md:block">
-                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 pt-0.5">Descrição</span>
+                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 pt-0.5">Descrição</span>
                     <span class="text-right md:text-left break-words md:max-w-[200px] md:truncate block flex-1"><%= t.description %></span>
                   </div>
                 </td>
                 <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3">
                   <div class="flex items-center justify-between gap-3 md:block">
-                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Cartão</span>
-                    <span class="inline-flex items-center px-2 py-1 rounded bg-slate-100 text-slate-700 font-bold text-xs border border-slate-200 text-right md:text-left">
+                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Cartão</span>
+                    <span class="inline-flex items-center px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-slate-600 text-right md:text-left">
                       <%= t.card_name %>
                     </span>
                   </div>
                 </td>
-                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-mono text-xs text-slate-500">
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-mono text-xs text-slate-500 dark:text-slate-400">
                   <div class="flex items-center justify-between gap-3 md:block">
-                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 not-italic font-sans">Nº</span>
+                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 not-italic font-sans">Nº</span>
                     <span><%= t.card_number || "-" %></span>
                   </div>
                 </td>
-                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-right font-black text-slate-900">
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-right font-black text-slate-900 dark:text-white">
                   <div class="flex items-center justify-between gap-3 md:block">
-                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Valor</span>
+                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Valor</span>
                     <span><%= formatBRLFromCents(t.amount_cents) %></span>
                   </div>
                 </td>
@@ -202,7 +202,7 @@
                 <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-center status-icon">
                   <% if (t.alloc_count> 0) { %>
                     <div class="flex items-center justify-between md:justify-center gap-3">
-                      <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Status</span>
+                      <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</span>
                       <div
                         class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center md:mx-auto"
                         title="Distribuído">
@@ -213,7 +213,7 @@
                     </div>
                     <% } else { %>
                       <div class="flex items-center justify-between md:justify-center gap-3">
-                        <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Status</span>
+                        <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</span>
                         <div
                           class="w-6 h-6 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center md:mx-auto"
                           title="Não Distribuído">
@@ -226,20 +226,20 @@
                       <% } %>
                 </td>
 
-                <td class="block md:table-cell px-0 md:px-4 py-3 md:py-3 mt-3 md:mt-0 border-t border-dashed border-slate-200 md:border-t-0">
-                  <div class="md:hidden mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Distribuição Rápida</div>
+                <td class="block md:table-cell px-0 md:px-4 py-3 md:py-3 mt-3 md:mt-0 border-t border-dashed border-slate-200 dark:border-slate-700 md:border-t-0">
+                  <div class="md:hidden mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Distribuição Rápida</div>
                   <form method="post" action="/txn/<%= t.id %>/alloc" data-alloc-form="<%= t.id %>"
-                    class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 shadow-inner transition-colors duration-300">
+                    class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 shadow-inner transition-colors duration-300">
 
                     <div
-                      class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-3 gap-y-2 mb-3 min-w-0 md:min-w-[380px] border border-slate-100 rounded-xl p-2 bg-slate-50/40">
+                      class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-3 gap-y-2 mb-3 min-w-0 md:min-w-[380px] border border-slate-100 dark:border-slate-700 rounded-xl p-2 bg-slate-50/40 dark:bg-slate-900/40">
                       <% people.forEach(p=> { %>
                         <label class="flex items-center gap-2 cursor-pointer select-none group py-0.5 min-w-0">
                           <input type="checkbox" name="person_ids" value="<%= p.id %>" <%=(t.selected_ids &&
                             t.selected_ids.includes(p.id)) ? "checked" : "" %>
-                          class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 bg-white shrink-0" />
+                          class="w-4 h-4 text-blue-600 rounded border-slate-300 dark:border-slate-600 focus:ring-blue-500 bg-white dark:bg-slate-800 shrink-0" />
 
-                          <span class="text-xs font-bold text-slate-700 group-hover:text-blue-600 truncate">
+                          <span class="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-blue-600 truncate">
                             <%= p.name.split(' ')[0] %>
                         </span>
                       </label>
@@ -251,11 +251,11 @@
                       class="w-full sm:w-auto px-4 py-2 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-transform active:scale-95 btn-salvar-indiv">Salvar</button>
 
                     <button type="button" onclick="copyAlloc(' <%=t.id %>')"
-                              class="w-full sm:w-auto px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
+                              class="w-full sm:w-auto px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
                               title="Copiar atribuição">Copiar</button>
 
                               <button type="button" onclick="pasteAlloc('<%= t.id %>')"
-                                class="w-full sm:w-auto px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
+                                class="w-full sm:w-auto px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
                                 title="Colar atribuição">Colar</button>
 
                               <button type="submit" form="delete-txn-<%= t.id %>"
@@ -276,9 +276,9 @@
     </div>
 
     <% if (txns.length===0) { %>
-      <div class="mt-6 p-6 rounded-3xl bg-amber-50 border-2 border-dashed border-amber-200 text-center">
-        <h3 class="font-bold text-amber-900 mb-1">Nenhum resultado</h3>
-        <p class="text-sm font-medium text-amber-700">Nenhum item encontrado com os filtros de busca atuais.</p>
+      <div class="mt-6 p-6 rounded-3xl bg-amber-50 dark:bg-amber-900/20 border-2 border-dashed border-amber-200 dark:border-amber-800 text-center">
+        <h3 class="font-bold text-amber-900 dark:text-amber-200 mb-1">Nenhum resultado</h3>
+        <p class="text-sm font-medium text-amber-700 dark:text-amber-300">Nenhum item encontrado com os filtros de busca atuais.</p>
       </div>
       <% } %>
 
@@ -351,9 +351,9 @@
           if (statusTd) {
             const isAllocated = form.querySelectorAll('input[type="checkbox"]:checked').length > 0;
             if (isAllocated) {
-              statusTd.innerHTML = `<div class="flex items-center justify-between md:justify-center gap-3"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Status</span><div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center md:mx-auto" title="Distribuído"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg></div></div>`;
+              statusTd.innerHTML = `<div class="flex items-center justify-between md:justify-center gap-3"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</span><div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center md:mx-auto" title="Distribuído"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg></div></div>`;
             } else {
-              statusTd.innerHTML = `<div class="flex items-center justify-between md:justify-center gap-3"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Status</span><div class="w-6 h-6 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center md:mx-auto" title="Não Distribuído"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div></div>`;
+              statusTd.innerHTML = `<div class="flex items-center justify-between md:justify-center gap-3"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</span><div class="w-6 h-6 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center md:mx-auto" title="Não Distribuído"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div></div>`;
             }
           }
 

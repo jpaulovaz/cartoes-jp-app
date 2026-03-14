@@ -37,23 +37,36 @@
       </div>
 
       <form action="/txn/manual" method="POST" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cartão Utilizado</label>
+          <select name="card_id" data-manual-card-select
+            class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+            <% cards.forEach(c=> { %>
+              <option value="<%= c.id %>" data-close-day="<%= c.close_day || '' %>">
+                <%= c.name %><%= c.close_day ? ' • Fecha dia ' + c.close_day : '' %>
+              </option>
+              <% }) %>
+          </select>
+        </div>
+
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Data da Compra</label>
-            <input type="date" name="date" required
+            <input type="date" name="date" data-manual-date required
               class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
           </div>
           <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Valor Total (R$)</label>
-            <input type="text" name="amount" placeholder="0,00" required
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1º Vencimento</label>
+            <input type="month" name="first_due" data-manual-first-due required
               class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+            <p class="text-[11px] text-slate-400 mt-1">Sugestão automática baseada na data da compra e no fechamento do cartão.</p>
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1º Vencimento</label>
-            <input type="month" name="first_due" required
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Valor Total (R$)</label>
+            <input type="text" name="amount" placeholder="0,00" required
               class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
           </div>
           <div>
@@ -67,18 +80,6 @@
           <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição</label>
           <input type="text" name="description" placeholder="Ex: Monitor Dell" required
             class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
-        </div>
-
-        <div>
-          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cartão Utilizado</label>
-          <select name="card_id"
-            class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
-            <% cards.forEach(c=> { %>
-              <option value="<%= c.id %>">
-                <%= c.name %>
-              </option>
-              <% }) %>
-          </select>
         </div>
 
         <button type="submit"
@@ -194,43 +195,24 @@
                     <div
                       class="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-300 hover:shadow-md transition-all flex flex-col relative">
 
-                      <div class="flex justify-between items-start gap-3 mb-3">
-                        <div class="font-extrabold text-slate-800 text-lg break-words leading-tight">
+                      <div class="flex justify-between items-start mb-3">
+                        <div class="font-extrabold text-slate-800 text-lg truncate">
                           <%= card.card_name %>
                         </div>
-                        <span class="bg-slate-100 text-slate-600 text-xs font-bold px-2 py-1 rounded-md whitespace-nowrap">
+                        <span class="bg-slate-100 text-slate-600 text-xs font-bold px-2 py-1 rounded-md">
                           <%= card.txn_count %> itens
                         </span>
                       </div>
 
-                      <div class="text-xs font-medium text-slate-400 mb-4 break-all">
+                      <div class="text-xs font-medium text-slate-400 mb-5 truncate">
                         Arquivo: <%= card.original_filename || "N/A" %>
                       </div>
 
-                      <div class="grid grid-cols-2 gap-3 mb-4">
-                        <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total de Itens</div>
-                          <div class="text-lg font-black text-slate-800"><%= card.txn_count %></div>
-                        </div>
-                        <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Valor do Cartão</div>
-                          <div class="text-sm font-black text-slate-800"><%= formatBRLFromCents(card.import_total) %></div>
-                        </div>
-                      </div>
-
-                      <div class="mt-auto space-y-2">
+                      <div class="mt-auto">
                         <a href="/month/<%= card.year %>/<%= card.month %>?f_card=<%= card.card_name %>"
                           class="block w-full text-center px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-semibold text-sm rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors">
                           Ver transações deste cartão
                         </a>
-                        <form method="post" action="/geral/<%= card.year %>/<%= card.month %>/card/<%= card.card_id %>/delete"
-                          data-confirm-prompt="Excluir todos os lançamentos do cartão <%= card.card_name %> em <%= group.label %>? Esta ação remove os itens e as distribuições associadas."
-                          data-confirm-phrase="Eu confirmo">
-                          <button
-                            class="block w-full text-center px-4 py-2.5 bg-red-50 border border-red-200 text-red-700 font-semibold text-sm rounded-lg hover:bg-red-100 hover:border-red-300 transition-colors">
-                            Excluir lançamentos
-                          </button>
-                        </form>
                       </div>
                     </div>
                     <% }) %>
@@ -243,5 +225,60 @@
         </div>
         <% } %>
   </div>
+
+  <script>
+    (() => {
+      const modal = document.getElementById('modalManual');
+      if (!modal) return;
+
+      const form = modal.querySelector('form[action="/txn/manual"]');
+      const cardSelect = form?.querySelector('[data-manual-card-select]');
+      const dateInput = form?.querySelector('[data-manual-date]');
+      const firstDueInput = form?.querySelector('[data-manual-first-due]');
+      if (!form || !cardSelect || !dateInput || !firstDueInput) return;
+
+      const normalizeMonth = (dateValue, closeDayValue) => {
+        if (!dateValue) return '';
+        const [yearStr, monthStr, dayStr] = dateValue.split('-');
+        const year = Number(yearStr);
+        const month = Number(monthStr);
+        const day = Number(dayStr);
+        if (!year || !month || !day) return '';
+
+        const closeDay = Number(closeDayValue);
+        let targetYear = year;
+        let targetMonth = month;
+
+        if (closeDay && day >= closeDay) {
+          targetMonth += 1;
+          if (targetMonth > 12) {
+            targetMonth = 1;
+            targetYear += 1;
+          }
+        }
+
+        return `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
+      };
+
+      const applySuggestion = ({ force = false } = {}) => {
+        if (firstDueInput.dataset.userEdited === 'true' && !force) return;
+        const selectedOption = cardSelect.options[cardSelect.selectedIndex];
+        const suggestedMonth = normalizeMonth(dateInput.value, selectedOption?.dataset.closeDay || '');
+        if (suggestedMonth) {
+          firstDueInput.value = suggestedMonth;
+          if (!force) firstDueInput.dataset.autoFilled = 'true';
+        }
+      };
+
+      firstDueInput.addEventListener('input', () => {
+        firstDueInput.dataset.userEdited = 'true';
+      });
+
+      cardSelect.addEventListener('change', () => applySuggestion());
+      dateInput.addEventListener('change', () => applySuggestion());
+      modal.addEventListener('transitionend', () => applySuggestion({ force: !firstDueInput.value }));
+      applySuggestion({ force: !firstDueInput.value });
+    })();
+  </script>
 
   <%- include("partials/footer") %>

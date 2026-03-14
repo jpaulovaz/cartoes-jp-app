@@ -33,23 +33,36 @@
         </div>
 
         <form action="/txn/manual" method="POST" class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cartão Utilizado</label>
+            <select name="card_id" data-manual-card-select
+              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+              <% cards.forEach(c=> { %>
+                <option value="<%= c.id %>" data-close-day="<%= c.close_day || '' %>">
+                  <%= c.name %><%= c.close_day ? ' • Fecha dia ' + c.close_day : '' %>
+                </option>
+                <% }) %>
+            </select>
+          </div>
+
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Data da Compra</label>
-              <input type="date" name="date" required
+              <input type="date" name="date" data-manual-date required
                 class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Valor Total (R$)</label>
-              <input type="text" name="amount" placeholder="0,00" required
+              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1º Vencimento</label>
+              <input type="month" name="first_due" data-manual-first-due value="<%= year %>-<%= String(month).padStart(2, '0') %>" required
                 class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+              <p class="text-[11px] text-slate-400 mt-1">Sugestão automática baseada na data da compra e no fechamento do cartão.</p>
             </div>
           </div>
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1º Vencimento</label>
-              <input type="month" name="first_due" value="<%= year %>-<%= String(month).padStart(2, '0') %>" required
+              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Valor Total (R$)</label>
+              <input type="text" name="amount" placeholder="0,00" required
                 class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
             </div>
             <div>
@@ -63,18 +76,6 @@
             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição</label>
             <input type="text" name="description" placeholder="Ex: Monitor Dell" required
               class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
-          </div>
-
-          <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cartão Utilizado</label>
-            <select name="card_id"
-              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
-              <% cards.forEach(c=> { %>
-                <option value="<%= c.id %>">
-                  <%= c.name %>
-                </option>
-                <% }) %>
-            </select>
           </div>
 
           <button type="submit"
@@ -224,7 +225,7 @@
                     <% }) %>
                   </div>
 
-                  <div class="flex items-center gap-2 flex-wrap">
+                  <div class="flex items-center gap-2">
                     <button type="submit"
                       class="px-4 py-1.5 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-transform active:scale-95 btn-salvar-indiv">Salvar</button>
 
@@ -237,15 +238,10 @@
                                 class="px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
                                 title="Colar atribuição">Colar</button>
 
-                              <button type="submit" form="delete-txn-<%= t.id %>"
-                                class="ml-auto px-3 py-1.5 text-[11px] font-bold rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
-                                Excluir
-                              </button>
+                              <a class="ml-auto px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
+                                href="/txn/<%= t.id %>">Detalhe</a>
                     </div>
                   </form>
-                  <form id="delete-txn-<%= t.id %>" method="post" action="/txn/<%= t.id %>/delete"
-                    data-confirm-prompt="Excluir este lançamento? Esta ação remove o item e a distribuição associada."
-                    data-confirm-phrase="Eu confirmo"></form>
                 </td>
               </tr>
               <% }) %>
@@ -395,6 +391,59 @@
         allocMsg.innerHTML = '<span class="text-blue-600 font-bold">Colado! Não esqueça de Salvar.</span>';
       };
     });
+  </script>
+
+  <script>
+    (() => {
+      const modal = document.getElementById('modalManual');
+      if (!modal) return;
+
+      const form = modal.querySelector('form[action="/txn/manual"]');
+      const cardSelect = form?.querySelector('[data-manual-card-select]');
+      const dateInput = form?.querySelector('[data-manual-date]');
+      const firstDueInput = form?.querySelector('[data-manual-first-due]');
+      if (!form || !cardSelect || !dateInput || !firstDueInput) return;
+
+      const normalizeMonth = (dateValue, closeDayValue) => {
+        if (!dateValue) return '';
+        const [yearStr, monthStr, dayStr] = dateValue.split('-');
+        const year = Number(yearStr);
+        const month = Number(monthStr);
+        const day = Number(dayStr);
+        if (!year || !month || !day) return '';
+
+        const closeDay = Number(closeDayValue);
+        let targetYear = year;
+        let targetMonth = month;
+
+        if (closeDay && day >= closeDay) {
+          targetMonth += 1;
+          if (targetMonth > 12) {
+            targetMonth = 1;
+            targetYear += 1;
+          }
+        }
+
+        return `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
+      };
+
+      const applySuggestion = ({ force = false } = {}) => {
+        if (firstDueInput.dataset.userEdited === 'true' && !force) return;
+        const selectedOption = cardSelect.options[cardSelect.selectedIndex];
+        const suggestedMonth = normalizeMonth(dateInput.value, selectedOption?.dataset.closeDay || '');
+        if (suggestedMonth) {
+          firstDueInput.value = suggestedMonth;
+        }
+      };
+
+      firstDueInput.addEventListener('input', () => {
+        firstDueInput.dataset.userEdited = 'true';
+      });
+
+      cardSelect.addEventListener('change', () => applySuggestion());
+      dateInput.addEventListener('change', () => applySuggestion());
+      applySuggestion({ force: !firstDueInput.value });
+    })();
   </script>
 
   <%- include("partials/footer") %>

@@ -25,8 +25,8 @@ CREATE TABLE IF NOT EXISTS cards (
   user_id INTEGER NOT NULL,
   name TEXT NOT NULL,
   due_day INTEGER,
+  close_day INTEGER,
   holiday_scope TEXT,
-  active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT,
   UNIQUE(user_id, name),
   FOREIGN KEY (user_id) REFERENCES users(id)
@@ -162,6 +162,10 @@ CREATE TABLE IF NOT EXISTS closed_months (
 );
 `);
 
+if (!columnExists('cards', 'close_day')) {
+  db.prepare("ALTER TABLE cards ADD COLUMN close_day INTEGER").run();
+}
+
 // ===== ÍNDICES =====
 db.exec(`
 CREATE INDEX IF NOT EXISTS idx_cards_user ON cards(user_id);
@@ -175,10 +179,6 @@ CREATE INDEX IF NOT EXISTS idx_alloc_txn ON allocations(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_statements_user ON card_statements(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_user ON person_payments(user_id);
 `);
-
-if (!columnExists("cards", "active")) {
-  db.exec("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1;");
-}
 
 // ===== CATEGORIAS PADRÃO =====
 // Nota: Categorias agora são por usuário, então não inserimos padrão aqui

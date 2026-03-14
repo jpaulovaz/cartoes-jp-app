@@ -18,7 +18,6 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    // Ativa o suporte oficial do Tailwind para Dark Mode
     tailwind.config = {
       darkMode: 'class',
       theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } }
@@ -56,7 +55,6 @@
   </script>
 
   <style>
-    /* O fundo agora respeita o modo escuro automaticamente */
     body {
       background-color: #f8fafc;
       transition: background-color 0.3s, color 0.3s;
@@ -65,8 +63,6 @@
     html.dark body {
       background-color: #0f172a;
     }
-
-    /* Slate 900 */
 
     ::-webkit-scrollbar {
       width: 8px;
@@ -99,29 +95,30 @@
 <body
   class="text-slate-800 dark:text-slate-200 antialiased selection:bg-blue-300 selection:text-blue-900 flex flex-col min-h-screen font-sans">
 
-  <nav class="sticky top-0 z-50 bg-slate-900 border-b border-slate-800 shadow-lg">
-    <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between h-16">
+  <% const dNav=new Date();
+     const mNav=dNav.getMonth() + 1;
+     const yNav=dNav.getFullYear();
+     const isUserAdmin=!!(user && user.role === 'admin'); %>
 
-        <% /* Descobre a data atual para mandar o usuario para o mes certo ao clicar no Logo */ const dNav=new Date();
-          const mNav=dNav.getMonth() + 1; const yNav=dNav.getFullYear(); %>
+    <nav class="sticky top-0 z-50 bg-slate-900 border-b border-slate-800 shadow-lg">
+      <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16 gap-3">
 
           <a href="/detalhamento/<%= yNav %>/<%= mNav %>"
-            class="flex items-center gap-3 group transition-transform hover:scale-105">
+            class="flex items-center gap-3 group transition-transform hover:scale-105 min-w-0">
             <div
-              class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-md group-hover:shadow-blue-500/50 transition-shadow">
+              class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-md group-hover:shadow-blue-500/50 transition-shadow shrink-0">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
                   d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
               </svg>
             </div>
-            <span class="text-xl font-extrabold text-white tracking-tight">
+            <span class="text-lg sm:text-xl font-extrabold text-white tracking-tight truncate">
               <%= nomeTitular %>
             </span>
           </a>
 
-          <div class="hidden sm:flex items-center gap-2">
-
+          <div class="hidden md:flex items-center gap-2 min-w-0">
             <a class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
               href="/geral">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -160,24 +157,47 @@
               Pessoas
             </a>
 
-            <button onclick="toggleDarkMode()"
-              class="ml-4 p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-amber-300 transition-all border border-slate-700"
-              title="Alternar Modo Escuro">
-              <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z">
-                </path>
-              </svg>
-              <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
-              </svg>
-            </button>
+            <% if (isUserAdmin) { %>
+              <a class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
+                href="/admin">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622C17.176 19.29 21 14.591 21 9c0-1.042-.133-2.052-.382-3.016z">
+                  </path>
+                </svg>
+                Admin
+              </a>
+              <% } %>
 
+                <% if (user) { %>
+                  <a class="ml-1 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 transition-all border border-slate-700"
+                    href="/logout">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1">
+                      </path>
+                    </svg>
+                    Sair
+                  </a>
+                  <% } %>
+
+                    <button onclick="toggleDarkMode()"
+                      class="ml-1 p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-amber-300 transition-all border border-slate-700"
+                      title="Alternar Modo Escuro">
+                      <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z">
+                        </path>
+                      </svg>
+                      <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                      </svg>
+                    </button>
           </div>
 
-          <div class="flex sm:hidden items-center gap-1">
-            <a class="p-2.5 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/geral"
+          <div class="flex md:hidden items-center gap-0.5 shrink-0">
+            <a class="p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/geral"
               title="Visão Geral Cartões">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -185,45 +205,68 @@
                 </path>
               </svg>
             </a>
-            <a class="p-2.5 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/import"
+            <a class="p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/import"
               title="Importar">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
               </svg>
             </a>
-            <a class="p-2.5 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/cards"
+            <a class="p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/cards"
               title="Ajustes de Cartões">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
               </svg>
             </a>
-            <a class="p-2.5 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/people"
+            <a class="p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/people"
               title="Pessoas">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z">
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0z">
                 </path>
               </svg>
             </a>
 
-            <button onclick="toggleDarkMode()"
-              class="p-2.5 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-amber-300 transition-all">
-              <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z">
-                </path>
-              </svg>
-              <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
-              </svg>
-            </button>
+            <% if (isUserAdmin) { %>
+              <a class="p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/admin"
+                title="Administração">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622C17.176 19.29 21 14.591 21 9c0-1.042-.133-2.052-.382-3.016z">
+                  </path>
+                </svg>
+              </a>
+              <% } %>
+
+                <% if (user) { %>
+                  <a class="p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/logout"
+                    title="Sair">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1">
+                      </path>
+                    </svg>
+                  </a>
+                  <% } %>
+
+                    <button onclick="toggleDarkMode()"
+                      class="p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-amber-300 transition-all"
+                      title="Alternar Modo Escuro">
+                      <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z">
+                        </path>
+                      </svg>
+                      <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                      </svg>
+                    </button>
           </div>
 
+        </div>
       </div>
-    </div>
-  </nav>
+    </nav>
 
-  <main class="max-w-[1600px] mx-auto px-4 py-8 flex-grow w-full">
+    <main class="max-w-[1600px] mx-auto px-4 py-8 flex-grow w-full">

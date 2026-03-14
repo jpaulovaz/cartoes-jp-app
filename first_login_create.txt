@@ -1,0 +1,3 @@
+sqlite3 app.db
+INSERT INTO users (email, name, role, created_at ) VALUES ('seu@email.com', 'Seu Nome', 'admin', datetime('now'));
+.quit

@@ -27,6 +27,7 @@ try { db.prepare("ALTER TABLE transactions ADD COLUMN parent_txn_id INTEGER").ru
 // Adiciona a coluna de telefone na tabela people se ela não existir
 try { db.prepare("ALTER TABLE people ADD COLUMN phone TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE cards ADD COLUMN close_day INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 
 // Cria a tabela de meses fechados se não existir
 // Em ambiente multi-usuário, o fechamento precisa ser isolado por user_id.
@@ -255,9 +256,38 @@ app.use((req, res, next) => {
 
 function nowIso() { return dayjs().toISOString(); }
 
+function normalizeDayNumber(value) {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num < 1 || num > 31) return null;
+  return num;
+}
+
+function suggestFirstDueMonth(purchaseDate, closeDay) {
+  const purchase = dayjs(purchaseDate);
+  if (!purchase.isValid()) return null;
+
+  const normalizedCloseDay = normalizeDayNumber(closeDay);
+  let target = purchase.startOf("month");
+
+  if (normalizedCloseDay) {
+    const effectiveCloseDay = Math.min(normalizedCloseDay, purchase.daysInMonth());
+    if (purchase.date() >= effectiveCloseDay) {
+      target = target.add(1, "month");
+    }
+  }
+
+  return target.format("YYYY-MM");
+}
+
+function resolveFirstDueMonth({ firstDue, purchaseDate, closeDay }) {
+  const provided = String(firstDue || "").trim();
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(provided)) return provided;
+  return suggestFirstDueMonth(purchaseDate, closeDay);
+}
+
 function getCards(userId) {
   return db.prepare(`
-    SELECT id, name, due_day, holiday_scope, COALESCE(active, 1) AS active
+    SELECT id, name, due_day, close_day, holiday_scope, COALESCE(active, 1) AS active
     FROM cards
     WHERE user_id = ?
     ORDER BY COALESCE(active, 1) DESC, name
@@ -266,7 +296,7 @@ function getCards(userId) {
 
 function getActiveCards(userId) {
   return db.prepare(`
-    SELECT id, name, due_day, holiday_scope, COALESCE(active, 1) AS active
+    SELECT id, name, due_day, close_day, holiday_scope, COALESCE(active, 1) AS active
     FROM cards
     WHERE user_id = ? AND COALESCE(active, 1) = 1
     ORDER BY name
@@ -279,7 +309,7 @@ function getCardsByIds(userId, ids) {
 
   const placeholders = uniqueIds.map(() => "?").join(", ");
   return db.prepare(`
-    SELECT id, name, due_day, holiday_scope, COALESCE(active, 1) AS active
+    SELECT id, name, due_day, close_day, holiday_scope, COALESCE(active, 1) AS active
     FROM cards
     WHERE user_id = ? AND id IN (${placeholders})
     ORDER BY COALESCE(active, 1) DESC, name
@@ -679,11 +709,12 @@ app.get("/cards", ensureAuthenticated, (req, res) => {
 app.post("/cards", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const name = (req.body.name || "").trim();
-  const dueDay = Number(req.body.due_day) || null;
+  const dueDay = normalizeDayNumber(req.body.due_day);
+  const closeDay = normalizeDayNumber(req.body.close_day);
 
   if (name) {
-    db.prepare("INSERT OR IGNORE INTO cards(user_id, name, due_day, holiday_scope) VALUES (?, ?, ?, ?)")
-      .run(userId, name, dueDay, "BR");
+    db.prepare("INSERT OR IGNORE INTO cards(user_id, name, due_day, close_day, holiday_scope) VALUES (?, ?, ?, ?, ?)")
+      .run(userId, name, dueDay, closeDay, "BR");
   }
 
   res.redirect("/cards");
@@ -691,8 +722,8 @@ app.post("/cards", ensureAuthenticated, (req, res) => {
 
 app.post("/cards/:id/update", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  db.prepare("UPDATE cards SET due_day = ? WHERE id = ? AND user_id = ?")
-    .run(Number(req.body.due_day) || null, Number(req.params.id), userId);
+  db.prepare("UPDATE cards SET due_day = ?, close_day = ? WHERE id = ? AND user_id = ?")
+    .run(normalizeDayNumber(req.body.due_day), normalizeDayNumber(req.body.close_day), Number(req.params.id), userId);
   res.redirect("/cards");
 });
 
@@ -1026,7 +1057,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
       return res.status(400).send("Cartao invalido. Selecione um cartao valido.");
     }
 
-    const cardExists = db.prepare("SELECT id FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(cardIdNum, userId);
+    const cardExists = db.prepare("SELECT id, close_day FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(cardIdNum, userId);
     if (!cardExists) {
       return res.status(400).send("Cartao nao encontrado no sistema ou esta desativado.");
     }
@@ -1036,7 +1067,17 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
     const installmentValue = Math.floor(totalCents / numInstallments);
     const remainder = totalCents % numInstallments;
 
-    let [startYear, startMonth] = first_due.split('-').map(Number);
+    const resolvedFirstDue = resolveFirstDueMonth({
+      firstDue: first_due,
+      purchaseDate: date,
+      closeDay: cardExists.close_day
+    });
+
+    if (!resolvedFirstDue) {
+      throw new Error("Nao foi possivel determinar o primeiro vencimento. Verifique a data da compra informada.");
+    }
+
+    let [startYear, startMonth] = resolvedFirstDue.split('-').map(Number);
 
     db.transaction(() => {
       const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1").all(userId);

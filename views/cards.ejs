@@ -3,22 +3,30 @@
   <div class="max-w-4xl mx-auto">
     <div class="mb-8">
       <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Cartões de Crédito</h1>
-      <p class="text-slate-500 mt-2 font-medium">Cadastre seus cartões e configure os dias de vencimento padrão.</p>
+      <p class="text-slate-500 mt-2 font-medium">Cadastre seus cartões e configure os dias de fechamento e vencimento da fatura.</p>
     </div>
 
     <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 sm:p-8">
 
       <form method="post" action="/cards" class="mb-8 pb-8 border-b border-slate-100">
-        <div class="grid md:grid-cols-12 gap-3 items-start">
-          <div class="md:col-span-6">
+        <div class="grid md:grid-cols-12 gap-3 items-end">
+          <div class="md:col-span-5">
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Nome do cartão</label>
             <input name="name"
               class="w-full border border-slate-300 rounded-xl px-4 py-3 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
-              placeholder="Nome do cartão (ex: Nubank, Inter...)" required />
+              placeholder="Ex: Nubank, Inter..." required />
           </div>
-          <div class="md:col-span-3">
+          <div class="md:col-span-2">
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Fechamento</label>
+            <input name="close_day" type="number" min="1" max="31"
+              class="w-full border border-slate-300 rounded-xl px-4 py-3 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+              placeholder="Dia" />
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Vencimento</label>
             <input name="due_day" type="number" min="1" max="31"
               class="w-full border border-slate-300 rounded-xl px-4 py-3 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
-              placeholder="Dia de Vencimento" />
+              placeholder="Dia" />
           </div>
           <div class="md:col-span-3">
             <button type="submit"
@@ -33,7 +41,7 @@
               d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
           O sistema empurra automaticamente o vencimento para o próximo dia útil considerando feriados nacionais e fins
-          de semana.
+          de semana. O fechamento é usado para sugerir o primeiro mês da fatura nos lançamentos manuais.
         </p>
       </form>
 
@@ -55,10 +63,14 @@
                   <div class="font-extrabold text-slate-800 text-lg">
                     <%= c.name %>
                   </div>
-                  <div class="text-sm font-medium text-slate-500 mt-0.5">Vencimento atual: <span
-                      class="text-slate-700 font-bold">
-                      <%= c.due_day ? 'Dia ' + c.due_day : 'Não definido' %>
-                    </span></div>
+                  <div class="flex flex-wrap gap-2 mt-2 text-xs font-bold">
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
+                      Fechamento: <span class="ml-1"><%= c.close_day ? 'Dia ' + c.close_day : 'Não definido' %></span>
+                    </span>
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
+                      Vencimento: <span class="ml-1"><%= c.due_day ? 'Dia ' + c.due_day : 'Não definido' %></span>
+                    </span>
+                  </div>
                 </div>
               </div>
               <span
@@ -68,14 +80,23 @@
             </div>
 
             <form method="post" action="/cards/<%= c.id %>/update"
-              class="flex items-center gap-2 mt-auto bg-slate-50 -mx-5 px-4 py-4 border-y border-slate-100 flex-wrap">
-              <label class="text-xs font-bold text-slate-600 uppercase tracking-wide">Vencimento:</label>
-              <input name="due_day" type="number" min="1" max="31" value="<%= c.due_day || '' %>" placeholder="Dia"
-                class="w-20 border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-bold bg-white focus:ring-2 focus:ring-blue-500 outline-none" />
-              <button
-                class="ml-auto px-4 py-1.5 text-sm font-bold rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-colors shadow-sm">
-                Salvar
-              </button>
+              class="mt-auto bg-slate-50 -mx-5 px-4 py-4 border-y border-slate-100">
+              <div class="grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 items-end">
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Fechamento</label>
+                  <input name="close_day" type="number" min="1" max="31" value="<%= c.close_day || '' %>" placeholder="Dia"
+                    class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Vencimento</label>
+                  <input name="due_day" type="number" min="1" max="31" value="<%= c.due_day || '' %>" placeholder="Dia"
+                    class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+                <button
+                  class="px-4 py-2 text-sm font-bold rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-colors shadow-sm">
+                  Salvar
+                </button>
+              </div>
             </form>
 
             <div class="flex flex-wrap gap-2 mt-4">

@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS cards (
   user_id INTEGER NOT NULL,
   name TEXT NOT NULL,
   due_day INTEGER,
+  close_day INTEGER,
   holiday_scope TEXT,
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT,
@@ -178,6 +179,10 @@ CREATE INDEX IF NOT EXISTS idx_payments_user ON person_payments(user_id);
 
 if (!columnExists("cards", "active")) {
   db.exec("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("cards", "close_day")) {
+  db.exec("ALTER TABLE cards ADD COLUMN close_day INTEGER;");
 }
 
 // ===== CATEGORIAS PADRÃO =====

@@ -90,3 +90,55 @@ Digite exatamente: ${phrase}`, "");
 
   window.confirmTypedAction = confirmTypedAction;
 })();
+
+(function () {
+  function computeSuggestedFirstDue(dateValue, closeDayValue) {
+    if (!dateValue) return "";
+
+    const parts = String(dateValue).split('-').map(Number);
+    if (parts.length !== 3 || parts.some(Number.isNaN)) return "";
+
+    let [year, month, day] = parts;
+    const lastDayOfMonth = new Date(year, month, 0).getDate();
+    const closeDay = Number(closeDayValue);
+
+    if (Number.isInteger(closeDay) && closeDay > 0) {
+      const effectiveCloseDay = Math.min(closeDay, lastDayOfMonth);
+      if (day >= effectiveCloseDay) {
+        month += 1;
+        if (month > 12) {
+          month = 1;
+          year += 1;
+        }
+      }
+    }
+
+    return `${year}-${String(month).padStart(2, '0')}`;
+  }
+
+  function bindAutoFirstDue(form) {
+    const dateInput = form.querySelector('[data-manual-date-input]');
+    const cardSelect = form.querySelector('[data-manual-card-select]');
+    const firstDueInput = form.querySelector('[data-manual-first-due]');
+
+    if (!(dateInput instanceof HTMLInputElement) || !(cardSelect instanceof HTMLSelectElement) || !(firstDueInput instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const refreshSuggestion = () => {
+      const selectedOption = cardSelect.options[cardSelect.selectedIndex];
+      const suggested = computeSuggestedFirstDue(dateInput.value, selectedOption?.dataset.closeDay || '');
+      if (suggested) {
+        firstDueInput.value = suggested;
+      }
+    };
+
+    dateInput.addEventListener('change', refreshSuggestion);
+    dateInput.addEventListener('input', refreshSuggestion);
+    cardSelect.addEventListener('change', refreshSuggestion);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-auto-first-due-form]').forEach(bindAutoFirstDue);
+  });
+})();

@@ -36,24 +36,30 @@
           class="text-slate-400 hover:text-slate-600 text-2xl">✕</button>
       </div>
 
-      <form action="/txn/manual" method="POST" class="space-y-4">
+      <form action="/txn/manual" method="POST" class="space-y-4" data-auto-first-due-form>
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Data da Compra</label>
-            <input type="date" name="date" required
+            <input type="date" name="date" required data-manual-date-input
               class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
           </div>
           <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Valor Total (R$)</label>
-            <input type="text" name="amount" placeholder="0,00" required
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cartão Utilizado</label>
+            <select name="card_id" data-manual-card-select
               class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+              <% cards.forEach(c=> { %>
+                <option value="<%= c.id %>" data-close-day="<%= c.close_day || '' %>">
+                  <%= c.name %>
+                </option>
+                <% }) %>
+            </select>
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1º Vencimento</label>
-            <input type="month" name="first_due" required
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Valor Total (R$)</label>
+            <input type="text" name="amount" placeholder="0,00" required
               class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
           </div>
           <div>
@@ -64,21 +70,16 @@
         </div>
 
         <div>
-          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição</label>
-          <input type="text" name="description" placeholder="Ex: Monitor Dell" required
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1º Vencimento</label>
+          <input type="month" name="first_due" required data-manual-first-due
             class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+          <p class="mt-1 text-[11px] font-medium text-slate-400">Preenchido automaticamente pela data da compra e pelo fechamento do cartão, mas você pode alterar manualmente.</p>
         </div>
 
         <div>
-          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cartão Utilizado</label>
-          <select name="card_id"
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição</label>
+          <input type="text" name="description" placeholder="Ex: Monitor Dell" required
             class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
-            <% cards.forEach(c=> { %>
-              <option value="<%= c.id %>">
-                <%= c.name %>
-              </option>
-              <% }) %>
-          </select>
         </div>
 
         <button type="submit"

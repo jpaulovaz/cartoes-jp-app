@@ -270,17 +270,16 @@
     </nav>
 
     <main class="max-w-[1600px] mx-auto px-4 py-8 flex-grow w-full">
-      <% const flashData = typeof flash !== 'undefined' ? flash : null; %>
-      <% if (flashData && flashData.message) {
-           const flashClasses = flashData.type === 'success'
+      <% if (flash && flash.message) {
+           const flashClasses = flash.type === 'success'
              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-             : flashData.type === 'error'
+             : flash.type === 'error'
                ? 'border-red-200 bg-red-50 text-red-800'
                : 'border-blue-200 bg-blue-50 text-blue-800';
       %>
         <div class="mb-6">
           <div class="rounded-2xl border px-4 py-3 text-sm font-semibold shadow-sm <%= flashClasses %>">
-            <%= flashData.message %>
+            <%= flash.message %>
           </div>
         </div>
       <% } %>

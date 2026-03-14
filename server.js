@@ -48,6 +48,53 @@ const { computeDueDate } = require("./src/dueDate");
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
+const DEFAULT_FINANCE_CATEGORIES = ['Prestação Apartamento', 'Luz', 'Internet', 'Condomínio', 'Tim'];
+
+function getUserRecord(userId) {
+  return db.prepare("SELECT id, email, name, role, created_at, last_login FROM users WHERE id = ?").get(userId);
+}
+
+function getAllUsers() {
+  return db.prepare("SELECT id, email, name, role, created_at, last_login FROM users ORDER BY created_at DESC").all();
+}
+
+function isAdminUser(userId) {
+  return getUserRecord(userId)?.role === 'admin';
+}
+
+function ensureDefaultOwnerPerson(userId, preferredName) {
+  const safeName = String(preferredName || "").trim();
+  if (!safeName) return;
+
+  db.transaction(() => {
+    const existingOwner = db.prepare("SELECT id FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
+    if (existingOwner) return;
+
+    const existingPerson = db.prepare("SELECT id FROM people WHERE user_id = ? AND lower(name) = lower(?) LIMIT 1").get(userId, safeName);
+
+    if (existingPerson) {
+      db.prepare("UPDATE people SET active = 1 WHERE id = ? AND user_id = ?").run(existingPerson.id, userId);
+      db.prepare("UPDATE people SET is_owner = 0 WHERE user_id = ?").run(userId);
+      db.prepare("UPDATE people SET is_owner = 1 WHERE id = ? AND user_id = ?").run(existingPerson.id, userId);
+      return;
+    }
+
+    db.prepare(`
+      INSERT INTO people (user_id, name, phone, active, is_owner, created_at)
+      VALUES (?, ?, NULL, 1, 1, ?)
+    `).run(userId, safeName, dayjs().toISOString());
+  })();
+}
+
+function renderAdmin(res, { error = null, success = null } = {}) {
+  return res.render('admin', {
+    title: 'Cartões JP | Administração',
+    users: getAllUsers(),
+    error,
+    success
+  });
+}
+
 // --- MIDDLEWARES DE BODY PARSER (DEVE VIR ANTES DAS ROTAS) ---
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
@@ -93,11 +140,22 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       return done(null, false, { message: 'Email não autorizado. Entre em contato com o administrador.' });
     }
 
+    const isFirstGoogleLogin = !authorizedUser.last_login;
+
     // Atualiza last_login
     db.prepare("UPDATE users SET last_login = ? WHERE email = ?").run(dayjs().toISOString(), email);
 
+    if (isFirstGoogleLogin) {
+      ensureDefaultOwnerPerson(authorizedUser.id, name || authorizedUser.name || email.split('@')[0]);
+    }
+
     // Retorna o usuário
-    return done(null, { id: authorizedUser.id, email, name: authorizedUser.name || name });
+    return done(null, {
+      id: authorizedUser.id,
+      email,
+      name: authorizedUser.name || name || email.split('@')[0],
+      role: authorizedUser.role
+    });
   }));
 } else {
   console.warn('⚠️  Google OAuth não configurado. Verifique GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET no .env');
@@ -156,12 +214,22 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use((req, res, next) => {
   res.locals.user = null;
   res.locals.userId = null;
+  res.locals.isAdmin = false;
   res.locals.nomeTitular = "Detalhamento Contas";
   res.locals.formatDateBR = formatDateBR;
 
   if (req.isAuthenticated() && req.user?.id) {
+    const currentUser = getUserRecord(req.user.id);
+
+    if (currentUser) {
+      req.user.email = currentUser.email || req.user.email;
+      req.user.name = currentUser.name || req.user.name || currentUser.email;
+      req.user.role = currentUser.role;
+    }
+
     res.locals.user = req.user;
     res.locals.userId = req.user.id;
+    res.locals.isAdmin = req.user.role === 'admin';
 
     try {
       const owner = db.prepare("SELECT name FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(req.user.id);
@@ -239,64 +307,107 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
     statements[`${s.year}-${s.month}-${s.card_id}`] = s.paid_cents || 0;
   });
 
-  // 3. Agrupamos por mês/ano e cartão, e calculamos os totais
+  // 3. Agrupamos por mês/ano e consolidamos os cartões dentro de cada mês
   const groupedMap = new Map();
 
   recent.forEach(r => {
-    const key = `${r.year}-${r.month}-${r.card_id}`;
-    if (!groupedMap.has(key)) {
-      groupedMap.set(key, {
+    const monthKey = `${r.year}-${r.month}`;
+
+    if (!groupedMap.has(monthKey)) {
+      groupedMap.set(monthKey, {
         year: r.year,
         month: r.month,
-        card_id: r.card_id,
-        card_name: r.card_name,
         label: `${String(r.month).padStart(2, '0')}/${r.year}`,
         cards: [],
         total_cents: 0,
-        paid_cents: 0
+        paid_cents: 0,
+        remaining_cents: 0,
+        cardsMap: new Map()
       });
     }
-    const group = groupedMap.get(key);
-    group.cards.push(r);
+
+    const group = groupedMap.get(monthKey);
     group.total_cents += r.import_total;
+
+    if (!group.cardsMap.has(r.card_id)) {
+      group.cardsMap.set(r.card_id, {
+        card_id: r.card_id,
+        card_name: r.card_name,
+        month: r.month,
+        year: r.year,
+        txn_count: 0,
+        import_total: 0,
+        original_filename: r.original_filename,
+        filenames: new Set()
+      });
+    }
+
+    const cardGroup = group.cardsMap.get(r.card_id);
+    cardGroup.txn_count += r.txn_count;
+    cardGroup.import_total += r.import_total;
+
+    if (r.original_filename) {
+      cardGroup.filenames.add(r.original_filename);
+    }
   });
 
-  // 4. Calculamos o total pago e o que falta pagar por cartão/mês
-  for (const group of groupedMap.values()) {
-    const paid = statements[`${group.year}-${group.month}-${group.card_id}`] || 0;
-    group.paid_cents = paid;
-    group.remaining_cents = Math.max(0, group.total_cents - group.paid_cents);
-  }
+  const groupedRecent = Array.from(groupedMap.values()).map(group => {
+    const cards = Array.from(group.cardsMap.values())
+      .map(card => {
+        const filenames = Array.from(card.filenames.values());
+        return {
+          card_id: card.card_id,
+          card_name: card.card_name,
+          month: card.month,
+          year: card.year,
+          txn_count: card.txn_count,
+          import_total: card.import_total,
+          original_filename: filenames.length > 1 ? filenames.join(' + ') : (filenames[0] || 'N/A')
+        };
+      })
+      .sort((a, b) => a.card_name.localeCompare(b.card_name, 'pt-BR', { sensitivity: 'base' }));
 
-  // 5. Transformamos em array e ordenamos com lógica especial
-  const groupedRecent = Array.from(groupedMap.values());
+    const paid_cents = cards.reduce((totalPaid, card) => {
+      return totalPaid + (statements[`${group.year}-${group.month}-${card.card_id}`] || 0);
+    }, 0);
+
+    return {
+      year: group.year,
+      month: group.month,
+      label: group.label,
+      cards,
+      total_cents: group.total_cents,
+      paid_cents,
+      remaining_cents: Math.max(0, group.total_cents - paid_cents)
+    };
+  });
+
+  const sortDesc = (a, b) => (b.year !== a.year) ? b.year - a.year : b.month - a.month;
+  const sortAsc = (a, b) => (a.year !== b.year) ? a.year - b.year : a.month - b.month;
+
+  groupedRecent.sort(sortDesc);
 
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
 
-  let currentOrNextGroup = null;
-  const others = [];
+  const currentOrNextGroup = groupedRecent
+    .filter(group => group.year > currentYear || (group.year === currentYear && group.month >= currentMonth))
+    .sort(sortAsc)[0] || null;
 
-  groupedRecent.forEach(group => {
-    const isCurrentOrNext = (group.year === currentYear && group.month === currentMonth) ||
-      (group.year === currentYear && group.month > currentMonth) ||
-      (group.year === currentYear + 1 && group.month < currentMonth);
+  const groupedRecentFinal = currentOrNextGroup
+    ? [
+      currentOrNextGroup,
+      ...groupedRecent
+        .filter(group => !(group.year === currentOrNextGroup.year && group.month === currentOrNextGroup.month))
+        .sort(sortDesc)
+    ]
+    : groupedRecent.sort(sortDesc);
 
-    if (isCurrentOrNext && !currentOrNextGroup) {
-      currentOrNextGroup = group;
-    } else {
-      others.push(group);
-    }
-  });
-
-  others.sort((a, b) => (b.year !== a.year) ? b.year - a.year : b.month - a.month);
-
-  const groupedRecent_final = currentOrNextGroup ? [currentOrNextGroup, ...others] : others;
   const cards = db.prepare("SELECT id, name FROM cards WHERE user_id = ? ORDER BY name ASC").all(userId);
 
   res.render("home", {
-    groupedRecent: groupedRecent_final,
+    groupedRecent: groupedRecentFinal,
     formatBRLFromCents,
     cards,
     user: req.user || req.session.user
@@ -1165,58 +1276,36 @@ app.post("/finances/toggle-close", ensureAuthenticated, express.json(), (req, re
 app.get("/admin", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
 
-  // Verifica se é admin
-  const user = db.prepare("SELECT role FROM users WHERE id = ?").get(userId);
-  if (user?.role !== 'admin') {
+  if (!isAdminUser(userId)) {
     return res.status(403).send('Acesso negado. Apenas administradores podem acessar esta página.');
   }
 
-  // Lista todos os usuários
-  const users = db.prepare("SELECT id, email, name, role, created_at, last_login FROM users ORDER BY created_at DESC").all();
-
-  res.render('admin', { users, error: null, success: null });
+  return renderAdmin(res);
 });
 
 app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const { email, name, role } = req.body;
 
-  // Verifica se é admin
-  const user = db.prepare("SELECT role FROM users WHERE id = ?").get(userId);
-  if (user?.role !== 'admin') {
+  if (!isAdminUser(userId)) {
     return res.status(403).send('Acesso negado.');
   }
 
-  // Valida email
   if (!email || !email.includes('@')) {
-    return res.render('admin', {
-      users: db.prepare("SELECT id, email, name, role, created_at, last_login FROM users ORDER BY created_at DESC").all(),
-      error: 'Email inválido',
-      success: null
-    });
+    return renderAdmin(res, { error: 'Email inválido' });
   }
 
   try {
-    // Insere novo usuário
-    db.prepare("INSERT INTO users (email, name, role, created_at) VALUES (?, ?, ?, ?)").run(email, name || email.split('@')[0], role || 'user', dayjs().toISOString());
+    db.prepare("INSERT INTO users (email, name, role, created_at) VALUES (?, ?, ?, ?)")
+      .run(email, name || email.split('@')[0], role || 'user', dayjs().toISOString());
 
-    // Cria categorias padrão para o novo usuário
     const newUser = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
-    const categories = ['Prestação Apartamento', 'Luz', 'Internet', 'Condomínio', 'Tim'];
     const insertCat = db.prepare("INSERT OR IGNORE INTO finance_categories (user_id, name) VALUES (?, ?)");
-    categories.forEach(cat => insertCat.run(newUser.id, cat));
+    DEFAULT_FINANCE_CATEGORIES.forEach(cat => insertCat.run(newUser.id, cat));
 
-    return res.render('admin', {
-      users: db.prepare("SELECT id, email, name, role, created_at, last_login FROM users ORDER BY created_at DESC").all(),
-      error: null,
-      success: `Usuário ${email} adicionado com sucesso!`
-    });
+    return renderAdmin(res, { success: `Usuário ${email} adicionado com sucesso!` });
   } catch (err) {
-    return res.render('admin', {
-      users: db.prepare("SELECT id, email, name, role, created_at, last_login FROM users ORDER BY created_at DESC").all(),
-      error: err.message,
-      success: null
-    });
+    return renderAdmin(res, { error: err.message });
   }
 });
 
@@ -1224,43 +1313,26 @@ app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const targetUserId = req.params.id;
 
-  // Verifica se é admin
-  const user = db.prepare("SELECT role FROM users WHERE id = ?").get(userId);
-  if (user?.role !== 'admin') {
+  if (!isAdminUser(userId)) {
     return res.status(403).send('Acesso negado.');
   }
 
-  // Não permite remover a si mesmo
-  if (userId == targetUserId) {
-    return res.render('admin', {
-      users: db.prepare("SELECT id, email, name, role, created_at, last_login FROM users ORDER BY created_at DESC").all(),
-      error: 'Você não pode remover sua própria conta',
-      success: null
-    });
+  if (String(userId) === String(targetUserId)) {
+    return renderAdmin(res, { error: 'Você não pode remover sua própria conta' });
   }
 
   try {
-    // Remove todos os dados do usuário
     const tables = ['allocations', 'transactions', 'imports', 'person_payments', 'card_statements', 'people', 'cards', 'monthly_finances', 'scratchpad', 'finance_categories', 'closed_months'];
 
     for (const table of tables) {
       db.prepare(`DELETE FROM ${table} WHERE user_id = ?`).run(targetUserId);
     }
 
-    // Remove o usuário
     db.prepare("DELETE FROM users WHERE id = ?").run(targetUserId);
 
-    return res.render('admin', {
-      users: db.prepare("SELECT id, email, name, role, created_at, last_login FROM users ORDER BY created_at DESC").all(),
-      error: null,
-      success: 'Usuário removido com sucesso!'
-    });
+    return renderAdmin(res, { success: 'Usuário removido com sucesso!' });
   } catch (err) {
-    return res.render('admin', {
-      users: db.prepare("SELECT id, email, name, role, created_at, last_login FROM users ORDER BY created_at DESC").all(),
-      error: err.message,
-      success: null
-    });
+    return renderAdmin(res, { error: err.message });
   }
 });
 

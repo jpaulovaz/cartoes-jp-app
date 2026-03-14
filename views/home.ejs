@@ -48,7 +48,7 @@
             <select name="card_id" data-manual-card-select
               class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
               <% cards.forEach(c=> { %>
-                <option value="<%= c.id %>" data-close-day="<%= c.close_day || '' %>">
+                <option value="<%= c.id %>" data-close-day="<%= c.close_day || '' %>" data-due-day="<%= c.due_day || '' %>">
                   <%= c.name %>
                 </option>
                 <% }) %>

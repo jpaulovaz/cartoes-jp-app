@@ -92,24 +92,50 @@ Digite exatamente: ${phrase}`, "");
 })();
 
 (function () {
-  function computeSuggestedFirstDue(dateValue, closeDayValue) {
+  function normalizeDayNumber(value) {
+    const num = Number(value);
+    if (!Number.isInteger(num) || num < 1 || num > 31) return null;
+    return num;
+  }
+
+  function shiftMonth(year, month, amount) {
+    let y = year;
+    let m = month + amount;
+
+    while (m > 12) {
+      m -= 12;
+      y += 1;
+    }
+
+    while (m < 1) {
+      m += 12;
+      y -= 1;
+    }
+
+    return { year: y, month: m };
+  }
+
+  function computeSuggestedFirstDue(dateValue, closeDayValue, dueDayValue) {
     if (!dateValue) return "";
 
     const parts = String(dateValue).split('-').map(Number);
     if (parts.length !== 3 || parts.some(Number.isNaN)) return "";
 
-    let [year, month, day] = parts;
-    const lastDayOfMonth = new Date(year, month, 0).getDate();
-    const closeDay = Number(closeDayValue);
+    const [inputYear, inputMonth, inputDay] = parts;
+    let year = inputYear;
+    let month = inputMonth;
+    const closeDay = normalizeDayNumber(closeDayValue);
+    const dueDay = normalizeDayNumber(dueDayValue);
 
-    if (Number.isInteger(closeDay) && closeDay > 0) {
-      const effectiveCloseDay = Math.min(closeDay, lastDayOfMonth);
-      if (day >= effectiveCloseDay) {
-        month += 1;
-        if (month > 12) {
-          month = 1;
-          year += 1;
-        }
+    if (closeDay && dueDay && closeDay > dueDay) {
+      ({ year, month } = shiftMonth(year, month, 1));
+    }
+
+    if (closeDay) {
+      const lastDayOfPurchaseMonth = new Date(inputYear, inputMonth, 0).getDate();
+      const effectiveCloseDay = Math.min(closeDay, lastDayOfPurchaseMonth);
+      if (inputDay >= effectiveCloseDay) {
+        ({ year, month } = shiftMonth(year, month, 1));
       }
     }
 
@@ -127,7 +153,7 @@ Digite exatamente: ${phrase}`, "");
 
     const refreshSuggestion = () => {
       const selectedOption = cardSelect.options[cardSelect.selectedIndex];
-      const suggested = computeSuggestedFirstDue(dateInput.value, selectedOption?.dataset.closeDay || '');
+      const suggested = computeSuggestedFirstDue(dateInput.value, selectedOption?.dataset.closeDay || '', selectedOption?.dataset.dueDay || '');
       if (suggested) {
         firstDueInput.value = suggested;
       }

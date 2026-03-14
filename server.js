@@ -262,12 +262,17 @@ function normalizeDayNumber(value) {
   return num;
 }
 
-function suggestFirstDueMonth(purchaseDate, closeDay) {
+function suggestFirstDueMonth(purchaseDate, closeDay, dueDay) {
   const purchase = dayjs(purchaseDate);
   if (!purchase.isValid()) return null;
 
   const normalizedCloseDay = normalizeDayNumber(closeDay);
+  const normalizedDueDay = normalizeDayNumber(dueDay);
   let target = purchase.startOf("month");
+
+  if (normalizedCloseDay && normalizedDueDay && normalizedCloseDay > normalizedDueDay) {
+    target = target.add(1, "month");
+  }
 
   if (normalizedCloseDay) {
     const effectiveCloseDay = Math.min(normalizedCloseDay, purchase.daysInMonth());
@@ -279,10 +284,10 @@ function suggestFirstDueMonth(purchaseDate, closeDay) {
   return target.format("YYYY-MM");
 }
 
-function resolveFirstDueMonth({ firstDue, purchaseDate, closeDay }) {
+function resolveFirstDueMonth({ firstDue, purchaseDate, closeDay, dueDay }) {
   const provided = String(firstDue || "").trim();
   if (/^\d{4}-(0[1-9]|1[0-2])$/.test(provided)) return provided;
-  return suggestFirstDueMonth(purchaseDate, closeDay);
+  return suggestFirstDueMonth(purchaseDate, closeDay, dueDay);
 }
 
 function getCards(userId) {
@@ -596,7 +601,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
     ]
     : groupedRecent.sort(sortDesc);
 
-  const cards = getActiveCards(userId).map(({ id, name, close_day }) => ({ id, name, close_day }));
+  const cards = getActiveCards(userId).map(({ id, name, close_day, due_day }) => ({ id, name, close_day, due_day }));
 
   res.render("home", {
     groupedRecent: groupedRecentFinal,
@@ -1057,7 +1062,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
       return res.status(400).send("Cartao invalido. Selecione um cartao valido.");
     }
 
-    const cardExists = db.prepare("SELECT id, close_day FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(cardIdNum, userId);
+    const cardExists = db.prepare("SELECT id, close_day, due_day FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(cardIdNum, userId);
     if (!cardExists) {
       return res.status(400).send("Cartao nao encontrado no sistema ou esta desativado.");
     }
@@ -1070,7 +1075,8 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
     const resolvedFirstDue = resolveFirstDueMonth({
       firstDue: first_due,
       purchaseDate: date,
-      closeDay: cardExists.close_day
+      closeDay: cardExists.close_day,
+      dueDay: cardExists.due_day
     });
 
     if (!resolvedFirstDue) {

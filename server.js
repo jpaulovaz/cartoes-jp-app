@@ -218,6 +218,7 @@ app.use((req, res, next) => {
   res.locals.isAdmin = false;
   res.locals.nomeTitular = "Detalhamento Contas";
   res.locals.formatDateBR = formatDateBR;
+  res.locals.flash = null;
 
   if (req.isAuthenticated() && req.user?.id) {
     const currentUser = getUserRecord(req.user.id);

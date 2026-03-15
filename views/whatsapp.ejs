@@ -1,4 +1,4 @@
-<%- include("partials/header", { title: `Cartões JP | Recibo ${person.name}` }) %>
+<%- include("partials/header", { title: `OrganizaPay | Recibo ${person.name}` }) %>
 
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
@@ -172,7 +172,7 @@
 
         <div
           class="mt-8 pt-6 border-t border-slate-100 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-[10px] font-bold text-slate-400">
-          <div class="flex items-center">Gerado automaticamente por Cartões JP</div>
+          <div class="flex items-center">Gerado automaticamente por OrganizaPay</div>
           <div>
             <%= new Date().toLocaleDateString('pt-BR') %>
           </div>
@@ -264,7 +264,7 @@
       </div>
 
       <div class="mt-10 pt-6 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-400">
-        <div>Gerado automaticamente por Cartões JP</div>
+        <div>Gerado automaticamente por OrganizaPay</div>
         <div><%= new Date().toLocaleDateString('pt-BR') %></div>
       </div>
     </div>

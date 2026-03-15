@@ -90,7 +90,7 @@ function ensureDefaultOwnerPerson(userId, preferredName) {
 
 function renderAdmin(res, { error = null, success = null } = {}) {
   return res.render('admin', {
-    title: 'Cartões JP | Administração',
+    title: 'OrganizaPay | Administração',
     users: getAllUsers(),
     error,
     success

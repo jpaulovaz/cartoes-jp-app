@@ -1,6 +1,6 @@
 {
-    "name": "Cartões J.PauloVaz",
-    "short_name": "Cartões JP",
+    "name": "OrganizaPay",
+    "short_name": "OrganizaPay",
     "start_url": "/geral",
     "display": "standalone",
     "background_color": "#0f172a",

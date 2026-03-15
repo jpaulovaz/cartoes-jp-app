@@ -1,4 +1,4 @@
-# Cartões JP App
+# OrganizaPay
 
 Aplicação para controle de gastos em cartões, com foco em organização por mês, distribuição por pessoa, acompanhamento de fechamento/vencimento, lançamentos parcelados e geração de resumo para WhatsApp.
 

@@ -1033,7 +1033,8 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     f_card: (req.query.f_card || "").toString().trim(),
     f_number: (req.query.f_number || "").toString().trim(),
     f_amount: (req.query.f_amount || "").toString().trim(),
-    f_allocated: (req.query.f_allocated || "").toString().trim()
+    f_allocated: (req.query.f_allocated || "").toString().trim(),
+    f_person: (req.query.f_person || "").toString().trim()
   };
 
   const allocCountExpr = "(SELECT COUNT(*) FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id)";
@@ -1073,6 +1074,16 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     const f = filters.f_allocated.toLowerCase();
     if (f.startsWith("s")) where.push(`${allocCountExpr} > 0`);
     else if (f.startsWith("n")) where.push(`${allocCountExpr} = 0`);
+  }
+
+  if (filters.f_person) {
+    const personId = Number(filters.f_person);
+    if (personId > 0) {
+      where.push(`EXISTS (SELECT 1 FROM allocations a_filter WHERE a_filter.transaction_id = t.id AND a_filter.user_id = t.user_id AND a_filter.person_id = ?)`);
+      params.push(personId);
+    } else {
+      filters.f_person = "";
+    }
   }
 
   const txns = db.prepare(`

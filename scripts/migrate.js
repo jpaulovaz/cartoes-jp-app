@@ -195,6 +195,18 @@ CREATE TABLE IF NOT EXISTS recurring_exceptions (
 );
 `);
 
+if (!columnExists("cards", "active")) {
+  db.exec("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("cards", "close_day")) {
+  db.exec("ALTER TABLE cards ADD COLUMN close_day INTEGER;");
+}
+
+if (!columnExists("transactions", "recurring_rule_id")) {
+  db.exec("ALTER TABLE transactions ADD COLUMN recurring_rule_id INTEGER;");
+}
+
 // ===== ÍNDICES =====
 db.exec(`
 CREATE INDEX IF NOT EXISTS idx_cards_user ON cards(user_id);
@@ -211,18 +223,6 @@ CREATE INDEX IF NOT EXISTS idx_txn_recurring_rule ON transactions(recurring_rule
 CREATE INDEX IF NOT EXISTS idx_recurring_rules_user_status ON recurring_rules(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_recurring_exceptions_rule_month ON recurring_exceptions(user_id, rule_id, year, month);
 `);
-
-if (!columnExists("cards", "active")) {
-  db.exec("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1;");
-}
-
-if (!columnExists("cards", "close_day")) {
-  db.exec("ALTER TABLE cards ADD COLUMN close_day INTEGER;");
-}
-
-if (!columnExists("transactions", "recurring_rule_id")) {
-  db.exec("ALTER TABLE transactions ADD COLUMN recurring_rule_id INTEGER;");
-}
 
 // ===== CATEGORIAS PADRÃO =====
 // Nota: Categorias agora são por usuário, então não inserimos padrão aqui

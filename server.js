@@ -1361,19 +1361,27 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     }
 
     const missingPaymentCards = visibleCards
-      .filter(card => (cardTotalsMap.get(card.id) || 0) > 0)
-      .filter(card => {
+      .map(card => {
         const stmt = statementByCard.get(card.id);
-        return !stmt || Number(stmt.paid_cents || 0) <= 0;
+        const computedDueDate = computeDueDate({ year: currentYear, month: currentMonth, dueDay: card.due_day, holidayScope: card.holiday_scope || 'BR' });
+        const dueDate = stmt?.override_due_date || stmt?.computed_due_date || computedDueDate;
+        const duePassed = dueDate ? dayjs(dueDate).startOf('day').isBefore(today.startOf('day')) : false;
+        return {
+          card_name: card.name,
+          total_cents: cardTotalsMap.get(card.id) || 0,
+          paid_cents: Number(stmt?.paid_cents || 0),
+          due_date: dueDate,
+          due_passed: duePassed
+        };
       })
-      .map(card => card.name);
+      .filter(item => item.total_cents > 0 && item.due_passed && item.paid_cents <= 0);
 
     if (missingPaymentCards.length) {
       alerts.push({
         type: 'info',
         icon: '💳',
         title: 'Valor pago ainda não informado',
-        description: `${missingPaymentCards.join(', ')} ainda ${missingPaymentCards.length === 1 ? 'não tem' : 'não têm'} valor pago informado no resumo.`,
+        description: `${missingPaymentCards.map(item => `${item.card_name} (${dayjs(item.due_date).format('DD/MM')})`).join(', ')} ainda ${missingPaymentCards.length === 1 ? 'não tem' : 'não têm'} valor pago informado no resumo.`,
         href: `/summary/${currentYear}/${currentMonth}`
       });
     }

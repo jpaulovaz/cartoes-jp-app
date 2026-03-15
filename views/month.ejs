@@ -25,7 +25,7 @@
           class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all hover:-translate-y-0.5">Resumo
           do Mês</a>
         <a href="/import"
-          class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 shadow-sm transition-all">Importar
+          class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5">Importar
           Mais</a>
       </div>
     </div>
@@ -186,9 +186,8 @@
 
         <div>
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Data</label>
-          <input name="f_date" value="<%= filters.f_date || '' %>"
-            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
-            placeholder="Ex: 2026-03" />
+          <input type="date" name="f_date" value="<%= filters.f_date || '' %>"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none" />
         </div>
         <div class="md:col-span-2">
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Descrição</label>
@@ -239,7 +238,7 @@
         <div class="md:col-span-4 flex flex-col sm:flex-row sm:items-end gap-3">
           <button
             class="w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 transition-all shadow-sm">Filtrar</button>
-          <a class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-2.5 rounded-xl font-bold text-slate-600 dark:text-slate-200 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+          <a class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-2.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 transition-all shadow-sm"
             href="/month/<%= year %>/<%= month %>">Limpar</a>
         </div>
       </form>

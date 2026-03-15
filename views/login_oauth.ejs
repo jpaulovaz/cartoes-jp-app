@@ -7,83 +7,238 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
   <style>
+    :root {
+      --brand-red: #e50914;
+      --brand-red-dark: #a80710;
+      --brand-gold: #f4b400;
+      --brand-ink: #241416;
+      --brand-card: rgba(255, 251, 251, 0.94);
+      --brand-muted: #6b5b60;
+    }
+
+    * { box-sizing: border-box; }
+
     body {
-      background-color: #f8f9fa;
-      height: 100vh;
+      min-height: 100vh;
+      margin: 0;
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top left, rgba(229, 9, 20, 0.32), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(244, 180, 0, 0.16), transparent 26%),
+        linear-gradient(135deg, #120608 0%, #1c0b0f 42%, #261115 100%);
+      color: var(--brand-ink);
     }
+
+    .login-shell {
+      width: 100%;
+      max-width: 440px;
+      position: relative;
+    }
+
+    .login-shell::before,
+    .login-shell::after {
+      content: "";
+      position: absolute;
+      inset: auto;
+      border-radius: 999px;
+      filter: blur(18px);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .login-shell::before {
+      width: 150px;
+      height: 150px;
+      top: -20px;
+      right: -18px;
+      background: rgba(229, 9, 20, 0.22);
+    }
+
+    .login-shell::after {
+      width: 120px;
+      height: 120px;
+      left: -12px;
+      bottom: -22px;
+      background: rgba(244, 180, 0, 0.14);
+    }
+
     .login-container {
-      max-width: 400px;
+      position: relative;
+      z-index: 1;
       width: 100%;
       padding: 2rem;
-      background: white;
-      border-radius: 10px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      background: var(--brand-card);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      border-radius: 28px;
+      box-shadow: 0 28px 60px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(14px);
       text-align: center;
     }
-    .logo-icon {
-      font-size: 3rem;
-      color: #0d6efd;
-      margin-bottom: 1rem;
+
+    .logo-wrapper {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 1.25rem;
     }
+
+    .brand-logo {
+      width: min(100%, 300px);
+      height: auto;
+      display: block;
+      filter: drop-shadow(0 16px 22px rgba(229, 9, 20, 0.22));
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.42rem 0.8rem;
+      margin-bottom: 1rem;
+      border-radius: 999px;
+      background: rgba(229, 9, 20, 0.08);
+      color: var(--brand-red-dark);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    h2 {
+      margin: 0 0 0.45rem;
+      font-size: clamp(1.55rem, 4vw, 1.95rem);
+      font-weight: 800;
+      color: var(--brand-ink);
+    }
+
+    .lead-text {
+      color: var(--brand-muted);
+      font-size: 0.98rem;
+      line-height: 1.6;
+      margin: 0 auto 1.75rem;
+      max-width: 30ch;
+    }
+
     .btn-google {
       background-color: #fff;
-      color: #757575;
-      border: 1px solid #ddd;
+      color: #403336;
+      border: 1px solid rgba(36, 20, 22, 0.12);
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
-      font-weight: 500;
-      padding: 10px 20px;
-      transition: background-color 0.3s, box-shadow 0.3s;
+      font-weight: 700;
+      padding: 0.95rem 1.25rem;
+      border-radius: 18px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+      box-shadow: 0 12px 24px rgba(20, 8, 10, 0.08);
     }
+
     .btn-google:hover {
-      background-color: #f1f1f1;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      background-color: #fff7f7;
+      border-color: rgba(229, 9, 20, 0.25);
+      transform: translateY(-1px);
+      box-shadow: 0 16px 26px rgba(229, 9, 20, 0.12);
     }
+
+    .btn-google:focus-visible {
+      outline: 0;
+      box-shadow: 0 0 0 0.25rem rgba(229, 9, 20, 0.15);
+    }
+
     .google-icon {
       width: 20px;
       height: 20px;
+      flex-shrink: 0;
+    }
+
+    .restricted-note {
+      margin-top: 1rem;
+      color: var(--brand-muted);
+      font-size: 0.86rem;
+    }
+
+    .policy-copy {
+      margin-top: 1.1rem;
+      font-size: 0.84rem;
+      line-height: 1.6;
+      color: var(--brand-muted);
+    }
+
+    .policy-copy a {
+      color: var(--brand-red-dark);
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .policy-copy a:hover {
+      color: var(--brand-red);
+      text-decoration: underline;
+    }
+
+    .alert {
+      border-radius: 16px;
+      text-align: left;
+      margin-bottom: 1.2rem;
+    }
+
+    @media (max-width: 576px) {
+      body {
+        padding: 18px;
+      }
+
+      .login-container {
+        padding: 1.5rem;
+        border-radius: 24px;
+      }
+
+      .brand-logo {
+        width: min(100%, 260px);
+      }
     }
   </style>
 </head>
 <body>
-
-  <div class="login-container">
-    <i class="bi bi-credit-card-2-front logo-icon"></i>
-    <h2 class="mb-4">OrganizaPay</h2>
-    
-    <% if (typeof error !== 'undefined' && error) { %>
-      <div class="alert alert-danger" role="alert">
-        <%= error %>
+  <div class="login-shell">
+    <div class="login-container">
+      <div class="logo-wrapper">
+        <img src="/logo.png" alt="OrganizaPay" class="brand-logo">
       </div>
-    <% } %>
 
-    <p class="text-muted mb-4">Faça login para acessar o controle financeiro.</p>
+      <% if (typeof error !== 'undefined' && error) { %>
+        <div class="alert alert-danger" role="alert">
+          <%= error %>
+        </div>
+      <% } %>
 
-    <a href="/auth/google" class="btn btn-google w-100 mb-3">
-      <svg class="google-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-        <path fill="none" d="M0 0h48v48H0z"/>
-      </svg>
-      Entrar com Google
-    </a>
-    
-    <div class="mt-4 text-muted small">
-      Acesso restrito a usuários autorizados.
-    </div>
+      <div class="eyebrow">
+        <i class="bi bi-shield-lock"></i>
+        Acesso seguro
+      </div>
+      <h2>Entre com sua conta Google</h2>
+      <p class="lead-text">Controle financeiro familiar, acompanhamento da fatura e visão clara dos gastos em tempo real.</p>
 
-    <div class="mt-3 small">
-      Ao continuar, você concorda com o processamento dos dados necessários para autenticação e uso do aplicativo.
-      <a href="/privacy-policy" class="link-primary text-decoration-none fw-semibold">Política de Privacidade</a>
+      <a href="/auth/google" class="btn btn-google w-100 mb-2">
+        <svg class="google-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" aria-hidden="true">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          <path fill="none" d="M0 0h48v48H0z"/>
+        </svg>
+        Entrar com Google
+      </a>
+
+      <div class="restricted-note">
+        Acesso restrito a usuários autorizados.
+      </div>
+
+      <div class="policy-copy">
+        Ao continuar, você concorda com o processamento dos dados necessários para autenticação e uso do aplicativo.
+        <a href="/privacy-policy">Política de Privacidade</a>
+      </div>
     </div>
   </div>
-
 </body>
 </html>

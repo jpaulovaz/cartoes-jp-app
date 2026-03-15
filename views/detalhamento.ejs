@@ -103,6 +103,30 @@
                     </div>
                 </div>
 
+                <% if (alerts && alerts.length) { %>
+                    <div class="mb-8 bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Alertas rápidos</h2>
+                            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Sinais importantes para manter o mês em dia.</p>
+                        </div>
+                        <div class="p-4 md:p-5 grid gap-3">
+                            <% alerts.forEach(alert => { %>
+                                <div class="rounded-2xl border px-4 py-3 <%= alert.type === 'warning' ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20' : 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20' %>">
+                                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                        <div>
+                                            <div class="font-bold text-slate-800 dark:text-white"><%= alert.icon %> <%= alert.title %></div>
+                                            <div class="text-sm text-slate-600 dark:text-slate-300 mt-1"><%= alert.description %></div>
+                                        </div>
+                                        <% if (alert.href) { %>
+                                            <a href="<%= alert.href %>" class="inline-flex items-center justify-center px-4 py-2 rounded-xl text-sm font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">Abrir</a>
+                                        <% } %>
+                                    </div>
+                                </div>
+                            <% }) %>
+                        </div>
+                    </div>
+                <% } %>
+
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
                     <div class="space-y-8">

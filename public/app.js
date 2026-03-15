@@ -168,3 +168,37 @@ Digite exatamente: ${phrase}`, "");
     document.querySelectorAll('[data-auto-first-due-form]').forEach(bindAutoFirstDue);
   });
 })();
+
+(function () {
+  function bindRecurringToggle(form) {
+    const recurringToggle = form.querySelector('[data-recurring-toggle]');
+    const installmentsInput = form.querySelector('[data-installments-input]');
+
+    if (!(recurringToggle instanceof HTMLInputElement) || !(installmentsInput instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const syncState = () => {
+      if (recurringToggle.checked) {
+        installmentsInput.value = '1';
+        installmentsInput.setAttribute('readonly', 'readonly');
+        installmentsInput.classList.add('opacity-60', 'cursor-not-allowed');
+      } else {
+        installmentsInput.removeAttribute('readonly');
+        installmentsInput.classList.remove('opacity-60', 'cursor-not-allowed');
+      }
+    };
+
+    recurringToggle.addEventListener('change', syncState);
+    installmentsInput.addEventListener('input', () => {
+      if (recurringToggle.checked) {
+        installmentsInput.value = '1';
+      }
+    });
+    syncState();
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-auto-first-due-form]').forEach(bindRecurringToggle);
+  });
+})();

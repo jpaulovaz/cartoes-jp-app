@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   due_month INTEGER,
   due_year INTEGER,
   parent_txn_id INTEGER,
+  recurring_rule_id INTEGER,
   created_at TEXT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (import_id) REFERENCES imports(id),
@@ -161,6 +162,37 @@ CREATE TABLE IF NOT EXISTS closed_months (
   PRIMARY KEY (user_id, month, year),
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS recurring_rules (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  card_id INTEGER NOT NULL,
+  description TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  start_txn_date TEXT NOT NULL,
+  start_due_month INTEGER NOT NULL,
+  start_due_year INTEGER NOT NULL,
+  active_from_month INTEGER NOT NULL,
+  active_from_year INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  ended_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (card_id) REFERENCES cards(id)
+);
+
+CREATE TABLE IF NOT EXISTS recurring_exceptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  rule_id INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, rule_id, month, year),
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (rule_id) REFERENCES recurring_rules(id)
+);
 `);
 
 // ===== ÍNDICES =====
@@ -175,6 +207,9 @@ CREATE INDEX IF NOT EXISTS idx_alloc_user ON allocations(user_id);
 CREATE INDEX IF NOT EXISTS idx_alloc_txn ON allocations(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_statements_user ON card_statements(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_user ON person_payments(user_id);
+CREATE INDEX IF NOT EXISTS idx_txn_recurring_rule ON transactions(recurring_rule_id);
+CREATE INDEX IF NOT EXISTS idx_recurring_rules_user_status ON recurring_rules(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_recurring_exceptions_rule_month ON recurring_exceptions(user_id, rule_id, year, month);
 `);
 
 if (!columnExists("cards", "active")) {
@@ -183,6 +218,10 @@ if (!columnExists("cards", "active")) {
 
 if (!columnExists("cards", "close_day")) {
   db.exec("ALTER TABLE cards ADD COLUMN close_day INTEGER;");
+}
+
+if (!columnExists("transactions", "recurring_rule_id")) {
+  db.exec("ALTER TABLE transactions ADD COLUMN recurring_rule_id INTEGER;");
 }
 
 // ===== CATEGORIAS PADRÃO =====

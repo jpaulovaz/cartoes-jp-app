@@ -64,7 +64,7 @@
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Parcelas</label>
-            <input type="number" name="installments" value="1" min="1" max="99" required
+            <input type="number" name="installments" value="1" min="1" max="99" required data-installments-input
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
         </div>
@@ -81,6 +81,15 @@
           <input type="text" name="description" placeholder="Ex: Monitor Dell" required
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
         </div>
+
+        <label class="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3">
+          <input type="checkbox" name="is_recurring" value="1" data-recurring-toggle
+            class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
+          <span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Tornar este item recorrente mensal</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Ideal para academia, streaming, escola, internet e condomínio. Funciona somente com 1 parcela.</span>
+          </span>
+        </label>
 
         <button type="submit"
           class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all">
@@ -177,6 +186,12 @@
                     class="flex-1 lg:flex-none text-center px-5 py-2.5 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5"
                     onclick="event.stopPropagation()">
                     Resumo
+                  </a>
+
+                  <a href="/geral/<%= group.year %>/<%= group.month %>/export.csv"
+                    class="flex-1 lg:flex-none text-center px-5 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-600 shadow-sm transition-all"
+                    onclick="event.stopPropagation()">
+                    Exportar CSV
                   </a>
 
                   <div

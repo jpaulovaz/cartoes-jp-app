@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login | OrganizaPay</title>
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#b20710">
+    <meta name="theme-color" content="#0f172a">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,18 +16,18 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="min-h-screen p-4 flex items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(229,9,20,0.28),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(244,180,0,0.14),_transparent_24%),linear-gradient(135deg,_#120608_0%,_#1c0b0f_42%,_#261115_100%)]">
-    <div class="w-full max-w-md rounded-[28px] border border-white/50 bg-white/95 p-8 shadow-[0_28px_60px_rgba(0,0,0,0.28)] backdrop-blur-xl">
-        <img src="/logo.png" alt="OrganizaPay" class="mx-auto mb-6 w-full max-w-[290px] drop-shadow-[0_16px_22px_rgba(229,9,20,0.22)]">
+<body class="min-h-screen p-4 flex items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.24),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(79,70,229,0.18),_transparent_26%),linear-gradient(135deg,_#020617_0%,_#0f172a_44%,_#172554_100%)]">
+    <div class="w-full max-w-md rounded-[28px] border border-white/60 bg-slate-50/95 p-6 sm:p-8 shadow-[0_28px_60px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+        <img src="/logo.png" alt="OrganizaPay" class="mx-auto mb-6 w-full max-w-[300px] sm:max-w-[336px] drop-shadow-[0_18px_26px_rgba(37,99,235,0.22)]">
 
         <% if (error) { %>
-            <div class="mb-6 rounded-2xl border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-600">
+            <div class="mb-6 rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-bold text-blue-700">
                 <%= error %>
             </div>
         <% } %>
 
-        <div class="mb-4 inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.08em] text-red-700">
-            <span class="inline-block h-2 w-2 rounded-full bg-red-600"></span>
+        <div class="mb-4 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.08em] text-blue-800">
+            <span class="inline-block h-2 w-2 rounded-full bg-blue-700"></span>
             Acesso seguro
         </div>
         <h1 class="mb-2 text-2xl font-black text-slate-800">Aceder ao Sistema</h1>
@@ -36,20 +36,20 @@
         <form action="/login" method="POST" class="space-y-4">
             <div>
                 <label class="mb-1 block text-xs font-bold uppercase text-slate-400">Utilizador</label>
-                <input type="text" name="username" required class="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition-all focus:border-red-300 focus:ring-2 focus:ring-red-200">
+                <input type="text" name="username" required class="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition-all focus:border-blue-300 focus:ring-2 focus:ring-blue-200">
             </div>
             <div>
                 <label class="mb-1 block text-xs font-bold uppercase text-slate-400">Palavra-passe</label>
-                <input type="password" name="password" required class="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition-all focus:border-red-300 focus:ring-2 focus:ring-red-200">
+                <input type="password" name="password" required class="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition-all focus:border-blue-300 focus:ring-2 focus:ring-blue-200">
             </div>
-            <button type="submit" class="w-full rounded-2xl bg-[#e50914] py-4 font-black text-white shadow-lg shadow-red-600/30 transition-all hover:bg-[#c90812]">
+            <button type="submit" class="w-full rounded-2xl bg-slate-900 py-4 font-black text-white shadow-lg shadow-slate-950/30 transition-all hover:bg-slate-800">
                 Entrar
             </button>
         </form>
 
         <p class="mt-6 text-xs leading-5 text-slate-500">
             Ao continuar, você concorda com o processamento dos dados necessários para autenticação e uso do aplicativo.
-            <a href="/privacy-policy" class="font-semibold text-red-700 hover:text-red-600">Política de Privacidade</a>
+            <a href="/privacy-policy" class="font-semibold text-blue-800 hover:text-blue-700">Política de Privacidade</a>
         </p>
     </div>
 </body>

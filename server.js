@@ -184,6 +184,12 @@ app.get('/login', (req, res) => {
   res.render('login_oauth', { error: null });
 });
 
+app.get(['/privacy-policy', '/politica-de-privacidade'], (req, res) => {
+  res.render('privacy-policy', {
+    updatedAt: '14/03/2026'
+  });
+});
+
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
 const handleGoogleCallback = passport.authenticate('google', {

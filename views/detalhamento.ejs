@@ -40,44 +40,42 @@
                             </span></p>
                     </div>
 
-                    <div class="w-full lg:w-auto max-w-3xl lg:max-w-none mx-auto lg:mx-0">
-                        <div class="grid grid-cols-2 lg:grid-cols-[auto_auto_auto] gap-3 items-stretch lg:items-center">
-                            <% if (isClosed) { %>
-                                <button onclick="toggleLock('open')"
-                                    class="w-full inline-flex items-center justify-center px-4 py-2.5 bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-900 dark:text-rose-300 rounded-xl text-sm font-bold shadow-sm transition-colors gap-2">
-                                    🔒 Mês Fechado
-                                </button>
-                            <% } else { %>
-                                <button onclick="toggleLock('close')"
-                                    class="w-full inline-flex items-center justify-center px-4 py-2.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 rounded-xl text-sm font-bold shadow-sm transition-colors gap-2">
-                                    🔓 Fechar Mês
-                                </button>
-                            <% } %>
-
-                            <button type="button"
-                                onclick="document.getElementById('modalManualDetalhamento').classList.remove('hidden')"
-                                <%= (isClosed || !cards || !cards.length) ? 'disabled' : '' %>
-                                class="w-full inline-flex items-center justify-center px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 rounded-xl shadow-sm transition-all hover:-translate-y-0.5 <%= (isClosed || !cards || !cards.length) ? 'opacity-60 cursor-not-allowed hover:bg-emerald-600' : 'hover:bg-emerald-700' %>">
-                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                </svg>
-                                + Novo Item
+                    <div class="flex flex-wrap items-center gap-3">
+                        <% if (isClosed) { %>
+                            <button onclick="toggleLock('open')"
+                                class="px-4 py-2 bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-900 dark:text-rose-300 rounded-xl text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
+                                🔒 Mês Fechado
                             </button>
+                        <% } else { %>
+                            <button onclick="toggleLock('close')"
+                                class="px-4 py-2 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 rounded-xl text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
+                                🔓 Fechar Mês
+                            </button>
+                        <% } %>
 
+                        <button type="button"
+                            onclick="document.getElementById('modalManualDetalhamento').classList.remove('hidden')"
+                            <%= (isClosed || !cards || !cards.length) ? 'disabled' : '' %>
+                            class="inline-flex items-center justify-center px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 rounded-xl shadow-sm transition-all hover:-translate-y-0.5 <%= (isClosed || !cards || !cards.length) ? 'opacity-60 cursor-not-allowed hover:bg-emerald-600' : 'hover:bg-emerald-700' %>">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            + Novo Item
+                        </button>
+
+                        <div
+                            class="flex items-center gap-2 bg-white dark:bg-slate-800 p-1 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                            <a href="/detalhamento/<%= prevY %>/<%= prevM %>"
+                                class="px-3 py-2 bg-slate-50 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold transition-colors">&larr;
+                                Anterior</a>
                             <div
-                                class="col-span-2 lg:col-span-1 w-full flex items-center gap-2 bg-white dark:bg-slate-800 p-1 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-                                <a href="/detalhamento/<%= prevY %>/<%= prevM %>"
-                                    class="flex-1 text-center px-3 py-2 bg-slate-50 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold transition-colors">&larr;
-                                    Anterior</a>
-                                <div
-                                    class="px-4 py-2 bg-slate-900 dark:bg-slate-950 text-white rounded-lg text-sm font-bold shadow-inner whitespace-nowrap">
-                                    <%= String(month).padStart(2, '0' ) %> / <%= year %>
-                                </div>
-                                <a href="/detalhamento/<%= nextY %>/<%= nextM %>"
-                                    class="flex-1 text-center px-3 py-2 bg-slate-50 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold transition-colors">Próximo
-                                    &rarr;</a>
+                                class="px-4 py-2 bg-slate-900 dark:bg-slate-950 text-white rounded-lg text-sm font-bold shadow-inner">
+                                <%= String(month).padStart(2, '0' ) %> / <%= year %>
                             </div>
+                            <a href="/detalhamento/<%= nextY %>/<%= nextM %>"
+                                class="px-3 py-2 bg-slate-50 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold transition-colors">Próximo
+                                &rarr;</a>
                         </div>
                     </div>
                 </div>

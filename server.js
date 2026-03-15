@@ -1274,6 +1274,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 
   const isClosed = isMonthClosed(userId, currentMonth, currentYear);
   const visibleCards = getVisibleCardsForMonth(userId, currentMonth, currentYear);
+  const cards = getActiveCards(userId).map(({ id, name, close_day, due_day }) => ({ id, name, close_day, due_day }));
 
   const cardTotalsRows = db.prepare(`
     SELECT t.card_id, SUM(t.amount_cents) AS total_cents
@@ -1398,7 +1399,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     notes,
     formatBRLFromCents,
     isClosed,
-    alerts
+    alerts,
+    cards
   });
 });
 

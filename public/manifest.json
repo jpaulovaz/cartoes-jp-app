@@ -1,20 +1,25 @@
 {
-    "name": "OrganizaPay",
-    "short_name": "OrganizaPay",
-    "start_url": "/geral",
-    "display": "standalone",
-    "background_color": "#0f172a",
-    "theme_color": "#0f172a",
-    "icons": [
-        {
-            "src": "/icon-192.png",
-            "sizes": "192x192",
-            "type": "image/png"
-        },
-        {
-            "src": "/icon-512.png",
-            "sizes": "512x512",
-            "type": "image/png"
-        }
-    ]
+  "name": "OrganizaPay",
+  "short_name": "OrganizaPay",
+  "start_url": "/geral",
+  "display": "standalone",
+  "background_color": "#1c0b0f",
+  "theme_color": "#b20710",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "description": "Controle financeiro de cartões, faturas e gastos em tempo real.",
+  "id": "/",
+  "scope": "/"
 }

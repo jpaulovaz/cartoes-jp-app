@@ -9,10 +9,17 @@
         <div id="allocMsg" class="text-sm font-bold text-emerald-600 mt-2 h-5 transition-all duration-300"></div>
       </div>
       <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-        <button onclick="document.getElementById('modalManual').classList.remove('hidden')"
-          class="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all hover:-translate-y-0.5">
-          + Novo Item
-        </button>
+        <% if (isClosed) { %>
+          <button type="button" disabled
+            class="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-white bg-slate-400 dark:bg-slate-600 cursor-not-allowed shadow-sm">
+            🔒 Mês Fechado
+          </button>
+        <% } else { %>
+          <button onclick="document.getElementById('modalManual').classList.remove('hidden')"
+            class="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all hover:-translate-y-0.5">
+            + Novo Item
+          </button>
+        <% } %>
 
         <a href="/summary/<%= year %>/<%= month %>"
           class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all hover:-translate-y-0.5">Resumo
@@ -22,6 +29,12 @@
           Mais</a>
       </div>
     </div>
+
+    <% if (isClosed) { %>
+      <div class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+        🔒 Este mês está fechado. Distribuições, exclusões e novos lançamentos para <%= String(month).padStart(2,'0') %>/<%= year %> estão bloqueados.
+      </div>
+    <% } %>
 
     <div id="modalManual"
       class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -36,12 +49,12 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data da Compra</label>
-              <input type="date" name="date" required data-manual-date-input
+              <input type="date" name="date" required data-manual-date-input <%= isClosed ? "disabled" : "" %>
                 class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
             </div>
             <div>
               <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cartão Utilizado</label>
-              <select name="card_id" data-manual-card-select
+              <select name="card_id" data-manual-card-select <%= isClosed ? "disabled" : "" %>
                 class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                 <% cards.forEach(c=> { %>
                   <option value="<%= c.id %>" data-close-day="<%= c.close_day || '' %>" data-due-day="<%= c.due_day || '' %>">
@@ -55,33 +68,39 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
-              <input type="text" name="amount" placeholder="0,00" required
+              <input type="text" name="amount" placeholder="0,00" required <%= isClosed ? "disabled" : "" %>
                 class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
             </div>
             <div>
               <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Parcelas</label>
-              <input type="number" name="installments" value="1" min="1" max="99" required
+              <input type="number" name="installments" value="1" min="1" max="99" required <%= isClosed ? "disabled" : "" %>
                 class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
             </div>
           </div>
 
           <div>
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">1º Vencimento</label>
-            <input type="month" name="first_due" value="<%= year %>-<%= String(month).padStart(2, '0') %>" required data-manual-first-due
+            <input type="month" name="first_due" value="<%= year %>-<%= String(month).padStart(2, '0') %>" required data-manual-first-due <%= isClosed ? "disabled" : "" %>
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
             <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Preenchido automaticamente pela data da compra e pelo fechamento do cartão, mas você pode alterar manualmente.</p>
           </div>
 
           <div>
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Descrição</label>
-            <input type="text" name="description" placeholder="Ex: Monitor Dell" required
+            <input type="text" name="description" placeholder="Ex: Monitor Dell" required <%= isClosed ? "disabled" : "" %>
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
 
-          <button type="submit"
-            class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all">
-            Criar Lançamento
-          </button>
+          <% if (isClosed) { %>
+            <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+              Este mês está fechado. Abra o mês em Detalhamento para lançar novos itens nele.
+            </div>
+          <% } else { %>
+            <button type="submit"
+              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all">
+              Criar Lançamento
+            </button>
+          <% } %>
         </form>
       </div>
     </div>
@@ -236,7 +255,7 @@
                       <% people.forEach(p=> { %>
                         <label class="flex items-center gap-2 cursor-pointer select-none group py-0.5 min-w-0">
                           <input type="checkbox" name="person_ids" value="<%= p.id %>" <%=(t.selected_ids &&
-                            t.selected_ids.includes(p.id)) ? "checked" : "" %>
+                            t.selected_ids.includes(p.id)) ? "checked" : "" %> <%= isClosed ? "disabled" : "" %>
                           class="w-4 h-4 text-blue-600 rounded border-slate-300 dark:border-slate-600 focus:ring-blue-500 bg-white dark:bg-slate-800 shrink-0" />
 
                           <span class="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-blue-600 truncate">
@@ -247,26 +266,34 @@
                   </div>
 
                   <div class="flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
-                    <button type="submit"
-                      class="w-full sm:w-auto px-4 py-2 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-transform active:scale-95 btn-salvar-indiv">Salvar</button>
+                    <% if (isClosed) { %>
+                      <div class="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                        Mês fechado: distribuição e exclusão bloqueadas.
+                      </div>
+                    <% } else { %>
+                      <button type="submit"
+                        class="w-full sm:w-auto px-4 py-2 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-transform active:scale-95 btn-salvar-indiv">Salvar</button>
 
-                    <button type="button" onclick="copyAlloc(' <%=t.id %>')"
-                              class="w-full sm:w-auto px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
-                              title="Copiar atribuição">Copiar</button>
-
-                              <button type="button" onclick="pasteAlloc('<%= t.id %>')"
+                      <button type="button" onclick="copyAlloc(' <%=t.id %>')"
                                 class="w-full sm:w-auto px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
-                                title="Colar atribuição">Colar</button>
+                                title="Copiar atribuição">Copiar</button>
 
-                              <button type="submit" form="delete-txn-<%= t.id %>"
-                                class="w-full sm:w-auto sm:ml-auto px-3 py-2 text-xs font-bold rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
-                                Excluir
-                              </button>
-                    </div>
+                      <button type="button" onclick="pasteAlloc('<%= t.id %>')"
+                          class="w-full sm:w-auto px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
+                          title="Colar atribuição">Colar</button>
+
+                      <button type="submit" form="delete-txn-<%= t.id %>"
+                          class="w-full sm:w-auto sm:ml-auto px-3 py-2 text-xs font-bold rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
+                          Excluir
+                      </button>
+                    <% } %>
+                  </div>
                   </form>
-                  <form id="delete-txn-<%= t.id %>" method="post" action="/txn/<%= t.id %>/delete"
-                    data-confirm-prompt="Excluir este lançamento? Esta ação remove o item e a distribuição associada."
-                    data-confirm-phrase="Eu confirmo"></form>
+                  <% if (!isClosed) { %>
+                    <form id="delete-txn-<%= t.id %>" method="post" action="/txn/<%= t.id %>/delete"
+                      data-confirm-prompt="Excluir este lançamento? Esta ação remove o item e a distribuição associada."
+                      data-confirm-phrase="Eu confirmo"></form>
+                  <% } %>
                 </td>
               </tr>
               <% }) %>
@@ -284,6 +311,7 @@
 
   </div>
 
+  <% if (!isClosed) { %>
   <div id="globalSaveBar"
     class="fixed bottom-4 left-4 right-4 md:right-auto md:bottom-6 md:left-1/2 md:-translate-x-1/2 bg-slate-900 text-white px-4 sm:px-6 py-4 rounded-2xl shadow-2xl z-50 items-stretch sm:items-center gap-4 sm:gap-5 transition-transform duration-300 translate-y-32 flex flex-col sm:flex-row opacity-0 pointer-events-none">
     <div class="flex items-center gap-3">
@@ -296,6 +324,7 @@
       Salvar Tudo Agora
     </button>
   </div>
+  <% } %>
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
@@ -338,11 +367,15 @@
         const formData = new URLSearchParams(new FormData(form));
 
         try {
-          await fetch(form.action, {
+          const response = await fetch(form.action, {
             method: 'POST',
             body: formData,
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
           });
+
+          if (!response.ok) {
+            throw new Error(await response.text() || 'Erro ao salvar.');
+          }
 
           modifiedForms.delete(form);
           form.classList.remove('bg-amber-50', 'border-amber-300');
@@ -361,7 +394,7 @@
           setTimeout(() => allocMsg.innerHTML = '', 3000);
           updateGlobalBar();
         } catch (err) {
-          allocMsg.innerHTML = '<span class="text-red-600">Erro ao salvar.</span>';
+          allocMsg.innerHTML = `<span class="text-red-600">${err.message || 'Erro ao salvar.'}</span>`;
         } finally {
           btn.innerHTML = originalText;
           btn.disabled = false;

@@ -262,6 +262,48 @@ function normalizeDayNumber(value) {
   return num;
 }
 
+function monthLabel(month, year) {
+  return `${String(month).padStart(2, "0")}/${year}`;
+}
+
+function monthKey(month, year) {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function isMonthClosed(userId, month, year) {
+  return !!db.prepare("SELECT 1 FROM closed_months WHERE user_id = ? AND month = ? AND year = ?").get(userId, month, year);
+}
+
+function getClosedMonthsSet(userId) {
+  const rows = db.prepare("SELECT month, year FROM closed_months WHERE user_id = ?").all(userId);
+  return new Set(rows.map(row => monthKey(row.month, row.year)));
+}
+
+function getMonthLockMessage(month, year) {
+  return `O mês ${monthLabel(month, year)} está fechado para edição.`;
+}
+
+function redirectBackOr(req, fallback) {
+  return req.get("referer") || fallback;
+}
+
+function getInstallmentMonths(startYear, startMonth, installments) {
+  const months = [];
+  let currentYear = Number(startYear);
+  let currentMonth = Number(startMonth);
+
+  for (let i = 0; i < installments; i++) {
+    months.push({ year: currentYear, month: currentMonth, index: i + 1 });
+    currentMonth += 1;
+    if (currentMonth > 12) {
+      currentMonth = 1;
+      currentYear += 1;
+    }
+  }
+
+  return months;
+}
+
 function suggestFirstDueMonth(purchaseDate, closeDay, dueDay) {
   const purchase = dayjs(purchaseDate);
   if (!purchase.isValid()) return null;
@@ -500,6 +542,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
   // 2. Puxamos o que já foi marcado como pago na tela de Resumo
   const statementsRows = db.prepare("SELECT card_id, month, year, paid_cents FROM card_statements WHERE user_id = ?").all(userId);
   const statements = {};
+  const closedMonths = getClosedMonthsSet(userId);
   statementsRows.forEach(s => {
     statements[`${s.year}-${s.month}-${s.card_id}`] = s.paid_cents || 0;
   });
@@ -575,7 +618,8 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
       cards,
       total_cents: group.total_cents,
       paid_cents,
-      remaining_cents: Math.max(0, group.total_cents - paid_cents)
+      remaining_cents: Math.max(0, group.total_cents - paid_cents),
+      isClosed: closedMonths.has(monthKey(group.month, group.year))
     };
   });
 
@@ -607,6 +651,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
     groupedRecent: groupedRecentFinal,
     formatBRLFromCents,
     cards,
+    closedMonths: Array.from(closedMonths.values()),
     user: req.user || req.session.user
   });
 });
@@ -623,6 +668,10 @@ app.post("/geral/:year/:month/card/:cardId/delete", ensureAuthenticated, (req, r
   }
 
   const card = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ?").get(cardId, userId);
+  if (isMonthClosed(userId, month, year)) {
+    setFlash(req, "error", getMonthLockMessage(month, year));
+    return res.redirect("/geral");
+  }
   if (!card) {
     setFlash(req, "error", "Cartão não encontrado.");
     return res.redirect("/geral");
@@ -1037,6 +1086,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   const people = getVisiblePeopleForMonth(userId, month, year);
   const cards = getActiveCards(userId);
+  const isClosed = isMonthClosed(userId, month, year);
   const baseParams = new URLSearchParams();
   Object.entries(filters).forEach(([k, v]) => { if (v) baseParams.set(k, v); });
 
@@ -1049,7 +1099,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     return `/month/${year}/${month}${qs ? `?${qs}` : ""}`;
   };
 
-  res.render("month", { month, year, txns, people, cards, formatBRLFromCents, sort, dir, sortLink, filters });
+  res.render("month", { month, year, txns, people, cards, formatBRLFromCents, sort, dir, sortLink, filters, isClosed });
 });
 
 app.post("/txn/manual", ensureAuthenticated, (req, res) => {
@@ -1084,6 +1134,13 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
     }
 
     let [startYear, startMonth] = resolvedFirstDue.split('-').map(Number);
+    const installmentMonths = getInstallmentMonths(startYear, startMonth, numInstallments);
+    const lockedInstallment = installmentMonths.find(item => isMonthClosed(userId, item.month, item.year));
+
+    if (lockedInstallment) {
+      setFlash(req, "error", `Não é possível criar este lançamento porque ${monthLabel(lockedInstallment.month, lockedInstallment.year)} está fechado.`);
+      return res.redirect(redirectBackOr(req, `/month/${lockedInstallment.year}/${lockedInstallment.month}`));
+    }
 
     db.transaction(() => {
       const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1").all(userId);
@@ -1133,6 +1190,9 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
   `).get(id, userId);
 
   if (!txn) return res.status(404).send("Transação não encontrada.");
+  if (isMonthClosed(userId, txn.month, txn.year)) {
+    return res.status(423).send(getMonthLockMessage(txn.month, txn.year));
+  }
 
   let personIds = req.body.person_ids || [];
   if (!Array.isArray(personIds)) personIds = [personIds];
@@ -1177,8 +1237,9 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
   const selected = db.prepare("SELECT person_id FROM allocations WHERE transaction_id = ? AND user_id = ?")
     .all(id, userId)
     .map(r => r.person_id);
+  const isClosed = isMonthClosed(userId, txn.month, txn.year);
 
-  res.render("txn", { txn, people, selected, formatBRLFromCents });
+  res.render("txn", { txn, people, selected, formatBRLFromCents, isClosed });
 });
 
 app.post("/txn/:id", ensureAuthenticated, (req, res) => {
@@ -1195,6 +1256,10 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
   `).get(id, userId);
 
   if (!txn) return res.status(404).send("Transação não encontrada.");
+  if (isMonthClosed(userId, txn.month, txn.year)) {
+    setFlash(req, "error", getMonthLockMessage(txn.month, txn.year));
+    return res.redirect(`/month/${txn.year}/${txn.month}`);
+  }
 
   let personIds = req.body.person_ids || [];
   if (!Array.isArray(personIds)) personIds = [personIds];
@@ -1236,6 +1301,10 @@ app.post("/txn/:id/delete", ensureAuthenticated, (req, res) => {
     setFlash(req, "error", "Lançamento não encontrado.");
     return res.redirect("/geral");
   }
+  if (isMonthClosed(userId, txn.month, txn.year)) {
+    setFlash(req, "error", getMonthLockMessage(txn.month, txn.year));
+    return res.redirect(`/month/${txn.year}/${txn.month}`);
+  }
 
   deleteTransactionsAndAllocations(userId, [txn]);
   setFlash(req, "success", "Lançamento excluído com sucesso.");
@@ -1248,6 +1317,7 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
   const parsed = parseMonthYear(req.params.month, req.params.year);
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
+  const isClosed = isMonthClosed(userId, month, year);
 
   const people = getVisiblePeopleForMonth(userId, month, year, { includePayments: true });
   const cards = getVisibleCardsForMonth(userId, month, year);
@@ -1360,7 +1430,7 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
     active: person.active
   }));
 
-  res.render("summary", { month, year, people, cards, rows, unassigned, cardsPanel, personPanel, formatBRLFromCents });
+  res.render("summary", { month, year, people, cards, rows, unassigned, cardsPanel, personPanel, formatBRLFromCents, isClosed });
 });
 
 app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {
@@ -1368,6 +1438,10 @@ app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {
   const parsed = parseMonthYear(req.params.month, req.params.year);
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
+  if (isMonthClosed(userId, month, year)) {
+    setFlash(req, "error", getMonthLockMessage(month, year));
+    return res.redirect(`/summary/${year}/${month}`);
+  }
 
   const cardIds = Array.isArray(req.body.card_id) ? req.body.card_id : [req.body.card_id];
   const paid = Array.isArray(req.body.paid) ? req.body.paid : [req.body.paid];
@@ -1413,6 +1487,10 @@ app.post("/summary/:year/:month/people", ensureAuthenticated, (req, res) => {
   const parsed = parseMonthYear(req.params.month, req.params.year);
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
+  if (isMonthClosed(userId, month, year)) {
+    setFlash(req, "error", getMonthLockMessage(month, year));
+    return res.redirect(`/summary/${year}/${month}`);
+  }
 
   const personIds = Array.isArray(req.body.person_id) ? req.body.person_id : [req.body.person_id];
   const paid = Array.isArray(req.body.paid) ? req.body.paid : [req.body.paid];
@@ -1543,6 +1621,9 @@ app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) =>
 
   try {
     const { month, year, type, description } = req.body;
+    if (isMonthClosed(userId, Number(month), Number(year))) {
+      return res.status(423).json({ error: getMonthLockMessage(Number(month), Number(year)) });
+    }
     db.prepare(`
       INSERT INTO monthly_finances (user_id, month, year, type, description, formula, amount_cents, created_at)
       VALUES (?, ?, ?, ?, ?, '', 0, ?)
@@ -1561,6 +1642,13 @@ app.post("/finances/update/:id", ensureAuthenticated, express.json(), (req, res)
   try {
     const id = req.params.id;
     const { field, value, formula, amount_cents } = req.body;
+    const row = db.prepare("SELECT month, year FROM monthly_finances WHERE id = ? AND user_id = ?").get(id, userId);
+    if (!row) {
+      return res.status(404).json({ error: "Linha não encontrada." });
+    }
+    if (isMonthClosed(userId, Number(row.month), Number(row.year))) {
+      return res.status(423).json({ error: getMonthLockMessage(Number(row.month), Number(row.year)) });
+    }
 
     if (field === 'description') {
       db.prepare("UPDATE monthly_finances SET description = ? WHERE id = ? AND user_id = ?").run(value, id, userId);
@@ -1577,6 +1665,13 @@ app.post("/finances/update/:id", ensureAuthenticated, express.json(), (req, res)
 // 3. Deleta uma linha (Entrada ou Conta)
 app.post("/finances/delete/:id", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
+  const row = db.prepare("SELECT month, year FROM monthly_finances WHERE id = ? AND user_id = ?").get(req.params.id, userId);
+  if (!row) {
+    return res.status(404).json({ error: "Linha não encontrada." });
+  }
+  if (isMonthClosed(userId, Number(row.month), Number(row.year))) {
+    return res.status(423).json({ error: getMonthLockMessage(Number(row.month), Number(row.year)) });
+  }
   db.prepare("DELETE FROM monthly_finances WHERE id = ? AND user_id = ?").run(req.params.id, userId);
   res.json({ success: true });
 });
@@ -1588,6 +1683,9 @@ app.post("/finances/notes/:year/:month", ensureAuthenticated, express.json(), (r
   try {
     const { year, month } = req.params;
     const { type, content } = req.body;
+    if (isMonthClosed(userId, Number(month), Number(year))) {
+      return res.status(423).json({ error: getMonthLockMessage(Number(month), Number(year)) });
+    }
     const column = type === 'math' ? 'content_math' : 'content_text';
 
     const existing = db.prepare("SELECT 1 FROM scratchpad WHERE user_id = ? AND month = ? AND year = ?").get(userId, month, year);

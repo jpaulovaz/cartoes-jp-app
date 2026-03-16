@@ -783,6 +783,55 @@ function addSharedDebtEvent({ requestId, actorUserId, eventType, note = null }) 
   `).run(requestId, actorUserId, eventType, note, nowIso());
 }
 
+function clearSharedDebtAllocationLinksForTransaction(userId, txnId) {
+  db.prepare(`
+    UPDATE shared_debt_requests
+    SET source_allocation_id = NULL,
+        updated_at = ?
+    WHERE requester_user_id = ?
+      AND source_transaction_id = ?
+      AND source_allocation_id IS NOT NULL
+  `).run(nowIso(), userId, txnId);
+}
+
+function detachSharedDebtRequestsFromDeletedTransaction(userId, txnId) {
+  const now = nowIso();
+  const pendingRows = db.prepare(`
+    SELECT id
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND source_transaction_id = ?
+      AND status = 'pending'
+  `).all(userId, txnId);
+
+  pendingRows.forEach(row => {
+    db.prepare(`
+      UPDATE shared_debt_requests
+      SET status = 'cancelled',
+          updated_at = ?,
+          resolved_at = COALESCE(resolved_at, ?)
+      WHERE id = ? AND status = 'pending'
+    `).run(now, now, row.id);
+
+    addSharedDebtEvent({
+      requestId: row.id,
+      actorUserId: userId,
+      eventType: 'cancelled',
+      note: 'Solicitação cancelada automaticamente porque o lançamento original foi excluído.'
+    });
+  });
+
+  db.prepare(`
+    UPDATE shared_debt_requests
+    SET source_transaction_id = NULL,
+        source_allocation_id = NULL,
+        card_id = NULL,
+        updated_at = ?
+    WHERE requester_user_id = ?
+      AND source_transaction_id = ?
+  `).run(now, userId, txnId);
+}
+
 function cancelPendingSharedDebtRequestsForTransaction(userId, txnId, note = 'Lançamento removido ou deixou de ser elegível para compartilhamento.') {
   const pendingRows = db.prepare(`
     SELECT id
@@ -891,7 +940,6 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
       if (existing) {
         const changed = [
           Number(existing.receiver_user_id || 0) !== Number(row.receiver_user_id || 0),
-          Number(existing.source_allocation_id || 0) !== Number(row.allocation_id || 0),
           Number(existing.amount_cents || 0) !== Number(row.share_cents || 0),
           Number(existing.card_id || 0) !== Number(txn.card_id || 0),
           String(existing.card_name_snapshot || '') !== String(txn.card_name || ''),
@@ -1050,7 +1098,7 @@ function deleteTransactionsAndAllocations(userId, rows) {
     const importIds = new Set();
 
     items.forEach(item => {
-      cancelPendingSharedDebtRequestsForTransaction(userId, item.id);
+      detachSharedDebtRequestsFromDeletedTransaction(userId, item.id);
       deleteAllocation.run(item.id, userId);
       deleteTransaction.run(item.id, userId);
       if (item.import_id) importIds.add(item.import_id);
@@ -1376,6 +1424,8 @@ function getSharedDebtRequestsReceived(userId) {
     LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
     WHERE r.receiver_user_id = ?
     ORDER BY
+      COALESCE(r.source_due_year, 0) DESC,
+      COALESCE(r.source_due_month, 0) DESC,
       CASE r.status
         WHEN 'pending' THEN 0
         WHEN 'accepted' THEN 1
@@ -1386,6 +1436,7 @@ function getSharedDebtRequestsReceived(userId) {
         WHEN 'settled' THEN 6
         ELSE 7
       END,
+      COALESCE(r.source_txn_date_snapshot, t.txn_date, r.created_at) DESC,
       r.created_at DESC
   `).all(userId);
 }
@@ -1402,6 +1453,8 @@ function getSharedDebtRequestsSent(userId) {
     LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
     WHERE r.requester_user_id = ?
     ORDER BY
+      COALESCE(r.source_due_year, 0) DESC,
+      COALESCE(r.source_due_month, 0) DESC,
       CASE r.status
         WHEN 'pending' THEN 0
         WHEN 'accepted' THEN 1
@@ -1412,6 +1465,7 @@ function getSharedDebtRequestsSent(userId) {
         WHEN 'settled' THEN 6
         ELSE 7
       END,
+      COALESCE(r.source_txn_date_snapshot, t.txn_date, r.created_at) DESC,
       r.created_at DESC
   `).all(userId);
 }
@@ -1439,21 +1493,25 @@ function getSharedDebtEventsByRequestIds(requestIds) {
 
 function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
   const owed = db.prepare(`
-    SELECT COUNT(*) AS total_requests, COALESCE(SUM(amount_cents), 0) AS total_cents
-    FROM shared_debt_requests
-    WHERE receiver_user_id = ?
-      AND status = 'accepted'
-      AND source_due_month = ?
-      AND source_due_year = ?
+    SELECT COUNT(*) AS total_requests, COALESCE(SUM(r.amount_cents), 0) AS total_cents
+    FROM shared_debt_requests r
+    LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE r.receiver_user_id = ?
+      AND r.status = 'accepted'
+      AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
+      AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
   `).get(userId, month, year) || { total_requests: 0, total_cents: 0 };
 
   const receivable = db.prepare(`
-    SELECT COUNT(*) AS total_requests, COALESCE(SUM(amount_cents), 0) AS total_cents
-    FROM shared_debt_requests
-    WHERE requester_user_id = ?
-      AND status = 'accepted'
-      AND source_due_month = ?
-      AND source_due_year = ?
+    SELECT COUNT(*) AS total_requests, COALESCE(SUM(r.amount_cents), 0) AS total_cents
+    FROM shared_debt_requests r
+    LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE r.requester_user_id = ?
+      AND r.status = 'accepted'
+      AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
+      AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
   `).get(userId, month, year) || { total_requests: 0, total_cents: 0 };
 
   return {
@@ -1780,22 +1838,13 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
 });
 
 app.get("/notifications", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const notifications = getNotificationsForUser(userId);
-
-  return res.render('notifications', {
-    title: 'OrganizaPay | Notificações',
-    notifications,
-    unreadCount: Number(notifications.filter(item => Number(item.is_read || 0) === 0).length || 0),
-    readCount: Number(notifications.filter(item => Number(item.is_read || 0) !== 0).length || 0),
-    formatDateBR
-  });
+  return res.redirect('/shared-debts');
 });
 
 app.post("/notifications/read-all", ensureAuthenticated, (req, res) => {
   markAllNotificationsAsRead(req.user.id);
-  setFlash(req, 'success', 'Todas as notificações foram marcadas como lidas.');
-  return res.redirect('/notifications');
+  setFlash(req, 'success', 'As notificações foram marcadas como lidas.');
+  return res.redirect('/shared-debts');
 });
 
 app.post("/notifications/:id/read", ensureAuthenticated, (req, res) => {
@@ -1803,18 +1852,17 @@ app.post("/notifications/:id/read", ensureAuthenticated, (req, res) => {
 
   if (!notificationId) {
     setFlash(req, 'error', 'Notificação inválida.');
-    return res.redirect('/notifications');
+    return res.redirect('/shared-debts');
   }
 
   const notification = getNotificationForUser(notificationId, req.user.id);
   if (!notification) {
     setFlash(req, 'error', 'Notificação não encontrada.');
-    return res.redirect('/notifications');
+    return res.redirect('/shared-debts');
   }
 
   markNotificationAsRead(notificationId, req.user.id);
-  setFlash(req, 'success', 'Notificação marcada como lida.');
-  return res.redirect('/notifications');
+  return res.redirect(notification.href || '/shared-debts');
 });
 
 app.get("/notifications/:id/open", ensureAuthenticated, (req, res) => {
@@ -1822,13 +1870,13 @@ app.get("/notifications/:id/open", ensureAuthenticated, (req, res) => {
 
   if (!notificationId) {
     setFlash(req, 'error', 'Notificação inválida.');
-    return res.redirect('/notifications');
+    return res.redirect('/shared-debts');
   }
 
   const notification = getNotificationForUser(notificationId, req.user.id);
   if (!notification) {
     setFlash(req, 'error', 'Notificação não encontrada.');
-    return res.redirect('/notifications');
+    return res.redirect('/shared-debts');
   }
 
   markNotificationAsRead(notificationId, req.user.id);
@@ -1838,7 +1886,7 @@ app.get("/notifications/:id/open", ensureAuthenticated, (req, res) => {
     return res.redirect(targetHref);
   }
 
-  return res.redirect('/notifications');
+  return res.redirect('/shared-debts');
 });
 
 // People
@@ -2188,7 +2236,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
         icon: '📨',
         title: 'Cobranças aguardando sua análise',
         description: `${pendingSharedDebtCount} solicitação(ões) de dívida compartilhada estão pendentes para você.`,
-        href: '/shared-debts'
+        href: '/shared-debts#received'
       });
     }
   }
@@ -2244,7 +2292,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       icon: '⚖️',
       title: 'Rejeições aguardando sua decisão',
       description: `${senderDecisionCount} solicitação(ões) recusadas aguardam você aceitar a rejeição ou contestá-la.`,
-      href: '/shared-debts'
+      href: '/shared-debts#sent'
     });
   }
 
@@ -2262,7 +2310,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       icon: '✅',
       title: 'Pagamentos aguardando sua confirmação',
       description: `${pendingReceiptConfirmationCount} dívida(s) compartilhada(s) já foram marcadas como pagas e aguardam sua confirmação de recebimento.`,
-      href: '/shared-debts'
+      href: '/shared-debts#sent'
     });
   }
 
@@ -2617,6 +2665,7 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
   const ins = db.prepare("INSERT INTO allocations(user_id, transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?, ?)");
 
   db.transaction(() => {
+    clearSharedDebtAllocationLinksForTransaction(userId, id);
     del.run(id, userId);
     if (personIds.length > 0) {
       const share = Math.floor(txn.amount_cents / personIds.length);

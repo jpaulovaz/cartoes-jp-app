@@ -29,6 +29,7 @@ try { db.prepare("ALTER TABLE transactions ADD COLUMN recurring_rule_id INTEGER"
 try { db.prepare("ALTER TABLE people ADD COLUMN phone TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN close_day INTEGER").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN can_import INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 
 // Cria a tabela de meses fechados se não existir
 // Em ambiente multi-usuário, o fechamento precisa ser isolado por user_id.
@@ -89,15 +90,19 @@ const upload = multer({ storage: multer.memoryStorage() });
 const DEFAULT_FINANCE_CATEGORIES = ['Prestação Apartamento', 'Luz', 'Internet', 'Condomínio', 'Tim'];
 
 function getUserRecord(userId) {
-  return db.prepare("SELECT id, email, name, role, created_at, last_login FROM users WHERE id = ?").get(userId);
+  return db.prepare("SELECT id, email, name, role, can_import, created_at, last_login FROM users WHERE id = ?").get(userId);
 }
 
 function getAllUsers() {
-  return db.prepare("SELECT id, email, name, role, created_at, last_login FROM users ORDER BY created_at DESC").all();
+  return db.prepare("SELECT id, email, name, role, can_import, created_at, last_login FROM users ORDER BY created_at DESC").all();
 }
 
 function isAdminUser(userId) {
   return getUserRecord(userId)?.role === 'admin';
+}
+
+function canUserImport(userId) {
+  return Number(getUserRecord(userId)?.can_import ?? 1) !== 0;
 }
 
 function ensureDefaultOwnerPerson(userId, preferredName) {
@@ -197,7 +202,8 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       id: authorizedUser.id,
       email,
       name: authorizedUser.name || name || email.split('@')[0],
-      role: authorizedUser.role
+      role: authorizedUser.role,
+      can_import: Number(authorizedUser.can_import ?? 1)
     });
   }));
 } else {
@@ -213,6 +219,19 @@ function ensureAuthenticated(req, res, next) {
     return next();
   }
   res.redirect('/login');
+}
+
+function ensureCanImport(req, res, next) {
+  if (!req.isAuthenticated()) {
+    return res.redirect('/login');
+  }
+
+  if (Number(req.user?.can_import ?? 1) !== 0) {
+    return next();
+  }
+
+  setFlash(req, 'error', 'Seu usuário não tem permissão para importar faturas.');
+  return res.redirect(redirectBackOr(req, '/'));
 }
 
 // ===== ROTAS DE AUTH =====
@@ -264,6 +283,7 @@ app.use((req, res, next) => {
   res.locals.user = null;
   res.locals.userId = null;
   res.locals.isAdmin = false;
+  res.locals.canImport = false;
   res.locals.nomeTitular = "Detalhamento Contas";
   res.locals.formatDateBR = formatDateBR;
   res.locals.flash = req.session?.flash || null;
@@ -281,11 +301,13 @@ app.use((req, res, next) => {
       req.user.email = currentUser.email || req.user.email;
       req.user.name = currentUser.name || req.user.name || currentUser.email;
       req.user.role = currentUser.role;
+      req.user.can_import = Number(currentUser.can_import ?? 1);
     }
 
     res.locals.user = req.user;
     res.locals.userId = req.user.id;
     res.locals.isAdmin = req.user.role === 'admin';
+    res.locals.canImport = Number(req.user.can_import ?? 1) !== 0;
 
     try {
       const owner = db.prepare("SELECT name FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(req.user.id);
@@ -332,11 +354,6 @@ function getMonthLockMessage(month, year) {
 
 function redirectBackOr(req, fallback) {
   return req.get("referer") || fallback;
-}
-
-
-function isFetchRequest(req) {
-  return String(req.get('x-requested-with') || '').toLowerCase() === 'fetch';
 }
 
 function getInstallmentMonths(startYear, startMonth, installments) {
@@ -857,36 +874,50 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
   const sortDesc = (a, b) => (b.year !== a.year) ? b.year - a.year : b.month - a.month;
   const sortAsc = (a, b) => (a.year !== b.year) ? a.year - b.year : a.month - b.month;
 
-  groupedRecent.sort(sortDesc);
-
   const nowDate = new Date();
   const currentYear = nowDate.getFullYear();
   const currentMonth = nowDate.getMonth() + 1;
+  const preferredOpenMonth = getPreferredDashboardMonth(userId, currentYear, currentMonth);
 
-  const futureGroupsAsc = groupedRecent
-    .filter(group => compareMonthYear(group.year, group.month, currentYear, currentMonth) >= 0)
+  const openGroups = groupedRecent
+    .filter(group => !group.isClosed)
     .sort(sortAsc);
+  const closedGroups = groupedRecent
+    .filter(group => group.isClosed)
+    .sort(sortDesc);
 
-  const currentMonthIsClosed = closedMonths.has(monthKey(currentMonth, currentYear));
-  const currentOrNextGroup = currentMonthIsClosed
-    ? (futureGroupsAsc.find(group => compareMonthYear(group.year, group.month, currentYear, currentMonth) > 0 && !group.isClosed)
-      || futureGroupsAsc.find(group => compareMonthYear(group.year, group.month, currentYear, currentMonth) > 0)
-      || null)
-    : (futureGroupsAsc[0] || null);
+  const featuredOpenGroup = openGroups.find(group => group.year === preferredOpenMonth.year && group.month === preferredOpenMonth.month)
+    || openGroups[0]
+    || null;
 
-  const groupedRecentFinal = currentOrNextGroup
-    ? [
-      currentOrNextGroup,
-      ...groupedRecent
-        .filter(group => !(group.year === currentOrNextGroup.year && group.month === currentOrNextGroup.month))
-        .sort(sortDesc)
-    ]
-    : groupedRecent.sort(sortDesc);
+  const remainingOpenGroups = featuredOpenGroup
+    ? openGroups.filter(group => !(group.year === featuredOpenGroup.year && group.month === featuredOpenGroup.month))
+      .sort((a, b) => {
+        const aIsFuture = compareMonthYear(a.year, a.month, featuredOpenGroup.year, featuredOpenGroup.month) >= 0;
+        const bIsFuture = compareMonthYear(b.year, b.month, featuredOpenGroup.year, featuredOpenGroup.month) >= 0;
+        if (aIsFuture !== bIsFuture) return aIsFuture ? -1 : 1;
+        return aIsFuture ? sortAsc(a, b) : sortDesc(a, b);
+      })
+    : [];
+
+  const groupedRecentDisplay = [];
+  if (featuredOpenGroup) {
+    groupedRecentDisplay.push(featuredOpenGroup);
+  }
+  if (remainingOpenGroups.length) {
+    groupedRecentDisplay.push({ __section: true, kind: 'open', label: 'Próximos meses em aberto', description: 'Competências abertas em ordem crescente.' });
+    groupedRecentDisplay.push(...remainingOpenGroups);
+  }
+  if (closedGroups.length) {
+    groupedRecentDisplay.push({ __section: true, kind: 'closed', label: 'Meses fechados', description: 'Competências encerradas, listadas em ordem decrescente.' });
+    groupedRecentDisplay.push(...closedGroups);
+  }
 
   const cards = getActiveCards(userId).map(({ id, name, close_day, due_day }) => ({ id, name, close_day, due_day }));
 
   res.render("home", {
-    groupedRecent: groupedRecentFinal,
+    groupedRecent: groupedRecentDisplay,
+    featuredOpenGroup,
     formatBRLFromCents,
     cards,
     closedMonths: Array.from(closedMonths.values()),
@@ -1153,12 +1184,12 @@ app.post("/cards/:id/delete", ensureAuthenticated, (req, res) => {
 });
 
 // Import
-app.get("/import", ensureAuthenticated, (req, res) => {
+app.get("/import", ensureAuthenticated, ensureCanImport, (req, res) => {
   const userId = req.user.id;
   res.render("import", { cards: getActiveCards(userId), error: null });
 });
 
-app.post("/import", ensureAuthenticated, upload.single("csvfile"), (req, res) => {
+app.post("/import", ensureAuthenticated, ensureCanImport, upload.single("csvfile"), (req, res) => {
   const userId = req.user.id;
   const cards = getActiveCards(userId);
 
@@ -1485,8 +1516,6 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     if (digits) {
       where.push("CAST(ABS(t.amount_cents) AS TEXT) LIKE ?");
       params.push(likeParam(digits));
-    } else {
-      filters.f_amount = "";
     }
   }
 
@@ -1829,6 +1858,71 @@ app.post("/txn/:id/delete", ensureAuthenticated, (req, res) => {
 });
 
 // Summary (minimal)
+function upsertCardStatementsForMonth(userId, month, year, entries) {
+  const cardsById = new Map(getCards(userId).map(card => [card.id, card]));
+  const findStatement = db.prepare("SELECT 1 FROM card_statements WHERE user_id = ? AND card_id = ? AND month = ? AND year = ?");
+  const insertStatement = db.prepare(`
+    INSERT INTO card_statements (user_id, card_id, month, year, computed_due_date, override_due_date, paid_cents, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const updateStatement = db.prepare(`
+    UPDATE card_statements
+    SET computed_due_date = ?, override_due_date = ?, paid_cents = ?, updated_at = ?
+    WHERE user_id = ? AND card_id = ? AND month = ? AND year = ?
+  `);
+
+  db.transaction((rows) => {
+    rows.forEach((entry) => {
+      const card_id = Number(entry.card_id);
+      if (!card_id || !cardsById.has(card_id)) return;
+
+      const paid_cents = centsFromPtBrMoney(entry.paid);
+      const override_due_date = (entry.override_due || "").toString().trim() || null;
+      const card = cardsById.get(card_id);
+      const computed_due_date = computeDueDate({ year, month, dueDay: card?.due_day, holidayScope: card?.holiday_scope || "BR" });
+      const now = nowIso();
+      const existing = findStatement.get(userId, card_id, month, year);
+
+      if (existing) {
+        updateStatement.run(computed_due_date, override_due_date, paid_cents, now, userId, card_id, month, year);
+      } else {
+        insertStatement.run(userId, card_id, month, year, computed_due_date, override_due_date, paid_cents, now, now);
+      }
+    });
+  })(entries);
+}
+
+function upsertPersonPaymentsForMonth(userId, month, year, entries) {
+  const validPeople = new Set(getPeopleAll(userId).map(person => person.id));
+  const findPayment = db.prepare("SELECT 1 FROM person_payments WHERE user_id = ? AND person_id = ? AND month = ? AND year = ?");
+  const insertPayment = db.prepare(`
+    INSERT INTO person_payments (user_id, person_id, month, year, paid_cents, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  const updatePayment = db.prepare(`
+    UPDATE person_payments
+    SET paid_cents = ?, updated_at = ?
+    WHERE user_id = ? AND person_id = ? AND month = ? AND year = ?
+  `);
+
+  db.transaction((rows) => {
+    rows.forEach((entry) => {
+      const person_id = Number(entry.person_id);
+      if (!person_id || !validPeople.has(person_id)) return;
+
+      const paid_cents = centsFromPtBrMoney(entry.paid);
+      const now = nowIso();
+      const existing = findPayment.get(userId, person_id, month, year);
+
+      if (existing) {
+        updatePayment.run(paid_cents, now, userId, person_id, month, year);
+      } else {
+        insertPayment.run(userId, person_id, month, year, paid_cents, now, now);
+      }
+    });
+  })(entries);
+}
+
 app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
@@ -1957,9 +2051,6 @@ app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
   if (isMonthClosed(userId, month, year)) {
-    if (isFetchRequest(req)) {
-      return res.status(423).json({ error: getMonthLockMessage(month, year) });
-    }
     setFlash(req, "error", getMonthLockMessage(month, year));
     return res.redirect(`/summary/${year}/${month}`);
   }
@@ -1967,43 +2058,32 @@ app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {
   const cardIds = Array.isArray(req.body.card_id) ? req.body.card_id : [req.body.card_id];
   const paid = Array.isArray(req.body.paid) ? req.body.paid : [req.body.paid];
   const overrideDue = Array.isArray(req.body.override_due) ? req.body.override_due : [req.body.override_due];
-  const cardsById = new Map(getCards(userId).map(card => [card.id, card]));
+  const entries = cardIds.map((card_id, index) => ({
+    card_id,
+    paid: paid[index],
+    override_due: overrideDue[index]
+  }));
 
-  const findStatement = db.prepare("SELECT 1 FROM card_statements WHERE user_id = ? AND card_id = ? AND month = ? AND year = ?");
-  const insertStatement = db.prepare(`
-    INSERT INTO card_statements (user_id, card_id, month, year, computed_due_date, override_due_date, paid_cents, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const updateStatement = db.prepare(`
-    UPDATE card_statements
-    SET computed_due_date = ?, override_due_date = ?, paid_cents = ?, updated_at = ?
-    WHERE user_id = ? AND card_id = ? AND month = ? AND year = ?
-  `);
-
-  db.transaction(() => {
-    for (let i = 0; i < cardIds.length; i++) {
-      const card_id = Number(cardIds[i]);
-      if (!card_id || !cardsById.has(card_id)) continue;
-
-      const paid_cents = centsFromPtBrMoney(paid[i]);
-      const override_due_date = (overrideDue[i] || "").toString().trim() || null;
-      const card = cardsById.get(card_id);
-      const computed_due_date = computeDueDate({ year, month, dueDay: card?.due_day, holidayScope: card?.holiday_scope || "BR" });
-      const now = nowIso();
-
-      const existing = findStatement.get(userId, card_id, month, year);
-      if (existing) {
-        updateStatement.run(computed_due_date, override_due_date, paid_cents, now, userId, card_id, month, year);
-      } else {
-        insertStatement.run(userId, card_id, month, year, computed_due_date, override_due_date, paid_cents, now, now);
-      }
-    }
-  })();
-
-  if (isFetchRequest(req)) {
-    return res.json({ success: true });
-  }
+  upsertCardStatementsForMonth(userId, month, year, entries);
   res.redirect(`/summary/${year}/${month}`);
+});
+
+app.post("/summary/:year/:month/cards/async", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
+  const { month, year } = parsed;
+  if (isMonthClosed(userId, month, year)) {
+    return res.status(423).json({ ok: false, error: getMonthLockMessage(month, year) });
+  }
+
+  upsertCardStatementsForMonth(userId, month, year, [{
+    card_id: req.body.card_id,
+    paid: req.body.paid,
+    override_due: req.body.override_due
+  }]);
+
+  return res.json({ ok: true });
 });
 
 app.post("/summary/:year/:month/people", ensureAuthenticated, (req, res) => {
@@ -2012,49 +2092,29 @@ app.post("/summary/:year/:month/people", ensureAuthenticated, (req, res) => {
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
   if (isMonthClosed(userId, month, year)) {
-    if (isFetchRequest(req)) {
-      return res.status(423).json({ error: getMonthLockMessage(month, year) });
-    }
     setFlash(req, "error", getMonthLockMessage(month, year));
     return res.redirect(`/summary/${year}/${month}`);
   }
 
   const personIds = Array.isArray(req.body.person_id) ? req.body.person_id : [req.body.person_id];
   const paid = Array.isArray(req.body.paid) ? req.body.paid : [req.body.paid];
-  const validPeople = new Set(getPeopleAll(userId).map(person => person.id));
+  const entries = personIds.map((person_id, index) => ({ person_id, paid: paid[index] }));
 
-  const findPayment = db.prepare("SELECT 1 FROM person_payments WHERE user_id = ? AND person_id = ? AND month = ? AND year = ?");
-  const insertPayment = db.prepare(`
-    INSERT INTO person_payments (user_id, person_id, month, year, paid_cents, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  const updatePayment = db.prepare(`
-    UPDATE person_payments
-    SET paid_cents = ?, updated_at = ?
-    WHERE user_id = ? AND person_id = ? AND month = ? AND year = ?
-  `);
-
-  db.transaction(() => {
-    for (let i = 0; i < personIds.length; i++) {
-      const person_id = Number(personIds[i]);
-      if (!person_id || !validPeople.has(person_id)) continue;
-
-      const paid_cents = centsFromPtBrMoney(paid[i]);
-      const now = nowIso();
-      const existing = findPayment.get(userId, person_id, month, year);
-
-      if (existing) {
-        updatePayment.run(paid_cents, now, userId, person_id, month, year);
-      } else {
-        insertPayment.run(userId, person_id, month, year, paid_cents, now, now);
-      }
-    }
-  })();
-
-  if (isFetchRequest(req)) {
-    return res.json({ success: true });
-  }
+  upsertPersonPaymentsForMonth(userId, month, year, entries);
   res.redirect(`/summary/${year}/${month}`);
+});
+
+app.post("/summary/:year/:month/people/async", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
+  const { month, year } = parsed;
+  if (isMonthClosed(userId, month, year)) {
+    return res.status(423).json({ ok: false, error: getMonthLockMessage(month, year) });
+  }
+
+  upsertPersonPaymentsForMonth(userId, month, year, [{ person_id: req.body.person_id, paid: req.body.paid }]);
+  return res.json({ ok: true });
 });
 
 // WhatsApp
@@ -2265,6 +2325,7 @@ app.get("/admin", ensureAuthenticated, (req, res) => {
 app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const { email, name, role } = req.body;
+  const canImport = req.body.can_import ? 1 : 0;
 
   if (!isAdminUser(userId)) {
     return res.status(403).send('Acesso negado.');
@@ -2275,55 +2336,14 @@ app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
   }
 
   try {
-    db.prepare("INSERT INTO users (email, name, role, created_at) VALUES (?, ?, ?, ?)")
-      .run(email, name || email.split('@')[0], role || 'user', dayjs().toISOString());
+    db.prepare("INSERT INTO users (email, name, role, can_import, created_at) VALUES (?, ?, ?, ?, ?)")
+      .run(email, name || email.split('@')[0], role || 'user', canImport, dayjs().toISOString());
 
     const newUser = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
     const insertCat = db.prepare("INSERT OR IGNORE INTO finance_categories (user_id, name) VALUES (?, ?)");
     DEFAULT_FINANCE_CATEGORIES.forEach(cat => insertCat.run(newUser.id, cat));
 
     return renderAdmin(res, { success: `Usuário ${email} adicionado com sucesso!` });
-  } catch (err) {
-    return renderAdmin(res, { error: err.message });
-  }
-});
-
-app.post("/admin/update-user/:id", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const targetUserId = Number(req.params.id);
-  const { email, name, role } = req.body;
-
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  if (!targetUserId) {
-    return renderAdmin(res, { error: 'Usuário inválido.' });
-  }
-
-  const safeEmail = String(email || '').trim();
-  const safeName = String(name || '').trim();
-  const safeRole = role === 'admin' ? 'admin' : 'user';
-
-  if (!safeEmail || !safeEmail.includes('@')) {
-    return renderAdmin(res, { error: 'Email inválido' });
-  }
-
-  const targetUser = db.prepare("SELECT id, email FROM users WHERE id = ?").get(targetUserId);
-  if (!targetUser) {
-    return renderAdmin(res, { error: 'Usuário não encontrado.' });
-  }
-
-  const emailInUse = db.prepare("SELECT id FROM users WHERE lower(email) = lower(?) AND id <> ? LIMIT 1").get(safeEmail, targetUserId);
-  if (emailInUse) {
-    return renderAdmin(res, { error: 'Já existe outro usuário com esse email.' });
-  }
-
-  try {
-    db.prepare("UPDATE users SET email = ?, name = ?, role = ? WHERE id = ?")
-      .run(safeEmail, safeName || safeEmail.split('@')[0], safeRole, targetUserId);
-
-    return renderAdmin(res, { success: `Usuário ${safeEmail} atualizado com sucesso!` });
   } catch (err) {
     return renderAdmin(res, { error: err.message });
   }

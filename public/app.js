@@ -202,3 +202,75 @@ Digite exatamente: ${phrase}`, "");
     document.querySelectorAll('[data-auto-first-due-form]').forEach(bindRecurringToggle);
   });
 })();
+
+
+(function () {
+  const brlFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  function hasMathSyntax(value) {
+    return /[+\-*/()]/.test(String(value || ''));
+  }
+
+  function extractMoneyDigits(value) {
+    return String(value || '').replace(/\D/g, '');
+  }
+
+  function formatMoneyDigits(digits) {
+    if (!digits) return '';
+    return brlFormatter.format(Number(digits) / 100);
+  }
+
+  function placeCaretToEnd(input) {
+    const len = input.value.length;
+    try { input.setSelectionRange(len, len); } catch (e) { }
+  }
+
+  function renderMoneyInput(input, force) {
+    const raw = input.value || '';
+    if (!force && hasMathSyntax(raw)) return;
+    const digits = extractMoneyDigits(raw);
+    input.dataset.moneyDigits = digits;
+    input.value = digits ? formatMoneyDigits(digits) : '';
+  }
+
+  function bindMoneyMask(input) {
+    if (!(input instanceof HTMLInputElement) || input.dataset.moneyMaskBound === '1') return;
+    input.dataset.moneyMaskBound = '1';
+    input.setAttribute('inputmode', 'numeric');
+    input.setAttribute('autocomplete', 'off');
+
+    if (!hasMathSyntax(input.value)) {
+      renderMoneyInput(input, true);
+    }
+
+    input.addEventListener('beforeinput', (event) => {
+      if (event.inputType && event.inputType.startsWith('delete')) return;
+      if (!event.data) return;
+      if (/\D/.test(event.data)) {
+        event.preventDefault();
+      }
+    });
+
+    input.addEventListener('input', () => {
+      renderMoneyInput(input, true);
+      placeCaretToEnd(input);
+    });
+
+    input.addEventListener('paste', () => {
+      requestAnimationFrame(() => {
+        renderMoneyInput(input, true);
+        placeCaretToEnd(input);
+      });
+    });
+
+    input.addEventListener('focus', () => {
+      if (!hasMathSyntax(input.value)) {
+        placeCaretToEnd(input);
+      }
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-money-mask]').forEach(bindMoneyMask);
+  });
+})();

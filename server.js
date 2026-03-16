@@ -267,6 +267,8 @@ app.use((req, res, next) => {
   res.locals.nomeTitular = "Detalhamento Contas";
   res.locals.formatDateBR = formatDateBR;
   res.locals.flash = req.session?.flash || null;
+  const now = dayjs();
+  res.locals.dashboardHref = `/detalhamento/${now.year()}/${now.month() + 1}`;
 
   if (req.session?.flash) {
     delete req.session.flash;
@@ -291,6 +293,9 @@ app.use((req, res, next) => {
     } catch (e) {
       res.locals.nomeTitular = "Detalhamento Contas";
     }
+
+    const dashboardTarget = getPreferredDashboardMonth(req.user.id);
+    res.locals.dashboardHref = `/detalhamento/${dashboardTarget.year}/${dashboardTarget.month}`;
   }
 
   next();
@@ -395,6 +400,19 @@ function compareMonthYear(aYear, aMonth, bYear, bMonth) {
   if (Number(aYear) !== Number(bYear)) return Number(aYear) - Number(bYear);
   return Number(aMonth) - Number(bMonth);
 }
+function getPreferredDashboardMonth(userId, startYear = dayjs().year(), startMonth = dayjs().month() + 1, maxLookahead = 24) {
+  let current = { year: Number(startYear), month: Number(startMonth) };
+
+  for (let i = 0; i <= maxLookahead; i += 1) {
+    if (!isMonthClosed(userId, current.month, current.year)) {
+      return current;
+    }
+    current = shiftMonth(current.year, current.month, 1);
+  }
+
+  return { year: Number(startYear), month: Number(startMonth) };
+}
+
 
 function occurrenceDateFromStart(startTxnDate, offset) {
   const base = dayjs(startTxnDate);
@@ -715,10 +733,8 @@ app.get("/", ensureAuthenticated, (req, res) => {
     return res.redirect('/people');
   }
 
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = d.getMonth() + 1;
-  res.redirect(`/detalhamento/${year}/${month}`);
+  const target = getPreferredDashboardMonth(userId);
+  res.redirect(`/detalhamento/${target.year}/${target.month}`);
 });
 
 app.get("/geral", ensureAuthenticated, (req, res) => {
@@ -842,9 +858,16 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
   const currentYear = nowDate.getFullYear();
   const currentMonth = nowDate.getMonth() + 1;
 
-  const currentOrNextGroup = groupedRecent
-    .filter(group => group.year > currentYear || (group.year === currentYear && group.month >= currentMonth))
-    .sort(sortAsc)[0] || null;
+  const futureGroupsAsc = groupedRecent
+    .filter(group => compareMonthYear(group.year, group.month, currentYear, currentMonth) >= 0)
+    .sort(sortAsc);
+
+  const currentMonthIsClosed = closedMonths.has(monthKey(currentMonth, currentYear));
+  const currentOrNextGroup = currentMonthIsClosed
+    ? (futureGroupsAsc.find(group => compareMonthYear(group.year, group.month, currentYear, currentMonth) > 0 && !group.isClosed)
+      || futureGroupsAsc.find(group => compareMonthYear(group.year, group.month, currentYear, currentMonth) > 0)
+      || null)
+    : (futureGroupsAsc[0] || null);
 
   const groupedRecentFinal = currentOrNextGroup
     ? [

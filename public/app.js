@@ -169,36 +169,52 @@ Digite exatamente: ${phrase}`, "");
   });
 })();
 
+
 (function () {
-  function bindRecurringToggle(form) {
-    const recurringToggle = form.querySelector('[data-recurring-toggle]');
-    const installmentsInput = form.querySelector('[data-installments-input]');
+  const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
-    if (!(recurringToggle instanceof HTMLInputElement) || !(installmentsInput instanceof HTMLInputElement)) {
-      return;
-    }
-
-    const syncState = () => {
-      if (recurringToggle.checked) {
-        installmentsInput.value = '1';
-        installmentsInput.setAttribute('readonly', 'readonly');
-        installmentsInput.classList.add('opacity-60', 'cursor-not-allowed');
-      } else {
-        installmentsInput.removeAttribute('readonly');
-        installmentsInput.classList.remove('opacity-60', 'cursor-not-allowed');
-      }
-    };
-
-    recurringToggle.addEventListener('change', syncState);
-    installmentsInput.addEventListener('input', () => {
-      if (recurringToggle.checked) {
-        installmentsInput.value = '1';
-      }
-    });
-    syncState();
+  function extractCurrencyDigits(value) {
+    return String(value || '').replace(/\D/g, '');
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('[data-auto-first-due-form]').forEach(bindRecurringToggle);
-  });
+  function formatCurrencyFromDigits(digits) {
+    const cents = Number(digits || 0);
+    return currencyFormatter.format(cents / 100);
+  }
+
+  function moveCursorToEnd(input) {
+    try {
+      const len = input.value.length;
+      input.setSelectionRange(len, len);
+    } catch (err) {
+      // Ignora campos que não suportam setSelectionRange.
+    }
+  }
+
+  function bindCurrencyInput(input) {
+    if (!(input instanceof HTMLInputElement) || input.dataset.currencyBound === '1') return;
+    input.dataset.currencyBound = '1';
+
+    const render = () => {
+      const digits = extractCurrencyDigits(input.value);
+      input.value = digits ? formatCurrencyFromDigits(digits) : '';
+      requestAnimationFrame(() => moveCursorToEnd(input));
+    };
+
+    if (input.value) {
+      const digits = extractCurrencyDigits(input.value);
+      input.value = digits ? formatCurrencyFromDigits(digits) : '';
+    }
+
+    input.addEventListener('input', render);
+    input.addEventListener('change', render);
+    input.addEventListener('focus', () => requestAnimationFrame(() => moveCursorToEnd(input)));
+  }
+
+  function bindCurrencyInputs(root = document) {
+    root.querySelectorAll('[data-currency-input]').forEach(bindCurrencyInput);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => bindCurrencyInputs());
+  window.bindCurrencyInputs = bindCurrencyInputs;
 })();

@@ -14,8 +14,6 @@
 
             /* Funções visuais para os campos */
             function getDisplayValue(fin) {
-            const hasMath = fin.formula && /[-+*/]/.test(fin.formula);
-            if (hasMath) return fin.formula;
             return formatBRLFromCents(fin.amount_cents);
             }
 
@@ -40,69 +38,64 @@
                             </span></p>
                     </div>
 
-                    <div class="w-full lg:w-auto max-w-3xl lg:max-w-none mx-auto lg:mx-0">
-                        <div class="grid grid-cols-2 lg:grid-cols-[auto_auto_auto] gap-3 items-stretch lg:items-center">
-                            <% if (isClosed) { %>
-                                <button onclick="toggleLock('open')"
-                                    class="w-full inline-flex items-center justify-center px-4 py-2.5 bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-900 dark:text-rose-300 rounded-xl text-sm font-bold shadow-sm transition-colors gap-2">
-                                    🔒 Mês Fechado
-                                </button>
-                            <% } else { %>
-                                <button onclick="toggleLock('close')"
-                                    class="w-full inline-flex items-center justify-center px-4 py-2.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 rounded-xl text-sm font-bold shadow-sm transition-colors gap-2">
-                                    🔓 Fechar Mês
-                                </button>
-                            <% } %>
-
-                            <button type="button"
-                                onclick="document.getElementById('modalManualDetalhamento').classList.remove('hidden')"
-                                <%= (isClosed || !cards || !cards.length) ? 'disabled' : '' %>
-                                class="w-full inline-flex items-center justify-center px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 rounded-xl shadow-sm transition-all hover:-translate-y-0.5 <%= (isClosed || !cards || !cards.length) ? 'opacity-60 cursor-not-allowed hover:bg-emerald-600' : 'hover:bg-emerald-700' %>">
-                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                </svg>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <% if (isClosed) { %>
+                            <button onclick="toggleLock('open')"
+                                class="px-4 py-2 bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-900 dark:text-rose-300 rounded-xl text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
+                                🔒 Mês Fechado
+                            </button>
+                            <button type="button" disabled
+                                class="px-5 py-2.5 rounded-xl font-bold text-white bg-slate-400 dark:bg-slate-600 cursor-not-allowed shadow-sm">
                                 + Novo Item
                             </button>
+                            <% } else { %>
+                                <button onclick="toggleLock('close')"
+                                    class="px-4 py-2 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 rounded-xl text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
+                                    🔓 Fechar Mês
+                                </button>
+                                <button type="button" onclick="document.getElementById('modalManual').classList.remove('hidden')"
+                                    class="px-5 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all hover:-translate-y-0.5">
+                                    + Novo Item
+                                </button>
+                                <% } %>
 
-                            <div
-                                class="col-span-2 lg:col-span-1 w-full flex items-center gap-2 bg-white dark:bg-slate-800 p-1 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-                                <a href="/detalhamento/<%= prevY %>/<%= prevM %>"
-                                    class="flex-1 text-center px-3 py-2 bg-slate-50 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold transition-colors">&larr;
-                                    Anterior</a>
-                                <div
-                                    class="px-4 py-2 bg-slate-900 dark:bg-slate-950 text-white rounded-lg text-sm font-bold shadow-inner whitespace-nowrap">
-                                    <%= String(month).padStart(2, '0' ) %> / <%= year %>
-                                </div>
-                                <a href="/detalhamento/<%= nextY %>/<%= nextM %>"
-                                    class="flex-1 text-center px-3 py-2 bg-slate-50 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold transition-colors">Próximo
-                                    &rarr;</a>
-                            </div>
-                        </div>
+                                    <div
+                                        class="flex items-center gap-2 bg-white dark:bg-slate-800 p-1 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                                        <a href="/detalhamento/<%= prevY %>/<%= prevM %>"
+                                            class="px-3 py-2 bg-slate-50 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold transition-colors">&larr;
+                                            Anterior</a>
+                                        <div
+                                            class="px-4 py-2 bg-slate-900 dark:bg-slate-950 text-white rounded-lg text-sm font-bold shadow-inner">
+                                            <%= String(month).padStart(2, '0' ) %> / <%= year %>
+                                        </div>
+                                        <a href="/detalhamento/<%= nextY %>/<%= nextM %>"
+                                            class="px-3 py-2 bg-slate-50 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold transition-colors">Próximo
+                                            &rarr;</a>
+                                    </div>
                     </div>
                 </div>
 
-                <div id="modalManualDetalhamento"
+                <div id="modalManual"
                     class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
                         <div class="flex justify-between items-center mb-6">
                             <h2 class="text-xl font-black text-slate-800 dark:text-white">Novo Gasto Manual</h2>
-                            <button type="button" onclick="document.getElementById('modalManualDetalhamento').classList.add('hidden')"
+                            <button type="button" onclick="document.getElementById('modalManual').classList.add('hidden')"
                                 class="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-2xl">✕</button>
                         </div>
 
                         <form action="/txn/manual" method="POST" class="space-y-4" data-auto-first-due-form>
-                            <div class="grid grid-cols-2 gap-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data da Compra</label>
-                                    <input type="date" name="date" required data-manual-date-input <%= isClosed ? 'disabled' : '' %>
+                                    <input type="date" name="date" required data-manual-date-input <%= isClosed ? "disabled" : "" %>
                                         class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cartão Utilizado</label>
-                                    <select name="card_id" data-manual-card-select <%= isClosed ? 'disabled' : '' %>
+                                    <select name="card_id" data-manual-card-select <%= isClosed ? "disabled" : "" %>
                                         class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
-                                        <% cards.forEach(c => { %>
+                                        <% cards.forEach(c=> { %>
                                             <option value="<%= c.id %>" data-close-day="<%= c.close_day || '' %>" data-due-day="<%= c.due_day || '' %>">
                                                 <%= c.name %>
                                             </option>
@@ -111,40 +104,31 @@
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-2 gap-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
-                                    <input type="text" name="amount" placeholder="0,00" required <%= isClosed ? 'disabled' : '' %>
+                                    <input type="text" name="amount" placeholder="R$ 0,00" required data-currency-input inputmode="numeric" <%= isClosed ? "disabled" : "" %>
                                         class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Parcelas</label>
-                                    <input type="number" name="installments" value="1" min="1" max="99" required data-installments-input <%= isClosed ? 'disabled' : '' %>
+                                    <input type="number" name="installments" value="1" min="1" max="99" required <%= isClosed ? "disabled" : "" %>
                                         class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                                 </div>
                             </div>
 
                             <div>
                                 <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">1º Vencimento</label>
-                                <input type="month" name="first_due" value="<%= year %>-<%= String(month).padStart(2, '0') %>" required data-manual-first-due <%= isClosed ? 'disabled' : '' %>
+                                <input type="month" name="first_due" value="<%= year %>-<%= String(month).padStart(2, '0') %>" required data-manual-first-due <%= isClosed ? "disabled" : "" %>
                                     class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                                 <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Preenchido automaticamente pela data da compra e pelo fechamento do cartão, mas você pode alterar manualmente.</p>
                             </div>
 
                             <div>
                                 <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Descrição</label>
-                                <input type="text" name="description" placeholder="Ex: Monitor Dell" required <%= isClosed ? 'disabled' : '' %>
+                                <input type="text" name="description" placeholder="Ex: Monitor Dell" required <%= isClosed ? "disabled" : "" %>
                                     class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                             </div>
-
-                            <label class="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 <%= isClosed ? 'opacity-60' : '' %>">
-                                <input type="checkbox" name="is_recurring" value="1" data-recurring-toggle <%= isClosed ? 'disabled' : '' %>
-                                    class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
-                                <span>
-                                    <span class="block text-sm font-bold text-slate-800 dark:text-white">Tornar este item recorrente mensal</span>
-                                    <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Ideal para academia, streaming, escola, internet e condomínio. Funciona somente com 1 parcela.</span>
-                                </span>
-                            </label>
 
                             <% if (isClosed) { %>
                                 <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
@@ -194,30 +178,6 @@
                     </div>
                 </div>
 
-                <% if (alerts && alerts.length) { %>
-                    <div class="mb-8 bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
-                            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Alertas rápidos</h2>
-                            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Sinais importantes para manter o mês em dia.</p>
-                        </div>
-                        <div class="p-4 md:p-5 grid gap-3">
-                            <% alerts.forEach(alert => { %>
-                                <div class="rounded-2xl border px-4 py-3 <%= alert.type === 'warning' ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20' : 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20' %>">
-                                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                        <div>
-                                            <div class="font-bold text-slate-800 dark:text-white"><%= alert.icon %> <%= alert.title %></div>
-                                            <div class="text-sm text-slate-600 dark:text-slate-300 mt-1"><%= alert.description %></div>
-                                        </div>
-                                        <% if (alert.href) { %>
-                                            <a href="<%= alert.href %>" class="inline-flex items-center justify-center px-4 py-2 rounded-xl text-sm font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">Abrir</a>
-                                        <% } %>
-                                    </div>
-                                </div>
-                            <% }) %>
-                        </div>
-                    </div>
-                <% } %>
-
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
                     <div class="space-y-8">
@@ -246,7 +206,7 @@
                                                     font-mono font-bold text-right text-emerald-700
                                                     dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30
                                                     rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none
-                                                    disabled:opacity-60" value="<%= getDisplayValue(fin) %>"
+                                                    disabled:opacity-60" value="<%= getDisplayValue(fin) %>" data-currency-input inputmode="numeric"
                                                         onblur="saveMath(<%= fin.id %>, this.value)">
                                                 </td>
                                                 <td class="py-3 pl-2 text-right">
@@ -286,7 +246,7 @@
                                                     font-mono font-bold text-right text-rose-700 dark:text-rose-400
                                                     bg-rose-50 dark:bg-rose-900/30 rounded-lg px-2 py-1 focus:ring-2
                                                     focus:ring-rose-500 outline-none disabled:opacity-60" value="<%=
-                                                        getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>,
+                                                        getDisplayValue(fin) %>" data-currency-input inputmode="numeric" onblur="saveMath(<%= fin.id %>,
                                                             this.value)">
                                                 </td>
                                                 <td class="py-3 pl-2 text-right">

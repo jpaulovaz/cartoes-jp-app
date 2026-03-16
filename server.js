@@ -23,7 +23,6 @@ require('./scripts/migrate.js');
 try { db.prepare("ALTER TABLE transactions ADD COLUMN due_month INTEGER").run(); } catch (e) { }
 try { db.prepare("ALTER TABLE transactions ADD COLUMN due_year INTEGER").run(); } catch (e) { }
 try { db.prepare("ALTER TABLE transactions ADD COLUMN parent_txn_id INTEGER").run(); } catch (e) { }
-try { db.prepare("ALTER TABLE transactions ADD COLUMN recurring_rule_id INTEGER").run(); } catch (e) { }
 
 // Adiciona a coluna de telefone na tabela people se ela não existir
 try { db.prepare("ALTER TABLE people ADD COLUMN phone TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -42,41 +41,6 @@ db.prepare(`
 `).run();
 try { db.prepare("ALTER TABLE closed_months ADD COLUMN user_id INTEGER").run(); } catch (e) { /* Coluna já existe ou tabela ainda não precisava de ajuste */ }
 try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_closed_months_user_month_year ON closed_months(user_id, month, year)").run(); } catch (e) { /* Índice já existe */ }
-
-db.prepare(`
-  CREATE TABLE IF NOT EXISTS recurring_rules (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    card_id INTEGER NOT NULL,
-    description TEXT NOT NULL,
-    amount_cents INTEGER NOT NULL,
-    start_txn_date TEXT NOT NULL,
-    start_due_month INTEGER NOT NULL,
-    start_due_year INTEGER NOT NULL,
-    active_from_month INTEGER NOT NULL,
-    active_from_year INTEGER NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    ended_at TEXT
-  )
-`).run();
-
-db.prepare(`
-  CREATE TABLE IF NOT EXISTS recurring_exceptions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    rule_id INTEGER NOT NULL,
-    month INTEGER NOT NULL,
-    year INTEGER NOT NULL,
-    created_at TEXT NOT NULL,
-    UNIQUE(user_id, rule_id, month, year)
-  )
-`).run();
-
-try { db.prepare("CREATE INDEX IF NOT EXISTS idx_txn_recurring_rule ON transactions(recurring_rule_id)").run(); } catch (e) { }
-try { db.prepare("CREATE INDEX IF NOT EXISTS idx_recurring_rules_user_status ON recurring_rules(user_id, status)").run(); } catch (e) { }
-try { db.prepare("CREATE INDEX IF NOT EXISTS idx_recurring_exceptions_user_rule_month ON recurring_exceptions(user_id, rule_id, year, month)").run(); } catch (e) { }
 
 const { parseCsvByCardName } = require("./src/importers");
 const { formatBRLFromCents, parseMonthYear, toISOFromBRDate, centsFromPtBrMoney } = require("./src/utils");
@@ -265,6 +229,9 @@ app.use((req, res, next) => {
   res.locals.userId = null;
   res.locals.isAdmin = false;
   res.locals.nomeTitular = "Detalhamento Contas";
+  res.locals.ownerFirstName = "Usuário";
+  res.locals.ownerFullName = "";
+  res.locals.detailNav = null;
   res.locals.formatDateBR = formatDateBR;
   res.locals.flash = req.session?.flash || null;
 
@@ -284,12 +251,20 @@ app.use((req, res, next) => {
     res.locals.user = req.user;
     res.locals.userId = req.user.id;
     res.locals.isAdmin = req.user.role === 'admin';
+    res.locals.detailNav = getPreferredDetailTarget(req.user.id);
 
     try {
       const owner = db.prepare("SELECT name FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(req.user.id);
+      const ownerName = (owner?.name || req.user.name || req.user.email || "Usuário").trim();
+      const ownerFirstName = (ownerName.split(/\s+/)[0] || "Usuário").split("@")[0];
       res.locals.nomeTitular = owner ? `Detalhamento ${owner.name}` : "Detalhamento Contas";
+      res.locals.ownerFullName = ownerName;
+      res.locals.ownerFirstName = ownerFirstName;
     } catch (e) {
+      const fallbackName = (req.user.name || req.user.email || "Usuário").trim();
       res.locals.nomeTitular = "Detalhamento Contas";
+      res.locals.ownerFullName = fallbackName;
+      res.locals.ownerFirstName = (fallbackName.split(/\s+/)[0] || "Usuário").split("@")[0];
     }
   }
 
@@ -310,6 +285,37 @@ function monthLabel(month, year) {
 
 function monthKey(month, year) {
   return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function shiftMonth(month, year, amount = 1) {
+  let nextMonth = Number(month) + Number(amount || 0);
+  let nextYear = Number(year);
+
+  while (nextMonth > 12) {
+    nextMonth -= 12;
+    nextYear += 1;
+  }
+
+  while (nextMonth < 1) {
+    nextMonth += 12;
+    nextYear -= 1;
+  }
+
+  return { month: nextMonth, year: nextYear };
+}
+
+function getPreferredDetailTarget(userId, baseDate = new Date()) {
+  let month = baseDate.getMonth() + 1;
+  let year = baseDate.getFullYear();
+
+  for (let i = 0; i < 24; i++) {
+    if (!isMonthClosed(userId, month, year)) {
+      return { month, year };
+    }
+    ({ month, year } = shiftMonth(month, year, 1));
+  }
+
+  return { month, year };
 }
 
 function isMonthClosed(userId, month, year) {
@@ -372,171 +378,6 @@ function resolveFirstDueMonth({ firstDue, purchaseDate, closeDay, dueDay }) {
   const provided = String(firstDue || "").trim();
   if (/^\d{4}-(0[1-9]|1[0-2])$/.test(provided)) return provided;
   return suggestFirstDueMonth(purchaseDate, closeDay, dueDay);
-}
-
-function shiftMonth(year, month, amount = 0) {
-  let y = Number(year);
-  let m = Number(month) + Number(amount || 0);
-
-  while (m > 12) {
-    m -= 12;
-    y += 1;
-  }
-
-  while (m < 1) {
-    m += 12;
-    y -= 1;
-  }
-
-  return { year: y, month: m };
-}
-
-function compareMonthYear(aYear, aMonth, bYear, bMonth) {
-  if (Number(aYear) !== Number(bYear)) return Number(aYear) - Number(bYear);
-  return Number(aMonth) - Number(bMonth);
-}
-
-function occurrenceDateFromStart(startTxnDate, offset) {
-  const base = dayjs(startTxnDate);
-  if (!base.isValid()) return null;
-
-  const shifted = shiftMonth(base.year(), base.month() + 1, offset);
-  const firstDay = dayjs(`${shifted.year}-${String(shifted.month).padStart(2, '0')}-01`);
-  const day = Math.min(base.date(), firstDay.daysInMonth());
-  return `${shifted.year}-${String(shifted.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
-
-function csvEscape(value) {
-  const str = String(value == null ? '' : value);
-  if (/[";\n\r]/.test(str)) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
-
-function getRecurringRules(userId, { includeEnded = false } = {}) {
-  const whereEnded = includeEnded ? '' : "AND r.status != 'ended'";
-  return db.prepare(`
-    SELECT r.*, c.name AS card_name, c.close_day, c.due_day
-    FROM recurring_rules r
-    JOIN cards c ON c.id = r.card_id AND c.user_id = r.user_id
-    WHERE r.user_id = ? ${whereEnded}
-    ORDER BY CASE r.status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END, lower(r.description), r.id DESC
-  `).all(userId);
-}
-
-function syncRecurringTransactions(userId, targetYear, targetMonth) {
-  const year = Number(targetYear);
-  const month = Number(targetMonth);
-  if (!year || !month) return;
-
-  const rules = db.prepare(`
-    SELECT r.*, c.name AS card_name, COALESCE(c.active, 1) AS card_active
-    FROM recurring_rules r
-    JOIN cards c ON c.id = r.card_id AND c.user_id = r.user_id
-    WHERE r.user_id = ? AND r.status = 'active' AND COALESCE(c.active, 1) = 1
-    ORDER BY r.id
-  `).all(userId);
-
-  if (!rules.length) return;
-
-  const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1 ORDER BY id").all(userId);
-  const findTxn = db.prepare(`
-    SELECT id
-    FROM transactions
-    WHERE user_id = ? AND recurring_rule_id = ? AND due_month = ? AND due_year = ?
-    LIMIT 1
-  `);
-  const hasException = db.prepare(`
-    SELECT 1
-    FROM recurring_exceptions
-    WHERE user_id = ? AND rule_id = ? AND month = ? AND year = ?
-    LIMIT 1
-  `);
-  const insTxn = db.prepare(`
-    INSERT INTO transactions (user_id, card_id, txn_date, description, amount_cents, due_month, due_year, recurring_rule_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const insAlloc = db.prepare(`
-    INSERT INTO allocations (user_id, transaction_id, person_id, share_cents, created_at)
-    VALUES (?, ?, ?, ?, ?)
-  `);
-
-  db.transaction(() => {
-    rules.forEach(rule => {
-      if (compareMonthYear(rule.start_due_year, rule.start_due_month, year, month) > 0) return;
-
-      let offset = 0;
-      while (true) {
-        const due = shiftMonth(rule.start_due_year, rule.start_due_month, offset);
-        if (compareMonthYear(due.year, due.month, year, month) > 0) break;
-
-        if (compareMonthYear(due.year, due.month, rule.active_from_year, rule.active_from_month) < 0) {
-          offset += 1;
-          continue;
-        }
-
-        if (hasException.get(userId, rule.id, due.month, due.year) || findTxn.get(userId, rule.id, due.month, due.year)) {
-          offset += 1;
-          continue;
-        }
-
-        if (isMonthClosed(userId, due.month, due.year)) {
-          offset += 1;
-          continue;
-        }
-
-        const txnDate = occurrenceDateFromStart(rule.start_txn_date, offset) || rule.start_txn_date;
-        const info = insTxn.run(userId, rule.card_id, txnDate, rule.description, rule.amount_cents, due.month, due.year, rule.id, nowIso());
-
-        if (activePeople.length === 1) {
-          insAlloc.run(userId, info.lastInsertRowid, activePeople[0].id, rule.amount_cents, nowIso());
-        }
-
-        offset += 1;
-      }
-    });
-  })();
-}
-
-function getRecurringPreview(rule) {
-  const today = dayjs();
-  const currentYear = today.year();
-  const currentMonth = today.month() + 1;
-
-  let offset = 0;
-  while (offset < 240) {
-    const due = shiftMonth(rule.start_due_year, rule.start_due_month, offset);
-    if (compareMonthYear(due.year, due.month, rule.active_from_year, rule.active_from_month) < 0) {
-      offset += 1;
-      continue;
-    }
-    if (compareMonthYear(due.year, due.month, currentYear, currentMonth) >= 0) {
-      return due;
-    }
-    offset += 1;
-  }
-
-  return null;
-}
-
-function removeFutureRecurringTransactions(userId, ruleId, fromYear, fromMonth) {
-  const rows = db.prepare(`
-    SELECT t.id, t.import_id
-    FROM transactions t
-    WHERE t.user_id = ?
-      AND t.recurring_rule_id = ?
-      AND (t.due_year > ? OR (t.due_year = ? AND t.due_month > ?))
-  `).all(userId, ruleId, fromYear, fromYear, fromMonth);
-
-  const removable = rows.filter(row => {
-    const due = db.prepare("SELECT due_month, due_year FROM transactions WHERE id = ? AND user_id = ?").get(row.id, userId);
-    return due && !isMonthClosed(userId, due.due_month, due.due_year);
-  });
-
-  if (removable.length) {
-    deleteTransactionsAndAllocations(userId, removable);
-  }
 }
 
 function getCards(userId) {
@@ -715,17 +556,12 @@ app.get("/", ensureAuthenticated, (req, res) => {
     return res.redirect('/people');
   }
 
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = d.getMonth() + 1;
-  res.redirect(`/detalhamento/${year}/${month}`);
+  const preferredDetail = getPreferredDetailTarget(userId);
+  res.redirect(`/detalhamento/${preferredDetail.year}/${preferredDetail.month}`);
 });
 
 app.get("/geral", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const now = dayjs();
-  const nextReference = shiftMonth(now.year(), now.month() + 1, 1);
-  syncRecurringTransactions(userId, nextReference.year, nextReference.month);
 
   // 1. Puxamos todas as importações e transações manuais do usuário logado
   const recent = db.prepare(`
@@ -838,12 +674,10 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
 
   groupedRecent.sort(sortDesc);
 
-  const nowDate = new Date();
-  const currentYear = nowDate.getFullYear();
-  const currentMonth = nowDate.getMonth() + 1;
+  const preferredDetail = getPreferredDetailTarget(userId);
 
   const currentOrNextGroup = groupedRecent
-    .filter(group => group.year > currentYear || (group.year === currentYear && group.month >= currentMonth))
+    .filter(group => group.year > preferredDetail.year || (group.year === preferredDetail.year && group.month >= preferredDetail.month))
     .sort(sortAsc)[0] || null;
 
   const groupedRecentFinal = currentOrNextGroup
@@ -888,7 +722,7 @@ app.post("/geral/:year/:month/card/:cardId/delete", ensureAuthenticated, (req, r
   }
 
   const txns = db.prepare(`
-    SELECT t.id, t.import_id, t.recurring_rule_id, t.due_month, t.due_year
+    SELECT t.id, t.import_id
     FROM transactions t
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE t.user_id = ?
@@ -904,85 +738,9 @@ app.post("/geral/:year/:month/card/:cardId/delete", ensureAuthenticated, (req, r
     return res.redirect("/geral");
   }
 
-  const addException = db.prepare(`
-    INSERT OR IGNORE INTO recurring_exceptions (user_id, rule_id, month, year, created_at)
-    VALUES (?, ?, ?, ?, ?)
-  `);
-
-  let deletedCount = 0;
-  db.transaction(() => {
-    txns.forEach(txn => {
-      if (txn.recurring_rule_id && txn.due_month && txn.due_year) {
-        addException.run(userId, txn.recurring_rule_id, txn.due_month, txn.due_year, nowIso());
-      }
-    });
-    deletedCount = deleteTransactionsAndAllocations(userId, txns);
-  })();
-
+  const deletedCount = deleteTransactionsAndAllocations(userId, txns);
   setFlash(req, "success", `${deletedCount} lançamento(s) de ${card.name} em ${String(month).padStart(2, "0")}/${year} foram excluídos.`);
   return res.redirect("/geral");
-});
-
-app.get("/geral/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
-  const { month, year } = parsed;
-
-  syncRecurringTransactions(userId, year, month);
-
-  const rows = db.prepare(`
-    SELECT
-      COALESCE(t.txn_date, '') AS txn_date,
-      t.description,
-      c.name AS card_name,
-      COALESCE(t.card_number, '') AS card_number,
-      t.amount_cents,
-      CASE WHEN EXISTS (
-        SELECT 1 FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id
-      ) THEN 'Sim' ELSE 'Não' END AS allocated,
-      COALESCE((
-        SELECT GROUP_CONCAT(name, ', ') FROM (
-          SELECT p.name AS name
-          FROM allocations a2
-          JOIN people p ON p.id = a2.person_id AND p.user_id = a2.user_id
-          WHERE a2.transaction_id = t.id AND a2.user_id = t.user_id
-          ORDER BY p.name
-        )
-      ), '') AS people_names,
-      CASE WHEN t.import_id IS NULL THEN 'Manual' ELSE COALESCE(i.original_filename, 'Importado') END AS origem
-    FROM transactions t
-    JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
-    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
-    WHERE t.user_id = ?
-      AND (
-        (i.month = ? AND i.year = ?) OR
-        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
-      )
-    ORDER BY c.name, COALESCE(t.txn_date, ''), t.description
-  `).all(userId, month, year, month, year);
-
-  const header = ['Data da compra', 'Descrição', 'Cartão', 'Número', 'Valor (R$)', 'Distribuído', 'Pessoas', 'Origem', 'Competência'];
-  const lines = [header.map(csvEscape).join(';')];
-
-  rows.forEach(row => {
-    lines.push([
-      formatDateBR(row.txn_date),
-      row.description,
-      row.card_name,
-      row.card_number,
-      formatBRLFromCents(row.amount_cents),
-      row.allocated,
-      row.people_names,
-      row.origem,
-      monthLabel(month, year)
-    ].map(csvEscape).join(';'));
-  });
-
-  const filename = `organizapay-cartoes-${year}-${String(month).padStart(2, '0')}.csv`;
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.send('\uFEFF' + lines.join('\r\n'));
 });
 
 // People
@@ -1208,8 +966,9 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const currentMonth = parseInt(month);
   const currentYear = parseInt(year);
 
-  syncRecurringTransactions(userId, currentYear, currentMonth);
-
+  // ================================================================
+  // NOVA LÓGICA: CLONAR CONTAS FIXAS DO MÊS ANTERIOR
+  // ================================================================
   const existingExpenses = db.prepare(`
     SELECT COUNT(*) as count
     FROM monthly_finances
@@ -1240,10 +999,13 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       })();
     }
   }
+  // ================================================================
 
+  // 1. Busca o titular do usuário logado
   const owner = db.prepare("SELECT * FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
   if (!owner) return res.status(400).send("Defina um titular na aba Pessoas primeiro.");
 
+  // 2. Calcula total de cartões do titular para o mês (incluindo transações manuais)
   const cardTotal = db.prepare(`
     SELECT COALESCE(SUM(a.share_cents), 0) as total
     FROM allocations a
@@ -1257,6 +1019,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       )
   `).get(userId, owner.id, currentMonth, currentYear, currentMonth, currentYear);
 
+  // 3. Busca entradas e gastos fixos do usuário
   const finances = db.prepare(`
     SELECT *
     FROM monthly_finances
@@ -1265,6 +1028,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 
   const categories = db.prepare("SELECT * FROM finance_categories WHERE user_id = ? AND is_active = 1").all(userId);
 
+  // 4. Busca bloco de notas
   let notes = db.prepare("SELECT * FROM scratchpad WHERE user_id = ? AND month = ? AND year = ?").get(userId, currentMonth, currentYear);
   if (!notes) {
     db.prepare("INSERT INTO scratchpad (user_id, month, year, content_text, content_math) VALUES (?, ?, ?, '', '')")
@@ -1272,121 +1036,11 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     notes = { content_text: '', content_math: '' };
   }
 
-  const isClosed = isMonthClosed(userId, currentMonth, currentYear);
-  const visibleCards = getVisibleCardsForMonth(userId, currentMonth, currentYear);
+  // Verifica se o mês está trancado
+  const closedCheck = db.prepare("SELECT 1 FROM closed_months WHERE user_id = ? AND month = ? AND year = ?")
+    .get(userId, currentMonth, currentYear);
+  const isClosed = !!closedCheck;
   const cards = getActiveCards(userId).map(({ id, name, close_day, due_day }) => ({ id, name, close_day, due_day }));
-
-  const cardTotalsRows = db.prepare(`
-    SELECT t.card_id, SUM(t.amount_cents) AS total_cents
-    FROM transactions t
-    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
-    WHERE t.user_id = ?
-      AND (
-        (i.month = ? AND i.year = ?) OR
-        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
-      )
-    GROUP BY t.card_id
-  `).all(userId, currentMonth, currentYear, currentMonth, currentYear);
-  const cardTotalsMap = new Map(cardTotalsRows.map(row => [row.card_id, row.total_cents || 0]));
-
-  const statementRows = db.prepare(`
-    SELECT card_id, computed_due_date, override_due_date, paid_cents
-    FROM card_statements
-    WHERE user_id = ? AND month = ? AND year = ?
-  `).all(userId, currentMonth, currentYear);
-  const statementByCard = new Map(statementRows.map(row => [row.card_id, row]));
-
-  const alerts = [];
-  const today = dayjs();
-  const isCurrentReferenceMonth = currentYear === today.year() && currentMonth === (today.month() + 1);
-
-  if (isCurrentReferenceMonth) {
-    const closingTodayCards = getActiveCards(userId).filter(card => {
-      const closeDay = normalizeDayNumber(card.close_day);
-      return closeDay && Math.min(closeDay, today.daysInMonth()) === today.date();
-    });
-
-    if (closingTodayCards.length) {
-      alerts.push({
-        type: 'info',
-        icon: '⏰',
-        title: 'Cartão fecha hoje',
-        description: `${closingTodayCards.map(card => card.name).join(', ')} ${closingTodayCards.length === 1 ? 'fecha' : 'fecham'} hoje.`
-      });
-    }
-
-    const dueSoonCards = visibleCards
-      .map(card => {
-        const stmt = statementByCard.get(card.id);
-        const computedDueDate = computeDueDate({ year: currentYear, month: currentMonth, dueDay: card.due_day, holidayScope: card.holiday_scope || 'BR' });
-        const dueDate = stmt?.override_due_date || stmt?.computed_due_date || computedDueDate;
-        const totalCents = cardTotalsMap.get(card.id) || 0;
-        const diffDays = dueDate ? dayjs(dueDate).startOf('day').diff(today.startOf('day'), 'day') : null;
-        return { card_name: card.name, due_date: dueDate, total_cents: totalCents, diff_days: diffDays };
-      })
-      .filter(item => item.total_cents > 0 && item.due_date && item.diff_days >= 0 && item.diff_days <= 2);
-
-    if (dueSoonCards.length) {
-      alerts.push({
-        type: 'warning',
-        icon: '📅',
-        title: 'Vencimento em até 2 dias',
-        description: dueSoonCards.map(item => `${item.card_name} (${dayjs(item.due_date).format('DD/MM')})`).join(', ')
-      });
-    }
-  }
-
-  if (!isClosed) {
-    const unassignedCount = db.prepare(`
-      SELECT COUNT(*) AS total
-      FROM transactions t
-      LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
-      WHERE t.user_id = ?
-        AND (
-          (i.month = ? AND i.year = ?) OR
-          (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id
-        )
-    `).get(userId, currentMonth, currentYear, currentMonth, currentYear)?.total || 0;
-
-    if (unassignedCount > 0) {
-      alerts.push({
-        type: 'warning',
-        icon: '👥',
-        title: 'Itens sem distribuição',
-        description: `${unassignedCount} lançamento(s) deste mês ainda não foram distribuídos entre as pessoas.`,
-        href: `/month/${currentYear}/${currentMonth}?f_allocated=nao`
-      });
-    }
-
-    const missingPaymentCards = visibleCards
-      .map(card => {
-        const stmt = statementByCard.get(card.id);
-        const computedDueDate = computeDueDate({ year: currentYear, month: currentMonth, dueDay: card.due_day, holidayScope: card.holiday_scope || 'BR' });
-        const dueDate = stmt?.override_due_date || stmt?.computed_due_date || computedDueDate;
-        const duePassed = dueDate ? dayjs(dueDate).startOf('day').isBefore(today.startOf('day')) : false;
-        return {
-          card_name: card.name,
-          total_cents: cardTotalsMap.get(card.id) || 0,
-          paid_cents: Number(stmt?.paid_cents || 0),
-          due_date: dueDate,
-          due_passed: duePassed
-        };
-      })
-      .filter(item => item.total_cents > 0 && item.due_passed && item.paid_cents <= 0);
-
-    if (missingPaymentCards.length) {
-      alerts.push({
-        type: 'info',
-        icon: '💳',
-        title: 'Valor pago ainda não informado',
-        description: `${missingPaymentCards.map(item => `${item.card_name} (${dayjs(item.due_date).format('DD/MM')})`).join(', ')} ainda ${missingPaymentCards.length === 1 ? 'não tem' : 'não têm'} valor pago informado no resumo.`,
-        href: `/summary/${currentYear}/${currentMonth}`
-      });
-    }
-  }
 
   res.render("detalhamento", {
     title: "Meu Detalhamento",
@@ -1397,10 +1051,9 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     finances,
     categories,
     notes,
+    cards,
     formatBRLFromCents,
-    isClosed,
-    alerts,
-    cards
+    isClosed
   });
 });
 
@@ -1409,8 +1062,6 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   const parsed = parseMonthYear(req.params.month, req.params.year);
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
-
-  syncRecurringTransactions(userId, year, month);
 
   const sort = (req.query.sort || "date").toString();
   const dir = (req.query.dir || "asc").toString();
@@ -1422,8 +1073,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     f_card: (req.query.f_card || "").toString().trim(),
     f_number: (req.query.f_number || "").toString().trim(),
     f_amount: (req.query.f_amount || "").toString().trim(),
-    f_allocated: (req.query.f_allocated || "").toString().trim(),
-    f_person: (req.query.f_person || "").toString().trim()
+    f_allocated: (req.query.f_allocated || "").toString().trim()
   };
 
   const allocCountExpr = "(SELECT COUNT(*) FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id)";
@@ -1465,16 +1115,6 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     else if (f.startsWith("n")) where.push(`${allocCountExpr} = 0`);
   }
 
-  if (filters.f_person) {
-    const personId = Number(filters.f_person);
-    if (personId > 0) {
-      where.push(`EXISTS (SELECT 1 FROM allocations a_filter WHERE a_filter.transaction_id = t.id AND a_filter.user_id = t.user_id AND a_filter.person_id = ?)`);
-      params.push(personId);
-    } else {
-      filters.f_person = "";
-    }
-  }
-
   const txns = db.prepare(`
     SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
            ${allocCountExpr} AS alloc_count,
@@ -1492,17 +1132,6 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   const people = getVisiblePeopleForMonth(userId, month, year);
   const cards = getActiveCards(userId);
-  const recurringRules = getRecurringRules(userId).map(rule => {
-    const preview = getRecurringPreview(rule);
-    const startDate = dayjs(rule.start_txn_date);
-    return {
-      ...rule,
-      purchase_day: startDate.isValid() ? startDate.date() : null,
-      start_due_label: monthLabel(rule.start_due_month, rule.start_due_year),
-      active_from_label: monthLabel(rule.active_from_month, rule.active_from_year),
-      preview_label: preview ? monthLabel(preview.month, preview.year) : null
-    };
-  });
   const isClosed = isMonthClosed(userId, month, year);
   const baseParams = new URLSearchParams();
   Object.entries(filters).forEach(([k, v]) => { if (v) baseParams.set(k, v); });
@@ -1516,13 +1145,12 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     return `/month/${year}/${month}${qs ? `?${qs}` : ""}`;
   };
 
-  res.render("month", { month, year, txns, people, cards, recurringRules, formatBRLFromCents, sort, dir, sortLink, filters, isClosed });
+  res.render("month", { month, year, txns, people, cards, formatBRLFromCents, sort, dir, sortLink, filters, isClosed });
 });
 
 app.post("/txn/manual", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const { date, description, amount, card_id, first_due, installments } = req.body;
-  const isRecurring = ["1", "true", "on", "sim"].includes(String(req.body.is_recurring || "").toLowerCase());
 
   try {
     const cardIdNum = Number(card_id);
@@ -1537,11 +1165,6 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
 
     const totalCents = centsFromPtBrMoney(amount);
     const numInstallments = parseInt(installments) || 1;
-    if (isRecurring && numInstallments !== 1) {
-      setFlash(req, "error", "Lançamentos recorrentes mensais funcionam apenas com 1 parcela.");
-      return res.redirect(redirectBackOr(req, "/geral"));
-    }
-
     const installmentValue = Math.floor(totalCents / numInstallments);
     const remainder = totalCents % numInstallments;
 
@@ -1565,27 +1188,16 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
       return res.redirect(redirectBackOr(req, `/month/${lockedInstallment.year}/${lockedInstallment.month}`));
     }
 
-    let recurringRuleId = null;
-
     db.transaction(() => {
       const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1").all(userId);
       const insTxn = db.prepare(`
-        INSERT INTO transactions (user_id, card_id, txn_date, description, amount_cents, due_month, due_year, recurring_rule_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO transactions (user_id, card_id, txn_date, description, amount_cents, due_month, due_year, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const insAlloc = db.prepare(`
         INSERT INTO allocations (user_id, transaction_id, person_id, share_cents, created_at)
         VALUES (?, ?, ?, ?, ?)
       `);
-      const insRecurring = db.prepare(`
-        INSERT INTO recurring_rules (user_id, card_id, description, amount_cents, start_txn_date, start_due_month, start_due_year, active_from_month, active_from_year, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
-      `);
-
-      if (isRecurring) {
-        const info = insRecurring.run(userId, cardIdNum, description, totalCents, date, startMonth, startYear, startMonth, startYear, nowIso(), nowIso());
-        recurringRuleId = Number(info.lastInsertRowid);
-      }
 
       for (let i = 0; i < numInstallments; i++) {
         let currentMonth = startMonth + i;
@@ -1597,62 +1209,19 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
           : description;
 
         const currentAmount = (i === numInstallments - 1) ? installmentValue + remainder : installmentValue;
-        const currentRecurringRuleId = isRecurring ? recurringRuleId : null;
 
-        const info = insTxn.run(userId, cardIdNum, date, finalDesc, currentAmount, currentMonth, currentYear, currentRecurringRuleId, nowIso());
+        const info = insTxn.run(userId, cardIdNum, date, finalDesc, currentAmount, currentMonth, currentYear, new Date().toISOString());
 
         if (activePeople.length === 1) {
-          insAlloc.run(userId, info.lastInsertRowid, activePeople[0].id, currentAmount, nowIso());
+          insAlloc.run(userId, info.lastInsertRowid, activePeople[0].id, currentAmount, new Date().toISOString());
         }
       }
     })();
-
-    if (isRecurring) {
-      setFlash(req, "success", "Lançamento recorrente mensal criado com sucesso.");
-    }
 
     res.redirect(`/month/${startYear}/${startMonth}`);
   } catch (err) {
     res.status(500).send("Erro ao processar transacao manual: " + err.message);
   }
-});
-
-app.post("/recurring/:id/state", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const ruleId = Number(req.params.id);
-  const action = String(req.body.action || '').trim().toLowerCase();
-  const rule = db.prepare("SELECT * FROM recurring_rules WHERE id = ? AND user_id = ?").get(ruleId, userId);
-
-  if (!rule) {
-    setFlash(req, "error", "Lançamento recorrente não encontrado.");
-    return res.redirect(redirectBackOr(req, "/month"));
-  }
-
-  const today = dayjs();
-  const currentYear = today.year();
-  const currentMonth = today.month() + 1;
-
-  if (action === 'pause') {
-    db.prepare("UPDATE recurring_rules SET status = 'paused', updated_at = ? WHERE id = ? AND user_id = ?").run(nowIso(), ruleId, userId);
-    removeFutureRecurringTransactions(userId, ruleId, currentYear, currentMonth);
-    setFlash(req, "success", `${rule.description} foi pausado.`);
-  } else if (action === 'resume') {
-    db.prepare(`
-      UPDATE recurring_rules
-      SET status = 'active', active_from_month = ?, active_from_year = ?, ended_at = NULL, updated_at = ?
-      WHERE id = ? AND user_id = ?
-    `).run(currentMonth, currentYear, nowIso(), ruleId, userId);
-    syncRecurringTransactions(userId, currentYear, currentMonth);
-    setFlash(req, "success", `${rule.description} foi reativado.`);
-  } else if (action === 'end') {
-    db.prepare("UPDATE recurring_rules SET status = 'ended', ended_at = ?, updated_at = ? WHERE id = ? AND user_id = ?").run(nowIso(), nowIso(), ruleId, userId);
-    removeFutureRecurringTransactions(userId, ruleId, currentYear, currentMonth);
-    setFlash(req, "success", `${rule.description} foi encerrado.`);
-  } else {
-    setFlash(req, "error", "Ação inválida para lançamento recorrente.");
-  }
-
-  return res.redirect(redirectBackOr(req, "/month"));
 });
 
 app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
@@ -1766,7 +1335,7 @@ app.post("/txn/:id/delete", ensureAuthenticated, (req, res) => {
   const id = Number(req.params.id);
 
   const txn = db.prepare(`
-    SELECT t.id, t.import_id, t.description, t.recurring_rule_id,
+    SELECT t.id, t.import_id, t.description,
            COALESCE(i.month, t.due_month) AS month,
            COALESCE(i.year, t.due_year) AS year
     FROM transactions t
@@ -1783,16 +1352,7 @@ app.post("/txn/:id/delete", ensureAuthenticated, (req, res) => {
     return res.redirect(`/month/${txn.year}/${txn.month}`);
   }
 
-  db.transaction(() => {
-    if (txn.recurring_rule_id && txn.month && txn.year) {
-      db.prepare(`
-        INSERT OR IGNORE INTO recurring_exceptions (user_id, rule_id, month, year, created_at)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(userId, txn.recurring_rule_id, txn.month, txn.year, nowIso());
-    }
-    deleteTransactionsAndAllocations(userId, [txn]);
-  })();
-
+  deleteTransactionsAndAllocations(userId, [txn]);
   setFlash(req, "success", "Lançamento excluído com sucesso.");
   return res.redirect(`/month/${txn.year}/${txn.month}`);
 });
@@ -1803,7 +1363,6 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
   const parsed = parseMonthYear(req.params.month, req.params.year);
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
-  syncRecurringTransactions(userId, year, month);
   const isClosed = isMonthClosed(userId, month, year);
 
   const people = getVisiblePeopleForMonth(userId, month, year, { includePayments: true });
@@ -2025,7 +1584,6 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
   if (!person) return res.status(400).send("Pessoa inválida.");
 
   const { month, year } = parsed;
-  syncRecurringTransactions(userId, year, month);
 
   const items = db.prepare(`
     SELECT t.txn_date, t.description, c.name AS card_name, a.share_cents

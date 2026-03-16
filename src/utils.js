@@ -25,8 +25,12 @@ function toISOFromBRDate(brDate) {
 function centsFromPtBrMoney(str) {
   const s = (str || "").toString().trim();
   if (!s) return 0;
-  const n = Number(s.replace(/\./g, "").replace(",", "."));
-  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+
+  const digitsOnly = s.replace(/\D/g, "");
+  if (!digitsOnly) return 0;
+
+  const cents = Number(digitsOnly);
+  return Number.isFinite(cents) ? cents : 0;
 }
 
 module.exports = { formatBRLFromCents, parseMonthYear, toISOFromBRDate, centsFromPtBrMoney };

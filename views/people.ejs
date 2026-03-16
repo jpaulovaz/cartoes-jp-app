@@ -1,4 +1,4 @@
-<%- include("partials/header", { title: "OrganizaPay | Pessoas" }) %>
+<%- include("partials/header", { title: "Cartões JP | Pessoas" }) %>
 
   <div class="max-w-4xl mx-auto">
     <div class="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -14,12 +14,9 @@
 
       <form method="post" action="/people" id="personForm"
         class="flex flex-col gap-4 mb-8 pb-8 border-b border-slate-100 dark:border-slate-700">
-        <div class="text-sm font-medium text-slate-500 dark:text-slate-400 -mb-1">
-          O e-mail é opcional. Ele será usado no futuro para identificar quando essa pessoa também tiver acesso ao OrganizaPay.
-        </div>
         <input type="hidden" name="id" id="personId">
-        <div class="flex flex-col md:flex-row gap-3">
-          <div class="flex-1 relative">
+        <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_16rem]">
+          <div class="relative">
             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
               <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -31,7 +28,7 @@
               placeholder="Nome do participante" required />
           </div>
 
-          <div class="md:w-64 relative">
+          <div class="relative">
             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
               <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -42,11 +39,14 @@
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
               placeholder="5511999999999" />
           </div>
+        </div>
 
-          <div class="md:w-72 relative">
+        <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <div class="relative">
             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
               <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12H8m8-4H8m12 8H4a2 2 0 01-2-2V6a2 2 0 012-2h16a2 2 0 012 2v8a2 2 0 01-2 2z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M16 12H8m8-4H8m-2 12h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
               </svg>
             </div>
             <input name="email" id="inputEmail" type="email"
@@ -78,7 +78,12 @@
               <div>
                 <div class="font-extrabold text-slate-800 dark:text-white text-lg flex items-center gap-2">
                   <%= p.name %>
-                    <button type="button" data-id="<%= p.id %>" data-name="<%= p.name %>" data-phone="<%= p.phone || '' %>" data-email="<%= p.email || '' %>" onclick="editPersonFromButton(this)"
+                    <button type="button"
+                      data-id="<%= p.id %>"
+                      data-name="<%= p.name %>"
+                      data-phone="<%= p.phone || '' %>"
+                      data-email="<%= p.email || '' %>"
+                      onclick="editPerson(this)"
                       class="text-slate-400 hover:text-blue-500 transition-colors">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -90,8 +95,8 @@
                 <div class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
                   <%= p.phone ? '📱 ' + p.phone : '⚠️ Sem telefone' %>
                 </div>
-                <div class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 break-all">
-                  <%= p.email ? '✉️ ' + p.email : '— Sem e-mail vinculado' %>
+                <div class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                  <%= p.email ? '✉️ ' + p.email : '⚠️ Sem e-mail' %>
                 </div>
                 <div class="flex gap-2 items-center">
                   <% if (p.active) { %>
@@ -109,7 +114,7 @@
               <form method="post" action="/people/<%= p.id %>/set-owner">
                 <button
                   class="w-full px-3 py-1.5 text-xs font-bold rounded-lg border <%= p.is_owner ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400' : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600' %> shadow-sm transition-colors">
-                  <%= p.is_owner ? "É o Titular" : "Tornar Titular" %>
+                  <%= p.is_owner ? "Titular" : "Tornar Titular" %>
                 </button>
               </form>
               <form method="post" action="/people/<%= p.id %>/toggle">
@@ -134,15 +139,11 @@
   </div>
 
   <script>
-    function editPersonFromButton(button) {
-      editPerson(button.dataset.id, button.dataset.name || "", button.dataset.phone || "", button.dataset.email || "");
-    }
-
-    function editPerson(id, name, phone, email) {
-      document.getElementById('personId').value = id;
-      document.getElementById('inputName').value = name;
-      document.getElementById('inputPhone').value = phone;
-      document.getElementById('inputEmail').value = email;
+    function editPerson(trigger) {
+      document.getElementById('personId').value = trigger.dataset.id || '';
+      document.getElementById('inputName').value = trigger.dataset.name || '';
+      document.getElementById('inputPhone').value = trigger.dataset.phone || '';
+      document.getElementById('inputEmail').value = trigger.dataset.email || '';
       document.getElementById('btnSubmit').innerText = 'Salvar Alterações';
       document.getElementById('btnSubmit').classList.replace('bg-slate-900', 'bg-blue-600');
       document.getElementById('btnCancel').classList.remove('hidden');

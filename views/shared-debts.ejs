@@ -59,8 +59,8 @@
         </div>
       <% } else { %>
         <div class="divide-y divide-slate-100 dark:divide-slate-700">
-          <% received.forEach(item => { const meta = statusMeta(item.status); %>
-            <article class="px-6 py-5 space-y-3">
+          <% received.forEach(item => { const meta = statusMeta(item.status); const highlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id); %>
+            <article class="px-6 py-5 space-y-3 <%= highlighted ? 'bg-blue-50/60 dark:bg-blue-900/10' : '' %>">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 class="text-base font-bold text-slate-900 dark:text-white"><%= item.description_snapshot %></h3>
@@ -70,7 +70,7 @@
                 </div>
                 <span class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold <%= meta.classes %>"><%= meta.label %></span>
               </div>
-              <div class="grid gap-3 sm:grid-cols-2">
+              <div class="grid gap-3 sm:grid-cols-3">
                 <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                   <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor</div>
                   <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
@@ -78,6 +78,10 @@
                 <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                   <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Competência</div>
                   <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= item.source_due_month && item.source_due_year ? monthLabel(item.source_due_month, item.source_due_year) : '—' %></div>
+                </div>
+                <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                  <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Compra</div>
+                  <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= item.source_txn_date ? formatDateBR(item.source_txn_date) : '—' %></div>
                 </div>
               </div>
               <div class="grid gap-3 sm:grid-cols-2">
@@ -113,18 +117,18 @@
         </div>
       <% } else { %>
         <div class="divide-y divide-slate-100 dark:divide-slate-700">
-          <% sent.forEach(item => { const meta = statusMeta(item.status); %>
-            <article class="px-6 py-5 space-y-3">
+          <% sent.forEach(item => { const meta = statusMeta(item.status); const highlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id); %>
+            <article class="px-6 py-5 space-y-3 <%= highlighted ? 'bg-blue-50/60 dark:bg-blue-900/10' : '' %>">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 class="text-base font-bold text-slate-900 dark:text-white"><%= item.description_snapshot %></h3>
                   <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
-                    Enviado para <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.receiver_name || item.receiver_email || item.receiver_email_snapshot || 'Usuário' %></span>
+                    Enviado para <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.receiver_name_snapshot || item.receiver_name || item.receiver_email_snapshot || item.receiver_email || 'Usuário' %></span>
                   </p>
                 </div>
                 <span class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold <%= meta.classes %>"><%= meta.label %></span>
               </div>
-              <div class="grid gap-3 sm:grid-cols-2">
+              <div class="grid gap-3 sm:grid-cols-3">
                 <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                   <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor</div>
                   <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
@@ -132,6 +136,10 @@
                 <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                   <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Competência</div>
                   <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= item.source_due_month && item.source_due_year ? monthLabel(item.source_due_month, item.source_due_year) : '—' %></div>
+                </div>
+                <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                  <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Compra</div>
+                  <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= item.source_txn_date ? formatDateBR(item.source_txn_date) : '—' %></div>
                 </div>
               </div>
               <div class="grid gap-3 sm:grid-cols-2">

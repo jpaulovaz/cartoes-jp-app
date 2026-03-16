@@ -2349,6 +2349,49 @@ app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
   }
 });
 
+app.post("/admin/update-user/:id", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const targetUserId = req.params.id;
+  const { email, name, role } = req.body;
+  const canImport = req.body.can_import ? 1 : 0;
+
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  if (!email || !email.includes('@')) {
+    return renderAdmin(res, { error: 'Email inválido' });
+  }
+
+  const existingUser = db.prepare("SELECT id FROM users WHERE id = ?").get(targetUserId);
+  if (!existingUser) {
+    return renderAdmin(res, { error: 'Usuário não encontrado' });
+  }
+
+  try {
+    db.prepare("UPDATE users SET email = ?, name = ?, role = ?, can_import = ? WHERE id = ?")
+      .run(
+        String(email).trim(),
+        (String(name || '').trim() || String(email).split('@')[0]),
+        role === 'admin' ? 'admin' : 'user',
+        canImport,
+        targetUserId
+      );
+
+    if (String(userId) === String(targetUserId)) {
+      const updatedSelf = getUserRecord(targetUserId);
+      if (updatedSelf) {
+        req.user = updatedSelf;
+        res.locals.user = updatedSelf;
+      }
+    }
+
+    return renderAdmin(res, { success: 'Usuário atualizado com sucesso!' });
+  } catch (err) {
+    return renderAdmin(res, { error: err.message });
+  }
+});
+
 app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const targetUserId = req.params.id;

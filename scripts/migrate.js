@@ -198,6 +198,63 @@ CREATE TABLE IF NOT EXISTS recurring_exceptions (
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (rule_id) REFERENCES recurring_rules(id)
 );
+
+
+CREATE TABLE IF NOT EXISTS shared_debt_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  requester_user_id INTEGER NOT NULL,
+  requester_person_id INTEGER,
+  receiver_user_id INTEGER NOT NULL,
+  source_transaction_id INTEGER,
+  source_allocation_id INTEGER,
+  source_due_month INTEGER,
+  source_due_year INTEGER,
+  card_id INTEGER,
+  card_name_snapshot TEXT,
+  description_snapshot TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  receiver_email_snapshot TEXT,
+  receiver_name_snapshot TEXT,
+  request_note TEXT,
+  response_note TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  responded_at TEXT,
+  resolved_at TEXT,
+  FOREIGN KEY (requester_user_id) REFERENCES users(id),
+  FOREIGN KEY (requester_person_id) REFERENCES people(id),
+  FOREIGN KEY (receiver_user_id) REFERENCES users(id),
+  FOREIGN KEY (source_transaction_id) REFERENCES transactions(id),
+  FOREIGN KEY (source_allocation_id) REFERENCES allocations(id),
+  FOREIGN KEY (card_id) REFERENCES cards(id)
+);
+
+CREATE TABLE IF NOT EXISTS shared_debt_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  request_id INTEGER NOT NULL,
+  actor_user_id INTEGER NOT NULL,
+  event_type TEXT NOT NULL,
+  note TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (request_id) REFERENCES shared_debt_requests(id),
+  FOREIGN KEY (actor_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT,
+  href TEXT,
+  is_read INTEGER NOT NULL DEFAULT 0,
+  related_type TEXT,
+  related_id INTEGER,
+  created_at TEXT NOT NULL,
+  read_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
 `);
 
 if (!columnExists("cards", "active")) {
@@ -206,6 +263,10 @@ if (!columnExists("cards", "active")) {
 
 if (!columnExists("cards", "close_day")) {
   db.exec("ALTER TABLE cards ADD COLUMN close_day INTEGER;");
+}
+
+if (!columnExists("people", "email")) {
+  db.exec("ALTER TABLE people ADD COLUMN email TEXT;");
 }
 
 if (!columnExists("transactions", "recurring_rule_id")) {
@@ -227,6 +288,12 @@ CREATE INDEX IF NOT EXISTS idx_payments_user ON person_payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_txn_recurring_rule ON transactions(recurring_rule_id);
 CREATE INDEX IF NOT EXISTS idx_recurring_rules_user_status ON recurring_rules(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_recurring_exceptions_rule_month ON recurring_exceptions(user_id, rule_id, year, month);
+CREATE INDEX IF NOT EXISTS idx_people_email ON people(user_id, email);
+CREATE INDEX IF NOT EXISTS idx_shared_debts_receiver_status ON shared_debt_requests(receiver_user_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_shared_debts_requester_status ON shared_debt_requests(requester_user_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_shared_debts_source_allocation ON shared_debt_requests(source_allocation_id);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_events_request ON shared_debt_events(request_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at);
 `);
 
 // ===== CATEGORIAS PADRÃO =====

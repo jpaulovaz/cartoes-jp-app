@@ -27,6 +27,7 @@ try { db.prepare("ALTER TABLE transactions ADD COLUMN recurring_rule_id INTEGER"
 
 // Adiciona a coluna de telefone na tabela people se ela não existir
 try { db.prepare("ALTER TABLE people ADD COLUMN phone TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN email TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN close_day INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN can_import INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
@@ -331,6 +332,16 @@ function normalizeDayNumber(value) {
   return num;
 }
 
+function normalizeEmail(value) {
+  const email = String(value || "").trim().toLowerCase();
+  return email || null;
+}
+
+function firstTwoNames(value) {
+  const parts = String(value || "").trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).join(" ") || "Titular";
+}
+
 function monthLabel(month, year) {
   return `${String(month).padStart(2, "0")}/${year}`;
 }
@@ -612,7 +623,7 @@ function getCardsByIds(userId, ids) {
 
 function getPeopleAll(userId) {
   return db.prepare(`
-    SELECT id, name, active, is_owner, phone
+    SELECT id, name, active, is_owner, phone, email
     FROM people
     WHERE user_id = ?
     ORDER BY is_owner DESC, active DESC, name
@@ -620,7 +631,7 @@ function getPeopleAll(userId) {
 }
 
 function getPeopleActive(userId) {
-  return db.prepare("SELECT id, name, active FROM people WHERE user_id = ? AND active = 1 ORDER BY name").all(userId);
+  return db.prepare("SELECT id, name, active, email FROM people WHERE user_id = ? AND active = 1 ORDER BY name").all(userId);
 }
 
 function getPeopleByIds(userId, ids) {
@@ -629,7 +640,7 @@ function getPeopleByIds(userId, ids) {
 
   const placeholders = uniqueIds.map(() => "?").join(", ");
   return db.prepare(`
-    SELECT id, name, active, is_owner, phone
+    SELECT id, name, active, is_owner, phone, email
     FROM people
     WHERE user_id = ? AND id IN (${placeholders})
     ORDER BY active DESC, name
@@ -1044,6 +1055,68 @@ app.get("/geral/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
   res.send('\uFEFF' + lines.join('\r\n'));
 });
 
+function getSharedDebtRequestsReceived(userId) {
+  return db.prepare(`
+    SELECT
+      r.*,
+      u.name AS requester_name,
+      u.email AS requester_email
+    FROM shared_debt_requests r
+    JOIN users u ON u.id = r.requester_user_id
+    WHERE r.receiver_user_id = ?
+    ORDER BY
+      CASE r.status
+        WHEN 'pending' THEN 0
+        WHEN 'accepted' THEN 1
+        WHEN 'rejected_by_receiver' THEN 2
+        WHEN 'rejection_contested_by_sender' THEN 3
+        WHEN 'rejection_accepted_by_sender' THEN 4
+        WHEN 'cancelled' THEN 5
+        WHEN 'settled' THEN 6
+        ELSE 7
+      END,
+      r.created_at DESC
+  `).all(userId);
+}
+
+function getSharedDebtRequestsSent(userId) {
+  return db.prepare(`
+    SELECT
+      r.*,
+      u.name AS receiver_name,
+      u.email AS receiver_email
+    FROM shared_debt_requests r
+    JOIN users u ON u.id = r.receiver_user_id
+    WHERE r.requester_user_id = ?
+    ORDER BY
+      CASE r.status
+        WHEN 'pending' THEN 0
+        WHEN 'accepted' THEN 1
+        WHEN 'rejected_by_receiver' THEN 2
+        WHEN 'rejection_contested_by_sender' THEN 3
+        WHEN 'rejection_accepted_by_sender' THEN 4
+        WHEN 'cancelled' THEN 5
+        WHEN 'settled' THEN 6
+        ELSE 7
+      END,
+      r.created_at DESC
+  `).all(userId);
+}
+
+app.get("/shared-debts", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const received = getSharedDebtRequestsReceived(userId);
+  const sent = getSharedDebtRequestsSent(userId);
+
+  return res.render("shared-debts", {
+    title: "OrganizaPay | Dívidas Compartilhadas",
+    received,
+    sent,
+    formatBRLFromCents,
+    monthLabel
+  });
+});
+
 // People
 app.get("/people", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
@@ -1054,13 +1127,14 @@ app.get("/people", ensureAuthenticated, (req, res) => {
 app.post("/people", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const name = (req.body.name || "").trim();
-  const phone = (req.body.phone || "").trim().replace(/\D/g, '');
+  const phone = (req.body.phone || "").trim().replace(/\D/g, "");
+  const email = normalizeEmail(req.body.email);
   const id = Number(req.body.id) || null;
 
   if (id) {
-    db.prepare("UPDATE people SET name = ?, phone = ? WHERE id = ? AND user_id = ?").run(name, phone, id, userId);
+    db.prepare("UPDATE people SET name = ?, phone = ?, email = ? WHERE id = ? AND user_id = ?").run(name, phone, email, id, userId);
   } else if (name) {
-    db.prepare("INSERT OR IGNORE INTO people(user_id, name, phone, active) VALUES (?, ?, ?, 1)").run(userId, name, phone);
+    db.prepare("INSERT OR IGNORE INTO people(user_id, name, phone, email, active) VALUES (?, ?, ?, ?, 1)").run(userId, name, phone, email);
   }
 
   res.redirect("/people");
@@ -2344,49 +2418,6 @@ app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
     DEFAULT_FINANCE_CATEGORIES.forEach(cat => insertCat.run(newUser.id, cat));
 
     return renderAdmin(res, { success: `Usuário ${email} adicionado com sucesso!` });
-  } catch (err) {
-    return renderAdmin(res, { error: err.message });
-  }
-});
-
-app.post("/admin/update-user/:id", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const targetUserId = req.params.id;
-  const { email, name, role } = req.body;
-  const canImport = req.body.can_import ? 1 : 0;
-
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  if (!email || !email.includes('@')) {
-    return renderAdmin(res, { error: 'Email inválido' });
-  }
-
-  const existingUser = db.prepare("SELECT id FROM users WHERE id = ?").get(targetUserId);
-  if (!existingUser) {
-    return renderAdmin(res, { error: 'Usuário não encontrado' });
-  }
-
-  try {
-    db.prepare("UPDATE users SET email = ?, name = ?, role = ?, can_import = ? WHERE id = ?")
-      .run(
-        String(email).trim(),
-        (String(name || '').trim() || String(email).split('@')[0]),
-        role === 'admin' ? 'admin' : 'user',
-        canImport,
-        targetUserId
-      );
-
-    if (String(userId) === String(targetUserId)) {
-      const updatedSelf = getUserRecord(targetUserId);
-      if (updatedSelf) {
-        req.user = updatedSelf;
-        res.locals.user = updatedSelf;
-      }
-    }
-
-    return renderAdmin(res, { success: 'Usuário atualizado com sucesso!' });
   } catch (err) {
     return renderAdmin(res, { error: err.message });
   }

@@ -128,7 +128,8 @@
      const ownerDisplayNameRaw = ((nomeTitular || '').replace(/^Detalhamento\s+/i, '').trim());
      const ownerDisplayName = ownerDisplayNameRaw && ownerDisplayNameRaw.toLowerCase() !== 'contas' ? ownerDisplayNameRaw : ((user && user.name) ? user.name : 'Titular');
      const ownerNameParts = ownerDisplayName.split(/\s+/).filter(Boolean);
-     const ownerShortName = ownerNameParts.slice(0, 2).join(' ') || 'Titular'; %>
+     const ownerShortName = ownerNameParts.slice(0, 2).join(' ') || 'Titular';
+     const unreadNotifications = Number(typeof unreadNotificationCount !== 'undefined' ? unreadNotificationCount : 0) || 0; %>
 
     <nav class="sticky top-0 z-50 bg-[#020617] border-b border-slate-900 shadow-lg">
       <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -182,6 +183,21 @@
                 </path>
               </svg>
               Pessoas
+            </a>
+
+            <a class="relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
+              href="/notifications">
+              <span class="relative inline-flex">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9">
+                  </path>
+                </svg>
+                <% if (unreadNotifications > 0) { %>
+                  <span class="absolute -right-2 -top-2 min-w-[1.1rem] rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white text-center"><%= unreadNotifications > 99 ? '99+' : unreadNotifications %></span>
+                <% } %>
+              </span>
+              Notificações
             </a>
 
             <% if (isUserAdmin) { %>
@@ -271,6 +287,18 @@
                     d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z">
                   </path>
                 </svg>
+              </a>
+
+              <a class="relative p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/notifications"
+                title="Notificações">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9">
+                  </path>
+                </svg>
+                <% if (unreadNotifications > 0) { %>
+                  <span class="absolute right-1 top-1 min-w-[1rem] rounded-full bg-rose-500 px-1 py-0.5 text-[9px] font-black leading-none text-white text-center"><%= unreadNotifications > 99 ? '99+' : unreadNotifications %></span>
+                <% } %>
               </a>
 
               <% if (isUserAdmin) { %>

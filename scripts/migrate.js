@@ -217,6 +217,8 @@ CREATE TABLE IF NOT EXISTS shared_debt_requests (
   receiver_name_snapshot TEXT,
   request_note TEXT,
   response_note TEXT,
+  payment_marked_at TEXT,
+  payment_note TEXT,
   status TEXT NOT NULL DEFAULT 'pending',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -279,6 +281,14 @@ if (!columnExists("shared_debt_requests", "source_person_id")) {
 
 if (!columnExists("shared_debt_requests", "source_txn_date_snapshot")) {
   db.exec("ALTER TABLE shared_debt_requests ADD COLUMN source_txn_date_snapshot TEXT;");
+}
+
+if (!columnExists("shared_debt_requests", "payment_marked_at")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN payment_marked_at TEXT;");
+}
+
+if (!columnExists("shared_debt_requests", "payment_note")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN payment_note TEXT;");
 }
 
 // ===== ÍNDICES =====

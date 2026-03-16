@@ -1,7 +1,17 @@
 <%- include("partials/header", { title: "OrganizaPay | Dívidas Compartilhadas" }) %>
 
 <%
-  function statusMeta(status) {
+  function statusMeta(itemOrStatus) {
+    const item = (itemOrStatus && typeof itemOrStatus === 'object') ? itemOrStatus : null;
+    const status = item ? item.status : itemOrStatus;
+
+    if (status === 'accepted' && item?.payment_marked_at) {
+      return {
+        label: 'Pagamento informado',
+        classes: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-900/20 dark:text-sky-300 dark:border-sky-800'
+      };
+    }
+
     switch (status) {
       case 'accepted':
         return { label: 'Aceita', classes: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800' };
@@ -36,6 +46,10 @@
         return { label: 'Rejeição contestada', dot: 'bg-amber-500' };
       case 'rejection_accepted_by_sender':
         return { label: 'Rejeição aceita', dot: 'bg-slate-500' };
+      case 'payment_marked_by_receiver':
+        return { label: 'Pagamento informado', dot: 'bg-sky-500' };
+      case 'settled':
+        return { label: 'Recebimento confirmado', dot: 'bg-cyan-500' };
       default:
         return { label: eventType || 'Atualização', dot: 'bg-slate-400' };
     }
@@ -99,8 +113,8 @@
         </div>
       <% } else { %>
         <div class="divide-y divide-slate-100 dark:divide-slate-700">
-          <% received.forEach(item => { 
-            const meta = statusMeta(item.status); 
+          <% received.forEach(item => {
+            const meta = statusMeta(item);
             const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
             const timeline = timelineFor(item.id);
           %>
@@ -155,13 +169,50 @@
                   <form method="POST" action="/shared-debts/<%= item.id %>/respond" class="mt-3 space-y-3">
                     <label class="block">
                       <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação para <%= item.requester_name || item.requester_email || 'o remetente' %> (opcional)</span>
-                      <textarea name="note" rows="2" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:border-blue-500 dark:focus:ring-blue-500/20" placeholder="Ex.: Vou considerar essa dívida, obrigado por me avisar."></textarea>
+                      <textarea name="note" rows="2" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:border-blue-500 dark:focus:ring-blue-500/20" placeholder="Ex.: Confirmo este valor."></textarea>
                     </label>
                     <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                      <button type="submit" name="action" value="reject" class="inline-flex items-center justify-center rounded-2xl border border-rose-200 dark:border-rose-800 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-rose-600 dark:text-rose-300 shadow-sm hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors">Recusar</button>
-                      <button type="submit" name="action" value="accept" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors">Aceitar</button>
+                      <button type="submit" name="action" value="reject" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Recusar</button>
+                      <button type="submit" name="action" value="accept" class="inline-flex items-center justify-center rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-600 transition-colors">Aceitar</button>
                     </div>
                   </form>
+                </div>
+              <% } else if (item.status === 'accepted' && !item.payment_marked_at) { %>
+                <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-4">
+                  <div class="text-sm font-bold text-slate-900 dark:text-white">Dívida aceita e em aberto</div>
+                  <p class="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">Quando o pagamento for realizado, marque aqui para avisar o remetente e iniciar a liquidação.</p>
+                  <form method="POST" action="/shared-debts/<%= item.id %>/mark-paid" class="mt-3 space-y-3">
+                    <label class="block">
+                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação sobre o pagamento (opcional)</span>
+                      <textarea name="note" rows="2" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20" placeholder="Ex.: Já fiz o Pix agora há pouco."></textarea>
+                    </label>
+                    <div class="flex justify-end">
+                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-600 transition-colors">Marcar como paga</button>
+                    </div>
+                  </form>
+                </div>
+              <% } else if (item.status === 'accepted' && item.payment_marked_at) { %>
+                <div class="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 px-4 py-3">
+                  <div class="text-sm font-bold text-slate-900 dark:text-white">Pagamento informado</div>
+                  <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Você informou o pagamento em <strong><%= formatDateBR(item.payment_marked_at) %></strong> às <strong><%= formatTimeBR(item.payment_marked_at) %></strong>. Agora é só aguardar o remetente confirmar o recebimento.</div>
+                  <% if (item.payment_note) { %>
+                    <div class="mt-2 text-sm text-slate-600 dark:text-slate-300">Observação do pagamento: <span class="font-medium"><%= item.payment_note %></span></div>
+                  <% } %>
+                </div>
+              <% } else if (item.status === 'rejection_contested_by_sender') { %>
+                <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+                  <div class="text-sm font-bold text-slate-900 dark:text-white">Cobrança em disputa</div>
+                  <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">O remetente contestou a sua recusa. A solicitação permanece apenas para acompanhamento e não entra no seu quadro financeiro.</div>
+                </div>
+              <% } else if (item.status === 'rejection_accepted_by_sender') { %>
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
+                  <div class="text-sm font-bold text-slate-900 dark:text-white">Rejeição encerrada</div>
+                  <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Sua recusa foi aceita pelo remetente. A solicitação permanece apenas no histórico.</div>
+                </div>
+              <% } else if (item.status === 'settled') { %>
+                <div class="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 px-4 py-3">
+                  <div class="text-sm font-bold text-slate-900 dark:text-white">Dívida liquidada</div>
+                  <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">O recebimento foi confirmado em <strong><%= item.resolved_at ? formatDateBR(item.resolved_at) : 'data não informada' %></strong><% if (item.resolved_at) { %> às <strong><%= formatTimeBR(item.resolved_at) %></strong><% } %>. Esta cobrança saiu do quadro financeiro ativo.</div>
                 </div>
               <% } %>
 
@@ -210,8 +261,8 @@
         </div>
       <% } else { %>
         <div class="divide-y divide-slate-100 dark:divide-slate-700">
-          <% sent.forEach(item => { 
-            const meta = statusMeta(item.status); 
+          <% sent.forEach(item => {
+            const meta = statusMeta(item);
             const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
             const timeline = timelineFor(item.id);
           %>
@@ -274,6 +325,28 @@
                     </div>
                   </form>
                 </div>
+              <% } else if (item.status === 'accepted' && !item.payment_marked_at) { %>
+                <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3">
+                  <div class="text-sm font-bold text-slate-900 dark:text-white">Cobrança aceita e aguardando pagamento</div>
+                  <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">O destinatário já aceitou esta dívida. Assim que ele marcar o pagamento, você poderá confirmar o recebimento e liquidar a solicitação.</div>
+                </div>
+              <% } else if (item.status === 'accepted' && item.payment_marked_at) { %>
+                <div class="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 px-4 py-4">
+                  <div class="text-sm font-bold text-slate-900 dark:text-white">Pagamento aguardando sua confirmação</div>
+                  <p class="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">O destinatário informou o pagamento em <strong><%= formatDateBR(item.payment_marked_at) %></strong> às <strong><%= formatTimeBR(item.payment_marked_at) %></strong>. Confirme abaixo quando o valor tiver realmente entrado.</p>
+                  <% if (item.payment_note) { %>
+                    <div class="mt-2 text-sm text-slate-600 dark:text-slate-300">Observação do pagamento: <span class="font-medium"><%= item.payment_note %></span></div>
+                  <% } %>
+                  <form method="POST" action="/shared-debts/<%= item.id %>/confirm-receipt" class="mt-3 space-y-3">
+                    <label class="block">
+                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação da liquidação (opcional)</span>
+                      <textarea name="note" rows="2" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20" placeholder="Ex.: Recebido e conferido no extrato."></textarea>
+                    </label>
+                    <div class="flex justify-end">
+                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-sky-700 transition-colors">Confirmar recebimento</button>
+                    </div>
+                  </form>
+                </div>
               <% } else if (item.status === 'rejection_contested_by_sender') { %>
                 <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
                   <div class="text-sm font-bold text-slate-900 dark:text-white">Cobrança em disputa</div>
@@ -283,6 +356,11 @@
                 <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
                   <div class="text-sm font-bold text-slate-900 dark:text-white">Cobrança encerrada</div>
                   <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Você aceitou a rejeição desta cobrança. Ela permanece apenas no histórico para consulta futura.</div>
+                </div>
+              <% } else if (item.status === 'settled') { %>
+                <div class="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 px-4 py-3">
+                  <div class="text-sm font-bold text-slate-900 dark:text-white">Dívida liquidada</div>
+                  <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">O recebimento foi confirmado em <strong><%= item.resolved_at ? formatDateBR(item.resolved_at) : 'data não informada' %></strong><% if (item.resolved_at) { %> às <strong><%= formatTimeBR(item.resolved_at) %></strong><% } %>. Esta cobrança saiu do quadro financeiro ativo.</div>
                 </div>
               <% } %>
 

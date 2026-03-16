@@ -33,6 +33,8 @@ try { db.prepare("ALTER TABLE cards ADD COLUMN close_day INTEGER").run(); } catc
 try { db.prepare("ALTER TABLE users ADD COLUMN can_import INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_txn_date_snapshot TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_marked_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_note TEXT").run(); } catch (e) { /* Coluna já existe */ }
 
 // Cria a tabela de meses fechados se não existir
 // Em ambiente multi-usuário, o fechamento precisa ser isolado por user_id.
@@ -290,6 +292,7 @@ app.use((req, res, next) => {
   res.locals.nomeTitular = "Detalhamento Contas";
   res.locals.formatDateBR = formatDateBR;
   res.locals.flash = req.session?.flash || null;
+  res.locals.unreadNotificationCount = 0;
   const now = dayjs();
   res.locals.dashboardHref = `/detalhamento/${now.year()}/${now.month() + 1}`;
 
@@ -298,6 +301,7 @@ app.use((req, res, next) => {
   }
 
   if (req.isAuthenticated() && req.user?.id) {
+    res.locals.unreadNotificationCount = Number(getUnreadNotificationCount(req.user.id) || 0);
     const currentUser = getUserRecord(req.user.id);
 
     if (currentUser) {
@@ -728,6 +732,48 @@ function createNotification({ userId, type, title, body = null, href = null, rel
     INSERT INTO notifications (user_id, type, title, body, href, is_read, related_type, related_id, created_at)
     VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
   `).run(userId, type, title, body, href, relatedType, relatedId, nowIso());
+}
+
+function getUnreadNotificationCount(userId) {
+  return db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM notifications
+    WHERE user_id = ? AND is_read = 0
+  `).get(userId)?.total || 0;
+}
+
+function getNotificationsForUser(userId) {
+  return db.prepare(`
+    SELECT *
+    FROM notifications
+    WHERE user_id = ?
+    ORDER BY created_at DESC, id DESC
+  `).all(userId);
+}
+
+function getNotificationForUser(notificationId, userId) {
+  return db.prepare(`
+    SELECT *
+    FROM notifications
+    WHERE id = ? AND user_id = ?
+    LIMIT 1
+  `).get(notificationId, userId);
+}
+
+function markNotificationAsRead(notificationId, userId) {
+  return db.prepare(`
+    UPDATE notifications
+    SET is_read = 1, read_at = COALESCE(read_at, ?)
+    WHERE id = ? AND user_id = ? AND is_read = 0
+  `).run(nowIso(), notificationId, userId);
+}
+
+function markAllNotificationsAsRead(userId) {
+  return db.prepare(`
+    UPDATE notifications
+    SET is_read = 1, read_at = COALESCE(read_at, ?)
+    WHERE user_id = ? AND is_read = 0
+  `).run(nowIso(), userId);
 }
 
 function addSharedDebtEvent({ requestId, actorUserId, eventType, note = null }) {
@@ -1426,7 +1472,7 @@ app.get("/shared-debts", ensureAuthenticated, (req, res) => {
     UPDATE notifications
     SET is_read = 1, read_at = COALESCE(read_at, ?)
     WHERE user_id = ?
-      AND type = 'shared_debt_request'
+      AND (related_type = 'shared_debt_request' OR type = 'shared_debt_request')
       AND is_read = 0
   `).run(nowIso(), userId);
 
@@ -1595,6 +1641,204 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
 
   setFlash(req, 'success', acceptingRejection ? 'Rejeição aceita com sucesso.' : 'Rejeição contestada com sucesso.');
   return res.redirect(`/shared-debts?request=${requestId}`);
+});
+
+app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const requestId = Number(req.params.id);
+  const note = String(req.body.note || '').trim() || null;
+
+  if (!requestId) {
+    setFlash(req, 'error', 'Solicitação inválida.');
+    return res.redirect('/shared-debts');
+  }
+
+  const requestRow = db.prepare(`
+    SELECT r.*, u.name AS requester_name, u.email AS requester_email
+    FROM shared_debt_requests r
+    JOIN users u ON u.id = r.requester_user_id
+    WHERE r.id = ? AND r.receiver_user_id = ?
+    LIMIT 1
+  `).get(requestId, userId);
+
+  if (!requestRow) {
+    setFlash(req, 'error', 'Solicitação não encontrada.');
+    return res.redirect('/shared-debts');
+  }
+
+  if (requestRow.status === 'settled') {
+    setFlash(req, 'info', 'Esta dívida já foi liquidada anteriormente.');
+    return res.redirect(`/shared-debts?request=${requestId}`);
+  }
+
+  if (requestRow.status !== 'accepted') {
+    setFlash(req, 'info', 'Somente solicitações aceitas podem ser marcadas como pagas.');
+    return res.redirect(`/shared-debts?request=${requestId}`);
+  }
+
+  if (requestRow.payment_marked_at) {
+    setFlash(req, 'info', 'O pagamento desta solicitação já foi informado e está aguardando confirmação.');
+    return res.redirect(`/shared-debts?request=${requestId}`);
+  }
+
+  const actor = getUserRecord(userId);
+  const actorName = actor?.name || requestRow.receiver_name_snapshot || actor?.email || 'O destinatário';
+  const now = nowIso();
+  const baseBody = `${actorName} informou que pagou a cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`;
+  const body = note ? `${baseBody} Observação: ${note}` : baseBody;
+
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE shared_debt_requests
+      SET payment_marked_at = ?, payment_note = ?, updated_at = ?
+      WHERE id = ? AND receiver_user_id = ? AND status = 'accepted' AND payment_marked_at IS NULL
+    `).run(now, note, now, requestId, userId);
+
+    addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'payment_marked_by_receiver', note });
+
+    createNotification({
+      userId: requestRow.requester_user_id,
+      type: 'shared_debt_request',
+      title: 'Pagamento informado na dívida compartilhada',
+      body,
+      href: `/shared-debts?request=${requestId}`,
+      relatedType: 'shared_debt_request',
+      relatedId: requestId
+    });
+  })();
+
+  setFlash(req, 'success', 'Pagamento informado com sucesso. Agora o remetente pode confirmar o recebimento.');
+  return res.redirect(`/shared-debts?request=${requestId}`);
+});
+
+app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const requestId = Number(req.params.id);
+  const note = String(req.body.note || '').trim() || null;
+
+  if (!requestId) {
+    setFlash(req, 'error', 'Solicitação inválida.');
+    return res.redirect('/shared-debts');
+  }
+
+  const requestRow = db.prepare(`
+    SELECT r.*, u.name AS receiver_name, u.email AS receiver_email
+    FROM shared_debt_requests r
+    JOIN users u ON u.id = r.receiver_user_id
+    WHERE r.id = ? AND r.requester_user_id = ?
+    LIMIT 1
+  `).get(requestId, userId);
+
+  if (!requestRow) {
+    setFlash(req, 'error', 'Solicitação não encontrada.');
+    return res.redirect('/shared-debts');
+  }
+
+  if (requestRow.status === 'settled') {
+    setFlash(req, 'info', 'Esta dívida já foi liquidada anteriormente.');
+    return res.redirect(`/shared-debts?request=${requestId}`);
+  }
+
+  if (requestRow.status !== 'accepted') {
+    setFlash(req, 'info', 'Somente solicitações aceitas podem ser liquidadas.');
+    return res.redirect(`/shared-debts?request=${requestId}`);
+  }
+
+  if (!requestRow.payment_marked_at) {
+    setFlash(req, 'info', 'A dívida ainda não foi marcada como paga pelo destinatário.');
+    return res.redirect(`/shared-debts?request=${requestId}`);
+  }
+
+  const actor = getUserRecord(userId);
+  const actorName = actor?.name || actor?.email || 'O remetente';
+  const now = nowIso();
+  const baseBody = `${actorName} confirmou o recebimento da cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`;
+  const body = note ? `${baseBody} Observação: ${note}` : baseBody;
+
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE shared_debt_requests
+      SET status = 'settled', updated_at = ?, resolved_at = ?
+      WHERE id = ? AND requester_user_id = ? AND status = 'accepted' AND payment_marked_at IS NOT NULL
+    `).run(now, now, requestId, userId);
+
+    addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'settled', note });
+
+    createNotification({
+      userId: requestRow.receiver_user_id,
+      type: 'shared_debt_request',
+      title: 'Recebimento confirmado na dívida compartilhada',
+      body,
+      href: `/shared-debts?request=${requestId}`,
+      relatedType: 'shared_debt_request',
+      relatedId: requestId
+    });
+  })();
+
+  setFlash(req, 'success', 'Recebimento confirmado com sucesso. A dívida foi liquidada.');
+  return res.redirect(`/shared-debts?request=${requestId}`);
+});
+
+app.get("/notifications", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const notifications = getNotificationsForUser(userId);
+
+  return res.render('notifications', {
+    title: 'OrganizaPay | Notificações',
+    notifications,
+    unreadCount: Number(notifications.filter(item => Number(item.is_read || 0) === 0).length || 0),
+    readCount: Number(notifications.filter(item => Number(item.is_read || 0) !== 0).length || 0),
+    formatDateBR
+  });
+});
+
+app.post("/notifications/read-all", ensureAuthenticated, (req, res) => {
+  markAllNotificationsAsRead(req.user.id);
+  setFlash(req, 'success', 'Todas as notificações foram marcadas como lidas.');
+  return res.redirect('/notifications');
+});
+
+app.post("/notifications/:id/read", ensureAuthenticated, (req, res) => {
+  const notificationId = Number(req.params.id);
+
+  if (!notificationId) {
+    setFlash(req, 'error', 'Notificação inválida.');
+    return res.redirect('/notifications');
+  }
+
+  const notification = getNotificationForUser(notificationId, req.user.id);
+  if (!notification) {
+    setFlash(req, 'error', 'Notificação não encontrada.');
+    return res.redirect('/notifications');
+  }
+
+  markNotificationAsRead(notificationId, req.user.id);
+  setFlash(req, 'success', 'Notificação marcada como lida.');
+  return res.redirect('/notifications');
+});
+
+app.get("/notifications/:id/open", ensureAuthenticated, (req, res) => {
+  const notificationId = Number(req.params.id);
+
+  if (!notificationId) {
+    setFlash(req, 'error', 'Notificação inválida.');
+    return res.redirect('/notifications');
+  }
+
+  const notification = getNotificationForUser(notificationId, req.user.id);
+  if (!notification) {
+    setFlash(req, 'error', 'Notificação não encontrada.');
+    return res.redirect('/notifications');
+  }
+
+  markNotificationAsRead(notificationId, req.user.id);
+
+  const targetHref = String(notification.href || '').trim();
+  if (targetHref && targetHref.startsWith('/')) {
+    return res.redirect(targetHref);
+  }
+
+  return res.redirect('/notifications');
 });
 
 // People
@@ -1915,7 +2159,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const unreadSharedDebtNotifications = db.prepare(`
     SELECT title, body, href, created_at
     FROM notifications
-    WHERE user_id = ? AND is_read = 0 AND type = 'shared_debt_request'
+    WHERE user_id = ? AND is_read = 0 AND (related_type = 'shared_debt_request' OR type = 'shared_debt_request')
     ORDER BY created_at DESC
     LIMIT 5
   `).all(userId);
@@ -2000,6 +2244,24 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       icon: '⚖️',
       title: 'Rejeições aguardando sua decisão',
       description: `${senderDecisionCount} solicitação(ões) recusadas aguardam você aceitar a rejeição ou contestá-la.`,
+      href: '/shared-debts'
+    });
+  }
+
+  const pendingReceiptConfirmationCount = db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND status = 'accepted'
+      AND payment_marked_at IS NOT NULL
+  `).get(userId)?.total || 0;
+
+  if (pendingReceiptConfirmationCount > 0) {
+    alerts.push({
+      type: 'warning',
+      icon: '✅',
+      title: 'Pagamentos aguardando sua confirmação',
+      description: `${pendingReceiptConfirmationCount} dívida(s) compartilhada(s) já foram marcadas como pagas e aguardam sua confirmação de recebimento.`,
       href: '/shared-debts'
     });
   }

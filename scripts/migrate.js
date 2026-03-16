@@ -257,7 +257,19 @@ CREATE TABLE IF NOT EXISTS notifications (
   read_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  endpoint TEXT NOT NULL UNIQUE,
+  subscription_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
 `);
+
+db.exec(`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id);`);
 
 if (!columnExists("cards", "active")) {
   db.exec("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1;");

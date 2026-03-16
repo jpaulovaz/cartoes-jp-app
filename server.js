@@ -5,6 +5,13 @@ const multer = require("multer");
 const axios = require('axios');
 const dayjs = require("dayjs");
 
+let webPush = null;
+try {
+  webPush = require('web-push');
+} catch (err) {
+  webPush = null;
+}
+
 // Novas dependências para Auth
 const session = require('express-session');
 const passport = require('passport');
@@ -46,6 +53,19 @@ db.prepare(`
     PRIMARY KEY (user_id, month, year)
   )
 `).run();
+
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    endpoint TEXT NOT NULL UNIQUE,
+    subscription_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("ALTER TABLE closed_months ADD COLUMN user_id INTEGER").run(); } catch (e) { /* Coluna já existe ou tabela ainda não precisava de ajuste */ }
 try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_closed_months_user_month_year ON closed_months(user_id, month, year)").run(); } catch (e) { /* Índice já existe */ }
 
@@ -91,6 +111,27 @@ const { computeDueDate } = require("./src/dueDate");
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
+
+const PUSH_PUBLIC_KEY = String(process.env.VAPID_PUBLIC_KEY || '').trim();
+const PUSH_PRIVATE_KEY = String(process.env.VAPID_PRIVATE_KEY || '').trim();
+const PUSH_SUBJECT = String(process.env.VAPID_SUBJECT || 'mailto:no-reply@organizapay.local').trim();
+let pushRuntimeEnabled = false;
+
+function isPushConfigured() {
+  return pushRuntimeEnabled;
+}
+
+if (webPush && PUSH_PUBLIC_KEY && PUSH_PRIVATE_KEY) {
+  try {
+    webPush.setVapidDetails(PUSH_SUBJECT, PUSH_PUBLIC_KEY, PUSH_PRIVATE_KEY);
+    pushRuntimeEnabled = true;
+  } catch (err) {
+    pushRuntimeEnabled = false;
+    console.warn('⚠️  Push Web configurado de forma inválida. Verifique VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY e VAPID_SUBJECT.');
+  }
+} else if (PUSH_PUBLIC_KEY || PUSH_PRIVATE_KEY) {
+  console.warn('⚠️  Push Web desativado: faltam dependência web-push ou variáveis VAPID completas.');
+}
 
 const DEFAULT_FINANCE_CATEGORIES = ['Prestação Apartamento', 'Luz', 'Internet', 'Condomínio', 'Tim'];
 
@@ -293,6 +334,8 @@ app.use((req, res, next) => {
   res.locals.formatDateBR = formatDateBR;
   res.locals.flash = req.session?.flash || null;
   res.locals.unreadNotificationCount = 0;
+  res.locals.pushNotificationsEnabled = isPushConfigured();
+  res.locals.pushPublicKey = isPushConfigured() ? PUSH_PUBLIC_KEY : '';
   const now = dayjs();
   res.locals.dashboardHref = `/detalhamento/${now.year()}/${now.month() + 1}`;
 
@@ -727,11 +770,100 @@ function getOwnerPerson(userId) {
   return db.prepare("SELECT id, name FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
 }
 
-function createNotification({ userId, type, title, body = null, href = null, relatedType = null, relatedId = null }) {
+function upsertPushSubscription(userId, subscription) {
+  const endpoint = String(subscription?.endpoint || '').trim();
+  if (!endpoint) return false;
+
+  const serialized = JSON.stringify(subscription);
+  const now = nowIso();
+
+  db.prepare(`
+    INSERT INTO push_subscriptions (user_id, endpoint, subscription_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(endpoint) DO UPDATE SET
+      user_id = excluded.user_id,
+      subscription_json = excluded.subscription_json,
+      updated_at = excluded.updated_at
+  `).run(userId, endpoint, serialized, now, now);
+
+  return true;
+}
+
+function removePushSubscriptionByEndpoint(endpoint) {
+  const safeEndpoint = String(endpoint || '').trim();
+  if (!safeEndpoint) return;
+
+  db.prepare(`
+    DELETE FROM push_subscriptions
+    WHERE endpoint = ?
+  `).run(safeEndpoint);
+}
+
+function removePushSubscriptionForUser(userId, endpoint) {
+  const safeEndpoint = String(endpoint || '').trim();
+  if (!safeEndpoint) return;
+
+  db.prepare(`
+    DELETE FROM push_subscriptions
+    WHERE endpoint = ? AND user_id = ?
+  `).run(safeEndpoint, userId);
+}
+
+function getPushSubscriptionsForUser(userId) {
   return db.prepare(`
+    SELECT endpoint, subscription_json
+    FROM push_subscriptions
+    WHERE user_id = ?
+    ORDER BY id DESC
+  `).all(userId);
+}
+
+async function sendPushNotificationToUser(userId, payload) {
+  if (!isPushConfigured()) return;
+
+  const subscriptions = getPushSubscriptionsForUser(userId);
+  if (!subscriptions.length) return;
+
+  const message = JSON.stringify({
+    title: String(payload?.title || 'OrganizaPay'),
+    body: payload?.body ? String(payload.body) : '',
+    href: payload?.href ? String(payload.href) : '/shared-debts',
+    tag: payload?.tag ? String(payload.tag) : undefined
+  });
+
+  await Promise.allSettled(subscriptions.map(async (row) => {
+    try {
+      const parsedSubscription = JSON.parse(row.subscription_json);
+      await webPush.sendNotification(parsedSubscription, message);
+    } catch (err) {
+      if (err?.statusCode === 404 || err?.statusCode === 410) {
+        removePushSubscriptionByEndpoint(row.endpoint);
+        return;
+      }
+
+      console.error('Erro ao enviar push notification:', err?.message || err);
+    }
+  }));
+}
+
+function queuePushNotification(userId, payload) {
+  if (!isPushConfigured()) return;
+
+  Promise.resolve()
+    .then(() => sendPushNotificationToUser(userId, payload))
+    .catch(err => console.error('Falha ao disparar push notification:', err?.message || err));
+}
+
+function createNotification({ userId, type, title, body = null, href = null, relatedType = null, relatedId = null }) {
+  const result = db.prepare(`
     INSERT INTO notifications (user_id, type, title, body, href, is_read, related_type, related_id, created_at)
     VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
   `).run(userId, type, title, body, href, relatedType, relatedId, nowIso());
+
+  const pushTag = relatedType && relatedId ? `${relatedType}:${relatedId}` : `${type}:${result.lastInsertRowid || nowIso()}`;
+  queuePushNotification(userId, { title, body, href, tag: pushTag });
+
+  return result;
 }
 
 function getUnreadNotificationCount(userId) {
@@ -1835,6 +1967,43 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
 
   setFlash(req, 'success', 'Recebimento confirmado com sucesso. A dívida foi liquidada.');
   return res.redirect(`/shared-debts?request=${requestId}`);
+});
+
+app.post('/push/subscribe', ensureAuthenticated, (req, res) => {
+  if (!isPushConfigured()) {
+    return res.status(503).json({ ok: false, error: 'push_unavailable' });
+  }
+
+  const subscription = req.body?.subscription;
+  const endpoint = String(subscription?.endpoint || '').trim();
+
+  if (!endpoint) {
+    return res.status(400).json({ ok: false, error: 'invalid_subscription' });
+  }
+
+  try {
+    upsertPushSubscription(req.user.id, subscription);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Erro ao salvar subscription de push:', err);
+    return res.status(500).json({ ok: false, error: 'subscription_save_failed' });
+  }
+});
+
+app.post('/push/unsubscribe', ensureAuthenticated, (req, res) => {
+  const endpoint = String(req.body?.endpoint || '').trim();
+
+  if (!endpoint) {
+    return res.status(400).json({ ok: false, error: 'invalid_endpoint' });
+  }
+
+  try {
+    removePushSubscriptionForUser(req.user.id, endpoint);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Erro ao remover subscription de push:', err);
+    return res.status(500).json({ ok: false, error: 'subscription_remove_failed' });
+  }
 });
 
 app.get("/notifications", ensureAuthenticated, (req, res) => {

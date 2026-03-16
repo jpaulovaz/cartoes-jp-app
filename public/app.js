@@ -430,3 +430,160 @@ Digite exatamente: ${phrase}`, "");
     syncPeopleSummary(root);
   });
 })();
+
+(function () {
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+
+    return outputArray;
+  }
+
+  function supportsPushNotifications() {
+    return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  }
+
+  function setPushToggleState(button, statusEl, state) {
+    if (!(button instanceof HTMLButtonElement)) return;
+
+    const states = {
+      idle: {
+        label: 'Ativar push',
+        disabled: false,
+        className: 'inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-sky-700 transition-colors'
+      },
+      enabled: {
+        label: 'Desativar push',
+        disabled: false,
+        className: 'inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors'
+      },
+      loading: {
+        label: 'Processando...',
+        disabled: true,
+        className: 'inline-flex items-center justify-center rounded-2xl bg-slate-400 px-4 py-2.5 text-sm font-bold text-white shadow-sm cursor-wait'
+      },
+      unsupported: {
+        label: 'Push indisponível',
+        disabled: true,
+        className: 'inline-flex items-center justify-center rounded-2xl bg-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm cursor-not-allowed dark:bg-slate-700 dark:text-slate-200'
+      }
+    };
+
+    const chosen = states[state] || states.idle;
+    button.textContent = chosen.label;
+    button.disabled = chosen.disabled;
+    button.className = chosen.className;
+
+    if (statusEl) {
+      if (state === 'enabled') {
+        statusEl.textContent = 'Este aparelho já pode receber notificações push. Toque no botão para desativar.';
+      } else if (state === 'unsupported') {
+        statusEl.textContent = 'Este navegador não suporta push ou o recurso não está configurado.';
+      } else if (state === 'idle') {
+        statusEl.textContent = 'Ative as notificações push neste aparelho para receber avisos mesmo fora da tela.';
+      }
+    }
+  }
+
+  async function sendSubscriptionToServer(subscription) {
+    const response = await fetch('/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription })
+    });
+
+    if (!response.ok) {
+      throw new Error('Não foi possível salvar a inscrição de push no servidor.');
+    }
+  }
+
+  async function removeSubscriptionFromServer(endpoint) {
+    const response = await fetch('/push/unsubscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint })
+    });
+
+    if (!response.ok) {
+      throw new Error('Não foi possível remover a inscrição de push no servidor.');
+    }
+  }
+
+  async function syncPushButton(button, statusEl) {
+    const publicKey = String(button.dataset.pushPublicKey || '').trim();
+
+    if (!supportsPushNotifications() || !publicKey) {
+      setPushToggleState(button, statusEl, 'unsupported');
+      return;
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    const existingSubscription = await registration.pushManager.getSubscription();
+    setPushToggleState(button, statusEl, existingSubscription ? 'enabled' : 'idle');
+  }
+
+  async function togglePush(button, statusEl) {
+    const publicKey = String(button.dataset.pushPublicKey || '').trim();
+    if (!publicKey) {
+      setPushToggleState(button, statusEl, 'unsupported');
+      return;
+    }
+
+    setPushToggleState(button, statusEl, 'loading');
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const existingSubscription = await registration.pushManager.getSubscription();
+
+      if (existingSubscription) {
+        await removeSubscriptionFromServer(existingSubscription.endpoint);
+        await existingSubscription.unsubscribe();
+        setPushToggleState(button, statusEl, 'idle');
+        return;
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        throw new Error('Permissão de notificações não concedida.');
+      }
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey)
+      });
+
+      await sendSubscriptionToServer(subscription);
+      setPushToggleState(button, statusEl, 'enabled');
+    } catch (error) {
+      console.error(error);
+      setPushToggleState(button, statusEl, 'idle');
+      window.alert(error?.message || 'Não foi possível configurar as notificações push neste aparelho.');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-push-toggle]').forEach((button) => {
+      if (!(button instanceof HTMLButtonElement)) return;
+
+      const statusSelector = String(button.dataset.pushStatusTarget || '').trim();
+      const statusEl = statusSelector ? document.querySelector(statusSelector) : null;
+      syncPushButton(button, statusEl).catch((error) => {
+        console.error(error);
+        setPushToggleState(button, statusEl, 'unsupported');
+      });
+
+      button.addEventListener('click', () => {
+        togglePush(button, statusEl).catch((error) => {
+          console.error(error);
+          setPushToggleState(button, statusEl, 'idle');
+        });
+      });
+    });
+  });
+})();

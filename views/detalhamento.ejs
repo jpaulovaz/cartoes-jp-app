@@ -1,4 +1,4 @@
-<%- include("partials/header", { title: "OrganizaPay | 👑 Meu Detalhamento" }) %>
+<%- include("partials/header", { title: "OrganizaPay | 👑 Meu Controle" }) %>
 
     <% /* Calculo de saldo */ let incCents=0; let expCents=0; finances.forEach(f=> {
         if(f.type === 'income') incCents += f.amount_cents;
@@ -34,7 +34,7 @@
                 <div class="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                         <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">👑 Meu
-                            Detalhamento</h1>
+                            Controle</h1>
                         <p class="text-slate-500 mt-1 font-medium">Titular: <span class="text-blue-600">
                                 <%= owner.name %>
                             </span></p>
@@ -62,7 +62,7 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                 </svg>
-                                + Novo Item
+                                Novo Item
                             </button>
 
                             <div

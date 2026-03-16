@@ -134,52 +134,74 @@
     return (items || []).filter(predicate).length;
   }
 
+  function isReceivedActionable(item) {
+    return item?.status === 'pending' || (item?.status === 'accepted' && !item?.payment_marked_at);
+  }
+
+  function isSentActionable(item) {
+    return item?.status === 'rejected_by_receiver' || (item?.status === 'accepted' && !!item?.payment_marked_at);
+  }
+
+  function groupContainsRequest(group, requestId) {
+    if (!group || !requestId) return false;
+    return (group.items || []).some(item => Number(item.id) === Number(requestId));
+  }
+
+  function countGroupActions(group, scope) {
+    if (!group) return 0;
+    return (group.items || []).filter(item => scope === 'received' ? isReceivedActionable(item) : isSentActionable(item)).length;
+  }
+
   const receivedGroups = buildMonthGroups(received || []);
   const sentGroups = buildMonthGroups(sent || []);
   const receivedPendingCount = countItems(received, item => item.status === 'pending');
   const sentDecisionCount = countItems(sent, item => item.status === 'rejected_by_receiver');
   const sentReceiptCount = countItems(sent, item => item.status === 'accepted' && item.payment_marked_at);
   const actionCount = receivedPendingCount + sentDecisionCount + sentReceiptCount;
+  const receivedHasActionableGroup = receivedGroups.some(group => countGroupActions(group, 'received') > 0);
+  const sentHasActionableGroup = sentGroups.some(group => countGroupActions(group, 'sent') > 0);
+
+  function shouldOpenGroup(group, index, scope) {
+    if (groupContainsRequest(group, requestIdToHighlight)) return true;
+    const actionCountForGroup = countGroupActions(group, scope);
+    if (actionCountForGroup > 0) return true;
+    if (scope === 'received' && !receivedHasActionableGroup && index === 0) return true;
+    if (scope === 'sent' && !sentHasActionableGroup && index === 0) return true;
+    return false;
+  }
 %>
 
 <div class="max-w-7xl mx-auto space-y-8">
   <section class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
     <div>
       <h1 class="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Dívidas Compartilhadas</h1>
-      <p class="mt-2 text-sm md:text-base font-medium text-slate-500 dark:text-slate-400">
-        O sino do header e os alertas do detalhamento agora levam direto para esta tela. Tudo que envolve a cobrança fica concentrado aqui.
-      </p>
     </div>
 
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 shadow-sm">
+    <div class="grid gap-3 sm:grid-cols-3">
+      <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4 shadow-sm text-center">
         <div class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Recebidas</div>
-        <div class="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white"><%= received.length %></div>
+        <div class="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white"><%= received.length %></div>
+        <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= receivedGroups.length %> período(s)</div>
       </div>
-      <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 shadow-sm">
+      <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4 shadow-sm text-center">
         <div class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Enviadas</div>
-        <div class="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white"><%= sent.length %></div>
+        <div class="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white"><%= sent.length %></div>
+        <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= sentGroups.length %> período(s)</div>
       </div>
-      <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 shadow-sm">
+      <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-5 py-4 shadow-sm text-center">
         <div class="text-xs font-bold uppercase tracking-[0.18em] text-amber-600 dark:text-amber-300">Sua vez</div>
-        <div class="mt-1 text-2xl font-extrabold text-amber-700 dark:text-amber-200"><%= actionCount %></div>
-      </div>
-      <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 shadow-sm">
-        <div class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Fluxo</div>
-        <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white">Do envio à liquidação</div>
+        <div class="mt-2 text-2xl font-extrabold text-amber-700 dark:text-amber-200"><%= actionCount %></div>
+        <div class="mt-1 text-xs font-medium text-amber-700/80 dark:text-amber-200/80">Ações pendentes</div>
       </div>
     </div>
   </section>
 
-  <section class="grid gap-6 xl:grid-cols-2">
-    <div id="received" class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
+  <section class="grid gap-6 xl:grid-cols-2 xl:items-start">
+    <div id="received" class="self-start rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
       <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/70">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 class="text-lg font-extrabold text-slate-900 dark:text-white">Recebidas</h2>
-            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Solicitações que outros usuários enviaram para você.</p>
-          </div>
-          <a href="#sent" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Ir para enviadas</a>
+        <div>
+          <h2 class="text-lg font-extrabold text-slate-900 dark:text-white">Recebidas</h2>
+          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Solicitações que outros usuários enviaram para você.</p>
         </div>
       </div>
 
@@ -191,28 +213,34 @@
         </div>
       <% } else { %>
         <div class="p-4 md:p-5 space-y-4">
-          <% receivedGroups.forEach(group => { %>
-            <section class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 overflow-hidden">
-              <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-950/30">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <% receivedGroups.forEach((group, groupIndex) => {
+            const monthActionCount = countGroupActions(group, 'received');
+            const groupOpen = shouldOpenGroup(group, groupIndex, 'received');
+          %>
+            <details class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 overflow-hidden" <%= groupOpen ? 'open' : '' %>>
+              <summary class="list-none cursor-pointer px-5 py-4 bg-white/70 dark:bg-slate-950/30">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Competência</div>
                     <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= group.label %></div>
                   </div>
-                  <div class="flex flex-wrap gap-2">
+                  <div class="flex flex-wrap gap-2 sm:justify-end">
+                    <% if (monthActionCount > 0) { %>
+                      <span class="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-200"><%= monthActionCount %> ação(ões)</span>
+                    <% } %>
                     <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= group.items.length %> cobrança(s)</span>
                     <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= formatBRLFromCents(group.totalCents) %></span>
                   </div>
                 </div>
-              </div>
+              </summary>
 
-              <div class="divide-y divide-slate-200 dark:divide-slate-700">
+              <div class="border-t border-slate-200 dark:border-slate-700 divide-y divide-slate-200 dark:divide-slate-700">
                 <% group.items.forEach(item => {
                   const meta = statusMeta(item);
                   const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
                   const timeline = timelineFor(item.id);
                 %>
-                  <details id="request-<%= item.id %>" class="group <%= isHighlighted ? 'bg-blue-50/70 dark:bg-blue-900/10' : 'bg-white/80 dark:bg-slate-900/20' %>" <%= isHighlighted ? 'open' : '' %>>
+                  <details id="request-<%= item.id %>" class="<%= isHighlighted ? 'bg-blue-50/70 dark:bg-blue-900/10' : 'bg-white/80 dark:bg-slate-900/20' %>" <%= isHighlighted ? 'open' : '' %>>
                     <summary class="list-none cursor-pointer px-5 py-4">
                       <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div class="min-w-0 flex-1">
@@ -231,12 +259,7 @@
                             <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor</div>
                             <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
                           </div>
-                          <div class="flex items-center gap-2 text-sm font-bold text-blue-600 dark:text-blue-300">
-                            <span>Ver detalhes</span>
-                            <svg class="h-5 w-5 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                          </div>
+                          <div class="text-sm font-bold text-blue-600 dark:text-blue-300">Ver detalhes</div>
                         </div>
                       </div>
                     </summary>
@@ -348,20 +371,17 @@
                   </details>
                 <% }) %>
               </div>
-            </section>
+            </details>
           <% }) %>
         </div>
       <% } %>
     </div>
 
-    <div id="sent" class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
+    <div id="sent" class="self-start rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
       <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/70">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 class="text-lg font-extrabold text-slate-900 dark:text-white">Enviadas</h2>
-            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Solicitações que você enviou para outros usuários.</p>
-          </div>
-          <a href="#received" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Ir para recebidas</a>
+        <div>
+          <h2 class="text-lg font-extrabold text-slate-900 dark:text-white">Enviadas</h2>
+          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Solicitações que você enviou para outros usuários.</p>
         </div>
       </div>
 
@@ -369,32 +389,38 @@
         <div class="px-6 py-12 text-center">
           <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-900 dark:text-slate-500">📤</div>
           <div class="text-base font-bold text-slate-800 dark:text-slate-100">Nenhuma solicitação enviada ainda.</div>
-          <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Quando você compartilhar uma dívida com outro usuário, ela aparecerá aqui.</p>
+          <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Quando você dividir uma compra com alguém elegível, ela aparecerá aqui.</p>
         </div>
       <% } else { %>
         <div class="p-4 md:p-5 space-y-4">
-          <% sentGroups.forEach(group => { %>
-            <section class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 overflow-hidden">
-              <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-950/30">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <% sentGroups.forEach((group, groupIndex) => {
+            const monthActionCount = countGroupActions(group, 'sent');
+            const groupOpen = shouldOpenGroup(group, groupIndex, 'sent');
+          %>
+            <details class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 overflow-hidden" <%= groupOpen ? 'open' : '' %>>
+              <summary class="list-none cursor-pointer px-5 py-4 bg-white/70 dark:bg-slate-950/30">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Competência</div>
                     <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= group.label %></div>
                   </div>
-                  <div class="flex flex-wrap gap-2">
+                  <div class="flex flex-wrap gap-2 sm:justify-end">
+                    <% if (monthActionCount > 0) { %>
+                      <span class="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-200"><%= monthActionCount %> ação(ões)</span>
+                    <% } %>
                     <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= group.items.length %> cobrança(s)</span>
                     <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= formatBRLFromCents(group.totalCents) %></span>
                   </div>
                 </div>
-              </div>
+              </summary>
 
-              <div class="divide-y divide-slate-200 dark:divide-slate-700">
+              <div class="border-t border-slate-200 dark:border-slate-700 divide-y divide-slate-200 dark:divide-slate-700">
                 <% group.items.forEach(item => {
                   const meta = statusMeta(item);
                   const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
                   const timeline = timelineFor(item.id);
                 %>
-                  <details id="request-<%= item.id %>" class="group <%= isHighlighted ? 'bg-blue-50/70 dark:bg-blue-900/10' : 'bg-white/80 dark:bg-slate-900/20' %>" <%= isHighlighted ? 'open' : '' %>>
+                  <details id="request-<%= item.id %>" class="<%= isHighlighted ? 'bg-blue-50/70 dark:bg-blue-900/10' : 'bg-white/80 dark:bg-slate-900/20' %>" <%= isHighlighted ? 'open' : '' %>>
                     <summary class="list-none cursor-pointer px-5 py-4">
                       <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div class="min-w-0 flex-1">
@@ -413,12 +439,7 @@
                             <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor</div>
                             <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
                           </div>
-                          <div class="flex items-center gap-2 text-sm font-bold text-blue-600 dark:text-blue-300">
-                            <span>Ver detalhes</span>
-                            <svg class="h-5 w-5 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                          </div>
+                          <div class="text-sm font-bold text-blue-600 dark:text-blue-300">Ver detalhes</div>
                         </div>
                       </div>
                     </summary>
@@ -530,7 +551,7 @@
                   </details>
                 <% }) %>
               </div>
-            </section>
+            </details>
           <% }) %>
         </div>
       <% } %>

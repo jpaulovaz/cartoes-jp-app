@@ -31,6 +31,8 @@ try { db.prepare("ALTER TABLE people ADD COLUMN email TEXT").run(); } catch (e) 
 try { db.prepare("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN close_day INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN can_import INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_txn_date_snapshot TEXT").run(); } catch (e) { /* Coluna já existe */ }
 
 // Cria a tabela de meses fechados se não existir
 // Em ambiente multi-usuário, o fechamento precisa ser isolado por user_id.
@@ -717,6 +719,256 @@ function getVisibleCardsForMonth(userId, month, year) {
   return getCardsByIds(userId, Array.from(visibleIds));
 }
 
+function getOwnerPerson(userId) {
+  return db.prepare("SELECT id, name FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
+}
+
+function createNotification({ userId, type, title, body = null, href = null, relatedType = null, relatedId = null }) {
+  return db.prepare(`
+    INSERT INTO notifications (user_id, type, title, body, href, is_read, related_type, related_id, created_at)
+    VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
+  `).run(userId, type, title, body, href, relatedType, relatedId, nowIso());
+}
+
+function addSharedDebtEvent({ requestId, actorUserId, eventType, note = null }) {
+  db.prepare(`
+    INSERT INTO shared_debt_events (request_id, actor_user_id, event_type, note, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(requestId, actorUserId, eventType, note, nowIso());
+}
+
+function cancelPendingSharedDebtRequestsForTransaction(userId, txnId, note = 'Lançamento removido ou deixou de ser elegível para compartilhamento.') {
+  const pendingRows = db.prepare(`
+    SELECT id
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND source_transaction_id = ?
+      AND status = 'pending'
+  `).all(userId, txnId);
+
+  if (!pendingRows.length) return;
+
+  const now = nowIso();
+  const updateStmt = db.prepare(`
+    UPDATE shared_debt_requests
+    SET status = 'cancelled', updated_at = ?, resolved_at = ?
+    WHERE id = ? AND status = 'pending'
+  `);
+
+  pendingRows.forEach(row => {
+    updateStmt.run(now, now, row.id);
+    addSharedDebtEvent({ requestId: row.id, actorUserId: userId, eventType: 'cancelled', note });
+  });
+}
+
+function syncSharedDebtRequestsForTransaction(userId, txnId) {
+  const txn = db.prepare(`
+    SELECT
+      t.id,
+      t.txn_date,
+      t.description,
+      t.amount_cents,
+      t.card_id,
+      c.name AS card_name,
+      COALESCE(i.month, t.due_month) AS due_month,
+      COALESCE(i.year, t.due_year) AS due_year
+    FROM transactions t
+    LEFT JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.id = ? AND t.user_id = ?
+  `).get(txnId, userId);
+
+  if (!txn) {
+    cancelPendingSharedDebtRequestsForTransaction(userId, txnId);
+    return;
+  }
+
+  const requesterPerson = getOwnerPerson(userId);
+  const requesterDisplayName = requesterPerson?.name || getUserRecord(userId)?.name || 'Um usuário';
+
+  const eligibleRows = db.prepare(`
+    SELECT
+      a.id AS allocation_id,
+      a.person_id,
+      a.share_cents,
+      p.name AS person_name,
+      p.email AS person_email,
+      u.id AS receiver_user_id,
+      u.name AS receiver_user_name,
+      u.email AS receiver_user_email
+    FROM allocations a
+    JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id
+    JOIN users u ON lower(u.email) = lower(p.email)
+    WHERE a.user_id = ?
+      AND a.transaction_id = ?
+      AND p.email IS NOT NULL
+      AND trim(p.email) <> ''
+      AND u.id <> ?
+      AND a.share_cents > 0
+    ORDER BY a.id
+  `).all(userId, txnId, userId);
+
+  const existingPending = db.prepare(`
+    SELECT *
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND source_transaction_id = ?
+      AND status = 'pending'
+    ORDER BY id DESC
+  `).all(userId, txnId);
+
+  const existingByPerson = new Map();
+  existingPending.forEach(row => {
+    const personId = Number(row.source_person_id || 0);
+    if (personId && !existingByPerson.has(personId)) {
+      existingByPerson.set(personId, row);
+    }
+  });
+
+  const activePersonIds = new Set();
+  const now = nowIso();
+
+  db.transaction(() => {
+    eligibleRows.forEach(row => {
+      const personId = Number(row.person_id);
+      activePersonIds.add(personId);
+
+      const receiverEmailSnapshot = normalizeEmail(row.person_email || row.receiver_user_email);
+      const receiverNameSnapshot = row.person_name || row.receiver_user_name || null;
+      const existing = existingByPerson.get(personId);
+
+      if (existing) {
+        const changed = [
+          Number(existing.receiver_user_id || 0) !== Number(row.receiver_user_id || 0),
+          Number(existing.source_allocation_id || 0) !== Number(row.allocation_id || 0),
+          Number(existing.amount_cents || 0) !== Number(row.share_cents || 0),
+          Number(existing.card_id || 0) !== Number(txn.card_id || 0),
+          String(existing.card_name_snapshot || '') !== String(txn.card_name || ''),
+          String(existing.description_snapshot || '') !== String(txn.description || ''),
+          Number(existing.source_due_month || 0) !== Number(txn.due_month || 0),
+          Number(existing.source_due_year || 0) !== Number(txn.due_year || 0),
+          String(existing.source_txn_date_snapshot || '') !== String(txn.txn_date || ''),
+          String(existing.receiver_email_snapshot || '') !== String(receiverEmailSnapshot || ''),
+          String(existing.receiver_name_snapshot || '') !== String(receiverNameSnapshot || '')
+        ].some(Boolean);
+
+        db.prepare(`
+          UPDATE shared_debt_requests
+          SET requester_person_id = ?,
+              receiver_user_id = ?,
+              source_person_id = ?,
+              source_allocation_id = ?,
+              source_due_month = ?,
+              source_due_year = ?,
+              source_txn_date_snapshot = ?,
+              card_id = ?,
+              card_name_snapshot = ?,
+              description_snapshot = ?,
+              amount_cents = ?,
+              receiver_email_snapshot = ?,
+              receiver_name_snapshot = ?,
+              updated_at = ?
+          WHERE id = ?
+        `).run(
+          requesterPerson?.id || null,
+          row.receiver_user_id,
+          personId,
+          row.allocation_id,
+          txn.due_month || null,
+          txn.due_year || null,
+          txn.txn_date || null,
+          txn.card_id || null,
+          txn.card_name || null,
+          txn.description,
+          row.share_cents,
+          receiverEmailSnapshot,
+          receiverNameSnapshot,
+          now,
+          existing.id
+        );
+
+        if (changed) {
+          addSharedDebtEvent({
+            requestId: existing.id,
+            actorUserId: userId,
+            eventType: 'updated',
+            note: 'Solicitação atualizada automaticamente após alteração na distribuição.'
+          });
+
+          createNotification({
+            userId: row.receiver_user_id,
+            type: 'shared_debt_request',
+            title: 'Cobrança compartilhada atualizada',
+            body: `${requesterDisplayName} atualizou uma cobrança para ${formatBRLFromCents(row.share_cents)} referente a ${txn.description}.`,
+            href: `/shared-debts?request=${existing.id}`,
+            relatedType: 'shared_debt_request',
+            relatedId: existing.id
+          });
+        }
+      } else {
+        const info = db.prepare(`
+          INSERT INTO shared_debt_requests (
+            requester_user_id, requester_person_id, receiver_user_id, source_person_id,
+            source_transaction_id, source_allocation_id, source_due_month, source_due_year, source_txn_date_snapshot,
+            card_id, card_name_snapshot, description_snapshot, amount_cents,
+            receiver_email_snapshot, receiver_name_snapshot, request_note, response_note,
+            status, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'pending', ?, ?)
+        `).run(
+          userId,
+          requesterPerson?.id || null,
+          row.receiver_user_id,
+          personId,
+          txnId,
+          row.allocation_id,
+          txn.due_month || null,
+          txn.due_year || null,
+          txn.txn_date || null,
+          txn.card_id || null,
+          txn.card_name || null,
+          txn.description,
+          row.share_cents,
+          receiverEmailSnapshot,
+          receiverNameSnapshot,
+          now,
+          now
+        );
+
+        const requestId = Number(info.lastInsertRowid);
+        addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'created' });
+
+        createNotification({
+          userId: row.receiver_user_id,
+          type: 'shared_debt_request',
+          title: 'Nova cobrança compartilhada',
+          body: `${requesterDisplayName} enviou uma cobrança para você no valor de ${formatBRLFromCents(row.share_cents)} referente a ${txn.description}.`,
+          href: `/shared-debts?request=${requestId}`,
+          relatedType: 'shared_debt_request',
+          relatedId: requestId
+        });
+      }
+    });
+
+    existingPending.forEach(row => {
+      const personId = Number(row.source_person_id || 0);
+      if (personId && !activePersonIds.has(personId)) {
+        db.prepare(`
+          UPDATE shared_debt_requests
+          SET status = 'cancelled', updated_at = ?, resolved_at = ?
+          WHERE id = ? AND status = 'pending'
+        `).run(now, now, row.id);
+
+        addSharedDebtEvent({
+          requestId: row.id,
+          actorUserId: userId,
+          eventType: 'cancelled',
+          note: 'Solicitação cancelada automaticamente porque a pessoa deixou de participar da divisão.'
+        });
+      }
+    });
+  })();
+}
+
 function deleteTransactionsAndAllocations(userId, rows) {
   const uniqueRows = Array.from(new Map(
     (rows || [])
@@ -742,6 +994,7 @@ function deleteTransactionsAndAllocations(userId, rows) {
     const importIds = new Set();
 
     items.forEach(item => {
+      cancelPendingSharedDebtRequestsForTransaction(userId, item.id);
       deleteAllocation.run(item.id, userId);
       deleteTransaction.run(item.id, userId);
       if (item.import_id) importIds.add(item.import_id);
@@ -1060,9 +1313,11 @@ function getSharedDebtRequestsReceived(userId) {
     SELECT
       r.*,
       u.name AS requester_name,
-      u.email AS requester_email
+      u.email AS requester_email,
+      COALESCE(r.source_txn_date_snapshot, t.txn_date) AS source_txn_date
     FROM shared_debt_requests r
     JOIN users u ON u.id = r.requester_user_id
+    LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
     WHERE r.receiver_user_id = ?
     ORDER BY
       CASE r.status
@@ -1084,9 +1339,11 @@ function getSharedDebtRequestsSent(userId) {
     SELECT
       r.*,
       u.name AS receiver_name,
-      u.email AS receiver_email
+      u.email AS receiver_email,
+      COALESCE(r.source_txn_date_snapshot, t.txn_date) AS source_txn_date
     FROM shared_debt_requests r
     JOIN users u ON u.id = r.receiver_user_id
+    LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
     WHERE r.requester_user_id = ?
     ORDER BY
       CASE r.status
@@ -1105,6 +1362,16 @@ function getSharedDebtRequestsSent(userId) {
 
 app.get("/shared-debts", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
+  const requestIdToHighlight = Number(req.query.request) || null;
+
+  db.prepare(`
+    UPDATE notifications
+    SET is_read = 1, read_at = COALESCE(read_at, ?)
+    WHERE user_id = ?
+      AND type = 'shared_debt_request'
+      AND is_read = 0
+  `).run(nowIso(), userId);
+
   const received = getSharedDebtRequestsReceived(userId);
   const sent = getSharedDebtRequestsSent(userId);
 
@@ -1112,8 +1379,10 @@ app.get("/shared-debts", ensureAuthenticated, (req, res) => {
     title: "OrganizaPay | Dívidas Compartilhadas",
     received,
     sent,
+    requestIdToHighlight,
     formatBRLFromCents,
-    monthLabel
+    monthLabel,
+    formatDateBR
   });
 });
 
@@ -1430,6 +1699,43 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const statementByCard = new Map(statementRows.map(row => [row.card_id, row]));
 
   const alerts = [];
+  const unreadSharedDebtNotifications = db.prepare(`
+    SELECT title, body, href, created_at
+    FROM notifications
+    WHERE user_id = ? AND is_read = 0 AND type = 'shared_debt_request'
+    ORDER BY created_at DESC
+    LIMIT 5
+  `).all(userId);
+
+  if (unreadSharedDebtNotifications.length) {
+    const newest = unreadSharedDebtNotifications[0];
+    alerts.push({
+      type: 'info',
+      icon: '🤝',
+      title: unreadSharedDebtNotifications.length === 1 ? newest.title : 'Dívidas compartilhadas pendentes',
+      description: unreadSharedDebtNotifications.length === 1
+        ? (newest.body || 'Você recebeu uma nova solicitação de dívida compartilhada.')
+        : `Você tem ${unreadSharedDebtNotifications.length} atualização(ões) sobre dívidas compartilhadas aguardando sua análise.`,
+      href: newest.href || '/shared-debts'
+    });
+  } else {
+    const pendingSharedDebtCount = db.prepare(`
+      SELECT COUNT(*) AS total
+      FROM shared_debt_requests
+      WHERE receiver_user_id = ? AND status = 'pending'
+    `).get(userId)?.total || 0;
+
+    if (pendingSharedDebtCount > 0) {
+      alerts.push({
+        type: 'warning',
+        icon: '📨',
+        title: 'Cobranças aguardando sua análise',
+        description: `${pendingSharedDebtCount} solicitação(ões) de dívida compartilhada estão pendentes para você.`,
+        href: '/shared-debts'
+      });
+    }
+  }
+
   const today = dayjs();
   const isCurrentReferenceMonth = currentYear === today.year() && currentMonth === (today.month() + 1);
 
@@ -1700,6 +2006,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
     }
 
     let recurringRuleId = null;
+    const createdTxnIds = [];
 
     db.transaction(() => {
       const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1").all(userId);
@@ -1734,12 +2041,16 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
         const currentRecurringRuleId = isRecurring ? recurringRuleId : null;
 
         const info = insTxn.run(userId, cardIdNum, date, finalDesc, currentAmount, currentMonth, currentYear, currentRecurringRuleId, nowIso());
+        const txnIdCreated = Number(info.lastInsertRowid);
 
         if (activePeople.length === 1) {
-          insAlloc.run(userId, info.lastInsertRowid, activePeople[0].id, currentAmount, nowIso());
+          insAlloc.run(userId, txnIdCreated, activePeople[0].id, currentAmount, nowIso());
+          createdTxnIds.push(txnIdCreated);
         }
       }
     })();
+
+    createdTxnIds.forEach(txnIdCreated => syncSharedDebtRequestsForTransaction(userId, txnIdCreated));
 
     if (isRecurring) {
       setFlash(req, "success", "Lançamento recorrente mensal criado com sucesso.");
@@ -1825,6 +2136,8 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
     }
   })();
 
+  syncSharedDebtRequestsForTransaction(userId, id);
+
   res.redirect(`/month/${txn.year}/${txn.month}`);
 });
 
@@ -1891,6 +2204,8 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
       });
     }
   })();
+
+  syncSharedDebtRequestsForTransaction(userId, id);
 
   res.redirect(`/month/${txn.year}/${txn.month}`);
 });

@@ -273,6 +273,14 @@ if (!columnExists("transactions", "recurring_rule_id")) {
   db.exec("ALTER TABLE transactions ADD COLUMN recurring_rule_id INTEGER;");
 }
 
+if (!columnExists("shared_debt_requests", "source_person_id")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id INTEGER;");
+}
+
+if (!columnExists("shared_debt_requests", "source_txn_date_snapshot")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN source_txn_date_snapshot TEXT;");
+}
+
 // ===== ÍNDICES =====
 db.exec(`
 CREATE INDEX IF NOT EXISTS idx_cards_user ON cards(user_id);
@@ -292,6 +300,7 @@ CREATE INDEX IF NOT EXISTS idx_people_email ON people(user_id, email);
 CREATE INDEX IF NOT EXISTS idx_shared_debts_receiver_status ON shared_debt_requests(receiver_user_id, status, created_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debts_requester_status ON shared_debt_requests(requester_user_id, status, created_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debts_source_allocation ON shared_debt_requests(source_allocation_id);
+CREATE INDEX IF NOT EXISTS idx_shared_debts_source_person ON shared_debt_requests(requester_user_id, source_transaction_id, source_person_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_events_request ON shared_debt_events(request_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at);
 `);

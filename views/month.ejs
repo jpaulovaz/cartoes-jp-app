@@ -209,9 +209,9 @@
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Valor</label>
-          <input name="f_amount" value="<%= filters.f_amount || '' %>"
+          <input name="f_amount" value="<%= filters.f_amount || '' %>" data-money-mask inputmode="numeric"
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
-            placeholder="49,90" />
+            placeholder="R$ 0,00" />
         </div>
 
         <div class="md:col-span-1">

@@ -334,6 +334,11 @@ function redirectBackOr(req, fallback) {
   return req.get("referer") || fallback;
 }
 
+
+function isFetchRequest(req) {
+  return String(req.get('x-requested-with') || '').toLowerCase() === 'fetch';
+}
+
 function getInstallmentMonths(startYear, startMonth, installments) {
   const months = [];
   let currentYear = Number(startYear);
@@ -1476,10 +1481,13 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   }
 
   if (filters.f_amount) {
-    const s = filters.f_amount.replace(/\s+/g, "");
-    where.push("(CAST(ABS(t.amount_cents) AS TEXT) LIKE ? OR CAST(ABS(t.amount_cents) / 100.0 AS TEXT) LIKE ?)");
-    params.push(likeParam(s.replace(/[.,]/g, "")));
-    params.push(likeParam(s.replace(",", ".")));
+    const digits = filters.f_amount.replace(/\D/g, "");
+    if (digits) {
+      where.push("CAST(ABS(t.amount_cents) AS TEXT) LIKE ?");
+      params.push(likeParam(digits));
+    } else {
+      filters.f_amount = "";
+    }
   }
 
   if (filters.f_allocated) {
@@ -1949,6 +1957,9 @@ app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
   if (isMonthClosed(userId, month, year)) {
+    if (isFetchRequest(req)) {
+      return res.status(423).json({ error: getMonthLockMessage(month, year) });
+    }
     setFlash(req, "error", getMonthLockMessage(month, year));
     return res.redirect(`/summary/${year}/${month}`);
   }
@@ -1989,6 +2000,9 @@ app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {
     }
   })();
 
+  if (isFetchRequest(req)) {
+    return res.json({ success: true });
+  }
   res.redirect(`/summary/${year}/${month}`);
 });
 
@@ -1998,6 +2012,9 @@ app.post("/summary/:year/:month/people", ensureAuthenticated, (req, res) => {
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
   if (isMonthClosed(userId, month, year)) {
+    if (isFetchRequest(req)) {
+      return res.status(423).json({ error: getMonthLockMessage(month, year) });
+    }
     setFlash(req, "error", getMonthLockMessage(month, year));
     return res.redirect(`/summary/${year}/${month}`);
   }
@@ -2034,6 +2051,9 @@ app.post("/summary/:year/:month/people", ensureAuthenticated, (req, res) => {
     }
   })();
 
+  if (isFetchRequest(req)) {
+    return res.json({ success: true });
+  }
   res.redirect(`/summary/${year}/${month}`);
 });
 

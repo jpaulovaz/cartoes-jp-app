@@ -215,8 +215,12 @@ Digite exatamente: ${phrase}`, "");
     return String(value || '').replace(/\D/g, '');
   }
 
-  function formatMoneyDigits(digits) {
-    if (!digits) return '';
+  function keepZeroVisible(input) {
+    return input?.dataset?.moneyZero === '1';
+  }
+
+  function formatMoneyDigits(digits, keepZero = false) {
+    if (!digits) return keepZero ? brlFormatter.format(0) : '';
     return brlFormatter.format(Number(digits) / 100);
   }
 
@@ -230,7 +234,7 @@ Digite exatamente: ${phrase}`, "");
     if (!force && hasMathSyntax(raw)) return;
     const digits = extractMoneyDigits(raw);
     input.dataset.moneyDigits = digits;
-    input.value = digits ? formatMoneyDigits(digits) : '';
+    input.value = formatMoneyDigits(digits, keepZeroVisible(input));
   }
 
   function bindMoneyMask(input) {
@@ -241,6 +245,11 @@ Digite exatamente: ${phrase}`, "");
 
     if (!hasMathSyntax(input.value)) {
       renderMoneyInput(input, true);
+    }
+
+    if (keepZeroVisible(input) && !extractMoneyDigits(input.value)) {
+      input.value = brlFormatter.format(0);
+      input.dataset.moneyDigits = '';
     }
 
     input.addEventListener('beforeinput', (event) => {

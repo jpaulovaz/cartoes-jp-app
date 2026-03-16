@@ -23,6 +23,10 @@
       <div class="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
         🔒 Este mês está fechado. Os lançamentos continuam visíveis, mas os campos de pagamento e vencimento estão em somente leitura.
       </div>
+    <% } else { %>
+      <div id="summaryAutosaveStatus" class="mb-8 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
+        As alterações desta página são salvas automaticamente em segundo plano.
+      </div>
     <% } %>
 
     <% if (unassigned && unassigned.length> 0) { %>
@@ -71,16 +75,16 @@
                    acc.remaining_cents += (cp.total_cents || 0) - (cp.paid_cents || 0);
                    return acc;
                  }, { total_cents: 0, paid_cents: 0, remaining_cents: 0 }); %>
-              <form method="post" action="/summary/<%= year %>/<%= month %>/cards">
+              <form method="post" action="/summary/<%= year %>/<%= month %>/cards" id="summaryCardsForm" data-summary-autosave="cards">
                 <div class="overflow-x-auto">
                   <table class="w-full text-sm text-left">
                     <thead
                       class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-xs tracking-wider">
                       <tr>
                         <th class="px-3 py-4">Cartão</th>
-                        <th class="px-2 py-4">Vencimento</th>
+                        <th class="px-2 py-4 text-center">Vencimento</th>
                         <th class="px-3 py-4 text-right">Fatura</th>
-                        <th class="px-3 py-4 text-right">Valor Pago</th>
+                        <th class="px-3 py-4 text-center">Valor Pago</th>
                         <th class="px-3 py-4 text-right">Falta</th>
                       </tr>
                     </thead>
@@ -88,27 +92,29 @@
                       <% cardsPanel.forEach(cp=> {
                         const falta = (cp.total_cents || 0) - (cp.paid_cents || 0);
                         %>
-                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors" data-summary-card-row data-total-cents="<%= cp.total_cents || 0 %>">
                           <td class="px-3 py-3 font-bold text-slate-800 dark:text-white">
                             <%= cp.card_name %>
                               <input type="hidden" name="card_id" value="<%= cp.card_id %>" />
                           </td>
-                          <td class="px-2 py-3">
-                            <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1">Calculado: <%=
-                                formatDateBR(cp.computed_due_date) %>
+                          <td class="px-2 py-3 text-center align-top">
+                            <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1">Calculado: <%= formatDateBR(cp.computed_due_date) %></div>
+                            <div class="flex justify-center">
+                              <input name="override_due" type="date" value="<%= (cp.due_date || '') %>" data-summary-card-due <%= isClosed ? 'disabled' : '' %>
+                                class="border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none w-full max-w-[150px]" />
                             </div>
-                            <input name="override_due" type="date" value="<%= (cp.due_date || '') %>" <%= isClosed ? 'disabled' : '' %>
-                              class="border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none w-full min-w-[110px]" />
                           </td>
                           <td class="px-3 py-3 text-right font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">
                             <%= formatBRLFromCents(cp.total_cents) %>
                           </td>
-                          <td class="px-3 py-3 text-right">
-                            <input name="paid" inputmode="decimal" type="text"
-                              value="<%= cp.paid_cents ? formatBRLFromCents(cp.paid_cents) : '' %>" <%= isClosed ? 'disabled' : '' %>
-                              class="w-24 lg:w-28 text-right border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none paid-input" />
+                          <td class="px-3 py-3 text-center">
+                            <div class="flex justify-center">
+                              <input name="paid" inputmode="numeric" type="text" data-money-mask data-money-zero="1" data-summary-card-paid
+                                value="<%= formatBRLFromCents(cp.paid_cents || 0) %>" <%= isClosed ? 'disabled' : '' %>
+                                class="w-28 lg:w-32 text-center border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none paid-input" />
+                            </div>
                           </td>
-                          <td
+                          <td data-summary-card-remaining
                             class="px-3 py-3 text-right font-black whitespace-nowrap <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">
                             <%= formatBRLFromCents(falta) %>
                           </td>
@@ -118,10 +124,10 @@
                     <tfoot class="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
                       <tr>
                         <td class="px-3 py-3 font-black text-slate-800 dark:text-white">Total</td>
-                        <td class="px-2 py-3 text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Ordenado por vencimento</td>
+                        <td class="px-2 py-3 text-xs font-bold uppercase text-slate-500 dark:text-slate-400 text-center">Ordenado por vencimento</td>
                         <td class="px-3 py-3 text-right font-black text-slate-900 dark:text-white whitespace-nowrap"><%= formatBRLFromCents(cardsPanelTotals.total_cents) %></td>
-                        <td class="px-3 py-3 text-right font-black text-emerald-700 whitespace-nowrap"><%= formatBRLFromCents(cardsPanelTotals.paid_cents) %></td>
-                        <td class="px-3 py-3 text-right font-black whitespace-nowrap <%= cardsPanelTotals.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(cardsPanelTotals.remaining_cents) %></td>
+                        <td id="summaryCardsPaidTotal" class="px-3 py-3 text-center font-black text-emerald-700 whitespace-nowrap"><%= formatBRLFromCents(cardsPanelTotals.paid_cents) %></td>
+                        <td id="summaryCardsRemainingTotal" class="px-3 py-3 text-right font-black whitespace-nowrap <%= cardsPanelTotals.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(cardsPanelTotals.remaining_cents) %></td>
                       </tr>
                     </tfoot>
                   </table>
@@ -130,9 +136,7 @@
                   <% if (isClosed) { %>
                     <span class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Mês fechado</span>
                   <% } else { %>
-                    <button
-                      class="px-6 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all hover:-translate-y-0.5">Salvar
-                      (Cartões)</button>
+                    <span class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-900 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Salvamento automático ativo</span>
                   <% } %>
                 </div>
               </form>
@@ -155,7 +159,7 @@
                    acc.remaining_cents += (pp.total_cents || 0) - (pp.paid_cents || 0);
                    return acc;
                  }, { total_cents: 0, paid_cents: 0, remaining_cents: 0 }); %>
-              <form method="post" action="/summary/<%= year %>/<%= month %>/people">
+              <form method="post" action="/summary/<%= year %>/<%= month %>/people" id="summaryPeopleForm" data-summary-autosave="people">
                 <div class="overflow-x-auto">
                   <table class="w-full text-sm text-left">
                     <thead
@@ -163,7 +167,7 @@
                       <tr>
                         <th class="px-4 py-4">Pessoa</th>
                         <th class="px-4 py-4 text-right">Total (Deve)</th>
-                        <th class="px-4 py-4 text-right">Já Pagou</th>
+                        <th class="px-4 py-4 text-center">Já Pagou</th>
                         <th class="px-4 py-4 text-right">Falta</th>
                       </tr>
                     </thead>
@@ -171,7 +175,7 @@
                       <% personPanel.forEach(pp=> {
                         const falta = (pp.total_cents || 0) - (pp.paid_cents || 0);
                         %>
-                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors" data-summary-person-row data-total-cents="<%= pp.total_cents || 0 %>">
                           <td class="px-4 py-3 font-bold text-slate-800 dark:text-white">
                             <%= pp.person_name %>
                               <input type="hidden" name="person_id" value="<%= pp.person_id %>" />
@@ -179,12 +183,14 @@
                           <td class="px-4 py-3 text-right font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">
                             <%= formatBRLFromCents(pp.total_cents) %>
                           </td>
-                          <td class="px-4 py-3 text-right">
-                            <input name="paid" inputmode="decimal" type="text"
-                              value="<%= pp.paid_cents ? formatBRLFromCents(pp.paid_cents) : '' %>" <%= isClosed ? 'disabled' : '' %>
-                              class="w-24 lg:w-28 text-right border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none paid-input" />
+                          <td class="px-4 py-3 text-center">
+                            <div class="flex justify-center">
+                              <input name="paid" inputmode="numeric" type="text" data-money-mask data-money-zero="1" data-summary-person-paid
+                                value="<%= formatBRLFromCents(pp.paid_cents || 0) %>" <%= isClosed ? 'disabled' : '' %>
+                                class="w-28 lg:w-32 text-center border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none paid-input" />
+                            </div>
                           </td>
-                          <td
+                          <td data-summary-person-remaining
                             class="px-4 py-3 text-right font-black whitespace-nowrap <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">
                             <%= formatBRLFromCents(falta) %>
                           </td>
@@ -195,8 +201,8 @@
                       <tr>
                         <td class="px-4 py-3 font-black text-slate-800 dark:text-white">Total</td>
                         <td class="px-4 py-3 text-right font-black text-slate-900 dark:text-white whitespace-nowrap"><%= formatBRLFromCents(personPanelTotals.total_cents) %></td>
-                        <td class="px-4 py-3 text-right font-black text-indigo-700 whitespace-nowrap"><%= formatBRLFromCents(personPanelTotals.paid_cents) %></td>
-                        <td class="px-4 py-3 text-right font-black whitespace-nowrap <%= personPanelTotals.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(personPanelTotals.remaining_cents) %></td>
+                        <td id="summaryPeoplePaidTotal" class="px-4 py-3 text-center font-black text-indigo-700 whitespace-nowrap"><%= formatBRLFromCents(personPanelTotals.paid_cents) %></td>
+                        <td id="summaryPeopleRemainingTotal" class="px-4 py-3 text-right font-black whitespace-nowrap <%= personPanelTotals.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(personPanelTotals.remaining_cents) %></td>
                       </tr>
                     </tfoot>
                   </table>
@@ -205,9 +211,7 @@
                   <% if (isClosed) { %>
                     <span class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Mês fechado</span>
                   <% } else { %>
-                    <button
-                      class="px-6 py-2.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-all hover:-translate-y-0.5">Salvar
-                      (Pessoas)</button>
+                    <span class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-900 dark:border-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-200">Salvamento automático ativo</span>
                   <% } %>
                 </div>
               </form>
@@ -277,43 +281,167 @@
 
   </div>
 
-  <script>
+    <script>
     document.addEventListener("DOMContentLoaded", () => {
-      const paidInputs = document.querySelectorAll(".paid-input");
+      const statusEl = document.getElementById("summaryAutosaveStatus");
+      const formatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+      const saveTimers = new WeakMap();
 
-      paidInputs.forEach(input => {
-        // Ao focar para digitar, retira o R$ e o ponto de milhar para facilitar a edição
-        input.addEventListener("focus", function () {
-          if (this.value) {
-            this.value = this.value.replace(/\./g, "").replace(/[^\d,-]/g, "").trim();
+      const setStatus = (message, type = "idle") => {
+        if (!statusEl) return;
+        statusEl.textContent = message;
+        statusEl.className = "mb-8 rounded-2xl px-4 py-3 text-sm font-semibold";
+        if (type === "saving") {
+          statusEl.classList.add("border", "border-blue-200", "bg-blue-50", "text-blue-900", "dark:border-blue-800", "dark:bg-blue-900/20", "dark:text-blue-200");
+        } else if (type === "success") {
+          statusEl.classList.add("border", "border-emerald-200", "bg-emerald-50", "text-emerald-900", "dark:border-emerald-800", "dark:bg-emerald-900/20", "dark:text-emerald-200");
+        } else if (type === "error") {
+          statusEl.classList.add("border", "border-rose-200", "bg-rose-50", "text-rose-900", "dark:border-rose-800", "dark:bg-rose-900/20", "dark:text-rose-200");
+        } else {
+          statusEl.classList.add("border", "border-emerald-200", "bg-emerald-50", "text-emerald-900", "dark:border-emerald-800", "dark:bg-emerald-900/20", "dark:text-emerald-200");
+        }
+      };
+
+      const centsFromInput = (value) => {
+        const digits = String(value || "").replace(/\D/g, "");
+        return digits ? Number(digits) : 0;
+      };
+
+      const updateColor = (element, cents) => {
+        if (!element) return;
+        element.classList.remove("text-red-500", "text-emerald-500");
+        element.classList.add(cents > 0 ? "text-red-500" : "text-emerald-500");
+      };
+
+      const updateCardTotals = () => {
+        const rows = document.querySelectorAll("[data-summary-card-row]");
+        let paidTotal = 0;
+        let remainingTotal = 0;
+
+        rows.forEach((row) => {
+          const totalCents = Number(row.dataset.totalCents || 0);
+          const input = row.querySelector("[data-summary-card-paid]");
+          const paidCents = centsFromInput(input ? input.value : "");
+          const remainingCents = Math.max(0, totalCents - paidCents);
+          paidTotal += paidCents;
+          remainingTotal += remainingCents;
+
+          const remainingCell = row.querySelector("[data-summary-card-remaining]");
+          if (remainingCell) {
+            remainingCell.textContent = formatter.format(remainingCents / 100);
+            updateColor(remainingCell, remainingCents);
           }
         });
 
-        // Ao tirar o foco, formata bonitinho como R$ XX.XXX,XX
-        input.addEventListener("blur", function () {
-          if (!this.value) return;
-          // Pega o valor, tira pontos de milhar, troca vírgula por ponto e converte pra Float
-          const limpo = this.value.replace(/\./g, "").replace(/[^\d,-]/g, "").replace(",", ".");
-          const val = parseFloat(limpo);
-          if (!isNaN(val)) {
-            this.value = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
+        const paidTotalEl = document.getElementById("summaryCardsPaidTotal");
+        const remainingTotalEl = document.getElementById("summaryCardsRemainingTotal");
+        if (paidTotalEl) paidTotalEl.textContent = formatter.format(paidTotal / 100);
+        if (remainingTotalEl) {
+          remainingTotalEl.textContent = formatter.format(remainingTotal / 100);
+          updateColor(remainingTotalEl, remainingTotal);
+        }
+      };
+
+      const updatePeopleTotals = () => {
+        const rows = document.querySelectorAll("[data-summary-person-row]");
+        let paidTotal = 0;
+        let remainingTotal = 0;
+
+        rows.forEach((row) => {
+          const totalCents = Number(row.dataset.totalCents || 0);
+          const input = row.querySelector("[data-summary-person-paid]");
+          const paidCents = centsFromInput(input ? input.value : "");
+          const remainingCents = Math.max(0, totalCents - paidCents);
+          paidTotal += paidCents;
+          remainingTotal += remainingCents;
+
+          const remainingCell = row.querySelector("[data-summary-person-remaining]");
+          if (remainingCell) {
+            remainingCell.textContent = formatter.format(remainingCents / 100);
+            updateColor(remainingCell, remainingCents);
           }
         });
-      });
 
-      // MÁGICA DA CORREÇÃO: Limpa a formatação de moeda um milissegundo antes de enviar pro servidor
-      document.querySelectorAll("form").forEach(form => {
-        form.addEventListener("submit", function () {
-          const inputsParaLimpar = this.querySelectorAll(".paid-input");
-          inputsParaLimpar.forEach(input => {
-            if (input.value) {
-              // Transforma "R$ 1.500,00" de volta para "1500,00" para o servidor não se assustar
-              input.value = input.value.replace(/\./g, '').replace(/[^\d,]/g, '');
-            }
+        const paidTotalEl = document.getElementById("summaryPeoplePaidTotal");
+        const remainingTotalEl = document.getElementById("summaryPeopleRemainingTotal");
+        if (paidTotalEl) paidTotalEl.textContent = formatter.format(paidTotal / 100);
+        if (remainingTotalEl) {
+          remainingTotalEl.textContent = formatter.format(remainingTotal / 100);
+          updateColor(remainingTotalEl, remainingTotal);
+        }
+      };
+
+      const submitForm = async (form) => {
+        if (!(form instanceof HTMLFormElement)) return;
+        if (form.dataset.submitting === "1") return;
+
+        form.dataset.submitting = "1";
+        setStatus("Salvando alterações...", "saving");
+
+        try {
+          const response = await fetch(form.action, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+              "X-Requested-With": "fetch"
+            },
+            body: new URLSearchParams(new FormData(form)).toString()
           });
+
+          if (!response.ok) {
+            let errorMessage = "Não foi possível salvar as alterações.";
+            try {
+              const data = await response.json();
+              if (data && data.error) errorMessage = data.error;
+            } catch (e) {}
+            throw new Error(errorMessage);
+          }
+
+          setStatus("Alterações salvas automaticamente.", "success");
+        } catch (error) {
+          setStatus(error.message || "Não foi possível salvar as alterações.", "error");
+        } finally {
+          form.dataset.submitting = "0";
+        }
+      };
+
+      const scheduleSubmit = (form) => {
+        if (!(form instanceof HTMLFormElement)) return;
+        const existing = saveTimers.get(form);
+        if (existing) clearTimeout(existing);
+        setStatus("Alterações pendentes...", "saving");
+        const timer = setTimeout(() => submitForm(form), 500);
+        saveTimers.set(form, timer);
+      };
+
+      updateCardTotals();
+      updatePeopleTotals();
+
+      document.querySelectorAll("[data-summary-card-paid]").forEach((input) => {
+        input.addEventListener("input", () => {
+          updateCardTotals();
+          scheduleSubmit(input.form);
+        });
+        input.addEventListener("change", () => {
+          updateCardTotals();
+          scheduleSubmit(input.form);
         });
       });
 
+      document.querySelectorAll("[data-summary-person-paid]").forEach((input) => {
+        input.addEventListener("input", () => {
+          updatePeopleTotals();
+          scheduleSubmit(input.form);
+        });
+        input.addEventListener("change", () => {
+          updatePeopleTotals();
+          scheduleSubmit(input.form);
+        });
+      });
+
+      document.querySelectorAll("[data-summary-card-due]").forEach((input) => {
+        input.addEventListener("change", () => scheduleSubmit(input.form));
+      });
     });
   </script>
 

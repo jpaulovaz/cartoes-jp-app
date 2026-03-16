@@ -19,6 +19,46 @@
         return { label: 'Pendente', classes: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800' };
     }
   }
+
+  function eventMeta(eventType) {
+    switch (eventType) {
+      case 'created':
+        return { label: 'Solicitação criada', dot: 'bg-blue-500' };
+      case 'updated':
+        return { label: 'Solicitação atualizada', dot: 'bg-amber-500' };
+      case 'accepted':
+        return { label: 'Solicitação aceita', dot: 'bg-emerald-500' };
+      case 'rejected_by_receiver':
+        return { label: 'Solicitação recusada', dot: 'bg-rose-500' };
+      case 'cancelled':
+        return { label: 'Solicitação cancelada', dot: 'bg-slate-400' };
+      case 'rejection_contested_by_sender':
+        return { label: 'Rejeição contestada', dot: 'bg-amber-500' };
+      case 'rejection_accepted_by_sender':
+        return { label: 'Rejeição aceita', dot: 'bg-slate-500' };
+      default:
+        return { label: eventType || 'Atualização', dot: 'bg-slate-400' };
+    }
+  }
+
+  function actorLabel(event) {
+    return event?.actor_name || event?.actor_email || 'Usuário';
+  }
+
+  function timelineFor(requestId) {
+    if (!eventsByRequest || typeof eventsByRequest.get !== 'function') return [];
+    const rows = eventsByRequest.get(Number(requestId)) || eventsByRequest.get(requestId) || [];
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  function formatTimeBR(dateStr) {
+    if (!dateStr) return '--:--';
+    try {
+      return new Date(dateStr).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } catch (err) {
+      return '--:--';
+    }
+  }
 %>
 
 <div class="max-w-7xl mx-auto space-y-8">
@@ -59,8 +99,12 @@
         </div>
       <% } else { %>
         <div class="divide-y divide-slate-100 dark:divide-slate-700">
-          <% received.forEach(item => { const meta = statusMeta(item.status); const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id); %>
-            <article class="px-6 py-5 space-y-3 <%= isHighlighted ? 'bg-blue-50/80 dark:bg-blue-900/10' : '' %>">
+          <% received.forEach(item => { 
+            const meta = statusMeta(item.status); 
+            const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
+            const timeline = timelineFor(item.id);
+          %>
+            <article class="px-6 py-5 space-y-4 <%= isHighlighted ? 'bg-blue-50/80 dark:bg-blue-900/10' : '' %>">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 class="text-base font-bold text-slate-900 dark:text-white"><%= item.description_snapshot %></h3>
@@ -70,7 +114,8 @@
                 </div>
                 <span class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold <%= meta.classes %>"><%= meta.label %></span>
               </div>
-              <div class="grid gap-3 sm:grid-cols-2">
+
+              <div class="grid gap-3 sm:grid-cols-3">
                 <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                   <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor</div>
                   <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
@@ -84,16 +129,64 @@
                   <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= item.source_txn_date ? formatDateBR(item.source_txn_date) : '—' %></div>
                 </div>
               </div>
+
               <div class="grid gap-3 sm:grid-cols-2">
                 <div>
                   <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Cartão</div>
                   <div class="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200"><%= item.card_name_snapshot || 'Não informado' %></div>
                 </div>
                 <div>
-                  <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação</div>
+                  <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação do envio</div>
                   <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= item.request_note || '—' %></div>
                 </div>
               </div>
+
+              <% if (item.response_note) { %>
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
+                  <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação da resposta</div>
+                  <div class="mt-1 text-sm font-medium text-slate-700 dark:text-slate-200"><%= item.response_note %></div>
+                </div>
+              <% } %>
+
+              <% if (item.status === 'pending') { %>
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-4">
+                  <div class="text-sm font-bold text-slate-900 dark:text-white">Responder solicitação</div>
+                  <p class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Você pode aceitar ou recusar esta cobrança e, se quiser, enviar uma observação de volta.</p>
+                  <form method="POST" action="/shared-debts/<%= item.id %>/respond" class="mt-3 space-y-3">
+                    <label class="block">
+                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação para <%= item.requester_name || item.requester_email || 'o remetente' %> (opcional)</span>
+                      <textarea name="note" rows="2" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:border-blue-500 dark:focus:ring-blue-500/20" placeholder="Ex.: Vou considerar essa dívida, obrigado por me avisar."></textarea>
+                    </label>
+                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                      <button type="submit" name="action" value="reject" class="inline-flex items-center justify-center rounded-2xl border border-rose-200 dark:border-rose-800 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-rose-600 dark:text-rose-300 shadow-sm hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors">Recusar</button>
+                      <button type="submit" name="action" value="accept" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors">Aceitar</button>
+                    </div>
+                  </form>
+                </div>
+              <% } %>
+
+              <% if (timeline.length) { %>
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 px-4 py-4">
+                  <div class="text-sm font-bold text-slate-900 dark:text-white">Histórico</div>
+                  <div class="mt-3 space-y-3">
+                    <% timeline.forEach(event => { const eMeta = eventMeta(event.event_type); %>
+                      <div class="flex gap-3">
+                        <div class="pt-1.5"><span class="block h-2.5 w-2.5 rounded-full <%= eMeta.dot %>"></span></div>
+                        <div class="min-w-0 flex-1">
+                          <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="text-sm font-semibold text-slate-800 dark:text-slate-100"><%= eMeta.label %></div>
+                            <div class="text-xs font-medium text-slate-400 dark:text-slate-500"><%= formatDateBR(event.created_at) %> • <%= formatTimeBR(event.created_at) %></div>
+                          </div>
+                          <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Por <%= actorLabel(event) %></div>
+                          <% if (event.note) { %>
+                            <div class="mt-1 text-sm text-slate-600 dark:text-slate-300"><%= event.note %></div>
+                          <% } %>
+                        </div>
+                      </div>
+                    <% }) %>
+                  </div>
+                </div>
+              <% } %>
             </article>
           <% }) %>
         </div>
@@ -117,8 +210,12 @@
         </div>
       <% } else { %>
         <div class="divide-y divide-slate-100 dark:divide-slate-700">
-          <% sent.forEach(item => { const meta = statusMeta(item.status); const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id); %>
-            <article class="px-6 py-5 space-y-3 <%= isHighlighted ? 'bg-blue-50/80 dark:bg-blue-900/10' : '' %>">
+          <% sent.forEach(item => { 
+            const meta = statusMeta(item.status); 
+            const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
+            const timeline = timelineFor(item.id);
+          %>
+            <article class="px-6 py-5 space-y-4 <%= isHighlighted ? 'bg-blue-50/80 dark:bg-blue-900/10' : '' %>">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 class="text-base font-bold text-slate-900 dark:text-white"><%= item.description_snapshot %></h3>
@@ -128,7 +225,8 @@
                 </div>
                 <span class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold <%= meta.classes %>"><%= meta.label %></span>
               </div>
-              <div class="grid gap-3 sm:grid-cols-2">
+
+              <div class="grid gap-3 sm:grid-cols-3">
                 <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                   <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor</div>
                   <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
@@ -142,16 +240,47 @@
                   <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= item.source_txn_date ? formatDateBR(item.source_txn_date) : '—' %></div>
                 </div>
               </div>
+
               <div class="grid gap-3 sm:grid-cols-2">
                 <div>
                   <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Cartão</div>
                   <div class="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200"><%= item.card_name_snapshot || 'Não informado' %></div>
                 </div>
                 <div>
-                  <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação</div>
+                  <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação do envio</div>
                   <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= item.request_note || '—' %></div>
                 </div>
               </div>
+
+              <% if (item.response_note) { %>
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
+                  <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação da resposta</div>
+                  <div class="mt-1 text-sm font-medium text-slate-700 dark:text-slate-200"><%= item.response_note %></div>
+                </div>
+              <% } %>
+
+              <% if (timeline.length) { %>
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 px-4 py-4">
+                  <div class="text-sm font-bold text-slate-900 dark:text-white">Histórico</div>
+                  <div class="mt-3 space-y-3">
+                    <% timeline.forEach(event => { const eMeta = eventMeta(event.event_type); %>
+                      <div class="flex gap-3">
+                        <div class="pt-1.5"><span class="block h-2.5 w-2.5 rounded-full <%= eMeta.dot %>"></span></div>
+                        <div class="min-w-0 flex-1">
+                          <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="text-sm font-semibold text-slate-800 dark:text-slate-100"><%= eMeta.label %></div>
+                            <div class="text-xs font-medium text-slate-400 dark:text-slate-500"><%= formatDateBR(event.created_at) %> • <%= formatTimeBR(event.created_at) %></div>
+                          </div>
+                          <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Por <%= actorLabel(event) %></div>
+                          <% if (event.note) { %>
+                            <div class="mt-1 text-sm text-slate-600 dark:text-slate-300"><%= event.note %></div>
+                          <% } %>
+                        </div>
+                      </div>
+                    <% }) %>
+                  </div>
+                </div>
+              <% } %>
             </article>
           <% }) %>
         </div>

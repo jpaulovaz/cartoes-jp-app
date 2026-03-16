@@ -808,19 +808,24 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
     ORDER BY a.id
   `).all(userId, txnId, userId);
 
-  const existingPending = db.prepare(`
+  const existingRequests = db.prepare(`
     SELECT *
     FROM shared_debt_requests
     WHERE requester_user_id = ?
       AND source_transaction_id = ?
-      AND status = 'pending'
     ORDER BY id DESC
   `).all(userId, txnId);
 
+  const existingPending = existingRequests.filter(row => row.status === 'pending');
+
   const existingByPerson = new Map();
-  existingPending.forEach(row => {
+  const latestByPerson = new Map();
+
+  existingRequests.forEach(row => {
     const personId = Number(row.source_person_id || 0);
-    if (personId && !existingByPerson.has(personId)) {
+    if (!personId) return;
+    if (!latestByPerson.has(personId)) latestByPerson.set(personId, row);
+    if (row.status === 'pending' && !existingByPerson.has(personId)) {
       existingByPerson.set(personId, row);
     }
   });
@@ -906,46 +911,51 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
           });
         }
       } else {
-        const info = db.prepare(`
-          INSERT INTO shared_debt_requests (
-            requester_user_id, requester_person_id, receiver_user_id, source_person_id,
-            source_transaction_id, source_allocation_id, source_due_month, source_due_year, source_txn_date_snapshot,
-            card_id, card_name_snapshot, description_snapshot, amount_cents,
-            receiver_email_snapshot, receiver_name_snapshot, request_note, response_note,
-            status, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'pending', ?, ?)
-        `).run(
-          userId,
-          requesterPerson?.id || null,
-          row.receiver_user_id,
-          personId,
-          txnId,
-          row.allocation_id,
-          txn.due_month || null,
-          txn.due_year || null,
-          txn.txn_date || null,
-          txn.card_id || null,
-          txn.card_name || null,
-          txn.description,
-          row.share_cents,
-          receiverEmailSnapshot,
-          receiverNameSnapshot,
-          now,
-          now
-        );
+        const latestRequest = latestByPerson.get(personId);
+        const hasActiveHistory = latestRequest && latestRequest.status && latestRequest.status !== 'cancelled';
 
-        const requestId = Number(info.lastInsertRowid);
-        addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'created' });
+        if (!hasActiveHistory) {
+          const info = db.prepare(`
+            INSERT INTO shared_debt_requests (
+              requester_user_id, requester_person_id, receiver_user_id, source_person_id,
+              source_transaction_id, source_allocation_id, source_due_month, source_due_year, source_txn_date_snapshot,
+              card_id, card_name_snapshot, description_snapshot, amount_cents,
+              receiver_email_snapshot, receiver_name_snapshot, request_note, response_note,
+              status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'pending', ?, ?)
+          `).run(
+            userId,
+            requesterPerson?.id || null,
+            row.receiver_user_id,
+            personId,
+            txnId,
+            row.allocation_id,
+            txn.due_month || null,
+            txn.due_year || null,
+            txn.txn_date || null,
+            txn.card_id || null,
+            txn.card_name || null,
+            txn.description,
+            row.share_cents,
+            receiverEmailSnapshot,
+            receiverNameSnapshot,
+            now,
+            now
+          );
 
-        createNotification({
-          userId: row.receiver_user_id,
-          type: 'shared_debt_request',
-          title: 'Nova cobrança compartilhada',
-          body: `${requesterDisplayName} enviou uma cobrança para você no valor de ${formatBRLFromCents(row.share_cents)} referente a ${txn.description}.`,
-          href: `/shared-debts?request=${requestId}`,
-          relatedType: 'shared_debt_request',
-          relatedId: requestId
-        });
+          const requestId = Number(info.lastInsertRowid);
+          addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'created' });
+
+          createNotification({
+            userId: row.receiver_user_id,
+            type: 'shared_debt_request',
+            title: 'Nova cobrança compartilhada',
+            body: `${requesterDisplayName} enviou uma cobrança para você no valor de ${formatBRLFromCents(row.share_cents)} referente a ${txn.description}.`,
+            href: `/shared-debts?request=${requestId}`,
+            relatedType: 'shared_debt_request',
+            relatedId: requestId
+          });
+        }
       }
     });
 
@@ -1360,6 +1370,27 @@ function getSharedDebtRequestsSent(userId) {
   `).all(userId);
 }
 
+function getSharedDebtEventsByRequestIds(requestIds) {
+  const cleanIds = Array.from(new Set((requestIds || []).map(Number).filter(Boolean)));
+  if (!cleanIds.length) return new Map();
+
+  const placeholders = cleanIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT e.*, u.name AS actor_name, u.email AS actor_email
+    FROM shared_debt_events e
+    JOIN users u ON u.id = e.actor_user_id
+    WHERE e.request_id IN (${placeholders})
+    ORDER BY e.created_at ASC, e.id ASC
+  `).all(...cleanIds);
+
+  const map = new Map();
+  rows.forEach(row => {
+    if (!map.has(row.request_id)) map.set(row.request_id, []);
+    map.get(row.request_id).push(row);
+  });
+  return map;
+}
+
 app.get("/shared-debts", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const requestIdToHighlight = Number(req.query.request) || null;
@@ -1374,16 +1405,91 @@ app.get("/shared-debts", ensureAuthenticated, (req, res) => {
 
   const received = getSharedDebtRequestsReceived(userId);
   const sent = getSharedDebtRequestsSent(userId);
+  const eventsByRequest = getSharedDebtEventsByRequestIds([
+    ...received.map(item => item.id),
+    ...sent.map(item => item.id)
+  ]);
 
   return res.render("shared-debts", {
     title: "OrganizaPay | Dívidas Compartilhadas",
     received,
     sent,
+    eventsByRequest,
     requestIdToHighlight,
     formatBRLFromCents,
     monthLabel,
     formatDateBR
   });
+});
+
+app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const requestId = Number(req.params.id);
+  const action = String(req.body.action || '').trim().toLowerCase();
+  const note = String(req.body.note || '').trim() || null;
+
+  if (!requestId) {
+    setFlash(req, 'error', 'Solicitação inválida.');
+    return res.redirect('/shared-debts');
+  }
+
+  if (!['accept', 'reject'].includes(action)) {
+    setFlash(req, 'error', 'Ação inválida para esta solicitação.');
+    return res.redirect(`/shared-debts?request=${requestId}`);
+  }
+
+  const requestRow = db.prepare(`
+    SELECT r.*, u.name AS requester_name, u.email AS requester_email
+    FROM shared_debt_requests r
+    JOIN users u ON u.id = r.requester_user_id
+    WHERE r.id = ? AND r.receiver_user_id = ?
+    LIMIT 1
+  `).get(requestId, userId);
+
+  if (!requestRow) {
+    setFlash(req, 'error', 'Solicitação não encontrada.');
+    return res.redirect('/shared-debts');
+  }
+
+  if (requestRow.status !== 'pending') {
+    setFlash(req, 'info', 'Esta solicitação já foi analisada anteriormente.');
+    return res.redirect(`/shared-debts?request=${requestId}`);
+  }
+
+  const actor = getUserRecord(userId);
+  const actorName = actor?.name || requestRow.receiver_name_snapshot || actor?.email || 'O destinatário';
+  const now = nowIso();
+  const accepted = action === 'accept';
+  const nextStatus = accepted ? 'accepted' : 'rejected_by_receiver';
+  const eventType = nextStatus;
+  const title = accepted ? 'Cobrança compartilhada aceita' : 'Cobrança compartilhada recusada';
+  const baseBody = accepted
+    ? `${actorName} aceitou a cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`
+    : `${actorName} recusou a cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`;
+  const body = note ? `${baseBody} Observação: ${note}` : baseBody;
+
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE shared_debt_requests
+      SET status = ?, response_note = ?, updated_at = ?, responded_at = ?
+      WHERE id = ? AND receiver_user_id = ? AND status = 'pending'
+    `).run(nextStatus, note, now, now, requestId, userId);
+
+    addSharedDebtEvent({ requestId, actorUserId: userId, eventType, note });
+
+    createNotification({
+      userId: requestRow.requester_user_id,
+      type: 'shared_debt_request',
+      title,
+      body,
+      href: `/shared-debts?request=${requestId}`,
+      relatedType: 'shared_debt_request',
+      relatedId: requestId
+    });
+  })();
+
+  setFlash(req, 'success', accepted ? 'Solicitação aceita com sucesso.' : 'Solicitação recusada com sucesso.');
+  return res.redirect(`/shared-debts?request=${requestId}`);
 });
 
 // People

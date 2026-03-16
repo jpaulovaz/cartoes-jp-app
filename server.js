@@ -1242,6 +1242,72 @@ function deleteTransactionsAndAllocations(userId, rows) {
   return uniqueRows.length;
 }
 
+function getTransactionScopeRow(userId, txnId) {
+  return db.prepare(`
+    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id,
+           COALESCE(i.month, t.due_month) AS month,
+           COALESCE(i.year, t.due_year) AS year
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.id = ? AND t.user_id = ?
+  `).get(txnId, userId);
+}
+
+function hasFutureInstallments(userId, txnRow) {
+  if (!txnRow) return false;
+  const currentMonth = Number(txnRow.month || 0);
+  const currentYear = Number(txnRow.year || 0);
+  const rootId = Number(txnRow.parent_txn_id || txnRow.id || 0);
+  if (!rootId || !currentMonth || !currentYear) return false;
+
+  return !!db.prepare(`
+    SELECT 1
+    FROM transactions t
+    WHERE t.user_id = ?
+      AND (t.id = ? OR t.parent_txn_id = ?)
+      AND t.due_year IS NOT NULL
+      AND t.due_month IS NOT NULL
+      AND (
+        t.due_year > ? OR
+        (t.due_year = ? AND t.due_month > ?)
+      )
+    LIMIT 1
+  `).get(userId, rootId, rootId, currentYear, currentYear, currentMonth);
+}
+
+function getInstallmentScopeRows(userId, txnRow, scope = 'single') {
+  if (!txnRow) return [];
+
+  const normalizedScope = String(scope || 'single').trim().toLowerCase();
+  if (normalizedScope !== 'future') {
+    return [txnRow];
+  }
+
+  const currentMonth = Number(txnRow.month || 0);
+  const currentYear = Number(txnRow.year || 0);
+  const rootId = Number(txnRow.parent_txn_id || txnRow.id || 0);
+  if (!rootId || !currentMonth || !currentYear) {
+    return [txnRow];
+  }
+
+  const rows = db.prepare(`
+    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id,
+           COALESCE(i.month, t.due_month) AS month,
+           COALESCE(i.year, t.due_year) AS year
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (t.id = ? OR t.parent_txn_id = ?)
+      AND (
+        COALESCE(i.year, t.due_year) > ? OR
+        (COALESCE(i.year, t.due_year) = ? AND COALESCE(i.month, t.due_month) >= ?)
+      )
+    ORDER BY COALESCE(i.year, t.due_year) ASC, COALESCE(i.month, t.due_month) ASC, t.id ASC
+  `).all(userId, rootId, rootId, currentYear, currentYear, currentMonth);
+
+  return rows.length ? rows : [txnRow];
+}
+
 function likeParam(s) { return `%${String(s).trim()}%`; }
 
 app.get("/", ensureAuthenticated, (req, res) => {
@@ -2626,6 +2692,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   const txns = db.prepare(`
     SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
+           t.parent_txn_id, t.due_month, t.due_year,
            ${allocCountExpr} AS alloc_count,
            ${selectedCsvExpr} AS selected_csv
     FROM transactions t
@@ -2637,6 +2704,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   txns.forEach(t => {
     t.selected_ids = (t.selected_csv ? t.selected_csv.split(",").map(x => Number(x)) : []).filter(Boolean);
+    t.has_future_installments = hasFutureInstallments(userId, t);
   });
 
   const people = getVisiblePeopleForMonth(userId, month, year);
@@ -2720,8 +2788,8 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
     db.transaction(() => {
       const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1").all(userId);
       const insTxn = db.prepare(`
-        INSERT INTO transactions (user_id, card_id, txn_date, description, amount_cents, due_month, due_year, recurring_rule_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO transactions (user_id, card_id, txn_date, description, amount_cents, due_month, due_year, parent_txn_id, recurring_rule_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const insAlloc = db.prepare(`
         INSERT INTO allocations (user_id, transaction_id, person_id, share_cents, created_at)
@@ -2737,6 +2805,8 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
         recurringRuleId = Number(info.lastInsertRowid);
       }
 
+      let installmentRootTxnId = null;
+
       for (let i = 0; i < numInstallments; i++) {
         let currentMonth = startMonth + i;
         let currentYear = startYear;
@@ -2748,9 +2818,11 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
 
         const currentAmount = (i === numInstallments - 1) ? installmentValue + remainder : installmentValue;
         const currentRecurringRuleId = isRecurring ? recurringRuleId : null;
+        const currentParentTxnId = (numInstallments > 1 && installmentRootTxnId) ? installmentRootTxnId : null;
 
-        const info = insTxn.run(userId, cardIdNum, date, finalDesc, currentAmount, currentMonth, currentYear, currentRecurringRuleId, nowIso());
+        const info = insTxn.run(userId, cardIdNum, date, finalDesc, currentAmount, currentMonth, currentYear, currentParentTxnId, currentRecurringRuleId, nowIso());
         const txnIdCreated = Number(info.lastInsertRowid);
+        if (!installmentRootTxnId) installmentRootTxnId = txnIdCreated;
 
         if (activePeople.length === 1) {
           insAlloc.run(userId, txnIdCreated, activePeople[0].id, currentAmount, nowIso());
@@ -2813,16 +2885,18 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const id = Number(req.params.id);
 
-  const txn = db.prepare(`
-    SELECT t.id, t.amount_cents, COALESCE(i.month, t.due_month) as month, COALESCE(i.year, t.due_year) as year
-    FROM transactions t
-    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
-    WHERE t.id = ? AND t.user_id = ?
-  `).get(id, userId);
+  const txn = getTransactionScopeRow(userId, id);
 
   if (!txn) return res.status(404).send("Transação não encontrada.");
   if (isMonthClosed(userId, txn.month, txn.year)) {
     return res.status(423).send(getMonthLockMessage(txn.month, txn.year));
+  }
+
+  const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
+  const targetRows = getInstallmentScopeRows(userId, txn, applyScope);
+  const lockedTarget = targetRows.find(row => isMonthClosed(userId, row.month, row.year));
+  if (lockedTarget) {
+    return res.status(423).send(getMonthLockMessage(lockedTarget.month, lockedTarget.year));
   }
 
   let personIds = req.body.person_ids || [];
@@ -2834,19 +2908,21 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
   const ins = db.prepare("INSERT INTO allocations(user_id, transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?, ?)");
 
   db.transaction(() => {
-    clearSharedDebtAllocationLinksForTransaction(userId, id);
-    del.run(id, userId);
-    if (personIds.length > 0) {
-      const share = Math.floor(txn.amount_cents / personIds.length);
-      const remainder = txn.amount_cents - (share * personIds.length);
-      personIds.forEach((pid, idx) => {
-        const s = share + (idx < Math.abs(remainder) ? Math.sign(remainder) : 0);
-        ins.run(userId, id, pid, s, nowIso());
-      });
-    }
+    targetRows.forEach(targetTxn => {
+      clearSharedDebtAllocationLinksForTransaction(userId, targetTxn.id);
+      del.run(targetTxn.id, userId);
+      if (personIds.length > 0) {
+        const share = Math.floor(targetTxn.amount_cents / personIds.length);
+        const remainder = targetTxn.amount_cents - (share * personIds.length);
+        personIds.forEach((pid, idx) => {
+          const s = share + (idx < Math.abs(remainder) ? Math.sign(remainder) : 0);
+          ins.run(userId, targetTxn.id, pid, s, nowIso());
+        });
+      }
+    });
   })();
 
-  syncSharedDebtRequestsForTransaction(userId, id);
+  targetRows.forEach(targetTxn => syncSharedDebtRequestsForTransaction(userId, targetTxn.id));
 
   res.redirect(`/month/${txn.year}/${txn.month}`);
 });
@@ -2856,7 +2932,7 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const id = Number(req.params.id);
   const txn = db.prepare(`
-    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
+    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, t.parent_txn_id, c.name AS card_name,
            COALESCE(t.due_month, i.month) as month,
            COALESCE(t.due_year, i.year) as year
     FROM transactions t
@@ -2872,26 +2948,28 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
     .all(id, userId)
     .map(r => r.person_id);
   const isClosed = isMonthClosed(userId, txn.month, txn.year);
+  const hasFutureInstallmentsForTxn = hasFutureInstallments(userId, txn);
 
-  res.render("txn", { txn, people, selected, formatBRLFromCents, isClosed });
+  res.render("txn", { txn, people, selected, formatBRLFromCents, isClosed, hasFutureInstallments: hasFutureInstallmentsForTxn });
 });
 
 app.post("/txn/:id", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const id = Number(req.params.id);
 
-  const txn = db.prepare(`
-    SELECT t.id, t.amount_cents,
-           COALESCE(i.month, t.due_month) as month,
-           COALESCE(i.year, t.due_year) as year
-    FROM transactions t
-    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
-    WHERE t.id = ? AND t.user_id = ?
-  `).get(id, userId);
+  const txn = getTransactionScopeRow(userId, id);
 
   if (!txn) return res.status(404).send("Transação não encontrada.");
   if (isMonthClosed(userId, txn.month, txn.year)) {
     setFlash(req, "error", getMonthLockMessage(txn.month, txn.year));
+    return res.redirect(`/month/${txn.year}/${txn.month}`);
+  }
+
+  const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
+  const targetRows = getInstallmentScopeRows(userId, txn, applyScope);
+  const lockedTarget = targetRows.find(row => isMonthClosed(userId, row.month, row.year));
+  if (lockedTarget) {
+    setFlash(req, "error", getMonthLockMessage(lockedTarget.month, lockedTarget.year));
     return res.redirect(`/month/${txn.year}/${txn.month}`);
   }
 
@@ -2904,18 +2982,21 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
   const ins = db.prepare("INSERT INTO allocations(user_id, transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?, ?)");
 
   db.transaction(() => {
-    del.run(id, userId);
-    if (personIds.length > 0) {
-      const share = Math.floor(txn.amount_cents / personIds.length);
-      const remainder = txn.amount_cents - (share * personIds.length);
-      personIds.forEach((pid, idx) => {
-        const s = share + (idx < Math.abs(remainder) ? Math.sign(remainder) : 0);
-        ins.run(userId, id, pid, s, nowIso());
-      });
-    }
+    targetRows.forEach(targetTxn => {
+      clearSharedDebtAllocationLinksForTransaction(userId, targetTxn.id);
+      del.run(targetTxn.id, userId);
+      if (personIds.length > 0) {
+        const share = Math.floor(targetTxn.amount_cents / personIds.length);
+        const remainder = targetTxn.amount_cents - (share * personIds.length);
+        personIds.forEach((pid, idx) => {
+          const s = share + (idx < Math.abs(remainder) ? Math.sign(remainder) : 0);
+          ins.run(userId, targetTxn.id, pid, s, nowIso());
+        });
+      }
+    });
   })();
 
-  syncSharedDebtRequestsForTransaction(userId, id);
+  targetRows.forEach(targetTxn => syncSharedDebtRequestsForTransaction(userId, targetTxn.id));
 
   res.redirect(`/month/${txn.year}/${txn.month}`);
 });
@@ -2924,14 +3005,7 @@ app.post("/txn/:id/delete", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const id = Number(req.params.id);
 
-  const txn = db.prepare(`
-    SELECT t.id, t.import_id, t.description, t.recurring_rule_id,
-           COALESCE(i.month, t.due_month) AS month,
-           COALESCE(i.year, t.due_year) AS year
-    FROM transactions t
-    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
-    WHERE t.id = ? AND t.user_id = ?
-  `).get(id, userId);
+  const txn = getTransactionScopeRow(userId, id);
 
   if (!txn) {
     setFlash(req, "error", "Lançamento não encontrado.");
@@ -2942,17 +3016,28 @@ app.post("/txn/:id/delete", ensureAuthenticated, (req, res) => {
     return res.redirect(`/month/${txn.year}/${txn.month}`);
   }
 
+  const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
+  const targetRows = getInstallmentScopeRows(userId, txn, applyScope);
+  const lockedTarget = targetRows.find(row => isMonthClosed(userId, row.month, row.year));
+  if (lockedTarget) {
+    setFlash(req, "error", getMonthLockMessage(lockedTarget.month, lockedTarget.year));
+    return res.redirect(`/month/${txn.year}/${txn.month}`);
+  }
+
   db.transaction(() => {
-    if (txn.recurring_rule_id && txn.month && txn.year) {
-      db.prepare(`
-        INSERT OR IGNORE INTO recurring_exceptions (user_id, rule_id, month, year, created_at)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(userId, txn.recurring_rule_id, txn.month, txn.year, nowIso());
-    }
-    deleteTransactionsAndAllocations(userId, [txn]);
+    targetRows.forEach(targetTxn => {
+      if (targetTxn.recurring_rule_id && targetTxn.month && targetTxn.year) {
+        db.prepare(`
+          INSERT OR IGNORE INTO recurring_exceptions (user_id, rule_id, month, year, created_at)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(userId, targetTxn.recurring_rule_id, targetTxn.month, targetTxn.year, nowIso());
+      }
+    });
+    deleteTransactionsAndAllocations(userId, targetRows);
   })();
 
-  setFlash(req, "success", "Lançamento excluído com sucesso.");
+  const deletedCount = targetRows.length;
+  setFlash(req, "success", deletedCount > 1 ? `${deletedCount} lançamento(s) excluídos com sucesso.` : "Lançamento excluído com sucesso.");
   return res.redirect(`/month/${txn.year}/${txn.month}`);
 });
 
@@ -3216,18 +3301,11 @@ app.post("/summary/:year/:month/people/async", ensureAuthenticated, (req, res) =
   return res.json({ ok: true });
 });
 
-// WhatsApp
-app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  const personId = Number(req.params.personId);
-  if (!parsed) return res.status(400).send("Parâmetros inválidos.");
+function getPersonStatementExportData(userId, month, year, personId) {
+  syncRecurringTransactions(userId, year, month);
 
   const person = db.prepare("SELECT * FROM people WHERE id = ? AND user_id = ?").get(personId, userId);
-  if (!person) return res.status(400).send("Pessoa inválida.");
-
-  const { month, year } = parsed;
-  syncRecurringTransactions(userId, year, month);
+  if (!person) return null;
 
   const items = db.prepare(`
     SELECT t.txn_date, t.description, c.name AS card_name, a.share_cents
@@ -3271,10 +3349,46 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
   const paid_cents = paymentRow ? paymentRow.paid_cents : 0;
   const remaining_cents = Math.max(0, total - paid_cents);
 
-  res.render("whatsapp", { month, year, person, items, totalsByCard, total, paid_cents, remaining_cents, formatBRLFromCents });
+  return { person, items, totalsByCard, total, paid_cents, remaining_cents };
+}
+
+// WhatsApp e compartilhamento
+app.get("/share/:year/:month/:personId", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  const personId = Number(req.params.personId);
+  if (!parsed) return res.status(400).send("Parâmetros inválidos.");
+
+  const { month, year } = parsed;
+  const exportData = getPersonStatementExportData(userId, month, year, personId);
+  if (!exportData) return res.status(400).send("Pessoa inválida.");
+
+  res.render("share", { month, year, ...exportData, formatBRLFromCents });
+});
+
+app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  const personId = Number(req.params.personId);
+  if (!parsed) return res.status(400).send("Parâmetros inválidos.");
+
+  if (!isAdminUser(userId)) {
+    setFlash(req, "error", "O envio via WhatsApp está disponível apenas para administradores.");
+    return res.redirect(`/share/${req.params.year}/${req.params.month}/${personId}`);
+  }
+
+  const { month, year } = parsed;
+  const exportData = getPersonStatementExportData(userId, month, year, personId);
+  if (!exportData) return res.status(400).send("Pessoa inválida.");
+
+  res.render("whatsapp", { month, year, ...exportData, formatBRLFromCents });
 });
 
 app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit: '10mb' }), async (req, res) => {
+  if (!isAdminUser(req.user.id)) {
+    return res.status(403).json({ error: "O envio via WhatsApp está disponível apenas para administradores." });
+  }
+
   try {
     const { personPhone, message, imageBase64 } = req.body;
 
@@ -3286,14 +3400,12 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
       return res.status(400).json({ error: "Configurações da Evolution API não encontradas." });
     }
 
-    // Limpa o número (apenas números)
-    const cleanNumber = personPhone.replace(/\D/g, '');
-    const base64Data = imageBase64.split(',')[1];
-    // Envia como Mídia (Imagem + Legenda)
+    const cleanNumber = String(personPhone || '').replace(/\D/g, '');
+    const base64Data = String(imageBase64 || '').split(',')[1];
     await axios.post(`${apiUrl}/message/sendMedia/${instance}`, {
       number: cleanNumber,
-      mediatype: "image", // TUDO MINÚSCULO (O erro estava aqui)
-      media: base64Data,   // Apenas a string Base64 limpa
+      mediatype: "image",
+      media: base64Data,
       caption: message,
       delay: 1200
     }, { headers: { apikey: apiKey } });

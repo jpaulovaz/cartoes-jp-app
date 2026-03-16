@@ -76,6 +76,8 @@ Digite exatamente: ${phrase}`, "");
   }
 
   document.addEventListener("submit", (event) => {
+    if (event.defaultPrevented) return;
+
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) return;
 
@@ -586,4 +588,70 @@ Digite exatamente: ${phrase}`, "");
       });
     });
   });
+})();
+
+
+(function () {
+  function ensureHiddenScopeField(form) {
+    let field = form.querySelector('input[name="apply_scope"]');
+    if (!(field instanceof HTMLInputElement)) {
+      field = document.createElement('input');
+      field.type = 'hidden';
+      field.name = 'apply_scope';
+      form.appendChild(field);
+    }
+    return field;
+  }
+
+  function resolveInstallmentScope(form, { actionLabel = 'executar esta ação' } = {}) {
+    const hasFuture = String(form?.dataset?.hasFutureInstallments || '') === '1';
+    if (!hasFuture) {
+      const field = ensureHiddenScopeField(form);
+      field.value = 'single';
+      return 'single';
+    }
+
+    const label = form?.dataset?.installmentLabel ? `
+
+Lançamento: ${form.dataset.installmentLabel}` : '';
+    const applyFuture = window.confirm(`Este lançamento faz parte de um parcelamento.${label}
+
+Pressione OK para ${actionLabel} nesta parcela e nas próximas.
+Pressione Cancelar para escolher somente esta parcela ou abortar.`);
+
+    if (applyFuture) {
+      const field = ensureHiddenScopeField(form);
+      field.value = 'future';
+      return 'future';
+    }
+
+    const applySingle = window.confirm(`Aplicar ${actionLabel} somente nesta parcela?
+
+Pressione OK para continuar somente com esta parcela.
+Pressione Cancelar para não fazer nenhuma alteração.`);
+    if (!applySingle) {
+      return null;
+    }
+
+    const field = ensureHiddenScopeField(form);
+    field.value = 'single';
+    return 'single';
+  }
+
+  document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    if (!form.dataset.installmentScopeForm) return;
+
+    const actionLabel = form.dataset.installmentScopeForm === 'delete'
+      ? 'excluir este lançamento'
+      : 'alterar a distribuição';
+
+    const chosenScope = resolveInstallmentScope(form, { actionLabel });
+    if (!chosenScope) {
+      event.preventDefault();
+    }
+  }, true);
+
+  window.resolveInstallmentScope = resolveInstallmentScope;
 })();

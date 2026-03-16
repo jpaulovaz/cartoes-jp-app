@@ -340,7 +340,7 @@
 
                 <td class="block md:table-cell px-0 md:px-4 py-3 md:py-3 mt-3 md:mt-0 border-t border-dashed border-slate-200 dark:border-slate-700 md:border-t-0">
                   <div class="md:hidden mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Distribuição Rápida</div>
-                  <form method="post" action="/txn/<%= t.id %>/alloc" data-alloc-form="<%= t.id %>"
+                  <form method="post" action="/txn/<%= t.id %>/alloc" data-alloc-form="<%= t.id %>" data-has-future-installments="<%= t.has_future_installments ? '1' : '0' %>" data-installment-label="<%= t.description %>"
                     class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 shadow-inner transition-colors duration-300">
 
                     <div
@@ -385,7 +385,10 @@
                   <% if (!isClosed) { %>
                     <form id="delete-txn-<%= t.id %>" method="post" action="/txn/<%= t.id %>/delete"
                       data-confirm-prompt="Excluir este lançamento? Esta ação remove o item e a distribuição associada."
-                      data-confirm-phrase="Eu confirmo"></form>
+                      data-confirm-phrase="Eu confirmo"
+                      data-installment-scope-form="delete"
+                      data-has-future-installments="<%= t.has_future_installments ? '1' : '0' %>"
+                      data-installment-label="<%= t.description %>"></form>
                   <% } %>
                 </td>
               </tr>
@@ -457,7 +460,15 @@
         btn.innerHTML = '...';
         btn.disabled = true;
 
+        const chosenScope = window.resolveInstallmentScope ? window.resolveInstallmentScope(form, { actionLabel: "alterar a distribuição" }) : "single";
+        if (!chosenScope) {
+          btn.innerHTML = originalText;
+          btn.disabled = false;
+          return;
+        }
+
         const formData = new URLSearchParams(new FormData(form));
+        formData.set('apply_scope', chosenScope);
 
         try {
           const response = await fetch(form.action, {

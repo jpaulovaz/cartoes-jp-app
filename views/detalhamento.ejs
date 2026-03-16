@@ -5,7 +5,9 @@
         if(f.type === 'expense') expCents += f.amount_cents;
         });
 
-        let saldoCents = incCents - expCents - cardTotalCents;
+        const sharedDebtOwedCents = Number(sharedDebtSummary?.owedCents || 0);
+        const sharedDebtReceivableCents = Number(sharedDebtSummary?.receivableCents || 0);
+        let saldoCents = incCents + sharedDebtReceivableCents - expCents - cardTotalCents - sharedDebtOwedCents;
 
         /* Lógica para botões de Mês Anterior / Próximo */
         let prevM = parseInt(month) - 1; let prevY = parseInt(year);
@@ -160,7 +162,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+                <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     <div class="bg-emerald-500 p-5 rounded-3xl text-white shadow-sm border border-emerald-600">
                         <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Total Recebido</p>
                         <h3 class="text-xl xl:text-2xl font-black mt-1">
@@ -191,6 +193,37 @@
                         <h3 class="text-xl xl:text-2xl font-black mt-1">
                             <%= formatBRLFromCents(saldoCents) %>
                         </h3>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 mt-4">
+                    <div class="bg-sky-500 p-5 rounded-3xl text-white shadow-sm border border-sky-600">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Dívidas com Amigos</p>
+                                <h3 class="text-xl xl:text-2xl font-black mt-1">
+                                    <%= formatBRLFromCents(sharedDebtOwedCents) %>
+                                </h3>
+                                <p class="mt-2 text-xs font-semibold opacity-85">
+                                    <%= Number(sharedDebtSummary?.owedCount || 0) %> solicitação(ões) aceita(s) neste mês
+                                </p>
+                            </div>
+                            <div class="h-12 w-12 shrink-0 rounded-2xl bg-white/15 flex items-center justify-center text-2xl">🤝</div>
+                        </div>
+                    </div>
+                    <div class="bg-cyan-600 p-5 rounded-3xl text-white shadow-sm border border-cyan-700">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <p class="text-xs font-bold opacity-80 uppercase tracking-wider">A Receber de Amigos</p>
+                                <h3 class="text-xl xl:text-2xl font-black mt-1">
+                                    <%= formatBRLFromCents(sharedDebtReceivableCents) %>
+                                </h3>
+                                <p class="mt-2 text-xs font-semibold opacity-85">
+                                    <%= Number(sharedDebtSummary?.receivableCount || 0) %> solicitação(ões) aceita(s) neste mês
+                                </p>
+                            </div>
+                            <div class="h-12 w-12 shrink-0 rounded-2xl bg-white/15 flex items-center justify-center text-2xl">💸</div>
+                        </div>
                     </div>
                 </div>
 

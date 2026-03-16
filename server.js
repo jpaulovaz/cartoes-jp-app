@@ -1391,6 +1391,33 @@ function getSharedDebtEventsByRequestIds(requestIds) {
   return map;
 }
 
+function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
+  const owed = db.prepare(`
+    SELECT COUNT(*) AS total_requests, COALESCE(SUM(amount_cents), 0) AS total_cents
+    FROM shared_debt_requests
+    WHERE receiver_user_id = ?
+      AND status = 'accepted'
+      AND source_due_month = ?
+      AND source_due_year = ?
+  `).get(userId, month, year) || { total_requests: 0, total_cents: 0 };
+
+  const receivable = db.prepare(`
+    SELECT COUNT(*) AS total_requests, COALESCE(SUM(amount_cents), 0) AS total_cents
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND status = 'accepted'
+      AND source_due_month = ?
+      AND source_due_year = ?
+  `).get(userId, month, year) || { total_requests: 0, total_cents: 0 };
+
+  return {
+    owedCents: Number(owed.total_cents || 0),
+    owedCount: Number(owed.total_requests || 0),
+    receivableCents: Number(receivable.total_cents || 0),
+    receivableCount: Number(receivable.total_requests || 0)
+  };
+}
+
 app.get("/shared-debts", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const requestIdToHighlight = Number(req.query.request) || null;
@@ -1489,6 +1516,84 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
   })();
 
   setFlash(req, 'success', accepted ? 'Solicitação aceita com sucesso.' : 'Solicitação recusada com sucesso.');
+  return res.redirect(`/shared-debts?request=${requestId}`);
+});
+
+app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const requestId = Number(req.params.id);
+  const action = String(req.body.action || '').trim().toLowerCase();
+  const note = String(req.body.note || '').trim() || null;
+
+  if (!requestId) {
+    setFlash(req, 'error', 'Solicitação inválida.');
+    return res.redirect('/shared-debts');
+  }
+
+  if (!['accept_rejection', 'contest_rejection'].includes(action)) {
+    setFlash(req, 'error', 'Ação inválida para esta solicitação.');
+    return res.redirect(`/shared-debts?request=${requestId}`);
+  }
+
+  const requestRow = db.prepare(`
+    SELECT r.*, u.name AS receiver_name, u.email AS receiver_email
+    FROM shared_debt_requests r
+    JOIN users u ON u.id = r.receiver_user_id
+    WHERE r.id = ? AND r.requester_user_id = ?
+    LIMIT 1
+  `).get(requestId, userId);
+
+  if (!requestRow) {
+    setFlash(req, 'error', 'Solicitação não encontrada.');
+    return res.redirect('/shared-debts');
+  }
+
+  if (requestRow.status !== 'rejected_by_receiver') {
+    setFlash(req, 'info', 'Esta solicitação não está aguardando decisão do remetente.');
+    return res.redirect(`/shared-debts?request=${requestId}`);
+  }
+
+  const actor = getUserRecord(userId);
+  const actorName = actor?.name || actor?.email || 'O remetente';
+  const now = nowIso();
+  const acceptingRejection = action === 'accept_rejection';
+  const nextStatus = acceptingRejection ? 'rejection_accepted_by_sender' : 'rejection_contested_by_sender';
+  const eventType = nextStatus;
+  const title = acceptingRejection ? 'Rejeição aceita pelo remetente' : 'Rejeição contestada pelo remetente';
+  const baseBody = acceptingRejection
+    ? `${actorName} aceitou a sua recusa da cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`
+    : `${actorName} contestou a sua recusa da cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`;
+  const body = note ? `${baseBody} Observação: ${note}` : baseBody;
+
+  db.transaction(() => {
+    if (acceptingRejection) {
+      db.prepare(`
+        UPDATE shared_debt_requests
+        SET status = ?, updated_at = ?, resolved_at = ?
+        WHERE id = ? AND requester_user_id = ? AND status = 'rejected_by_receiver'
+      `).run(nextStatus, now, now, requestId, userId);
+    } else {
+      db.prepare(`
+        UPDATE shared_debt_requests
+        SET status = ?, updated_at = ?, resolved_at = NULL
+        WHERE id = ? AND requester_user_id = ? AND status = 'rejected_by_receiver'
+      `).run(nextStatus, now, requestId, userId);
+    }
+
+    addSharedDebtEvent({ requestId, actorUserId: userId, eventType, note });
+
+    createNotification({
+      userId: requestRow.receiver_user_id,
+      type: 'shared_debt_request',
+      title,
+      body,
+      href: `/shared-debts?request=${requestId}`,
+      relatedType: 'shared_debt_request',
+      relatedId: requestId
+    });
+  })();
+
+  setFlash(req, 'success', acceptingRejection ? 'Rejeição aceita com sucesso.' : 'Rejeição contestada com sucesso.');
   return res.redirect(`/shared-debts?request=${requestId}`);
 });
 
@@ -1804,6 +1909,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   `).all(userId, currentMonth, currentYear);
   const statementByCard = new Map(statementRows.map(row => [row.card_id, row]));
 
+  const sharedDebtSummary = getAcceptedSharedDebtSummaryForMonth(userId, currentMonth, currentYear);
+
   const alerts = [];
   const unreadSharedDebtNotifications = db.prepare(`
     SELECT title, body, href, created_at
@@ -1881,6 +1988,22 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     }
   }
 
+  const senderDecisionCount = db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM shared_debt_requests
+    WHERE requester_user_id = ? AND status = 'rejected_by_receiver'
+  `).get(userId)?.total || 0;
+
+  if (senderDecisionCount > 0) {
+    alerts.push({
+      type: 'warning',
+      icon: '⚖️',
+      title: 'Rejeições aguardando sua decisão',
+      description: `${senderDecisionCount} solicitação(ões) recusadas aguardam você aceitar a rejeição ou contestá-la.`,
+      href: '/shared-debts'
+    });
+  }
+
   if (!isClosed) {
     const unassignedCount = db.prepare(`
       SELECT COUNT(*) AS total
@@ -1945,7 +2068,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     formatBRLFromCents,
     isClosed,
     alerts,
-    cards
+    cards,
+    sharedDebtSummary
   });
 });
 

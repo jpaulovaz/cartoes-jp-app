@@ -13,10 +13,15 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT,
   google_id TEXT UNIQUE,
   role TEXT DEFAULT 'user',
+  can_import INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   last_login TEXT
 );
 `);
+
+if (!columnExists("users", "can_import")) {
+  db.exec("ALTER TABLE users ADD COLUMN can_import INTEGER NOT NULL DEFAULT 1;");
+}
 
 // ===== TABELAS EXISTENTES COM user_id =====
 db.exec(`

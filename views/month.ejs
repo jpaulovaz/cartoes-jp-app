@@ -24,9 +24,10 @@
         <a href="/summary/<%= year %>/<%= month %>"
           class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all hover:-translate-y-0.5">Resumo
           do Mês</a>
-        <a href="/import"
-          class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white bg-violet-500 hover:bg-violet-600 shadow-sm transition-all hover:-translate-y-0.5">Importar
-          Mais</a>
+        <% if (canImport) { %>
+          <a href="/import"
+            class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white bg-violet-500 hover:bg-violet-600 shadow-sm transition-all hover:-translate-y-0.5">+ Nova Importação</a>
+        <% } %>
       </div>
     </div>
 

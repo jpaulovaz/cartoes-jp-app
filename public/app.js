@@ -215,12 +215,8 @@ Digite exatamente: ${phrase}`, "");
     return String(value || '').replace(/\D/g, '');
   }
 
-  function keepZeroVisible(input) {
-    return input?.dataset?.moneyZero === '1';
-  }
-
-  function formatMoneyDigits(digits, keepZero = false) {
-    if (!digits) return keepZero ? brlFormatter.format(0) : '';
+  function formatMoneyDigits(digits) {
+    if (!digits) return '';
     return brlFormatter.format(Number(digits) / 100);
   }
 
@@ -234,7 +230,7 @@ Digite exatamente: ${phrase}`, "");
     if (!force && hasMathSyntax(raw)) return;
     const digits = extractMoneyDigits(raw);
     input.dataset.moneyDigits = digits;
-    input.value = formatMoneyDigits(digits, keepZeroVisible(input));
+    input.value = digits ? formatMoneyDigits(digits) : '';
   }
 
   function bindMoneyMask(input) {
@@ -245,11 +241,6 @@ Digite exatamente: ${phrase}`, "");
 
     if (!hasMathSyntax(input.value)) {
       renderMoneyInput(input, true);
-    }
-
-    if (keepZeroVisible(input) && !extractMoneyDigits(input.value)) {
-      input.value = brlFormatter.format(0);
-      input.dataset.moneyDigits = '';
     }
 
     input.addEventListener('beforeinput', (event) => {
@@ -281,5 +272,161 @@ Digite exatamente: ${phrase}`, "");
 
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-money-mask]').forEach(bindMoneyMask);
+  });
+})();
+
+
+(function () {
+  const brlFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  function debounceWithKey(store, key, fn, delay = 450) {
+    const previous = store.get(key);
+    if (previous) window.clearTimeout(previous);
+    const handle = window.setTimeout(fn, delay);
+    store.set(key, handle);
+  }
+
+  function centsFromValue(value) {
+    const digits = String(value || '').replace(/\D/g, '');
+    return digits ? Number(digits) : 0;
+  }
+
+  function formatCents(cents) {
+    return brlFormatter.format(Number(cents || 0) / 100);
+  }
+
+  function syncRemainingCell(cell, remainingCents) {
+    if (!cell) return;
+    cell.textContent = formatCents(remainingCents);
+    cell.classList.remove('text-red-500', 'text-emerald-500');
+    cell.classList.add(remainingCents > 0 ? 'text-red-500' : 'text-emerald-500');
+  }
+
+  function syncCardsSummary(root) {
+    let paidTotal = 0;
+    let remainingTotal = 0;
+    root.querySelectorAll('[data-summary-card-row]').forEach((row) => {
+      const totalCents = Number(row.getAttribute('data-total-cents') || 0);
+      const cardId = row.getAttribute('data-card-id');
+      const paidInput = root.querySelector(`[data-summary-card-paid][data-card-id="${cardId}"]`);
+      const paidCents = centsFromValue(paidInput ? paidInput.value : '');
+      const remainingCents = totalCents - paidCents;
+      paidTotal += paidCents;
+      remainingTotal += remainingCents;
+      syncRemainingCell(root.querySelector(`[data-summary-card-remaining][data-card-id="${cardId}"]`), remainingCents);
+    });
+
+    const paidCell = root.querySelector('[data-summary-cards-total-paid]');
+    const remainingCell = root.querySelector('[data-summary-cards-total-remaining]');
+    if (paidCell) paidCell.textContent = formatCents(paidTotal);
+    syncRemainingCell(remainingCell, remainingTotal);
+  }
+
+  function syncPeopleSummary(root) {
+    let paidTotal = 0;
+    let remainingTotal = 0;
+    root.querySelectorAll('[data-summary-person-row]').forEach((row) => {
+      const totalCents = Number(row.getAttribute('data-total-cents') || 0);
+      const personId = row.getAttribute('data-person-id');
+      const paidInput = root.querySelector(`[data-summary-person-paid][data-person-id="${personId}"]`);
+      const paidCents = centsFromValue(paidInput ? paidInput.value : '');
+      const remainingCents = totalCents - paidCents;
+      paidTotal += paidCents;
+      remainingTotal += remainingCents;
+      syncRemainingCell(root.querySelector(`[data-summary-person-remaining][data-person-id="${personId}"]`), remainingCents);
+    });
+
+    const paidCell = root.querySelector('[data-summary-people-total-paid]');
+    const remainingCell = root.querySelector('[data-summary-people-total-remaining]');
+    if (paidCell) paidCell.textContent = formatCents(paidTotal);
+    syncRemainingCell(remainingCell, remainingTotal);
+  }
+
+  async function postForm(url, data) {
+    const body = new URLSearchParams();
+    Object.entries(data).forEach(([key, value]) => {
+      body.append(key, value == null ? '' : String(value));
+    });
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'same-origin',
+      body: body.toString()
+    });
+
+    if (!response.ok) {
+      throw new Error(`Autosave failed: ${response.status}`);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const root = document.querySelector('[data-summary-autosave-root]');
+    if (!root) return;
+
+    const month = root.getAttribute('data-month');
+    const year = root.getAttribute('data-year');
+    if (!month || !year) return;
+
+    const timers = new Map();
+
+    const saveCard = (cardId) => {
+      const paidInput = root.querySelector(`[data-summary-card-paid][data-card-id="${cardId}"]`);
+      const dueInput = root.querySelector(`[data-summary-card-due][data-card-id="${cardId}"]`);
+      if (!paidInput && !dueInput) return;
+      syncCardsSummary(root);
+      postForm(`/summary/${year}/${month}/cards/async`, {
+        card_id: cardId,
+        paid: paidInput ? paidInput.value : 'R$ 0,00',
+        override_due: dueInput ? dueInput.value : ''
+      }).catch((error) => console.error(error));
+    };
+
+    const savePerson = (personId) => {
+      const paidInput = root.querySelector(`[data-summary-person-paid][data-person-id="${personId}"]`);
+      if (!paidInput) return;
+      syncPeopleSummary(root);
+      postForm(`/summary/${year}/${month}/people/async`, {
+        person_id: personId,
+        paid: paidInput.value
+      }).catch((error) => console.error(error));
+    };
+
+    root.querySelectorAll('[data-summary-card-paid]').forEach((input) => {
+      if (input.disabled) return;
+      const cardId = input.getAttribute('data-card-id');
+      if (!cardId) return;
+      input.addEventListener('input', () => {
+        syncCardsSummary(root);
+        debounceWithKey(timers, `card-paid-${cardId}`, () => saveCard(cardId));
+      });
+      input.addEventListener('blur', () => saveCard(cardId));
+      input.addEventListener('change', () => saveCard(cardId));
+    });
+
+    root.querySelectorAll('[data-summary-card-due]').forEach((input) => {
+      if (input.disabled) return;
+      const cardId = input.getAttribute('data-card-id');
+      if (!cardId) return;
+      input.addEventListener('change', () => saveCard(cardId));
+    });
+
+    root.querySelectorAll('[data-summary-person-paid]').forEach((input) => {
+      if (input.disabled) return;
+      const personId = input.getAttribute('data-person-id');
+      if (!personId) return;
+      input.addEventListener('input', () => {
+        syncPeopleSummary(root);
+        debounceWithKey(timers, `person-paid-${personId}`, () => savePerson(personId));
+      });
+      input.addEventListener('blur', () => savePerson(personId));
+      input.addEventListener('change', () => savePerson(personId));
+    });
+
+    syncCardsSummary(root);
+    syncPeopleSummary(root);
   });
 })();

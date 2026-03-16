@@ -124,10 +124,10 @@
      const yNav=dNav.getFullYear();
      const defaultDashboardHref = (typeof dashboardHref !== 'undefined' && dashboardHref) ? dashboardHref : `/detalhamento/${yNav}/${mNav}`;
      const isUserAdmin=!!(user && user.role === 'admin');
-     const canImportData = Number((user && user.can_import) ?? (typeof canImport !== 'undefined' ? canImport : 1)) !== 0;
      const ownerDisplayNameRaw = ((nomeTitular || '').replace(/^Detalhamento\s+/i, '').trim());
      const ownerDisplayName = ownerDisplayNameRaw && ownerDisplayNameRaw.toLowerCase() !== 'contas' ? ownerDisplayNameRaw : ((user && user.name) ? user.name : 'Titular');
-     const ownerFirstName = ownerDisplayName.split(/\s+/)[0] || 'Titular'; %>
+     const ownerNameParts = ownerDisplayName.split(/\s+/).filter(Boolean);
+     const ownerShortName = ownerNameParts.slice(0, 2).join(' ') || 'Titular'; %>
 
     <nav class="sticky top-0 z-50 bg-[#020617] border-b border-slate-900 shadow-lg">
       <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -137,8 +137,8 @@
             <img src="/icon-192.png" alt="OrganizaPay"
               class="h-14 w-14 lg:h-16 lg:w-16 rounded-[1.35rem] object-cover shadow-[0_14px_30px_rgba(37,99,235,0.35)] flex-none">
             <span class="min-w-0 flex flex-col leading-tight">
-              <span class="text-xs lg:text-sm font-bold uppercase tracking-[0.22em] text-blue-200/75 truncate">Olá,</span>
-              <span class="mt-1 text-xl lg:text-2xl font-extrabold tracking-tight text-white truncate"><%= ownerFirstName %></span>
+              <span class="text-xl lg:text-2xl font-extrabold normal-case tracking-normal text-white truncate">Olá,</span>
+              <span class="mt-0.5 text-sm lg:text-base font-semibold tracking-tight text-white/95 truncate"><%= ownerShortName %></span>
             </span>
           </a>
 
@@ -153,16 +153,14 @@
               Visão Geral Cartões
             </a>
 
-            <% if (canImportData) { %>
-              <a class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
-                href="/import">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                </svg>
-                Importar
-              </a>
-            <% } %>
+            <a class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
+              href="/import">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+              </svg>
+              Importar
+            </a>
 
             <a class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
               href="/cards">
@@ -230,8 +228,8 @@
               <img src="/icon-192.png" alt="OrganizaPay"
                 class="h-12 w-12 rounded-2xl object-cover shadow-[0_10px_24px_rgba(37,99,235,0.35)] flex-none">
               <span class="min-w-0 flex flex-col leading-tight">
-                <span class="text-[10px] font-bold uppercase tracking-[0.22em] text-blue-200/75 truncate">Olá,</span>
-                <span class="mt-0.5 text-xl font-extrabold tracking-tight text-white truncate"><%= ownerFirstName %></span>
+                <span class="text-base font-extrabold normal-case tracking-normal text-white truncate">Olá,</span>
+                <span class="mt-0.5 text-xs font-semibold tracking-tight text-white/95 truncate"><%= ownerShortName %></span>
               </span>
             </a>
 
@@ -245,15 +243,13 @@
                 </svg>
               </a>
 
-              <% if (canImportData) { %>
-                <a class="p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/import"
-                  title="Importar">
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                  </svg>
-                </a>
-              <% } %>
+              <a class="p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/import"
+                title="Importar">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                </svg>
+              </a>
 
               <a class="p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/cards"
                 title="Ajustes de Cartões">

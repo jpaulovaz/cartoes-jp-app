@@ -79,7 +79,6 @@
                         <th class="px-4 py-4">Usuário</th>
                         <th class="px-4 py-4">Email</th>
                         <th class="px-4 py-4">Papel</th>
-                        <th class="px-4 py-4">Importação</th>
                         <th class="px-4 py-4">Criado em</th>
                         <th class="px-4 py-4">Último acesso</th>
                         <th class="px-4 py-4 text-right">Ações</th>
@@ -103,13 +102,6 @@
                                     class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600">Usuário</span>
                                   <% } %>
                             </td>
-                            <td class="px-4 py-4">
-                              <% if (Number(u.can_import ?? 1) !== 0) { %>
-                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">Permitida</span>
-                              <% } else { %>
-                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">Bloqueada</span>
-                              <% } %>
-                            </td>
                             <td class="px-4 py-4 font-medium text-slate-600 dark:text-slate-300">
                               <%= u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '-' %>
                             </td>
@@ -117,10 +109,22 @@
                               <%= u.last_login ? new Date(u.last_login).toLocaleString('pt-BR') : 'Nunca acessou' %>
                             </td>
                             <td class="px-4 py-4 text-right">
-                              <% if (isSelf) { %>
-                                <span
-                                  class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">Você</span>
-                                <% } else { %>
+                              <div class="inline-flex items-center justify-end gap-2 flex-wrap">
+                                <% if (isSelf) { %>
+                                  <span
+                                    class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">Você</span>
+                                <% } %>
+                                <button type="button"
+                                  onclick='openEditUserModal(<%- JSON.stringify({ id: u.id, email: u.email || "", name: u.name || "", role: u.role || "user" }) %>)'
+                                  class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold border border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-900/20 transition-colors bg-white dark:bg-slate-800 shadow-sm">
+                                  <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z">
+                                    </path>
+                                  </svg>
+                                  Editar
+                                </button>
+                                <% if (!isSelf) { %>
                                   <form action="/admin/remove-user/<%= u.id %>" method="POST" class="inline"
                                     onsubmit="return confirm('Tem certeza que deseja remover este usuário? Ele perderá acesso ao sistema.');">
                                     <button type="submit"
@@ -133,13 +137,14 @@
                                       Remover
                                     </button>
                                   </form>
-                                  <% } %>
+                                <% } %>
+                              </div>
                             </td>
                           </tr>
                           <% }) %>
                             <% } else { %>
                               <tr>
-                                <td colspan="7" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400 font-medium">
+                                <td colspan="6" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400 font-medium">
                                   Nenhum usuário encontrado.
                                 </td>
                               </tr>
@@ -181,59 +186,50 @@
             </div>
   </div>
 
-  <div id="addUserModal"
+  <div id="userModal"
     class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl border border-slate-200 dark:border-slate-700"
       onclick="event.stopPropagation()">
       <div class="flex justify-between items-center mb-6">
         <div>
-          <h2 class="text-xl font-black text-slate-800 dark:text-white">Adicionar Usuário Autorizado</h2>
+          <h2 class="text-xl font-black text-slate-800 dark:text-white" id="userModalTitle">Adicionar Usuário Autorizado</h2>
           <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Esse email poderá entrar no app usando a conta Google correspondente.</p>
         </div>
-        <button type="button" onclick="closeAddUserModal()"
+        <button type="button" onclick="closeUserModal()"
           class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-2xl leading-none">✕</button>
       </div>
 
-      <form action="/admin/add-user" method="POST" class="space-y-4">
+      <form id="userForm" action="/admin/add-user" method="POST" class="space-y-4">
         <div>
-          <label for="email" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Email do Google</label>
-          <input type="email" id="email" name="email" required placeholder="exemplo@gmail.com"
+          <label for="userEmail" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Email do Google</label>
+          <input type="email" id="userEmail" name="email" required placeholder="exemplo@gmail.com"
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
         </div>
 
         <div>
-          <label for="name" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Nome (Opcional)</label>
-          <input type="text" id="name" name="name" placeholder="Nome do usuário"
+          <label for="userName" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Nome (Opcional)</label>
+          <input type="text" id="userName" name="name" placeholder="Nome do usuário"
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
           <p class="text-xs font-medium text-slate-400 mt-2">Se ficar em branco, usamos a parte anterior ao <code>@</code>.</p>
         </div>
 
         <div>
-          <label for="role" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Papel</label>
-          <select id="role" name="role"
+          <label for="userRole" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Papel</label>
+          <select id="userRole" name="role"
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
             <option value="user" selected>Usuário (Apenas app)</option>
             <option value="admin">Administrador (App + Painel Admin)</option>
           </select>
         </div>
 
-        <label class="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3">
-          <input type="checkbox" name="can_import" value="1" checked
-            class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-800">
-          <span>
-            <span class="block text-sm font-bold text-slate-800 dark:text-white">Permitir Importação de Faturas?</span>
-            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Quando desmarcado, a pessoa não verá os botões nem poderá acessar a funcionalidade de importação.</span>
-          </span>
-        </label>
-
         <div class="flex flex-col sm:flex-row gap-3 pt-2">
-          <button type="button" onclick="closeAddUserModal()"
+          <button type="button" onclick="closeUserModal()"
             class="flex-1 px-5 py-3 rounded-xl font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all">
             Cancelar
           </button>
           <button type="submit"
             class="flex-1 px-5 py-3 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5">
-            Adicionar Usuário
+            <span id="userSubmitText">Adicionar Usuário</span>
           </button>
         </div>
       </form>
@@ -241,25 +237,48 @@
   </div>
 
   <script>
-    const addUserModal = document.getElementById('addUserModal');
+    const userModal = document.getElementById('userModal');
+    const userForm = document.getElementById('userForm');
+    const userModalTitle = document.getElementById('userModalTitle');
+    const userSubmitText = document.getElementById('userSubmitText');
+    const userEmail = document.getElementById('userEmail');
+    const userName = document.getElementById('userName');
+    const userRole = document.getElementById('userRole');
 
     function openAddUserModal() {
-      addUserModal.classList.remove('hidden');
+      userModalTitle.textContent = 'Adicionar Usuário Autorizado';
+      userSubmitText.textContent = 'Adicionar Usuário';
+      userForm.action = '/admin/add-user';
+      userForm.reset();
+      userRole.value = 'user';
+      userModal.classList.remove('hidden');
+      window.setTimeout(() => userEmail?.focus(), 20);
     }
 
-    function closeAddUserModal() {
-      addUserModal.classList.add('hidden');
+    function openEditUserModal(userData) {
+      userModalTitle.textContent = 'Editar Usuário Autorizado';
+      userSubmitText.textContent = 'Salvar Alterações';
+      userForm.action = `/admin/update-user/${userData.id}`;
+      userEmail.value = userData.email || '';
+      userName.value = userData.name || '';
+      userRole.value = userData.role === 'admin' ? 'admin' : 'user';
+      userModal.classList.remove('hidden');
+      window.setTimeout(() => userEmail?.focus(), 20);
     }
 
-    addUserModal?.addEventListener('click', (event) => {
-      if (event.target === addUserModal) {
-        closeAddUserModal();
+    function closeUserModal() {
+      userModal.classList.add('hidden');
+    }
+
+    userModal?.addEventListener('click', (event) => {
+      if (event.target === userModal) {
+        closeUserModal();
       }
     });
 
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && addUserModal && !addUserModal.classList.contains('hidden')) {
-        closeAddUserModal();
+      if (event.key === 'Escape' && userModal && !userModal.classList.contains('hidden')) {
+        closeUserModal();
       }
     });
   </script>

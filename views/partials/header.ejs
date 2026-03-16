@@ -127,7 +127,8 @@
      const canImportData = Number((user && user.can_import) ?? (typeof canImport !== 'undefined' ? canImport : 1)) !== 0;
      const ownerDisplayNameRaw = ((nomeTitular || '').replace(/^Detalhamento\s+/i, '').trim());
      const ownerDisplayName = ownerDisplayNameRaw && ownerDisplayNameRaw.toLowerCase() !== 'contas' ? ownerDisplayNameRaw : ((user && user.name) ? user.name : 'Titular');
-     const ownerFirstName = ownerDisplayName.split(/\s+/)[0] || 'Titular'; %>
+     const ownerNameParts = ownerDisplayName.split(/\s+/).filter(Boolean);
+     const ownerShortName = ownerNameParts.slice(0, 2).join(' ') || 'Titular'; %>
 
     <nav class="sticky top-0 z-50 bg-[#020617] border-b border-slate-900 shadow-lg">
       <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -137,8 +138,8 @@
             <img src="/icon-192.png" alt="OrganizaPay"
               class="h-14 w-14 lg:h-16 lg:w-16 rounded-[1.35rem] object-cover shadow-[0_14px_30px_rgba(37,99,235,0.35)] flex-none">
             <span class="min-w-0 flex flex-col leading-tight">
-              <span class="text-xs lg:text-sm font-bold uppercase tracking-[0.22em] text-blue-200/75 truncate">Olá,</span>
-              <span class="mt-1 text-xl lg:text-2xl font-extrabold tracking-tight text-white truncate"><%= ownerFirstName %></span>
+              <span class="text-base lg:text-lg font-extrabold text-white truncate">Olá,</span>
+              <span class="mt-1 text-sm lg:text-base font-semibold tracking-tight text-white/95 truncate"><%= ownerShortName %></span>
             </span>
           </a>
 
@@ -230,8 +231,8 @@
               <img src="/icon-192.png" alt="OrganizaPay"
                 class="h-12 w-12 rounded-2xl object-cover shadow-[0_10px_24px_rgba(37,99,235,0.35)] flex-none">
               <span class="min-w-0 flex flex-col leading-tight">
-                <span class="text-[10px] font-bold uppercase tracking-[0.22em] text-blue-200/75 truncate">Olá,</span>
-                <span class="mt-0.5 text-xl font-extrabold tracking-tight text-white truncate"><%= ownerFirstName %></span>
+                <span class="text-sm font-extrabold text-white truncate">Olá,</span>
+                <span class="mt-0.5 text-xs font-semibold tracking-tight text-white/95 truncate"><%= ownerShortName %></span>
               </span>
             </a>
 

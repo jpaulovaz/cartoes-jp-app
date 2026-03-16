@@ -128,7 +128,9 @@
      const ownerDisplayNameRaw = ((nomeTitular || '').replace(/^Detalhamento\s+/i, '').trim());
      const ownerDisplayName = ownerDisplayNameRaw && ownerDisplayNameRaw.toLowerCase() !== 'contas' ? ownerDisplayNameRaw : ((user && user.name) ? user.name : 'Titular');
      const ownerNameParts = ownerDisplayName.split(/\s+/).filter(Boolean);
-     const ownerShortName = ownerNameParts.slice(0, 2).join(' ') || 'Titular'; %>
+     const ownerShortName = ownerNameParts.slice(0, 2).join(' ') || 'Titular';
+     const unreadNotificationsCount = Number(typeof unreadNotificationsCount !== 'undefined' ? unreadNotificationsCount : 0) || 0;
+     const unreadNotificationsBadge = unreadNotificationsCount > 99 ? '99+' : String(unreadNotificationsCount); %>
 
     <nav class="sticky top-0 z-50 bg-[#020617] border-b border-slate-900 shadow-lg">
       <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -197,6 +199,17 @@
             <% } %>
 
             <% if (user) { %>
+              <a class="relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
+                href="/notifications">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                </svg>
+                Notificações
+                <% if (unreadNotificationsCount > 0) { %>
+                  <span class="inline-flex min-w-[1.35rem] items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-extrabold leading-none text-white"><%= unreadNotificationsBadge %></span>
+                <% } %>
+              </a>
+
               <a class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
                 href="/logout">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -285,6 +298,16 @@
               <% } %>
 
               <% if (user) { %>
+                <a class="relative p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/notifications"
+                  title="Notificações">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                  </svg>
+                  <% if (unreadNotificationsCount > 0) { %>
+                    <span class="absolute -right-0.5 -top-0.5 inline-flex min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 py-0.5 text-[9px] font-extrabold leading-none text-white"><%= unreadNotificationsBadge %></span>
+                  <% } %>
+                </a>
+
                 <a class="p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all" href="/logout"
                   title="Sair">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -290,6 +290,7 @@ app.use((req, res, next) => {
   res.locals.nomeTitular = "Detalhamento Contas";
   res.locals.formatDateBR = formatDateBR;
   res.locals.flash = req.session?.flash || null;
+  res.locals.unreadNotificationsCount = 0;
   const now = dayjs();
   res.locals.dashboardHref = `/detalhamento/${now.year()}/${now.month() + 1}`;
 
@@ -311,6 +312,13 @@ app.use((req, res, next) => {
     res.locals.userId = req.user.id;
     res.locals.isAdmin = req.user.role === 'admin';
     res.locals.canImport = Number(req.user.can_import ?? 1) !== 0;
+
+    try {
+      const unreadNotifications = db.prepare("SELECT COUNT(*) AS total FROM notifications WHERE user_id = ? AND is_read = 0").get(req.user.id);
+      res.locals.unreadNotificationsCount = Number(unreadNotifications?.total || 0);
+    } catch (e) {
+      res.locals.unreadNotificationsCount = 0;
+    }
 
     try {
       const owner = db.prepare("SELECT name FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(req.user.id);
@@ -808,24 +816,19 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
     ORDER BY a.id
   `).all(userId, txnId, userId);
 
-  const existingRequests = db.prepare(`
+  const existingPending = db.prepare(`
     SELECT *
     FROM shared_debt_requests
     WHERE requester_user_id = ?
       AND source_transaction_id = ?
+      AND status = 'pending'
     ORDER BY id DESC
   `).all(userId, txnId);
 
-  const existingPending = existingRequests.filter(row => row.status === 'pending');
-
   const existingByPerson = new Map();
-  const latestByPerson = new Map();
-
-  existingRequests.forEach(row => {
+  existingPending.forEach(row => {
     const personId = Number(row.source_person_id || 0);
-    if (!personId) return;
-    if (!latestByPerson.has(personId)) latestByPerson.set(personId, row);
-    if (row.status === 'pending' && !existingByPerson.has(personId)) {
+    if (personId && !existingByPerson.has(personId)) {
       existingByPerson.set(personId, row);
     }
   });
@@ -911,51 +914,46 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
           });
         }
       } else {
-        const latestRequest = latestByPerson.get(personId);
-        const hasActiveHistory = latestRequest && latestRequest.status && latestRequest.status !== 'cancelled';
+        const info = db.prepare(`
+          INSERT INTO shared_debt_requests (
+            requester_user_id, requester_person_id, receiver_user_id, source_person_id,
+            source_transaction_id, source_allocation_id, source_due_month, source_due_year, source_txn_date_snapshot,
+            card_id, card_name_snapshot, description_snapshot, amount_cents,
+            receiver_email_snapshot, receiver_name_snapshot, request_note, response_note,
+            status, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'pending', ?, ?)
+        `).run(
+          userId,
+          requesterPerson?.id || null,
+          row.receiver_user_id,
+          personId,
+          txnId,
+          row.allocation_id,
+          txn.due_month || null,
+          txn.due_year || null,
+          txn.txn_date || null,
+          txn.card_id || null,
+          txn.card_name || null,
+          txn.description,
+          row.share_cents,
+          receiverEmailSnapshot,
+          receiverNameSnapshot,
+          now,
+          now
+        );
 
-        if (!hasActiveHistory) {
-          const info = db.prepare(`
-            INSERT INTO shared_debt_requests (
-              requester_user_id, requester_person_id, receiver_user_id, source_person_id,
-              source_transaction_id, source_allocation_id, source_due_month, source_due_year, source_txn_date_snapshot,
-              card_id, card_name_snapshot, description_snapshot, amount_cents,
-              receiver_email_snapshot, receiver_name_snapshot, request_note, response_note,
-              status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'pending', ?, ?)
-          `).run(
-            userId,
-            requesterPerson?.id || null,
-            row.receiver_user_id,
-            personId,
-            txnId,
-            row.allocation_id,
-            txn.due_month || null,
-            txn.due_year || null,
-            txn.txn_date || null,
-            txn.card_id || null,
-            txn.card_name || null,
-            txn.description,
-            row.share_cents,
-            receiverEmailSnapshot,
-            receiverNameSnapshot,
-            now,
-            now
-          );
+        const requestId = Number(info.lastInsertRowid);
+        addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'created' });
 
-          const requestId = Number(info.lastInsertRowid);
-          addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'created' });
-
-          createNotification({
-            userId: row.receiver_user_id,
-            type: 'shared_debt_request',
-            title: 'Nova cobrança compartilhada',
-            body: `${requesterDisplayName} enviou uma cobrança para você no valor de ${formatBRLFromCents(row.share_cents)} referente a ${txn.description}.`,
-            href: `/shared-debts?request=${requestId}`,
-            relatedType: 'shared_debt_request',
-            relatedId: requestId
-          });
-        }
+        createNotification({
+          userId: row.receiver_user_id,
+          type: 'shared_debt_request',
+          title: 'Nova cobrança compartilhada',
+          body: `${requesterDisplayName} enviou uma cobrança para você no valor de ${formatBRLFromCents(row.share_cents)} referente a ${txn.description}.`,
+          href: `/shared-debts?request=${requestId}`,
+          relatedType: 'shared_debt_request',
+          relatedId: requestId
+        });
       }
     });
 
@@ -1370,53 +1368,78 @@ function getSharedDebtRequestsSent(userId) {
   `).all(userId);
 }
 
-function getSharedDebtEventsByRequestIds(requestIds) {
-  const cleanIds = Array.from(new Set((requestIds || []).map(Number).filter(Boolean)));
-  if (!cleanIds.length) return new Map();
+function getNotificationsForUser(userId) {
+  return db.prepare(`
+    SELECT *
+    FROM notifications
+    WHERE user_id = ?
+    ORDER BY is_read ASC, created_at DESC, id DESC
+  `).all(userId);
+}
 
-  const placeholders = cleanIds.map(() => '?').join(', ');
-  const rows = db.prepare(`
-    SELECT e.*, u.name AS actor_name, u.email AS actor_email
-    FROM shared_debt_events e
-    JOIN users u ON u.id = e.actor_user_id
-    WHERE e.request_id IN (${placeholders})
-    ORDER BY e.created_at ASC, e.id ASC
-  `).all(...cleanIds);
+function sanitizeNotificationHref(href) {
+  const value = String(href || '').trim();
+  return value.startsWith('/') ? value : '/notifications';
+}
 
-  const map = new Map();
-  rows.forEach(row => {
-    if (!map.has(row.request_id)) map.set(row.request_id, []);
-    map.get(row.request_id).push(row);
+app.get('/notifications', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const notifications = getNotificationsForUser(userId);
+
+  return res.render('notifications', {
+    title: 'OrganizaPay | Notificações',
+    notifications
   });
-  return map;
-}
+});
 
-function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
-  const owed = db.prepare(`
-    SELECT COUNT(*) AS total_requests, COALESCE(SUM(amount_cents), 0) AS total_cents
-    FROM shared_debt_requests
-    WHERE receiver_user_id = ?
-      AND status = 'accepted'
-      AND source_due_month = ?
-      AND source_due_year = ?
-  `).get(userId, month, year) || { total_requests: 0, total_cents: 0 };
+app.post('/notifications/mark-all-read', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  db.prepare(`
+    UPDATE notifications
+    SET is_read = 1, read_at = COALESCE(read_at, ?)
+    WHERE user_id = ? AND is_read = 0
+  `).run(nowIso(), userId);
 
-  const receivable = db.prepare(`
-    SELECT COUNT(*) AS total_requests, COALESCE(SUM(amount_cents), 0) AS total_cents
-    FROM shared_debt_requests
-    WHERE requester_user_id = ?
-      AND status = 'accepted'
-      AND source_due_month = ?
-      AND source_due_year = ?
-  `).get(userId, month, year) || { total_requests: 0, total_cents: 0 };
+  const returnTo = sanitizeNotificationHref(req.body.return_to || '/notifications');
+  return res.redirect(returnTo);
+});
 
-  return {
-    owedCents: Number(owed.total_cents || 0),
-    owedCount: Number(owed.total_requests || 0),
-    receivableCents: Number(receivable.total_cents || 0),
-    receivableCount: Number(receivable.total_requests || 0)
-  };
-}
+app.post('/notifications/:id/read', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const notificationId = Number(req.params.id);
+
+  db.prepare(`
+    UPDATE notifications
+    SET is_read = 1, read_at = COALESCE(read_at, ?)
+    WHERE id = ? AND user_id = ?
+  `).run(nowIso(), notificationId, userId);
+
+  const returnTo = sanitizeNotificationHref(req.body.return_to || '/notifications');
+  return res.redirect(returnTo);
+});
+
+app.get('/notifications/:id/go', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const notificationId = Number(req.params.id);
+  const notification = db.prepare(`
+    SELECT *
+    FROM notifications
+    WHERE id = ? AND user_id = ?
+    LIMIT 1
+  `).get(notificationId, userId);
+
+  if (!notification) {
+    return res.redirect('/notifications');
+  }
+
+  db.prepare(`
+    UPDATE notifications
+    SET is_read = 1, read_at = COALESCE(read_at, ?)
+    WHERE id = ? AND user_id = ?
+  `).run(nowIso(), notificationId, userId);
+
+  return res.redirect(sanitizeNotificationHref(notification.href));
+});
 
 app.get("/shared-debts", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
@@ -1432,169 +1455,16 @@ app.get("/shared-debts", ensureAuthenticated, (req, res) => {
 
   const received = getSharedDebtRequestsReceived(userId);
   const sent = getSharedDebtRequestsSent(userId);
-  const eventsByRequest = getSharedDebtEventsByRequestIds([
-    ...received.map(item => item.id),
-    ...sent.map(item => item.id)
-  ]);
 
   return res.render("shared-debts", {
     title: "OrganizaPay | Dívidas Compartilhadas",
     received,
     sent,
-    eventsByRequest,
     requestIdToHighlight,
     formatBRLFromCents,
     monthLabel,
     formatDateBR
   });
-});
-
-app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const requestId = Number(req.params.id);
-  const action = String(req.body.action || '').trim().toLowerCase();
-  const note = String(req.body.note || '').trim() || null;
-
-  if (!requestId) {
-    setFlash(req, 'error', 'Solicitação inválida.');
-    return res.redirect('/shared-debts');
-  }
-
-  if (!['accept', 'reject'].includes(action)) {
-    setFlash(req, 'error', 'Ação inválida para esta solicitação.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
-  }
-
-  const requestRow = db.prepare(`
-    SELECT r.*, u.name AS requester_name, u.email AS requester_email
-    FROM shared_debt_requests r
-    JOIN users u ON u.id = r.requester_user_id
-    WHERE r.id = ? AND r.receiver_user_id = ?
-    LIMIT 1
-  `).get(requestId, userId);
-
-  if (!requestRow) {
-    setFlash(req, 'error', 'Solicitação não encontrada.');
-    return res.redirect('/shared-debts');
-  }
-
-  if (requestRow.status !== 'pending') {
-    setFlash(req, 'info', 'Esta solicitação já foi analisada anteriormente.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
-  }
-
-  const actor = getUserRecord(userId);
-  const actorName = actor?.name || requestRow.receiver_name_snapshot || actor?.email || 'O destinatário';
-  const now = nowIso();
-  const accepted = action === 'accept';
-  const nextStatus = accepted ? 'accepted' : 'rejected_by_receiver';
-  const eventType = nextStatus;
-  const title = accepted ? 'Cobrança compartilhada aceita' : 'Cobrança compartilhada recusada';
-  const baseBody = accepted
-    ? `${actorName} aceitou a cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`
-    : `${actorName} recusou a cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`;
-  const body = note ? `${baseBody} Observação: ${note}` : baseBody;
-
-  db.transaction(() => {
-    db.prepare(`
-      UPDATE shared_debt_requests
-      SET status = ?, response_note = ?, updated_at = ?, responded_at = ?
-      WHERE id = ? AND receiver_user_id = ? AND status = 'pending'
-    `).run(nextStatus, note, now, now, requestId, userId);
-
-    addSharedDebtEvent({ requestId, actorUserId: userId, eventType, note });
-
-    createNotification({
-      userId: requestRow.requester_user_id,
-      type: 'shared_debt_request',
-      title,
-      body,
-      href: `/shared-debts?request=${requestId}`,
-      relatedType: 'shared_debt_request',
-      relatedId: requestId
-    });
-  })();
-
-  setFlash(req, 'success', accepted ? 'Solicitação aceita com sucesso.' : 'Solicitação recusada com sucesso.');
-  return res.redirect(`/shared-debts?request=${requestId}`);
-});
-
-app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const requestId = Number(req.params.id);
-  const action = String(req.body.action || '').trim().toLowerCase();
-  const note = String(req.body.note || '').trim() || null;
-
-  if (!requestId) {
-    setFlash(req, 'error', 'Solicitação inválida.');
-    return res.redirect('/shared-debts');
-  }
-
-  if (!['accept_rejection', 'contest_rejection'].includes(action)) {
-    setFlash(req, 'error', 'Ação inválida para esta solicitação.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
-  }
-
-  const requestRow = db.prepare(`
-    SELECT r.*, u.name AS receiver_name, u.email AS receiver_email
-    FROM shared_debt_requests r
-    JOIN users u ON u.id = r.receiver_user_id
-    WHERE r.id = ? AND r.requester_user_id = ?
-    LIMIT 1
-  `).get(requestId, userId);
-
-  if (!requestRow) {
-    setFlash(req, 'error', 'Solicitação não encontrada.');
-    return res.redirect('/shared-debts');
-  }
-
-  if (requestRow.status !== 'rejected_by_receiver') {
-    setFlash(req, 'info', 'Esta solicitação não está aguardando decisão do remetente.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
-  }
-
-  const actor = getUserRecord(userId);
-  const actorName = actor?.name || actor?.email || 'O remetente';
-  const now = nowIso();
-  const acceptingRejection = action === 'accept_rejection';
-  const nextStatus = acceptingRejection ? 'rejection_accepted_by_sender' : 'rejection_contested_by_sender';
-  const eventType = nextStatus;
-  const title = acceptingRejection ? 'Rejeição aceita pelo remetente' : 'Rejeição contestada pelo remetente';
-  const baseBody = acceptingRejection
-    ? `${actorName} aceitou a sua recusa da cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`
-    : `${actorName} contestou a sua recusa da cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`;
-  const body = note ? `${baseBody} Observação: ${note}` : baseBody;
-
-  db.transaction(() => {
-    if (acceptingRejection) {
-      db.prepare(`
-        UPDATE shared_debt_requests
-        SET status = ?, updated_at = ?, resolved_at = ?
-        WHERE id = ? AND requester_user_id = ? AND status = 'rejected_by_receiver'
-      `).run(nextStatus, now, now, requestId, userId);
-    } else {
-      db.prepare(`
-        UPDATE shared_debt_requests
-        SET status = ?, updated_at = ?, resolved_at = NULL
-        WHERE id = ? AND requester_user_id = ? AND status = 'rejected_by_receiver'
-      `).run(nextStatus, now, requestId, userId);
-    }
-
-    addSharedDebtEvent({ requestId, actorUserId: userId, eventType, note });
-
-    createNotification({
-      userId: requestRow.receiver_user_id,
-      type: 'shared_debt_request',
-      title,
-      body,
-      href: `/shared-debts?request=${requestId}`,
-      relatedType: 'shared_debt_request',
-      relatedId: requestId
-    });
-  })();
-
-  setFlash(req, 'success', acceptingRejection ? 'Rejeição aceita com sucesso.' : 'Rejeição contestada com sucesso.');
-  return res.redirect(`/shared-debts?request=${requestId}`);
 });
 
 // People
@@ -1909,8 +1779,6 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   `).all(userId, currentMonth, currentYear);
   const statementByCard = new Map(statementRows.map(row => [row.card_id, row]));
 
-  const sharedDebtSummary = getAcceptedSharedDebtSummaryForMonth(userId, currentMonth, currentYear);
-
   const alerts = [];
   const unreadSharedDebtNotifications = db.prepare(`
     SELECT title, body, href, created_at
@@ -1988,22 +1856,6 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     }
   }
 
-  const senderDecisionCount = db.prepare(`
-    SELECT COUNT(*) AS total
-    FROM shared_debt_requests
-    WHERE requester_user_id = ? AND status = 'rejected_by_receiver'
-  `).get(userId)?.total || 0;
-
-  if (senderDecisionCount > 0) {
-    alerts.push({
-      type: 'warning',
-      icon: '⚖️',
-      title: 'Rejeições aguardando sua decisão',
-      description: `${senderDecisionCount} solicitação(ões) recusadas aguardam você aceitar a rejeição ou contestá-la.`,
-      href: '/shared-debts'
-    });
-  }
-
   if (!isClosed) {
     const unassignedCount = db.prepare(`
       SELECT COUNT(*) AS total
@@ -2068,8 +1920,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     formatBRLFromCents,
     isClosed,
     alerts,
-    cards,
-    sharedDebtSummary
+    cards
   });
 });
 

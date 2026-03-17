@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - OrganizaPay</title>
+  <title>Login | OrganizaPay</title>
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#020617">
   <meta name="mobile-web-app-capable" content="yes">
@@ -14,240 +14,94 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-  <style>
-    :root {
-      --brand-blue: #2563eb;
-      --brand-blue-dark: #1e3a8a;
-      --brand-indigo: #4f46e5;
-      --brand-ink: #020617;
-      --brand-card: rgba(248, 250, 252, 0.94);
-      --brand-muted: #475569;
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } } };
+    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
     }
-
-    * { box-sizing: border-box; }
-
-    body {
-      min-height: 100vh;
-      margin: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      background:
-        radial-gradient(circle at top left, rgba(59, 130, 246, 0.24), transparent 34%),
-        radial-gradient(circle at bottom right, rgba(79, 70, 229, 0.18), transparent 28%),
-        linear-gradient(135deg, #020617 0%, #020617 44%, #172554 100%);
-      color: var(--brand-ink);
-    }
-
-    .login-shell {
-      width: 100%;
-      max-width: 456px;
-      position: relative;
-    }
-
-    .login-shell::before,
-    .login-shell::after {
-      content: "";
-      position: absolute;
-      inset: auto;
-      border-radius: 999px;
-      filter: blur(18px);
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .login-shell::before {
-      width: 150px;
-      height: 150px;
-      top: -20px;
-      right: -18px;
-      background: rgba(59, 130, 246, 0.24);
-    }
-
-    .login-shell::after {
-      width: 120px;
-      height: 120px;
-      left: -12px;
-      bottom: -22px;
-      background: rgba(79, 70, 229, 0.18);
-    }
-
-    .login-container {
-      position: relative;
-      z-index: 1;
-      width: 100%;
-      padding: 2rem;
-      background: var(--brand-card);
-      border: 1px solid rgba(255, 255, 255, 0.6);
-      border-radius: 28px;
-      box-shadow: 0 28px 60px rgba(0, 0, 0, 0.28);
-      backdrop-filter: blur(14px);
-      text-align: center;
-    }
-
-    .logo-wrapper {
-      display: flex;
-      justify-content: center;
-      margin-bottom: 1.25rem;
-    }
-
-    .brand-logo {
-      width: min(100%, 336px);
-      height: auto;
-      display: block;
-      filter: drop-shadow(0 18px 26px rgba(37, 99, 235, 0.22));
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.45rem;
-      padding: 0.42rem 0.8rem;
-      margin-bottom: 1rem;
-      border-radius: 999px;
-      background: rgba(37, 99, 235, 0.10);
-      color: var(--brand-blue-dark);
-      font-size: 0.78rem;
-      font-weight: 700;
-      letter-spacing: 0.03em;
-    }
-
-    h2 {
-      margin: 0 0 0.45rem;
-      font-size: clamp(1.55rem, 4vw, 1.95rem);
-      font-weight: 800;
-      color: var(--brand-ink);
-    }
-
-    .lead-text {
-      color: var(--brand-muted);
-      font-size: 0.98rem;
-      line-height: 1.6;
-      margin: 0 auto 1.75rem;
-      max-width: 30ch;
-    }
-
-    .btn-google {
-      background-color: #fff;
-      color: #1e293b;
-      border: 1px solid rgba(15, 23, 42, 0.10);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      font-weight: 700;
-      padding: 0.95rem 1.25rem;
-      border-radius: 18px;
-      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
-      box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
-    }
-
-    .btn-google:hover {
-      background-color: #f8fbff;
-      border-color: rgba(37, 99, 235, 0.25);
-      transform: translateY(-1px);
-      box-shadow: 0 16px 26px rgba(37, 99, 235, 0.12);
-    }
-
-    .btn-google:focus-visible {
-      outline: 0;
-      box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.16);
-    }
-
-    .google-icon {
-      width: 20px;
-      height: 20px;
-      flex-shrink: 0;
-    }
-
-    .restricted-note {
-      margin-top: 1rem;
-      color: var(--brand-muted);
-      font-size: 0.86rem;
-    }
-
-    .policy-copy {
-      margin-top: 1.1rem;
-      font-size: 0.84rem;
-      line-height: 1.6;
-      color: var(--brand-muted);
-    }
-
-    .policy-copy a {
-      color: var(--brand-blue-dark);
-      text-decoration: none;
-      font-weight: 700;
-    }
-
-    .policy-copy a:hover {
-      color: var(--brand-blue);
-      text-decoration: underline;
-    }
-
-    .alert {
-      border-radius: 16px;
-      text-align: left;
-      margin-bottom: 1.2rem;
-    }
-
-    @media (max-width: 576px) {
-      body {
-        padding: 18px;
-      }
-
-      .login-container {
-        padding: 1.5rem;
-        border-radius: 24px;
-      }
-
-      .brand-logo {
-        width: min(100%, 284px);
-      }
-    }
-  </style>
+  </script>
+  <link rel="stylesheet" href="/app.css" />
 </head>
-<body>
-  <div class="login-shell">
-    <div class="login-container">
-      <div class="logo-wrapper">
-        <img src="/logo.png" alt="OrganizaPay" class="brand-logo">
-      </div>
+<body class="op-auth-page flex items-center justify-center p-4 font-sans sm:p-6">
+  <div class="op-auth-shell">
+    <div class="op-auth-card grid overflow-hidden lg:grid-cols-[minmax(0,1.05fr)_420px]">
+      <section class="relative z-10 border-b border-slate-200/70 px-6 py-7 dark:border-slate-800 lg:border-b-0 lg:border-r lg:px-8 lg:py-9">
+        <span class="op-auth-badge">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 .552-.224 1.052-.586 1.414A1.992 1.992 0 019.999 13a1.99 1.99 0 01-1.414-.586A1.992 1.992 0 018 11V9a4 4 0 118 0v2zm0 0v4m0 0h3m-3 0H9"></path></svg>
+          Google Sign-In
+        </span>
+        <h1 class="op-auth-title mt-5 text-slate-900 dark:text-slate-50">Acesso rápido com sua conta Google.</h1>
+        <p class="op-auth-text mt-4">A autenticação por Google simplifica o acesso e reduz atrito no celular, mantendo o aplicativo restrito a usuários autorizados.</p>
 
-      <% if (typeof error !== 'undefined' && error) { %>
-        <div class="alert alert-danger" role="alert">
-          <%= error %>
+        <div class="op-auth-feature-grid mt-7">
+          <div class="op-auth-feature">
+            <div class="op-auth-feature__icon">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+            </div>
+            <div>
+              <div class="op-auth-feature__title">Continuar de qualquer aparelho</div>
+              <div class="op-auth-feature__text">Ideal para usar no computador, no celular e no modo PWA com a mesma conta autorizada.</div>
+            </div>
+          </div>
+          <div class="op-auth-feature">
+            <div class="op-auth-feature__icon">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            </div>
+            <div>
+              <div class="op-auth-feature__title">Conta certa, acesso certo</div>
+              <div class="op-auth-feature__text">Só usuários autorizados conseguem entrar e usar as áreas protegidas do OrganizaPay.</div>
+            </div>
+          </div>
+          <div class="op-auth-feature">
+            <div class="op-auth-feature__icon">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <div>
+              <div class="op-auth-feature__title">Experiência rápida no celular</div>
+              <div class="op-auth-feature__text">Fluxo curto, botões grandes e continuidade perfeita com a versão instalada na tela inicial.</div>
+            </div>
+          </div>
         </div>
-      <% } %>
+      </section>
 
-      <div class="eyebrow">
-        <i class="bi bi-shield-lock"></i>
-        Acesso seguro
-      </div>
-      <h2>Entre com sua conta Google</h2>
-      <p class="lead-text">Controle financeiro familiar, acompanhamento da fatura e visão clara dos gastos em tempo real.</p>
+      <section class="relative z-10 px-6 py-7 lg:px-8 lg:py-9">
+        <img src="/logo.png" alt="OrganizaPay" class="mx-auto mb-6 w-full max-w-[260px] drop-shadow-[0_18px_26px_rgba(37,99,235,0.16)] sm:max-w-[300px]">
 
-      <a href="/auth/google" class="btn btn-google w-100 mb-2">
-        <svg class="google-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" aria-hidden="true">
-          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-          <path fill="none" d="M0 0h48v48H0z"/>
-        </svg>
-        Entrar com Google
-      </a>
+        <% if (typeof error !== 'undefined' && error) { %>
+          <div class="mb-5 rounded-[22px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 dark:border-red-800 dark:bg-red-900/25 dark:text-red-200">
+            <%= error %>
+          </div>
+        <% } %>
 
-      <div class="restricted-note">
-        Acesso restrito a usuários autorizados.
-      </div>
+        <div class="mb-5">
+          <div class="text-xs font-extrabold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Login</div>
+          <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-slate-50">Entre com sua conta Google</h2>
+          <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">Um toque para iniciar a sessão e continuar de onde parou.</p>
+        </div>
 
-      <div class="policy-copy">
-        Ao continuar, você concorda com o processamento dos dados necessários para autenticação e uso do aplicativo.
-        <a href="/privacy-policy">Política de Privacidade</a>
-      </div>
+        <a href="/auth/google" class="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-800 shadow-lg shadow-slate-900/5 transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:border-blue-500 dark:hover:bg-slate-900">
+          <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+            <path fill="none" d="M0 0h48v48H0z"/>
+          </svg>
+          Entrar com Google
+        </a>
+
+        <p class="mt-4 text-sm font-semibold text-slate-500 dark:text-slate-400">Acesso restrito a usuários autorizados.</p>
+        <p class="mt-5 text-xs leading-6 text-slate-500 dark:text-slate-400">
+          Ao continuar, você concorda com o processamento dos dados necessários para autenticação e uso do aplicativo.
+          <a href="/privacy-policy" class="font-semibold text-blue-700 hover:text-blue-600 dark:text-blue-300 dark:hover:text-blue-200">Política de Privacidade</a>
+        </p>
+      </section>
     </div>
   </div>
 </body>

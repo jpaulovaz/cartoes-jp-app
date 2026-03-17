@@ -150,22 +150,140 @@
     };
   }
 
+  function ensureHtml2CanvasAvailable() {
+    if (typeof window.html2canvas !== 'function') {
+      throw new Error('A biblioteca de geração da imagem não foi carregada. Recarregue a página e tente novamente.');
+    }
+  }
+
+  function getCaptureSourceNode() {
+    return document.getElementById('cardPreview') || document.getElementById('cardExport');
+  }
+
+  function waitForPaint() {
+    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  }
+
   async function buildReceiptCanvas() {
-    const exportNode = document.getElementById('cardExport') || document.getElementById('cardPreview');
-    if (!exportNode) throw new Error('Resumo não encontrado para captura.');
+    ensureHtml2CanvasAvailable();
+    const sourceNode = getCaptureSourceNode();
+    if (!sourceNode) throw new Error('Resumo não encontrado para captura.');
 
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await waitForPaint();
 
-    return html2canvas(exportNode, {
-      scale: Number((exportNode.dataset && exportNode.dataset.captureScale) || 2),
-      backgroundColor: '#ffffff',
-      useCORS: true,
-      width: exportNode.scrollWidth,
-      height: exportNode.scrollHeight,
-      windowWidth: Math.max(1440, exportNode.scrollWidth + 200),
-      windowHeight: Math.max(1440, exportNode.scrollHeight + 200),
-      scrollX: 0,
-      scrollY: 0
+    const rect = sourceNode.getBoundingClientRect();
+    const baseWidth = Math.max(Math.ceil(rect.width || 0), sourceNode.scrollWidth || 0, sourceNode.offsetWidth || 0, 704);
+
+    const stage = document.createElement('div');
+    stage.setAttribute('data-capture-stage', 'true');
+    stage.style.position = 'fixed';
+    stage.style.left = '0';
+    stage.style.top = '0';
+    stage.style.zIndex = '-1';
+    stage.style.pointerEvents = 'none';
+    stage.style.opacity = '1';
+    stage.style.background = '#ffffff';
+    stage.style.padding = '0';
+    stage.style.margin = '0';
+    stage.style.width = `${baseWidth}px`;
+
+    const clone = sourceNode.cloneNode(true);
+    clone.id = `${sourceNode.id || 'whatsapp-card'}-capture`;
+    clone.style.width = `${baseWidth}px`;
+    clone.style.maxWidth = `${baseWidth}px`;
+    clone.style.margin = '0';
+    clone.style.transform = 'none';
+
+    stage.appendChild(clone);
+    document.body.appendChild(stage);
+
+    try {
+      await waitForPaint();
+      const cloneRect = clone.getBoundingClientRect();
+      const width = Math.max(Math.ceil(cloneRect.width || 0), clone.scrollWidth || 0, clone.offsetWidth || 0, baseWidth);
+      const height = Math.max(Math.ceil(cloneRect.height || 0), clone.scrollHeight || 0, clone.offsetHeight || 0);
+
+      console.info('[whatsapp] capture dimensions', { width, height, baseWidth });
+
+      if (!width || !height) {
+        throw new Error(`Não foi possível medir a área do recibo para captura (${width}x${height}).`);
+      }
+
+      const canvas = await html2canvas(clone, {
+        scale: Number((sourceNode.dataset && sourceNode.dataset.captureScale) || 2),
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        width,
+        height,
+        windowWidth: width + 40,
+        windowHeight: height + 40,
+        scrollX: 0,
+        scrollY: 0
+      });
+
+      if (!canvas || !canvas.width || !canvas.height) {
+        throw new Error('A captura foi gerada sem conteúdo útil.');
+      }
+
+      return canvas;
+    } finally {
+      stage.remove();
+    }
+  }
+
+  function canvasToBlob(canvas) {
+    return new Promise((resolve, reject) => {
+      if (canvas.toBlob) {
+        canvas.toBlob((blob) => {
+          if (blob && blob.size > 0) {
+            console.info('[whatsapp] blob generated', { size: blob.size, type: blob.type || 'image/png' });
+            resolve(blob);
+            return;
+          }
+
+          try {
+            const dataUrl = canvas.toDataURL('image/png');
+            const base64 = String(dataUrl).split(',')[1] || '';
+            if (!base64) {
+              reject(new Error('A imagem foi gerada vazia.'));
+              return;
+            }
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+            const blobFromDataUrl = new Blob([bytes], { type: 'image/png' });
+            console.info('[whatsapp] fallback blob generated', { size: blobFromDataUrl.size, type: blobFromDataUrl.type });
+            resolve(blobFromDataUrl);
+          } catch (error) {
+            reject(error);
+          }
+        }, 'image/png');
+        return;
+      }
+
+      try {
+        const dataUrl = canvas.toDataURL('image/png');
+        const base64 = String(dataUrl).split(',')[1] || '';
+        if (!base64) {
+          reject(new Error('A imagem foi gerada vazia.'));
+          return;
+        }
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        resolve(new Blob([bytes], { type: 'image/png' }));
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error || new Error('Não foi possível ler a imagem gerada.'));
+      reader.readAsDataURL(blob);
     });
   }
 
@@ -173,10 +291,13 @@
     const restore = setBusy(document.getElementById('btnPng'), 'Gerando PNG...');
     try {
       const canvas = await buildReceiptCanvas();
+      const blob = await canvasToBlob(canvas);
       const link = document.createElement('a');
       link.download = `Fatura_<%= person.name.replace(/\s+/g,'_') %>_<%= String(month).padStart(2,'0') %>_<%= year %>.png`;
-      link.href = canvas.toDataURL('image/png');
+      const url = URL.createObjectURL(blob);
+      link.href = url;
       link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
     } finally {
       restore();
     }
@@ -187,7 +308,8 @@
     const restore = setBusy(button, 'Enviando via WhatsApp...');
     try {
       const canvas = await buildReceiptCanvas();
-      const imageBase64 = canvas.toDataURL('image/png');
+      const blob = await canvasToBlob(canvas);
+      const imageBase64 = await blobToDataUrl(blob);
       const totalLabel = '<%= formatBRL(effectiveTotalCents) %>';
       const message = [
         `*Olá, <%= person.name %>!* 💳`,
@@ -214,7 +336,7 @@
 
       alert('Resumo enviado com imagem com sucesso.');
     } catch (error) {
-      console.error(error);
+      console.error('[whatsapp] send failure', error);
       alert(error && error.message ? error.message : 'Não foi possível enviar a imagem pelo WhatsApp agora.');
     } finally {
       restore();

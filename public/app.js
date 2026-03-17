@@ -59,37 +59,116 @@
 
 
 (function () {
-  function confirmTypedAction(message, phrase = "Eu confirmo") {
-    const typed = window.prompt(`${message}
+  let dialogState = null;
 
-Digite exatamente: ${phrase}`, "");
-    const ok = typeof typed === "string" && typed.trim().toLowerCase() === phrase.trim().toLowerCase();
-
-    if (!ok) {
-      if (typed !== null) {
-        alert("Confirmação não informada corretamente. Nenhuma ação foi executada.");
-      }
-      return false;
-    }
-
-    return true;
+  function toneClasses(tone) {
+    const base = 'w-full rounded-2xl px-4 py-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-900';
+    if (tone === 'danger') return `${base} bg-red-600 text-white hover:bg-red-700 focus:ring-red-500`;
+    if (tone === 'primary') return `${base} bg-slate-900 text-white hover:bg-slate-800 focus:ring-slate-500 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white dark:focus:ring-slate-300`;
+    return `${base} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:ring-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus:ring-slate-500`;
   }
 
-  document.addEventListener("submit", (event) => {
-    if (event.defaultPrevented) return;
+  function setDialogVisibility(state, visible) {
+    state.root.classList.toggle('hidden', !visible);
+    document.body.classList.toggle('overflow-hidden', visible);
+  }
 
-    const form = event.target;
-    if (!(form instanceof HTMLFormElement)) return;
-
-    const message = form.dataset.confirmPrompt;
-    if (!message) return;
-
-    const phrase = form.dataset.confirmPhrase || "Eu confirmo";
-    if (!confirmTypedAction(message, phrase)) {
-      event.preventDefault();
+  function ensureActionDialog() {
+    if (dialogState && dialogState.root && document.body.contains(dialogState.root)) {
+      return dialogState;
     }
-  });
 
+    const root = document.createElement('div');
+    root.className = 'fixed inset-0 z-[9999] hidden';
+    root.innerHTML = `
+      <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-dialog-backdrop></div>
+      <div class="relative z-10 flex min-h-full items-end justify-center p-4 sm:items-center">
+        <div class="w-full max-w-md overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+          <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+            <h3 class="text-base font-bold text-slate-900 dark:text-slate-100" data-dialog-title></h3>
+          </div>
+          <div class="px-5 py-4">
+            <p class="text-sm leading-6 text-slate-600 whitespace-pre-line dark:text-slate-300" data-dialog-message></p>
+          </div>
+          <div class="flex flex-col gap-2 px-5 pb-5" data-dialog-buttons></div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(root);
+
+    dialogState = {
+      root,
+      title: root.querySelector('[data-dialog-title]'),
+      message: root.querySelector('[data-dialog-message]'),
+      buttons: root.querySelector('[data-dialog-buttons]'),
+      activeResolve: null
+    };
+
+    const closeDialog = (value) => {
+      if (!dialogState?.activeResolve) return;
+      const resolve = dialogState.activeResolve;
+      dialogState.activeResolve = null;
+      setDialogVisibility(dialogState, false);
+      resolve(value);
+    };
+
+    root.querySelector('[data-dialog-backdrop]')?.addEventListener('click', () => closeDialog(null));
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && dialogState?.activeResolve) {
+        closeDialog(null);
+      }
+    });
+
+    dialogState.close = closeDialog;
+    return dialogState;
+  }
+
+  function showActionDialog({ title = 'Confirmar ação', message = '', options = [] } = {}) {
+    const state = ensureActionDialog();
+
+    if (state.activeResolve) {
+      const previousResolve = state.activeResolve;
+      state.activeResolve = null;
+      previousResolve(null);
+    }
+
+    state.title.textContent = title;
+    state.message.textContent = message;
+    state.buttons.innerHTML = '';
+
+    return new Promise((resolve) => {
+      state.activeResolve = resolve;
+
+      options.forEach((option, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = toneClasses(option.tone || 'secondary');
+        button.textContent = option.label;
+        button.addEventListener('click', () => state.close(option.value));
+        state.buttons.appendChild(button);
+        if (index === 0) {
+          window.requestAnimationFrame(() => button.focus());
+        }
+      });
+
+      setDialogVisibility(state, true);
+    });
+  }
+
+  async function confirmTypedAction(message, phrase = 'Eu confirmo') {
+    const result = await showActionDialog({
+      title: 'Confirmar exclusão',
+      message,
+      options: [
+        { label: 'Cancelar', value: false, tone: 'secondary' },
+        { label: 'Excluir', value: true, tone: 'danger' }
+      ]
+    });
+
+    return result === true;
+  }
+
+  window.showActionDialog = showActionDialog;
   window.confirmTypedAction = confirmTypedAction;
 })();
 
@@ -603,54 +682,88 @@ Digite exatamente: ${phrase}`, "");
     return field;
   }
 
-  function resolveInstallmentScope(form, { actionLabel = 'executar esta ação' } = {}) {
+  async function resolveInstallmentScope(form, { actionLabel = 'alterar a distribuição', destructive = false } = {}) {
     const hasFuture = String(form?.dataset?.hasFutureInstallments || '') === '1';
+    const field = ensureHiddenScopeField(form);
+
     if (!hasFuture) {
-      const field = ensureHiddenScopeField(form);
+      if (destructive) {
+        const confirmed = await window.confirmTypedAction(
+          form?.dataset?.confirmPrompt || 'Excluir este lançamento? Esta ação remove o item e a distribuição associada.'
+        );
+        if (!confirmed) return null;
+      }
       field.value = 'single';
       return 'single';
     }
 
-    const label = form?.dataset?.installmentLabel ? `
+    const label = String(form?.dataset?.installmentLabel || '').trim();
+    const message = [
+      destructive
+        ? 'Este lançamento faz parte de um parcelamento. Escolha o alcance da exclusão.'
+        : `Este lançamento faz parte de um parcelamento. Escolha se deseja ${actionLabel} só nesta parcela ou também nas próximas.`,
+      label ? `Lançamento: ${label}` : ''
+    ].filter(Boolean).join('\n\n');
 
-Lançamento: ${form.dataset.installmentLabel}` : '';
-    const applyFuture = window.confirm(`Este lançamento faz parte de um parcelamento.${label}
+    const result = await window.showActionDialog({
+      title: destructive ? 'Excluir lançamento parcelado' : 'Aplicar em compra parcelada',
+      message,
+      options: destructive
+        ? [
+            { label: 'Cancelar', value: null, tone: 'secondary' },
+            { label: 'Excluir só esta parcela', value: 'single', tone: 'danger' },
+            { label: 'Excluir esta e próximas', value: 'future', tone: 'danger' }
+          ]
+        : [
+            { label: 'Cancelar', value: null, tone: 'secondary' },
+            { label: 'Aplicar só nesta parcela', value: 'single', tone: 'primary' },
+            { label: 'Aplicar nesta e nas próximas', value: 'future', tone: 'primary' }
+          ]
+    });
 
-Pressione OK para ${actionLabel} nesta parcela e nas próximas.
-Pressione Cancelar para escolher somente esta parcela ou abortar.`);
-
-    if (applyFuture) {
-      const field = ensureHiddenScopeField(form);
-      field.value = 'future';
-      return 'future';
-    }
-
-    const applySingle = window.confirm(`Aplicar ${actionLabel} somente nesta parcela?
-
-Pressione OK para continuar somente com esta parcela.
-Pressione Cancelar para não fazer nenhuma alteração.`);
-    if (!applySingle) {
+    if (!result) {
       return null;
     }
 
-    const field = ensureHiddenScopeField(form);
-    field.value = 'single';
-    return 'single';
+    field.value = result;
+    return result;
   }
 
   document.addEventListener('submit', (event) => {
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) return;
-    if (!form.dataset.installmentScopeForm) return;
+    if (form.dataset.allocForm) return;
+    if (form.dataset.scopeFlowHandled === '1') return;
 
-    const actionLabel = form.dataset.installmentScopeForm === 'delete'
-      ? 'excluir este lançamento'
-      : 'alterar a distribuição';
+    const formType = String(form.dataset.installmentScopeForm || '').trim().toLowerCase();
+    const needsScope = !!formType;
+    const needsConfirm = !!form.dataset.confirmPrompt && formType !== 'delete';
+    if (!needsScope && !needsConfirm) return;
 
-    const chosenScope = resolveInstallmentScope(form, { actionLabel });
-    if (!chosenScope) {
-      event.preventDefault();
-    }
+    event.preventDefault();
+
+    (async () => {
+      if (needsScope) {
+        const actionLabel = formType === 'delete' ? 'excluir este lançamento' : 'alterar a distribuição';
+        const chosenScope = await resolveInstallmentScope(form, {
+          actionLabel,
+          destructive: formType === 'delete'
+        });
+        if (!chosenScope) return;
+      }
+
+      if (needsConfirm) {
+        const confirmed = await window.confirmTypedAction(form.dataset.confirmPrompt);
+        if (!confirmed) return;
+      }
+
+      form.dataset.scopeFlowHandled = '1';
+      HTMLFormElement.prototype.submit.call(form);
+      delete form.dataset.scopeFlowHandled;
+    })().catch((error) => {
+      console.error(error);
+      delete form.dataset.scopeFlowHandled;
+    });
   }, true);
 
   window.resolveInstallmentScope = resolveInstallmentScope;

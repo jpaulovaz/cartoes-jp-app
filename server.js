@@ -2693,6 +2693,8 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   const txns = db.prepare(`
     SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
            t.parent_txn_id, t.due_month, t.due_year,
+           COALESCE(i.month, t.due_month) AS month,
+           COALESCE(i.year, t.due_year) AS year,
            ${allocCountExpr} AS alloc_count,
            ${selectedCsvExpr} AS selected_csv
     FROM transactions t

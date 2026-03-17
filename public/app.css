@@ -40,9 +40,18 @@ html.dark body {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
+  color: #334155;
   border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
   backdrop-filter: blur(10px);
+}
+
+html.dark .badge {
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.86);
+  box-shadow: 0 14px 32px rgba(2, 6, 23, 0.22);
 }
 
 .small { font-size: 12px; }
@@ -353,6 +362,13 @@ html.dark .op-surface-card {
   bottom: 0;
   z-index: 55;
   padding: 0 1rem calc(env(safe-area-inset-bottom, 0px) + 0.85rem);
+  transition: transform 0.28s ease, opacity 0.24s ease;
+}
+
+.op-bottom-nav.is-idle-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(calc(100% + env(safe-area-inset-bottom, 0px) + 1rem));
 }
 
 .op-bottom-nav__inner {

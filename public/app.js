@@ -841,3 +841,46 @@
     applyActiveNavState();
   }
 })();
+
+
+(function () {
+  function initMobileBottomNavAutoHide() {
+    const nav = document.querySelector('.op-bottom-nav');
+    if (!(nav instanceof HTMLElement)) return;
+    if (window.matchMedia('(min-width: 768px)').matches) return;
+
+    let hideTimer = null;
+
+    const showNav = () => nav.classList.remove('is-idle-hidden');
+    const hideNav = () => nav.classList.add('is-idle-hidden');
+    const scheduleHide = (delay = 900) => {
+      window.clearTimeout(hideTimer);
+      hideTimer = window.setTimeout(hideNav, delay);
+    };
+    const registerActivity = (delay = 900) => {
+      showNav();
+      scheduleHide(delay);
+    };
+
+    registerActivity(1400);
+
+    window.addEventListener('scroll', () => registerActivity(900), { passive: true });
+    window.addEventListener('touchstart', () => registerActivity(1400), { passive: true });
+    window.addEventListener('pointerdown', () => registerActivity(1400), { passive: true });
+    window.addEventListener('focusin', () => registerActivity(1400));
+    window.addEventListener('resize', () => {
+      if (window.matchMedia('(min-width: 768px)').matches) {
+        window.clearTimeout(hideTimer);
+        showNav();
+        return;
+      }
+      registerActivity(1400);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMobileBottomNavAutoHide);
+  } else {
+    initMobileBottomNavAutoHide();
+  }
+})();

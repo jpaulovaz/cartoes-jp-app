@@ -56,8 +56,11 @@
           </div>
 
           <button type="submit" id="btnSubmit"
-            class="w-full md:w-auto px-6 py-3 rounded-xl font-bold text-white bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 dark:hover:bg-blue-700 shadow-sm transition-all hover:-translate-y-0.5 whitespace-nowrap">
-            + Adicionar
+            class="w-full md:w-auto inline-flex items-center justify-center px-6 py-3 rounded-xl font-bold text-white bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 dark:hover:bg-blue-700 shadow-sm transition-all hover:-translate-y-0.5 whitespace-nowrap">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Adicionar
           </button>
           <button type="button" id="btnCancel" onclick="resetForm()"
             class="hidden w-full md:w-auto px-4 py-3 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-all whitespace-nowrap">Cancelar</button>
@@ -144,7 +147,7 @@
       document.getElementById('inputName').value = name;
       document.getElementById('inputPhone').value = phone;
       document.getElementById('inputEmail').value = email;
-      document.getElementById('btnSubmit').innerText = 'Salvar Alterações';
+      document.getElementById('btnSubmit').innerHTML = 'Salvar Alterações';
       document.getElementById('btnSubmit').classList.replace('bg-slate-900', 'bg-blue-600');
       document.getElementById('btnCancel').classList.remove('hidden');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -155,7 +158,7 @@
       document.getElementById('inputName').value = '';
       document.getElementById('inputPhone').value = '';
       document.getElementById('inputEmail').value = '';
-      document.getElementById('btnSubmit').innerText = '+ Adicionar';
+      document.getElementById('btnSubmit').innerHTML = `<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>Adicionar`;
       document.getElementById('btnSubmit').classList.remove('bg-blue-600');
       document.getElementById('btnSubmit').classList.add('bg-slate-900');
       document.getElementById('btnCancel').classList.add('hidden');

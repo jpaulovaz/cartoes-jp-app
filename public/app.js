@@ -573,31 +573,36 @@
   function setPushToggleState(button, statusEl, state) {
     if (!(button instanceof HTMLButtonElement)) return;
 
+    const iconBell = '<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.389 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>';
+    const iconBellOff = '<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364L4.636 4.636m13.728 13.728A9.953 9.953 0 0112 20a9.953 9.953 0 01-5.895-1.93M6.343 6.343A5.97 5.97 0 006 8v3.159c0 .538-.214 1.055-.595 1.436L4 14h16l-1.405-1.405A2.032 2.032 0 0118 11.159V8a6 6 0 00-9.33-4.958M9 17a3 3 0 006 0"></path></svg>';
+    const iconSpinner = '<svg class="w-5 h-5 mr-2 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>';
+    const iconBlocked = '<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636A9 9 0 115.636 18.364M19 19L5 5"></path></svg>';
+
     const states = {
       idle: {
-        label: 'Ativar push',
+        html: `${iconBell}Ativar push`,
         disabled: false,
         className: 'inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-sky-700 transition-colors'
       },
       enabled: {
-        label: 'Desativar push',
+        html: `${iconBellOff}Desativar push`,
         disabled: false,
         className: 'inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors'
       },
       loading: {
-        label: 'Processando...',
+        html: `${iconSpinner}Processando...`,
         disabled: true,
         className: 'inline-flex items-center justify-center rounded-2xl bg-slate-400 px-4 py-2.5 text-sm font-bold text-white shadow-sm cursor-wait'
       },
       unsupported: {
-        label: 'Push indisponível',
+        html: `${iconBlocked}Push indisponível`,
         disabled: true,
         className: 'inline-flex items-center justify-center rounded-2xl bg-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm cursor-not-allowed dark:bg-slate-700 dark:text-slate-200'
       }
     };
 
     const chosen = states[state] || states.idle;
-    button.textContent = chosen.label;
+    button.innerHTML = chosen.html;
     button.disabled = chosen.disabled;
     button.className = chosen.className;
 

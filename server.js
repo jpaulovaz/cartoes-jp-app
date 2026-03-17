@@ -3116,6 +3116,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const { date, description, amount, card_id, first_due, installments } = req.body;
   const isRecurring = ["1", "true", "on", "sim"].includes(String(req.body.is_recurring || "").toLowerCase());
+  const assignToOwner = ["1", "true", "on", "sim"].includes(String(req.body.assign_to_owner || "").toLowerCase());
 
   try {
     const cardIdNum = Number(card_id);
@@ -3132,6 +3133,12 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
     const numInstallments = parseInt(installments) || 1;
     if (isRecurring && numInstallments !== 1) {
       setFlash(req, "error", "Lançamentos recorrentes mensais funcionam apenas com 1 parcela.");
+      return res.redirect(redirectBackOr(req, "/geral"));
+    }
+
+    const ownerPerson = assignToOwner ? getOwnerPerson(userId) : null;
+    if (assignToOwner && !ownerPerson) {
+      setFlash(req, "error", "Defina um titular na aba Pessoas antes de usar 'Atribuir esse item a mim'.");
       return res.redirect(redirectBackOr(req, "/geral"));
     }
 
@@ -3163,6 +3170,9 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
 
     db.transaction(() => {
       const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1").all(userId);
+      const autoAssignPersonId = assignToOwner
+        ? Number(ownerPerson.id)
+        : (activePeople.length === 1 ? Number(activePeople[0].id) : null);
       const insTxn = db.prepare(`
         INSERT INTO transactions (user_id, card_id, txn_date, description, amount_cents, due_month, due_year, parent_txn_id, recurring_rule_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -3200,8 +3210,8 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
         const txnIdCreated = Number(info.lastInsertRowid);
         if (!installmentRootTxnId) installmentRootTxnId = txnIdCreated;
 
-        if (activePeople.length === 1) {
-          insAlloc.run(userId, txnIdCreated, activePeople[0].id, currentAmount, nowIso());
+        if (autoAssignPersonId) {
+          insAlloc.run(userId, txnIdCreated, autoAssignPersonId, currentAmount, nowIso());
           createdTxnIds.push(txnIdCreated);
         }
       }

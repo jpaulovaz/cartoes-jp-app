@@ -46,8 +46,12 @@
     </section>
 
     <% if (isClosed) { %>
-      <div class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-        🔒 Este mês está fechado. Distribuições, exclusões e novos lançamentos para <%= String(month).padStart(2,'0') %>/<%= year %> estão bloqueados.
+      <div class="op-inline-alert op-inline-alert--warning">
+        <div class="op-inline-alert__icon">🔒</div>
+        <div>
+          <div class="op-inline-alert__title">Mês fechado</div>
+          <div class="op-inline-alert__text">Distribuições, exclusões e novos lançamentos para <%= String(month).padStart(2,'0') %>/<%= year %> estão bloqueados.</div>
+        </div>
       </div>
     <% } %>
 
@@ -110,8 +114,12 @@
           <% }) %>
         </div>
       <% } else { %>
-        <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 px-4 py-5 text-sm font-medium text-slate-500 dark:text-slate-400">
-          Você ainda não tem lançamentos recorrentes. Crie um novo item manual e marque a opção <strong class="text-slate-700 dark:text-slate-200">Tornar este item recorrente mensal</strong>.
+        <div class="op-empty-state op-empty-state--compact">
+          <div class="op-empty-state__icon">
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10m-11 9h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v11a2 2 0 002 2z"></path></svg>
+          </div>
+          <div class="op-empty-state__title">Nenhum recorrente configurado</div>
+          <p class="op-empty-state__text">Crie um novo item manual e marque a opção <strong class="text-slate-700 dark:text-slate-200">Tornar este item recorrente mensal</strong> para passar a gerenciar a repetição por aqui.</p>
         </div>
       <% } %>
     </div>
@@ -466,9 +474,12 @@
     </div>
 
     <% if (txns.length===0) { %>
-      <div class="mt-6 p-6 rounded-3xl bg-amber-50 dark:bg-amber-900/20 border-2 border-dashed border-amber-200 dark:border-amber-800 text-center">
-        <h3 class="font-bold text-amber-900 dark:text-amber-200 mb-1">Nenhum resultado</h3>
-        <p class="text-sm font-medium text-amber-700 dark:text-amber-300">Nenhum item encontrado com os filtros de busca atuais.</p>
+      <div class="mt-6 op-empty-state op-empty-state--compact">
+        <div class="op-empty-state__icon">
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        </div>
+        <div class="op-empty-state__title">Nenhum resultado</div>
+        <p class="op-empty-state__text">Nenhum item encontrado com os filtros de busca atuais. Ajuste os critérios ou limpe a busca para voltar à lista completa.</p>
       </div>
       <% } %>
 

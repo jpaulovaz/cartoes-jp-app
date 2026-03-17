@@ -1,18 +1,50 @@
-<%- include("partials/header", { title: `OrganizaPay | Recibo ${person.name}` }) %>
+<%- include("partials/header", { title: "Exportar Resumo" }) %>
+<%
+  const periodLabel = `${String(month).padStart(2, '0')}/${year}`;
+  const getItemCents = (item) => {
+    if (item && item.amount_cents !== undefined && item.amount_cents !== null && item.amount_cents !== '') return Number(item.amount_cents) || 0;
+    if (item && item.amount !== undefined && item.amount !== null && item.amount !== '') return Math.round(Number(item.amount) * 100) || 0;
+    if (item && item.share_cents !== undefined && item.share_cents !== null && item.share_cents !== '') return Number(item.share_cents) || 0;
+    return 0;
+  };
+  const formatBRL = (cents) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((Number(cents) || 0) / 100);
+  const getDescription = (item) => (item && (item.description || item.title || item.name || item.label)) || 'Lançamento';
+  const itemDate = (item) => {
+    const raw = (item && (item.txn_date || item.date || item.purchase_date || item.created_at || item.imported_at)) || '';
+    if (!raw) return '';
+    const str = String(raw);
+    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+    return str;
+  };
+  const totalCents = items.reduce((acc, item) => acc + getItemCents(item), 0);
+  const remainingCents = Number(remaining_cents || 0);
+  const paidCents = Number(paid_cents || 0);
+  const effectiveTotalCents = remainingCents > 0 ? remainingCents : totalCents;
+  const summaryMode = items.length > 12;
+  const compactMode = items.length > 8;
+  const visibleItems = summaryMode ? items.slice(0, 12) : items;
+  const hiddenItems = summaryMode ? items.slice(12) : [];
+  const hiddenTotalCents = hiddenItems.reduce((acc, item) => acc + getItemCents(item), 0);
+  const captureScale = items.length > 22 ? 1.15 : items.length > 16 ? 1.3 : items.length > 10 ? 1.55 : 2;
+  const metricPills = [
+    { label: 'Itens', value: `${items.length}` },
+    { label: 'Em aberto', value: formatBRL(effectiveTotalCents) },
+    { label: paidCents > 0 ? 'Já pago' : 'Status', value: paidCents > 0 ? formatBRL(paidCents) : 'Sem baixa' }
+  ];
+%>
 
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-
-<div class="max-w-6xl mx-auto space-y-6">
+<div class="op-page-shell">
   <section class="op-page-hero op-fade-up">
     <div>
       <span class="op-page-hero__eyebrow">Envio assistido</span>
       <h1 class="op-page-hero__title mt-4">Exportar Resumo</h1>
-      <p class="op-page-hero__subtitle mt-3">Gere a imagem do resumo e, quando houver número disponível, envie o fechamento direto pelo WhatsApp com a mesma prévia usada no compartilhamento.</p>
+      <p class="op-page-hero__subtitle mt-3">Use a mesma imagem otimizada para o mobile tanto no WhatsApp quanto no download manual. Quando houver muitos itens, o cartão resume a lista sem perder o total completo.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= person.name %></span>
-        <span class="badge">Ref. <%= String(month).padStart(2,'0') %>/<%= year %></span>
-        <span class="badge"><%= items.length %> lançamento(s)</span>
-        <% if (person.phone) { %><span class="badge">Número disponível</span><% } %>
+        <span class="badge">Ref. <%= periodLabel %></span>
+        <span class="badge"><%= items.length %> item(ns)</span>
+        <% if (person.phone) { %><span class="badge">Número disponível</span><% } else { %><span class="badge">Sem número cadastrado</span><% } %>
       </div>
     </div>
     <div class="op-page-hero__actions">
@@ -20,12 +52,12 @@
         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
         Voltar
       </a>
-      <button id="btnPng" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+      <button id="btnPng" type="button" data-loading-label="Gerando PNG..." class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
         Baixar PNG
       </button>
       <% if (person.phone) { %>
-        <button id="btnEvolution" onclick="sendViaEvolution()" class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700">
+        <button id="btnEvolution" type="button" data-loading-label="Enviando via WhatsApp..." class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700">
           <svg class="mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" /></svg>
           WhatsApp
         </button>
@@ -33,335 +65,174 @@
     </div>
   </section>
 
+  <% if (!person.phone) { %>
+    <div class="op-inline-alert op-inline-alert--warning op-fade-up">
+      <div class="op-inline-alert__icon">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M10.29 3.86l-8 14A1 1 0 003.17 19h17.66a1 1 0 00.88-1.5l-8-14a1 1 0 00-1.74 0z"></path></svg>
+      </div>
+      <div>
+        <div class="op-inline-alert__title">Número ausente para envio automático</div>
+        <div class="op-inline-alert__text">O download da imagem continua disponível. Para liberar o envio pelo WhatsApp, preencha um telefone válido em Pessoas.</div>
+      </div>
+    </div>
+  <% } else if (summaryMode) { %>
+    <div class="op-inline-alert op-inline-alert--info op-fade-up">
+      <div class="op-inline-alert__icon">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 21a9 9 0 100-18 9 9 0 000 18z"></path></svg>
+      </div>
+      <div>
+        <div class="op-inline-alert__title">Resumo inteligente ativado</div>
+        <div class="op-inline-alert__text">A imagem foi adaptada para caber melhor no WhatsApp: ela mostra os primeiros <%= visibleItems.length %> itens e resume os demais, preservando o total em aberto.</div>
+      </div>
+    </div>
+  <% } %>
+
   <div class="op-preview-shell op-fade-up">
     <div class="op-preview-shell__label">Prévia do cartão compartilhável</div>
     <div class="flex justify-center pb-2">
-    <div id="cardPreview"
-      class="bg-white dark:bg-white rounded-[32px] border border-white/70 w-full max-w-[46rem] overflow-hidden relative shadow-[0_34px_78px_rgba(15,23,42,0.18)]">
-      <div class="h-3 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500"></div>
-
-      <div class="p-4 sm:p-8">
-        <div class="mb-8 pb-8 border-b border-slate-100">
-          <div class="flex justify-center mb-6">
-            <img src="/logo.png" alt="OrganizaPay" class="w-56 sm:w-72 h-auto object-contain">
-          </div>
-
-          <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Consolidado da Fatura</div>
-            <div class="text-2xl sm:text-3xl font-black text-slate-900 break-words">
-              <%= person.name %>
-            </div>
-            <div
-              class="text-sm font-bold text-emerald-600 mt-2 bg-emerald-50 inline-flex px-3 py-1 rounded-lg border border-emerald-100">
-              Ref: <%= String(month).padStart(2,'0') %>/<%= year %>
-            </div>
-          </div>
-
-          <div class="w-full sm:w-auto text-left sm:text-right flex flex-col gap-2 sm:items-end">
-            <% if (paid_cents > 0) { %>
-              <div class="flex items-center justify-between gap-3 sm:justify-end">
-                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total da Fatura</span>
-                <span class="text-lg font-bold text-slate-700">
-                  <%= formatBRLFromCents(total) %>
-                </span>
-              </div>
-              <div class="flex items-center justify-between gap-3 sm:justify-end">
-                <span class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Já Pago (-)</span>
-                <span class="text-lg font-bold text-emerald-600">
-                  <%= formatBRLFromCents(paid_cents) %>
-                </span>
-              </div>
-              <div class="flex items-center justify-between gap-3 mt-1 pt-2 border-t border-slate-100 sm:justify-end">
-                <span class="text-[11px] font-bold text-red-400 uppercase tracking-widest">Falta Pagar</span>
-                <span class="text-3xl font-black <%= remaining_cents === 0 ? 'text-emerald-500' : 'text-red-500' %>">
-                  <%= formatBRLFromCents(remaining_cents) %>
-                </span>
-              </div>
-            <% } else { %>
-              <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total a Pagar</div>
-              <div class="text-3xl sm:text-4xl font-black text-slate-900">
-                <%= formatBRLFromCents(total) %>
-              </div>
-            <% } %>
-          </div>
-        </div>
-      </div>
-
-        <div class="mb-8">
-          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Resumo por Cartão</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <% totalsByCard.forEach(t => { %>
-              <div
-                class="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-center items-center text-center">
-                <span class="text-[11px] font-bold text-slate-500 mb-2 w-full text-center break-words whitespace-normal leading-tight min-h-[2.75rem] flex items-center justify-center">
-                  <%= t.card_name %>
-                </span>
-                <span class="text-lg font-black text-slate-800">
-                  <%= formatBRLFromCents(t.total_cents) %>
-                </span>
-              </div>
-            <% }) %>
-          </div>
-        </div>
-
-        <div>
-          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Lançamentos Detalhados</h3>
-
-          <div class="sm:hidden space-y-3">
-            <% items.forEach(it => { %>
-              <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div class="flex items-start justify-between gap-3">
-                  <div>
-                    <div class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Data</div>
-                    <div class="mt-1 text-sm font-semibold text-slate-600 whitespace-nowrap"><%= formatDateBR(it.txn_date) %></div>
-                  </div>
-                  <div class="text-right shrink-0">
-                    <div class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Valor</div>
-                    <div class="mt-1 text-base font-black text-slate-900"><%= formatBRLFromCents(it.share_cents) %></div>
-                  </div>
-                </div>
-
-                <div class="mt-4">
-                  <div class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Descrição</div>
-                  <div class="mt-1 text-base font-bold text-slate-800 break-words leading-snug"><%= it.description %></div>
-                </div>
-
-                <div class="mt-4">
-                  <div class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Cartão</div>
-                  <div class="mt-2 inline-flex w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-center text-xs font-bold text-slate-600 leading-tight break-words whitespace-normal">
-                    <%= it.card_name %>
-                  </div>
-                </div>
-              </div>
-            <% }) %>
-          </div>
-
-          <div class="hidden sm:block border border-slate-200 rounded-2xl overflow-hidden">
-            <div class="overflow-x-auto">
-              <table class="min-w-full text-sm text-left">
-                <thead
-                  class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold text-[10px] tracking-wider">
-                  <tr>
-                    <th class="px-4 py-3 w-20">Data</th>
-                    <th class="px-4 py-3">Descrição</th>
-                    <th class="px-4 py-3 text-center w-44">Cartão</th>
-                    <th class="px-4 py-3 text-right">Valor</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100 bg-white">
-                  <% items.forEach(it => { %>
-                    <tr>
-                      <td class="px-4 py-3 font-medium text-slate-500 whitespace-nowrap">
-                        <%= formatDateBR(it.txn_date) %>
-                      </td>
-                      <td class="px-4 py-3 font-bold text-slate-800 break-words">
-                        <%= it.description %>
-                      </td>
-                      <td class="px-4 py-3 text-center">
-                        <span
-                          class="inline-flex w-full justify-center text-center px-2 py-1 rounded bg-slate-100 text-slate-600 font-bold text-[10px] border border-slate-200 whitespace-normal break-words leading-tight">
-                          <%= it.card_name %>
-                        </span>
-                      </td>
-                      <td class="px-4 py-3 text-right font-black text-slate-900 whitespace-nowrap">
-                        <%= formatBRLFromCents(it.share_cents) %>
-                      </td>
-                    </tr>
-                  <% }) %>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div
-          class="mt-8 pt-6 border-t border-slate-100 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-[10px] font-bold text-slate-400">
-          <div class="flex items-center">Gerado automaticamente por OrganizaPay</div>
-          <div>
-            <%= new Date().toLocaleDateString('pt-BR') %>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-</div>
-
-<div aria-hidden="true" style="position:absolute; left:-20000px; top:0; pointer-events:none;">
-  <div id="cardExport" class="bg-white rounded-3xl border border-slate-200 overflow-hidden relative" style="width:1080px;">
-    <div class="h-4 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500"></div>
-
-    <div class="p-10">
-      <div class="mb-10 pb-8 border-b border-slate-100">
-        <div class="flex justify-center mb-8">
-          <img src="/logo.png" alt="OrganizaPay" style="width: 360px; height: auto; display: block;">
-        </div>
-
-        <div class="flex items-start justify-between gap-8">
-        <div class="min-w-0">
-          <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Consolidado da Fatura</div>
-          <div class="text-4xl font-black text-slate-900 break-words leading-tight">
-            <%= person.name %>
-          </div>
-          <div class="text-base font-bold text-emerald-600 mt-3 bg-emerald-50 inline-flex px-4 py-2 rounded-xl border border-emerald-100">
-            Ref: <%= String(month).padStart(2,'0') %>/<%= year %>
-          </div>
-        </div>
-
-        <div class="text-right flex flex-col items-end gap-2 shrink-0">
-          <% if (paid_cents > 0) { %>
-            <div class="flex items-center gap-4">
-              <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Total da Fatura</span>
-              <span class="text-2xl font-bold text-slate-700"><%= formatBRLFromCents(total) %></span>
-            </div>
-            <div class="flex items-center gap-4">
-              <span class="text-xs font-bold text-emerald-500 uppercase tracking-widest">Já Pago (-)</span>
-              <span class="text-2xl font-bold text-emerald-600"><%= formatBRLFromCents(paid_cents) %></span>
-            </div>
-            <div class="flex items-center gap-4 mt-2 pt-3 border-t border-slate-100">
-              <span class="text-xs font-bold text-red-400 uppercase tracking-widest">Falta Pagar</span>
-              <span class="text-4xl font-black <%= remaining_cents === 0 ? 'text-emerald-500' : 'text-red-500' %>"><%= formatBRLFromCents(remaining_cents) %></span>
-            </div>
-          <% } else { %>
-            <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total a Pagar</div>
-            <div class="text-5xl font-black text-slate-900"><%= formatBRLFromCents(total) %></div>
-          <% } %>
-        </div>
-      </div>
-    </div>
-
-      <div class="mb-10">
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Resumo por Cartão</h3>
-        <div class="grid grid-cols-2 gap-4">
-          <% totalsByCard.forEach(t => { %>
-            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-center items-center text-center" style="min-height:130px;">
-              <span class="text-sm font-bold text-slate-500 mb-3 w-full break-words whitespace-normal leading-tight flex items-center justify-center" style="min-height:3.5rem;">
-                <%= t.card_name %>
-              </span>
-              <span class="text-2xl font-black text-slate-800"><%= formatBRLFromCents(t.total_cents) %></span>
-            </div>
-          <% }) %>
-        </div>
-      </div>
-
-      <div>
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Lançamentos Detalhados</h3>
-        <div class="border border-slate-200 rounded-3xl overflow-hidden">
-          <table class="w-full table-fixed text-base text-left bg-white">
-            <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold text-xs tracking-widest">
-              <tr>
-                <th class="px-5 py-4" style="width:120px;">Data</th>
-                <th class="px-5 py-4">Descrição</th>
-                <th class="px-5 py-4 text-center" style="width:270px;">Cartão</th>
-                <th class="px-5 py-4 text-right" style="width:170px;">Valor</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              <% items.forEach(it => { %>
-                <tr>
-                  <td class="px-5 py-4 font-semibold text-slate-500 align-top whitespace-nowrap"><%= formatDateBR(it.txn_date) %></td>
-                  <td class="px-5 py-4 font-bold text-slate-800 align-top break-words leading-snug"><%= it.description %></td>
-                  <td class="px-5 py-4 align-top">
-                    <span class="inline-flex w-full items-center justify-center text-center px-3 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs border border-slate-200 whitespace-normal break-words leading-tight" style="min-height:58px;">
-                      <%= it.card_name %>
-                    </span>
-                  </td>
-                  <td class="px-5 py-4 text-right font-black text-slate-900 align-top whitespace-nowrap"><%= formatBRLFromCents(it.share_cents) %></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="mt-10 pt-6 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-400">
-        <div>Gerado automaticamente por OrganizaPay</div>
-        <div><%= new Date().toLocaleDateString('pt-BR') %></div>
-      </div>
+      <%- include('partials/share-summary-card', {
+        cardId: 'cardPreview',
+        person,
+        periodLabel,
+        items,
+        visibleItems,
+        hiddenItems,
+        hiddenTotalCents,
+        compactMode,
+        summaryMode,
+        formatBRL,
+        getItemCents,
+        getDescription,
+        itemDate,
+        totalCents: effectiveTotalCents,
+        exportMode: false,
+        captureScale,
+        metricPills,
+        compactHint: summaryMode ? 'A visualização foi condensada automaticamente para ficar legível em telas menores e mensageiros.' : 'A imagem mantém todos os itens sem compactação.',
+        footerLeft: 'Gerado pelo OrganizaPay · compatível com envio automático via WhatsApp',
+        footerRight: summaryMode ? `Total completo considerado: ${items.length} item(ns)` : 'Imagem pronta para envio',
+        totalLabel: remainingCents > 0 ? 'Total em aberto' : 'Total do período',
+        heroText: remainingCents > 0 ? 'Resumo financeiro pensado para leitura rápida no celular, destacando o valor ainda em aberto e os principais itens do período.' : 'Resumo financeiro pronto para envio, com foco no total e nos itens mais importantes do período.'
+      }) %>
     </div>
   </div>
 </div>
 
+<div aria-hidden="true" style="position:fixed; left:-99999px; top:0; pointer-events:none; opacity:0;">
+  <%- include('partials/share-summary-card', {
+    cardId: 'cardExport',
+    person,
+    periodLabel,
+    items,
+    visibleItems,
+    hiddenItems,
+    hiddenTotalCents,
+    compactMode,
+    summaryMode,
+    formatBRL,
+    getItemCents,
+    getDescription,
+    itemDate,
+    totalCents: effectiveTotalCents,
+    exportMode: true,
+    captureScale,
+    metricPills,
+    compactHint: summaryMode ? 'A visualização foi condensada automaticamente para ficar legível em telas menores e mensageiros.' : 'A imagem mantém todos os itens sem compactação.',
+    footerLeft: 'Gerado pelo OrganizaPay · compatível com envio automático via WhatsApp',
+    footerRight: summaryMode ? `Total completo considerado: ${items.length} item(ns)` : 'Imagem pronta para envio',
+    totalLabel: remainingCents > 0 ? 'Total em aberto' : 'Total do período',
+    heroText: remainingCents > 0 ? 'Resumo financeiro pensado para leitura rápida no celular, destacando o valor ainda em aberto e os principais itens do período.' : 'Resumo financeiro pronto para envio, com foco no total e nos itens mais importantes do período.'
+  }) %>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
-  async function buildReceiptCanvas() {
-    const el = document.getElementById("cardExport") || document.getElementById("cardPreview");
-    if (!el) throw new Error("Recibo não encontrado para captura.");
+  function setBusy(button, loadingLabel) {
+    if (!button) return () => {};
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.classList.add('op-button-loading');
+    button.innerHTML = `<span class="op-submit-spinner" aria-hidden="true"></span><span>${loadingLabel}</span>`;
+    return () => {
+      button.disabled = false;
+      button.classList.remove('op-button-loading');
+      button.innerHTML = original;
+    };
+  }
 
-    const hadShadow = el.classList.contains('shadow-xl');
-    if (hadShadow) el.classList.remove('shadow-xl');
+  async function buildReceiptCanvas() {
+    const exportNode = document.getElementById('cardExport') || document.getElementById('cardPreview');
+    if (!exportNode) throw new Error('Resumo não encontrado para captura.');
 
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-    const canvas = await html2canvas(el, {
-      scale: 2,
-      backgroundColor: "#ffffff",
+    return html2canvas(exportNode, {
+      scale: Number((exportNode.dataset && exportNode.dataset.captureScale) || 2),
+      backgroundColor: '#ffffff',
       useCORS: true,
-      width: el.scrollWidth,
-      height: el.scrollHeight,
-      windowWidth: Math.max(1400, el.scrollWidth + 200),
-      windowHeight: Math.max(1400, el.scrollHeight + 200),
+      width: exportNode.scrollWidth,
+      height: exportNode.scrollHeight,
+      windowWidth: Math.max(1440, exportNode.scrollWidth + 200),
+      windowHeight: Math.max(1440, exportNode.scrollHeight + 200),
       scrollX: 0,
       scrollY: 0
     });
-
-    if (hadShadow) el.classList.add('shadow-xl');
-    return canvas;
   }
 
-  document.getElementById("btnPng").addEventListener("click", async () => {
-    const canvas = await buildReceiptCanvas();
-
-    const link = document.createElement("a");
-    link.download = `Fatura_<%= person.name.replace(/\s+/g,'_') %>_<%= String(month).padStart(2,'0') %>_<%= year %>.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
-  });
+  async function downloadReceipt() {
+    const restore = setBusy(document.getElementById('btnPng'), 'Gerando PNG...');
+    try {
+      const canvas = await buildReceiptCanvas();
+      const link = document.createElement('a');
+      link.download = `Fatura_<%= person.name.replace(/\s+/g,'_') %>_<%= String(month).padStart(2,'0') %>_<%= year %>.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } finally {
+      restore();
+    }
+  }
 
   async function sendViaEvolution() {
-    const btn = document.getElementById('btnEvolution');
-    const originalContent = btn.innerHTML;
-
+    const button = document.getElementById('btnEvolution');
+    const restore = setBusy(button, 'Enviando via WhatsApp...');
     try {
-      btn.disabled = true;
-      btn.innerHTML = "📸 Gerando Imagem...";
-
       const canvas = await buildReceiptCanvas();
-      const imageBase64 = canvas.toDataURL("image/png");
-
-      const total = "<%= formatBRLFromCents(remaining_cents > 0 ? remaining_cents : total) %>";
-      const mesAno = "<%= String(month).padStart(2,'0') %>/<%= year %>";
-
-      let msg = `*Olá, <%= person.name %>!* 💳\n\n`;
-      msg += `Segue o fechamento da fatura de *${mesAno}*.\n`;
-      msg += `Total a pagar: *${total}*.\n\n`;
-
-      btn.innerHTML = "🚀 Enviando WhatsApp...";
+      const imageBase64 = canvas.toDataURL('image/png');
+      const totalLabel = '<%= formatBRL(effectiveTotalCents) %>';
+      const message = [
+        `*Olá, <%= person.name %>!* 💳`,
+        '',
+        `Segue o fechamento da fatura de *<%= periodLabel %>*.`,
+        `Total a pagar: *${totalLabel}*.`,
+        <% if (summaryMode) { %>'_A imagem foi resumida automaticamente para ficar melhor no celular._'<% } else { %>''<% } %>
+      ].filter(Boolean).join('\n');
 
       const response = await fetch('/whatsapp/send-automation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          personPhone: "<%= person.phone %>",
-          message: msg,
-          imageBase64: imageBase64
+          personPhone: '<%= person.phone || "" %>',
+          message,
+          imageBase64
         })
       });
 
       const result = await response.json();
-      if (result.success) {
-        alert("✅ Recibo enviado com imagem com sucesso!");
-      } else {
-        alert("❌ Erro no envio: " + (result.error || "Falha na API"));
+      if (!result.success) {
+        throw new Error(result.error || 'Falha na API de envio.');
       }
-    } catch (e) {
-      console.error(e);
-      alert("❌ Erro ao processar imagem ou conexão.");
+
+      alert('Resumo enviado com imagem com sucesso.');
+    } catch (error) {
+      console.error(error);
+      alert(error && error.message ? error.message : 'Não foi possível enviar a imagem pelo WhatsApp agora.');
     } finally {
-      btn.disabled = false;
-      btn.innerHTML = originalContent;
+      restore();
     }
   }
+
+  document.getElementById('btnPng')?.addEventListener('click', downloadReceipt);
+  document.getElementById('btnEvolution')?.addEventListener('click', sendViaEvolution);
 </script>
 
 <%- include("partials/footer") %>

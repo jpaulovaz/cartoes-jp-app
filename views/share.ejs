@@ -1,17 +1,46 @@
-<%- include("partials/header", { title: `OrganizaPay | Compartilhar ${person.name}` }) %>
+<%- include("partials/header", { title: "Compartilhar Resumo" }) %>
+<%
+  const periodLabel = `${String(month).padStart(2, '0')}/${year}`;
+  const getItemCents = (item) => {
+    if (item && item.amount_cents !== undefined && item.amount_cents !== null && item.amount_cents !== '') return Number(item.amount_cents) || 0;
+    if (item && item.amount !== undefined && item.amount !== null && item.amount !== '') return Math.round(Number(item.amount) * 100) || 0;
+    if (item && item.share_cents !== undefined && item.share_cents !== null && item.share_cents !== '') return Number(item.share_cents) || 0;
+    return 0;
+  };
+  const formatBRL = (cents) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((Number(cents) || 0) / 100);
+  const getDescription = (item) => (item && (item.description || item.title || item.name || item.label)) || 'Lançamento';
+  const itemDate = (item) => {
+    const raw = (item && (item.txn_date || item.date || item.purchase_date || item.created_at || item.imported_at)) || '';
+    if (!raw) return '';
+    const str = String(raw);
+    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+    return str;
+  };
+  const totalCents = items.reduce((acc, item) => acc + getItemCents(item), 0);
+  const summaryMode = items.length > 12;
+  const compactMode = items.length > 8;
+  const visibleItems = summaryMode ? items.slice(0, 12) : items;
+  const hiddenItems = summaryMode ? items.slice(12) : [];
+  const hiddenTotalCents = hiddenItems.reduce((acc, item) => acc + getItemCents(item), 0);
+  const captureScale = items.length > 22 ? 1.15 : items.length > 16 ? 1.3 : items.length > 10 ? 1.55 : 2;
+  const metricPills = [
+    { label: 'Itens', value: `${items.length}` },
+    { label: 'Valor total', value: formatBRL(totalCents) },
+    { label: 'Modo', value: summaryMode ? 'Resumo inteligente' : 'Lista completa' }
+  ];
+%>
 
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-
-<div class="max-w-6xl mx-auto space-y-6">
+<div class="op-page-shell">
   <section class="op-page-hero op-fade-up">
     <div>
       <span class="op-page-hero__eyebrow">Compartilhamento rápido</span>
       <h1 class="op-page-hero__title mt-4">Compartilhar Resumo</h1>
-      <p class="op-page-hero__subtitle mt-3">Gere uma imagem pronta para compartilhar pelo menu nativo do aparelho, com prévia fiel do que a pessoa vai receber.</p>
+      <p class="op-page-hero__subtitle mt-3">Gere uma imagem pronta para compartilhar pelo menu nativo do aparelho, com prévia fiel do que a pessoa vai receber e resumo automático quando houver muitos itens.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= person.name %></span>
-        <span class="badge">Ref. <%= String(month).padStart(2,'0') %>/<%= year %></span>
-        <span class="badge"><%= items.length %> lançamento(s)</span>
+        <span class="badge">Ref. <%= periodLabel %></span>
+        <span class="badge"><%= items.length %> item(ns)</span>
       </div>
     </div>
     <div class="op-page-hero__actions">
@@ -19,301 +48,118 @@
         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
         Voltar
       </a>
-      <button id="btnPng" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+      <button id="btnPng" type="button" data-loading-label="Gerando PNG..." class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
         Baixar PNG
       </button>
-      <button id="btnShare" onclick="shareReceipt()" class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700">
+      <button id="btnShare" type="button" data-loading-label="Preparando compartilhamento..." class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700">
         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C9.886 12.64 11.278 12.25 12.75 12.25c1.472 0 2.864.39 4.066 1.092M8.684 13.342 5.5 15.25m3.184-1.908a3 3 0 10-1.368-2.53m9.5 2.53L19.5 15.25m-2.684-1.908a3 3 0 11 1.368-2.53M12 6v7" /></svg>
         Compartilhar
       </button>
     </div>
   </section>
 
+  <% if (summaryMode) { %>
+    <div class="op-inline-alert op-inline-alert--info op-fade-up">
+      <div class="op-inline-alert__icon">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 21a9 9 0 100-18 9 9 0 000 18z"></path></svg>
+      </div>
+      <div>
+        <div class="op-inline-alert__title">Resumo inteligente ativado</div>
+        <div class="op-inline-alert__text">Para melhorar a leitura em aparelhos menores, a imagem mostra os primeiros <%= visibleItems.length %> itens e resume os demais sem perder o total completo.</div>
+      </div>
+    </div>
+  <% } %>
+
   <div class="op-preview-shell op-fade-up">
     <div class="op-preview-shell__label">Prévia do cartão compartilhável</div>
     <div class="flex justify-center pb-2">
-    <div id="cardPreview"
-      class="bg-white dark:bg-white rounded-[32px] border border-white/70 w-full max-w-[46rem] overflow-hidden relative shadow-[0_34px_78px_rgba(15,23,42,0.18)]">
-      <div class="h-3 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500"></div>
-
-      <div class="p-4 sm:p-8">
-        <div class="mb-8 pb-8 border-b border-slate-100">
-          <div class="flex justify-center mb-6">
-            <img src="/logo.png" alt="OrganizaPay" class="w-56 sm:w-72 h-auto object-contain">
-          </div>
-
-          <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Consolidado da Fatura</div>
-            <div class="text-2xl sm:text-3xl font-black text-slate-900 break-words">
-              <%= person.name %>
-            </div>
-            <div
-              class="text-sm font-bold text-emerald-600 mt-2 bg-emerald-50 inline-flex px-3 py-1 rounded-lg border border-emerald-100">
-              Ref: <%= String(month).padStart(2,'0') %>/<%= year %>
-            </div>
-          </div>
-
-          <div class="w-full sm:w-auto text-left sm:text-right flex flex-col gap-2 sm:items-end">
-            <% if (paid_cents > 0) { %>
-              <div class="flex items-center justify-between gap-3 sm:justify-end">
-                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total da Fatura</span>
-                <span class="text-lg font-bold text-slate-700">
-                  <%= formatBRLFromCents(total) %>
-                </span>
-              </div>
-              <div class="flex items-center justify-between gap-3 sm:justify-end">
-                <span class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Já Pago (-)</span>
-                <span class="text-lg font-bold text-emerald-600">
-                  <%= formatBRLFromCents(paid_cents) %>
-                </span>
-              </div>
-              <div class="flex items-center justify-between gap-3 mt-1 pt-2 border-t border-slate-100 sm:justify-end">
-                <span class="text-[11px] font-bold text-red-400 uppercase tracking-widest">Falta Pagar</span>
-                <span class="text-3xl font-black <%= remaining_cents === 0 ? 'text-emerald-500' : 'text-red-500' %>">
-                  <%= formatBRLFromCents(remaining_cents) %>
-                </span>
-              </div>
-            <% } else { %>
-              <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total a Pagar</div>
-              <div class="text-3xl sm:text-4xl font-black text-slate-900">
-                <%= formatBRLFromCents(total) %>
-              </div>
-            <% } %>
-          </div>
-        </div>
-      </div>
-
-        <div class="mb-8">
-          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Resumo por Cartão</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <% totalsByCard.forEach(t => { %>
-              <div
-                class="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-center items-center text-center">
-                <span class="text-[11px] font-bold text-slate-500 mb-2 w-full text-center break-words whitespace-normal leading-tight min-h-[2.75rem] flex items-center justify-center">
-                  <%= t.card_name %>
-                </span>
-                <span class="text-lg font-black text-slate-800">
-                  <%= formatBRLFromCents(t.total_cents) %>
-                </span>
-              </div>
-            <% }) %>
-          </div>
-        </div>
-
-        <div>
-          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Lançamentos Detalhados</h3>
-
-          <div class="sm:hidden space-y-3">
-            <% items.forEach(it => { %>
-              <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div class="flex items-start justify-between gap-3">
-                  <div>
-                    <div class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Data</div>
-                    <div class="mt-1 text-sm font-semibold text-slate-600 whitespace-nowrap"><%= formatDateBR(it.txn_date) %></div>
-                  </div>
-                  <div class="text-right shrink-0">
-                    <div class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Valor</div>
-                    <div class="mt-1 text-base font-black text-slate-900"><%= formatBRLFromCents(it.share_cents) %></div>
-                  </div>
-                </div>
-
-                <div class="mt-4">
-                  <div class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Descrição</div>
-                  <div class="mt-1 text-base font-bold text-slate-800 break-words leading-snug"><%= it.description %></div>
-                </div>
-
-                <div class="mt-4">
-                  <div class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Cartão</div>
-                  <div class="mt-2 inline-flex w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-center text-xs font-bold text-slate-600 leading-tight break-words whitespace-normal">
-                    <%= it.card_name %>
-                  </div>
-                </div>
-              </div>
-            <% }) %>
-          </div>
-
-          <div class="hidden sm:block border border-slate-200 rounded-2xl overflow-hidden">
-            <div class="overflow-x-auto">
-              <table class="min-w-full text-sm text-left">
-                <thead
-                  class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold text-[10px] tracking-wider">
-                  <tr>
-                    <th class="px-4 py-3 w-20">Data</th>
-                    <th class="px-4 py-3">Descrição</th>
-                    <th class="px-4 py-3 text-center w-44">Cartão</th>
-                    <th class="px-4 py-3 text-right">Valor</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100 bg-white">
-                  <% items.forEach(it => { %>
-                    <tr>
-                      <td class="px-4 py-3 font-medium text-slate-500 whitespace-nowrap">
-                        <%= formatDateBR(it.txn_date) %>
-                      </td>
-                      <td class="px-4 py-3 font-bold text-slate-800 break-words">
-                        <%= it.description %>
-                      </td>
-                      <td class="px-4 py-3 text-center">
-                        <span
-                          class="inline-flex w-full justify-center text-center px-2 py-1 rounded bg-slate-100 text-slate-600 font-bold text-[10px] border border-slate-200 whitespace-normal break-words leading-tight">
-                          <%= it.card_name %>
-                        </span>
-                      </td>
-                      <td class="px-4 py-3 text-right font-black text-slate-900 whitespace-nowrap">
-                        <%= formatBRLFromCents(it.share_cents) %>
-                      </td>
-                    </tr>
-                  <% }) %>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div
-          class="mt-8 pt-6 border-t border-slate-100 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-[10px] font-bold text-slate-400">
-          <div class="flex items-center">Gerado automaticamente por OrganizaPay</div>
-          <div>
-            <%= new Date().toLocaleDateString('pt-BR') %>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-</div>
-
-<div aria-hidden="true" style="position:absolute; left:-20000px; top:0; pointer-events:none;">
-  <div id="cardExport" class="bg-white rounded-3xl border border-slate-200 overflow-hidden relative" style="width:1080px;">
-    <div class="h-4 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500"></div>
-
-    <div class="p-10">
-      <div class="mb-10 pb-8 border-b border-slate-100">
-        <div class="flex justify-center mb-8">
-          <img src="/logo.png" alt="OrganizaPay" style="width: 360px; height: auto; display: block;">
-        </div>
-
-        <div class="flex items-start justify-between gap-8">
-        <div class="min-w-0">
-          <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Consolidado da Fatura</div>
-          <div class="text-4xl font-black text-slate-900 break-words leading-tight">
-            <%= person.name %>
-          </div>
-          <div class="text-base font-bold text-emerald-600 mt-3 bg-emerald-50 inline-flex px-4 py-2 rounded-xl border border-emerald-100">
-            Ref: <%= String(month).padStart(2,'0') %>/<%= year %>
-          </div>
-        </div>
-
-        <div class="text-right flex flex-col items-end gap-2 shrink-0">
-          <% if (paid_cents > 0) { %>
-            <div class="flex items-center gap-4">
-              <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Total da Fatura</span>
-              <span class="text-2xl font-bold text-slate-700"><%= formatBRLFromCents(total) %></span>
-            </div>
-            <div class="flex items-center gap-4">
-              <span class="text-xs font-bold text-emerald-500 uppercase tracking-widest">Já Pago (-)</span>
-              <span class="text-2xl font-bold text-emerald-600"><%= formatBRLFromCents(paid_cents) %></span>
-            </div>
-            <div class="flex items-center gap-4 mt-2 pt-3 border-t border-slate-100">
-              <span class="text-xs font-bold text-red-400 uppercase tracking-widest">Falta Pagar</span>
-              <span class="text-4xl font-black <%= remaining_cents === 0 ? 'text-emerald-500' : 'text-red-500' %>"><%= formatBRLFromCents(remaining_cents) %></span>
-            </div>
-          <% } else { %>
-            <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total a Pagar</div>
-            <div class="text-5xl font-black text-slate-900"><%= formatBRLFromCents(total) %></div>
-          <% } %>
-        </div>
-      </div>
-    </div>
-
-      <div class="mb-10">
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Resumo por Cartão</h3>
-        <div class="grid grid-cols-2 gap-4">
-          <% totalsByCard.forEach(t => { %>
-            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-center items-center text-center" style="min-height:130px;">
-              <span class="text-sm font-bold text-slate-500 mb-3 w-full break-words whitespace-normal leading-tight flex items-center justify-center" style="min-height:3.5rem;">
-                <%= t.card_name %>
-              </span>
-              <span class="text-2xl font-black text-slate-800"><%= formatBRLFromCents(t.total_cents) %></span>
-            </div>
-          <% }) %>
-        </div>
-      </div>
-
-      <div>
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Lançamentos Detalhados</h3>
-        <div class="border border-slate-200 rounded-3xl overflow-hidden">
-          <table class="w-full table-fixed text-base text-left bg-white">
-            <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold text-xs tracking-widest">
-              <tr>
-                <th class="px-5 py-4" style="width:120px;">Data</th>
-                <th class="px-5 py-4">Descrição</th>
-                <th class="px-5 py-4 text-center" style="width:270px;">Cartão</th>
-                <th class="px-5 py-4 text-right" style="width:170px;">Valor</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              <% items.forEach(it => { %>
-                <tr>
-                  <td class="px-5 py-4 font-semibold text-slate-500 align-top whitespace-nowrap"><%= formatDateBR(it.txn_date) %></td>
-                  <td class="px-5 py-4 font-bold text-slate-800 align-top break-words leading-snug"><%= it.description %></td>
-                  <td class="px-5 py-4 align-top">
-                    <span class="inline-flex w-full items-center justify-center text-center px-3 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs border border-slate-200 whitespace-normal break-words leading-tight" style="min-height:58px;">
-                      <%= it.card_name %>
-                    </span>
-                  </td>
-                  <td class="px-5 py-4 text-right font-black text-slate-900 align-top whitespace-nowrap"><%= formatBRLFromCents(it.share_cents) %></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="mt-10 pt-6 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-400">
-        <div>Gerado automaticamente por OrganizaPay</div>
-        <div><%= new Date().toLocaleDateString('pt-BR') %></div>
-      </div>
+      <%- include('partials/share-summary-card', {
+        cardId: 'cardPreview',
+        person,
+        periodLabel,
+        items,
+        visibleItems,
+        hiddenItems,
+        hiddenTotalCents,
+        compactMode,
+        summaryMode,
+        formatBRL,
+        getItemCents,
+        getDescription,
+        itemDate,
+        totalCents,
+        exportMode: false,
+        captureScale,
+        metricPills,
+        compactHint: summaryMode ? 'A visualização foi condensada automaticamente para preservar legibilidade no mobile.' : 'Todos os itens aparecem integralmente na imagem.',
+        footerLeft: 'Gerado pelo OrganizaPay · pronto para compartilhar pelo sistema do aparelho',
+        footerRight: summaryMode ? `Total completo considerado: ${items.length} item(ns)` : 'Imagem pronta para envio',
+        totalLabel: 'Total do período'
+      }) %>
     </div>
   </div>
 </div>
 
+<div aria-hidden="true" style="position:fixed; left:-99999px; top:0; pointer-events:none; opacity:0;">
+  <%- include('partials/share-summary-card', {
+    cardId: 'cardExport',
+    person,
+    periodLabel,
+    items,
+    visibleItems,
+    hiddenItems,
+    hiddenTotalCents,
+    compactMode,
+    summaryMode,
+    formatBRL,
+    getItemCents,
+    getDescription,
+    itemDate,
+    totalCents,
+    exportMode: true,
+    captureScale,
+    metricPills,
+    compactHint: summaryMode ? 'A visualização foi condensada automaticamente para preservar legibilidade no mobile.' : 'Todos os itens aparecem integralmente na imagem.',
+    footerLeft: 'Gerado pelo OrganizaPay · pronto para compartilhar pelo sistema do aparelho',
+    footerRight: summaryMode ? `Total completo considerado: ${items.length} item(ns)` : 'Imagem pronta para envio',
+    totalLabel: 'Total do período'
+  }) %>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
-  async function buildReceiptCanvas() {
-    const el = document.getElementById("cardExport") || document.getElementById("cardPreview");
-    if (!el) throw new Error("Recibo não encontrado para captura.");
+  function setBusy(button, loadingLabel) {
+    if (!button) return () => {};
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.classList.add('op-button-loading');
+    button.innerHTML = `<span class="op-submit-spinner" aria-hidden="true"></span><span>${loadingLabel}</span>`;
+    return () => {
+      button.disabled = false;
+      button.classList.remove('op-button-loading');
+      button.innerHTML = original;
+    };
+  }
 
-    const hadShadow = el.classList.contains('shadow-xl');
-    if (hadShadow) el.classList.remove('shadow-xl');
+  async function buildReceiptCanvas() {
+    const exportNode = document.getElementById('cardExport') || document.getElementById('cardPreview');
+    if (!exportNode) throw new Error('Resumo não encontrado para captura.');
 
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-    const canvas = await html2canvas(el, {
-      scale: 2,
-      backgroundColor: "#ffffff",
+    return html2canvas(exportNode, {
+      scale: Number((exportNode.dataset && exportNode.dataset.captureScale) || 2),
+      backgroundColor: '#ffffff',
       useCORS: true,
-      width: el.scrollWidth,
-      height: el.scrollHeight,
-      windowWidth: Math.max(1400, el.scrollWidth + 200),
-      windowHeight: Math.max(1400, el.scrollHeight + 200),
+      width: exportNode.scrollWidth,
+      height: exportNode.scrollHeight,
+      windowWidth: Math.max(1440, exportNode.scrollWidth + 200),
+      windowHeight: Math.max(1440, exportNode.scrollHeight + 200),
       scrollX: 0,
       scrollY: 0
     });
-
-    if (hadShadow) el.classList.add('shadow-xl');
-    return canvas;
   }
-
-  document.getElementById("btnPng").addEventListener("click", async () => {
-    const canvas = await buildReceiptCanvas();
-
-    const link = document.createElement("a");
-    link.download = `Fatura_<%= person.name.replace(/\s+/g,'_') %>_<%= String(month).padStart(2,'0') %>_<%= year %>.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
-  });
 
   function canvasToFile(canvas, filename) {
     return new Promise((resolve, reject) => {
@@ -327,25 +173,32 @@
     });
   }
 
-  async function shareReceipt() {
-    const btn = document.getElementById('btnShare');
-    const originalContent = btn.innerHTML;
-
+  async function downloadReceipt() {
+    const restore = setBusy(document.getElementById('btnPng'), 'Gerando PNG...');
     try {
-      btn.disabled = true;
-      btn.innerHTML = "📸 Gerando Imagem...";
+      const canvas = await buildReceiptCanvas();
+      const link = document.createElement('a');
+      link.download = `Fatura_<%= person.name.replace(/\s+/g,'_') %>_<%= String(month).padStart(2,'0') %>_<%= year %>.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } finally {
+      restore();
+    }
+  }
 
+  async function shareReceipt() {
+    const restore = setBusy(document.getElementById('btnShare'), 'Preparando compartilhamento...');
+    try {
       const canvas = await buildReceiptCanvas();
       const filename = `Fatura_<%= person.name.replace(/\s+/g,'_') %>_<%= String(month).padStart(2,'0') %>_<%= year %>.png`;
       const file = await canvasToFile(canvas, filename);
-      const totalLabel = "<%= formatBRLFromCents(remaining_cents > 0 ? remaining_cents : total) %>";
-      const periodLabel = "<%= String(month).padStart(2,'0') %>/<%= year %>";
+      const totalLabel = '<%= formatBRL(totalCents) %>';
+      const periodLabel = '<%= periodLabel %>';
 
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        btn.innerHTML = "📤 Abrindo compartilhamento...";
         await navigator.share({
           title: `Resumo ${periodLabel} — <%= person.name %>`,
-          text: `Resumo da fatura de ${periodLabel} para <%= person.name %>. Total: ${totalLabel}.`,
+          text: `Resumo do período ${periodLabel} para <%= person.name %>. Total: ${totalLabel}.`,
           files: [file]
         });
         return;
@@ -356,18 +209,18 @@
       link.href = URL.createObjectURL(file);
       link.click();
       setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-      alert('O compartilhamento direto não está disponível neste aparelho. A imagem foi baixada para você compartilhar manualmente.');
-    } catch (e) {
-      if (e && e.name === 'AbortError') {
-        return;
-      }
-      console.error(e);
-      alert('❌ Erro ao gerar ou compartilhar a imagem.');
+      alert('O compartilhamento direto não está disponível neste aparelho. A imagem foi baixada para compartilhamento manual.');
+    } catch (error) {
+      if (error && error.name === 'AbortError') return;
+      console.error(error);
+      alert('Não foi possível gerar ou compartilhar a imagem agora.');
     } finally {
-      btn.disabled = false;
-      btn.innerHTML = originalContent;
+      restore();
     }
   }
+
+  document.getElementById('btnPng')?.addEventListener('click', downloadReceipt);
+  document.getElementById('btnShare')?.addEventListener('click', shareReceipt);
 </script>
 
 <%- include("partials/footer") %>

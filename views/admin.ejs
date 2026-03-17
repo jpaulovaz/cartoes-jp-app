@@ -32,24 +32,25 @@
     </section>
 
     <% if (typeof error !== 'undefined' && error) { %>
-      <div class="rounded-2xl border border-red-200 bg-red-50 text-red-700 px-5 py-4 font-medium shadow-sm">
-        <div class="flex items-start gap-3">
-          <svg class="w-5 h-5 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
-          <span><%= error %></span>
+      <div class="op-inline-alert op-inline-alert--warning">
+        <div class="op-inline-alert__icon">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        </div>
+        <div>
+          <div class="op-inline-alert__title">Atenção</div>
+          <div class="op-inline-alert__text"><%= error %></div>
         </div>
       </div>
       <% } %>
 
         <% if (typeof success !== 'undefined' && success) { %>
-          <div class="rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-700 px-5 py-4 font-medium shadow-sm">
-            <div class="flex items-start gap-3">
-              <svg class="w-5 h-5 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-              </svg>
-              <span><%= success %></span>
+          <div class="op-inline-alert op-inline-alert--success">
+            <div class="op-inline-alert__icon">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            </div>
+            <div>
+              <div class="op-inline-alert__title">Atualização concluída</div>
+              <div class="op-inline-alert__text"><%= success %></div>
             </div>
           </div>
           <% } %>
@@ -161,8 +162,14 @@
                           <% }) %>
                             <% } else { %>
                               <tr>
-                                <td colspan="7" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400 font-medium">
-                                  Nenhum usuário encontrado.
+                                <td colspan="7" class="px-4 py-6">
+                                  <div class="op-empty-state op-empty-state--compact">
+                                    <div class="op-empty-state__icon">
+                                      <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v6m3-3h-6m-6 6H5a2 2 0 01-2-2V8a2 2 0 012-2h4l2-2h2l2 2h4a2 2 0 012 2v4"></path></svg>
+                                    </div>
+                                    <div class="op-empty-state__title">Nenhum usuário encontrado</div>
+                                    <p class="op-empty-state__text">Cadastre o primeiro e-mail autorizado para começar a distribuir acessos ao aplicativo.</p>
+                                  </div>
                                 </td>
                               </tr>
                               <% } %>

@@ -884,3 +884,65 @@
     initMobileBottomNavAutoHide();
   }
 })();
+
+(function () {
+  function setButtonBusyState(button, isBusy) {
+    if (!(button instanceof HTMLElement)) return;
+    if (isBusy) {
+      if (!button.dataset.originalHtml) {
+        button.dataset.originalHtml = button.innerHTML;
+      }
+      const loadingLabel = button.dataset.loadingLabel || 'Processando...';
+      button.disabled = true;
+      button.classList.add('op-button-loading');
+      button.innerHTML = `<span class="op-submit-spinner" aria-hidden="true"></span><span>${loadingLabel}</span>`;
+      button.style.display = button.style.display || 'inline-flex';
+      button.style.alignItems = 'center';
+      button.style.justifyContent = 'center';
+      button.style.gap = '0.55rem';
+      return;
+    }
+
+    if (button.dataset.originalHtml) {
+      button.innerHTML = button.dataset.originalHtml;
+      delete button.dataset.originalHtml;
+    }
+    button.disabled = false;
+    button.classList.remove('op-button-loading');
+  }
+
+  function bindSubmitLoadingStates() {
+    document.addEventListener('submit', (event) => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      if (form.dataset.noSubmitState === '1') return;
+      if (form.method && form.method.toUpperCase() === 'GET' && form.dataset.submitState !== 'force') return;
+
+      if (event.defaultPrevented) return;
+
+      const submitButtons = Array.from(form.querySelectorAll('button[type="submit"], input[type="submit"]'));
+      if (!submitButtons.length) return;
+
+      window.setTimeout(() => {
+        submitButtons.forEach((button) => {
+          if (button instanceof HTMLButtonElement) {
+            setButtonBusyState(button, true);
+          } else if (button instanceof HTMLInputElement) {
+            if (!button.dataset.originalValue) {
+              button.dataset.originalValue = button.value;
+            }
+            button.disabled = true;
+            button.classList.add('op-button-loading');
+            button.value = button.dataset.loadingLabel || 'Processando...';
+          }
+        });
+      }, 0);
+    }, true);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindSubmitLoadingStates);
+  } else {
+    bindSubmitLoadingStates();
+  }
+})();

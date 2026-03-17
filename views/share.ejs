@@ -117,6 +117,12 @@
 
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
+  const shareState = {
+    file: null,
+    objectUrl: null,
+    promise: null
+  };
+
   function setBusy(button, loadingLabel) {
     if (!button) return () => {};
     const original = button.innerHTML;
@@ -149,26 +155,107 @@
     });
   }
 
+  function dataUrlToFile(dataUrl, filename) {
+    const parts = String(dataUrl || '').split(',');
+    if (parts.length < 2) {
+      throw new Error('Não foi possível gerar a imagem para compartilhamento.');
+    }
+    const mimeMatch = parts[0].match(/data:(.*?);base64/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+    const binary = atob(parts[1]);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new File([bytes], filename, { type: mime });
+  }
+
   function canvasToFile(canvas, filename) {
     return new Promise((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          reject(new Error('Não foi possível gerar a imagem para compartilhamento.'));
-          return;
-        }
-        resolve(new File([blob], filename, { type: 'image/png' }));
-      }, 'image/png');
+      if (canvas.toBlob) {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            try {
+              resolve(dataUrlToFile(canvas.toDataURL('image/png'), filename));
+            } catch (error) {
+              reject(error);
+            }
+            return;
+          }
+          resolve(new File([blob], filename, { type: 'image/png' }));
+        }, 'image/png');
+        return;
+      }
+
+      try {
+        resolve(dataUrlToFile(canvas.toDataURL('image/png'), filename));
+      } catch (error) {
+        reject(error);
+      }
     });
+  }
+
+  async function prepareShareFile(force) {
+    if (!force && shareState.file) return shareState.file;
+    if (!force && shareState.promise) return shareState.promise;
+
+    const filename = `Fatura_<%= person.name.replace(/\s+/g,'_') %>_<%= String(month).padStart(2,'0') %>_<%= year %>.png`;
+    shareState.promise = (async () => {
+      const canvas = await buildReceiptCanvas();
+      const file = await canvasToFile(canvas, filename);
+      shareState.file = file;
+      return file;
+    })();
+
+    try {
+      return await shareState.promise;
+    } finally {
+      shareState.promise = null;
+    }
+  }
+
+  function scheduleShareWarmup() {
+    if (shareState.file || shareState.promise) return;
+    const run = () => prepareShareFile(false).catch((error) => console.warn('[share] Pré-geração da imagem falhou', error));
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(run, { timeout: 1800 });
+    } else {
+      window.setTimeout(run, 350);
+    }
+  }
+
+  function cleanupObjectUrl() {
+    if (shareState.objectUrl) {
+      URL.revokeObjectURL(shareState.objectUrl);
+      shareState.objectUrl = null;
+    }
+  }
+
+  function triggerDownloadFromFile(file) {
+    cleanupObjectUrl();
+    shareState.objectUrl = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.download = file.name;
+    link.href = shareState.objectUrl;
+    link.click();
+    window.setTimeout(cleanupObjectUrl, 1500);
+  }
+
+  function canShareFiles(file) {
+    if (!navigator.share) return false;
+    try {
+      return !navigator.canShare || navigator.canShare({ files: [file] });
+    } catch (error) {
+      console.warn('[share] navigator.canShare falhou', error);
+      return false;
+    }
   }
 
   async function downloadReceipt() {
     const restore = setBusy(document.getElementById('btnPng'), 'Gerando PNG...');
     try {
-      const canvas = await buildReceiptCanvas();
-      const link = document.createElement('a');
-      link.download = `Fatura_<%= person.name.replace(/\s+/g,'_') %>_<%= String(month).padStart(2,'0') %>_<%= year %>.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      const file = await prepareShareFile(true);
+      triggerDownloadFromFile(file);
     } finally {
       restore();
     }
@@ -177,13 +264,11 @@
   async function shareReceipt() {
     const restore = setBusy(document.getElementById('btnShare'), 'Preparando compartilhamento...');
     try {
-      const canvas = await buildReceiptCanvas();
-      const filename = `Fatura_<%= person.name.replace(/\s+/g,'_') %>_<%= String(month).padStart(2,'0') %>_<%= year %>.png`;
-      const file = await canvasToFile(canvas, filename);
+      const file = await prepareShareFile(false);
       const totalLabel = '<%= formatBRL(totalCents) %>';
       const periodLabel = '<%= periodLabel %>';
 
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      if (canShareFiles(file)) {
         await navigator.share({
           title: `Resumo ${periodLabel} — <%= person.name %>`,
           text: `Resumo do período ${periodLabel} para <%= person.name %>. Total: ${totalLabel}.`,
@@ -192,16 +277,19 @@
         return;
       }
 
-      const link = document.createElement('a');
-      link.download = filename;
-      link.href = URL.createObjectURL(file);
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      triggerDownloadFromFile(file);
       alert('O compartilhamento direto não está disponível neste aparelho. A imagem foi baixada para compartilhamento manual.');
     } catch (error) {
       if (error && error.name === 'AbortError') return;
       console.error(error);
-      alert('Não foi possível gerar ou compartilhar a imagem agora.');
+      try {
+        const fallbackFile = shareState.file || await prepareShareFile(true);
+        triggerDownloadFromFile(fallbackFile);
+        alert('Não foi possível abrir o menu de compartilhamento agora. A imagem foi baixada para compartilhamento manual.');
+      } catch (downloadError) {
+        console.error(downloadError);
+        alert('Não foi possível gerar ou compartilhar a imagem agora.');
+      }
     } finally {
       restore();
     }
@@ -209,6 +297,11 @@
 
   document.getElementById('btnPng')?.addEventListener('click', downloadReceipt);
   document.getElementById('btnShare')?.addEventListener('click', shareReceipt);
+  document.getElementById('btnShare')?.addEventListener('touchstart', scheduleShareWarmup, { passive: true, once: true });
+  document.getElementById('btnShare')?.addEventListener('mouseenter', scheduleShareWarmup, { once: true });
+  document.getElementById('btnShare')?.addEventListener('focus', scheduleShareWarmup, { once: true });
+  window.addEventListener('load', scheduleShareWarmup, { once: true });
+  window.addEventListener('beforeunload', cleanupObjectUrl);
 </script>
 
 <%- include("partials/footer") %>

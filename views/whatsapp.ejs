@@ -207,8 +207,8 @@
         })
       });
 
-      const result = await response.json();
-      if (!result.success) {
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) {
         throw new Error(result.error || 'Falha na API de envio.');
       }
 

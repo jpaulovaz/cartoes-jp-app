@@ -3770,7 +3770,79 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
   res.render("whatsapp", { month, year, ...exportData, formatBRLFromCents });
 });
 
-app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit: '10mb' }), async (req, res) => {
+function maskPhoneForLog(rawPhone) {
+  const digits = String(rawPhone || '').replace(/\D/g, '');
+  if (!digits) return 'sem-telefone';
+  if (digits.length <= 4) return digits;
+  return `${'*'.repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
+}
+
+function summarizeAxiosError(error) {
+  if (!error) return 'Erro desconhecido.';
+
+  const status = error.response && error.response.status;
+  const payload = error.response && error.response.data;
+  if (typeof payload === 'string' && payload.trim()) {
+    return status ? `HTTP ${status}: ${payload.trim().slice(0, 400)}` : payload.trim().slice(0, 400);
+  }
+  if (payload && typeof payload === 'object') {
+    try {
+      const compact = JSON.stringify(payload).slice(0, 400);
+      return status ? `HTTP ${status}: ${compact}` : compact;
+    } catch (_) {
+      // segue para a próxima alternativa
+    }
+  }
+
+  if (error.message) {
+    return status ? `HTTP ${status}: ${error.message}` : error.message;
+  }
+  return status ? `HTTP ${status}` : 'Erro desconhecido.';
+}
+
+async function sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNumber, message, base64Data) {
+  const endpoint = `${apiUrl.replace(/\/$/, '')}/message/sendMedia/${instance}`;
+  const headers = { apikey: apiKey };
+  const fileName = `OrganizaPay_${new Date().toISOString().slice(0, 10)}.png`;
+
+  const v2Payload = {
+    number: cleanNumber,
+    mediatype: 'image',
+    mimetype: 'image/png',
+    media: base64Data,
+    fileName,
+    caption: message,
+    delay: 1200
+  };
+
+  try {
+    return await axios.post(endpoint, v2Payload, { headers, timeout: 30000 });
+  } catch (v2Error) {
+    const status = v2Error.response && v2Error.response.status;
+    const canRetryAsV1 = Boolean(v2Error.response) && [400, 404, 415, 422].includes(status);
+    if (!canRetryAsV1) {
+      throw v2Error;
+    }
+
+    const v1Payload = {
+      number: cleanNumber,
+      mediaMessage: {
+        mediaType: 'image',
+        fileName,
+        caption: message,
+        media: base64Data
+      },
+      options: {
+        delay: 1200,
+        presence: 'composing'
+      }
+    };
+
+    return axios.post(endpoint, v1Payload, { headers, timeout: 30000 });
+  }
+}
+
+app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit: '25mb' }), async (req, res) => {
   if (!isAdminUser(req.user.id)) {
     return res.status(403).json({ error: "O envio via WhatsApp está disponível apenas para administradores." });
   }
@@ -3787,18 +3859,29 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
     }
 
     const cleanNumber = String(personPhone || '').replace(/\D/g, '');
-    const base64Data = String(imageBase64 || '').split(',')[1];
-    await axios.post(`${apiUrl}/message/sendMedia/${instance}`, {
-      number: cleanNumber,
-      mediatype: "image",
-      media: base64Data,
-      caption: message,
-      delay: 1200
-    }, { headers: { apikey: apiKey } });
+    if (!cleanNumber) {
+      return res.status(400).json({ error: "A pessoa não possui telefone válido cadastrado para envio." });
+    }
 
+    const base64Data = String(imageBase64 || '').split(',')[1];
+    if (!base64Data) {
+      return res.status(400).json({ error: "Não foi possível gerar a imagem para envio." });
+    }
+
+    await sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNumber, message, base64Data);
     res.json({ success: true });
   } catch (e) {
-    res.status(500).json({ error: "Falha ao enviar imagem via WhatsApp" });
+    const summarized = summarizeAxiosError(e);
+    console.error('[whatsapp/send-automation] Falha no envio', {
+      userId: req.user && req.user.id,
+      phone: maskPhoneForLog(req.body && req.body.personPhone),
+      messageLength: req.body && req.body.message ? String(req.body.message).length : 0,
+      hasImage: Boolean(req.body && req.body.imageBase64),
+      details: summarized
+    });
+
+    const status = e && e.response && e.response.status ? 502 : 500;
+    res.status(status).json({ error: `Falha ao enviar imagem via WhatsApp. ${summarized}`.trim() });
   }
 });
 // --- ROTAS DO detalhamento ---

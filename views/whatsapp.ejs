@@ -21,12 +21,12 @@
   const remainingCents = Number(remaining_cents || 0);
   const paidCents = Number(paid_cents || 0);
   const effectiveTotalCents = remainingCents > 0 ? remainingCents : totalCents;
-  const summaryMode = items.length > 12;
-  const compactMode = items.length > 8;
-  const visibleItems = summaryMode ? items.slice(0, 12) : items;
-  const hiddenItems = summaryMode ? items.slice(12) : [];
-  const hiddenTotalCents = hiddenItems.reduce((acc, item) => acc + getItemCents(item), 0);
-  const captureScale = items.length > 22 ? 1.15 : items.length > 16 ? 1.3 : items.length > 10 ? 1.55 : 2;
+  const summaryMode = false;
+  const compactMode = items.length > 10;
+  const visibleItems = items;
+  const hiddenItems = [];
+  const hiddenTotalCents = 0;
+  const captureScale = items.length > 36 ? 1 : items.length > 24 ? 1.15 : items.length > 16 ? 1.3 : items.length > 10 ? 1.55 : 2;
   const metricPills = [
     { label: 'Itens', value: `${items.length}` },
     { label: 'Em aberto', value: formatBRL(effectiveTotalCents) },
@@ -39,7 +39,7 @@
     <div>
       <span class="op-page-hero__eyebrow">Envio assistido</span>
       <h1 class="op-page-hero__title mt-4">Exportar Resumo</h1>
-      <p class="op-page-hero__subtitle mt-3">Use a mesma imagem otimizada para o mobile tanto no WhatsApp quanto no download manual. Quando houver muitos itens, o cartão resume a lista sem perder o total completo.</p>
+      <p class="op-page-hero__subtitle mt-3">Use a mesma imagem otimizada para o mobile tanto no WhatsApp quanto no download manual, mantendo todos os itens do período visíveis na imagem.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= person.name %></span>
         <span class="badge">Ref. <%= periodLabel %></span>
@@ -75,16 +75,6 @@
         <div class="op-inline-alert__text">O download da imagem continua disponível. Para liberar o envio pelo WhatsApp, preencha um telefone válido em Pessoas.</div>
       </div>
     </div>
-  <% } else if (summaryMode) { %>
-    <div class="op-inline-alert op-inline-alert--info op-fade-up">
-      <div class="op-inline-alert__icon">
-        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 21a9 9 0 100-18 9 9 0 000 18z"></path></svg>
-      </div>
-      <div>
-        <div class="op-inline-alert__title">Resumo inteligente ativado</div>
-        <div class="op-inline-alert__text">A imagem foi adaptada para caber melhor no WhatsApp: ela mostra os primeiros <%= visibleItems.length %> itens e resume os demais, preservando o total em aberto.</div>
-      </div>
-    </div>
   <% } %>
 
   <div class="op-preview-shell op-fade-up">
@@ -108,11 +98,11 @@
         exportMode: false,
         captureScale,
         metricPills,
-        compactHint: summaryMode ? 'A visualização foi condensada automaticamente para ficar legível em telas menores e mensageiros.' : 'A imagem mantém todos os itens sem compactação.',
+        compactHint: compactMode ? 'Layout mais compacto para manter todos os itens legíveis em telas menores e mensageiros, sem resumir nenhuma informação.' : 'A imagem mantém todos os itens visíveis sem compactação.',
         footerLeft: 'Gerado pelo OrganizaPay · compatível com envio automático via WhatsApp',
-        footerRight: summaryMode ? `Total completo considerado: ${items.length} item(ns)` : 'Imagem pronta para envio',
+        footerRight: 'Imagem pronta para envio',
         totalLabel: remainingCents > 0 ? 'Total em aberto' : 'Total do período',
-        heroText: remainingCents > 0 ? 'Resumo financeiro pensado para leitura rápida no celular, destacando o valor ainda em aberto e os principais itens do período.' : 'Resumo financeiro pronto para envio, com foco no total e nos itens mais importantes do período.'
+        heroText: remainingCents > 0 ? 'Resumo financeiro pensado para leitura rápida no celular, destacando o valor ainda em aberto e mantendo todos os itens do período visíveis.' : 'Resumo financeiro pronto para envio, com todos os itens do período e total sempre visíveis.'
       }) %>
     </div>
   </div>
@@ -137,11 +127,11 @@
     exportMode: true,
     captureScale,
     metricPills,
-    compactHint: summaryMode ? 'A visualização foi condensada automaticamente para ficar legível em telas menores e mensageiros.' : 'A imagem mantém todos os itens sem compactação.',
+    compactHint: compactMode ? 'Layout mais compacto para manter todos os itens legíveis em telas menores e mensageiros, sem resumir nenhuma informação.' : 'A imagem mantém todos os itens visíveis sem compactação.',
     footerLeft: 'Gerado pelo OrganizaPay · compatível com envio automático via WhatsApp',
-    footerRight: summaryMode ? `Total completo considerado: ${items.length} item(ns)` : 'Imagem pronta para envio',
+    footerRight: 'Imagem pronta para envio',
     totalLabel: remainingCents > 0 ? 'Total em aberto' : 'Total do período',
-    heroText: remainingCents > 0 ? 'Resumo financeiro pensado para leitura rápida no celular, destacando o valor ainda em aberto e os principais itens do período.' : 'Resumo financeiro pronto para envio, com foco no total e nos itens mais importantes do período.'
+    heroText: remainingCents > 0 ? 'Resumo financeiro pensado para leitura rápida no celular, destacando o valor ainda em aberto e mantendo todos os itens do período visíveis.' : 'Resumo financeiro pronto para envio, com todos os itens do período e total sempre visíveis.'
   }) %>
 </div>
 
@@ -204,7 +194,7 @@
         '',
         `Segue o fechamento da fatura de *<%= periodLabel %>*.`,
         `Total a pagar: *${totalLabel}*.`,
-        <% if (summaryMode) { %>'_A imagem foi resumida automaticamente para ficar melhor no celular._'<% } else { %>''<% } %>
+        ''
       ].filter(Boolean).join('\n');
 
       const response = await fetch('/whatsapp/send-automation', {

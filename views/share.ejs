@@ -18,16 +18,16 @@
     return str;
   };
   const totalCents = items.reduce((acc, item) => acc + getItemCents(item), 0);
-  const summaryMode = items.length > 12;
-  const compactMode = items.length > 8;
-  const visibleItems = summaryMode ? items.slice(0, 12) : items;
-  const hiddenItems = summaryMode ? items.slice(12) : [];
-  const hiddenTotalCents = hiddenItems.reduce((acc, item) => acc + getItemCents(item), 0);
-  const captureScale = items.length > 22 ? 1.15 : items.length > 16 ? 1.3 : items.length > 10 ? 1.55 : 2;
+  const summaryMode = false;
+  const compactMode = items.length > 10;
+  const visibleItems = items;
+  const hiddenItems = [];
+  const hiddenTotalCents = 0;
+  const captureScale = items.length > 36 ? 1 : items.length > 24 ? 1.15 : items.length > 16 ? 1.3 : items.length > 10 ? 1.55 : 2;
   const metricPills = [
     { label: 'Itens', value: `${items.length}` },
     { label: 'Valor total', value: formatBRL(totalCents) },
-    { label: 'Modo', value: summaryMode ? 'Resumo inteligente' : 'Lista completa' }
+    { label: 'Visual', value: compactMode ? 'Compacta' : 'Completa' }
   ];
 %>
 
@@ -36,7 +36,7 @@
     <div>
       <span class="op-page-hero__eyebrow">Compartilhamento rápido</span>
       <h1 class="op-page-hero__title mt-4">Compartilhar Resumo</h1>
-      <p class="op-page-hero__subtitle mt-3">Gere uma imagem pronta para compartilhar pelo menu nativo do aparelho, com prévia fiel do que a pessoa vai receber e resumo automático quando houver muitos itens.</p>
+      <p class="op-page-hero__subtitle mt-3">Gere uma imagem pronta para compartilhar pelo menu nativo do aparelho, com prévia fiel do que a pessoa vai receber e todos os itens do período sempre visíveis.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= person.name %></span>
         <span class="badge">Ref. <%= periodLabel %></span>
@@ -59,18 +59,6 @@
     </div>
   </section>
 
-  <% if (summaryMode) { %>
-    <div class="op-inline-alert op-inline-alert--info op-fade-up">
-      <div class="op-inline-alert__icon">
-        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 21a9 9 0 100-18 9 9 0 000 18z"></path></svg>
-      </div>
-      <div>
-        <div class="op-inline-alert__title">Resumo inteligente ativado</div>
-        <div class="op-inline-alert__text">Para melhorar a leitura em aparelhos menores, a imagem mostra os primeiros <%= visibleItems.length %> itens e resume os demais sem perder o total completo.</div>
-      </div>
-    </div>
-  <% } %>
-
   <div class="op-preview-shell op-fade-up">
     <div class="op-preview-shell__label">Prévia do cartão compartilhável</div>
     <div class="flex justify-center pb-2">
@@ -92,9 +80,9 @@
         exportMode: false,
         captureScale,
         metricPills,
-        compactHint: summaryMode ? 'A visualização foi condensada automaticamente para preservar legibilidade no mobile.' : 'Todos os itens aparecem integralmente na imagem.',
+        compactHint: compactMode ? 'Layout mais compacto para manter todos os itens legíveis no celular, sem resumir nenhuma informação.' : 'Todos os itens aparecem integralmente na imagem.',
         footerLeft: 'Gerado pelo OrganizaPay · pronto para compartilhar pelo sistema do aparelho',
-        footerRight: summaryMode ? `Total completo considerado: ${items.length} item(ns)` : 'Imagem pronta para envio',
+        footerRight: 'Imagem pronta para envio',
         totalLabel: 'Total do período'
       }) %>
     </div>
@@ -120,9 +108,9 @@
     exportMode: true,
     captureScale,
     metricPills,
-    compactHint: summaryMode ? 'A visualização foi condensada automaticamente para preservar legibilidade no mobile.' : 'Todos os itens aparecem integralmente na imagem.',
+    compactHint: compactMode ? 'Layout mais compacto para manter todos os itens legíveis no celular, sem resumir nenhuma informação.' : 'Todos os itens aparecem integralmente na imagem.',
     footerLeft: 'Gerado pelo OrganizaPay · pronto para compartilhar pelo sistema do aparelho',
-    footerRight: summaryMode ? `Total completo considerado: ${items.length} item(ns)` : 'Imagem pronta para envio',
+    footerRight: 'Imagem pronta para envio',
     totalLabel: 'Total do período'
   }) %>
 </div>

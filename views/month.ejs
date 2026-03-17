@@ -272,7 +272,7 @@
               <th class="px-4 py-4 text-center"><a
                   class="hover:text-blue-600 transition-colors inline-flex items-center"
                   href="<%= sortLink('allocated') %>">Ok?</a></th>
-              <th class="px-4 py-4 text-center w-[340px]">Distribuição Rápida</th>
+              <th class="px-4 py-4 text-center w-[240px]">Distribuição Rápida</th>
             </tr>
           </thead>
           <tbody class="block md:table-row-group">
@@ -287,7 +287,7 @@
                 <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-bold text-slate-800 dark:text-white" title="<%= t.description %>">
                   <div class="flex items-start justify-between gap-3 md:block">
                     <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 pt-0.5">Descrição</span>
-                    <span class="text-right md:text-left break-words md:max-w-[200px] md:truncate block flex-1"><%= t.description %></span>
+                    <span class="text-right md:text-left break-words whitespace-normal block flex-1"><%= t.description %></span>
                   </div>
                 </td>
                 <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3">
@@ -339,57 +339,118 @@
                 </td>
 
                 <td class="block md:table-cell px-0 md:px-4 py-3 md:py-3 mt-3 md:mt-0 border-t border-dashed border-slate-200 dark:border-slate-700 md:border-t-0">
-                  <div class="md:hidden mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Distribuição Rápida</div>
-                  <form method="post" action="/txn/<%= t.id %>/alloc" data-alloc-form="<%= t.id %>" data-installment-scope-form="alloc" data-has-future-installments="<%= t.has_future_installments ? '1' : '0' %>" data-installment-label="<%= t.description %>"
-                    class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 shadow-inner transition-colors duration-300">
+                  <div class="md:hidden">
+                    <div class="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Distribuição Rápida</div>
+                    <form method="post" action="/txn/<%= t.id %>/alloc" data-alloc-form="<%= t.id %>" data-form-variant="mobile" data-installment-scope-form="alloc" data-has-future-installments="<%= t.has_future_installments ? '1' : '0' %>" data-installment-label="<%= t.description %>"
+                      class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 shadow-inner transition-colors duration-300">
 
-                    <div
-                      class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-3 gap-y-2 mb-3 min-w-0 md:min-w-[380px] border border-slate-100 dark:border-slate-700 rounded-xl p-2 bg-slate-50/40 dark:bg-slate-900/40">
-                      <% people.forEach(p=> { %>
-                        <label class="flex items-center gap-2 cursor-pointer select-none group py-0.5 min-w-0">
-                          <input type="checkbox" name="person_ids" value="<%= p.id %>" <%=(t.selected_ids &&
-                            t.selected_ids.includes(p.id)) ? "checked" : "" %> <%= isClosed ? "disabled" : "" %>
-                          class="w-4 h-4 text-blue-600 rounded border-slate-300 dark:border-slate-600 focus:ring-blue-500 bg-white dark:bg-slate-800 shrink-0" />
+                      <div
+                        class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-3 gap-y-2 mb-3 min-w-0 md:min-w-[380px] border border-slate-100 dark:border-slate-700 rounded-xl p-2 bg-slate-50/40 dark:bg-slate-900/40">
+                        <% people.forEach(p=> { %>
+                          <label class="flex items-center gap-2 cursor-pointer select-none group py-0.5 min-w-0">
+                            <input type="checkbox" name="person_ids" value="<%= p.id %>" <%=(t.selected_ids &&
+                              t.selected_ids.includes(p.id)) ? "checked" : "" %> <%= isClosed ? "disabled" : "" %>
+                            class="w-4 h-4 text-blue-600 rounded border-slate-300 dark:border-slate-600 focus:ring-blue-500 bg-white dark:bg-slate-800 shrink-0" />
 
-                          <span class="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-blue-600 truncate">
-                            <%= p.name.split(' ')[0] %>
-                        </span>
-                      </label>
-                    <% }) %>
+                            <span class="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-blue-600 truncate">
+                              <%= p.name.split(' ')[0] %>
+                          </span>
+                        </label>
+                      <% }) %>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
+                      <% if (isClosed) { %>
+                        <div class="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                          Mês fechado: distribuição e exclusão bloqueadas.
+                        </div>
+                      <% } else { %>
+                        <button type="submit"
+                          class="w-full sm:w-auto px-4 py-2 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-transform active:scale-95 btn-salvar-indiv">Salvar</button>
+
+                        <button type="button" onclick="copyAlloc('<%= t.id %>')"
+                                  class="w-full sm:w-auto px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
+                                  title="Copiar atribuição">Copiar</button>
+
+                        <button type="button" onclick="pasteAlloc('<%= t.id %>')"
+                            class="w-full sm:w-auto px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
+                            title="Colar atribuição">Colar</button>
+
+                        <button type="submit" form="delete-txn-<%= t.id %>"
+                            class="w-full sm:w-auto sm:ml-auto px-3 py-2 text-xs font-bold rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
+                            Excluir
+                        </button>
+                      <% } %>
+                    </div>
+                    </form>
+                    <% if (!isClosed) { %>
+                      <form id="delete-txn-<%= t.id %>" method="post" action="/txn/<%= t.id %>/delete"
+                        data-confirm-prompt="Excluir este lançamento? Esta ação remove o item e a distribuição associada."
+                        data-confirm-phrase="Eu confirmo"
+                        data-installment-scope-form="delete"
+                        data-has-future-installments="<%= t.has_future_installments ? '1' : '0' %>"
+                        data-installment-label="<%= t.description %>"></form>
+                    <% } %>
                   </div>
 
-                  <div class="flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
+                  <div class="hidden md:block">
                     <% if (isClosed) { %>
-                      <div class="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                      <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200 text-left">
                         Mês fechado: distribuição e exclusão bloqueadas.
                       </div>
                     <% } else { %>
-                      <button type="submit"
-                        class="w-full sm:w-auto px-4 py-2 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-transform active:scale-95 btn-salvar-indiv">Salvar</button>
+                      <form id="alloc-desktop-<%= t.id %>" method="post" action="/txn/<%= t.id %>/alloc" data-alloc-form="<%= t.id %>" data-form-variant="desktop" data-installment-scope-form="alloc" data-has-future-installments="<%= t.has_future_installments ? '1' : '0' %>" data-installment-label="<%= t.description %>"
+                        class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 shadow-inner transition-colors duration-300">
+                        <div class="flex flex-col gap-2">
+                          <button type="submit"
+                            class="w-full px-4 py-2 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-transform active:scale-95 btn-salvar-indiv">Salvar</button>
 
-                      <button type="button" onclick="copyAlloc(' <%=t.id %>')"
-                                class="w-full sm:w-auto px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
-                                title="Copiar atribuição">Copiar</button>
+                          <div class="grid grid-cols-2 gap-2">
+                            <button type="button" onclick="copyAlloc('<%= t.id %>')"
+                                    class="w-full px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
+                                    title="Copiar atribuição">Copiar</button>
 
-                      <button type="button" onclick="pasteAlloc('<%= t.id %>')"
-                          class="w-full sm:w-auto px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
-                          title="Colar atribuição">Colar</button>
+                            <button type="button" onclick="pasteAlloc('<%= t.id %>')"
+                                class="w-full px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
+                                title="Colar atribuição">Colar</button>
+                          </div>
 
-                      <button type="submit" form="delete-txn-<%= t.id %>"
-                          class="w-full sm:w-auto sm:ml-auto px-3 py-2 text-xs font-bold rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
-                          Excluir
-                      </button>
+                          <button type="submit" form="delete-txn-desktop-<%= t.id %>"
+                              class="w-full px-3 py-2 text-xs font-bold rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
+                              Excluir
+                          </button>
+                        </div>
+                      </form>
+                      <form id="delete-txn-desktop-<%= t.id %>" method="post" action="/txn/<%= t.id %>/delete"
+                        data-confirm-prompt="Excluir este lançamento? Esta ação remove o item e a distribuição associada."
+                        data-confirm-phrase="Eu confirmo"
+                        data-installment-scope-form="delete"
+                        data-has-future-installments="<%= t.has_future_installments ? '1' : '0' %>"
+                        data-installment-label="<%= t.description %>"></form>
                     <% } %>
                   </div>
-                  </form>
-                  <% if (!isClosed) { %>
-                    <form id="delete-txn-<%= t.id %>" method="post" action="/txn/<%= t.id %>/delete"
-                      data-confirm-prompt="Excluir este lançamento? Esta ação remove o item e a distribuição associada."
-                      data-confirm-phrase="Eu confirmo"
-                      data-installment-scope-form="delete"
-                      data-has-future-installments="<%= t.has_future_installments ? '1' : '0' %>"
-                      data-installment-label="<%= t.description %>"></form>
-                  <% } %>
+                </td>
+              </tr>
+              <tr class="hidden md:table-row bg-transparent">
+                <td colspan="7" class="px-4 pb-4 pt-0">
+                  <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-4 py-3">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                      <span class="text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Participantes</span>
+                      <span class="text-[11px] font-semibold text-slate-400 dark:text-slate-500">Marque quem participa deste lançamento</span>
+                    </div>
+                    <div class="flex flex-wrap gap-2.5">
+                      <% people.forEach(p=> { %>
+                        <label class="inline-flex items-center gap-2 cursor-pointer select-none rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 min-w-[120px] max-w-full hover:border-blue-300 dark:hover:border-blue-500 transition-colors">
+                          <input type="checkbox" name="person_ids" form="alloc-desktop-<%= t.id %>" value="<%= p.id %>" <%=(t.selected_ids &&
+                            t.selected_ids.includes(p.id)) ? "checked" : "" %> <%= isClosed ? "disabled" : "" %>
+                          class="w-4 h-4 text-blue-600 rounded border-slate-300 dark:border-slate-600 focus:ring-blue-500 bg-white dark:bg-slate-800 shrink-0" />
+                          <span class="text-xs font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                            <%= p.name.split(' ')[0] %>
+                          </span>
+                        </label>
+                      <% }) %>
+                    </div>
+                  </div>
                 </td>
               </tr>
               <% }) %>
@@ -430,8 +491,46 @@
       const allocMsg = document.getElementById('allocMsg');
       const btnGlobalSave = document.getElementById('btnGlobalSave');
 
+      function getPersonCheckboxes(form) {
+        const inner = Array.from(form.querySelectorAll('input[name="person_ids"]'));
+        if (!form.id) return inner;
+        const linked = Array.from(document.querySelectorAll(`input[name="person_ids"][form="${form.id}"]`));
+        return Array.from(new Set([...inner, ...linked]));
+      }
+
+      function syncSiblingForms(form) {
+        const txnId = String(form?.dataset?.allocForm || '').trim();
+        if (!txnId) return;
+
+        const selectedIds = new Set(
+          getPersonCheckboxes(form)
+            .filter(cb => cb.checked)
+            .map(cb => String(cb.value))
+        );
+
+        document.querySelectorAll(`form[data-alloc-form="${txnId}"]`).forEach(otherForm => {
+          if (otherForm === form) return;
+          getPersonCheckboxes(otherForm).forEach(cb => {
+            cb.checked = selectedIds.has(String(cb.value));
+          });
+        });
+      }
+
+      function getVisibleAllocForm(txnId) {
+        const forms = Array.from(document.querySelectorAll(`form[data-alloc-form="${txnId.trim()}"]`));
+        return forms.find(form => form.offsetParent !== null) || forms[0] || null;
+      }
+
       document.querySelectorAll('form[data-alloc-form]').forEach(form => {
-        form.addEventListener('change', () => markAsModified(form));
+        const handleChange = () => {
+          syncSiblingForms(form);
+          markAsModified(form);
+        };
+
+        form.addEventListener('change', handleChange);
+        getPersonCheckboxes(form).forEach(input => {
+          input.addEventListener('change', handleChange);
+        });
 
         form.addEventListener('submit', async (e) => {
           e.preventDefault();
@@ -527,7 +626,7 @@
 
           const statusTd = form.closest('tr').querySelector('.status-icon');
           if (statusTd) {
-            const isAllocated = form.querySelectorAll('input[type="checkbox"]:checked').length > 0;
+            const isAllocated = getPersonCheckboxes(form).filter(cb => cb.checked).length > 0;
             if (isAllocated) {
               statusTd.innerHTML = `<div class="flex items-center justify-between md:justify-center gap-3"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</span><div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center md:mx-auto" title="Distribuído"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg></div></div>`;
             } else {
@@ -586,10 +685,10 @@
       };
 
       window.copyAlloc = function (txnId) {
-        const form = document.querySelector(`form[data-alloc-form="${txnId.trim()}"]`);
+        const form = getVisibleAllocForm(txnId);
         if (!form) return;
 
-        const cbs = form.querySelectorAll('input[name="person_ids"]:checked');
+        const cbs = getPersonCheckboxes(form).filter(cb => cb.checked);
         const values = Array.from(cbs).map(cb => cb.value);
 
         localStorage.setItem("allocClipboard", JSON.stringify(values));
@@ -606,14 +705,15 @@
         }
 
         const ids = JSON.parse(raw);
-        const form = document.querySelector(`form[data-alloc-form="${txnId.trim()}"]`);
+        const form = getVisibleAllocForm(txnId);
         if (!form) return;
 
-        const cbs = form.querySelectorAll('input[name="person_ids"]');
+        const cbs = getPersonCheckboxes(form);
         cbs.forEach(cb => {
           cb.checked = ids.includes(cb.value);
         });
 
+        syncSiblingForms(form);
         markAsModified(form);
         allocMsg.innerHTML = '<span class="text-blue-600 font-bold">Colado! Não esqueça de Salvar.</span>';
       };

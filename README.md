@@ -1,274 +1,368 @@
 # OrganizaPay
 
-Aplicação para controle de gastos em cartões, com foco em organização por mês, distribuição por pessoa, acompanhamento de fechamento/vencimento, lançamentos parcelados e geração de resumo para WhatsApp.
+OrganizaPay é uma aplicação web/PWA para controle financeiro com foco em cartões, competência mensal, distribuição por pessoa e negociação de dívidas compartilhadas entre usuários autorizados.
 
-O sistema foi evoluído para manter o histórico financeiro preservado, melhorar a experiência de uso no dia a dia e reduzir operações manuais em tarefas recorrentes, como definição do mês de cobrança, gestão de cartões e administração de lançamentos.
+O projeto foi pensado para uso real no dia a dia, com fluxo forte em mobile, preservação de histórico e o mínimo possível de trabalho manual em tarefas repetitivas.
 
-## Destaques
+## O que o sistema faz
 
-- Controle de compras por **cartão**, **mês**, **pessoa** e **parcela**.
-- Lançamento manual com **sugestão automática do mês de cobrança** baseada na **data da compra** e no **dia de fechamento do cartão**.
-- Compatibilidade com compras **parceladas**, mantendo a divisão automática em parcelas iguais.
-- Área de **Resumo** com visão consolidada de pessoas e fechamento dos cartões.
-- Área **Geral** com visão mês a mês, detalhamento por cartão e ações em lote.
-- Geração de conteúdo para **WhatsApp** com ordenação e layout ajustados.
-- **Login com Google**, com criação automática da pessoa titular no primeiro acesso.
-- Regras de exclusão seguras, sempre priorizando a **preservação do histórico financeiro**.
-- Painel administrativo com exibição condicional para administradores.
+- autenticação com Google para usuários previamente autorizados
+- gestão de cartões com vencimento e fechamento
+- importação de faturas CSV
+- lançamento manual à vista, parcelado e recorrente
+- distribuição de lançamentos por pessoa
+- visão mensal com ações em lote
+- resumo por pessoa e por cartão
+- detalhamento financeiro mensal
+- compartilhamento visual da fatura
+- automação opcional de envio por WhatsApp para administradores
+- fluxo de dívidas compartilhadas entre usuários do sistema
+- notificações in-app e push web
+- painel administrativo para controle de acesso
+- instalação como aplicativo (PWA)
 
----
+## Principais diferenciais
 
-## Funcionalidades principais
+- foco em **competência mensal** e não apenas em cadastro bruto de gastos
+- preservação do **histórico financeiro** como regra de negócio
+- suporte real a **parcelas** e **lançamentos recorrentes**
+- modelo híbrido de controle: o sistema automatiza, mas o usuário continua podendo ajustar
+- experiência pensada para **celular**, sem abandonar o desktop
 
-### 1. Gestão de cartões
+## Stack
 
-- Cadastro de cartões com:
-  - nome do cartão
-  - dia de vencimento
-  - dia de fechamento da fatura
-- Edição de cartões existentes.
-- Opção de **desativar** cartões sem perder histórico.
-- Opção de **excluir** cartões **somente quando não houver dependências históricas**.
-- Ordenação e exibição preparadas para apoiar o cálculo do mês sugerido no lançamento manual.
+- Node.js
+- Express
+- EJS
+- SQLite (`better-sqlite3`)
+- Passport + Google OAuth 2.0
+- PWA com `manifest.json` e `service worker`
+- Push Web com `web-push`
+- PM2 via `ecosystem.config.js`
 
-### 2. Gestão de pessoas
+## Estrutura do projeto
 
-- Cadastro de pessoas vinculadas ao controle financeiro.
-- Definição de titular.
-- No primeiro login via Google, o sistema já cria automaticamente uma pessoa com o mesmo nome do usuário e a define como titular.
-- Opção de **excluir pessoa** apenas quando isso **não afetar lançamentos passados**.
-- Quando a exclusão puder comprometer histórico, a estratégia recomendada é **desativar/ocultar**, preservando os dados já lançados.
+```text
+.
+├── public/                 # CSS, JS do cliente, ícones, manifest, service worker
+├── scripts/                # migração e seed
+├── src/
+│   ├── db.js               # conexão SQLite
+│   ├── dueDate.js          # cálculo de vencimento útil
+│   ├── importers/          # parsers de CSV
+│   └── utils.js            # utilitários gerais
+├── views/                  # páginas EJS
+├── data/                   # banco SQLite local
+├── server.js               # aplicação principal
+├── .env.example            # variáveis de ambiente
+├── ecosystem.config.js     # configuração PM2
+└── generate-vapid.js       # geração de chaves VAPID para push
+```
 
-### 3. Lançamentos manuais
+## Fluxo principal do produto
 
-- Cadastro manual de itens com seleção de:
-  - cartão
-  - data da compra
-  - mês de cobrança / primeiro vencimento
-  - valor
-  - quantidade de parcelas
-  - demais campos já existentes no fluxo
-- O formulário foi reorganizado para priorizar a escolha do **cartão antes das demais opções**, já que ele influencia a sugestão automática do mês.
-- O sistema sugere automaticamente o mês de cobrança usando a seguinte lógica:
-  - compra em dia **anterior** ao fechamento → permanece no **mesmo mês**
-  - compra em dia **igual ou posterior** ao fechamento → vai para o **mês seguinte**
-- O mês sugerido continua **editável manualmente**.
-- A lógica atual de **parcelamento automático** foi preservada.
+### 1. Acesso
 
-### 4. Visão mensal
+O login é feito via Google OAuth, mas apenas para e-mails previamente autorizados na tabela `users`.
 
-Na aba de acompanhamento mensal:
+No primeiro login bem-sucedido, o sistema garante a criação da pessoa titular vinculada ao usuário.
 
-- remoção do botão de detalhe da distribuição quando a informação já estava exposta na tela
-- inclusão de exclusão de itens diretamente pela tela mensal
-- confirmação reforçada para ações destrutivas
+### 2. Cartões
 
-### 5. Visão geral por mês
+Cada usuário pode cadastrar seus cartões com:
 
-A aba `/geral` passou a ter uma navegação mais prática:
+- nome
+- dia de vencimento
+- dia de fechamento
+- status ativo/inativo
 
-- o **primeiro card** exibido é o **mês atual** ou, se ele não existir, o **próximo mês disponível**
-- os demais meses ficam organizados em **ordem decrescente**
-- ao abrir o card do mês, é possível ver o detalhamento por cartão
-- além dos cartões, também é exibido o **valor total de cada cartão** dentro do detalhamento mensal
-- foi adicionada a possibilidade de **excluir todos os lançamentos de um cartão diretamente dali**, com confirmação reforçada
-- o ícone da área foi atualizado para refletir melhor a função da tela
+Esses dados alimentam a sugestão automática de competência e o resumo mensal.
 
-### 6. Resumo
+### 3. Lançamentos
 
-Na área `/summary`, foram incluídas melhorias de leitura e fechamento:
+Os lançamentos podem entrar por dois caminhos:
 
-- exibição do **somatório ao final dos cards**
-- ajuste do texto de interface de **“Novo Vencimento”** para **“Vencimento”**
-- melhoria na exibição de datas de fechamento/vencimento
-- ordenação de vencimentos em **ordem crescente**
-- apresentação mais coerente para facilitar conferência mensal
+- importação CSV da fatura
+- cadastro manual
 
-### 7. WhatsApp
+No cadastro manual, o sistema suporta:
 
-A geração de conteúdo para WhatsApp recebeu melhorias visuais e de ordenação:
+- compra à vista
+- compra parcelada
+- lançamento recorrente mensal
 
-- correção de corte em nomes de cartões na imagem gerada
-- melhor centralização do nome do cartão na listagem
-- ordenação dos lançamentos em **ordem decrescente**
+Em compras parceladas, as transações são distribuídas automaticamente pelas competências futuras e mantêm vínculo por `parent_txn_id`.
 
-### 8. Administração
+### 4. Distribuição por pessoa
 
-- A área `/admin` passou a seguir o mesmo padrão visual das demais páginas.
-- O link para `/admin` foi incluído no header global, mas aparece **somente para usuários administradores**.
-- O botão **Sair** foi padronizado para ficar disponível nos headers das páginas.
+Cada lançamento pode ser distribuído entre uma ou mais pessoas.
 
----
+O app calcula automaticamente a divisão do valor e permite operar em dois níveis:
+
+- apenas a parcela atual
+- a parcela atual e as próximas
+
+Esse comportamento aparece tanto na edição individual quanto em ações em lote na visão mensal.
+
+### 5. Resumo e conferência
+
+O sistema oferece três visões principais:
+
+- `/geral`: visão por competências e cartões
+- `/month/:year/:month`: gestão detalhada dos lançamentos de um mês
+- `/summary/:year/:month`: fechamento consolidado por pessoa e cartão
+
+Além disso, `/detalhamento/:year/:month` reúne contas extras, lembretes, calculadora e visão ampliada do saldo mensal.
+
+### 6. Dívidas compartilhadas
+
+Quando uma pessoa selecionada em uma distribuição tem e-mail vinculado a outro usuário real do sistema, o app pode abrir uma cobrança compartilhada automaticamente.
+
+O fluxo atual contempla:
+
+- criação automática da solicitação
+- aceite ou recusa pelo destinatário
+- aceite da rejeição ou contestação pelo remetente
+- marcação de pagamento pelo destinatário
+- confirmação de recebimento pelo remetente
+- histórico completo por solicitação
+- notificações in-app e push
+
+Tudo isso fica centralizado em `/shared-debts`.
+
+### 7. Compartilhamento
+
+O resumo por pessoa pode ser compartilhado de duas formas:
+
+- `/share`: compartilhamento nativo do aparelho ou download da imagem
+- `/whatsapp`: envio automatizado via Evolution API, disponível apenas para administradores
+
+## Rotas principais
+
+### Navegação
+
+- `/` → redireciona para a visão geral autenticada
+- `/geral` → meses e cartões
+- `/month/:year/:month` → lançamentos da competência
+- `/summary/:year/:month` → fechamento consolidado
+- `/detalhamento/:year/:month` → visão financeira detalhada do mês
+
+### Cadastros
+
+- `/people` → pessoas
+- `/cards` → cartões
+- `/import` → importação de CSV
+
+### Compartilhamento e comunicação
+
+- `/share/:year/:month/:personId` → resumo compartilhável
+- `/whatsapp/:year/:month/:personId` → envio automatizado via WhatsApp (admin)
+- `/shared-debts` → fluxo de dívidas compartilhadas
+
+### Administração
+
+- `/admin` → gestão de usuários autorizados
 
 ## Regras de negócio importantes
 
 ### Preservação de histórico
 
-Uma diretriz central da ferramenta é:
+O projeto prioriza preservar lançamentos passados. Sempre que possível, a decisão é:
 
-> nada que comprometa lançamentos passados deve ser apagado de forma irresponsável.
+- desativar em vez de apagar
+- bloquear exclusões que destruam histórico
+- manter coerência entre transações, alocações e fechamento
 
-Por isso:
+### Fechamento de mês
 
-- **pessoas** e **cartões** só podem ser excluídos definitivamente quando não houver histórico relacionado
-- se houver risco de quebrar vínculo com dados passados, a exclusão real não deve acontecer
-- nesses casos, o caminho seguro é **desativar**, ocultando do uso corrente sem apagar o histórico
+Quando uma competência é fechada, o sistema bloqueia alterações em vários fluxos críticos daquela competência.
 
-### Confirmação reforçada para exclusões
+### Titular
 
-Ações destrutivas receberam uma confirmação explícita de alto atrito.
+Cada usuário deve ter uma pessoa marcada como titular. Esse titular é usado em partes centrais do detalhamento mensal e dos cálculos agregados.
 
-Exemplo de padrão adotado:
+## Banco de dados
 
-- exigir confirmação expressa por digitação, como **“Eu confirmo”**
+O banco padrão é SQLite e fica em:
 
-Essa abordagem foi adotada para reduzir exclusões acidentais.
+```text
+/data/app.db
+```
 
----
+Principais entidades:
 
-## Melhorias aplicadas neste ciclo
+- `users`
+- `cards`
+- `people`
+- `imports`
+- `transactions`
+- `allocations`
+- `card_statements`
+- `person_payments`
+- `monthly_finances`
+- `scratchpad`
+- `closed_months`
+- `recurring_rules`
+- `recurring_exceptions`
+- `shared_debt_requests`
+- `shared_debt_events`
+- `notifications`
+- `push_subscriptions`
 
-> A lista abaixo considera as melhorias implantadas **após** a etapa inicial de refatoração de rotas.
+## Como rodar localmente
 
-### Interface e navegação
+## Pré-requisitos
 
-- reordenação dos cards da aba `/geral`
-- inclusão do link `/admin` no header global apenas para admin
-- inclusão do botão `Sair` em todos os headers
-- padronização visual da página `/admin`
-- troca do ícone da aba `/geral`
+- Node.js
+- npm
+- conta Google OAuth configurada
 
-### Cadastro e autenticação
+## Instalação
 
-- criação automática da pessoa titular no primeiro login com Google
-- inclusão de dia de fechamento no cadastro de cartões
-- reorganização visual do formulário de lançamento manual
+```bash
+npm install
+cp .env.example .env
+npm run migrate
+npm start
+```
 
-### Resumo e conferência
+A aplicação sobe por padrão em:
 
-- somatórios ao final dos cards em `/summary`
-- ajuste do texto “Novo Vencimento” para “Vencimento”
-- ordenação crescente dos vencimentos
-- melhoria no formato de exibição das datas
-- exibição do total por cartão no detalhamento mensal de `/geral`
+```text
+http://localhost:3001
+```
 
-### Lançamentos e automações
+## Variáveis de ambiente
 
-- sugestão automática do mês de cobrança com base em:
-  - data da compra informada
-  - dia de fechamento do cartão
-- manutenção da edição manual do mês sugerido
-- preservação da lógica de parcelamento automático
+O arquivo `.env.example` já traz a base. As principais variáveis são:
 
-### Exclusões seguras
+```env
+PORT=3001
+SESSION_SECRET=uma_chave_longa_e_aleatoria
 
-- exclusão individual de itens pela visão mensal
-- exclusão em massa de lançamentos de um cartão na visão geral
-- opção de desativar e excluir cartões com proteção de histórico
-- opção de excluir pessoas com proteção de histórico
-- confirmações reforçadas para ações destrutivas
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_CALLBACK_URL=http://localhost:3001/auth/google/callback
 
-### WhatsApp
+EVOLUTION_API_URL=https://sua-instancia.com
+EVOLUTION_API_KEY=sua-chave
+EVOLUTION_INSTANCE_NAME=sua-instancia
 
-- ajustes de layout da imagem
-- melhora no alinhamento do nome do cartão
-- ordenação decrescente dos lançamentos
+VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_SUBJECT=mailto:voce@dominio.com
 
----
+INACTIVITY_TIMEOUT_MINUTES=0
+```
 
-## Fluxo de uso
+### O que cada bloco faz
 
-### Cadastro inicial
+- `SESSION_SECRET` → protege a sessão do usuário
+- `GOOGLE_*` → autenticação Google
+- `EVOLUTION_*` → envio automatizado via WhatsApp para admins
+- `VAPID_*` → push notifications web
+- `INACTIVITY_TIMEOUT_MINUTES` → força novo login após inatividade
 
-1. o usuário acessa a aplicação
-2. autentica com Google
-3. no primeiro acesso, a pessoa titular é criada automaticamente
-4. o usuário cadastra os cartões com vencimento e fechamento
+## Criando o primeiro administrador
 
-### Lançamento de compra
+Como o login depende de e-mail autorizado, você precisa ter pelo menos um usuário na tabela `users` antes do primeiro acesso.
 
-1. selecionar o cartão
-2. informar a data da compra
-3. o sistema sugere o mês de cobrança
-4. o usuário pode manter ou alterar manualmente
-5. se houver parcelamento, o sistema distribui as parcelas a partir do mês indicado
+Exemplo com `sqlite3`:
 
-### Conferência
+```bash
+sqlite3 data/app.db
+```
 
-- `/month` para ver e gerir lançamentos do período
-- `/geral` para visualizar meses, cartões e totais agrupados
-- `/summary` para visão consolidada de pessoas e vencimentos
-- `/whatsapp` para gerar material de compartilhamento
+```sql
+INSERT INTO users (email, name, role, created_at)
+VALUES ('voce@seudominio.com', 'Seu Nome', 'admin', datetime('now'));
+```
 
----
+Depois disso, acesse o app com esse mesmo e-mail via Google OAuth.
 
-## Estrutura funcional da aplicação
+## Scripts disponíveis
 
-### `/cards`
-Gestão de cartões, incluindo vencimento, fechamento, desativação e exclusão segura.
+```bash
+npm start      # inicia o servidor
+npm run migrate
+npm run seed
+```
 
-### `/people`
-Gestão de pessoas, titularidade e exclusão segura sem comprometer histórico.
+## Push notifications
 
-### `/month`
-Controle mensal de lançamentos, conferência e exclusão individual com confirmação reforçada.
+O projeto já suporta push web, desde que as chaves VAPID estejam configuradas.
 
-### `/geral`
-Visão consolidada por mês, detalhamento por cartão, totais e ações em lote.
+### Gerar chaves
 
-### `/summary`
-Resumo consolidado de pessoas e fechamento de cartões, com somatórios e ordenação por vencimento.
+Se necessário, use o script auxiliar:
+
+```bash
+node generate-vapid.js
+```
+
+Depois copie as chaves para o `.env`.
+
+### Requisitos práticos
+
+- VAPID configurado
+- HTTPS em produção
+- permissão de notificações concedida pelo usuário
+
+## WhatsApp / compartilhamento
+
+Existem dois caminhos diferentes:
+
+### `/share`
+
+Página voltada a compartilhamento pelo próprio aparelho:
+- usa a Web Share API quando disponível
+- faz fallback para download da imagem
 
 ### `/whatsapp`
-Geração de conteúdo visual para compartilhamento com melhor ordenação e apresentação.
 
-### `/admin`
-Área administrativa com acesso controlado por perfil.
+Página de automação via Evolution API:
+- disponível apenas para administradores
+- envia imagem + mensagem pelo backend
 
----
+## PWA
 
-## Diferenciais do projeto
+O app possui:
 
-- foco em **uso real do dia a dia**, e não apenas em cadastro bruto
-- preocupação com **consistência financeira e histórico preservado**
-- automação prática sem retirar o controle manual do usuário
-- confirmação reforçada para ações críticas
-- interface evoluída com base em rotinas reais de uso
+- `manifest.json`
+- ícones para instalação
+- `service worker`
+- modo `standalone`
 
----
+Isso permite instalação como aplicativo em dispositivos compatíveis.
 
-## Observações para manutenção
+## Deploy com PM2
 
-Ao evoluir o projeto, é importante manter estas premissas:
+O projeto já inclui um `ecosystem.config.js` simples.
 
-- nunca remover ou quebrar comportamentos existentes sem necessidade clara
-- toda exclusão deve ser avaliada sob a ótica de preservação de histórico
-- automações devem **ajudar**, mas o usuário deve continuar com possibilidade de ajuste manual
-- mudanças visuais devem manter o padrão já adotado nas telas principais
+Exemplo:
 
----
+```bash
+pm2 start ecosystem.config.js
+```
 
-## Sugestão de roadmap futuro
+## Observações de manutenção
 
-- filtros avançados por período, pessoa e cartão
-- histórico de alterações administrativas
-- exportação de relatórios
-- dashboard com indicadores mensais
-- notificações de fechamento e vencimento
-- auditoria de exclusões/desativações
+- `server.js` concentra muita lógica de negócio; no longo prazo, vale modularizar.
+- O sistema já é suficientemente rico para se beneficiar de testes automáticos.
+- Em produção, vale reforçar hardening web: sessão, CSRF, headers de segurança e limites de upload.
 
----
+## Roadmap natural do produto
+
+Boas evoluções futuras para o OrganizaPay:
+
+- agrupamento inteligente de cobranças compartilhadas
+- busca e filtros nas telas principais
+- backup/restauração
+- regras automáticas por descrição/estabelecimento
+- passkeys/biometria para reautenticação
+- auditoria de ações
+- orçamento vs realizado
 
 ## Licença
 
-Defina aqui a licença que você deseja usar no repositório, por exemplo:
-
-- MIT
-- Apache-2.0
-- uso privado / interno
-
----
-
-## Autor
-
-Projeto mantido por **Joao Paulo De Mattos Ferreira Vaz**.
+MIT

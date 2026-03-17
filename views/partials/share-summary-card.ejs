@@ -86,7 +86,7 @@
             </div>
             <div class="text-right">
               <div class="text-sm font-black text-slate-900"><%= formatBRL(getItemCents(item)) %></div>
-              <div class="mt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400"><%= safeItemValueLabel %></div>
+              <div class="mt-1 max-w-[152px] truncate text-[11px] font-bold text-slate-400" title="<%= (item && (item.card_name || item.cardName || item.card_label || item.cardLabel || item.card)) || 'Sem cartão' %>"><%= (item && (item.card_name || item.cardName || item.card_label || item.cardLabel || item.card)) || 'Sem cartão' %></div>
             </div>
           </div>
         <% }) %>

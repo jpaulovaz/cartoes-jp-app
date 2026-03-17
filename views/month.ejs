@@ -5,7 +5,7 @@
       <div>
         <span class="op-page-hero__eyebrow">Gestão do mês</span>
         <h1 class="op-page-hero__title mt-4">Lançamentos — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
-        <p class="op-page-hero__subtitle mt-3">Organize os itens do mês com mais clareza, mantendo ações rápidas para distribuir, revisar e fechar tudo pelo celular.</p>
+        <p class="op-page-hero__subtitle mt-3">Organize os itens do mês facilmente, com ações rápidas para distribuir, revisar e fechar.</p>
         <div class="op-page-hero__meta mt-4">
           <span class="badge"><%= isClosed ? 'Mês fechado' : 'Mês em edição' %></span>
           <span class="badge"><%= txns ? txns.length : 0 %> lançamento(s)</span>
@@ -59,7 +59,6 @@
       <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
         <div>
           <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Lançamentos recorrentes</h2>
-          <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Crie pelo formulário de novo item e gerencie aqui os lançamentos manuais que se repetem todo mês.</p>
         </div>
       </div>
 

@@ -6,7 +6,7 @@
     <div>
       <span class="op-page-hero__eyebrow">Visão consolidada</span>
       <h1 class="op-page-hero__title mt-4">Visão Geral</h1>
-      <p class="op-page-hero__subtitle mt-3">Seus meses, faturas e atalhos principais em uma leitura mais leve, com foco no uso rápido pelo celular.</p>
+      <p class="op-page-hero__subtitle mt-3">Todas as suas faturas em um só lugar.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= groupedRecent ? groupedRecent.filter(group => !group.__section).length : 0 %> período(s) disponível(eis)</span>
       </div>
@@ -199,19 +199,19 @@
 
                 <div class="flex items-center gap-3 mt-5 lg:mt-0 pt-5 lg:pt-0 border-t border-slate-100 dark:border-slate-700 lg:border-none">
                   <a href="/month/<%= group.year %>/<%= group.month %>"
-                    class="flex-1 lg:w-[10.5rem] inline-flex items-center justify-center text-center px-5 py-2.5 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5"
+                    class="flex-1 lg:w-[10.5rem] inline-flex items-center justify-center text-center px-5 py-2.5 text-sm font-bold text-white bg-slate-900 border border-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-200 dark:hover:bg-white"
                     onclick="event.stopPropagation()">
                     Abrir Mês
                   </a>
 
                   <a href="/summary/<%= group.year %>/<%= group.month %>"
-                    class="flex-1 lg:w-[10.5rem] inline-flex items-center justify-center text-center px-5 py-2.5 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5"
+                    class="flex-1 lg:w-[10.5rem] inline-flex items-center justify-center text-center px-5 py-2.5 text-sm font-bold text-white bg-slate-900 border border-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-200 dark:hover:bg-white"
                     onclick="event.stopPropagation()">
                     Resumo do Mês
                   </a>
 
                   <a href="/geral/<%= group.year %>/<%= group.month %>/export.csv"
-                    class="flex-1 lg:w-[10.5rem] inline-flex items-center justify-center text-center px-5 py-2.5 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5"
+                    class="flex-1 lg:w-[10.5rem] inline-flex items-center justify-center text-center px-5 py-2.5 text-sm font-bold text-white bg-slate-900 border border-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-200 dark:hover:bg-white"
                     onclick="event.stopPropagation()">
                     Exportar CSV
                   </a>

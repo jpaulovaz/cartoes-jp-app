@@ -115,6 +115,8 @@ const upload = multer({ storage: multer.memoryStorage() });
 const PUSH_PUBLIC_KEY = String(process.env.VAPID_PUBLIC_KEY || '').trim();
 const PUSH_PRIVATE_KEY = String(process.env.VAPID_PRIVATE_KEY || '').trim();
 const PUSH_SUBJECT = String(process.env.VAPID_SUBJECT || 'mailto:no-reply@organizapay.local').trim();
+const INACTIVITY_TIMEOUT_MINUTES = Number(String(process.env.INACTIVITY_TIMEOUT_MINUTES || '0').trim().replace(',', '.')) || 0;
+const INACTIVITY_TIMEOUT_MS = INACTIVITY_TIMEOUT_MINUTES > 0 ? Math.round(INACTIVITY_TIMEOUT_MINUTES * 60 * 1000) : 0;
 let pushRuntimeEnabled = false;
 
 function isPushConfigured() {
@@ -212,6 +214,64 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+function isAjaxLikeRequest(req) {
+  return String(req.get('X-Requested-With') || '').toLowerCase() === 'xmlhttprequest';
+}
+
+function finishExpiredSessionResponse(req, res, redirectUrl) {
+  if (isAjaxLikeRequest(req)) {
+    res.set('X-Session-Expired', '1');
+    res.set('X-Session-Expired-Redirect', redirectUrl);
+    return res.status(401).json({
+      sessionExpired: true,
+      redirect: redirectUrl,
+      message: 'Sua sessão expirou por inatividade. Faça login novamente.'
+    });
+  }
+
+  return res.redirect(redirectUrl);
+}
+
+function expireSessionForInactivity(req, res) {
+  const redirectUrl = '/login?reason=idle';
+
+  const respond = () => finishExpiredSessionResponse(req, res, redirectUrl);
+
+  const destroySession = () => {
+    if (!req.session) return respond();
+    req.session.destroy(() => respond());
+  };
+
+  if (typeof req.logout === 'function' && req.user) {
+    return req.logout(() => destroySession());
+  }
+
+  return destroySession();
+}
+
+app.use((req, res, next) => {
+  if (!INACTIVITY_TIMEOUT_MS || !req.isAuthenticated || !req.isAuthenticated()) {
+    return next();
+  }
+
+  if (req.path === '/logout') {
+    return next();
+  }
+
+  const now = Date.now();
+  const lastActivityAt = Number(req.session?.lastActivityAt || 0);
+
+  if (lastActivityAt && now - lastActivityAt > INACTIVITY_TIMEOUT_MS) {
+    return expireSessionForInactivity(req, res);
+  }
+
+  if (req.session) {
+    req.session.lastActivityAt = now;
+  }
+
+  return next();
+});
+
 // ===== GOOGLE OAUTH STRATEGY =====
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(new GoogleStrategy({
@@ -282,7 +342,15 @@ function ensureCanImport(req, res, next) {
 
 // ===== ROTAS DE AUTH =====
 app.get('/login', (req, res) => {
-  res.render('login_oauth', { error: null });
+  let error = null;
+
+  if (String(req.query.reason || '').trim().toLowerCase() === 'idle') {
+    error = 'Sua sessão expirou por inatividade. Faça login novamente.';
+  } else if (String(req.query.error || '').trim().toLowerCase() === 'auth_failed') {
+    error = 'Não foi possível concluir a autenticação. Tente novamente.';
+  }
+
+  res.render('login_oauth', { error });
 });
 
 app.get(['/privacy-policy', '/politica-de-privacidade'], (req, res) => {

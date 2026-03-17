@@ -1,4 +1,44 @@
 (function () {
+  if (typeof window.fetch !== 'function') return;
+
+  const nativeFetch = window.fetch.bind(window);
+
+  function isSameOriginRequest(input) {
+    try {
+      const rawUrl = typeof input === 'string'
+        ? input
+        : (input && typeof input.url === 'string' ? input.url : window.location.href);
+      const targetUrl = new URL(rawUrl, window.location.href);
+      return targetUrl.origin === window.location.origin;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  window.fetch = async function (input, init) {
+    const nextInit = init ? { ...init } : {};
+
+    if (isSameOriginRequest(input)) {
+      const headers = new Headers(nextInit.headers || (input instanceof Request ? input.headers : undefined) || {});
+      headers.set('X-Requested-With', 'XMLHttpRequest');
+      nextInit.headers = headers;
+    }
+
+    const response = await nativeFetch(input, nextInit);
+    if (response.headers.get('x-session-expired') === '1') {
+      const redirectUrl = response.headers.get('x-session-expired-redirect') || '/login?reason=idle';
+      window.location.href = redirectUrl;
+      const error = new Error('Sua sessão expirou por inatividade. Faça login novamente.');
+      error.code = 'SESSION_EXPIRED';
+      error.response = response;
+      throw error;
+    }
+
+    return response;
+  };
+})();
+
+(function () {
   function copyAlloc(btn) {
     // Encontra o widget cinza (o container da distribuição rápida)
     const container = btn.closest('.bg-slate-50\\/50');

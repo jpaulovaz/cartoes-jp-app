@@ -454,17 +454,58 @@
         }
       }
 
-      window.saveForm = async function (form) {
-        const btn = form.querySelector('.btn-salvar-indiv');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '...';
-        btn.disabled = true;
+      function formHasFutureInstallments(form) {
+        return String(form?.dataset?.hasFutureInstallments || '') === '1';
+      }
 
-        const chosenScope = window.resolveInstallmentScope ? await window.resolveInstallmentScope(form, { actionLabel: "alterar a distribuição" }) : "single";
+      async function resolveBatchInstallmentStrategy(forms) {
+        const formsWithFutureInstallments = forms.filter(formHasFutureInstallments);
+        if (!formsWithFutureInstallments.length || forms.length <= 1) {
+          return 'ask';
+        }
+
+        const result = await window.showActionDialog({
+          title: 'Salvar vários lançamentos',
+          message: `Você alterou ${forms.length} lançamento(s). ${formsWithFutureInstallments.length} deles fazem parte de compras parceladas.\n\nEscolha como deseja aplicar a distribuição nas parcelas futuras.`,
+          options: [
+            { label: 'Cancelar', value: null, tone: 'secondary' },
+            { label: 'Perguntar item a item', value: 'ask', tone: 'secondary' },
+            { label: 'Aplicar só a atual para todos os parcelados', value: 'single', tone: 'primary' },
+            { label: 'Aplicar atual + próximas para todos os parcelados', value: 'future', tone: 'primary' }
+          ]
+        });
+
+        return result;
+      }
+
+      window.saveForm = async function (form, options = {}) {
+        const btn = form.querySelector('.btn-salvar-indiv');
+        const originalText = btn ? btn.innerHTML : 'Salvar';
+        if (btn) {
+          btn.innerHTML = '...';
+          btn.disabled = true;
+        }
+
+        const hasFutureInstallments = formHasFutureInstallments(form);
+        const requestedStrategy = String(options.scopeStrategy || 'ask').trim().toLowerCase();
+        let chosenScope = 'single';
+
+        if (hasFutureInstallments) {
+          if (requestedStrategy === 'single' || requestedStrategy === 'future') {
+            chosenScope = requestedStrategy;
+          } else {
+            chosenScope = window.resolveInstallmentScope
+              ? await window.resolveInstallmentScope(form, { actionLabel: "alterar a distribuição" })
+              : 'single';
+          }
+        }
+
         if (!chosenScope) {
-          btn.innerHTML = originalText;
-          btn.disabled = false;
-          return;
+          if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+          }
+          return false;
         }
 
         const formData = new URLSearchParams(new FormData(form));
@@ -497,28 +538,51 @@
           allocMsg.innerHTML = '<span class="text-emerald-600">Item salvo!</span>';
           setTimeout(() => allocMsg.innerHTML = '', 3000);
           updateGlobalBar();
+          return true;
         } catch (err) {
           allocMsg.innerHTML = `<span class="text-red-600">${err.message || 'Erro ao salvar.'}</span>`;
+          return false;
         } finally {
-          btn.innerHTML = originalText;
-          btn.disabled = false;
+          if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+          }
         }
       };
 
       window.saveAllModified = async function () {
+        const formsToSave = Array.from(modifiedForms);
+        if (!formsToSave.length) return;
+
         const originalText = btnGlobalSave.innerHTML;
         btnGlobalSave.innerHTML = 'Processando...';
         btnGlobalSave.disabled = true;
 
-        for (const form of Array.from(modifiedForms)) {
-          await saveForm(form);
+        try {
+          const scopeStrategy = await resolveBatchInstallmentStrategy(formsToSave);
+          if (!scopeStrategy) {
+            return;
+          }
+
+          let successCount = 0;
+          let failureCount = 0;
+
+          for (const form of formsToSave) {
+            const ok = await saveForm(form, { scopeStrategy });
+            if (ok) successCount += 1;
+            else failureCount += 1;
+          }
+
+          if (failureCount === 0) {
+            allocMsg.innerHTML = '<span class="text-emerald-600 font-extrabold text-base">Todas as alterações foram salvas com sucesso!</span>';
+          } else if (successCount > 0) {
+            allocMsg.innerHTML = `<span class="text-amber-600 font-extrabold text-base">${successCount} item(ns) salvo(s) e ${failureCount} com pendência.</span>`;
+          }
+          setTimeout(() => allocMsg.innerHTML = '', 4000);
+        } finally {
+          btnGlobalSave.innerHTML = originalText;
+          btnGlobalSave.disabled = false;
         }
-
-        btnGlobalSave.innerHTML = originalText;
-        btnGlobalSave.disabled = false;
-
-        allocMsg.innerHTML = '<span class="text-emerald-600 font-extrabold text-base">Todas as alterações foram salvas com sucesso!</span>';
-        setTimeout(() => allocMsg.innerHTML = '', 4000);
       };
 
       window.copyAlloc = function (txnId) {

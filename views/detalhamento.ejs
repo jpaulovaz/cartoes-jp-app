@@ -33,56 +33,51 @@
 
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-                <div class="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <section class="op-page-hero op-fade-up mb-8">
                     <div>
-                        <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">👑 Meu
-                            Controle</h1>
-                        <p class="text-slate-500 mt-1 font-medium">Titular: <span class="text-blue-600">
-                                <%= owner.name %>
-                            </span></p>
-                    </div>
-
-                    <div class="w-full lg:w-auto max-w-3xl lg:max-w-none mx-auto lg:mx-0">
-                        <div class="grid grid-cols-2 lg:grid-cols-[auto_auto_auto] gap-3 items-stretch lg:items-center">
-                            <% if (isClosed) { %>
-                                <button onclick="toggleLock('open')"
-                                    class="w-full inline-flex items-center justify-center px-4 py-2.5 bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-900 dark:text-rose-300 rounded-xl text-sm font-bold shadow-sm transition-colors gap-2">
-                                    🔒 Mês Fechado
-                                </button>
-                            <% } else { %>
-                                <button onclick="toggleLock('close')"
-                                    class="w-full inline-flex items-center justify-center px-4 py-2.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 rounded-xl text-sm font-bold shadow-sm transition-colors gap-2">
-                                    🔓 Fechar Mês
-                                </button>
-                            <% } %>
-
-                            <button type="button"
-                                onclick="document.getElementById('modalManualDetalhamento').classList.remove('hidden')"
-                                <%= (isClosed || !cards || !cards.length) ? 'disabled' : '' %>
-                                class="w-full inline-flex items-center justify-center px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 rounded-xl shadow-sm transition-all hover:-translate-y-0.5 <%= (isClosed || !cards || !cards.length) ? 'opacity-60 cursor-not-allowed hover:bg-emerald-600' : 'hover:bg-emerald-700' %>">
-                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M12 4v16m8-8H4"></path>
-                                </svg>
-                                Novo Item
-                            </button>
-
-                            <div
-                                class="col-span-2 lg:col-span-1 w-full flex items-center gap-2 bg-white dark:bg-slate-800 p-1 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-                                <a href="/detalhamento/<%= prevY %>/<%= prevM %>"
-                                    class="flex-1 text-center px-3 py-2 bg-slate-50 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold transition-colors">&larr;
-                                    Anterior</a>
-                                <div
-                                    class="px-4 py-2 bg-slate-900 dark:bg-slate-950 text-white rounded-lg text-sm font-bold shadow-inner whitespace-nowrap">
-                                    <%= String(month).padStart(2, '0' ) %> / <%= year %>
-                                </div>
-                                <a href="/detalhamento/<%= nextY %>/<%= nextM %>"
-                                    class="flex-1 text-center px-3 py-2 bg-slate-50 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold transition-colors">Próximo
-                                    &rarr;</a>
-                            </div>
+                        <span class="op-page-hero__eyebrow">Painel principal</span>
+                        <h1 class="op-page-hero__title mt-4">👑 Meu Controle</h1>
+                        <p class="op-page-hero__subtitle mt-3">Titular: <span class="font-bold text-blue-600 dark:text-blue-300"><%= owner.name %></span>. Acompanhe contas, cartões, saldo e próximos passos do mês em uma hierarquia visual mais clara.</p>
+                        <div class="op-page-hero__meta mt-4">
+                            <span class="badge"><%= isClosed ? 'Mês fechado' : 'Mês aberto' %></span>
+                            <span class="badge"><%= String(month).padStart(2, '0' ) %> / <%= year %></span>
                         </div>
                     </div>
-                </div>
+
+                    <div class="op-page-hero__actions w-full lg:max-w-[32rem]">
+                        <% if (isClosed) { %>
+                            <button onclick="toggleLock('open')"
+                                class="w-full inline-flex items-center justify-center rounded-2xl bg-rose-100 px-4 py-3 text-sm font-bold text-rose-700 shadow-sm transition-colors hover:bg-rose-200 dark:bg-rose-900/30 dark:text-rose-300">
+                                🔒 Mês Fechado
+                            </button>
+                        <% } else { %>
+                            <button onclick="toggleLock('close')"
+                                class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-100 px-4 py-3 text-sm font-bold text-emerald-700 shadow-sm transition-colors hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                🔓 Fechar Mês
+                            </button>
+                        <% } %>
+
+                        <button type="button"
+                            onclick="document.getElementById('modalManualDetalhamento').classList.remove('hidden')"
+                            <%= (isClosed || !cards || !cards.length) ? 'disabled' : '' %>
+                            class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 <%= (isClosed || !cards || !cards.length) ? 'opacity-60 cursor-not-allowed hover:bg-emerald-600' : 'hover:bg-emerald-700' %>">
+                            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            Novo Item
+                        </button>
+
+                        <div class="col-span-2 w-full flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 p-1 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/70">
+                            <a href="/detalhamento/<%= prevY %>/<%= prevM %>"
+                                class="flex-1 rounded-xl bg-slate-50 px-3 py-3 text-center text-sm font-bold text-slate-600 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">&larr; Anterior</a>
+                            <div class="whitespace-nowrap rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-inner dark:bg-slate-950">
+                                <%= String(month).padStart(2, '0' ) %> / <%= year %>
+                            </div>
+                            <a href="/detalhamento/<%= nextY %>/<%= nextM %>"
+                                class="flex-1 rounded-xl bg-slate-50 px-3 py-3 text-center text-sm font-bold text-slate-600 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">Próximo &rarr;</a>
+                        </div>
+                    </div>
+                </section>
 
                 <div id="modalManualDetalhamento"
                     class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -230,7 +225,7 @@
                 </div>
 
                 <% if (alerts && alerts.length) { %>
-                    <div class="mb-8 bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <div class="mb-8 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                         <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
                             <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Alertas rápidos</h2>
                             <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Sinais importantes para manter o mês em dia.</p>
@@ -257,7 +252,7 @@
 
                     <div class="space-y-8">
                         <div
-                            class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                             <div class="bg-slate-900 px-6 py-4 flex justify-between items-center">
                                 <h5 class="text-white font-bold">📥 Entradas (Caixa)</h5>
                                 <button onclick="addRow('income', 'Nome da nova entrada (ex: Venda, Pix):')" <%=isClosed
@@ -297,7 +292,7 @@
                         </div>
 
                         <div
-                            class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                             <div class="bg-slate-800 dark:bg-slate-900 px-6 py-4 flex justify-between items-center">
                                 <h5 class="text-white font-bold">🏠 Contas Domésticas</h5>
                                 <button onclick="addRow('expense', 'Nome da nova conta (ex: Luz, Internet):')"
@@ -339,7 +334,7 @@
 
                     <div class="space-y-8">
                         <div
-                            class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                             <div class="bg-blue-700 dark:bg-blue-800 px-6 py-4">
                                 <h5 class="text-white font-bold">🧮 Calculadora de Rascunho</h5>
                             </div>
@@ -352,7 +347,7 @@
                         </div>
 
                         <div
-                            class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                             <div class="bg-slate-600 dark:bg-slate-700 px-6 py-4">
                                 <h5 class="text-white font-bold">📝 Lembretes</h5>
                             </div>

@@ -182,32 +182,38 @@
 %>
 
 <div class="max-w-7xl mx-auto space-y-8">
-  <section class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-    <div class="space-y-3">
-      <h1 class="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Dívidas Compartilhadas</h1>
+  <section class="op-page-hero op-fade-up">
+    <div>
+      <span class="op-page-hero__eyebrow">Cobranças entre pessoas</span>
+      <h1 class="op-page-hero__title mt-4">Dívidas Compartilhadas</h1>
+      <p class="op-page-hero__subtitle mt-3">Acompanhe pedidos recebidos e enviados em uma leitura mais fácil, com foco em status, pendências e ações rápidas no celular.</p>
       <% if (pushNotificationsEnabled && pushPublicKey) { %>
-        <div class="flex flex-wrap items-center gap-3">
-          <button type="button" data-push-toggle data-push-public-key="<%= pushPublicKey %>" data-push-status-target="#shared-debts-push-status" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-sky-700 transition-colors"><svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.389 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>Ativar push</button>
-          <span id="shared-debts-push-status" class="text-xs font-medium text-slate-500 dark:text-slate-400">Ative as notificações push neste aparelho para receber avisos mesmo fora da tela.</span>
+        <div class="op-page-hero__actions mt-4">
+          <button type="button" data-push-toggle data-push-public-key="<%= pushPublicKey %>" data-push-status-target="#shared-debts-push-status" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-sky-500/20 transition-colors hover:bg-sky-700"><svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.389 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>Ativar push</button>
+          <span id="shared-debts-push-status" class="text-xs font-medium text-slate-500 dark:text-slate-400">Ative notificações neste aparelho para receber alertas fora da tela.</span>
+        </div>
+      <% } else { %>
+        <div class="op-page-hero__meta mt-4">
+          <span class="badge">Recebidas e enviadas em uma só central</span>
         </div>
       <% } %>
     </div>
 
-    <div class="grid gap-3 sm:grid-cols-3">
-      <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4 shadow-sm text-center">
-        <div class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Recebidas</div>
-        <div class="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white"><%= received.length %></div>
-        <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= receivedGroups.length %> período(s)</div>
+    <div class="op-kpi-strip xl:max-w-[30rem]">
+      <div class="op-kpi-card text-center">
+        <div class="op-kpi-card__label">Recebidas</div>
+        <div class="op-kpi-card__value"><%= received.length %></div>
+        <div class="op-kpi-card__hint"><%= receivedGroups.length %> período(s)</div>
       </div>
-      <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4 shadow-sm text-center">
-        <div class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Enviadas</div>
-        <div class="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white"><%= sent.length %></div>
-        <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= sentGroups.length %> período(s)</div>
+      <div class="op-kpi-card text-center">
+        <div class="op-kpi-card__label">Enviadas</div>
+        <div class="op-kpi-card__value"><%= sent.length %></div>
+        <div class="op-kpi-card__hint"><%= sentGroups.length %> período(s)</div>
       </div>
-      <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-5 py-4 shadow-sm text-center">
-        <div class="text-xs font-bold uppercase tracking-[0.18em] text-amber-600 dark:text-amber-300">Sua vez</div>
-        <div class="mt-2 text-2xl font-extrabold text-amber-700 dark:text-amber-200"><%= actionCount %></div>
-        <div class="mt-1 text-xs font-medium text-amber-700/80 dark:text-amber-200/80">Ações pendentes</div>
+      <div class="op-kpi-card text-center">
+        <div class="op-kpi-card__label text-amber-600 dark:text-amber-300">Sua vez</div>
+        <div class="op-kpi-card__value text-amber-700 dark:text-amber-200"><%= actionCount %></div>
+        <div class="op-kpi-card__hint text-amber-700/80 dark:text-amber-200/80">Ações pendentes</div>
       </div>
     </div>
   </section>

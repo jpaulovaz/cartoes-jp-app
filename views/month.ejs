@@ -1,46 +1,49 @@
 <%- include("partials/header", { title: `OrganizaPay | Itens ${String(month).padStart(2,'0')}/${year}` }) %>
 
-  <div class="max-w-7xl mx-auto pb-24">
-    <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+  <div class="max-w-7xl mx-auto space-y-6 pb-24">
+    <section class="op-page-hero op-fade-up">
       <div>
-        <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Lançamentos — <%=
-            String(month).padStart(2,'0') %>/<%= year %>
-        </h1>
-        <div id="allocMsg" class="text-sm font-bold text-emerald-600 mt-2 h-5 transition-all duration-300"></div>
+        <span class="op-page-hero__eyebrow">Gestão do mês</span>
+        <h1 class="op-page-hero__title mt-4">Lançamentos — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
+        <p class="op-page-hero__subtitle mt-3">Organize os itens do mês com mais clareza, mantendo ações rápidas para distribuir, revisar e fechar tudo pelo celular.</p>
+        <div class="op-page-hero__meta mt-4">
+          <span class="badge"><%= isClosed ? 'Mês fechado' : 'Mês em edição' %></span>
+          <span class="badge"><%= rows ? rows.length : 0 %> lançamento(s)</span>
+        </div>
+        <div id="allocMsg" class="mt-3 h-5 text-sm font-bold text-emerald-600 transition-all duration-300"></div>
       </div>
-      <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+      <div class="op-page-hero__actions">
         <% if (isClosed) { %>
           <button type="button" disabled
-            class="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-white bg-slate-400 dark:bg-slate-600 cursor-not-allowed shadow-sm">
+            class="w-full rounded-2xl bg-slate-400 px-5 py-3 text-sm font-bold text-white shadow-sm dark:bg-slate-600 cursor-not-allowed">
             🔒 Mês Fechado
           </button>
         <% } else { %>
           <button onclick="document.getElementById('modalManual').classList.remove('hidden')"
-            class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all hover:-translate-y-0.5">
-            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M12 4v16m8-8H4"></path>
-        </svg>
-			Novo Item
+            class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Novo Item
           </button>
         <% } %>
 
         <a href="/summary/<%= year %>/<%= month %>"
-          class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all hover:-translate-y-0.5">
-          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          class="w-full inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700">
+          <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6m4 6V7m4 10v-3M5 19h14"></path>
           </svg>
           Resumo do Mês</a>
         <% if (canImport) { %>
           <a href="/import"
-            class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white bg-violet-500 hover:bg-violet-600 shadow-sm transition-all hover:-translate-y-0.5">
-			<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-          </svg>
-			Nova Importação</a>
+            class="w-full inline-flex items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700">
+            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Nova Importação</a>
         <% } %>
       </div>
-    </div>
+    </section>
 
     <% if (isClosed) { %>
       <div class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
@@ -48,7 +51,7 @@
       </div>
     <% } %>
 
-    <div class="mb-6 bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
+    <div class="mb-6 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
       <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
         <div>
           <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Lançamentos recorrentes</h2>
@@ -191,7 +194,7 @@
       </div>
     </div>
 
-    <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6">
+    <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6">
       <form method="get" action="/month/<%= year %>/<%= month %>" class="grid md:grid-cols-6 gap-4">
         <input type="hidden" name="sort" value="<%= sort %>" />
         <input type="hidden" name="dir" value="<%= dir %>" />
@@ -256,7 +259,7 @@
       </form>
     </div>
 
-    <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
       <div class="overflow-x-auto md:overflow-visible">
         <table class="block md:table w-full text-sm text-left">
           <thead

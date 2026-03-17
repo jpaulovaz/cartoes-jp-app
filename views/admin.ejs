@@ -1,31 +1,35 @@
 <%- include("partials/header", { title: "OrganizaPay | Administração" }) %>
 
   <div class="max-w-6xl mx-auto space-y-8">
-    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+    <section class="op-page-hero op-fade-up">
       <div>
-        <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Painel de Administração</h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-2 font-medium">Gerencie os acessos autorizados e acompanhe o uso do sistema.</p>
+        <span class="op-page-hero__eyebrow">Acesso e governança</span>
+        <h1 class="op-page-hero__title mt-4">Painel de Administração</h1>
+        <p class="op-page-hero__subtitle mt-3">Gerencie os acessos autorizados e acompanhe o uso do sistema em uma estrutura mais limpa, com foco na leitura e nas ações principais.</p>
+        <div class="op-page-hero__meta mt-4">
+          <span class="badge"><%= users ? users.length : 0 %> usuário(s)</span>
+          <span class="badge">Controle de papel e importação</span>
+        </div>
       </div>
 
-      <div class="flex flex-wrap gap-3">
+      <div class="op-page-hero__actions">
         <button type="button" onclick="openAddUserModal()"
-          class="inline-flex items-center justify-center px-6 py-3 text-sm font-bold text-white bg-blue-600 dark:bg-blue-500 rounded-xl hover:bg-blue-700 dark:hover:bg-blue-600 shadow-sm transition-all hover:-translate-y-0.5">
-          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M18 9v6m3-3h-6m-6 6H5a2 2 0 01-2-2V8a2 2 0 012-2h4l2-2h2l2 2h4a2 2 0 012 2v4"></path>
+          class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600">
+          <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v6m3-3h-6m-6 6H5a2 2 0 01-2-2V8a2 2 0 012-2h4l2-2h2l2 2h4a2 2 0 012 2v4"></path>
           </svg>
           Novo Usuário
         </button>
 
         <a href="/"
-          class="inline-flex items-center justify-center px-6 py-3 text-sm font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/50 shadow-sm transition-all hover:-translate-y-0.5">
-          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          class="inline-flex items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-3 text-sm font-bold text-emerald-700 shadow-lg shadow-emerald-500/10 transition-all hover:-translate-y-0.5 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50">
+          <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
           </svg>
           Voltar ao App
         </a>
       </div>
-    </div>
+    </section>
 
     <% if (typeof error !== 'undefined' && error) { %>
       <div class="rounded-2xl border border-red-200 bg-red-50 text-red-700 px-5 py-4 font-medium shadow-sm">
@@ -51,7 +55,7 @@
           <% } %>
 
             <div class="space-y-8">
-              <section class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <section class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                 <div class="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div>
                     <h2 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Usuários Autorizados</h2>
@@ -168,7 +172,7 @@
               </section>
 
               <section class="grid gap-6 xl:grid-cols-2">
-                <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
                   <h2 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Informações do Sistema</h2>
                   <div class="mt-5 space-y-4 text-sm">
                     <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4">
@@ -186,7 +190,7 @@
                   </div>
                 </div>
 
-                <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
                   <h2 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Como funciona o acesso?</h2>
                   <ol class="mt-5 space-y-3 text-sm font-medium text-slate-600 dark:text-slate-300 list-decimal list-inside">
                     <li>Apenas emails cadastrados nesta lista podem entrar no sistema.</li>

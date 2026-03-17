@@ -813,3 +813,31 @@
 
   window.resolveInstallmentScope = resolveInstallmentScope;
 })();
+
+(function () {
+  function detectNavKey(pathname) {
+    if (/^\/geral(?:\/|$)/.test(pathname)) return 'geral';
+    if (/^\/shared-debts(?:\/|$)/.test(pathname) || /^\/notifications(?:\/|$)/.test(pathname)) return 'shared';
+    if (/^\/people(?:\/|$)/.test(pathname)) return 'people';
+    if (/^\/cards(?:\/|$)/.test(pathname)) return 'cards';
+    if (/^\/import(?:\/|$)/.test(pathname)) return 'import';
+    if (/^\/admin(?:\/|$)/.test(pathname)) return 'admin';
+    if (/^\/month(?:\/|$)/.test(pathname) || /^\/summary(?:\/|$)/.test(pathname) || /^\/detalhamento(?:\/|$)/.test(pathname) || /^\/txn(?:\/|$)/.test(pathname) || pathname === '/') return 'painel';
+    return '';
+  }
+
+  function applyActiveNavState() {
+    const activeKey = detectNavKey(window.location.pathname || '/');
+    if (!activeKey) return;
+
+    document.querySelectorAll('[data-nav-key]').forEach((link) => {
+      link.classList.toggle('is-active', link.dataset.navKey === activeKey);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyActiveNavState);
+  } else {
+    applyActiveNavState();
+  }
+})();

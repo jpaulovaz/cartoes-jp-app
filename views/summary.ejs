@@ -2,22 +2,26 @@
 
   <div class="w-full" data-summary-autosave-root data-year="<%= year %>" data-month="<%= month %>">
 
-    <div class="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <section class="op-page-hero op-fade-up mb-8">
       <div>
-        <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Resumo — <%= String(month).padStart(2,'0') %>/
-            <%= year %>
-        </h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1 font-medium">Fechamento de faturas e divisões por pessoa.</p>
+        <span class="op-page-hero__eyebrow">Fechamento inteligente</span>
+        <h1 class="op-page-hero__title mt-4">Resumo — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
+        <p class="op-page-hero__subtitle mt-3">Veja o fechamento do mês por cartão e por pessoa em uma tela mais clara, com leitura rápida para conferência e pagamento.</p>
+        <div class="op-page-hero__meta mt-4">
+          <span class="badge"><%= isClosed ? 'Somente leitura' : 'Pronto para ajustar' %></span>
+          <span class="badge">Conferência de cartões e pessoas</span>
+        </div>
       </div>
-      <a href="/month/<%= year %>/<%= month %>"
-        class="inline-flex items-center justify-center px-5 py-2.5 text-sm font-bold text-white bg-rose-500 border border-rose-600 rounded-xl hover:bg-rose-600 transition-all shadow-sm">
-        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16">
-          </path>
-        </svg>
-        Ver Lançamentos
-      </a>
-    </div>
+      <div class="op-page-hero__actions">
+        <a href="/month/<%= year %>/<%= month %>"
+          class="inline-flex items-center justify-center rounded-2xl bg-rose-500 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-rose-500/20 transition-all hover:-translate-y-0.5 hover:bg-rose-600">
+          <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+          </svg>
+          Ver Lançamentos
+        </a>
+      </div>
+    </section>
 
     <% if (isClosed) { %>
       <div class="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
@@ -64,7 +68,7 @@
               </svg>
               Fechamento de Cartões
             </h2>
-            <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
               <% const cardsPanelTotals = cardsPanel.reduce((acc, cp) => {
                    acc.total_cents += cp.total_cents || 0;
                    acc.paid_cents += cp.paid_cents || 0;
@@ -140,7 +144,7 @@
               </svg>
               Controle de Pessoas
             </h2>
-            <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
               <% const personPanelTotals = personPanel.reduce((acc, pp) => {
                    acc.total_cents += pp.total_cents || 0;
                    acc.paid_cents += pp.paid_cents || 0;
@@ -206,7 +210,7 @@
           </svg>
           Resumo Detalhado (Pessoa x Cartão)
         </h2>
-        <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-8">
+        <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-8">
           <div class="overflow-x-auto">
             <table class="w-full text-sm text-left">
               <thead class="bg-slate-900 text-white font-bold text-xs uppercase tracking-wider">

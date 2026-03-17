@@ -1,3 +1,48 @@
-</main>
+  </main>
+
+  <% const dFoot = new Date();
+     const mFoot = dFoot.getMonth() + 1;
+     const yFoot = dFoot.getFullYear();
+     const bottomDashboardHref = (typeof dashboardHref !== 'undefined' && dashboardHref) ? dashboardHref : `/detalhamento/${yFoot}/${mFoot}`;
+     const unreadBottomNotifications = Number(typeof unreadNotificationCount !== 'undefined' ? unreadNotificationCount : 0) || 0;
+  %>
+
+  <nav class="op-bottom-nav md:hidden" aria-label="Navegação principal">
+    <div class="op-bottom-nav__inner">
+      <a href="<%= bottomDashboardHref %>" data-nav-key="painel" class="op-bottom-nav__link">
+        <span class="op-bottom-nav__icon">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h4a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h4a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2"></path></svg>
+        </span>
+        <span>Painel</span>
+      </a>
+      <a href="/geral" data-nav-key="geral" class="op-bottom-nav__link">
+        <span class="op-bottom-nav__icon">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+        </span>
+        <span>Geral</span>
+      </a>
+      <a href="/shared-debts" data-nav-key="shared" class="op-bottom-nav__link">
+        <span class="op-bottom-nav__icon">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>
+          <% if (unreadBottomNotifications > 0) { %>
+            <span class="op-bottom-nav__badge"><%= unreadBottomNotifications > 99 ? '99+' : unreadBottomNotifications %></span>
+          <% } %>
+        </span>
+        <span>Dívidas</span>
+      </a>
+      <a href="/people" data-nav-key="people" class="op-bottom-nav__link">
+        <span class="op-bottom-nav__icon">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+        </span>
+        <span>Pessoas</span>
+      </a>
+      <a href="/cards" data-nav-key="cards" class="op-bottom-nav__link">
+        <span class="op-bottom-nav__icon">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M5 11h14M6 15h3m3 0h2m-9 4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+        </span>
+        <span>Cartões</span>
+      </a>
+    </div>
+  </nav>
 </body>
 </html>

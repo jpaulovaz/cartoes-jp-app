@@ -785,12 +785,37 @@ function getCardsByIds(userId, ids) {
 }
 
 function getPeopleAll(userId) {
-  return db.prepare(`
-    SELECT id, name, active, is_owner, phone, email
-    FROM people
-    WHERE user_id = ?
-    ORDER BY is_owner DESC, active DESC, name
+  const rows = db.prepare(`
+    SELECT
+      p.id,
+      p.name,
+      COALESCE(p.active, 1) AS active,
+      COALESCE(p.is_owner, 0) AS is_owner,
+      p.phone,
+      p.email,
+      u.id AS linked_user_id,
+      u.name AS linked_user_name,
+      u.email AS linked_user_email
+    FROM people p
+    LEFT JOIN users u
+      ON p.email IS NOT NULL
+     AND lower(u.email) = lower(p.email)
+    WHERE p.user_id = ?
+    ORDER BY COALESCE(p.is_owner, 0) DESC, COALESCE(p.active, 1) DESC, p.name
   `).all(userId);
+
+  return rows.map((person) => {
+    const hasAppUser = !!person.linked_user_id;
+    const isActive = Number(person.active || 0) !== 0;
+    const isOwner = Number(person.is_owner || 0) !== 0;
+    const hasEmail = !!normalizeEmail(person.email);
+
+    return {
+      ...person,
+      has_app_user: hasAppUser,
+      can_share_charge: hasAppUser && hasEmail && isActive && !isOwner
+    };
+  });
 }
 
 function getPeopleActive(userId) {

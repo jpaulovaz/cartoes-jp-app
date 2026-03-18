@@ -833,6 +833,13 @@
     document.querySelectorAll('[data-nav-key]').forEach((link) => {
       link.classList.toggle('is-active', link.dataset.navKey === activeKey);
     });
+
+    const activeBottomLink = document.querySelector('.op-bottom-nav__link.is-active');
+    if (activeBottomLink instanceof HTMLElement) {
+      window.requestAnimationFrame(() => {
+        activeBottomLink.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'auto' });
+      });
+    }
   }
 
   if (document.readyState === 'loading') {

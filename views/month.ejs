@@ -84,7 +84,7 @@
                 <div>Compra recorrente no dia <span class="font-bold text-slate-700 dark:text-slate-200"><%= rule.purchase_day || '-' %></span></div>
                 <div>Primeiro vencimento <span class="font-bold text-slate-700 dark:text-slate-200"><%= rule.start_due_label %></span></div>
                 <div>Ativo a partir de <span class="font-bold text-slate-700 dark:text-slate-200"><%= rule.active_from_label %></span></div>
-                <div>Próxima competência <span class="font-bold text-slate-700 dark:text-slate-200"><%= rule.preview_label || '—' %></span></div>
+                <div><span class="md:hidden">Próximo mês</span><span class="hidden md:inline">Próxima competência</span> <span class="font-bold text-slate-700 dark:text-slate-200"><%= rule.preview_label || '—' %></span></div>
               </div>
 
               <div class="mt-4 flex flex-wrap gap-2">
@@ -128,12 +128,12 @@
       <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
         <div class="flex justify-between items-center mb-6">
           <h2 class="text-xl font-black text-slate-800 dark:text-white">Novo Gasto Manual</h2>
-          <button onclick="document.getElementById('modalManual').classList.add('hidden')"
+          <button type="button" onclick="document.getElementById('modalManual').classList.add('hidden')"
             class="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-2xl">✕</button>
         </div>
 
         <form action="/txn/manual" method="POST" class="space-y-4" data-auto-first-due-form>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data da Compra</label>
               <input type="date" name="date" required data-manual-date-input <%= isClosed ? "disabled" : "" %>
@@ -152,7 +152,7 @@
             </div>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
               <input type="text" name="amount" placeholder="0,00" required data-money-mask inputmode="numeric" <%= isClosed ? "disabled" : "" %>
@@ -198,7 +198,7 @@
 
           <% if (isClosed) { %>
             <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-              Este mês está fechado. Abra o mês em Detalhamento para lançar novos itens nele.
+              Este mês está fechado. Abra o mês para lançar novos itens nele.
             </div>
           <% } else { %>
             <button type="submit"

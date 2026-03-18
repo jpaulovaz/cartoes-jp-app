@@ -5,6 +5,8 @@
      const yFoot = dFoot.getFullYear();
      const bottomDashboardHref = (typeof dashboardHref !== 'undefined' && dashboardHref) ? dashboardHref : `/detalhamento/${yFoot}/${mFoot}`;
      const unreadBottomNotifications = Number(typeof unreadNotificationCount !== 'undefined' ? unreadNotificationCount : 0) || 0;
+     const bottomCanImportData = Number((user && user.can_import) ?? (typeof canImport !== 'undefined' ? canImport : 1)) !== 0;
+     const bottomIsAdmin = !!(user && user.role === 'admin');
   %>
 
   <nav class="op-bottom-nav md:hidden" aria-label="Navegação principal">
@@ -42,6 +44,22 @@
         </span>
         <span>Cartões</span>
       </a>
+      <% if (bottomCanImportData) { %>
+        <a href="/import" data-nav-key="import" class="op-bottom-nav__link">
+          <span class="op-bottom-nav__icon">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+          </span>
+          <span>Importar</span>
+        </a>
+      <% } %>
+      <% if (bottomIsAdmin) { %>
+        <a href="/admin" data-nav-key="admin" class="op-bottom-nav__link">
+          <span class="op-bottom-nav__icon">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622C17.176 19.29 21 14.591 21 9c0-1.042-.133-2.052-.382-3.016z"></path></svg>
+          </span>
+          <span>Admin</span>
+        </a>
+      <% } %>
     </div>
   </nav>
 </body>

@@ -18,15 +18,16 @@
     return str;
   };
   const totalCents = items.reduce((acc, item) => acc + getItemCents(item), 0);
-  const paidCents = Number(paid_cents || 0);
-  const remainingCents = Number(remaining_cents || Math.max(0, totalCents - paidCents));
+  const paidCents = Math.max(0, Number(paid_cents || 0) || 0);
+  const rawRemainingCents = (remaining_cents ?? (totalCents - paidCents));
+  const remainingCents = Math.max(0, Number(rawRemainingCents || 0) || 0);
   const visibleItems = items;
-  const captureScale = items.length > 36 ? 1 : items.length > 24 ? 1.1 : items.length > 16 ? 1.25 : items.length > 10 ? 1.45 : 1.8;
+  const captureScale = items.length > 48 ? 1.85 : 2;
   const heroText = remainingCents > 0
     ? (paidCents > 0
         ? 'Confira abaixo os lançamentos deste período, o valor já pago e o saldo que ainda falta para concluir o pagamento.'
-        : 'Confira abaixo os lançamentos deste período e o valor total em aberto para conferência e pagamento.')
-    : 'Confira abaixo os lançamentos deste período e a confirmação de que os valores já foram quitados.';
+        : 'Confira abaixo os lançamentos deste período e o valor que ainda falta pagar neste período.')
+    : 'Confira abaixo os lançamentos deste período e a confirmação de que o pagamento já foi concluído.';
 %>
 
 <div class="op-page-shell">
@@ -75,9 +76,7 @@
         remainingCents,
         exportMode: false,
         captureScale,
-        cardTotals: totalsByCard,
-        footerLeft: 'Gerado pelo OrganizaPay · pronto para compartilhar pelo sistema do aparelho',
-        footerRight: 'Imagem pronta para envio',
+        footerLeft: 'Gerado pelo OrganizaPay',
         totalLabel: 'Total do período',
         paymentTitle: 'Situação do pagamento',
         heroText
@@ -102,9 +101,7 @@
     remainingCents,
     exportMode: true,
     captureScale,
-    cardTotals: totalsByCard,
-    footerLeft: 'Gerado pelo OrganizaPay · pronto para compartilhar pelo sistema do aparelho',
-    footerRight: 'Imagem pronta para envio',
+    footerLeft: 'Gerado pelo OrganizaPay',
     totalLabel: 'Total do período',
     paymentTitle: 'Situação do pagamento',
     heroText
@@ -139,7 +136,7 @@
   }
 
   function getCaptureSourceNode() {
-    return document.getElementById('cardPreview') || document.getElementById('cardExport');
+    return document.getElementById('cardExport') || document.getElementById('cardPreview');
   }
 
   function waitForPaint() {

@@ -1,4 +1,4 @@
-<%- include("partials/header", { title: "Exportar Resumo" }) %>
+<%- include("partials/header", { title: "Compartilhar Resumo" }) %>
 <%
   const periodLabel = `${String(month).padStart(2, '0')}/${year}`;
   const getItemCents = (item) => {
@@ -33,14 +33,13 @@
 <div class="op-page-shell">
   <section class="op-page-hero op-fade-up">
     <div>
-      <span class="op-page-hero__eyebrow">Envio assistido</span>
-      <h1 class="op-page-hero__title mt-4">Exportar Resumo</h1>
-      <p class="op-page-hero__subtitle mt-3">Use a mesma imagem refinada para download e para envio via WhatsApp, mantendo todos os itens do período visíveis.</p>
+      <span class="op-page-hero__eyebrow">Compartilhamento rápido</span>
+      <h1 class="op-page-hero__title mt-4">Compartilhar Resumo</h1>
+      <p class="op-page-hero__subtitle mt-3">Gere uma imagem pronta para download ou compartilhamento rápido com a pessoa indicada.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= person.name %></span>
         <span class="badge">Ref. <%= periodLabel %></span>
         <span class="badge"><%= items.length %> item(ns)</span>
-        <% if (person.phone) { %><span class="badge">Número disponível</span><% } else { %><span class="badge">Sem número cadastrado</span><% } %>
       </div>
     </div>
     <div class="op-page-hero__actions">
@@ -145,7 +144,7 @@
   }
 
   function getCaptureSourceNode() {
-    return document.getElementById('cardExport') || document.getElementById('cardPreview');
+    return document.getElementById('cardPreview') || document.getElementById('cardExport');
   }
 
   function waitForPaint() {
@@ -199,8 +198,13 @@
     clone.id = `${sourceNode.id || 'whatsapp-card'}-capture`;
     clone.style.width = `${baseWidth}px`;
     clone.style.maxWidth = `${baseWidth}px`;
+    clone.style.minWidth = `${baseWidth}px`;
     clone.style.margin = '0';
     clone.style.transform = 'none';
+    clone.style.opacity = '1';
+    clone.style.visibility = 'visible';
+    clone.dataset.exportMode = '1';
+    clone.classList.add('share-summary-card--export');
 
     stage.appendChild(clone);
     document.body.appendChild(stage);
@@ -210,6 +214,7 @@
       const cloneRect = clone.getBoundingClientRect();
       const width = Math.max(Math.ceil(cloneRect.width || 0), clone.scrollWidth || 0, clone.offsetWidth || 0, baseWidth);
       const height = Math.max(Math.ceil(cloneRect.height || 0), clone.scrollHeight || 0, clone.offsetHeight || 0);
+      clone.style.height = 'auto';
 
       console.info('[whatsapp] capture dimensions', { width, height, baseWidth });
 

@@ -35,7 +35,7 @@
     <div>
       <span class="op-page-hero__eyebrow">Compartilhamento rápido</span>
       <h1 class="op-page-hero__title mt-4">Compartilhar Resumo</h1>
-      <p class="op-page-hero__subtitle mt-3">Gere uma imagem pronta para compartilhar pelo menu nativo do aparelho, com prévia fiel do que a pessoa vai receber.</p>
+      <p class="op-page-hero__subtitle mt-3">Gere uma imagem pronta para download ou compartilhamento rápido com a pessoa indicada.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= person.name %></span>
         <span class="badge">Ref. <%= periodLabel %></span>
@@ -136,7 +136,7 @@
   }
 
   function getCaptureSourceNode() {
-    return document.getElementById('cardExport') || document.getElementById('cardPreview');
+    return document.getElementById('cardPreview') || document.getElementById('cardExport');
   }
 
   function waitForPaint() {
@@ -190,8 +190,13 @@
     clone.id = `${sourceNode.id || 'share-card'}-capture`;
     clone.style.width = `${baseWidth}px`;
     clone.style.maxWidth = `${baseWidth}px`;
+    clone.style.minWidth = `${baseWidth}px`;
     clone.style.margin = '0';
     clone.style.transform = 'none';
+    clone.style.opacity = '1';
+    clone.style.visibility = 'visible';
+    clone.dataset.exportMode = '1';
+    clone.classList.add('share-summary-card--export');
 
     stage.appendChild(clone);
     document.body.appendChild(stage);
@@ -201,6 +206,7 @@
       const cloneRect = clone.getBoundingClientRect();
       const width = Math.max(Math.ceil(cloneRect.width || 0), clone.scrollWidth || 0, clone.offsetWidth || 0, baseWidth);
       const height = Math.max(Math.ceil(cloneRect.height || 0), clone.scrollHeight || 0, clone.offsetHeight || 0);
+      clone.style.height = 'auto';
 
       console.info('[share] capture dimensions', { width, height, baseWidth });
 

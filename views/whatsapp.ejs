@@ -144,7 +144,7 @@
   }
 
   function getCaptureSourceNode() {
-    return document.getElementById('cardPreview') || document.getElementById('cardExport');
+    return document.getElementById('cardExport') || document.getElementById('cardPreview');
   }
 
   function waitForPaint() {
@@ -193,6 +193,9 @@
     stage.style.padding = '0';
     stage.style.margin = '0';
     stage.style.width = `${baseWidth}px`;
+    stage.style.height = 'auto';
+    stage.style.overflow = 'hidden';
+    stage.style.display = 'inline-block';
 
     const clone = sourceNode.cloneNode(true);
     clone.id = `${sourceNode.id || 'whatsapp-card'}-capture`;
@@ -200,9 +203,14 @@
     clone.style.maxWidth = `${baseWidth}px`;
     clone.style.minWidth = `${baseWidth}px`;
     clone.style.margin = '0';
+    clone.style.display = 'block';
+    clone.style.position = 'static';
     clone.style.transform = 'none';
     clone.style.opacity = '1';
     clone.style.visibility = 'visible';
+    clone.style.height = 'auto';
+    clone.style.minHeight = '0';
+    clone.style.overflow = 'hidden';
     clone.dataset.exportMode = '1';
     clone.classList.add('share-summary-card--export');
 
@@ -212,9 +220,8 @@
     try {
       await waitForAssets(clone);
       const cloneRect = clone.getBoundingClientRect();
-      const width = Math.max(Math.ceil(cloneRect.width || 0), clone.scrollWidth || 0, clone.offsetWidth || 0, baseWidth);
-      const height = Math.max(Math.ceil(cloneRect.height || 0), clone.scrollHeight || 0, clone.offsetHeight || 0);
-      clone.style.height = 'auto';
+      const width = Math.max(1, Math.ceil(cloneRect.width || 0));
+      const height = Math.max(1, Math.ceil(cloneRect.height || 0));
 
       console.info('[whatsapp] capture dimensions', { width, height, baseWidth });
 
@@ -226,12 +233,10 @@
         scale: Number((sourceNode.dataset && sourceNode.dataset.captureScale) || 2),
         backgroundColor: '#ffffff',
         useCORS: true,
-        width,
-        height,
-        windowWidth: width + 40,
-        windowHeight: height + 40,
         scrollX: 0,
-        scrollY: 0
+        scrollY: 0,
+        logging: false,
+        removeContainer: true
       });
 
       if (!canvas || !canvas.width || !canvas.height) {

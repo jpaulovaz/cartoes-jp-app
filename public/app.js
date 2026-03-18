@@ -876,8 +876,8 @@
       }
 
       const navHeight = Math.ceil(nav.offsetHeight || nav.getBoundingClientRect().height || 0);
-      const extraBreathingRoom = 16;
-      const fallbackClearance = 124;
+      const extraBreathingRoom = 4;
+      const fallbackClearance = 96;
       const clearance = Math.max(fallbackClearance, navHeight + extraBreathingRoom);
       root.style.setProperty('--op-mobile-bottom-clearance', `${clearance}px`);
       if (mainShell instanceof HTMLElement) {

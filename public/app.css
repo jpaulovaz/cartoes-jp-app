@@ -11,7 +11,7 @@
   --op-primary-ink: #0f172a;
   --op-muted: #64748b;
   --op-radius: 28px;
-  --op-mobile-bottom-clearance: calc(7rem + env(safe-area-inset-bottom, 0px));
+  --op-mobile-bottom-clearance: calc(5.75rem + env(safe-area-inset-bottom, 0px));
 }
 
 html {

@@ -31,7 +31,11 @@
             }
             %>
 
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+                data-month-swipe-area
+                data-month-swipe-prev="/detalhamento/<%= prevY %>/<%= prevM %>"
+                data-month-swipe-next="/detalhamento/<%= nextY %>/<%= nextM %>"
+                style="touch-action: pan-y pinch-zoom;">
 
                 <section class="op-page-hero op-fade-up mb-8">
                     <div>

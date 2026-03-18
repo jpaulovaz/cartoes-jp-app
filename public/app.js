@@ -925,6 +925,126 @@
 })();
 
 (function () {
+  function initMonthSwipeNavigation() {
+    const swipeAreas = Array.from(document.querySelectorAll('[data-month-swipe-area]'));
+    if (!swipeAreas.length) return;
+
+    const supportsTouchMonthSwipe = () => {
+      const hasCoarsePointer = window.matchMedia('(pointer: coarse)').matches || Number(navigator.maxTouchPoints || 0) > 0;
+      return hasCoarsePointer && window.matchMedia('(max-width: 1023px)').matches;
+    };
+
+    const isIgnoredTarget = (target) => {
+      if (!(target instanceof Element)) return false;
+      return !!target.closest('a, button, input, select, textarea, label, summary, [role="button"], [contenteditable=""], [contenteditable="true"], [data-no-month-swipe], .overflow-x-auto, [data-allow-horizontal-scroll], .fixed');
+    };
+
+    swipeAreas.forEach((area) => {
+      if (!(area instanceof HTMLElement)) return;
+
+      let gesture = null;
+      let navigationLocked = false;
+
+      const resetGesture = () => {
+        gesture = null;
+      };
+
+      area.addEventListener('touchstart', (event) => {
+        if (!supportsTouchMonthSwipe()) return;
+        if (navigationLocked) return;
+        if (!event.touches || event.touches.length !== 1) {
+          resetGesture();
+          return;
+        }
+
+        const touch = event.touches[0];
+        const edgeGuard = Math.max(24, Math.round(window.innerWidth * 0.06));
+        if (touch.clientX <= edgeGuard || touch.clientX >= (window.innerWidth - edgeGuard)) {
+          resetGesture();
+          return;
+        }
+
+        if (isIgnoredTarget(event.target)) {
+          resetGesture();
+          return;
+        }
+
+        gesture = {
+          startX: touch.clientX,
+          startY: touch.clientY,
+          lastX: touch.clientX,
+          lastY: touch.clientY,
+          startTime: Date.now(),
+          axis: '',
+          cancelled: false
+        };
+      }, { passive: true });
+
+      area.addEventListener('touchmove', (event) => {
+        if (!gesture || gesture.cancelled) return;
+        if (!event.touches || event.touches.length !== 1) {
+          gesture.cancelled = true;
+          return;
+        }
+
+        const touch = event.touches[0];
+        gesture.lastX = touch.clientX;
+        gesture.lastY = touch.clientY;
+
+        const deltaX = gesture.lastX - gesture.startX;
+        const deltaY = gesture.lastY - gesture.startY;
+        const absX = Math.abs(deltaX);
+        const absY = Math.abs(deltaY);
+
+        if (!gesture.axis) {
+          if (absY >= 14 && absY > absX * 1.1) {
+            gesture.cancelled = true;
+            return;
+          }
+
+          if (absX >= 14 && absX > absY * 1.25) {
+            gesture.axis = 'x';
+          }
+        }
+      }, { passive: true });
+
+      area.addEventListener('touchend', () => {
+        if (!gesture || gesture.cancelled || navigationLocked) {
+          resetGesture();
+          return;
+        }
+
+        const deltaX = gesture.lastX - gesture.startX;
+        const deltaY = gesture.lastY - gesture.startY;
+        const absX = Math.abs(deltaX);
+        const absY = Math.abs(deltaY);
+        const elapsed = Date.now() - gesture.startTime;
+
+        resetGesture();
+
+        if (elapsed > 700) return;
+        if (absX < 72) return;
+        if (absX <= absY * 1.35) return;
+
+        const destination = deltaX < 0 ? area.dataset.monthSwipeNext : area.dataset.monthSwipePrev;
+        if (!destination) return;
+
+        navigationLocked = true;
+        window.location.assign(destination);
+      }, { passive: true });
+
+      area.addEventListener('touchcancel', resetGesture, { passive: true });
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMonthSwipeNavigation);
+  } else {
+    initMonthSwipeNavigation();
+  }
+})();
+
+(function () {
   function setButtonBusyState(button, isBusy) {
     if (!(button instanceof HTMLElement)) return;
     if (isBusy) {

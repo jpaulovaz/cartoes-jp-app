@@ -3002,7 +3002,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   syncRecurringTransactions(userId, year, month);
 
   const sort = (req.query.sort || "date").toString();
-  const dir = (req.query.dir || "asc").toString();
+  const dir = (req.query.dir || "desc").toString();
   const orderBy = buildOrder(sort, dir);
 
   const filters = {

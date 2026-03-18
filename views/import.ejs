@@ -1,84 +1,130 @@
 <%- include("partials/header", { title: "OrganizaPay | Importar CSV" }) %>
 
-  <div class="max-w-3xl mx-auto">
-    <div class="mb-8 flex flex-col items-center text-center">
-      <div
-        class="w-16 h-16 bg-slate-900 text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-slate-200">
-        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-        </svg>
+<div class="mx-auto max-w-6xl space-y-6">
+  <section class="op-page-hero op-fade-up">
+    <div>
+      <span class="op-page-hero__eyebrow">Importação guiada</span>
+      <h1 class="op-page-hero__title mt-4">Importar Fatura</h1>
+      <p class="op-page-hero__subtitle mt-3">Envie o CSV da fatura e confirme o cartão, mês e ano antes de processar.</p>
+      <div class="op-page-hero__meta mt-4">
+        <span class="badge">CSV do cartão</span>
+        <span class="badge">Período configurável</span>
       </div>
-      <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Importar Fatura</h1>
-      <p class="text-slate-500 dark:text-slate-400 mt-2 font-medium max-w-md">Faça o upload do arquivo CSV da fatura para o sistema
-        processar as transações.</p>
     </div>
+    <div class="op-page-hero__actions">
+      <a href="/geral" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
+        <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        Voltar para Geral
+      </a>
+    </div>
+  </section>
 
-    <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 sm:p-10 relative overflow-hidden">
-      <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600"></div>
+  <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+    <section class="op-form-card op-fade-up">
+      <div class="relative z-10">
+        <div class="op-form-card__title">Arquivo da fatura</div>
+        <p class="op-form-card__subtitle">Preencha os dados do período, selecione o cartão correspondente e envie o CSV para processamento.</p>
 
-      <% if (typeof error !=='undefined' && error) { %>
-        <div class="mb-8 flex items-center p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 animate-pulse">
-          <svg class="w-6 h-6 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
-          <span class="font-semibold text-sm">
+        <% if (typeof error !== 'undefined' && error) { %>
+          <div class="mt-5 rounded-[22px] border border-red-200 bg-red-50/90 px-4 py-3 text-sm font-semibold text-red-700 dark:border-red-800 dark:bg-red-900/25 dark:text-red-200">
             <%= error %>
-          </span>
-        </div>
+          </div>
         <% } %>
 
-          <form method="post" action="/import" enctype="multipart/form-data" class="space-y-6">
+        <form method="post" action="/import" enctype="multipart/form-data" class="mt-6 space-y-5">
+          <div>
+            <label class="op-field-label">Cartão de Crédito</label>
+            <select name="card_id" required class="op-select">
+              <option value="">Selecione o cartão correspondente...</option>
+              <% cards.forEach(c => { %>
+                <option value="<%= c.id %>"><%= c.name %></option>
+              <% }) %>
+            </select>
+          </div>
 
+          <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">Cartão de Crédito</label>
-              <select name="card_id" required
-                class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer font-medium text-slate-700 dark:text-slate-200">
-                <option value="">Selecione o cartão correspondente...</option>
-                <% cards.forEach(c=> { %>
-                  <option value="<%= c.id %>">
-                    <%= c.name %>
-                  </option>
-                  <% }) %>
-              </select>
+              <label class="op-field-label">Mês do vencimento</label>
+              <input name="month" type="number" min="1" max="12" placeholder="Ex: 12" required class="op-input" />
             </div>
-
-            <div class="grid grid-cols-2 gap-5">
-              <div>
-                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">Mês (Vencimento)</label>
-                <input name="month" type="number" min="1" max="12" placeholder="Ex: 12" required
-                  class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 dark:text-slate-200" />
-              </div>
-              <div>
-                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">Ano</label>
-                <input name="year" type="number" min="2000" max="2100" placeholder="Ex: 2026" required
-                  class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 dark:text-slate-200" />
-              </div>
-            </div>
-
             <div>
-              <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">Arquivo CSV</label>
-              <div
-                class="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-2 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                <input name="csvfile" type="file" accept=".csv,text/csv" required
-                  class="w-full text-slate-500 dark:text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer" />
-              </div>
+              <label class="op-field-label">Ano</label>
+              <input name="year" type="number" min="2000" max="2100" placeholder="Ex: 2026" required class="op-input" />
             </div>
+          </div>
 
-            <div class="pt-6 mt-2 border-t border-slate-100 dark:border-slate-700">
-              <button type="submit"
-                class="w-full px-6 py-3.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-200 transition-all hover:-translate-y-0.5 flex justify-center items-center">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+          <div>
+            <label class="op-field-label">Arquivo CSV</label>
+            <label class="op-file-drop">
+              <div class="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/20">
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                 </svg>
-                Processar Arquivo
-              </button>
+              </div>
+              <div class="text-sm font-bold text-slate-800 dark:text-slate-100">Escolha o CSV exportado pela operadora do cartão</div>
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">O arquivo não é enviado para nenhum serviço externo. O processamento acontece dentro do próprio aplicativo.</p>
+              <input name="csvfile" type="file" accept=".csv,text/csv" required class="mt-4 block w-full cursor-pointer text-sm font-medium text-slate-500 file:mr-4 file:rounded-2xl file:border-0 file:bg-slate-900 file:px-4 file:py-3 file:text-sm file:font-bold file:text-white hover:file:bg-slate-800 dark:text-slate-300 dark:file:bg-slate-100 dark:file:text-slate-900 dark:hover:file:bg-white" />
+            </label>
+          </div>
+
+          <div class="flex flex-col gap-3 pt-3 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Revise os dados antes de processar para evitar duplicidade de importação.</p>
+            <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
+              <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+              </svg>
+              Processar Arquivo
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <aside class="space-y-4 op-fade-up">
+      <section class="op-form-card">
+        <div class="relative z-10">
+          <div class="op-form-card__title">Como funciona</div>
+          <div class="op-step-list">
+            <div class="op-step-item">
+              <div class="op-step-item__index">1</div>
+              <div>
+                <div class="op-step-item__title">Escolha o cartão certo</div>
+                <div class="op-step-item__text">O cartão selecionado será usado como referência para o fechamento, vencimento e agrupamento do período.</div>
+              </div>
             </div>
+            <div class="op-step-item">
+              <div class="op-step-item__index">2</div>
+              <div>
+                <div class="op-step-item__title">Confirme mês e ano</div>
+                <div class="op-step-item__text">Esses campos definem em qual período os lançamentos importados aparecerão no painel e nos resumos.</div>
+              </div>
+            </div>
+            <div class="op-step-item">
+              <div class="op-step-item__index">3</div>
+              <div>
+                <div class="op-step-item__title">Envie o CSV</div>
+                <div class="op-step-item__text">Depois do processamento, você poderá revisar o mês, distribuir pessoas e seguir com o fechamento normalmente.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-          </form>
-    </div>
+      <section class="op-form-card">
+        <div class="relative z-10 space-y-3">
+          <div class="op-form-card__title">Dicas rápidas</div>
+          <div class="op-info-list">
+            <span class="op-info-pill">Importe um período por vez</span>
+            <span class="op-info-pill">Revise lançamentos recorrentes</span>
+            <span class="op-info-pill">Use /month para distribuir pessoas</span>
+          </div>
+          <p class="op-form-card__subtitle">Se a fatura tiver muitos itens, vale conferir primeiro no resumo do mês para validar total, pagamentos e participantes.</p>
+        </div>
+      </section>
+    </aside>
   </div>
+</div>
 
-  <%- include("partials/footer") %>
+<%- include("partials/footer") %>

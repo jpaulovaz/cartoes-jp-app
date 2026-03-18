@@ -267,9 +267,22 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   updated_at TEXT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS scheduled_push_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  event_type TEXT NOT NULL,
+  date_key TEXT NOT NULL,
+  sequence_no INTEGER NOT NULL DEFAULT 1,
+  payload_json TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, event_type, date_key, sequence_no),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
 `);
 
 db.exec(`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id);`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_scheduled_push_logs_event_date ON scheduled_push_logs(event_type, date_key, user_id, sequence_no);`);
 
 if (!columnExists("cards", "active")) {
   db.exec("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1;");

@@ -1,46 +1,142 @@
 <%- include("partials/header", { title: "Distribuir item" }) %>
-<div class="mb-4 flex items-center justify-between">
-  <div>
-    <h1 class="text-xl font-semibold">Distribuir item</h1>
-    <div class="text-sm text-slate-600"><span class="badge"><%= txn.card_name %></span> • <%= (txn.txn_date || "-") %> • <%= txn.card_number || "-" %></div>
-  </div>
-  <a class="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50" href="/month/<%= txn.year %>/<%= txn.month %>">Voltar</a>
-</div>
-<% if (isClosed) { %>
-  <div class="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-    🔒 Este mês está fechado. A distribuição deste item está em somente leitura.
-  </div>
-<% } %>
-<div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
-  <div class="text-sm text-slate-700 mb-2"><b>Descrição:</b> <%= txn.description %></div>
-  <div class="text-sm text-slate-700 mb-4"><b>Valor:</b> <%= formatBRLFromCents(txn.amount_cents) %></div>
-  <form method="post" action="/txn/<%= txn.id %>" data-installment-scope-form="alloc" data-has-future-installments="<%= hasFutureInstallments ? '1' : '0' %>" data-installment-label="<%= txn.description %>">
-    <h2 class="font-semibold mb-2">Pessoas (divide em partes iguais)</h2>
-    <div class="grid md:grid-cols-3 gap-2 mb-4">
-      <% people.forEach(p => { %>
-        <label class="border border-slate-200 rounded-xl p-3 flex items-center gap-2">
-          <input type="checkbox" name="person_ids" value="<%= p.id %>" <%= selected.includes(p.id) ? "checked" : "" %> <%= isClosed ? "disabled" : "" %> />
-          <span><%= p.name %></span>
-        </label>
-      <% }) %>
-    </div>
-    <% if (isClosed) { %>
-      <span class="inline-flex px-4 py-2 rounded-xl border border-amber-200 bg-amber-50 text-sm font-semibold text-amber-900">Mês fechado</span>
-    <% } else { %>
-      <% if (hasFutureInstallments) { %>
-        <div class="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-900">
-          Este lançamento faz parte de um parcelamento. Ao salvar ou excluir, você poderá escolher entre aplicar só nesta parcela ou nesta e nas próximas.
-        </div>
-      <% } %>
-      <div class="flex flex-wrap items-center gap-3">
-        <button class="px-4 py-2 rounded-xl bg-slate-900 text-white">Salvar</button>
-        <button type="submit" form="delete-txn-form" class="px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-700 font-semibold hover:bg-red-100">Excluir</button>
-      </div>
-    <% } %>
-  </form>
 
-  <% if (!isClosed) { %>
-    <form id="delete-txn-form" method="post" action="/txn/<%= txn.id %>/delete" data-confirm-prompt="Excluir este lançamento? Esta ação remove o item e a distribuição associada." data-confirm-phrase="Eu confirmo" data-installment-scope-form="delete" data-has-future-installments="<%= hasFutureInstallments ? '1' : '0' %>" data-installment-label="<%= txn.description %>"></form>
+<div class="mx-auto max-w-5xl space-y-6">
+  <section class="op-page-hero op-fade-up">
+    <div>
+      <span class="op-page-hero__eyebrow">Distribuição do lançamento</span>
+      <h1 class="op-page-hero__title mt-4">Distribuir item</h1>
+      <p class="op-page-hero__subtitle mt-3">Selecione quem participa desta compra. O sistema divide o valor igualmente entre as pessoas marcadas, sem alterar as demais funcionalidades do mês.</p>
+      <div class="op-page-hero__meta mt-4">
+        <span class="badge"><%= txn.card_name %></span>
+        <span class="badge"><%= txn.txn_date || '-' %></span>
+        <% if (txn.card_number) { %>
+          <span class="badge">Final <%= String(txn.card_number).slice(-4) %></span>
+        <% } %>
+      </div>
+    </div>
+    <div class="op-page-hero__actions">
+      <a href="/month/<%= txn.year %>/<%= txn.month %>" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
+        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        Voltar ao mês
+      </a>
+      <% if (!isClosed) { %>
+        <button type="submit" form="txn-alloc-form" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+          <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          Salvar distribuição
+        </button>
+      <% } %>
+    </div>
+  </section>
+
+  <% if (isClosed) { %>
+    <div class="rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+      🔒 Este mês está fechado. A distribuição deste item está em somente leitura.
+    </div>
   <% } %>
+
+  <section class="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_340px]">
+    <div class="op-form-card op-fade-up">
+      <div class="relative z-10">
+        <div class="op-form-card__title">Participantes</div>
+        <p class="op-form-card__subtitle">Marque quem participa desta compra. O valor será dividido em partes iguais entre as pessoas selecionadas.</p>
+
+        <form id="txn-alloc-form" method="post" action="/txn/<%= txn.id %>" class="mt-6 space-y-5" data-installment-scope-form="alloc" data-has-future-installments="<%= hasFutureInstallments ? '1' : '0' %>" data-installment-label="<%= txn.description %>">
+          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <% people.forEach(p => { %>
+              <label class="group <%= isClosed ? 'cursor-default' : 'cursor-pointer' %>">
+                <input class="peer sr-only" type="checkbox" name="person_ids" value="<%= p.id %>" <%= selected.includes(p.id) ? 'checked' : '' %> <%= isClosed ? 'disabled' : '' %> />
+                <span class="flex min-h-[74px] items-center gap-3 rounded-[22px] border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-blue-300 group-hover:shadow-md peer-checked:border-blue-400 peer-checked:bg-blue-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-blue-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/40 <%= isClosed ? 'opacity-70' : '' %>">
+                  <span class="flex-1 text-sm font-bold text-slate-800 dark:text-slate-100"><%= p.name %></span>
+                  <span class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 transition-all peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 dark:peer-checked:text-white">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                  </span>
+                </span>
+              </label>
+            <% }) %>
+          </div>
+
+          <% if (hasFutureInstallments) { %>
+            <div class="rounded-[22px] border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm font-semibold text-sky-900 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200">
+              Este lançamento faz parte de um parcelamento. Ao salvar ou excluir, você poderá escolher entre aplicar só nesta parcela ou nesta e nas próximas.
+            </div>
+          <% } %>
+
+          <% if (!isClosed) { %>
+            <div class="flex flex-col gap-3 pt-1 sm:flex-row sm:flex-wrap">
+              <button class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Salvar</button>
+              <button type="submit" form="delete-txn-form" class="inline-flex items-center justify-center rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-bold text-red-700 transition-all hover:-translate-y-0.5 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200 dark:hover:bg-red-900/35">Excluir lançamento</button>
+            </div>
+          <% } else { %>
+            <span class="inline-flex rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Mês fechado</span>
+          <% } %>
+        </form>
+      </div>
+
+      <% if (!isClosed) { %>
+        <form id="delete-txn-form" method="post" action="/txn/<%= txn.id %>/delete" data-confirm-prompt="Excluir este lançamento? Esta ação remove o item e a distribuição associada." data-confirm-phrase="Eu confirmo" data-installment-scope-form="delete" data-has-future-installments="<%= hasFutureInstallments ? '1' : '0' %>" data-installment-label="<%= txn.description %>"></form>
+      <% } %>
+    </div>
+
+    <aside class="space-y-4 op-fade-up">
+      <section class="op-form-card">
+        <div class="relative z-10 space-y-4">
+          <div>
+            <div class="op-form-card__title">Resumo do item</div>
+            <p class="op-form-card__subtitle">Uma leitura rápida do lançamento antes de distribuir.</p>
+          </div>
+          <div class="space-y-3">
+            <div class="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/55">
+              <div class="op-field-label">Descrição</div>
+              <div class="text-base font-black text-slate-900 dark:text-slate-100"><%= txn.description %></div>
+            </div>
+            <div class="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/55">
+              <div class="op-field-label">Valor</div>
+              <div class="text-2xl font-black text-slate-900 dark:text-slate-100"><%= formatBRLFromCents(txn.amount_cents) %></div>
+            </div>
+            <div class="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/55">
+              <div class="op-field-label">Tipo de compra</div>
+              <div class="text-sm font-bold text-slate-700 dark:text-slate-200"><%= hasFutureInstallments ? 'Parcelada' : 'À vista' %></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="op-form-card">
+        <div class="relative z-10">
+          <div class="op-form-card__title">Como esta tela funciona</div>
+          <div class="op-step-list">
+            <div class="op-step-item">
+              <div class="op-step-item__index">1</div>
+              <div>
+                <div class="op-step-item__title">Selecione as pessoas</div>
+                <div class="op-step-item__text">Cada pessoa marcada participa desta compra e recebe uma fatia igual do valor total.</div>
+              </div>
+            </div>
+            <div class="op-step-item">
+              <div class="op-step-item__index">2</div>
+              <div>
+                <div class="op-step-item__title">Confirme o escopo</div>
+                <div class="op-step-item__text">Em compras parceladas, você poderá decidir se a alteração vale só para esta parcela ou para esta e as próximas.</div>
+              </div>
+            </div>
+            <div class="op-step-item">
+              <div class="op-step-item__index">3</div>
+              <div>
+                <div class="op-step-item__title">Salve ou exclua</div>
+                <div class="op-step-item__text">A tela respeita o status do mês. Se estiver fechado, tudo fica somente para leitura.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </section>
 </div>
+
 <%- include("partials/footer") %>

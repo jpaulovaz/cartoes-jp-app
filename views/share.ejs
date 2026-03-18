@@ -1,373 +1,584 @@
-<%- include("partials/header", { title: `OrganizaPay | Compartilhar ${person.name}` }) %>
+<%- include("partials/header", { title: "Compartilhar Resumo" }) %>
+<%
+  const periodLabel = `${String(month).padStart(2, '0')}/${year}`;
+  const getItemCents = (item) => {
+    if (item && item.amount_cents !== undefined && item.amount_cents !== null && item.amount_cents !== '') return Number(item.amount_cents) || 0;
+    if (item && item.amount !== undefined && item.amount !== null && item.amount !== '') return Math.round(Number(item.amount) * 100) || 0;
+    if (item && item.share_cents !== undefined && item.share_cents !== null && item.share_cents !== '') return Number(item.share_cents) || 0;
+    return 0;
+  };
+  const formatBRL = (cents) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((Number(cents) || 0) / 100);
+  const getDescription = (item) => (item && (item.description || item.title || item.name || item.label)) || 'Lançamento';
+  const itemDate = (item) => {
+    const raw = (item && (item.txn_date || item.date || item.purchase_date || item.created_at || item.imported_at)) || '';
+    if (!raw) return '';
+    const str = String(raw);
+    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+    return str;
+  };
+  const totalCents = items.reduce((acc, item) => acc + getItemCents(item), 0);
+  const paidCents = Math.max(0, Number(paid_cents || 0) || 0);
+  const rawRemainingCents = (remaining_cents ?? (totalCents - paidCents));
+  const remainingCents = Math.max(0, Number(rawRemainingCents || 0) || 0);
+  const visibleItems = items;
+  const captureScale = items.length > 48 ? 1.85 : 2;
+  const heroText = remainingCents > 0
+    ? (paidCents > 0
+        ? 'Confira abaixo os lançamentos deste período, o valor já pago e o saldo que ainda falta para concluir o pagamento.'
+        : 'Confira abaixo os lançamentos deste período e o valor que ainda falta pagar neste período.')
+    : 'Confira abaixo os lançamentos deste período e a confirmação de que o pagamento já foi concluído.';
+%>
 
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-
-<div class="max-w-5xl mx-auto">
-  <div class="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+<div class="op-page-shell">
+  <section class="op-page-hero op-fade-up">
     <div>
-      <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Compartilhar Resumo</h1>
-      <p class="text-slate-500 dark:text-slate-400 mt-1 font-medium">Gere uma imagem ou compartilhe o resumo de <%= person.name %> pelo menu do aparelho.</p>
+      <span class="op-page-hero__eyebrow">Compartilhamento rápido</span>
+      <h1 class="op-page-hero__title mt-4">Compartilhar Resumo</h1>
+      <p class="op-page-hero__subtitle mt-3">Gere uma imagem pronta para download ou compartilhamento rápido com a pessoa indicada.</p>
+      <div class="op-page-hero__meta mt-4">
+        <span class="badge"><%= person.name %></span>
+        <span class="badge">Ref. <%= periodLabel %></span>
+        <span class="badge"><%= items.length %> item(ns)</span>
+      </div>
     </div>
-    <div class="flex flex-wrap gap-3">
-      <a class="inline-flex items-center justify-center px-5 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm"
-        href="/summary/<%= year %>/<%= month %>">
+    <div class="op-page-hero__actions">
+      <a href="/summary/<%= year %>/<%= month %>" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
+        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
         Voltar
       </a>
-
-      <button id="btnPng"
-        class="inline-flex items-center justify-center px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all hover:-translate-y-0.5">
-        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-        </svg>
+      <button id="btnPng" type="button" data-loading-label="Gerando PNG..." class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
         Baixar PNG
       </button>
-
-      <button id="btnShare" onclick="shareReceipt()"
-        class="inline-flex items-center justify-center px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm transition-all hover:-translate-y-0.5">
-        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C9.886 12.64 11.278 12.25 12.75 12.25c1.472 0 2.864.39 4.066 1.092M8.684 13.342 5.5 15.25m3.184-1.908a3 3 0 10-1.368-2.53m9.5 2.53L19.5 15.25m-2.684-1.908a3 3 0 11 1.368-2.53M12 6v7" />
-        </svg>
+      <button id="btnShare" type="button" data-loading-label="Preparando compartilhamento..." class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700">
+        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C9.886 12.64 11.278 12.25 12.75 12.25c1.472 0 2.864.39 4.066 1.092M8.684 13.342 5.5 15.25m3.184-1.908a3 3 0 10-1.368-2.53m9.5 2.53L19.5 15.25m-2.684-1.908a3 3 0 11 1.368-2.53M12 6v7" /></svg>
         Compartilhar
       </button>
     </div>
-  </div>
+  </section>
 
-  <div class="flex justify-center pb-10">
-    <div id="cardPreview"
-      class="bg-white dark:bg-white rounded-3xl shadow-xl border border-slate-200 w-full max-w-2xl overflow-hidden relative">
-      <div class="h-3 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500"></div>
-
-      <div class="p-4 sm:p-8">
-        <div class="mb-8 pb-8 border-b border-slate-100">
-          <div class="flex justify-center mb-6">
-            <img src="/logo.png" alt="OrganizaPay" class="w-56 sm:w-72 h-auto object-contain">
-          </div>
-
-          <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Consolidado da Fatura</div>
-            <div class="text-2xl sm:text-3xl font-black text-slate-900 break-words">
-              <%= person.name %>
-            </div>
-            <div
-              class="text-sm font-bold text-emerald-600 mt-2 bg-emerald-50 inline-flex px-3 py-1 rounded-lg border border-emerald-100">
-              Ref: <%= String(month).padStart(2,'0') %>/<%= year %>
-            </div>
-          </div>
-
-          <div class="w-full sm:w-auto text-left sm:text-right flex flex-col gap-2 sm:items-end">
-            <% if (paid_cents > 0) { %>
-              <div class="flex items-center justify-between gap-3 sm:justify-end">
-                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total da Fatura</span>
-                <span class="text-lg font-bold text-slate-700">
-                  <%= formatBRLFromCents(total) %>
-                </span>
-              </div>
-              <div class="flex items-center justify-between gap-3 sm:justify-end">
-                <span class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Já Pago (-)</span>
-                <span class="text-lg font-bold text-emerald-600">
-                  <%= formatBRLFromCents(paid_cents) %>
-                </span>
-              </div>
-              <div class="flex items-center justify-between gap-3 mt-1 pt-2 border-t border-slate-100 sm:justify-end">
-                <span class="text-[11px] font-bold text-red-400 uppercase tracking-widest">Falta Pagar</span>
-                <span class="text-3xl font-black <%= remaining_cents === 0 ? 'text-emerald-500' : 'text-red-500' %>">
-                  <%= formatBRLFromCents(remaining_cents) %>
-                </span>
-              </div>
-            <% } else { %>
-              <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total a Pagar</div>
-              <div class="text-3xl sm:text-4xl font-black text-slate-900">
-                <%= formatBRLFromCents(total) %>
-              </div>
-            <% } %>
-          </div>
-        </div>
-      </div>
-
-        <div class="mb-8">
-          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Resumo por Cartão</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <% totalsByCard.forEach(t => { %>
-              <div
-                class="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-center items-center text-center">
-                <span class="text-[11px] font-bold text-slate-500 mb-2 w-full text-center break-words whitespace-normal leading-tight min-h-[2.75rem] flex items-center justify-center">
-                  <%= t.card_name %>
-                </span>
-                <span class="text-lg font-black text-slate-800">
-                  <%= formatBRLFromCents(t.total_cents) %>
-                </span>
-              </div>
-            <% }) %>
-          </div>
-        </div>
-
-        <div>
-          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Lançamentos Detalhados</h3>
-
-          <div class="sm:hidden space-y-3">
-            <% items.forEach(it => { %>
-              <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div class="flex items-start justify-between gap-3">
-                  <div>
-                    <div class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Data</div>
-                    <div class="mt-1 text-sm font-semibold text-slate-600 whitespace-nowrap"><%= formatDateBR(it.txn_date) %></div>
-                  </div>
-                  <div class="text-right shrink-0">
-                    <div class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Valor</div>
-                    <div class="mt-1 text-base font-black text-slate-900"><%= formatBRLFromCents(it.share_cents) %></div>
-                  </div>
-                </div>
-
-                <div class="mt-4">
-                  <div class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Descrição</div>
-                  <div class="mt-1 text-base font-bold text-slate-800 break-words leading-snug"><%= it.description %></div>
-                </div>
-
-                <div class="mt-4">
-                  <div class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Cartão</div>
-                  <div class="mt-2 inline-flex w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-center text-xs font-bold text-slate-600 leading-tight break-words whitespace-normal">
-                    <%= it.card_name %>
-                  </div>
-                </div>
-              </div>
-            <% }) %>
-          </div>
-
-          <div class="hidden sm:block border border-slate-200 rounded-2xl overflow-hidden">
-            <div class="overflow-x-auto">
-              <table class="min-w-full text-sm text-left">
-                <thead
-                  class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold text-[10px] tracking-wider">
-                  <tr>
-                    <th class="px-4 py-3 w-20">Data</th>
-                    <th class="px-4 py-3">Descrição</th>
-                    <th class="px-4 py-3 text-center w-44">Cartão</th>
-                    <th class="px-4 py-3 text-right">Valor</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100 bg-white">
-                  <% items.forEach(it => { %>
-                    <tr>
-                      <td class="px-4 py-3 font-medium text-slate-500 whitespace-nowrap">
-                        <%= formatDateBR(it.txn_date) %>
-                      </td>
-                      <td class="px-4 py-3 font-bold text-slate-800 break-words">
-                        <%= it.description %>
-                      </td>
-                      <td class="px-4 py-3 text-center">
-                        <span
-                          class="inline-flex w-full justify-center text-center px-2 py-1 rounded bg-slate-100 text-slate-600 font-bold text-[10px] border border-slate-200 whitespace-normal break-words leading-tight">
-                          <%= it.card_name %>
-                        </span>
-                      </td>
-                      <td class="px-4 py-3 text-right font-black text-slate-900 whitespace-nowrap">
-                        <%= formatBRLFromCents(it.share_cents) %>
-                      </td>
-                    </tr>
-                  <% }) %>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div
-          class="mt-8 pt-6 border-t border-slate-100 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-[10px] font-bold text-slate-400">
-          <div class="flex items-center">Gerado automaticamente por OrganizaPay</div>
-          <div>
-            <%= new Date().toLocaleDateString('pt-BR') %>
-          </div>
-        </div>
-      </div>
+  <div class="op-preview-shell op-fade-up">
+    <div class="op-preview-shell__label">Prévia do cartão compartilhável</div>
+    <div class="flex justify-center pb-2">
+      <%- include('partials/share-summary-card', {
+        cardId: 'cardPreview',
+        person,
+        periodLabel,
+        items,
+        visibleItems,
+        formatBRL,
+        getItemCents,
+        getDescription,
+        itemDate,
+        totalCents,
+        paidCents,
+        remainingCents,
+        exportMode: false,
+        captureScale,
+        footerLeft: 'Gerado pelo OrganizaPay',
+        totalLabel: 'Total do período',
+        paymentTitle: 'Situação do pagamento',
+        heroText
+      }) %>
     </div>
   </div>
 </div>
 
-<div aria-hidden="true" style="position:absolute; left:-20000px; top:0; pointer-events:none;">
-  <div id="cardExport" class="bg-white rounded-3xl border border-slate-200 overflow-hidden relative" style="width:1080px;">
-    <div class="h-4 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500"></div>
-
-    <div class="p-10">
-      <div class="mb-10 pb-8 border-b border-slate-100">
-        <div class="flex justify-center mb-8">
-          <img src="/logo.png" alt="OrganizaPay" style="width: 360px; height: auto; display: block;">
-        </div>
-
-        <div class="flex items-start justify-between gap-8">
-        <div class="min-w-0">
-          <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Consolidado da Fatura</div>
-          <div class="text-4xl font-black text-slate-900 break-words leading-tight">
-            <%= person.name %>
-          </div>
-          <div class="text-base font-bold text-emerald-600 mt-3 bg-emerald-50 inline-flex px-4 py-2 rounded-xl border border-emerald-100">
-            Ref: <%= String(month).padStart(2,'0') %>/<%= year %>
-          </div>
-        </div>
-
-        <div class="text-right flex flex-col items-end gap-2 shrink-0">
-          <% if (paid_cents > 0) { %>
-            <div class="flex items-center gap-4">
-              <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Total da Fatura</span>
-              <span class="text-2xl font-bold text-slate-700"><%= formatBRLFromCents(total) %></span>
-            </div>
-            <div class="flex items-center gap-4">
-              <span class="text-xs font-bold text-emerald-500 uppercase tracking-widest">Já Pago (-)</span>
-              <span class="text-2xl font-bold text-emerald-600"><%= formatBRLFromCents(paid_cents) %></span>
-            </div>
-            <div class="flex items-center gap-4 mt-2 pt-3 border-t border-slate-100">
-              <span class="text-xs font-bold text-red-400 uppercase tracking-widest">Falta Pagar</span>
-              <span class="text-4xl font-black <%= remaining_cents === 0 ? 'text-emerald-500' : 'text-red-500' %>"><%= formatBRLFromCents(remaining_cents) %></span>
-            </div>
-          <% } else { %>
-            <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total a Pagar</div>
-            <div class="text-5xl font-black text-slate-900"><%= formatBRLFromCents(total) %></div>
-          <% } %>
-        </div>
-      </div>
-    </div>
-
-      <div class="mb-10">
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Resumo por Cartão</h3>
-        <div class="grid grid-cols-2 gap-4">
-          <% totalsByCard.forEach(t => { %>
-            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-center items-center text-center" style="min-height:130px;">
-              <span class="text-sm font-bold text-slate-500 mb-3 w-full break-words whitespace-normal leading-tight flex items-center justify-center" style="min-height:3.5rem;">
-                <%= t.card_name %>
-              </span>
-              <span class="text-2xl font-black text-slate-800"><%= formatBRLFromCents(t.total_cents) %></span>
-            </div>
-          <% }) %>
-        </div>
-      </div>
-
-      <div>
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Lançamentos Detalhados</h3>
-        <div class="border border-slate-200 rounded-3xl overflow-hidden">
-          <table class="w-full table-fixed text-base text-left bg-white">
-            <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold text-xs tracking-widest">
-              <tr>
-                <th class="px-5 py-4" style="width:120px;">Data</th>
-                <th class="px-5 py-4">Descrição</th>
-                <th class="px-5 py-4 text-center" style="width:270px;">Cartão</th>
-                <th class="px-5 py-4 text-right" style="width:170px;">Valor</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              <% items.forEach(it => { %>
-                <tr>
-                  <td class="px-5 py-4 font-semibold text-slate-500 align-top whitespace-nowrap"><%= formatDateBR(it.txn_date) %></td>
-                  <td class="px-5 py-4 font-bold text-slate-800 align-top break-words leading-snug"><%= it.description %></td>
-                  <td class="px-5 py-4 align-top">
-                    <span class="inline-flex w-full items-center justify-center text-center px-3 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs border border-slate-200 whitespace-normal break-words leading-tight" style="min-height:58px;">
-                      <%= it.card_name %>
-                    </span>
-                  </td>
-                  <td class="px-5 py-4 text-right font-black text-slate-900 align-top whitespace-nowrap"><%= formatBRLFromCents(it.share_cents) %></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="mt-10 pt-6 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-400">
-        <div>Gerado automaticamente por OrganizaPay</div>
-        <div><%= new Date().toLocaleDateString('pt-BR') %></div>
-      </div>
-    </div>
-  </div>
+<div aria-hidden="true" style="position:fixed; left:-99999px; top:0; pointer-events:none; opacity:0;">
+  <%- include('partials/share-summary-card', {
+    cardId: 'cardExport',
+    person,
+    periodLabel,
+    items,
+    visibleItems,
+    formatBRL,
+    getItemCents,
+    getDescription,
+    itemDate,
+    totalCents,
+    paidCents,
+    remainingCents,
+    exportMode: true,
+    captureScale,
+    footerLeft: 'Gerado pelo OrganizaPay',
+    totalLabel: 'Total do período',
+    paymentTitle: 'Situação do pagamento',
+    heroText
+  }) %>
 </div>
 
+<script src="/vendor/html2canvas/html2canvas.min.js"></script>
 <script>
-  async function buildReceiptCanvas() {
-    const el = document.getElementById("cardExport") || document.getElementById("cardPreview");
-    if (!el) throw new Error("Recibo não encontrado para captura.");
+  const shareState = {
+    file: null,
+    objectUrl: null,
+    promise: null
+  };
 
-    const hadShadow = el.classList.contains('shadow-xl');
-    if (hadShadow) el.classList.remove('shadow-xl');
+  const CAPTURE_MAX_PIXELS = 24000000;
+  const CAPTURE_MIN_SCALE = 1;
+  const CAPTURE_MAX_SCALE = 2;
 
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-    const canvas = await html2canvas(el, {
-      scale: 2,
-      backgroundColor: "#ffffff",
-      useCORS: true,
-      width: el.scrollWidth,
-      height: el.scrollHeight,
-      windowWidth: Math.max(1400, el.scrollWidth + 200),
-      windowHeight: Math.max(1400, el.scrollHeight + 200),
-      scrollX: 0,
-      scrollY: 0
-    });
-
-    if (hadShadow) el.classList.add('shadow-xl');
-    return canvas;
+  function setBusy(button, loadingLabel) {
+    if (!button) return () => {};
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.classList.add('op-button-loading');
+    button.innerHTML = `<span class="op-submit-spinner" aria-hidden="true"></span><span>${loadingLabel}</span>`;
+    return () => {
+      button.disabled = false;
+      button.classList.remove('op-button-loading');
+      button.innerHTML = original;
+    };
   }
 
-  document.getElementById("btnPng").addEventListener("click", async () => {
-    const canvas = await buildReceiptCanvas();
+  function ensureHtml2CanvasAvailable() {
+    if (typeof window.html2canvas !== 'function') {
+      throw new Error('A biblioteca de geração da imagem não foi carregada. Verifique se as dependências foram instaladas e recarregue a página.');
+    }
+  }
 
-    const link = document.createElement("a");
-    link.download = `Fatura_<%= person.name.replace(/\s+/g,'_') %>_<%= String(month).padStart(2,'0') %>_<%= year %>.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
-  });
+  function getCaptureSourceNode() {
+    return document.getElementById('cardExport') || document.getElementById('cardPreview');
+  }
+
+  function getCaptureWidth(node) {
+    const requestedWidth = Number((node && node.dataset && node.dataset.captureWidth) || 860) || 860;
+    return Math.max(requestedWidth, 720);
+  }
+
+  function getRequestedCaptureScale(node) {
+    const requestedScale = Number((node && node.dataset && node.dataset.captureScale) || CAPTURE_MAX_SCALE) || CAPTURE_MAX_SCALE;
+    return Math.max(CAPTURE_MIN_SCALE, Math.min(CAPTURE_MAX_SCALE, requestedScale));
+  }
+
+  function waitForPaint() {
+    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  }
+
+  async function waitForFonts() {
+    try {
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+      }
+    } catch (_) {}
+  }
+
+  async function waitForImages(root) {
+    const images = Array.from(root.querySelectorAll('img'));
+    await Promise.all(images.map((img) => {
+      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise((resolve) => {
+        const done = () => resolve();
+        img.addEventListener('load', done, { once: true });
+        img.addEventListener('error', done, { once: true });
+        window.setTimeout(done, 3000);
+      });
+    }));
+  }
+
+  async function waitForAssets(node) {
+    await waitForFonts();
+    await waitForImages(node);
+    await waitForPaint();
+  }
+
+  function buildCaptureClone(sourceNode, baseWidth) {
+    const stage = document.createElement('div');
+    stage.setAttribute('data-capture-stage', 'true');
+    stage.setAttribute('aria-hidden', 'true');
+    Object.assign(stage.style, {
+      position: 'fixed',
+      left: '-100000px',
+      top: '0',
+      width: `${baseWidth}px`,
+      padding: '0',
+      margin: '0',
+      background: '#ffffff',
+      pointerEvents: 'none',
+      opacity: '1',
+      overflow: 'hidden',
+      display: 'inline-block',
+      boxSizing: 'border-box'
+    });
+
+    const clone = sourceNode.cloneNode(true);
+    clone.id = `${sourceNode.id || 'share-card'}-capture`;
+    Object.assign(clone.style, {
+      width: `${baseWidth}px`,
+      minWidth: `${baseWidth}px`,
+      maxWidth: `${baseWidth}px`,
+      margin: '0',
+      display: 'block',
+      position: 'static',
+      left: '0',
+      top: '0',
+      transform: 'none',
+      opacity: '1',
+      visibility: 'visible',
+      height: 'auto',
+      minHeight: '0',
+      overflow: 'hidden',
+      background: '#ffffff',
+      boxSizing: 'border-box'
+    });
+    clone.dataset.exportMode = '1';
+    clone.classList.add('share-summary-card--export');
+
+    stage.appendChild(clone);
+    document.body.appendChild(stage);
+    return { stage, clone };
+  }
+
+  function getCaptureScale(width, height, requestedScale) {
+    const basePixels = Math.max(1, width) * Math.max(1, height);
+    if (!basePixels) return requestedScale;
+    const safeScale = Math.sqrt(CAPTURE_MAX_PIXELS / basePixels);
+    return Math.max(CAPTURE_MIN_SCALE, Math.min(requestedScale, Number.isFinite(safeScale) ? safeScale : requestedScale));
+  }
+
+  function canvasHasMeaningfulContent(canvas) {
+    const ctx = canvas && canvas.getContext ? canvas.getContext('2d', { willReadFrequently: true }) : null;
+    if (!ctx || !canvas.width || !canvas.height) return false;
+
+    const sampleCols = Math.min(32, Math.max(8, Math.ceil(canvas.width / 90)));
+    const sampleRows = Math.min(32, Math.max(8, Math.ceil(canvas.height / 90)));
+    const stepX = Math.max(1, Math.floor(canvas.width / sampleCols));
+    const stepY = Math.max(1, Math.floor(canvas.height / sampleRows));
+    let nonBlankSamples = 0;
+
+    for (let y = 0; y < canvas.height; y += stepY) {
+      for (let x = 0; x < canvas.width; x += stepX) {
+        const pixel = ctx.getImageData(x, y, 1, 1).data;
+        const red = pixel[0];
+        const green = pixel[1];
+        const blue = pixel[2];
+        const alpha = pixel[3];
+        const isTransparent = alpha === 0;
+        const isNearWhite = red >= 248 && green >= 248 && blue >= 248;
+
+        if (!isTransparent && !isNearWhite) {
+          nonBlankSamples += 1;
+          if (nonBlankSamples >= 8) return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  function trimTrailingBlankRows(canvas, label) {
+    const ctx = canvas && canvas.getContext ? canvas.getContext('2d', { willReadFrequently: true }) : null;
+    if (!ctx || !canvas.width || !canvas.height) return canvas;
+
+    const sampleCols = Math.min(64, Math.max(12, Math.ceil(canvas.width / 40)));
+    const stepX = Math.max(1, Math.floor(canvas.width / sampleCols));
+    let lastContentRow = -1;
+
+    for (let y = canvas.height - 1; y >= 0; y -= 1) {
+      let rowHasContent = false;
+      for (let x = 0; x < canvas.width; x += stepX) {
+        const pixel = ctx.getImageData(x, y, 1, 1).data;
+        const isTransparent = pixel[3] === 0;
+        const isNearWhite = pixel[0] >= 248 && pixel[1] >= 248 && pixel[2] >= 248;
+        if (!isTransparent && !isNearWhite) {
+          rowHasContent = true;
+          break;
+        }
+      }
+      if (rowHasContent) {
+        lastContentRow = y;
+        break;
+      }
+    }
+
+    if (lastContentRow < 0) return canvas;
+
+    const paddingRows = Math.min(24, Math.max(8, Math.round(canvas.height * 0.012)));
+    const targetHeight = Math.min(canvas.height, lastContentRow + 1 + paddingRows);
+    const trimmedRows = canvas.height - targetHeight;
+
+    if (trimmedRows < 40) return canvas;
+
+    const trimmedCanvas = document.createElement('canvas');
+    trimmedCanvas.width = canvas.width;
+    trimmedCanvas.height = targetHeight;
+    const trimmedCtx = trimmedCanvas.getContext('2d');
+    if (!trimmedCtx) return canvas;
+
+    trimmedCtx.drawImage(
+      canvas,
+      0,
+      0,
+      canvas.width,
+      targetHeight,
+      0,
+      0,
+      trimmedCanvas.width,
+      trimmedCanvas.height
+    );
+
+    console.info(`[${label}] trailing blank rows trimmed`, {
+      originalHeight: canvas.height,
+      targetHeight,
+      trimmedRows
+    });
+
+    return trimmedCanvas;
+  }
+
+  async function renderReceiptCanvas(node, width, height, requestedScale, label) {
+    const attempts = [
+      { foreignObjectRendering: false },
+      { foreignObjectRendering: true }
+    ];
+    let lastError = null;
+
+    for (const attempt of attempts) {
+      try {
+        const canvas = await html2canvas(node, {
+          scale: getCaptureScale(width, height, requestedScale),
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          logging: false,
+          imageTimeout: 0,
+          width,
+          height,
+          windowWidth: Math.max(width, getCaptureWidth(node)),
+          windowHeight: height,
+          scrollX: 0,
+          scrollY: 0,
+          removeContainer: true,
+          ...attempt
+        });
+
+        if (!canvasHasMeaningfulContent(canvas)) {
+          lastError = new Error('A captura foi gerada em branco.');
+          continue;
+        }
+
+        console.info(`[${label}] capture ok`, {
+          width: canvas.width,
+          height: canvas.height,
+          scale: getCaptureScale(width, height, requestedScale),
+          foreignObjectRendering: Boolean(attempt.foreignObjectRendering)
+        });
+        return canvas;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError || new Error('Falha ao renderizar o resumo.');
+  }
+
+  async function buildReceiptCanvas() {
+    ensureHtml2CanvasAvailable();
+    const sourceNode = getCaptureSourceNode();
+    if (!sourceNode) throw new Error('Resumo não encontrado para captura.');
+
+    await waitForAssets(sourceNode);
+
+    const requestedWidth = getCaptureWidth(sourceNode);
+    const sourceRect = sourceNode.getBoundingClientRect();
+    const baseWidth = Math.max(
+      requestedWidth,
+      Math.ceil(sourceRect.width || sourceNode.scrollWidth || sourceNode.offsetWidth || requestedWidth)
+    );
+    const requestedScale = getRequestedCaptureScale(sourceNode);
+    const { stage, clone } = buildCaptureClone(sourceNode, baseWidth);
+
+    try {
+      await waitForAssets(clone);
+      const cloneRect = clone.getBoundingClientRect();
+      const width = Math.max(baseWidth, Math.ceil(cloneRect.width || clone.scrollWidth || clone.offsetWidth || baseWidth));
+      const height = Math.max(600, Math.ceil(cloneRect.height || clone.scrollHeight || clone.offsetHeight || 0));
+
+      console.info('[share] capture dimensions', { width, height, baseWidth, requestedScale });
+
+      if (!width || !height) {
+        throw new Error(`Não foi possível medir a área do resumo para captura (${width}x${height}).`);
+      }
+
+      const rawCanvas = await renderReceiptCanvas(clone, width, height, requestedScale, 'share');
+      const canvas = trimTrailingBlankRows(rawCanvas, 'share');
+      if (!canvas || canvas.width < 50 || canvas.height < 50) {
+        throw new Error('A imagem foi gerada sem conteúdo útil.');
+      }
+
+      return canvas;
+    } finally {
+      stage.remove();
+    }
+  }
+
+  function blobToFile(blob, filename) {
+    if (!blob || !blob.size) {
+      throw new Error('A imagem foi gerada vazia.');
+    }
+    return new File([blob], filename, { type: blob.type || 'image/png' });
+  }
+
+  function dataUrlToFile(dataUrl, filename) {
+    const parts = String(dataUrl || '').split(',');
+    if (parts.length < 2) {
+      throw new Error('Não foi possível gerar a imagem para compartilhamento.');
+    }
+    const mimeMatch = parts[0].match(/data:(.*?);base64/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+    const binary = atob(parts[1]);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return new File([bytes], filename, { type: mime });
+  }
 
   function canvasToFile(canvas, filename) {
     return new Promise((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          reject(new Error('Não foi possível gerar a imagem para compartilhamento.'));
-          return;
-        }
-        resolve(new File([blob], filename, { type: 'image/png' }));
-      }, 'image/png');
+      if (canvas.toBlob) {
+        canvas.toBlob((blob) => {
+          if (blob && blob.size > 0) {
+            console.info('[share] blob generated', { size: blob.size, type: blob.type || 'image/png' });
+            try {
+              resolve(blobToFile(blob, filename));
+            } catch (error) {
+              reject(error);
+            }
+            return;
+          }
+
+          try {
+            const dataUrl = canvas.toDataURL('image/png');
+            const file = dataUrlToFile(dataUrl, filename);
+            console.info('[share] dataUrl generated without toBlob', { bytes: file.size });
+            resolve(file);
+          } catch (error) {
+            reject(error);
+          }
+        }, 'image/png');
+        return;
+      }
+
+      try {
+        const dataUrl = canvas.toDataURL('image/png');
+        const file = dataUrlToFile(dataUrl, filename);
+        console.info('[share] dataUrl generated without toBlob', { bytes: file.size });
+        resolve(file);
+      } catch (error) {
+        reject(error);
+      }
     });
   }
 
-  async function shareReceipt() {
-    const btn = document.getElementById('btnShare');
-    const originalContent = btn.innerHTML;
+  async function prepareShareFile(force) {
+    if (!force && shareState.file) return shareState.file;
+    if (!force && shareState.promise) return shareState.promise;
+
+    const filename = `Fatura_<%= person.name.replace(/\s+/g,'_') %>_<%= String(month).padStart(2,'0') %>_<%= year %>.png`;
+    shareState.promise = (async () => {
+      const canvas = await buildReceiptCanvas();
+      const file = await canvasToFile(canvas, filename);
+      shareState.file = file;
+      return file;
+    })();
 
     try {
-      btn.disabled = true;
-      btn.innerHTML = "📸 Gerando Imagem...";
+      return await shareState.promise;
+    } finally {
+      shareState.promise = null;
+    }
+  }
 
-      const canvas = await buildReceiptCanvas();
-      const filename = `Fatura_<%= person.name.replace(/\s+/g,'_') %>_<%= String(month).padStart(2,'0') %>_<%= year %>.png`;
-      const file = await canvasToFile(canvas, filename);
-      const totalLabel = "<%= formatBRLFromCents(remaining_cents > 0 ? remaining_cents : total) %>";
-      const periodLabel = "<%= String(month).padStart(2,'0') %>/<%= year %>";
+  function scheduleShareWarmup() {
+    if (shareState.file || shareState.promise) return;
+    const run = () => prepareShareFile(false).catch((error) => console.warn('[share] Pré-geração da imagem falhou', error));
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(run, { timeout: 1800 });
+    } else {
+      window.setTimeout(run, 350);
+    }
+  }
 
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        btn.innerHTML = "📤 Abrindo compartilhamento...";
+  function cleanupObjectUrl() {
+    if (shareState.objectUrl) {
+      URL.revokeObjectURL(shareState.objectUrl);
+      shareState.objectUrl = null;
+    }
+  }
+
+  function triggerDownloadFromFile(file) {
+    cleanupObjectUrl();
+    shareState.objectUrl = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.download = file.name;
+    link.href = shareState.objectUrl;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(cleanupObjectUrl, 1500);
+  }
+
+  function canShareFiles(file) {
+    if (!navigator.share) return false;
+    try {
+      return !navigator.canShare || navigator.canShare({ files: [file] });
+    } catch (error) {
+      console.warn('[share] navigator.canShare falhou', error);
+      return false;
+    }
+  }
+
+  async function downloadReceipt() {
+    const restore = setBusy(document.getElementById('btnPng'), 'Gerando PNG...');
+    try {
+      const file = await prepareShareFile(true);
+      triggerDownloadFromFile(file);
+    } finally {
+      restore();
+    }
+  }
+
+  async function shareReceipt() {
+    const restore = setBusy(document.getElementById('btnShare'), 'Preparando compartilhamento...');
+    try {
+      const file = await prepareShareFile(false);
+      const totalLabel = '<%= formatBRL(totalCents) %>';
+      const periodLabel = '<%= periodLabel %>';
+
+      if (canShareFiles(file)) {
         await navigator.share({
           title: `Resumo ${periodLabel} — <%= person.name %>`,
-          text: `Resumo da fatura de ${periodLabel} para <%= person.name %>. Total: ${totalLabel}.`,
+          text: `Resumo do período ${periodLabel} para <%= person.name %>. Total: ${totalLabel}.`,
           files: [file]
         });
         return;
       }
 
-      const link = document.createElement('a');
-      link.download = filename;
-      link.href = URL.createObjectURL(file);
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-      alert('O compartilhamento direto não está disponível neste aparelho. A imagem foi baixada para você compartilhar manualmente.');
-    } catch (e) {
-      if (e && e.name === 'AbortError') {
-        return;
+      triggerDownloadFromFile(file);
+      alert('O compartilhamento direto não está disponível neste aparelho. A imagem foi baixada para compartilhamento manual.');
+    } catch (error) {
+      if (error && error.name === 'AbortError') return;
+      console.error('[share] share failure', error);
+      try {
+        const fallbackFile = shareState.file || await prepareShareFile(true);
+        triggerDownloadFromFile(fallbackFile);
+        alert('Não foi possível abrir o menu de compartilhamento agora. A imagem foi baixada para compartilhamento manual.');
+      } catch (downloadError) {
+        console.error('[share] fallback failure', downloadError);
+        alert('Não foi possível gerar ou compartilhar a imagem agora.');
       }
-      console.error(e);
-      alert('❌ Erro ao gerar ou compartilhar a imagem.');
     } finally {
-      btn.disabled = false;
-      btn.innerHTML = originalContent;
+      restore();
     }
   }
+
+  document.getElementById('btnPng')?.addEventListener('click', downloadReceipt);
+  document.getElementById('btnShare')?.addEventListener('click', shareReceipt);
+  document.getElementById('btnShare')?.addEventListener('touchstart', scheduleShareWarmup, { passive: true, once: true });
+  document.getElementById('btnShare')?.addEventListener('mouseenter', scheduleShareWarmup, { once: true });
+  document.getElementById('btnShare')?.addEventListener('focus', scheduleShareWarmup, { once: true });
+  window.addEventListener('load', scheduleShareWarmup, { once: true });
+  window.addEventListener('beforeunload', cleanupObjectUrl);
 </script>
 
 <%- include("partials/footer") %>

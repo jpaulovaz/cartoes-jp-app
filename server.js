@@ -65,7 +65,21 @@ db.prepare(`
     FOREIGN KEY (user_id) REFERENCES users(id)
   )
 `).run();
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS scheduled_push_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    date_key TEXT NOT NULL,
+    sequence_no INTEGER NOT NULL DEFAULT 1,
+    payload_json TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(user_id, event_type, date_key, sequence_no),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_scheduled_push_logs_event_date ON scheduled_push_logs(event_type, date_key, user_id, sequence_no)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("ALTER TABLE closed_months ADD COLUMN user_id INTEGER").run(); } catch (e) { /* Coluna já existe ou tabela ainda não precisava de ajuste */ }
 try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_closed_months_user_month_year ON closed_months(user_id, month, year)").run(); } catch (e) { /* Índice já existe */ }
 
@@ -117,7 +131,34 @@ const PUSH_PRIVATE_KEY = String(process.env.VAPID_PRIVATE_KEY || '').trim();
 const PUSH_SUBJECT = String(process.env.VAPID_SUBJECT || 'mailto:no-reply@organizapay.local').trim();
 const INACTIVITY_TIMEOUT_MINUTES = Number(String(process.env.INACTIVITY_TIMEOUT_MINUTES || '0').trim().replace(',', '.')) || 0;
 const INACTIVITY_TIMEOUT_MS = INACTIVITY_TIMEOUT_MINUTES > 0 ? Math.round(INACTIVITY_TIMEOUT_MINUTES * 60 * 1000) : 0;
+
+function parseEnvBoolean(value, fallback = false) {
+  if (value == null || value === '') return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'y', 'on', 'sim', 's'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'n', 'off', 'nao', 'não'].includes(normalized)) return false;
+  return fallback;
+}
+
+function parseEnvInt(value, fallback, { min = null, max = null } = {}) {
+  const parsed = Number(String(value ?? '').trim().replace(',', '.'));
+  if (!Number.isFinite(parsed)) return fallback;
+
+  let result = Math.trunc(parsed);
+  if (min != null && result < min) result = min;
+  if (max != null && result > max) result = max;
+  return result;
+}
+
+const CARD_DUE_PUSH_ENABLED = parseEnvBoolean(process.env.CARD_DUE_PUSH_ENABLED, true);
+const CARD_DUE_PUSH_TIMEZONE = String(process.env.CARD_DUE_PUSH_TIMEZONE || 'America/Sao_Paulo').trim() || 'America/Sao_Paulo';
+const CARD_DUE_PUSH_HOUR = parseEnvInt(process.env.CARD_DUE_PUSH_HOUR, 10, { min: 0, max: 23 });
+const CARD_DUE_PUSH_MINUTE = parseEnvInt(process.env.CARD_DUE_PUSH_MINUTE, 0, { min: 0, max: 59 });
+const CARD_DUE_PUSH_MAX_SENDS_PER_DAY = parseEnvInt(process.env.CARD_DUE_PUSH_MAX_SENDS_PER_DAY, 1, { min: 0, max: 5 });
+const CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES = parseEnvInt(process.env.CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES, 0, { min: 0, max: 1440 });
+const CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES = parseEnvInt(process.env.CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES, 10, { min: 1, max: 120 });
 let pushRuntimeEnabled = false;
+let scheduledDuePushSweepRunning = false;
 
 function isPushConfigured() {
   return pushRuntimeEnabled;
@@ -391,6 +432,7 @@ app.set("views", path.join(__dirname, "views"));
 // NOTA: Middlewares de body-parser já foram configurados no início do arquivo
 
 app.use(express.static(path.join(__dirname, "public")));
+app.use("/vendor/html2canvas", express.static(path.join(__dirname, "node_modules", "html2canvas", "dist")));
 
 // ===== MIDDLEWARE GLOBAL =====
 app.use((req, res, next) => {
@@ -886,11 +928,184 @@ function getPushSubscriptionsForUser(userId) {
   `).all(userId);
 }
 
+function getUsersWithPushSubscriptions() {
+  return db.prepare(`
+    SELECT DISTINCT user_id
+    FROM push_subscriptions
+    ORDER BY user_id ASC
+  `).all().map(row => Number(row.user_id)).filter(Boolean);
+}
+
+function getScheduledPushLogs(userId, eventType, dateKey) {
+  return db.prepare(`
+    SELECT sequence_no, created_at
+    FROM scheduled_push_logs
+    WHERE user_id = ? AND event_type = ? AND date_key = ?
+    ORDER BY sequence_no ASC, created_at ASC
+  `).all(userId, eventType, dateKey);
+}
+
+function recordScheduledPushLog({ userId, eventType, dateKey, sequenceNo, payload = null }) {
+  return db.prepare(`
+    INSERT OR IGNORE INTO scheduled_push_logs (user_id, event_type, date_key, sequence_no, payload_json, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    userId,
+    eventType,
+    dateKey,
+    sequenceNo,
+    payload ? JSON.stringify(payload) : null,
+    nowIso()
+  );
+}
+
+function getZonedDateParts(timeZone, date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+
+  const mapped = formatter.formatToParts(date).reduce((acc, part) => {
+    if (part.type !== 'literal') acc[part.type] = part.value;
+    return acc;
+  }, {});
+
+  const year = Number(mapped.year || 0);
+  const month = Number(mapped.month || 0);
+  const day = Number(mapped.day || 0);
+  const hour = Number(mapped.hour || 0);
+  const minute = Number(mapped.minute || 0);
+  const second = Number(mapped.second || 0);
+
+  return {
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second,
+    dateKey: `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+    minutesOfDay: (hour * 60) + minute
+  };
+}
+
+function getCardStatementStatusForMonth(userId, month, year) {
+  const cards = getVisibleCardsForMonth(userId, month, year);
+  if (!cards.length) return [];
+
+  const cardTotalsRows = db.prepare(`
+    SELECT t.card_id, SUM(t.amount_cents) AS total_cents
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (
+        (i.month = ? AND i.year = ?) OR
+        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+      )
+    GROUP BY t.card_id
+  `).all(userId, month, year, month, year);
+  const cardTotalsMap = new Map(cardTotalsRows.map(row => [row.card_id, Number(row.total_cents || 0)]));
+
+  const statementRows = db.prepare(`
+    SELECT card_id, computed_due_date, override_due_date, paid_cents
+    FROM card_statements
+    WHERE user_id = ? AND month = ? AND year = ?
+  `).all(userId, month, year);
+  const statementByCard = new Map(statementRows.map(row => [row.card_id, row]));
+
+  return cards.map(card => {
+    const stmt = statementByCard.get(card.id);
+    const computedDueDate = computeDueDate({ year, month, dueDay: card.due_day, holidayScope: card.holiday_scope || 'BR' });
+    const dueDate = stmt?.override_due_date || stmt?.computed_due_date || computedDueDate;
+    const totalCents = Number(cardTotalsMap.get(card.id) || 0);
+    const paidCents = Number(stmt?.paid_cents || 0);
+    const remainingCents = Math.max(0, totalCents - paidCents);
+
+    return {
+      card_id: card.id,
+      card_name: card.name,
+      due_date: dueDate,
+      total_cents: totalCents,
+      paid_cents: paidCents,
+      remaining_cents: remainingCents,
+      month,
+      year
+    };
+  });
+}
+
+function getPendingDueTodayCardsForUser(userId, zonedToday) {
+  const candidateMonths = [
+    shiftMonth(zonedToday.year, zonedToday.month, -1),
+    { year: zonedToday.year, month: zonedToday.month }
+  ];
+
+  const seen = new Set();
+  const results = [];
+
+  candidateMonths.forEach(ref => {
+    getCardStatementStatusForMonth(userId, ref.month, ref.year).forEach(item => {
+      if (!item.due_date || item.due_date !== zonedToday.dateKey) return;
+      if (item.total_cents <= 0 || item.remaining_cents <= 0) return;
+
+      const key = `${item.year}-${item.month}-${item.card_id}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      results.push(item);
+    });
+  });
+
+  return results.sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    if (a.month !== b.month) return a.month - b.month;
+    return a.card_name.localeCompare(b.card_name, 'pt-BR', { sensitivity: 'base' });
+  });
+}
+
+function buildDueTodayPushPayload(cards, zonedToday, sequenceNo = 1) {
+  const totalRemaining = cards.reduce((sum, item) => sum + Number(item.remaining_cents || 0), 0);
+  const uniqueRefs = Array.from(new Set(cards.map(item => `${item.year}-${item.month}`)));
+  const href = uniqueRefs.length === 1
+    ? `/summary/${cards[0].year}/${cards[0].month}`
+    : '/geral';
+
+  if (cards.length === 1) {
+    const card = cards[0];
+    const title = sequenceNo > 1 ? 'Lembrete: fatura vence hoje' : 'Fatura vencendo hoje';
+    const body = card.paid_cents > 0
+      ? `${card.card_name} vence hoje. Ainda faltam ${formatBRLFromCents(card.remaining_cents)} para quitar no resumo.`
+      : `${card.card_name} vence hoje. Valor previsto: ${formatBRLFromCents(card.total_cents)}.`;
+
+    return {
+      title,
+      body,
+      href,
+      tag: `card-due-today:${zonedToday.dateKey}`
+    };
+  }
+
+  const previewNames = cards.slice(0, 2).map(item => item.card_name).join(', ');
+  const extraCount = cards.length > 2 ? ` +${cards.length - 2}` : '';
+
+  return {
+    title: sequenceNo > 1 ? 'Lembrete: faturas vencem hoje' : 'Faturas vencendo hoje',
+    body: `${cards.length} faturas vencem hoje (${previewNames}${extraCount}). Pendente no resumo: ${formatBRLFromCents(totalRemaining)}.`,
+    href,
+    tag: `card-due-today:${zonedToday.dateKey}`
+  };
+}
+
 async function sendPushNotificationToUser(userId, payload) {
-  if (!isPushConfigured()) return;
+  if (!isPushConfigured()) return { attempted: 0, sent: 0, failed: 0 };
 
   const subscriptions = getPushSubscriptionsForUser(userId);
-  if (!subscriptions.length) return;
+  if (!subscriptions.length) return { attempted: 0, sent: 0, failed: 0 };
 
   const message = JSON.stringify({
     title: String(payload?.title || 'OrganizaPay'),
@@ -899,11 +1114,18 @@ async function sendPushNotificationToUser(userId, payload) {
     tag: payload?.tag ? String(payload.tag) : undefined
   });
 
+  let attempted = 0;
+  let sent = 0;
+  let failed = 0;
+
   await Promise.allSettled(subscriptions.map(async (row) => {
+    attempted += 1;
     try {
       const parsedSubscription = JSON.parse(row.subscription_json);
       await webPush.sendNotification(parsedSubscription, message);
+      sent += 1;
     } catch (err) {
+      failed += 1;
       if (err?.statusCode === 404 || err?.statusCode === 410) {
         removePushSubscriptionByEndpoint(row.endpoint);
         return;
@@ -912,6 +1134,72 @@ async function sendPushNotificationToUser(userId, payload) {
       console.error('Erro ao enviar push notification:', err?.message || err);
     }
   }));
+
+  return { attempted, sent, failed };
+}
+
+async function runCardDueTodayPushSweep() {
+  if (scheduledDuePushSweepRunning) return;
+  if (!isPushConfigured() || !CARD_DUE_PUSH_ENABLED || CARD_DUE_PUSH_MAX_SENDS_PER_DAY <= 0) return;
+
+  scheduledDuePushSweepRunning = true;
+
+  try {
+    const zonedNow = getZonedDateParts(CARD_DUE_PUSH_TIMEZONE);
+    const firstSendMinute = (CARD_DUE_PUSH_HOUR * 60) + CARD_DUE_PUSH_MINUTE;
+    if (zonedNow.minutesOfDay < firstSendMinute) {
+      return;
+    }
+
+    const users = getUsersWithPushSubscriptions();
+    for (const userId of users) {
+      const cardsDueToday = getPendingDueTodayCardsForUser(userId, zonedNow);
+      if (!cardsDueToday.length) continue;
+
+      const logs = getScheduledPushLogs(userId, 'card_due_today', zonedNow.dateKey);
+      const nextSequenceNo = logs.length + 1;
+      if (nextSequenceNo > CARD_DUE_PUSH_MAX_SENDS_PER_DAY) continue;
+
+      if (logs.length) {
+        if (CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES <= 0) continue;
+
+        const lastSentAt = dayjs(logs[logs.length - 1].created_at);
+        if (!lastSentAt.isValid()) continue;
+        if (dayjs().diff(lastSentAt, 'minute') < CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES) continue;
+      }
+
+      const payload = buildDueTodayPushPayload(cardsDueToday, zonedNow, nextSequenceNo);
+      const result = await sendPushNotificationToUser(userId, payload);
+      if (result.sent > 0) {
+        recordScheduledPushLog({
+          userId,
+          eventType: 'card_due_today',
+          dateKey: zonedNow.dateKey,
+          sequenceNo: nextSequenceNo,
+          payload
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Falha ao executar varredura de push de vencimento:', err?.message || err);
+  } finally {
+    scheduledDuePushSweepRunning = false;
+  }
+}
+
+function startCardDueTodayPushScheduler() {
+  if (!isPushConfigured() || !CARD_DUE_PUSH_ENABLED || CARD_DUE_PUSH_MAX_SENDS_PER_DAY <= 0) {
+    return;
+  }
+
+  const intervalMs = Math.max(1, CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES) * 60 * 1000;
+  setTimeout(() => {
+    runCardDueTodayPushSweep().catch(err => console.error('Falha no agendamento inicial de push de vencimento:', err?.message || err));
+  }, 15000);
+
+  setInterval(() => {
+    runCardDueTodayPushSweep().catch(err => console.error('Falha no agendamento recorrente de push de vencimento:', err?.message || err));
+  }, intervalMs);
 }
 
 function queuePushNotification(userId, payload) {
@@ -2410,6 +2698,21 @@ app.post("/people/:id/set-owner", ensureAuthenticated, (req, res) => {
 });
 
 // Rota Principal do detalhamento
+function buildOverduePaymentAlertDescription(items) {
+  const preview = items.slice(0, 3).map(item => {
+    const dueLabel = item.due_date ? dayjs(item.due_date).format('DD/MM') : '--/--';
+    if (Number(item.paid_cents || 0) > 0) {
+      return `${item.card_name} (${dueLabel}) ainda tem ${formatBRLFromCents(item.remaining_cents)} pendente.`;
+    }
+    return `${item.card_name} (${dueLabel}) ainda não tem pagamento informado.`;
+  });
+
+  const extraCount = items.length - preview.length;
+  return extraCount > 0
+    ? `${preview.join(' ')} +${extraCount} outra(s) fatura(s) vencida(s) com pendência.`
+    : preview.join(' ');
+}
+
 app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const { year, month } = req.params;
@@ -2642,28 +2945,32 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       });
     }
 
-    const missingPaymentCards = visibleCards
+    const overduePendingCards = visibleCards
       .map(card => {
         const stmt = statementByCard.get(card.id);
         const computedDueDate = computeDueDate({ year: currentYear, month: currentMonth, dueDay: card.due_day, holidayScope: card.holiday_scope || 'BR' });
         const dueDate = stmt?.override_due_date || stmt?.computed_due_date || computedDueDate;
+        const totalCents = Number(cardTotalsMap.get(card.id) || 0);
+        const paidCents = Number(stmt?.paid_cents || 0);
+        const remainingCents = Math.max(0, totalCents - paidCents);
         const duePassed = dueDate ? dayjs(dueDate).startOf('day').isBefore(today.startOf('day')) : false;
         return {
           card_name: card.name,
-          total_cents: cardTotalsMap.get(card.id) || 0,
-          paid_cents: Number(stmt?.paid_cents || 0),
+          total_cents: totalCents,
+          paid_cents: paidCents,
+          remaining_cents: remainingCents,
           due_date: dueDate,
           due_passed: duePassed
         };
       })
-      .filter(item => item.total_cents > 0 && item.due_passed && item.paid_cents <= 0);
+      .filter(item => item.total_cents > 0 && item.due_passed && item.remaining_cents > 0);
 
-    if (missingPaymentCards.length) {
+    if (overduePendingCards.length) {
       alerts.push({
-        type: 'info',
-        icon: '💳',
-        title: 'Valor pago ainda não informado',
-        description: `${missingPaymentCards.map(item => `${item.card_name} (${dayjs(item.due_date).format('DD/MM')})`).join(', ')} ainda ${missingPaymentCards.length === 1 ? 'não tem' : 'não têm'} valor pago informado no resumo.`,
+        type: 'warning',
+        icon: '🚨',
+        title: overduePendingCards.length === 1 ? 'Fatura vencida com pendência' : 'Faturas vencidas com pendência',
+        description: buildOverduePaymentAlertDescription(overduePendingCards),
         href: `/summary/${currentYear}/${currentMonth}`
       });
     }
@@ -2695,7 +3002,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   syncRecurringTransactions(userId, year, month);
 
   const sort = (req.query.sort || "date").toString();
-  const dir = (req.query.dir || "asc").toString();
+  const dir = (req.query.dir || "desc").toString();
   const orderBy = buildOrder(sort, dir);
 
   const filters = {
@@ -2810,6 +3117,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const { date, description, amount, card_id, first_due, installments } = req.body;
   const isRecurring = ["1", "true", "on", "sim"].includes(String(req.body.is_recurring || "").toLowerCase());
+  const assignToOwner = ["1", "true", "on", "sim"].includes(String(req.body.assign_to_owner || "").toLowerCase());
 
   try {
     const cardIdNum = Number(card_id);
@@ -2826,6 +3134,12 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
     const numInstallments = parseInt(installments) || 1;
     if (isRecurring && numInstallments !== 1) {
       setFlash(req, "error", "Lançamentos recorrentes mensais funcionam apenas com 1 parcela.");
+      return res.redirect(redirectBackOr(req, "/geral"));
+    }
+
+    const ownerPerson = assignToOwner ? getOwnerPerson(userId) : null;
+    if (assignToOwner && !ownerPerson) {
+      setFlash(req, "error", "Defina um titular na aba Pessoas antes de usar 'Atribuir esse item a mim'.");
       return res.redirect(redirectBackOr(req, "/geral"));
     }
 
@@ -2857,6 +3171,9 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
 
     db.transaction(() => {
       const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1").all(userId);
+      const autoAssignPersonId = assignToOwner
+        ? Number(ownerPerson.id)
+        : (activePeople.length === 1 ? Number(activePeople[0].id) : null);
       const insTxn = db.prepare(`
         INSERT INTO transactions (user_id, card_id, txn_date, description, amount_cents, due_month, due_year, parent_txn_id, recurring_rule_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -2894,8 +3211,8 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
         const txnIdCreated = Number(info.lastInsertRowid);
         if (!installmentRootTxnId) installmentRootTxnId = txnIdCreated;
 
-        if (activePeople.length === 1) {
-          insAlloc.run(userId, txnIdCreated, activePeople[0].id, currentAmount, nowIso());
+        if (autoAssignPersonId) {
+          insAlloc.run(userId, txnIdCreated, autoAssignPersonId, currentAmount, nowIso());
           createdTxnIds.push(txnIdCreated);
         }
       }
@@ -3454,7 +3771,79 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
   res.render("whatsapp", { month, year, ...exportData, formatBRLFromCents });
 });
 
-app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit: '10mb' }), async (req, res) => {
+function maskPhoneForLog(rawPhone) {
+  const digits = String(rawPhone || '').replace(/\D/g, '');
+  if (!digits) return 'sem-telefone';
+  if (digits.length <= 4) return digits;
+  return `${'*'.repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
+}
+
+function summarizeAxiosError(error) {
+  if (!error) return 'Erro desconhecido.';
+
+  const status = error.response && error.response.status;
+  const payload = error.response && error.response.data;
+  if (typeof payload === 'string' && payload.trim()) {
+    return status ? `HTTP ${status}: ${payload.trim().slice(0, 400)}` : payload.trim().slice(0, 400);
+  }
+  if (payload && typeof payload === 'object') {
+    try {
+      const compact = JSON.stringify(payload).slice(0, 400);
+      return status ? `HTTP ${status}: ${compact}` : compact;
+    } catch (_) {
+      // segue para a próxima alternativa
+    }
+  }
+
+  if (error.message) {
+    return status ? `HTTP ${status}: ${error.message}` : error.message;
+  }
+  return status ? `HTTP ${status}` : 'Erro desconhecido.';
+}
+
+async function sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNumber, message, base64Data) {
+  const endpoint = `${apiUrl.replace(/\/$/, '')}/message/sendMedia/${instance}`;
+  const headers = { apikey: apiKey };
+  const fileName = `OrganizaPay_${new Date().toISOString().slice(0, 10)}.png`;
+
+  const v2Payload = {
+    number: cleanNumber,
+    mediatype: 'image',
+    mimetype: 'image/png',
+    media: base64Data,
+    fileName,
+    caption: message,
+    delay: 1200
+  };
+
+  try {
+    return await axios.post(endpoint, v2Payload, { headers, timeout: 30000 });
+  } catch (v2Error) {
+    const status = v2Error.response && v2Error.response.status;
+    const canRetryAsV1 = Boolean(v2Error.response) && [400, 404, 415, 422].includes(status);
+    if (!canRetryAsV1) {
+      throw v2Error;
+    }
+
+    const v1Payload = {
+      number: cleanNumber,
+      mediaMessage: {
+        mediaType: 'image',
+        fileName,
+        caption: message,
+        media: base64Data
+      },
+      options: {
+        delay: 1200,
+        presence: 'composing'
+      }
+    };
+
+    return axios.post(endpoint, v1Payload, { headers, timeout: 30000 });
+  }
+}
+
+app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit: '25mb' }), async (req, res) => {
   if (!isAdminUser(req.user.id)) {
     return res.status(403).json({ error: "O envio via WhatsApp está disponível apenas para administradores." });
   }
@@ -3471,18 +3860,29 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
     }
 
     const cleanNumber = String(personPhone || '').replace(/\D/g, '');
-    const base64Data = String(imageBase64 || '').split(',')[1];
-    await axios.post(`${apiUrl}/message/sendMedia/${instance}`, {
-      number: cleanNumber,
-      mediatype: "image",
-      media: base64Data,
-      caption: message,
-      delay: 1200
-    }, { headers: { apikey: apiKey } });
+    if (!cleanNumber) {
+      return res.status(400).json({ error: "A pessoa não possui telefone válido cadastrado para envio." });
+    }
 
+    const base64Data = String(imageBase64 || '').split(',')[1];
+    if (!base64Data) {
+      return res.status(400).json({ error: "Não foi possível gerar a imagem para envio." });
+    }
+
+    await sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNumber, message, base64Data);
     res.json({ success: true });
   } catch (e) {
-    res.status(500).json({ error: "Falha ao enviar imagem via WhatsApp" });
+    const summarized = summarizeAxiosError(e);
+    console.error('[whatsapp/send-automation] Falha no envio', {
+      userId: req.user && req.user.id,
+      phone: maskPhoneForLog(req.body && req.body.personPhone),
+      messageLength: req.body && req.body.message ? String(req.body.message).length : 0,
+      hasImage: Boolean(req.body && req.body.imageBase64),
+      details: summarized
+    });
+
+    const status = e && e.response && e.response.status ? 502 : 500;
+    res.status(status).json({ error: `Falha ao enviar imagem via WhatsApp. ${summarized}`.trim() });
   }
 });
 // --- ROTAS DO detalhamento ---
@@ -3661,4 +4061,5 @@ const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {
   console.log(`✅ Rodando em http://localhost:${PORT}`);
+  startCardDueTodayPushScheduler();
 });

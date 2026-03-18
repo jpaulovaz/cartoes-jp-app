@@ -813,3 +813,175 @@
 
   window.resolveInstallmentScope = resolveInstallmentScope;
 })();
+
+(function () {
+  function detectNavKey(pathname) {
+    if (/^\/geral(?:\/|$)/.test(pathname)) return 'geral';
+    if (/^\/shared-debts(?:\/|$)/.test(pathname) || /^\/notifications(?:\/|$)/.test(pathname)) return 'shared';
+    if (/^\/people(?:\/|$)/.test(pathname)) return 'people';
+    if (/^\/cards(?:\/|$)/.test(pathname)) return 'cards';
+    if (/^\/import(?:\/|$)/.test(pathname)) return 'import';
+    if (/^\/admin(?:\/|$)/.test(pathname)) return 'admin';
+    if (/^\/month(?:\/|$)/.test(pathname) || /^\/summary(?:\/|$)/.test(pathname) || /^\/detalhamento(?:\/|$)/.test(pathname) || /^\/txn(?:\/|$)/.test(pathname) || pathname === '/') return 'painel';
+    return '';
+  }
+
+  function applyActiveNavState() {
+    const activeKey = detectNavKey(window.location.pathname || '/');
+    if (!activeKey) return;
+
+    document.querySelectorAll('[data-nav-key]').forEach((link) => {
+      link.classList.toggle('is-active', link.dataset.navKey === activeKey);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyActiveNavState);
+  } else {
+    applyActiveNavState();
+  }
+})();
+
+
+(function () {
+  function initMobileBottomNavAutoHide() {
+    const nav = document.querySelector('.op-bottom-nav');
+    if (!(nav instanceof HTMLElement)) return;
+
+    const root = document.documentElement;
+    const mainShell = document.querySelector('.op-app-main');
+    let hideTimer = null;
+
+    const isMobileViewport = () => !window.matchMedia('(min-width: 768px)').matches;
+    const showNav = () => nav.classList.remove('is-idle-hidden');
+    const hideNav = () => nav.classList.add('is-idle-hidden');
+    const scheduleHide = (delay = 900) => {
+      window.clearTimeout(hideTimer);
+      hideTimer = window.setTimeout(hideNav, delay);
+    };
+    const registerActivity = (delay = 900) => {
+      if (!isMobileViewport()) return;
+      showNav();
+      scheduleHide(delay);
+    };
+
+    const applyBottomClearance = () => {
+      if (!isMobileViewport()) {
+        root.style.removeProperty('--op-mobile-bottom-clearance');
+        if (mainShell instanceof HTMLElement) {
+          mainShell.style.removeProperty('padding-bottom');
+          mainShell.style.removeProperty('scroll-padding-bottom');
+        }
+        return;
+      }
+
+      const navHeight = Math.ceil(nav.offsetHeight || nav.getBoundingClientRect().height || 0);
+      const extraBreathingRoom = 4;
+      const fallbackClearance = 96;
+      const clearance = Math.max(fallbackClearance, navHeight + extraBreathingRoom);
+      root.style.setProperty('--op-mobile-bottom-clearance', `${clearance}px`);
+      if (mainShell instanceof HTMLElement) {
+        mainShell.style.setProperty('padding-bottom', `${clearance}px`, 'important');
+        mainShell.style.setProperty('scroll-padding-bottom', `${clearance}px`);
+      }
+    };
+
+    const syncBottomClearance = () => window.requestAnimationFrame(applyBottomClearance);
+
+    applyBottomClearance();
+
+    if ('ResizeObserver' in window) {
+      const resizeObserver = new ResizeObserver(() => syncBottomClearance());
+      resizeObserver.observe(nav);
+    }
+
+    if (isMobileViewport()) {
+      registerActivity(1400);
+    }
+
+    window.addEventListener('scroll', () => registerActivity(900), { passive: true });
+    window.addEventListener('touchstart', () => registerActivity(1400), { passive: true });
+    window.addEventListener('pointerdown', () => registerActivity(1400), { passive: true });
+    window.addEventListener('focusin', () => registerActivity(1400));
+    window.addEventListener('load', syncBottomClearance, { once: true });
+    window.addEventListener('pageshow', syncBottomClearance);
+    window.addEventListener('orientationchange', syncBottomClearance, { passive: true });
+    window.addEventListener('resize', () => {
+      syncBottomClearance();
+      if (!isMobileViewport()) {
+        window.clearTimeout(hideTimer);
+        showNav();
+        return;
+      }
+      registerActivity(1400);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMobileBottomNavAutoHide);
+  } else {
+    initMobileBottomNavAutoHide();
+  }
+})();
+
+(function () {
+  function setButtonBusyState(button, isBusy) {
+    if (!(button instanceof HTMLElement)) return;
+    if (isBusy) {
+      if (!button.dataset.originalHtml) {
+        button.dataset.originalHtml = button.innerHTML;
+      }
+      const loadingLabel = button.dataset.loadingLabel || 'Processando...';
+      button.disabled = true;
+      button.classList.add('op-button-loading');
+      button.innerHTML = `<span class="op-submit-spinner" aria-hidden="true"></span><span>${loadingLabel}</span>`;
+      button.style.display = button.style.display || 'inline-flex';
+      button.style.alignItems = 'center';
+      button.style.justifyContent = 'center';
+      button.style.gap = '0.55rem';
+      return;
+    }
+
+    if (button.dataset.originalHtml) {
+      button.innerHTML = button.dataset.originalHtml;
+      delete button.dataset.originalHtml;
+    }
+    button.disabled = false;
+    button.classList.remove('op-button-loading');
+  }
+
+  function bindSubmitLoadingStates() {
+    document.addEventListener('submit', (event) => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      if (form.dataset.noSubmitState === '1') return;
+      if (form.method && form.method.toUpperCase() === 'GET' && form.dataset.submitState !== 'force') return;
+
+      if (event.defaultPrevented) return;
+
+      const submitButtons = Array.from(form.querySelectorAll('button[type="submit"], input[type="submit"]'));
+      if (!submitButtons.length) return;
+
+      window.setTimeout(() => {
+        submitButtons.forEach((button) => {
+          if (button instanceof HTMLButtonElement) {
+            setButtonBusyState(button, true);
+          } else if (button instanceof HTMLInputElement) {
+            if (!button.dataset.originalValue) {
+              button.dataset.originalValue = button.value;
+            }
+            button.disabled = true;
+            button.classList.add('op-button-loading');
+            button.value = button.dataset.loadingLabel || 'Processando...';
+          }
+        });
+      }, 0);
+    }, true);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindSubmitLoadingStates);
+  } else {
+    bindSubmitLoadingStates();
+  }
+})();

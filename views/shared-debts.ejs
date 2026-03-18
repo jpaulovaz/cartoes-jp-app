@@ -182,38 +182,44 @@
 %>
 
 <div class="max-w-7xl mx-auto space-y-8">
-  <section class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-    <div class="space-y-3">
-      <h1 class="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Dívidas Compartilhadas</h1>
+  <section class="op-page-hero op-fade-up">
+    <div>
+      <span class="op-page-hero__eyebrow">Cobranças entre pessoas</span>
+      <h1 class="op-page-hero__title mt-4">Dívidas Compartilhadas</h1>
+      <p class="op-page-hero__subtitle mt-3">Sabe aquela compra que você aceitou dividir com um amigo? Ela está aqui.</p>
       <% if (pushNotificationsEnabled && pushPublicKey) { %>
-        <div class="flex flex-wrap items-center gap-3">
-          <button type="button" data-push-toggle data-push-public-key="<%= pushPublicKey %>" data-push-status-target="#shared-debts-push-status" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-sky-700 transition-colors"><svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.389 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>Ativar push</button>
-          <span id="shared-debts-push-status" class="text-xs font-medium text-slate-500 dark:text-slate-400">Ative as notificações push neste aparelho para receber avisos mesmo fora da tela.</span>
+        <div class="op-page-hero__actions mt-4" style="justify-content: flex-start;">
+          <button type="button" data-push-toggle data-push-public-key="<%= pushPublicKey %>" data-push-status-target="#shared-debts-push-status" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-sky-500/20 transition-colors hover:bg-sky-700"><svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.389 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>Ativar push</button>
+          <span id="shared-debts-push-status" class="text-xs font-medium text-slate-500 dark:text-slate-400">Ative notificações neste aparelho para receber alertas fora da tela.</span>
+        </div>
+      <% } else { %>
+        <div class="op-page-hero__meta mt-4">
+          <span class="badge">Recebidas e enviadas em uma só central</span>
         </div>
       <% } %>
     </div>
 
-    <div class="grid gap-3 sm:grid-cols-3">
-      <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4 shadow-sm text-center">
-        <div class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Recebidas</div>
-        <div class="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white"><%= received.length %></div>
-        <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= receivedGroups.length %> período(s)</div>
+    <div class="op-kpi-strip xl:max-w-[30rem]">
+      <div class="op-kpi-card text-center">
+        <div class="op-kpi-card__label">Recebidas</div>
+        <div class="op-kpi-card__value"><%= received.length %></div>
+        <div class="op-kpi-card__hint"><%= receivedGroups.length %> período(s)</div>
       </div>
-      <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4 shadow-sm text-center">
-        <div class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Enviadas</div>
-        <div class="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white"><%= sent.length %></div>
-        <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= sentGroups.length %> período(s)</div>
+      <div class="op-kpi-card text-center">
+        <div class="op-kpi-card__label">Enviadas</div>
+        <div class="op-kpi-card__value"><%= sent.length %></div>
+        <div class="op-kpi-card__hint"><%= sentGroups.length %> período(s)</div>
       </div>
-      <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-5 py-4 shadow-sm text-center">
-        <div class="text-xs font-bold uppercase tracking-[0.18em] text-amber-600 dark:text-amber-300">Sua vez</div>
-        <div class="mt-2 text-2xl font-extrabold text-amber-700 dark:text-amber-200"><%= actionCount %></div>
-        <div class="mt-1 text-xs font-medium text-amber-700/80 dark:text-amber-200/80">Ações pendentes</div>
+      <div class="op-kpi-card text-center">
+        <div class="op-kpi-card__label text-amber-600 dark:text-amber-300">Sua vez</div>
+        <div class="op-kpi-card__value text-amber-700 dark:text-amber-200"><%= actionCount %></div>
+        <div class="op-kpi-card__hint text-amber-700/80 dark:text-amber-200/80">Ações pendentes</div>
       </div>
     </div>
   </section>
 
-  <section class="grid gap-6 xl:grid-cols-2 xl:items-start">
-    <details id="received" class="self-start rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden" <%= receivedScopeOpen ? 'open' : '' %>>
+  <section class="space-y-6">
+    <details id="received" class="op-dual-accordion w-full self-start rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden" <%= receivedScopeOpen ? 'open' : '' %>>
       <summary class="list-none cursor-pointer px-6 py-5 bg-slate-50 dark:bg-slate-900/70">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -223,7 +229,7 @@
                 <span class="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-200"><%= receivedActionCount %> ação(ões)</span>
               <% } %>
             </div>
-            <p class="mt-1 min-h-[2.5rem] text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-xs">Cobranças que chegaram para sua aprovação e baixa.</p>
+            <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none">Cobranças que chegaram para sua aprovação e baixa.</p>
           </div>
           <div class="flex flex-wrap gap-2 sm:justify-end">
             <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= received.length %> cobrança(s)</span>
@@ -234,10 +240,12 @@
 
       <div class="border-t border-slate-200 dark:border-slate-700">
       <% if (!receivedGroups.length) { %>
-        <div class="px-6 py-12 text-center">
-          <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-900 dark:text-slate-500">📭</div>
-          <div class="text-base font-bold text-slate-800 dark:text-slate-100">Nenhuma solicitação recebida ainda.</div>
-          <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Quando outro usuário compartilhar uma dívida com você, ela aparecerá aqui.</p>
+        <div class="px-5 py-5">
+          <div class="op-empty-state op-empty-state--compact">
+            <div class="op-empty-state__icon">📭</div>
+            <div class="op-empty-state__title">Nenhuma solicitação recebida ainda</div>
+            <p class="op-empty-state__text">Quando outro usuário compartilhar uma dívida com você, ela aparecerá aqui.</p>
+          </div>
         </div>
       <% } else { %>
         <div class="p-4 md:p-5 space-y-4">
@@ -262,7 +270,67 @@
                 </div>
               </summary>
 
-              <div class="border-t border-slate-200 dark:border-slate-700 divide-y divide-slate-200 dark:divide-slate-700">
+              <% const receivedMonthSheetId = `received-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); %>
+              <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Visão do período</div>
+                    <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Abra a lista completa do mês para revisar todas as cobranças recebidas de uma vez e depois entrar só na que precisar.</div>
+                  </div>
+                  <button type="button" data-open-sheet="<%= receivedMonthSheetId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-100 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
+                    Ver lista do mês
+                  </button>
+                </div>
+              </div>
+              <div id="<%= receivedMonthSheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
+                <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
+                <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[82vh] sm:max-w-3xl sm:rounded-[32px]">
+                  <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                    <div>
+                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Recebidas · <%= group.label %></div>
+                      <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Lista completa do mês</h3>
+                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= group.items.length %> cobrança(s) · <%= formatBRLFromCents(group.totalCents) %></p>
+                    </div>
+                    <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar lista do mês">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                  </div>
+                  <div class="max-h-[calc(88vh-92px)] overflow-y-auto px-5 py-4 sm:max-h-[calc(82vh-92px)]">
+                    <div class="space-y-3">
+                      <% group.items.forEach(item => { const sheetMeta = statusMeta(item); %>
+                        <div class="rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-800/80">
+                          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div class="min-w-0 flex-1">
+                              <div class="text-sm font-black text-slate-900 dark:text-white"><%= item.description_snapshot %></div>
+                              <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                                <span>Enviado por <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.requester_name || item.requester_email || 'Usuário' %></span></span>
+                                <span>Compra <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.source_txn_date ? formatDateBR(item.source_txn_date) : '—' %></span></span>
+                                <span>Cartão <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.card_name_snapshot || 'Não informado' %></span></span>
+                              </div>
+                            </div>
+                            <div class="sm:text-right">
+                              <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= sheetMeta.classes %>"><%= sheetMeta.label %></span>
+                              <div class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
+                            </div>
+                          </div>
+                          <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="text-xs font-medium text-slate-500 dark:text-slate-400">
+                              <span class="font-semibold text-slate-700 dark:text-slate-200">Competência:</span>
+                              <%= item.source_due_month && item.source_due_year ? monthLabel(item.source_due_month, item.source_due_year) : '—' %>
+                            </div>
+                            <button type="button" data-jump-request="request-<%= item.id %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
+                              Abrir cobrança
+                            </button>
+                          </div>
+                        </div>
+                      <% }) %>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="divide-y divide-slate-200 dark:divide-slate-700">
                 <% group.items.forEach(item => {
                   const meta = statusMeta(item);
                   const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
@@ -406,7 +474,7 @@
       </div>
     </details>
 
-    <details id="sent" class="self-start rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden" <%= sentScopeOpen ? 'open' : '' %>>
+    <details id="sent" class="op-dual-accordion w-full self-start rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden" <%= sentScopeOpen ? 'open' : '' %>>
       <summary class="list-none cursor-pointer px-6 py-5 bg-slate-50 dark:bg-slate-900/70">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -416,7 +484,7 @@
                 <span class="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-200"><%= sentActionCount %> ação(ões)</span>
               <% } %>
             </div>
-            <p class="mt-1 min-h-[2.5rem] text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-xs">Cobranças que você enviou para aprovação e baixa.</p>
+            <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none">Cobranças que você enviou para aprovação e baixa.</p>
           </div>
           <div class="flex flex-wrap gap-2 sm:justify-end">
             <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= sent.length %> cobrança(s)</span>
@@ -427,10 +495,12 @@
 
       <div class="border-t border-slate-200 dark:border-slate-700">
       <% if (!sentGroups.length) { %>
-        <div class="px-6 py-12 text-center">
-          <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-900 dark:text-slate-500">📤</div>
-          <div class="text-base font-bold text-slate-800 dark:text-slate-100">Nenhuma solicitação enviada ainda.</div>
-          <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Quando você dividir uma compra com alguém elegível, ela aparecerá aqui.</p>
+        <div class="px-5 py-5">
+          <div class="op-empty-state op-empty-state--compact">
+            <div class="op-empty-state__icon">📤</div>
+            <div class="op-empty-state__title">Nenhuma solicitação enviada ainda</div>
+            <p class="op-empty-state__text">Quando você dividir uma compra com alguém elegível, ela aparecerá aqui.</p>
+          </div>
         </div>
       <% } else { %>
         <div class="p-4 md:p-5 space-y-4">
@@ -455,7 +525,67 @@
                 </div>
               </summary>
 
-              <div class="border-t border-slate-200 dark:border-slate-700 divide-y divide-slate-200 dark:divide-slate-700">
+              <% const sentMonthSheetId = `sent-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); %>
+              <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Visão do período</div>
+                    <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Abra a lista completa do mês para ver todas as cobranças enviadas de uma vez e acompanhar o panorama do período.</div>
+                  </div>
+                  <button type="button" data-open-sheet="<%= sentMonthSheetId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-100 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
+                    Ver lista do mês
+                  </button>
+                </div>
+              </div>
+              <div id="<%= sentMonthSheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
+                <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
+                <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[82vh] sm:max-w-3xl sm:rounded-[32px]">
+                  <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                    <div>
+                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Enviadas · <%= group.label %></div>
+                      <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Lista completa do mês</h3>
+                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= group.items.length %> cobrança(s) · <%= formatBRLFromCents(group.totalCents) %></p>
+                    </div>
+                    <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar lista do mês">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                  </div>
+                  <div class="max-h-[calc(88vh-92px)] overflow-y-auto px-5 py-4 sm:max-h-[calc(82vh-92px)]">
+                    <div class="space-y-3">
+                      <% group.items.forEach(item => { const sheetMeta = statusMeta(item); %>
+                        <div class="rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-800/80">
+                          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div class="min-w-0 flex-1">
+                              <div class="text-sm font-black text-slate-900 dark:text-white"><%= item.description_snapshot %></div>
+                              <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                                <span>Para <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.receiver_name || item.receiver_email || item.receiver_email_snapshot || 'Usuário' %></span></span>
+                                <span>Compra <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.source_txn_date ? formatDateBR(item.source_txn_date) : '—' %></span></span>
+                                <span>Cartão <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.card_name_snapshot || 'Não informado' %></span></span>
+                              </div>
+                            </div>
+                            <div class="sm:text-right">
+                              <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= sheetMeta.classes %>"><%= sheetMeta.label %></span>
+                              <div class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
+                            </div>
+                          </div>
+                          <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="text-xs font-medium text-slate-500 dark:text-slate-400">
+                              <span class="font-semibold text-slate-700 dark:text-slate-200">Competência:</span>
+                              <%= item.source_due_month && item.source_due_year ? monthLabel(item.source_due_month, item.source_due_year) : '—' %>
+                            </div>
+                            <button type="button" data-jump-request="request-<%= item.id %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
+                              Abrir cobrança
+                            </button>
+                          </div>
+                        </div>
+                      <% }) %>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="divide-y divide-slate-200 dark:divide-slate-700">
                 <% group.items.forEach(item => {
                   const meta = statusMeta(item);
                   const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
@@ -612,12 +742,71 @@
     }
   }
 
+  function openRequestChain(target) {
+    if (!target) return;
+
+    let current = target;
+    while (current) {
+      if (current instanceof HTMLDetailsElement) current.open = true;
+      current = current.parentElement ? current.parentElement.closest('details') : null;
+    }
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function closeSharedDebtSheets() {
+    document.querySelectorAll('[data-shared-debts-sheet]').forEach((sheet) => {
+      sheet.classList.add('hidden');
+    });
+    document.body.classList.remove('overflow-hidden');
+  }
+
+  function openSharedDebtSheet(sheetId) {
+    const sheet = document.getElementById(sheetId);
+    if (!sheet) return;
+    closeSharedDebtSheets();
+    sheet.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+  }
+
+  document.addEventListener('click', (event) => {
+    const openBtn = event.target.closest('[data-open-sheet]');
+    if (openBtn) {
+      event.preventDefault();
+      openSharedDebtSheet(openBtn.getAttribute('data-open-sheet'));
+      return;
+    }
+
+    const closeBtn = event.target.closest('[data-close-sheet]');
+    if (closeBtn) {
+      event.preventDefault();
+      closeSharedDebtSheets();
+      return;
+    }
+
+    const jumpBtn = event.target.closest('[data-jump-request]');
+    if (jumpBtn) {
+      event.preventDefault();
+      const target = document.getElementById(jumpBtn.getAttribute('data-jump-request'));
+      closeSharedDebtSheets();
+      if (target) {
+        setTimeout(() => openRequestChain(target), 40);
+      }
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeSharedDebtSheets();
+    }
+  });
+
   window.addEventListener('load', () => {
     openSharedDebtScopeFromHash();
 
     <% if (requestIdToHighlight) { %>
       const el = document.getElementById('request-<%= requestIdToHighlight %>');
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (el) openRequestChain(el);
     <% } %>
   });
 

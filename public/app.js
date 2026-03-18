@@ -847,10 +847,12 @@
   function initMobileBottomNavAutoHide() {
     const nav = document.querySelector('.op-bottom-nav');
     if (!(nav instanceof HTMLElement)) return;
-    if (window.matchMedia('(min-width: 768px)').matches) return;
 
+    const root = document.documentElement;
+    const mainShell = document.querySelector('.op-app-main');
     let hideTimer = null;
 
+    const isMobileViewport = () => !window.matchMedia('(min-width: 768px)').matches;
     const showNav = () => nav.classList.remove('is-idle-hidden');
     const hideNav = () => nav.classList.add('is-idle-hidden');
     const scheduleHide = (delay = 900) => {
@@ -858,18 +860,55 @@
       hideTimer = window.setTimeout(hideNav, delay);
     };
     const registerActivity = (delay = 900) => {
+      if (!isMobileViewport()) return;
       showNav();
       scheduleHide(delay);
     };
 
-    registerActivity(1400);
+    const applyBottomClearance = () => {
+      if (!isMobileViewport()) {
+        root.style.removeProperty('--op-mobile-bottom-clearance');
+        if (mainShell instanceof HTMLElement) {
+          mainShell.style.removeProperty('padding-bottom');
+          mainShell.style.removeProperty('scroll-padding-bottom');
+        }
+        return;
+      }
+
+      const navHeight = Math.ceil(nav.offsetHeight || nav.getBoundingClientRect().height || 0);
+      const extraBreathingRoom = 16;
+      const fallbackClearance = 124;
+      const clearance = Math.max(fallbackClearance, navHeight + extraBreathingRoom);
+      root.style.setProperty('--op-mobile-bottom-clearance', `${clearance}px`);
+      if (mainShell instanceof HTMLElement) {
+        mainShell.style.setProperty('padding-bottom', `${clearance}px`, 'important');
+        mainShell.style.setProperty('scroll-padding-bottom', `${clearance}px`);
+      }
+    };
+
+    const syncBottomClearance = () => window.requestAnimationFrame(applyBottomClearance);
+
+    applyBottomClearance();
+
+    if ('ResizeObserver' in window) {
+      const resizeObserver = new ResizeObserver(() => syncBottomClearance());
+      resizeObserver.observe(nav);
+    }
+
+    if (isMobileViewport()) {
+      registerActivity(1400);
+    }
 
     window.addEventListener('scroll', () => registerActivity(900), { passive: true });
     window.addEventListener('touchstart', () => registerActivity(1400), { passive: true });
     window.addEventListener('pointerdown', () => registerActivity(1400), { passive: true });
     window.addEventListener('focusin', () => registerActivity(1400));
+    window.addEventListener('load', syncBottomClearance, { once: true });
+    window.addEventListener('pageshow', syncBottomClearance);
+    window.addEventListener('orientationchange', syncBottomClearance, { passive: true });
     window.addEventListener('resize', () => {
-      if (window.matchMedia('(min-width: 768px)').matches) {
+      syncBottomClearance();
+      if (!isMobileViewport()) {
         window.clearTimeout(hideTimer);
         showNav();
         return;

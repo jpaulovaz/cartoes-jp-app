@@ -86,8 +86,8 @@ html.dark input[type="month"]::-webkit-datetime-edit-text {
   color: #94a3b8;
 }
 
-main {
-  padding-bottom: var(--op-mobile-bottom-clearance);
+.op-app-main {
+  padding-bottom: var(--op-mobile-bottom-clearance) !important;
   scroll-padding-bottom: var(--op-mobile-bottom-clearance);
 }
 
@@ -96,8 +96,8 @@ main {
     --op-mobile-bottom-clearance: 2.5rem;
   }
 
-  main {
-    padding-bottom: var(--op-mobile-bottom-clearance);
+  .op-app-main {
+    padding-bottom: var(--op-mobile-bottom-clearance) !important;
     scroll-padding-bottom: var(--op-mobile-bottom-clearance);
   }
 }

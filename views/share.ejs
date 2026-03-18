@@ -268,6 +268,66 @@
     return false;
   }
 
+  function trimTrailingBlankRows(canvas, label) {
+    const ctx = canvas && canvas.getContext ? canvas.getContext('2d', { willReadFrequently: true }) : null;
+    if (!ctx || !canvas.width || !canvas.height) return canvas;
+
+    const sampleCols = Math.min(64, Math.max(12, Math.ceil(canvas.width / 40)));
+    const stepX = Math.max(1, Math.floor(canvas.width / sampleCols));
+    let lastContentRow = -1;
+
+    for (let y = canvas.height - 1; y >= 0; y -= 1) {
+      let rowHasContent = false;
+      for (let x = 0; x < canvas.width; x += stepX) {
+        const pixel = ctx.getImageData(x, y, 1, 1).data;
+        const isTransparent = pixel[3] === 0;
+        const isNearWhite = pixel[0] >= 248 && pixel[1] >= 248 && pixel[2] >= 248;
+        if (!isTransparent && !isNearWhite) {
+          rowHasContent = true;
+          break;
+        }
+      }
+      if (rowHasContent) {
+        lastContentRow = y;
+        break;
+      }
+    }
+
+    if (lastContentRow < 0) return canvas;
+
+    const paddingRows = Math.min(24, Math.max(8, Math.round(canvas.height * 0.012)));
+    const targetHeight = Math.min(canvas.height, lastContentRow + 1 + paddingRows);
+    const trimmedRows = canvas.height - targetHeight;
+
+    if (trimmedRows < 40) return canvas;
+
+    const trimmedCanvas = document.createElement('canvas');
+    trimmedCanvas.width = canvas.width;
+    trimmedCanvas.height = targetHeight;
+    const trimmedCtx = trimmedCanvas.getContext('2d');
+    if (!trimmedCtx) return canvas;
+
+    trimmedCtx.drawImage(
+      canvas,
+      0,
+      0,
+      canvas.width,
+      targetHeight,
+      0,
+      0,
+      trimmedCanvas.width,
+      trimmedCanvas.height
+    );
+
+    console.info(`[${label}] trailing blank rows trimmed`, {
+      originalHeight: canvas.height,
+      targetHeight,
+      trimmedRows
+    });
+
+    return trimmedCanvas;
+  }
+
   async function renderReceiptCanvas(node, width, height, requestedScale, label) {
     const attempts = [
       { foreignObjectRendering: false },
@@ -341,7 +401,8 @@
         throw new Error(`Não foi possível medir a área do resumo para captura (${width}x${height}).`);
       }
 
-      const canvas = await renderReceiptCanvas(clone, width, height, requestedScale, 'share');
+      const rawCanvas = await renderReceiptCanvas(clone, width, height, requestedScale, 'share');
+      const canvas = trimTrailingBlankRows(rawCanvas, 'share');
       if (!canvas || canvas.width < 50 || canvas.height < 50) {
         throw new Error('A imagem foi gerada sem conteúdo útil.');
       }

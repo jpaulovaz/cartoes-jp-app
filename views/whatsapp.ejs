@@ -18,20 +18,15 @@
     return str;
   };
   const totalCents = items.reduce((acc, item) => acc + getItemCents(item), 0);
-  const remainingCents = Number(remaining_cents || 0);
+  const remainingCents = Number(remaining_cents || Math.max(0, totalCents));
   const paidCents = Number(paid_cents || 0);
-  const effectiveTotalCents = remainingCents > 0 ? remainingCents : totalCents;
-  const summaryMode = false;
-  const compactMode = items.length > 10;
   const visibleItems = items;
-  const hiddenItems = [];
-  const hiddenTotalCents = 0;
-  const captureScale = items.length > 36 ? 1 : items.length > 24 ? 1.15 : items.length > 16 ? 1.3 : items.length > 10 ? 1.55 : 2;
-  const metricPills = [
-    { label: 'Itens', value: `${items.length}` },
-    { label: 'Em aberto', value: formatBRL(effectiveTotalCents) },
-    { label: paidCents > 0 ? 'Já pago' : 'Status', value: paidCents > 0 ? formatBRL(paidCents) : 'Sem baixa' }
-  ];
+  const captureScale = items.length > 36 ? 1 : items.length > 24 ? 1.1 : items.length > 16 ? 1.25 : items.length > 10 ? 1.45 : 1.8;
+  const heroText = remainingCents > 0
+    ? (paidCents > 0
+        ? 'Confira abaixo os lançamentos deste período, o valor já pago e o saldo que ainda falta para concluir o pagamento.'
+        : 'Confira abaixo os lançamentos deste período e o valor total em aberto para conferência e pagamento.')
+    : 'Confira abaixo os lançamentos deste período e a confirmação de que os valores já foram quitados.';
 %>
 
 <div class="op-page-shell">
@@ -39,7 +34,7 @@
     <div>
       <span class="op-page-hero__eyebrow">Envio assistido</span>
       <h1 class="op-page-hero__title mt-4">Exportar Resumo</h1>
-      <p class="op-page-hero__subtitle mt-3">Use a mesma imagem otimizada para o mobile tanto no WhatsApp quanto no download manual, mantendo todos os itens do período visíveis na imagem.</p>
+      <p class="op-page-hero__subtitle mt-3">Use a mesma imagem refinada para download e para envio via WhatsApp, mantendo todos os itens do período visíveis.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= person.name %></span>
         <span class="badge">Ref. <%= periodLabel %></span>
@@ -86,23 +81,21 @@
         periodLabel,
         items,
         visibleItems,
-        hiddenItems,
-        hiddenTotalCents,
-        compactMode,
-        summaryMode,
         formatBRL,
         getItemCents,
         getDescription,
         itemDate,
-        totalCents: effectiveTotalCents,
+        totalCents,
+        paidCents,
+        remainingCents,
         exportMode: false,
         captureScale,
-        metricPills,
-        compactHint: compactMode ? 'Layout mais compacto para manter todos os itens legíveis em telas menores e mensageiros, sem resumir nenhuma informação.' : 'A imagem mantém todos os itens visíveis sem compactação.',
+        cardTotals: totalsByCard,
         footerLeft: 'Gerado pelo OrganizaPay · compatível com envio automático via WhatsApp',
         footerRight: 'Imagem pronta para envio',
-        totalLabel: remainingCents > 0 ? 'Total em aberto' : 'Total do período',
-        heroText: remainingCents > 0 ? 'Resumo financeiro pensado para leitura rápida no celular, destacando o valor ainda em aberto e mantendo todos os itens do período visíveis.' : 'Resumo financeiro pronto para envio, com todos os itens do período e total sempre visíveis.'
+        totalLabel: 'Total do período',
+        paymentTitle: 'Situação do pagamento',
+        heroText
       }) %>
     </div>
   </div>
@@ -115,23 +108,21 @@
     periodLabel,
     items,
     visibleItems,
-    hiddenItems,
-    hiddenTotalCents,
-    compactMode,
-    summaryMode,
     formatBRL,
     getItemCents,
     getDescription,
     itemDate,
-    totalCents: effectiveTotalCents,
+    totalCents,
+    paidCents,
+    remainingCents,
     exportMode: true,
     captureScale,
-    metricPills,
-    compactHint: compactMode ? 'Layout mais compacto para manter todos os itens legíveis em telas menores e mensageiros, sem resumir nenhuma informação.' : 'A imagem mantém todos os itens visíveis sem compactação.',
+    cardTotals: totalsByCard,
     footerLeft: 'Gerado pelo OrganizaPay · compatível com envio automático via WhatsApp',
     footerRight: 'Imagem pronta para envio',
-    totalLabel: remainingCents > 0 ? 'Total em aberto' : 'Total do período',
-    heroText: remainingCents > 0 ? 'Resumo financeiro pensado para leitura rápida no celular, destacando o valor ainda em aberto e mantendo todos os itens do período visíveis.' : 'Resumo financeiro pronto para envio, com todos os itens do período e total sempre visíveis.'
+    totalLabel: 'Total do período',
+    paymentTitle: 'Situação do pagamento',
+    heroText
   }) %>
 </div>
 
@@ -164,22 +155,42 @@
     return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   }
 
+  async function waitForAssets(node) {
+    try {
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+      }
+    } catch (_) {}
+
+    const images = Array.from(node.querySelectorAll('img'));
+    await Promise.all(images.map((img) => {
+      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise((resolve) => {
+        const done = () => resolve();
+        img.addEventListener('load', done, { once: true });
+        img.addEventListener('error', done, { once: true });
+        window.setTimeout(resolve, 1600);
+      });
+    }));
+
+    await waitForPaint();
+  }
+
   async function buildReceiptCanvas() {
     ensureHtml2CanvasAvailable();
     const sourceNode = getCaptureSourceNode();
     if (!sourceNode) throw new Error('Resumo não encontrado para captura.');
 
-    await waitForPaint();
+    await waitForAssets(sourceNode);
 
-    const rect = sourceNode.getBoundingClientRect();
-    const baseWidth = Math.max(Math.ceil(rect.width || 0), sourceNode.scrollWidth || 0, sourceNode.offsetWidth || 0, 704);
+    const requestedWidth = Number((sourceNode.dataset && sourceNode.dataset.captureWidth) || 760) || 760;
+    const baseWidth = Math.max(requestedWidth, 720);
 
     const stage = document.createElement('div');
     stage.setAttribute('data-capture-stage', 'true');
     stage.style.position = 'fixed';
-    stage.style.left = '0';
+    stage.style.left = '-100000px';
     stage.style.top = '0';
-    stage.style.zIndex = '-1';
     stage.style.pointerEvents = 'none';
     stage.style.opacity = '1';
     stage.style.background = '#ffffff';
@@ -198,7 +209,7 @@
     document.body.appendChild(stage);
 
     try {
-      await waitForPaint();
+      await waitForAssets(clone);
       const cloneRect = clone.getBoundingClientRect();
       const width = Math.max(Math.ceil(cloneRect.width || 0), clone.scrollWidth || 0, clone.offsetWidth || 0, baseWidth);
       const height = Math.max(Math.ceil(cloneRect.height || 0), clone.scrollHeight || 0, clone.offsetHeight || 0);
@@ -310,14 +321,27 @@
       const canvas = await buildReceiptCanvas();
       const blob = await canvasToBlob(canvas);
       const imageBase64 = await blobToDataUrl(blob);
-      const totalLabel = '<%= formatBRL(effectiveTotalCents) %>';
-      const message = [
+      const totalLabel = '<%= formatBRL(totalCents) %>';
+      const remainingLabel = '<%= formatBRL(remainingCents) %>';
+      const paidLabel = '<%= formatBRL(paidCents) %>';
+      const messageLines = [
         `*Olá, <%= person.name %>!* 💳`,
         '',
-        `Segue o fechamento da fatura de *<%= periodLabel %>*.`,
-        `Total a pagar: *${totalLabel}*.`,
-        ''
-      ].filter(Boolean).join('\n');
+        `Segue o fechamento de *<%= periodLabel %>*.`,
+        `Total do período: *${totalLabel}*.`
+      ];
+
+      <% if (paidCents > 0 && remainingCents > 0) { %>
+        messageLines.push(`Já pago: *${paidLabel}*.`);
+        messageLines.push(`Saldo pendente: *${remainingLabel}*.`);
+      <% } else if (paidCents > 0 && remainingCents <= 0) { %>
+        messageLines.push(`Pagamento confirmado: *${paidLabel}*.`);
+      <% } else { %>
+        messageLines.push(`Valor em aberto: *${remainingLabel}*.`);
+      <% } %>
+
+      messageLines.push('');
+      const message = messageLines.join('\n');
 
       const response = await fetch('/whatsapp/send-automation', {
         method: 'POST',

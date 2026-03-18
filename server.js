@@ -194,27 +194,31 @@ function canUserImport(userId) {
   return Number(getUserRecord(userId)?.can_import ?? 1) !== 0;
 }
 
-function ensureDefaultOwnerPerson(userId, preferredName) {
+function ensureDefaultOwnerPerson(userId, preferredName, preferredEmail = null) {
   const safeName = String(preferredName || "").trim();
+  const safeEmail = normalizeEmail(preferredEmail);
   if (!safeName) return;
 
   db.transaction(() => {
     const existingOwner = db.prepare("SELECT id FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
     if (existingOwner) return;
 
-    const existingPerson = db.prepare("SELECT id FROM people WHERE user_id = ? AND lower(name) = lower(?) LIMIT 1").get(userId, safeName);
+    const existingPerson = db.prepare("SELECT id, email FROM people WHERE user_id = ? AND lower(name) = lower(?) LIMIT 1").get(userId, safeName);
 
     if (existingPerson) {
       db.prepare("UPDATE people SET active = 1 WHERE id = ? AND user_id = ?").run(existingPerson.id, userId);
+      if (safeEmail && !normalizeEmail(existingPerson.email)) {
+        db.prepare("UPDATE people SET email = ? WHERE id = ? AND user_id = ?").run(safeEmail, existingPerson.id, userId);
+      }
       db.prepare("UPDATE people SET is_owner = 0 WHERE user_id = ?").run(userId);
       db.prepare("UPDATE people SET is_owner = 1 WHERE id = ? AND user_id = ?").run(existingPerson.id, userId);
       return;
     }
 
     db.prepare(`
-      INSERT INTO people (user_id, name, phone, active, is_owner, created_at)
-      VALUES (?, ?, NULL, 1, 1, ?)
-    `).run(userId, safeName, dayjs().toISOString());
+      INSERT INTO people (user_id, name, phone, email, active, is_owner, created_at)
+      VALUES (?, ?, NULL, ?, 1, 1, ?)
+    `).run(userId, safeName, safeEmail, dayjs().toISOString());
   })();
 }
 
@@ -341,7 +345,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     db.prepare("UPDATE users SET last_login = ? WHERE email = ?").run(dayjs().toISOString(), email);
 
     if (isFirstGoogleLogin) {
-      ensureDefaultOwnerPerson(authorizedUser.id, name || authorizedUser.name || email.split('@')[0]);
+      ensureDefaultOwnerPerson(authorizedUser.id, name || authorizedUser.name || email.split('@')[0], email);
     }
 
     // Retorna o usuário
@@ -3002,7 +3006,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   syncRecurringTransactions(userId, year, month);
 
   const sort = (req.query.sort || "date").toString();
-  const dir = (req.query.dir || "desc").toString();
+  const dir = (req.query.dir || "asc").toString();
   const orderBy = buildOrder(sort, dir);
 
   const filters = {

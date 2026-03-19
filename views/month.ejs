@@ -796,12 +796,16 @@
           title: root.querySelector('[data-month-sheet-title]'),
           subtitle: root.querySelector('[data-month-sheet-subtitle]'),
           body: root.querySelector('[data-month-sheet-body]'),
-          actions: root.querySelector('[data-month-sheet-actions]')
+          actions: root.querySelector('[data-month-sheet-actions]'),
+          onClose: null
         };
 
         const closeMonthSheet = () => {
           monthSheetState.root.classList.add('hidden');
           document.body.classList.remove('overflow-hidden');
+          const handler = monthSheetState.onClose;
+          monthSheetState.onClose = null;
+          if (typeof handler === 'function') handler();
         };
 
         root.querySelector('[data-month-sheet-backdrop]')?.addEventListener('click', closeMonthSheet);
@@ -821,8 +825,9 @@
         return monthSheetState;
       }
 
-      function openMonthSheet({ title = 'Ações', subtitle = '', body = null, actions = [] } = {}) {
+      function openMonthSheet({ title = 'Ações', subtitle = '', body = null, actions = [], onClose = null } = {}) {
         const state = ensureMonthSheet();
+        state.onClose = typeof onClose === 'function' ? onClose : null;
         state.title.textContent = title;
         state.subtitle.textContent = subtitle || '';
         state.subtitle.classList.toggle('hidden', !subtitle);
@@ -881,43 +886,74 @@
           return confirmed ? 'single' : null;
         }
 
+        const nonInstallmentCount = Math.max(0, (items || []).length - futureItems.length);
         const title = destructive
           ? (items.length > 1 ? 'Excluir lançamentos parcelados' : 'Excluir lançamento parcelado')
           : moveAction
             ? (items.length > 1 ? 'Mover lançamentos parcelados' : 'Mover lançamento parcelado')
             : (items.length > 1 ? 'Aplicar em compras parceladas' : 'Aplicar em compra parcelada');
 
-        const message = destructive
-          ? `${futureItems.length} dos ${items.length} lançamento(s) selecionado(s) fazem parte de compras parceladas.\n\nEscolha se deseja excluir só os itens atuais ou também as próximas parcelas.`
-          : moveAction
-            ? `${futureItems.length} dos ${items.length} lançamento(s) selecionado(s) fazem parte de compras parceladas.\n\nEscolha se deseja mover só os itens atuais ou também deslocar as próximas parcelas.`
-            : `${futureItems.length} dos ${items.length} lançamento(s) selecionado(s) fazem parte de compras parceladas.\n\nEscolha se deseja ${actionLabel} só nos itens atuais ou também nas próximas parcelas.`;
+        const subtitle = nonInstallmentCount > 0
+          ? 'Há itens parcelados e itens simples na seleção.'
+          : 'Escolha como a ação deve tratar as próximas parcelas.';
 
-        const result = window.showActionDialog
-          ? await window.showActionDialog({
-              title,
-              message,
-              options: destructive
+        const wrapper = document.createElement('div');
+        wrapper.className = 'space-y-4';
+
+        const summary = document.createElement('div');
+        summary.className = 'rounded-[22px] border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200';
+        summary.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Seleção</div><div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">${items.length} lançamento(s) · ${escapeHtml(formatMoney(sumAmounts(items)))}</div><p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">${futureItems.length} item(ns) parcelado(s) exigem confirmação de alcance antes de concluir a ação.</p>`;
+        wrapper.appendChild(summary);
+
+        const scopeInfo = document.createElement('div');
+        scopeInfo.className = 'space-y-3';
+        scopeInfo.innerHTML = `
+          <div class="rounded-[22px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
+            <div class="text-xs font-bold uppercase tracking-wide text-blue-500/80 dark:text-blue-300/80">Como funciona</div>
+            <p class="mt-1 font-semibold">Ao confirmar, o app pergunta se a ação vale só para os itens selecionados agora ou também para as próximas parcelas das compras parceladas.</p>
+          </div>
+          <div class="rounded-[22px] border border-slate-200 bg-white/90 px-4 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200">
+            <div class="space-y-2">
+              <p><span class="font-bold text-slate-900 dark:text-slate-100">Só itens atuais</span> · altera apenas os lançamentos que você selecionou agora.</p>
+              <p><span class="font-bold text-slate-900 dark:text-slate-100">Itens atuais + próximas parcelas</span> · também aplica a ação nas próximas parcelas de cada compra parcelada selecionada.</p>
+              ${nonInstallmentCount > 0 ? `<p class="text-slate-500 dark:text-slate-400">Os ${nonInstallmentCount} item(ns) sem parcelamento continuam sendo alterados apenas uma vez.</p>` : ''}
+            </div>
+          </div>
+        `;
+        wrapper.appendChild(scopeInfo);
+
+        return await new Promise((resolve) => {
+          let settled = false;
+          const finish = (value) => {
+            if (settled) return;
+            settled = true;
+            resolve(value);
+          };
+
+          openMonthSheet({
+            title,
+            subtitle,
+            body: wrapper,
+            onClose: () => finish(null),
+            actions: destructive
+              ? [
+                  { label: 'Cancelar', tone: 'secondary' },
+                  { label: 'Excluir só itens atuais', tone: 'danger', onClick: () => { finish('single'); return true; } },
+                  { label: 'Excluir itens atuais + próximas parcelas', tone: 'danger', onClick: () => { finish('future'); return true; } }
+                ]
+              : moveAction
                 ? [
-                    { label: 'Cancelar', value: null, tone: 'secondary' },
-                    { label: 'Excluir só itens atuais', value: 'single', tone: 'danger' },
-                    { label: 'Excluir itens atuais + próximas parcelas', value: 'future', tone: 'danger' }
+                    { label: 'Cancelar', tone: 'secondary' },
+                    { label: 'Mover só itens atuais', tone: 'primary', onClick: () => { finish('single'); return true; } },
+                    { label: 'Mover itens atuais + próximas parcelas', tone: 'primary', onClick: () => { finish('future'); return true; } }
                   ]
-                : moveAction
-                  ? [
-                      { label: 'Cancelar', value: null, tone: 'secondary' },
-                      { label: 'Mover só itens atuais', value: 'single', tone: 'primary' },
-                      { label: 'Mover itens atuais + próximas parcelas', value: 'future', tone: 'primary' }
-                    ]
-                  : [
-                      { label: 'Cancelar', value: null, tone: 'secondary' },
-                      { label: 'Aplicar só itens atuais', value: 'single', tone: 'primary' },
-                      { label: 'Aplicar itens atuais + próximas parcelas', value: 'future', tone: 'primary' }
-                    ]
-            })
-          : null;
-
-        return result || null;
+                : [
+                    { label: 'Cancelar', tone: 'secondary' },
+                    { label: 'Aplicar só itens atuais', tone: 'primary', onClick: () => { finish('single'); return true; } },
+                    { label: 'Aplicar itens atuais + próximas parcelas', tone: 'primary', onClick: () => { finish('future'); return true; } }
+                  ]
+          });
+        });
       }
 
       async function postBulkAction(url, payload) {

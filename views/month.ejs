@@ -861,6 +861,10 @@
           state.body.appendChild(body);
         }
 
+        if (state.root.parentElement === document.body) {
+          document.body.appendChild(state.root);
+        }
+
         actions.forEach((action, index) => {
           const button = document.createElement('button');
           button.type = 'button';
@@ -897,14 +901,7 @@
       async function resolveSelectionScope(items, { actionLabel = 'alterar a distribuição', destructive = false, moveAction = false } = {}) {
         const futureItems = (items || []).filter(item => item.has_future_installments);
         if (!futureItems.length) {
-          if (!destructive) return 'single';
-          const confirmText = items.length > 1
-            ? `Excluir ${items.length} lançamento(s) selecionado(s)? Esta ação remove os itens e suas distribuições associadas.`
-            : 'Excluir este lançamento? Esta ação remove o item e a distribuição associada.';
-          const confirmed = window.confirmTypedAction
-            ? await window.confirmTypedAction(confirmText)
-            : window.confirm(confirmText);
-          return confirmed ? 'single' : null;
+          return 'single';
         }
 
         const nonInstallmentCount = Math.max(0, (items || []).length - futureItems.length);
@@ -957,6 +954,25 @@
           ? `Aplicar ${actionLabel} em ${items.length} lançamento(s), incluindo próximas parcelas das compras parceladas?`
           : `Aplicar ${actionLabel} incluindo próximas parcelas desta compra parcelada?`;
         return window.confirm(fallbackText) ? 'future' : 'single';
+      }
+
+      async function confirmDeleteScope(items, scope) {
+        const safeScope = String(scope || 'single');
+        const count = Array.isArray(items) ? items.length : 0;
+        const hasFuture = safeScope === 'future';
+        const message = hasFuture
+          ? (count > 1
+              ? 'Confirmar exclusão dos lançamentos selecionados e também das próximas parcelas das compras parceladas envolvidas? Esta ação remove os itens e as distribuições associadas.'
+              : 'Confirmar exclusão deste lançamento e também das próximas parcelas desta compra parcelada? Esta ação remove o item e as distribuições associadas.')
+          : (count > 1
+              ? `Confirmar exclusão de ${count} lançamento(s) selecionado(s)? Esta ação remove os itens e as distribuições associadas.`
+              : 'Confirmar exclusão deste lançamento? Esta ação remove o item e a distribuição associada.');
+
+        if (window.confirmTypedAction) {
+          return await window.confirmTypedAction(message);
+        }
+
+        return window.confirm(message);
       }
 
       async function postBulkAction(url, payload) {
@@ -1235,6 +1251,8 @@
         if (!items.length) return;
         const scope = await resolveSelectionScope(items, { destructive: true });
         if (!scope) return;
+        const confirmed = await confirmDeleteScope(items, scope);
+        if (!confirmed) return;
         await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/delete`, {
           txn_ids: txnIds,
           apply_scope: scope

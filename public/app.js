@@ -108,9 +108,26 @@
     return `${base} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:ring-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus:ring-slate-500`;
   }
 
+  function hasVisibleMonthSheet() {
+    const surface = document.querySelector('[data-month-sheet-surface]');
+    if (!surface) return false;
+    const root = surface.closest('.fixed.inset-0');
+    return !!(root && !root.classList.contains('hidden'));
+  }
+
   function setDialogVisibility(state, visible) {
     state.root.classList.toggle('hidden', !visible);
-    document.body.classList.toggle('overflow-hidden', visible);
+    if (visible) {
+      if (state.root.parentElement === document.body) {
+        document.body.appendChild(state.root);
+      }
+      document.body.classList.add('overflow-hidden');
+      return;
+    }
+
+    if (!hasVisibleMonthSheet()) {
+      document.body.classList.remove('overflow-hidden');
+    }
   }
 
   function ensureActionDialog() {
@@ -119,7 +136,7 @@
     }
 
     const root = document.createElement('div');
-    root.className = 'fixed inset-0 z-[9999] hidden';
+    root.className = 'fixed inset-0 z-[10050] hidden';
     root.innerHTML = `
       <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-dialog-backdrop></div>
       <div class="relative z-10 flex min-h-full items-end justify-center p-4 sm:items-center">

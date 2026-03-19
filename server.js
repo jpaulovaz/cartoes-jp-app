@@ -4338,6 +4338,65 @@ app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
   }
 });
 
+app.post("/admin/update-user/:id", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const targetUserId = Number(req.params.id);
+  const safeEmail = normalizeEmail(req.body.email);
+  const safeName = String(req.body.name || '').trim();
+  const safeRole = String(req.body.role || 'user') === 'admin' ? 'admin' : 'user';
+  const canImport = req.body.can_import ? 1 : 0;
+
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+    return renderAdmin(res, { error: 'Usuário inválido.' });
+  }
+
+  if (!safeEmail || !safeEmail.includes('@')) {
+    return renderAdmin(res, { error: 'Email inválido' });
+  }
+
+  const targetUser = getUserRecord(targetUserId);
+  if (!targetUser) {
+    return renderAdmin(res, { error: 'Usuário não encontrado.' });
+  }
+
+  const duplicatedEmail = db.prepare('SELECT id FROM users WHERE email = ? AND id <> ?').get(safeEmail, targetUserId);
+  if (duplicatedEmail) {
+    return renderAdmin(res, { error: 'Já existe outro usuário autorizado com esse email.' });
+  }
+
+  try {
+    db.prepare(`
+      UPDATE users
+         SET email = ?,
+             name = ?,
+             role = ?,
+             can_import = ?
+       WHERE id = ?
+    `).run(
+      safeEmail,
+      safeName || safeEmail.split('@')[0],
+      safeRole,
+      canImport,
+      targetUserId
+    );
+
+    if (String(req.user.id) === String(targetUserId)) {
+      req.user.email = safeEmail;
+      req.user.name = safeName || safeEmail.split('@')[0];
+      req.user.role = safeRole;
+      req.user.can_import = canImport;
+    }
+
+    return renderAdmin(res, { success: 'Usuário atualizado com sucesso!' });
+  } catch (err) {
+    return renderAdmin(res, { error: err.message });
+  }
+});
+
 app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const targetUserId = req.params.id;

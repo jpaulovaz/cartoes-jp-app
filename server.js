@@ -42,6 +42,7 @@ try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id I
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_txn_date_snapshot TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_marked_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_note TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN batch_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 
 // Cria a tabela de meses fechados se não existir
 // Em ambiente multi-usuário, o fechamento precisa ser isolado por user_id.
@@ -54,6 +55,18 @@ db.prepare(`
   )
 `).run();
 
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS shared_debt_batches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requester_user_id INTEGER NOT NULL,
+    receiver_user_id INTEGER NOT NULL,
+    origin_kind TEXT NOT NULL DEFAULT 'single',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (requester_user_id) REFERENCES users(id),
+    FOREIGN KEY (receiver_user_id) REFERENCES users(id)
+  )
+`).run();
 db.prepare(`
   CREATE TABLE IF NOT EXISTS push_subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,6 +93,9 @@ db.prepare(`
 `).run();
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_scheduled_push_logs_event_date ON scheduled_push_logs(event_type, date_key, user_id, sequence_no)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_requests_batch_id ON shared_debt_requests(batch_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_receiver ON shared_debt_batches(receiver_user_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batches(requester_user_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("ALTER TABLE closed_months ADD COLUMN user_id INTEGER").run(); } catch (e) { /* Coluna já existe ou tabela ainda não precisava de ajuste */ }
 try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_closed_months_user_month_year ON closed_months(user_id, month, year)").run(); } catch (e) { /* Índice já existe */ }
 
@@ -502,6 +518,271 @@ function normalizeEmail(value) {
   const email = String(value || "").trim().toLowerCase();
   return email || null;
 }
+
+function normalizeSharedDebtOriginKind(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (['single', 'multiple', 'installment', 'mixed'].includes(normalized)) return normalized;
+  return 'single';
+}
+
+function detectSharedDebtOriginKindFromRows(rows) {
+  const cleanRows = Array.from(new Map(
+    (rows || [])
+      .map(row => (row && typeof row === 'object') ? row : null)
+      .filter(Boolean)
+      .map(row => [Number(row.id || 0), row])
+  ).values()).filter(row => Number(row.id || 0) > 0);
+
+  if (cleanRows.length <= 1) return 'single';
+
+  const rootKeys = new Set();
+  let installmentLikeCount = 0;
+
+  cleanRows.forEach(row => {
+    const rootId = Number(row.parent_txn_id || row.id || 0);
+    if (rootId) rootKeys.add(rootId);
+
+    const description = String(row.description || row.description_snapshot || '').trim();
+    const looksLikeInstallment = Number(row.parent_txn_id || 0) > 0 || /\(\d{2}\/\d{2}\)\s*$/.test(description);
+    if (looksLikeInstallment) installmentLikeCount += 1;
+  });
+
+  if (installmentLikeCount > 0 && rootKeys.size <= 1) return 'installment';
+  if (installmentLikeCount > 0) return 'mixed';
+  return 'multiple';
+}
+
+function createSharedDebtBatch({ requesterUserId, receiverUserId, originKind = 'single', createdAt = null }) {
+  const now = createdAt || nowIso();
+  const info = db.prepare(`
+    INSERT INTO shared_debt_batches (requester_user_id, receiver_user_id, origin_kind, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(requesterUserId, receiverUserId, normalizeSharedDebtOriginKind(originKind), now, now);
+
+  return Number(info.lastInsertRowid);
+}
+
+function touchSharedDebtBatch(batchId, timestamp = null) {
+  const cleanId = Number(batchId || 0);
+  if (!cleanId) return;
+  db.prepare(`UPDATE shared_debt_batches SET updated_at = ? WHERE id = ?`).run(timestamp || nowIso(), cleanId);
+}
+
+function ensureSharedDebtRequestBatchesBackfilled() {
+  const rows = db.prepare(`
+    SELECT id, requester_user_id, receiver_user_id, created_at
+    FROM shared_debt_requests
+    WHERE batch_id IS NULL
+    ORDER BY created_at ASC, id ASC
+  `).all();
+
+  if (!rows.length) return;
+
+  const assignBatch = db.prepare(`UPDATE shared_debt_requests SET batch_id = ? WHERE id = ?`);
+
+  db.transaction(() => {
+    rows.forEach(row => {
+      const batchId = createSharedDebtBatch({
+        requesterUserId: row.requester_user_id,
+        receiverUserId: row.receiver_user_id,
+        originKind: 'single',
+        createdAt: row.created_at || nowIso()
+      });
+      assignBatch.run(batchId, row.id);
+    });
+  })();
+}
+
+function createSharedDebtSyncContext(userId, options = {}) {
+  const actor = getUserRecord(userId);
+  return {
+    userId,
+    requesterDisplayName: actor?.name || actor?.email || 'Um usuário',
+    originKind: normalizeSharedDebtOriginKind(options.originKind),
+    batchIdsByReceiver: new Map(),
+    changesByBatch: new Map()
+  };
+}
+
+function getOrCreateSharedDebtBatchId(context, receiverUserId) {
+  const cleanReceiverId = Number(receiverUserId || 0);
+  if (!context || !cleanReceiverId) return null;
+  if (context.batchIdsByReceiver.has(cleanReceiverId)) return context.batchIdsByReceiver.get(cleanReceiverId);
+
+  const batchId = createSharedDebtBatch({
+    requesterUserId: context.userId,
+    receiverUserId: cleanReceiverId,
+    originKind: context.originKind
+  });
+
+  context.batchIdsByReceiver.set(cleanReceiverId, batchId);
+  return batchId;
+}
+
+function recordSharedDebtBatchChange(context, payload) {
+  if (!context) return;
+
+  const batchId = Number(payload?.batchId || 0);
+  const receiverUserId = Number(payload?.receiverUserId || 0);
+  const requestId = Number(payload?.requestId || 0);
+  if (!batchId || !receiverUserId || !requestId) return;
+
+  if (!context.changesByBatch.has(batchId)) {
+    context.changesByBatch.set(batchId, {
+      batchId,
+      receiverUserId,
+      requestIds: new Set(),
+      receiverName: payload?.receiverName || null,
+      descriptions: [],
+      totalCents: 0,
+      createdCount: 0,
+      updatedCount: 0
+    });
+  }
+
+  const entry = context.changesByBatch.get(batchId);
+  if (entry.requestIds.has(requestId)) return;
+
+  entry.requestIds.add(requestId);
+  entry.totalCents += Number(payload?.amountCents || 0);
+  if (payload?.description && entry.descriptions.length < 3 && !entry.descriptions.includes(payload.description)) {
+    entry.descriptions.push(payload.description);
+  }
+  if (payload?.kind === 'updated') entry.updatedCount += 1;
+  else entry.createdCount += 1;
+}
+
+function buildSharedDebtBatchNotificationBody({ requesterDisplayName, actionLabel, itemCount, totalCents, descriptions }) {
+  const safeCount = Number(itemCount || 0);
+  const formattedTotal = formatBRLFromCents(Number(totalCents || 0));
+  const preview = (descriptions || []).filter(Boolean).slice(0, 2).join(' · ');
+  const previewSuffix = preview ? ` Principais itens: ${preview}.` : '';
+  return `${requesterDisplayName} ${actionLabel} ${safeCount} cobrança(s) para você, totalizando ${formattedTotal}.${previewSuffix}`;
+}
+
+function flushSharedDebtBatchNotifications(context) {
+  if (!context || !context.changesByBatch.size) return;
+
+  context.changesByBatch.forEach(entry => {
+    const itemCount = entry.requestIds.size;
+    if (!itemCount) return;
+
+    const onlyCreated = entry.createdCount > 0 && entry.updatedCount === 0;
+    const onlyUpdated = entry.updatedCount > 0 && entry.createdCount === 0;
+    const title = onlyCreated
+      ? 'Novo envio de cobranças compartilhadas'
+      : onlyUpdated
+        ? 'Cobranças compartilhadas atualizadas'
+        : 'Cobranças compartilhadas enviadas e atualizadas';
+
+    const actionLabel = onlyCreated
+      ? 'enviou'
+      : onlyUpdated
+        ? 'atualizou'
+        : 'enviou e atualizou';
+
+    touchSharedDebtBatch(entry.batchId);
+
+    createNotification({
+      userId: entry.receiverUserId,
+      type: 'shared_debt_batch',
+      title,
+      body: buildSharedDebtBatchNotificationBody({
+        requesterDisplayName: context.requesterDisplayName,
+        actionLabel,
+        itemCount,
+        totalCents: entry.totalCents,
+        descriptions: entry.descriptions
+      }),
+      href: `/shared-debts?batch=${entry.batchId}`,
+      relatedType: 'shared_debt_batch',
+      relatedId: entry.batchId
+    });
+  });
+}
+
+function buildSharedDebtBatchCards(items, scope) {
+  const groups = new Map();
+
+  (items || []).forEach(item => {
+    const batchId = Number(item?.batch_id || 0);
+    if (!batchId) return;
+
+    if (!groups.has(batchId)) {
+      groups.set(batchId, {
+        id: batchId,
+        scope,
+        originKind: normalizeSharedDebtOriginKind(item?.batch_origin_kind),
+        counterpartName: scope === 'received'
+          ? (item?.requester_name || item?.requester_email || 'Usuário')
+          : (item?.receiver_name || item?.receiver_email || 'Usuário'),
+        counterpartEmail: scope === 'received'
+          ? (item?.requester_email || null)
+          : (item?.receiver_email || null),
+        firstRequestId: Number(item?.id || 0),
+        firstPendingRequestId: item?.status === 'pending' ? Number(item?.id || 0) : null,
+        createdAt: item?.batch_created_at || item?.created_at || null,
+        updatedAt: item?.batch_updated_at || item?.updated_at || item?.created_at || null,
+        minMonthRank: null,
+        maxMonthRank: null,
+        minMonth: null,
+        minYear: null,
+        maxMonth: null,
+        maxYear: null,
+        totalCount: 0,
+        pendingCount: 0,
+        totalCents: 0,
+        pendingCents: 0,
+        previewDescriptions: [],
+        items: []
+      });
+    }
+
+    const batch = groups.get(batchId);
+    batch.items.push(item);
+    batch.totalCount += 1;
+    batch.totalCents += Number(item?.amount_cents || 0);
+
+    if (item?.status === 'pending') {
+      batch.pendingCount += 1;
+      batch.pendingCents += Number(item?.amount_cents || 0);
+      if (!batch.firstPendingRequestId) batch.firstPendingRequestId = Number(item?.id || 0);
+    }
+
+    const currentUpdatedAt = String(item?.updated_at || item?.created_at || '');
+    if (currentUpdatedAt && currentUpdatedAt > String(batch.updatedAt || '')) batch.updatedAt = currentUpdatedAt;
+
+    const description = String(item?.description_snapshot || '').trim();
+    if (description && batch.previewDescriptions.length < 3 && !batch.previewDescriptions.includes(description)) {
+      batch.previewDescriptions.push(description);
+    }
+
+    const month = Number(item?.source_due_month || 0);
+    const year = Number(item?.source_due_year || 0);
+    if (month && year) {
+      const rank = (year * 100) + month;
+      if (batch.minMonthRank == null || rank < batch.minMonthRank) {
+        batch.minMonthRank = rank;
+        batch.minMonth = month;
+        batch.minYear = year;
+      }
+      if (batch.maxMonthRank == null || rank > batch.maxMonthRank) {
+        batch.maxMonthRank = rank;
+        batch.maxMonth = month;
+        batch.maxYear = year;
+      }
+    }
+  });
+
+  return Array.from(groups.values())
+    .map(batch => ({
+      ...batch,
+      reviewRequestId: batch.firstPendingRequestId || batch.firstRequestId || null
+    }))
+    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+}
+
+ensureSharedDebtRequestBatchesBackfilled();
 
 function firstTwoNames(value) {
   const parts = String(value || "").trim().split(/\s+/).filter(Boolean);
@@ -1376,10 +1657,11 @@ function cancelPendingSharedDebtRequestsForTransaction(userId, txnId, note = 'La
   });
 }
 
-function syncSharedDebtRequestsForTransaction(userId, txnId) {
+function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) {
   const txn = db.prepare(`
     SELECT
       t.id,
+      t.parent_txn_id,
       t.txn_date,
       t.description,
       t.amount_cents,
@@ -1399,7 +1681,7 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
   }
 
   const requesterPerson = getOwnerPerson(userId);
-  const requesterDisplayName = requesterPerson?.name || getUserRecord(userId)?.name || 'Um usuário';
+  const requesterDisplayName = requesterPerson?.name || context?.requesterDisplayName || getUserRecord(userId)?.name || 'Um usuário';
 
   const eligibleRows = db.prepare(`
     SELECT
@@ -1456,6 +1738,7 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
       const receiverEmailSnapshot = normalizeEmail(row.person_email || row.receiver_user_email);
       const receiverNameSnapshot = row.person_name || row.receiver_user_name || null;
       const existing = existingByPerson.get(personId);
+      const getContextBatchId = () => context ? getOrCreateSharedDebtBatchId(context, row.receiver_user_id) : null;
 
       if (existing) {
         const changed = [
@@ -1470,6 +1753,13 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
           String(existing.receiver_email_snapshot || '') !== String(receiverEmailSnapshot || ''),
           String(existing.receiver_name_snapshot || '') !== String(receiverNameSnapshot || '')
         ].some(Boolean);
+
+        const nextBatchId = Number((changed && context ? getContextBatchId() : null) || existing.batch_id || createSharedDebtBatch({
+          requesterUserId: userId,
+          receiverUserId: row.receiver_user_id,
+          originKind: context?.originKind || 'single',
+          createdAt: existing.created_at || now
+        }));
 
         db.prepare(`
           UPDATE shared_debt_requests
@@ -1486,6 +1776,7 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
               amount_cents = ?,
               receiver_email_snapshot = ?,
               receiver_name_snapshot = ?,
+              batch_id = ?,
               updated_at = ?
           WHERE id = ?
         `).run(
@@ -1502,6 +1793,7 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
           row.share_cents,
           receiverEmailSnapshot,
           receiverNameSnapshot,
+          nextBatchId,
           now,
           existing.id
         );
@@ -1514,29 +1806,48 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
             note: 'Solicitação atualizada automaticamente após alteração na distribuição.'
           });
 
-          createNotification({
-            userId: row.receiver_user_id,
-            type: 'shared_debt_request',
-            title: 'Cobrança compartilhada atualizada',
-            body: `${requesterDisplayName} atualizou uma cobrança para ${formatBRLFromCents(row.share_cents)} referente a ${txn.description}.`,
-            href: `/shared-debts?request=${existing.id}`,
-            relatedType: 'shared_debt_request',
-            relatedId: existing.id
-          });
+          if (context) {
+            recordSharedDebtBatchChange(context, {
+              batchId: nextBatchId,
+              receiverUserId: row.receiver_user_id,
+              receiverName: receiverNameSnapshot,
+              requestId: existing.id,
+              kind: 'updated',
+              amountCents: row.share_cents,
+              description: txn.description
+            });
+          } else {
+            createNotification({
+              userId: row.receiver_user_id,
+              type: 'shared_debt_request',
+              title: 'Cobrança compartilhada atualizada',
+              body: `${requesterDisplayName} atualizou uma cobrança para ${formatBRLFromCents(row.share_cents)} referente a ${txn.description}.`,
+              href: `/shared-debts?request=${existing.id}`,
+              relatedType: 'shared_debt_request',
+              relatedId: existing.id
+            });
+          }
         }
       } else {
         const latestRequest = latestByPerson.get(personId);
         const hasActiveHistory = latestRequest && latestRequest.status && latestRequest.status !== 'cancelled';
 
         if (!hasActiveHistory) {
+          const nextBatchId = Number(getContextBatchId() || createSharedDebtBatch({
+            requesterUserId: userId,
+            receiverUserId: row.receiver_user_id,
+            originKind: context?.originKind || 'single',
+            createdAt: now
+          }));
+
           const info = db.prepare(`
             INSERT INTO shared_debt_requests (
               requester_user_id, requester_person_id, receiver_user_id, source_person_id,
               source_transaction_id, source_allocation_id, source_due_month, source_due_year, source_txn_date_snapshot,
               card_id, card_name_snapshot, description_snapshot, amount_cents,
               receiver_email_snapshot, receiver_name_snapshot, request_note, response_note,
-              status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'pending', ?, ?)
+              status, batch_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'pending', ?, ?, ?)
           `).run(
             userId,
             requesterPerson?.id || null,
@@ -1553,6 +1864,7 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
             row.share_cents,
             receiverEmailSnapshot,
             receiverNameSnapshot,
+            nextBatchId,
             now,
             now
           );
@@ -1560,15 +1872,27 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
           const requestId = Number(info.lastInsertRowid);
           addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'created' });
 
-          createNotification({
-            userId: row.receiver_user_id,
-            type: 'shared_debt_request',
-            title: 'Nova cobrança compartilhada',
-            body: `${requesterDisplayName} enviou uma cobrança para você no valor de ${formatBRLFromCents(row.share_cents)} referente a ${txn.description}.`,
-            href: `/shared-debts?request=${requestId}`,
-            relatedType: 'shared_debt_request',
-            relatedId: requestId
-          });
+          if (context) {
+            recordSharedDebtBatchChange(context, {
+              batchId: nextBatchId,
+              receiverUserId: row.receiver_user_id,
+              receiverName: receiverNameSnapshot,
+              requestId,
+              kind: 'created',
+              amountCents: row.share_cents,
+              description: txn.description
+            });
+          } else {
+            createNotification({
+              userId: row.receiver_user_id,
+              type: 'shared_debt_request',
+              title: 'Nova cobrança compartilhada',
+              body: `${requesterDisplayName} enviou uma cobrança para você no valor de ${formatBRLFromCents(row.share_cents)} referente a ${txn.description}.`,
+              href: `/shared-debts?request=${requestId}`,
+              relatedType: 'shared_debt_request',
+              relatedId: requestId
+            });
+          }
         }
       }
     });
@@ -1588,9 +1912,29 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
           eventType: 'cancelled',
           note: 'Solicitação cancelada automaticamente porque a pessoa deixou de participar da divisão.'
         });
+
+        touchSharedDebtBatch(row.batch_id, now);
       }
     });
   })();
+}
+
+function syncSharedDebtRequestsForTransactions(userId, txnIds, options = {}) {
+  const cleanIds = Array.from(new Set((txnIds || []).map(Number).filter(Boolean)));
+  if (!cleanIds.length) return null;
+
+  const originRows = getTransactionScopeRowsByIds(userId, cleanIds);
+  const context = createSharedDebtSyncContext(userId, {
+    originKind: options.originKind || detectSharedDebtOriginKindFromRows(originRows)
+  });
+
+  cleanIds.forEach(txnId => syncSharedDebtRequestForTransactionWithContext(userId, txnId, context));
+  flushSharedDebtBatchNotifications(context);
+  return context;
+}
+
+function syncSharedDebtRequestsForTransaction(userId, txnId) {
+  return syncSharedDebtRequestsForTransactions(userId, [txnId]);
 }
 
 function deleteTransactionsAndAllocations(userId, rows) {
@@ -2081,11 +2425,16 @@ function getSharedDebtRequestsReceived(userId) {
   return db.prepare(`
     SELECT
       r.*,
+      COALESCE(r.batch_id, b.id) AS batch_id,
+      COALESCE(b.origin_kind, 'single') AS batch_origin_kind,
+      COALESCE(b.created_at, r.created_at) AS batch_created_at,
+      COALESCE(b.updated_at, r.updated_at) AS batch_updated_at,
       u.name AS requester_name,
       u.email AS requester_email,
       COALESCE(r.source_txn_date_snapshot, t.txn_date) AS source_txn_date
     FROM shared_debt_requests r
     JOIN users u ON u.id = r.requester_user_id
+    LEFT JOIN shared_debt_batches b ON b.id = r.batch_id
     LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
     WHERE r.receiver_user_id = ?
     ORDER BY
@@ -2110,11 +2459,16 @@ function getSharedDebtRequestsSent(userId) {
   return db.prepare(`
     SELECT
       r.*,
+      COALESCE(r.batch_id, b.id) AS batch_id,
+      COALESCE(b.origin_kind, 'single') AS batch_origin_kind,
+      COALESCE(b.created_at, r.created_at) AS batch_created_at,
+      COALESCE(b.updated_at, r.updated_at) AS batch_updated_at,
       u.name AS receiver_name,
       u.email AS receiver_email,
       COALESCE(r.source_txn_date_snapshot, t.txn_date) AS source_txn_date
     FROM shared_debt_requests r
     JOIN users u ON u.id = r.receiver_user_id
+    LEFT JOIN shared_debt_batches b ON b.id = r.batch_id
     LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
     WHERE r.requester_user_id = ?
     ORDER BY
@@ -2190,17 +2544,23 @@ function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
 app.get("/shared-debts", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const requestIdToHighlight = Number(req.query.request) || null;
+  const batchIdToHighlight = Number(req.query.batch) || null;
 
   db.prepare(`
     UPDATE notifications
     SET is_read = 1, read_at = COALESCE(read_at, ?)
     WHERE user_id = ?
-      AND (related_type = 'shared_debt_request' OR type = 'shared_debt_request')
+      AND (
+        related_type IN ('shared_debt_request', 'shared_debt_batch') OR
+        type IN ('shared_debt_request', 'shared_debt_batch')
+      )
       AND is_read = 0
   `).run(nowIso(), userId);
 
   const received = getSharedDebtRequestsReceived(userId);
   const sent = getSharedDebtRequestsSent(userId);
+  const receivedPendingBatches = buildSharedDebtBatchCards(received, 'received').filter(batch => batch.pendingCount > 0);
+  const sentPendingBatches = buildSharedDebtBatchCards(sent, 'sent').filter(batch => batch.pendingCount > 0);
   const eventsByRequest = getSharedDebtEventsByRequestIds([
     ...received.map(item => item.id),
     ...sent.map(item => item.id)
@@ -2210,12 +2570,103 @@ app.get("/shared-debts", ensureAuthenticated, (req, res) => {
     title: "OrganizaPay | Dívidas Compartilhadas",
     received,
     sent,
+    receivedPendingBatches,
+    sentPendingBatches,
     eventsByRequest,
     requestIdToHighlight,
+    batchIdToHighlight,
     formatBRLFromCents,
     monthLabel,
     formatDateBR
   });
+});
+
+app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const batchId = Number(req.params.id);
+  const action = String(req.body.action || '').trim().toLowerCase();
+  const note = String(req.body.note || '').trim() || null;
+
+  if (!batchId) {
+    setFlash(req, 'error', 'Envio inválido.');
+    return res.redirect('/shared-debts');
+  }
+
+  if (!['accept', 'reject'].includes(action)) {
+    setFlash(req, 'error', 'Ação inválida para este envio.');
+    return res.redirect(`/shared-debts?batch=${batchId}`);
+  }
+
+  const batchRow = db.prepare(`
+    SELECT b.*, u.name AS requester_name, u.email AS requester_email
+    FROM shared_debt_batches b
+    JOIN users u ON u.id = b.requester_user_id
+    WHERE b.id = ? AND b.receiver_user_id = ?
+    LIMIT 1
+  `).get(batchId, userId);
+
+  if (!batchRow) {
+    setFlash(req, 'error', 'Envio não encontrado.');
+    return res.redirect('/shared-debts');
+  }
+
+  const pendingItems = db.prepare(`
+    SELECT id, amount_cents, description_snapshot
+    FROM shared_debt_requests
+    WHERE batch_id = ?
+      AND receiver_user_id = ?
+      AND status = 'pending'
+    ORDER BY created_at ASC, id ASC
+  `).all(batchId, userId);
+
+  if (!pendingItems.length) {
+    setFlash(req, 'info', 'Este envio não possui mais cobranças pendentes para você.');
+    return res.redirect(`/shared-debts?batch=${batchId}`);
+  }
+
+  const actor = getUserRecord(userId);
+  const actorName = actor?.name || actor?.email || 'O destinatário';
+  const now = nowIso();
+  const accepted = action === 'accept';
+  const nextStatus = accepted ? 'accepted' : 'rejected_by_receiver';
+  const eventType = nextStatus;
+  const totalCents = pendingItems.reduce((sum, item) => sum + Number(item.amount_cents || 0), 0);
+  const firstRequestId = Number(pendingItems[0]?.id || 0) || null;
+  const title = accepted ? 'Envio de cobranças aceito' : 'Envio de cobranças recusado';
+  const baseBody = accepted
+    ? `${actorName} aceitou ${pendingItems.length} cobrança(s) do seu envio, totalizando ${formatBRLFromCents(totalCents)}.`
+    : `${actorName} recusou ${pendingItems.length} cobrança(s) do seu envio, totalizando ${formatBRLFromCents(totalCents)}.`;
+  const body = note ? `${baseBody} Observação: ${note}` : baseBody;
+
+  const updateStmt = db.prepare(`
+    UPDATE shared_debt_requests
+    SET status = ?, response_note = ?, updated_at = ?, responded_at = ?
+    WHERE id = ? AND receiver_user_id = ? AND status = 'pending'
+  `);
+
+  db.transaction(() => {
+    pendingItems.forEach(item => {
+      updateStmt.run(nextStatus, note, now, now, item.id, userId);
+      addSharedDebtEvent({ requestId: item.id, actorUserId: userId, eventType, note });
+    });
+
+    touchSharedDebtBatch(batchId, now);
+
+    createNotification({
+      userId: batchRow.requester_user_id,
+      type: 'shared_debt_batch',
+      title,
+      body,
+      href: firstRequestId ? `/shared-debts?request=${firstRequestId}` : '/shared-debts',
+      relatedType: 'shared_debt_batch',
+      relatedId: batchId
+    });
+  })();
+
+  setFlash(req, 'success', accepted
+    ? `Você aceitou ${pendingItems.length} cobrança(s) deste envio.`
+    : `Você recusou ${pendingItems.length} cobrança(s) deste envio.`);
+  return res.redirect(`/shared-debts?batch=${batchId}`);
 });
 
 app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
@@ -2272,6 +2723,7 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
     `).run(nextStatus, note, now, now, requestId, userId);
 
     addSharedDebtEvent({ requestId, actorUserId: userId, eventType, note });
+    touchSharedDebtBatch(requestRow.batch_id, now);
 
     createNotification({
       userId: requestRow.requester_user_id,
@@ -2350,6 +2802,7 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
     }
 
     addSharedDebtEvent({ requestId, actorUserId: userId, eventType, note });
+    touchSharedDebtBatch(requestRow.batch_id, now);
 
     createNotification({
       userId: requestRow.receiver_user_id,
@@ -2418,6 +2871,7 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
     `).run(now, note, now, requestId, userId);
 
     addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'payment_marked_by_receiver', note });
+    touchSharedDebtBatch(requestRow.batch_id, now);
 
     createNotification({
       userId: requestRow.requester_user_id,
@@ -2486,6 +2940,7 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
     `).run(now, now, requestId, userId);
 
     addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'settled', note });
+    touchSharedDebtBatch(requestRow.batch_id, now);
 
     createNotification({
       userId: requestRow.receiver_user_id,
@@ -2936,7 +3391,10 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const unreadSharedDebtNotifications = db.prepare(`
     SELECT title, body, href, created_at
     FROM notifications
-    WHERE user_id = ? AND is_read = 0 AND (related_type = 'shared_debt_request' OR type = 'shared_debt_request')
+    WHERE user_id = ? AND is_read = 0 AND (
+      related_type IN ('shared_debt_request', 'shared_debt_batch') OR
+      type IN ('shared_debt_request', 'shared_debt_batch')
+    )
     ORDER BY created_at DESC
     LIMIT 5
   `).all(userId);
@@ -2954,7 +3412,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     });
   } else {
     const pendingSharedDebtCount = db.prepare(`
-      SELECT COUNT(*) AS total
+      SELECT COUNT(DISTINCT batch_id) AS total
       FROM shared_debt_requests
       WHERE receiver_user_id = ? AND status = 'pending'
     `).get(userId)?.total || 0;
@@ -2963,8 +3421,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       alerts.push({
         type: 'warning',
         icon: '📨',
-        title: 'Cobranças aguardando sua análise',
-        description: `${pendingSharedDebtCount} solicitação(ões) de dívida compartilhada estão pendentes para você.`,
+        title: 'Envios aguardando sua análise',
+        description: `${pendingSharedDebtCount} envio(s) de dívida compartilhada estão pendentes para você.`,
         href: '/shared-debts#received'
       });
     }
@@ -3349,7 +3807,9 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
       }
     })();
 
-    createdTxnIds.forEach(txnIdCreated => syncSharedDebtRequestsForTransaction(userId, txnIdCreated));
+    syncSharedDebtRequestsForTransactions(userId, createdTxnIds, {
+      originKind: createdTxnIds.length > 1 ? 'installment' : 'single'
+    });
 
     if (isRecurring) {
       setFlash(req, "success", "Lançamento recorrente mensal criado com sucesso.");
@@ -3440,7 +3900,9 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
     });
   })();
 
-  targetRows.forEach(targetTxn => syncSharedDebtRequestsForTransaction(userId, targetTxn.id));
+  syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
+    originKind: detectSharedDebtOriginKindFromRows(targetRows)
+  });
 
   res.redirect(`/month/${txn.year}/${txn.month}`);
 });
@@ -3514,7 +3976,9 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
     });
   })();
 
-  targetRows.forEach(targetTxn => syncSharedDebtRequestsForTransaction(userId, targetTxn.id));
+  syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
+    originKind: detectSharedDebtOriginKindFromRows(targetRows)
+  });
 
   res.redirect(`/month/${txn.year}/${txn.month}`);
 });
@@ -3602,7 +4066,9 @@ app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
     });
   })();
 
-  targetRows.forEach(targetTxn => syncSharedDebtRequestsForTransaction(userId, targetTxn.id));
+  syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
+    originKind: detectSharedDebtOriginKindFromRows(targetRows)
+  });
 
   return res.json({
     ok: true,
@@ -3716,7 +4182,9 @@ app.post("/month/:year/:month/bulk/move", ensureAuthenticated, (req, res) => {
     });
   })();
 
-  moveTargets.forEach(targetTxn => syncSharedDebtRequestsForTransaction(userId, targetTxn.id));
+  syncSharedDebtRequestsForTransactions(userId, moveTargets.map(targetTxn => targetTxn.id), {
+    originKind: detectSharedDebtOriginKindFromRows(moveTargets)
+  });
 
   return res.json({
     ok: true,

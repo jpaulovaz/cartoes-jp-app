@@ -205,6 +205,7 @@ CREATE TABLE IF NOT EXISTS shared_debt_requests (
   requester_user_id INTEGER NOT NULL,
   requester_person_id INTEGER,
   receiver_user_id INTEGER NOT NULL,
+  batch_id INTEGER,
   source_transaction_id INTEGER,
   source_allocation_id INTEGER,
   source_due_month INTEGER,
@@ -227,9 +228,21 @@ CREATE TABLE IF NOT EXISTS shared_debt_requests (
   FOREIGN KEY (requester_user_id) REFERENCES users(id),
   FOREIGN KEY (requester_person_id) REFERENCES people(id),
   FOREIGN KEY (receiver_user_id) REFERENCES users(id),
+  FOREIGN KEY (batch_id) REFERENCES shared_debt_batches(id),
   FOREIGN KEY (source_transaction_id) REFERENCES transactions(id),
   FOREIGN KEY (source_allocation_id) REFERENCES allocations(id),
   FOREIGN KEY (card_id) REFERENCES cards(id)
+);
+
+CREATE TABLE IF NOT EXISTS shared_debt_batches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  requester_user_id INTEGER NOT NULL,
+  receiver_user_id INTEGER NOT NULL,
+  origin_kind TEXT NOT NULL DEFAULT 'single',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (requester_user_id) REFERENCES users(id),
+  FOREIGN KEY (receiver_user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS shared_debt_events (
@@ -316,6 +329,10 @@ if (!columnExists("shared_debt_requests", "payment_note")) {
   db.exec("ALTER TABLE shared_debt_requests ADD COLUMN payment_note TEXT;");
 }
 
+if (!columnExists("shared_debt_requests", "batch_id")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN batch_id INTEGER;");
+}
+
 // ===== ÍNDICES =====
 db.exec(`
 CREATE INDEX IF NOT EXISTS idx_cards_user ON cards(user_id);
@@ -334,8 +351,11 @@ CREATE INDEX IF NOT EXISTS idx_recurring_exceptions_rule_month ON recurring_exce
 CREATE INDEX IF NOT EXISTS idx_people_email ON people(user_id, email);
 CREATE INDEX IF NOT EXISTS idx_shared_debts_receiver_status ON shared_debt_requests(receiver_user_id, status, created_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debts_requester_status ON shared_debt_requests(requester_user_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_shared_debts_batch_id ON shared_debt_requests(batch_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debts_source_allocation ON shared_debt_requests(source_allocation_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debts_source_person ON shared_debt_requests(requester_user_id, source_transaction_id, source_person_id);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_receiver ON shared_debt_batches(receiver_user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batches(requester_user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_events_request ON shared_debt_events(request_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at);
 `);

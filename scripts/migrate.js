@@ -239,6 +239,9 @@ CREATE TABLE IF NOT EXISTS shared_debt_batches (
   requester_user_id INTEGER NOT NULL,
   receiver_user_id INTEGER NOT NULL,
   origin_kind TEXT NOT NULL DEFAULT 'single',
+  status_summary TEXT NOT NULL DEFAULT 'pending',
+  first_responded_at TEXT,
+  resolved_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (requester_user_id) REFERENCES users(id),
@@ -331,6 +334,18 @@ if (!columnExists("shared_debt_requests", "payment_note")) {
 
 if (!columnExists("shared_debt_requests", "batch_id")) {
   db.exec("ALTER TABLE shared_debt_requests ADD COLUMN batch_id INTEGER;");
+}
+
+if (!columnExists("shared_debt_batches", "status_summary")) {
+  db.exec("ALTER TABLE shared_debt_batches ADD COLUMN status_summary TEXT NOT NULL DEFAULT 'pending';");
+}
+
+if (!columnExists("shared_debt_batches", "first_responded_at")) {
+  db.exec("ALTER TABLE shared_debt_batches ADD COLUMN first_responded_at TEXT;");
+}
+
+if (!columnExists("shared_debt_batches", "resolved_at")) {
+  db.exec("ALTER TABLE shared_debt_batches ADD COLUMN resolved_at TEXT;");
 }
 
 // ===== ÍNDICES =====

@@ -342,7 +342,7 @@
                  }).filter(Boolean);
                  const shortParticipantNames = participantNames.map(name => name.split(' ')[0]);
             %>
-              <tr class="op-month-row block md:table-row p-4 md:p-0 border-b border-slate-100 dark:border-slate-700 last:border-b-0 hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors align-middle space-y-1 md:space-y-0 cursor-pointer"
+              <tr class="op-month-row block md:table-row mb-3 rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-800/60 md:mb-0 md:rounded-none md:border-b md:border-x-0 md:border-t-0 md:border-slate-100 md:bg-transparent md:p-0 md:shadow-none dark:md:border-slate-700 hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors align-middle space-y-1 md:space-y-0 cursor-pointer"
                 data-month-row data-txn-id="<%= t.id %>" tabindex="0" role="button" aria-label="Abrir ações para <%= t.description %>">
                 <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
                   <div class="flex items-center justify-between gap-3 md:block">
@@ -400,7 +400,7 @@
                     </div>
                   <% } %>
                 </td>
-                <td class="block md:table-cell px-0 md:px-4 py-3 md:py-3 mt-3 md:mt-0 border-t border-dashed border-slate-200 dark:border-slate-700 md:border-t-0">
+                <td class="op-month-row__meta block md:table-cell px-3 md:px-4 py-3 md:py-3 mt-3 md:mt-0 rounded-2xl border border-slate-200/90 bg-slate-50/90 dark:border-slate-700 dark:bg-slate-900/35 md:rounded-none md:border-0 md:bg-transparent md:px-0 md:py-3">
                   <div class="flex items-start gap-3">
                     <% if (!isClosed) { %>
                       <span data-selection-indicator
@@ -431,7 +431,6 @@
                         <% if (t.recurring_rule_id) { %>
                           <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Recorrente</span>
                         <% } %>
-                        <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400"><%= t.alloc_count > 0 ? 'Distribuído' : 'Aguardando distribuição' %></span>
                       </div>
 
                       <div class="mt-2 text-[11px] font-medium text-slate-400 dark:text-slate-500">
@@ -495,6 +494,29 @@
   <style>
     .op-month-row {
       -webkit-tap-highlight-color: transparent;
+    }
+
+    @media (max-width: 767px) {
+      .op-month-row {
+        overflow: hidden;
+      }
+
+      .op-month-row__meta {
+        position: relative;
+      }
+
+      .op-month-row__meta::before {
+        content: '';
+        position: absolute;
+        left: 1rem;
+        right: 1rem;
+        top: 0;
+        border-top: 1.5px solid rgba(148, 163, 184, 0.3);
+      }
+
+      .dark .op-month-row__meta::before {
+        border-top-color: rgba(100, 116, 139, 0.5);
+      }
     }
 
     .op-month-selection-toolbar {

@@ -862,11 +862,11 @@
     const isMobileViewport = () => !window.matchMedia('(min-width: 768px)').matches;
     const showNav = () => nav.classList.remove('is-idle-hidden');
     const hideNav = () => nav.classList.add('is-idle-hidden');
-    const scheduleHide = (delay = 900) => {
+    const scheduleHide = (delay = 1900) => {
       window.clearTimeout(hideTimer);
       hideTimer = window.setTimeout(hideNav, delay);
     };
-    const registerActivity = (delay = 900) => {
+    const registerActivity = (delay = 1900) => {
       if (!isMobileViewport()) return;
       showNav();
       scheduleHide(delay);
@@ -903,13 +903,13 @@
     }
 
     if (isMobileViewport()) {
-      registerActivity(1400);
+      registerActivity(2400);
     }
 
-    window.addEventListener('scroll', () => registerActivity(900), { passive: true });
-    window.addEventListener('touchstart', () => registerActivity(1400), { passive: true });
-    window.addEventListener('pointerdown', () => registerActivity(1400), { passive: true });
-    window.addEventListener('focusin', () => registerActivity(1400));
+    window.addEventListener('scroll', () => registerActivity(1900), { passive: true });
+    window.addEventListener('touchstart', () => registerActivity(2400), { passive: true });
+    window.addEventListener('pointerdown', () => registerActivity(2400), { passive: true });
+    window.addEventListener('focusin', () => registerActivity(2400));
     window.addEventListener('load', syncBottomClearance, { once: true });
     window.addEventListener('pageshow', syncBottomClearance);
     window.addEventListener('orientationchange', syncBottomClearance, { passive: true });
@@ -920,7 +920,7 @@
         showNav();
         return;
       }
-      registerActivity(1400);
+      registerActivity(2400);
     });
   }
 

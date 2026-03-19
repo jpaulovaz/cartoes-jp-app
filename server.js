@@ -123,6 +123,9 @@ const { formatBRLFromCents, parseMonthYear, toISOFromBRDate, centsFromPtBrMoney 
 const formatDateBR = (dateStr) => { if (!dateStr) return "-"; return dayjs(dateStr).format("DD/MM/YYYY"); };
 const { computeDueDate } = require("./src/dueDate");
 
+const EFFECTIVE_DUE_MONTH_SQL = "COALESCE(t.due_month, i.month)";
+const EFFECTIVE_DUE_YEAR_SQL = "COALESCE(t.due_year, i.year)";
+
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -845,8 +848,8 @@ function getVisiblePeopleForMonth(userId, month, year, { includePayments = false
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE a.user_id = ?
       AND (
-        (i.month = ? AND i.year = ?) OR
-        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
       )
   `).all(userId, month, year, month, year);
 
@@ -887,8 +890,8 @@ function getVisibleCardsForMonth(userId, month, year) {
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE t.user_id = ?
       AND (
-        (i.month = ? AND i.year = ?) OR
-        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
       )
   `).all(userId, month, year, month, year);
 
@@ -1034,8 +1037,8 @@ function getCardStatementStatusForMonth(userId, month, year) {
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE t.user_id = ?
       AND (
-        (i.month = ? AND i.year = ?) OR
-        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
       )
     GROUP BY t.card_id
   `).all(userId, month, year, month, year);
@@ -1382,8 +1385,8 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
       t.amount_cents,
       t.card_id,
       c.name AS card_name,
-      COALESCE(i.month, t.due_month) AS due_month,
-      COALESCE(i.year, t.due_year) AS due_year
+      COALESCE(t.due_month, i.month) AS due_month,
+      COALESCE(t.due_year, i.year) AS due_year
     FROM transactions t
     LEFT JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
@@ -1630,8 +1633,8 @@ function deleteTransactionsAndAllocations(userId, rows) {
 function getTransactionScopeRow(userId, txnId) {
   return db.prepare(`
     SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id,
-           COALESCE(i.month, t.due_month) AS month,
-           COALESCE(i.year, t.due_year) AS year
+           COALESCE(t.due_month, i.month) AS month,
+           COALESCE(t.due_year, i.year) AS year
     FROM transactions t
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE t.id = ? AND t.user_id = ?
@@ -1677,20 +1680,99 @@ function getInstallmentScopeRows(userId, txnRow, scope = 'single') {
 
   const rows = db.prepare(`
     SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id,
-           COALESCE(i.month, t.due_month) AS month,
-           COALESCE(i.year, t.due_year) AS year
+           COALESCE(t.due_month, i.month) AS month,
+           COALESCE(t.due_year, i.year) AS year
     FROM transactions t
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE t.user_id = ?
       AND (t.id = ? OR t.parent_txn_id = ?)
       AND (
-        COALESCE(i.year, t.due_year) > ? OR
-        (COALESCE(i.year, t.due_year) = ? AND COALESCE(i.month, t.due_month) >= ?)
+        COALESCE(t.due_year, i.year) > ? OR
+        (COALESCE(t.due_year, i.year) = ? AND COALESCE(t.due_month, i.month) >= ?)
       )
-    ORDER BY COALESCE(i.year, t.due_year) ASC, COALESCE(i.month, t.due_month) ASC, t.id ASC
+    ORDER BY COALESCE(t.due_year, i.year) ASC, COALESCE(t.due_month, i.month) ASC, t.id ASC
   `).all(userId, rootId, rootId, currentYear, currentYear, currentMonth);
 
   return rows.length ? rows : [txnRow];
+}
+
+function normalizeTxnIds(value) {
+  const raw = Array.isArray(value) ? value : [value];
+  return Array.from(new Set(raw.map(item => Number(item)).filter(Number.isInteger).filter(item => item > 0)));
+}
+
+function getTransactionScopeRowsByIds(userId, txnIds) {
+  return normalizeTxnIds(txnIds)
+    .map(txnId => getTransactionScopeRow(userId, txnId))
+    .filter(Boolean);
+}
+
+function dedupeTxnRows(rows) {
+  const byId = new Map();
+  (rows || []).forEach(row => {
+    if (!row || !row.id) return;
+    if (!byId.has(row.id)) byId.set(row.id, row);
+  });
+  return Array.from(byId.values()).sort((a, b) => {
+    const yearDiff = Number(a.year || 0) - Number(b.year || 0);
+    if (yearDiff !== 0) return yearDiff;
+    const monthDiff = Number(a.month || 0) - Number(b.month || 0);
+    if (monthDiff !== 0) return monthDiff;
+    return Number(a.id || 0) - Number(b.id || 0);
+  });
+}
+
+function collectScopedTxnRows(userId, sourceRows, scope = 'single') {
+  const scopedRows = [];
+  (sourceRows || []).forEach(row => {
+    getInstallmentScopeRows(userId, row, scope).forEach(target => scopedRows.push(target));
+  });
+  return dedupeTxnRows(scopedRows);
+}
+
+function getMonthDelta(fromYear, fromMonth, toYear, toMonth) {
+  return ((Number(toYear) - Number(fromYear)) * 12) + (Number(toMonth) - Number(fromMonth));
+}
+
+function buildMoveTargets(userId, sourceRows, targetMonth, targetYear, scope = 'single') {
+  const normalizedScope = String(scope || 'single').trim().toLowerCase();
+  const targetMap = new Map();
+
+  (sourceRows || []).forEach(sourceRow => {
+    const delta = getMonthDelta(sourceRow.year, sourceRow.month, targetYear, targetMonth);
+    const rowsToMove = normalizedScope === 'future'
+      ? getInstallmentScopeRows(userId, sourceRow, 'future')
+      : [sourceRow];
+
+    rowsToMove.forEach(targetRow => {
+      const shifted = normalizedScope === 'future'
+        ? shiftMonth(targetRow.year, targetRow.month, delta)
+        : { month: Number(targetMonth), year: Number(targetYear) };
+
+      const existing = targetMap.get(targetRow.id);
+      if (existing) {
+        const conflict = Number(existing.target_month) !== Number(shifted.month) || Number(existing.target_year) !== Number(shifted.year);
+        if (conflict) {
+          throw new Error('Existem lançamentos selecionados com conflito de destino. Revise a seleção e tente novamente.');
+        }
+        return;
+      }
+
+      targetMap.set(targetRow.id, {
+        ...targetRow,
+        target_month: Number(shifted.month),
+        target_year: Number(shifted.year)
+      });
+    });
+  });
+
+  return Array.from(targetMap.values()).sort((a, b) => {
+    const yearDiff = Number(a.target_year || 0) - Number(b.target_year || 0);
+    if (yearDiff !== 0) return yearDiff;
+    const monthDiff = Number(a.target_month || 0) - Number(b.target_month || 0);
+    if (monthDiff !== 0) return monthDiff;
+    return Number(a.id || 0) - Number(b.id || 0);
+  });
 }
 
 function likeParam(s) { return `%${String(s).trim()}%`; }
@@ -1904,8 +1986,8 @@ app.post("/geral/:year/:month/card/:cardId/delete", ensureAuthenticated, (req, r
     WHERE t.user_id = ?
       AND t.card_id = ?
       AND (
-        (i.month = ? AND i.year = ?) OR
-        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
       )
   `).all(userId, cardId, month, year, month, year);
 
@@ -1966,8 +2048,8 @@ app.get("/geral/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE t.user_id = ?
       AND (
-        (i.month = ? AND i.year = ?) OR
-        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
       )
     ORDER BY c.name, COALESCE(t.txn_date, ''), t.description
   `).all(userId, month, year, month, year);
@@ -2804,8 +2886,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     WHERE a.user_id = ?
       AND a.person_id = ?
       AND (
-        (i.month = ? AND i.year = ?) OR
-        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
       )
   `).get(userId, owner.id, currentMonth, currentYear, currentMonth, currentYear);
 
@@ -2834,8 +2916,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE t.user_id = ?
       AND (
-        (i.month = ? AND i.year = ?) OR
-        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
       )
     GROUP BY t.card_id
   `).all(userId, currentMonth, currentYear, currentMonth, currentYear);
@@ -2968,8 +3050,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
       WHERE t.user_id = ?
         AND (
-          (i.month = ? AND i.year = ?) OR
-          (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+          (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+          (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
         )
         AND NOT EXISTS (
           SELECT 1 FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id
@@ -3067,7 +3149,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   const allocCountExpr = "(SELECT COUNT(*) FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id)";
   const selectedCsvExpr = "(SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id)";
 
-  const where = ["((i.month = ? AND i.year = ?) OR (t.due_month = ? AND t.due_year = ?))"];
+  const where = [`((${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?))`];
   const params = [month, year, month, year];
 
   if (filters.f_desc) {
@@ -3116,9 +3198,9 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   const txns = db.prepare(`
     SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
-           t.parent_txn_id, t.due_month, t.due_year,
-           COALESCE(i.month, t.due_month) AS month,
-           COALESCE(i.year, t.due_year) AS year,
+           t.parent_txn_id, t.recurring_rule_id, t.due_month, t.due_year,
+           COALESCE(t.due_month, i.month) AS month,
+           COALESCE(t.due_year, i.year) AS year,
            ${allocCountExpr} AS alloc_count,
            ${selectedCsvExpr} AS selected_csv
     FROM transactions t
@@ -3477,6 +3559,177 @@ app.post("/txn/:id/delete", ensureAuthenticated, (req, res) => {
   return res.redirect(`/month/${txn.year}/${txn.month}`);
 });
 
+app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
+
+  const sourceRows = getTransactionScopeRowsByIds(userId, req.body.txn_ids);
+  if (!sourceRows.length) {
+    return res.status(400).json({ ok: false, error: "Selecione pelo menos um lançamento." });
+  }
+
+  const lockedSource = sourceRows.find(row => isMonthClosed(userId, row.month, row.year));
+  if (lockedSource) {
+    return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedSource.month, lockedSource.year) });
+  }
+
+  const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
+  const targetRows = collectScopedTxnRows(userId, sourceRows, applyScope);
+  const lockedTarget = targetRows.find(row => isMonthClosed(userId, row.month, row.year));
+  if (lockedTarget) {
+    return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedTarget.month, lockedTarget.year) });
+  }
+
+  const validPeople = new Set(getPeopleAll(userId).map(p => p.id));
+  const personIds = normalizeTxnIds(req.body.person_ids).filter(pid => validPeople.has(pid));
+
+  const del = db.prepare("DELETE FROM allocations WHERE transaction_id = ? AND user_id = ?");
+  const ins = db.prepare("INSERT INTO allocations(user_id, transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?, ?)");
+
+  db.transaction(() => {
+    targetRows.forEach(targetTxn => {
+      clearSharedDebtAllocationLinksForTransaction(userId, targetTxn.id);
+      del.run(targetTxn.id, userId);
+      if (personIds.length > 0) {
+        const share = Math.floor(targetTxn.amount_cents / personIds.length);
+        const remainder = targetTxn.amount_cents - (share * personIds.length);
+        personIds.forEach((pid, idx) => {
+          const extra = idx < Math.abs(remainder) ? Math.sign(remainder) : 0;
+          ins.run(userId, targetTxn.id, pid, share + extra, nowIso());
+        });
+      }
+    });
+  })();
+
+  targetRows.forEach(targetTxn => syncSharedDebtRequestsForTransaction(userId, targetTxn.id));
+
+  return res.json({
+    ok: true,
+    affected_count: targetRows.length,
+    source_count: sourceRows.length,
+    message: targetRows.length > 1
+      ? `${targetRows.length} lançamento(s) tiveram a distribuição atualizada.`
+      : 'Distribuição atualizada com sucesso.'
+  });
+});
+
+app.post("/month/:year/:month/bulk/delete", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
+
+  const sourceRows = getTransactionScopeRowsByIds(userId, req.body.txn_ids);
+  if (!sourceRows.length) {
+    return res.status(400).json({ ok: false, error: "Selecione pelo menos um lançamento." });
+  }
+
+  const lockedSource = sourceRows.find(row => isMonthClosed(userId, row.month, row.year));
+  if (lockedSource) {
+    return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedSource.month, lockedSource.year) });
+  }
+
+  const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
+  const targetRows = collectScopedTxnRows(userId, sourceRows, applyScope);
+  const lockedTarget = targetRows.find(row => isMonthClosed(userId, row.month, row.year));
+  if (lockedTarget) {
+    return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedTarget.month, lockedTarget.year) });
+  }
+
+  const addException = db.prepare(`
+    INSERT OR IGNORE INTO recurring_exceptions (user_id, rule_id, month, year, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+
+  let deletedCount = 0;
+  db.transaction(() => {
+    targetRows.forEach(targetTxn => {
+      if (targetTxn.recurring_rule_id && targetTxn.month && targetTxn.year) {
+        addException.run(userId, targetTxn.recurring_rule_id, targetTxn.month, targetTxn.year, nowIso());
+      }
+    });
+    deletedCount = deleteTransactionsAndAllocations(userId, targetRows);
+  })();
+
+  return res.json({
+    ok: true,
+    affected_count: deletedCount,
+    source_count: sourceRows.length,
+    message: deletedCount > 1 ? `${deletedCount} lançamento(s) excluídos com sucesso.` : 'Lançamento excluído com sucesso.'
+  });
+});
+
+app.post("/month/:year/:month/bulk/move", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
+
+  const targetMonth = Number(req.body.target_month);
+  const targetYear = Number(req.body.target_year);
+  const targetParsed = parseMonthYear(targetMonth, targetYear);
+  if (!targetParsed) {
+    return res.status(400).json({ ok: false, error: "Destino inválido para a fatura." });
+  }
+
+  const sourceRows = getTransactionScopeRowsByIds(userId, req.body.txn_ids);
+  if (!sourceRows.length) {
+    return res.status(400).json({ ok: false, error: "Selecione pelo menos um lançamento." });
+  }
+
+  const lockedSource = sourceRows.find(row => isMonthClosed(userId, row.month, row.year));
+  if (lockedSource) {
+    return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedSource.month, lockedSource.year) });
+  }
+
+  const recurringSelected = sourceRows.find(row => Number(row.recurring_rule_id || 0) > 0);
+  if (recurringSelected) {
+    return res.status(409).json({ ok: false, error: 'Lançamentos recorrentes ainda não entram no fluxo de mover para outra fatura. Remova-os da seleção e tente novamente.' });
+  }
+
+  const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
+
+  let moveTargets = [];
+  try {
+    moveTargets = buildMoveTargets(userId, sourceRows, targetParsed.month, targetParsed.year, applyScope);
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error.message || 'Não foi possível preparar a movimentação.' });
+  }
+
+  if (!moveTargets.length) {
+    return res.status(400).json({ ok: false, error: 'Nenhum lançamento elegível para movimentação.' });
+  }
+
+  const lockedDestination = moveTargets.find(row => isMonthClosed(userId, row.target_month, row.target_year));
+  if (lockedDestination) {
+    return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedDestination.target_month, lockedDestination.target_year) });
+  }
+
+  const updateTxn = db.prepare(`
+    UPDATE transactions
+    SET due_month = ?, due_year = ?
+    WHERE id = ? AND user_id = ?
+  `);
+
+  db.transaction(() => {
+    moveTargets.forEach(targetTxn => {
+      updateTxn.run(targetTxn.target_month, targetTxn.target_year, targetTxn.id, userId);
+    });
+  })();
+
+  moveTargets.forEach(targetTxn => syncSharedDebtRequestsForTransaction(userId, targetTxn.id));
+
+  return res.json({
+    ok: true,
+    affected_count: moveTargets.length,
+    source_count: sourceRows.length,
+    target_month: targetParsed.month,
+    target_year: targetParsed.year,
+    message: moveTargets.length > 1
+      ? `${moveTargets.length} lançamento(s) foram movidos para ${monthLabel(targetParsed.month, targetParsed.year)}.`
+      : `Lançamento movido para ${monthLabel(targetParsed.month, targetParsed.year)}.`
+  });
+});
+
 // Summary (minimal)
 function upsertCardStatementsForMonth(userId, month, year, entries) {
   const cardsById = new Map(getCards(userId).map(card => [card.id, card]));
@@ -3561,8 +3814,8 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE a.user_id = ?
       AND (
-        (i.month = ? AND i.year = ?) OR
-        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
       )
     GROUP BY a.person_id, t.card_id
   `).all(userId, month, year, month, year);
@@ -3596,8 +3849,8 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE t.user_id = ?
       AND (
-        (i.month = ? AND i.year = ?) OR
-        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
       )
       AND NOT EXISTS (
         SELECT 1 FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id
@@ -3612,8 +3865,8 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE t.user_id = ?
       AND (
-        (i.month = ? AND i.year = ?) OR
-        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
       )
     GROUP BY t.card_id
   `).all(userId, month, year, month, year);
@@ -3754,8 +4007,8 @@ function getPersonStatementExportData(userId, month, year, personId, itemOrder =
     WHERE a.user_id = ?
       AND a.person_id = ?
       AND (
-        (i.month = ? AND i.year = ?) OR
-        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
       )
     ORDER BY t.txn_date IS NULL ASC, t.txn_date ${chronologicalDirection}, c.name ASC, t.id ${chronologicalDirection}
   `).all(userId, personId, month, year, month, year);
@@ -3769,8 +4022,8 @@ function getPersonStatementExportData(userId, month, year, personId, itemOrder =
     WHERE a.user_id = ?
       AND a.person_id = ?
       AND (
-        (i.month = ? AND i.year = ?) OR
-        (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
       )
     GROUP BY c.id
     ORDER BY c.name

@@ -25,16 +25,6 @@
         <span class="badge">Acesso controlado por permissão</span>
       </div>
     </div>
-    <div class="op-page-hero__actions">
-      <a href="/cards"
-         class="w-full inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
-        Gerenciar cartões
-      </a>
-      <a href="<%= dashboardHref %>"
-         class="w-full inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/20 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
-        Voltar ao painel
-      </a>
-    </div>
   </section>
 
   <% if (error) { %>
@@ -85,7 +75,12 @@
         </div>
 
         <div>
-          <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Arquivo CSV</label>
+          <div class="mb-1.5 flex items-center justify-between gap-3">
+            <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Arquivo CSV</label>
+            <a href="/examples/card_csv_example.csv" download="card_csv_example.csv" class="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/50">
+              Baixar CSV modelo
+            </a>
+          </div>
           <label class="flex cursor-pointer flex-col gap-3 rounded-[28px] border border-dashed border-slate-300 bg-slate-50/80 px-5 py-5 transition hover:border-blue-300 hover:bg-blue-50/60 dark:border-slate-700 dark:bg-slate-900/50 dark:hover:border-blue-500 dark:hover:bg-blue-950/20">
             <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-300">
               <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
@@ -96,15 +91,13 @@
             </span>
             <input type="file" name="csvfile" accept=".csv,text/csv" required class="sr-only">
           </label>
+          <p class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">O botão de modelo baixa um arquivo exemplo no formato esperado pelo OrganizaPay.</p>
         </div>
 
         <div class="flex flex-col gap-3 pt-2 sm:flex-row">
           <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
             Importar CSV
           </button>
-          <a href="/cards" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
-            Ver cartões
-          </a>
         </div>
       </form>
     </section>
@@ -115,7 +108,8 @@
         <ul class="mt-4 space-y-3 text-sm font-medium text-slate-600 dark:text-slate-300">
           <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">1</span><span>Confirme se o CSV pertence ao cartão escolhido.</span></li>
           <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">2</span><span>Escolha o mês em que essa fatura deve entrar no app.</span></li>
-          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">3</span><span>Depois da importação, revise os lançamentos em <strong>/month</strong> para distribuir e ajustar participantes.</span></li>
+          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">3</span><span>Se precisar, baixe o <strong>CSV modelo</strong> para conferir a estrutura esperada antes de enviar o arquivo real.</span></li>
+          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">4</span><span>Depois da importação, revise os lançamentos em <strong>/month</strong> para distribuir e ajustar participantes.</span></li>
         </ul>
       </section>
 

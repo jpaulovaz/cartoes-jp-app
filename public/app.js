@@ -839,13 +839,13 @@
 
 (function () {
   function detectNavKey(pathname) {
-    if (/^\/geral(?:\/|$)/.test(pathname)) return 'geral';
+    if (/^\/geral(?:\/|$)/.test(pathname) || /^\/month(?:\/|$)/.test(pathname) || /^\/summary(?:\/|$)/.test(pathname)) return 'geral';
     if (/^\/shared-debts(?:\/|$)/.test(pathname) || /^\/notifications(?:\/|$)/.test(pathname)) return 'shared';
     if (/^\/people(?:\/|$)/.test(pathname)) return 'people';
     if (/^\/cards(?:\/|$)/.test(pathname)) return 'cards';
     if (/^\/import(?:\/|$)/.test(pathname)) return 'import';
     if (/^\/admin(?:\/|$)/.test(pathname)) return 'admin';
-    if (/^\/month(?:\/|$)/.test(pathname) || /^\/summary(?:\/|$)/.test(pathname) || /^\/detalhamento(?:\/|$)/.test(pathname) || /^\/txn(?:\/|$)/.test(pathname) || pathname === '/') return 'painel';
+    if (/^\/detalhamento(?:\/|$)/.test(pathname) || /^\/txn(?:\/|$)/.test(pathname) || pathname === '/') return 'painel';
     return '';
   }
 

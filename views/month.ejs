@@ -532,6 +532,34 @@
       }
     }
 
+    @media (min-width: 768px) {
+      .op-month-row.is-selected > td {
+        background-color: rgba(239, 246, 255, 0.9) !important;
+        box-shadow: inset 0 2px 0 rgba(37, 99, 235, 0.9), inset 0 -2px 0 rgba(37, 99, 235, 0.9);
+      }
+
+      .op-month-row.is-selected > td:first-child {
+        box-shadow: inset 2px 0 0 rgba(37, 99, 235, 0.9), inset 0 2px 0 rgba(37, 99, 235, 0.9), inset 0 -2px 0 rgba(37, 99, 235, 0.9);
+      }
+
+      .op-month-row.is-selected > td:last-child {
+        box-shadow: inset -2px 0 0 rgba(37, 99, 235, 0.9), inset 0 2px 0 rgba(37, 99, 235, 0.9), inset 0 -2px 0 rgba(37, 99, 235, 0.9);
+      }
+
+      .dark .op-month-row.is-selected > td {
+        background-color: rgba(30, 41, 59, 0.92) !important;
+        box-shadow: inset 0 2px 0 rgba(96, 165, 250, 0.92), inset 0 -2px 0 rgba(96, 165, 250, 0.92);
+      }
+
+      .dark .op-month-row.is-selected > td:first-child {
+        box-shadow: inset 2px 0 0 rgba(96, 165, 250, 0.92), inset 0 2px 0 rgba(96, 165, 250, 0.92), inset 0 -2px 0 rgba(96, 165, 250, 0.92);
+      }
+
+      .dark .op-month-row.is-selected > td:last-child {
+        box-shadow: inset -2px 0 0 rgba(96, 165, 250, 0.92), inset 0 2px 0 rgba(96, 165, 250, 0.92), inset 0 -2px 0 rgba(96, 165, 250, 0.92);
+      }
+    }
+
     .op-month-selection-toolbar {
       bottom: calc(var(--op-mobile-bottom-clearance, 5.75rem) + 0.75rem);
       opacity: 0;
@@ -694,13 +722,6 @@
           const isSelected = selectedIds.has(txnId);
 
           row.classList.toggle('is-selected', isSelected);
-          row.classList.toggle('ring-2', isSelected);
-          row.classList.toggle('ring-blue-500', isSelected);
-          row.classList.toggle('ring-offset-2', isSelected);
-          row.classList.toggle('ring-offset-white', isSelected);
-          row.classList.toggle('dark:ring-offset-slate-800', isSelected);
-          row.classList.toggle('bg-blue-50/80', isSelected);
-          row.classList.toggle('dark:bg-blue-950/25', isSelected);
 
           if (indicator) {
             indicator.classList.toggle('hidden', !selectionMode);
@@ -891,69 +912,51 @@
           ? (items.length > 1 ? 'Excluir lançamentos parcelados' : 'Excluir lançamento parcelado')
           : moveAction
             ? (items.length > 1 ? 'Mover lançamentos parcelados' : 'Mover lançamento parcelado')
-            : (items.length > 1 ? 'Aplicar em compras parceladas' : 'Aplicar em compra parcelada');
+            : (items.length > 1 ? 'Aplicar participantes em compras parceladas' : 'Aplicar participantes em compra parcelada');
 
-        const subtitle = nonInstallmentCount > 0
-          ? 'Há itens parcelados e itens simples na seleção.'
-          : 'Escolha como a ação deve tratar as próximas parcelas.';
+        const messageParts = [
+          `${items.length} lançamento(s) · ${formatMoney(sumAmounts(items))}`,
+          `${futureItems.length} item(ns) parcelado(s) exigem confirmação de alcance antes de concluir ${actionLabel}.`,
+          'Só itens atuais: altera apenas os lançamentos selecionados agora.',
+          'Itens atuais + próximas parcelas: também aplica a ação nas próximas parcelas de cada compra parcelada selecionada.'
+        ];
 
-        const wrapper = document.createElement('div');
-        wrapper.className = 'space-y-4';
+        if (nonInstallmentCount > 0) {
+          messageParts.push(`Os ${nonInstallmentCount} item(ns) sem parcelamento continuam sendo alterados apenas uma vez.`);
+        }
 
-        const summary = document.createElement('div');
-        summary.className = 'rounded-[22px] border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200';
-        summary.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Seleção</div><div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">${items.length} lançamento(s) · ${escapeHtml(formatMoney(sumAmounts(items)))}</div><p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">${futureItems.length} item(ns) parcelado(s) exigem confirmação de alcance antes de concluir a ação.</p>`;
-        wrapper.appendChild(summary);
+        if (moveAction) {
+          messageParts.push('A data da compra será mantida; o app ajusta apenas a fatura/mês de cobrança.');
+        }
 
-        const scopeInfo = document.createElement('div');
-        scopeInfo.className = 'space-y-3';
-        scopeInfo.innerHTML = `
-          <div class="rounded-[22px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
-            <div class="text-xs font-bold uppercase tracking-wide text-blue-500/80 dark:text-blue-300/80">Como funciona</div>
-            <p class="mt-1 font-semibold">Ao confirmar, o app pergunta se a ação vale só para os itens selecionados agora ou também para as próximas parcelas das compras parceladas.</p>
-          </div>
-          <div class="rounded-[22px] border border-slate-200 bg-white/90 px-4 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200">
-            <div class="space-y-2">
-              <p><span class="font-bold text-slate-900 dark:text-slate-100">Só itens atuais</span> · altera apenas os lançamentos que você selecionou agora.</p>
-              <p><span class="font-bold text-slate-900 dark:text-slate-100">Itens atuais + próximas parcelas</span> · também aplica a ação nas próximas parcelas de cada compra parcelada selecionada.</p>
-              ${nonInstallmentCount > 0 ? `<p class="text-slate-500 dark:text-slate-400">Os ${nonInstallmentCount} item(ns) sem parcelamento continuam sendo alterados apenas uma vez.</p>` : ''}
-            </div>
-          </div>
-        `;
-        wrapper.appendChild(scopeInfo);
-
-        return await new Promise((resolve) => {
-          let settled = false;
-          const finish = (value) => {
-            if (settled) return;
-            settled = true;
-            resolve(value);
-          };
-
-          openMonthSheet({
+        if (window.showActionDialog) {
+          return await window.showActionDialog({
             title,
-            subtitle,
-            body: wrapper,
-            onClose: () => finish(null),
-            actions: destructive
+            message: messageParts.join('\n\n'),
+            options: destructive
               ? [
-                  { label: 'Cancelar', tone: 'secondary' },
-                  { label: 'Excluir só itens atuais', tone: 'danger', onClick: () => { finish('single'); return true; } },
-                  { label: 'Excluir itens atuais + próximas parcelas', tone: 'danger', onClick: () => { finish('future'); return true; } }
+                  { label: 'Cancelar', value: null, tone: 'secondary' },
+                  { label: 'Excluir só itens atuais', value: 'single', tone: 'danger' },
+                  { label: 'Excluir itens atuais + próximas parcelas', value: 'future', tone: 'danger' }
                 ]
               : moveAction
                 ? [
-                    { label: 'Cancelar', tone: 'secondary' },
-                    { label: 'Mover só itens atuais', tone: 'primary', onClick: () => { finish('single'); return true; } },
-                    { label: 'Mover itens atuais + próximas parcelas', tone: 'primary', onClick: () => { finish('future'); return true; } }
+                    { label: 'Cancelar', value: null, tone: 'secondary' },
+                    { label: 'Mover só itens atuais', value: 'single', tone: 'primary' },
+                    { label: 'Mover itens atuais + próximas parcelas', value: 'future', tone: 'primary' }
                   ]
                 : [
-                    { label: 'Cancelar', tone: 'secondary' },
-                    { label: 'Aplicar só itens atuais', tone: 'primary', onClick: () => { finish('single'); return true; } },
-                    { label: 'Aplicar itens atuais + próximas parcelas', tone: 'primary', onClick: () => { finish('future'); return true; } }
+                    { label: 'Cancelar', value: null, tone: 'secondary' },
+                    { label: 'Aplicar só itens atuais', value: 'single', tone: 'primary' },
+                    { label: 'Aplicar itens atuais + próximas parcelas', value: 'future', tone: 'primary' }
                   ]
           });
-        });
+        }
+
+        const fallbackText = items.length > 1
+          ? `Aplicar ${actionLabel} em ${items.length} lançamento(s), incluindo próximas parcelas das compras parceladas?`
+          : `Aplicar ${actionLabel} incluindo próximas parcelas desta compra parcelada?`;
+        return window.confirm(fallbackText) ? 'future' : 'single';
       }
 
       async function postBulkAction(url, payload) {
@@ -1264,10 +1267,21 @@
           ]
         });
 
-        if (choice === 'people') openPeopleSheet([txnId]);
-        if (choice === 'move') openMoveSheet([txnId]);
-        if (choice === 'multi') enterSelectionMode([txnId]);
-        if (choice === 'delete') executeDelete([txnId]);
+        if (choice === 'people') {
+          openPeopleSheet([txnId]);
+          return;
+        }
+        if (choice === 'move') {
+          openMoveSheet([txnId]);
+          return;
+        }
+        if (choice === 'multi') {
+          enterSelectionMode([txnId]);
+          return;
+        }
+        if (choice === 'delete') {
+          await executeDelete([txnId]);
+        }
       }
 
       function handleRowActivation(row, event) {

@@ -53,7 +53,7 @@
       .map(cb => cb.value);
 
     if (selected.length === 0) {
-      alert("Selecione pelo menos uma pessoa para copiar!");
+      alert("Selecione pelo menos uma pessoa antes de copiar.");
       return;
     }
 
@@ -69,7 +69,7 @@
     const data = localStorage.getItem('copiedAlloc');
 
     if (!data) {
-      alert("Nenhuma atribuição copiada. Use o botão Copiar antes.");
+      alert("Nada copiado ainda. Use o botão Copiar primeiro.");
       return;
     }
 
@@ -186,7 +186,7 @@
     return dialogState;
   }
 
-  function showActionDialog({ title = 'Confirmar ação', message = '', options = [] } = {}) {
+  function showActionDialog({ title = 'Confirma essa ação?', message = '', options = [] } = {}) {
     const state = ensureActionDialog();
 
     if (state.activeResolve) {
@@ -220,7 +220,7 @@
 
   async function confirmTypedAction(message, phrase = 'Eu confirmo') {
     const result = await showActionDialog({
-      title: 'Confirmar exclusão',
+      title: 'Confirma a exclusão?',
       message,
       options: [
         { label: 'Cancelar', value: false, tone: 'secondary' },
@@ -603,22 +603,22 @@
 
     const states = {
       idle: {
-        html: `${iconBell}Ativar push`,
+        html: `${iconBell}Receber alertas`,
         disabled: false,
         className: 'inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-sky-700 transition-colors'
       },
       enabled: {
-        html: `${iconBellOff}Desativar push`,
+        html: `${iconBellOff}Desligar alertas`,
         disabled: false,
         className: 'inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors'
       },
       loading: {
-        html: `${iconSpinner}Processando...`,
+        html: `${iconSpinner}Só um instante...`,
         disabled: true,
         className: 'inline-flex items-center justify-center rounded-2xl bg-slate-400 px-4 py-2.5 text-sm font-bold text-white shadow-sm cursor-wait'
       },
       unsupported: {
-        html: `${iconBlocked}Push indisponível`,
+        html: `${iconBlocked}Alertas indisponíveis`,
         disabled: true,
         className: 'inline-flex items-center justify-center rounded-2xl bg-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm cursor-not-allowed dark:bg-slate-700 dark:text-slate-200'
       }
@@ -631,11 +631,11 @@
 
     if (statusEl) {
       if (state === 'enabled') {
-        statusEl.textContent = 'Este aparelho já pode receber notificações push. Toque no botão para desativar.';
+        statusEl.textContent = 'Tudo certo: este aparelho já pode receber alertas. Toque no botão para desligar.';
       } else if (state === 'unsupported') {
-        statusEl.textContent = 'Este navegador não suporta push ou o recurso não está configurado.';
+        statusEl.textContent = 'Este navegador não suporta alertas ou o recurso ainda não foi configurado.';
       } else if (state === 'idle') {
-        statusEl.textContent = 'Ative as notificações push neste aparelho para receber avisos mesmo fora da tela.';
+        statusEl.textContent = 'Ative os alertas neste aparelho para receber avisos mesmo fora da tela.';
       }
     }
   }
@@ -648,7 +648,7 @@
     });
 
     if (!response.ok) {
-      throw new Error('Não foi possível salvar a inscrição de push no servidor.');
+      throw new Error('Não consegui salvar os alertas deste aparelho no servidor.');
     }
   }
 
@@ -660,7 +660,7 @@
     });
 
     if (!response.ok) {
-      throw new Error('Não foi possível remover a inscrição de push no servidor.');
+      throw new Error('Não consegui desligar os alertas deste aparelho no servidor.');
     }
   }
 
@@ -699,7 +699,7 @@
 
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
-        throw new Error('Permissão de notificações não concedida.');
+        throw new Error('Permissão de alertas não concedida.');
       }
 
       const subscription = await registration.pushManager.subscribe({
@@ -712,7 +712,7 @@
     } catch (error) {
       console.error(error);
       setPushToggleState(button, statusEl, 'idle');
-      window.alert(error?.message || 'Não foi possível configurar as notificações push neste aparelho.');
+      window.alert(error?.message || 'Não foi possível configurar os alertas neste aparelho.');
     }
   }
 
@@ -750,14 +750,14 @@
     return field;
   }
 
-  async function resolveInstallmentScope(form, { actionLabel = 'alterar a distribuição', destructive = false } = {}) {
+  async function resolveInstallmentScope(form, { actionLabel = 'ajustar a divisão', destructive = false } = {}) {
     const hasFuture = String(form?.dataset?.hasFutureInstallments || '') === '1';
     const field = ensureHiddenScopeField(form);
 
     if (!hasFuture) {
       if (destructive) {
         const confirmed = await window.confirmTypedAction(
-          form?.dataset?.confirmPrompt || 'Excluir este lançamento? Esta ação remove o item e a distribuição associada.'
+          form?.dataset?.confirmPrompt || 'Excluir este item? Isso apaga a compra e a divisão dela.'
         );
         if (!confirmed) return null;
       }
@@ -768,13 +768,13 @@
     const label = String(form?.dataset?.installmentLabel || '').trim();
     const message = [
       destructive
-        ? 'Este lançamento faz parte de um parcelamento. Escolha o alcance da exclusão.'
-        : `Este lançamento faz parte de um parcelamento. Escolha se deseja ${actionLabel} só nesta parcela ou também nas próximas.`,
-      label ? `Lançamento: ${label}` : ''
+        ? 'Este item faz parte de uma compra parcelada. Escolha o alcance da exclusão.'
+        : `Este item faz parte de uma compra parcelada. Escolha se deseja ${actionLabel} só nesta parcela ou também nas próximas.`,
+      label ? `Compra: ${label}` : ''
     ].filter(Boolean).join('\n\n');
 
     const result = await window.showActionDialog({
-      title: destructive ? 'Excluir lançamento parcelado' : 'Aplicar em compra parcelada',
+      title: destructive ? 'Excluir compra parcelada' : 'Aplicar em compra parcelada',
       message,
       options: destructive
         ? [
@@ -812,7 +812,7 @@
 
     (async () => {
       if (needsScope) {
-        const actionLabel = formType === 'delete' ? 'excluir este lançamento' : 'alterar a distribuição';
+        const actionLabel = formType === 'delete' ? 'excluir esta compra' : 'ajustar a divisão';
         const chosenScope = await resolveInstallmentScope(form, {
           actionLabel,
           destructive: formType === 'delete'

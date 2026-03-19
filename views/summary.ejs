@@ -6,7 +6,7 @@
       <div>
         <span class="op-page-hero__eyebrow">Fechamento inteligente</span>
         <h1 class="op-page-hero__title mt-4">Resumo — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
-        <p class="op-page-hero__subtitle mt-3">Todas as suas faturas organizadas e divididas por pessoa em um só lugar.</p>
+        <p class="op-page-hero__subtitle mt-3">Veja cartões, pessoas e pagamentos do mês sem precisar caçar informação em várias telas.</p>
       </div>
       <div class="op-page-hero__actions">
         <a href="/month/<%= year %>/<%= month %>"
@@ -14,14 +14,14 @@
           <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
           </svg>
-          Ver Lançamentos
+          Ver compras
         </a>
       </div>
     </section>
 
     <% if (isClosed) { %>
       <div class="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-        🔒 Este mês está fechado. Os lançamentos continuam visíveis, mas os campos de pagamento e vencimento estão em somente leitura.
+        🔒 Este mês já foi fechado. As compras continuam visíveis, mas os campos de pagamento e vencimento ficam só para consulta.
       </div>
     <% } %>
 
@@ -36,7 +36,7 @@
           </svg>
         </div>
         <div>
-          <h3 class="text-lg font-bold text-amber-900 mb-2">Atenção: Existem itens não atribuídos a pessoas!</h3>
+          <h3 class="text-lg font-bold text-amber-900 mb-2">Ops: ainda tem compra sem dono</h3>
           <div class="flex flex-wrap gap-3">
             <% unassigned.forEach(u=> { %>
               <div
@@ -62,7 +62,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
               </svg>
-              Fechamento de Cartões
+              Como estão os cartões
             </h2>
             <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
               <% const cardsPanelTotals = cardsPanel.reduce((acc, cp) => {
@@ -138,7 +138,7 @@
                   d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z">
                 </path>
               </svg>
-              Controle de Pessoas
+              Como está cada pessoa
             </h2>
             <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
               <% const personPanelTotals = personPanel.reduce((acc, pp) => {

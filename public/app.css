@@ -160,6 +160,192 @@ html.dark input[type="month"]::-webkit-datetime-edit-text {
   background: rgba(30, 41, 59, 0.88);
 }
 
+.op-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 48px;
+  padding: 0.82rem 1.2rem;
+  border-radius: 18px;
+  border: 1px solid transparent;
+  font-size: 0.94rem;
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+  transition: transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.op-btn:hover {
+  transform: translateY(-1px);
+}
+
+.op-btn:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.op-btn--block {
+  width: 100%;
+}
+
+.op-btn svg {
+  flex-shrink: 0;
+}
+
+.op-btn-primary {
+  color: #fff;
+  background: #0f172a;
+  border-color: #0f172a;
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.18);
+}
+
+.op-btn-primary:hover {
+  background: #020617;
+  border-color: #020617;
+}
+
+html.dark .op-btn-primary {
+  color: #0f172a;
+  background: #f8fafc;
+  border-color: rgba(226, 232, 240, 0.9);
+}
+
+html.dark .op-btn-primary:hover {
+  background: #ffffff;
+}
+
+.op-btn-success {
+  color: #fff;
+  background: linear-gradient(135deg, #10b981, #059669);
+  box-shadow: 0 18px 34px rgba(16, 185, 129, 0.24);
+}
+
+.op-btn-success:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+}
+
+.op-btn-info {
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.22);
+}
+
+.op-btn-info:hover {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+}
+
+.op-btn-muted {
+  color: #fff;
+  background: #94a3b8;
+  box-shadow: none;
+}
+
+html.dark .op-btn-muted {
+  background: #475569;
+}
+
+.op-btn-ghost {
+  color: #334155;
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+}
+
+.op-btn-ghost:hover {
+  background: #ffffff;
+  border-color: rgba(96, 165, 250, 0.32);
+}
+
+html.dark .op-btn-ghost {
+  color: #e2e8f0;
+  background: rgba(15, 23, 42, 0.88);
+  border-color: rgba(71, 85, 105, 0.8);
+  box-shadow: 0 16px 28px rgba(2, 6, 23, 0.28);
+}
+
+html.dark .op-btn-ghost:hover {
+  background: rgba(15, 23, 42, 0.96);
+  border-color: rgba(96, 165, 250, 0.32);
+}
+
+.op-btn-danger-soft {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+  box-shadow: 0 12px 24px rgba(239, 68, 68, 0.08);
+}
+
+.op-btn-danger-soft:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+html.dark .op-btn-danger-soft {
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.22);
+  border-color: rgba(127, 29, 29, 0.7);
+}
+
+html.dark .op-btn-danger-soft:hover {
+  background: rgba(127, 29, 29, 0.3);
+}
+
+.op-btn-warning-soft {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.op-btn-warning-soft:hover {
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+html.dark .op-btn-warning-soft {
+  color: #fde68a;
+  background: rgba(120, 53, 15, 0.24);
+  border-color: rgba(120, 53, 15, 0.72);
+}
+
+html.dark .op-btn-warning-soft:hover {
+  background: rgba(120, 53, 15, 0.32);
+}
+
+.op-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(248, 250, 252, 0.92);
+  color: #64748b;
+  transition: transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.op-icon-btn:hover {
+  transform: translateY(-1px);
+  background: #ffffff;
+  color: #0f172a;
+  border-color: rgba(96, 165, 250, 0.28);
+}
+
+html.dark .op-icon-btn {
+  background: rgba(15, 23, 42, 0.82);
+  border-color: rgba(71, 85, 105, 0.78);
+  color: #cbd5e1;
+}
+
+html.dark .op-icon-btn:hover {
+  background: rgba(15, 23, 42, 0.96);
+  color: #f8fafc;
+  border-color: rgba(96, 165, 250, 0.32);
+}
+
 .op-mobile-chip {
   position: relative;
   display: inline-flex;

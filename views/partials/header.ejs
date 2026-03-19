@@ -125,7 +125,7 @@
           <span class="min-w-0">
             <span class="block text-[11px] font-extrabold uppercase tracking-[0.18em] text-sky-200/80">OrganizaPay</span>
             <span class="mt-1 block truncate text-lg font-black tracking-tight text-white"><%= ownerShortName %></span>
-            <span class="mt-0.5 block truncate text-sm font-medium text-slate-300">Seu centro financeiro pessoal</span>
+            <span class="mt-0.5 block truncate text-sm font-medium text-slate-300">Seu cantinho financeiro</span>
           </span>
         </a>
 
@@ -168,12 +168,12 @@
         </nav>
 
         <div class="flex items-center gap-2">
-          <button onclick="toggleDarkMode()" class="op-utility-btn" title="Alternar tema">
+          <button onclick="toggleDarkMode()" class="op-utility-btn" title="Alternar tema" aria-label="Alternar tema">
             <svg class="h-5 w-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
             <svg class="h-5 w-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
           </button>
           <% if (user) { %>
-            <a href="/logout" class="op-utility-btn" title="Sair">
+            <a href="/logout" class="op-utility-btn" title="Sair" aria-label="Sair do app">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
             </a>
           <% } %>
@@ -186,15 +186,15 @@
             <img src="/icon-192.png" alt="OrganizaPay" class="h-12 w-12 rounded-[1.1rem] object-cover shadow-[0_10px_24px_rgba(37,99,235,0.3)]">
             <span class="min-w-0">
               <span class="block truncate text-sm font-black text-white"><%= ownerShortName %></span>
-              <span class="block truncate text-xs font-medium text-slate-300">Seu resumo financeiro</span>
+              <span class="block truncate text-xs font-medium text-slate-300">Seu cantinho financeiro</span>
             </span>
           </a>
-          <button onclick="toggleDarkMode()" class="op-utility-btn shrink-0" title="Alternar tema">
+          <button onclick="toggleDarkMode()" class="op-utility-btn shrink-0" title="Alternar tema" aria-label="Alternar tema">
             <svg class="h-5 w-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
             <svg class="h-5 w-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
           </button>
           <% if (user) { %>
-            <a href="/logout" class="op-utility-btn shrink-0" title="Sair">
+            <a href="/logout" class="op-utility-btn shrink-0" title="Sair" aria-label="Sair do app">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
             </a>
           <% } %>

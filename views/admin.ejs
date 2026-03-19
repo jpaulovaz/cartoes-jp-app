@@ -3,12 +3,12 @@
   <div class="max-w-6xl mx-auto space-y-8">
     <section class="op-page-hero op-fade-up">
       <div>
-        <span class="op-page-hero__eyebrow">Acesso e governança</span>
-        <h1 class="op-page-hero__title mt-4">Painel de Administração</h1>
-        <p class="op-page-hero__subtitle mt-3">Gerencie os acessos autorizados e acompanhe o uso do sistema.</p>
+        <span class="op-page-hero__eyebrow">Acesso e permissões</span>
+        <h1 class="op-page-hero__title mt-4">Painel de administração</h1>
+        <p class="op-page-hero__subtitle mt-3">Controle quem pode entrar, o que cada pessoa vê e quem pode importar faturas.</p>
         <div class="op-page-hero__meta mt-4">
           <span class="badge"><%= users ? users.length : 0 %> usuário(s)</span>
-          <span class="badge">Controle de papel e importação</span>
+          <span class="badge">Permissões e importação</span>
         </div>
       </div>
 
@@ -32,7 +32,7 @@
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
             </div>
             <div>
-              <div class="op-inline-alert__title">Atualização concluída</div>
+              <div class="op-inline-alert__title">Tudo certo por aqui</div>
               <div class="op-inline-alert__text"><%= success %></div>
             </div>
           </div>
@@ -42,7 +42,7 @@
               <section class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                 <div class="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div>
-                    <h2 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Usuários Autorizados</h2>
+                    <h2 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Pessoas com acesso</h2>
                     <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
                       <%= users.length %>
                         <%= users.length===1 ? 'usuário cadastrado' : 'usuários cadastrados' %>
@@ -55,7 +55,7 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M12 4v16m8-8H4"></path>
                     </svg>
-                    Adicionar
+                    Liberar acesso
                   </button>
                 </div>
 
@@ -66,7 +66,7 @@
                       <tr>
                         <th class="px-4 py-4 text-center">Usuário</th>
                         <th class="px-4 py-4 text-center">Email</th>
-                        <th class="px-4 py-4 text-center">Papel</th>
+                        <th class="px-4 py-4 text-center">Nível</th>
                         <th class="px-4 py-4 text-center">Importação</th>
                         <th class="px-4 py-4 text-center">Criado em</th>
                         <th class="px-4 py-4 text-center">Último acesso</th>
@@ -127,7 +127,7 @@
                                     class="inline-flex min-w-[104px] items-center justify-center px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">Você</span>
                                 <% } else { %>
                                   <form action="/admin/remove-user/<%= u.id %>" method="POST" class="inline"
-                                    onsubmit="return confirm('Tem certeza que deseja remover este usuário? Ele perderá acesso ao sistema.');">
+                                    onsubmit="return confirm('Tem certeza que deseja remover esse acesso? A pessoa vai deixar de entrar no app.');">
                                     <button type="submit"
                                       class="inline-flex min-w-[104px] items-center justify-center px-3 py-1.5 rounded-lg text-xs font-bold border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors bg-white dark:bg-slate-800 shadow-sm">
                                       <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -163,7 +163,7 @@
 
               <section class="grid gap-6 xl:grid-cols-2">
                 <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-                  <h2 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Informações do Sistema</h2>
+                  <h2 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Informações do app</h2>
                   <div class="mt-5 space-y-4 text-sm">
                     <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4">
                       <div class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Autenticação</div>
@@ -171,7 +171,7 @@
                     </div>
                     <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4">
                       <div class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Isolamento</div>
-                      <div class="font-semibold text-slate-800 dark:text-slate-200">Cada usuário visualiza apenas seus próprios dados</div>
+                      <div class="font-semibold text-slate-800 dark:text-slate-200">Cada pessoa vê apenas os próprios dados</div>
                     </div>
                     <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4">
                       <div class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Titular automático</div>
@@ -184,9 +184,9 @@
                   <h2 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Como funciona o acesso?</h2>
                   <ol class="mt-5 space-y-3 text-sm font-medium text-slate-600 dark:text-slate-300 list-decimal list-inside">
                     <li>Apenas emails cadastrados nesta lista podem entrar no sistema.</li>
-                    <li>No primeiro login com Google, o usuário já ganha uma pessoa titular automaticamente.</li>
-                    <li>Usuários com papel <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">admin</code> acessam esta área para gerenciar contas.</li>
-                    <li>Usuários com papel <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">user</code> usam apenas as abas do aplicativo.</li>
+                    <li>No primeiro login com Google, a pessoa já ganha um perfil principal automaticamente.</li>
+                    <li>Quem está no nível <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">admin</code> acessa esta área para gerenciar contas.</li>
+                    <li>Quem está no nível <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">user</code> usa só as abas do app.</li>
                   </ol>
                 </div>
               </section>
@@ -199,11 +199,11 @@
       onclick="event.stopPropagation()">
       <div class="flex justify-between items-center mb-6">
         <div>
-          <h2 id="userModalTitle" class="text-xl font-black text-slate-800 dark:text-white">Adicionar Usuário Autorizado</h2>
-          <p id="userModalDescription" class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Esse email poderá entrar no app usando a conta Google correspondente.</p>
+          <h2 id="userModalTitle" class="text-xl font-black text-slate-800 dark:text-white">Liberar novo acesso</h2>
+          <p id="userModalDescription" class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Esse e-mail poderá entrar no app usando a conta Google correspondente.</p>
         </div>
         <button type="button" onclick="closeAddUserModal()"
-          class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-2xl leading-none">✕</button>
+          class="op-icon-btn" aria-label="Fechar janela">✕</button>
       </div>
 
       <form id="userForm" action="/admin/add-user" method="POST" class="space-y-4">
@@ -215,17 +215,17 @@
 
         <div>
           <label for="name" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Nome (Opcional)</label>
-          <input type="text" id="name" name="name" placeholder="Nome do usuário"
+          <input type="text" id="name" name="name" placeholder="Nome da pessoa"
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
           <p class="text-xs font-medium text-slate-400 mt-2">Se ficar em branco, usamos a parte anterior ao <code>@</code>.</p>
         </div>
 
         <div>
-          <label for="role" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Papel</label>
+          <label for="role" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Nível de acesso</label>
           <select id="role" name="role"
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
-            <option value="user" selected>Usuário (Apenas app)</option>
-            <option value="admin">Administrador (App + Painel Admin)</option>
+            <option value="user" selected>Usuário (usa o app)</option>
+            <option value="admin">Administrador (app + painel)</option>
           </select>
         </div>
 
@@ -233,8 +233,8 @@
           <input type="checkbox" id="can_import" name="can_import" value="1" checked
             class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-800">
           <span>
-            <span class="block text-sm font-bold text-slate-800 dark:text-white">Permitir Importação de Faturas?</span>
-            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Quando desmarcado, a pessoa não verá os botões nem poderá acessar a funcionalidade de importação.</span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Pode importar fatura?</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Se ficar desmarcado, essa pessoa não verá os botões nem poderá usar a importação.</span>
           </span>
         </label>
 
@@ -245,7 +245,7 @@
           </button>
           <button type="submit"
             class="flex-1 px-5 py-3 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5">
-            <span id="userModalSubmitLabel">Adicionar Usuário</span>
+            <span id="userModalSubmitLabel">Liberar acesso</span>
           </button>
         </div>
       </form>
@@ -266,9 +266,9 @@
     function configureUserModalForAdd() {
       if (!userForm) return;
       userForm.action = '/admin/add-user';
-      userModalTitle.textContent = 'Adicionar Usuário Autorizado';
-      userModalDescription.textContent = 'Esse email poderá entrar no app usando a conta Google correspondente.';
-      userModalSubmitLabel.textContent = 'Adicionar Usuário';
+      userModalTitle.textContent = 'Liberar novo acesso';
+      userModalDescription.textContent = 'Esse e-mail poderá entrar no app usando a conta Google correspondente.';
+      userModalSubmitLabel.textContent = 'Liberar acesso';
       emailField.value = '';
       nameField.value = '';
       roleField.value = 'user';
@@ -283,9 +283,9 @@
     function openEditUserModal(button) {
       if (!button || !userForm) return;
       userForm.action = `/admin/update-user/${button.dataset.userId}`;
-      userModalTitle.textContent = 'Editar Usuário Autorizado';
-      userModalDescription.textContent = 'Atualize os dados de acesso mantendo as permissões desejadas para esse usuário.';
-      userModalSubmitLabel.textContent = 'Salvar Alterações';
+      userModalTitle.textContent = 'Editar permissões';
+      userModalDescription.textContent = 'Atualize os dados de acesso mantendo as permissões desejadas para essa pessoa.';
+      userModalSubmitLabel.textContent = 'Salvar mudanças';
       emailField.value = button.dataset.userEmail || '';
       nameField.value = button.dataset.userName || '';
       roleField.value = button.dataset.userRole || 'user';

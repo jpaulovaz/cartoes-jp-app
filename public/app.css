@@ -437,6 +437,7 @@ html.dark .op-surface-card {
 .op-bottom-nav__link {
   display: flex;
   position: relative;
+  isolation: isolate;
   flex: 0 0 auto;
   min-width: 4.85rem;
   min-height: 56px;
@@ -456,14 +457,47 @@ html.dark .op-surface-card {
   scroll-snap-stop: always;
   outline: none;
   -webkit-tap-highlight-color: transparent;
-  transition: color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.op-bottom-nav__link::before {
+  content: '';
+  position: absolute;
+  inset: 0.28rem 0.18rem;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.18), inset 0 0 0 1px rgba(148, 163, 184, 0.12);
+  opacity: 0;
+  transform: translateY(2px) scale(0.96);
+  transition: opacity 0.2s ease, transform 0.22s ease, box-shadow 0.22s ease;
+  z-index: 0;
+}
+
+.op-bottom-nav__link > span {
+  position: relative;
+  z-index: 1;
+}
+
+.op-bottom-nav__link > span:not(.op-bottom-nav__icon) {
+  opacity: 0.94;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .op-bottom-nav__link:hover,
-.op-bottom-nav__link.is-active {
+.op-bottom-nav__link.is-active,
+.op-bottom-nav__link:focus-visible {
   color: #fff;
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08);
+}
+
+.op-bottom-nav__link:hover::before {
+  opacity: 0.72;
+  transform: translateY(0) scale(0.985);
+}
+
+.op-bottom-nav__link.is-active::before {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.22), inset 0 0 0 1px rgba(148, 163, 184, 0.16);
 }
 
 .op-bottom-nav__link:focus,
@@ -471,10 +505,15 @@ html.dark .op-surface-card {
   outline: none;
 }
 
-.op-bottom-nav__link:focus-visible {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 0 0 2px rgba(96, 165, 250, 0.42);
+.op-bottom-nav__link:focus-visible::before {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.22), inset 0 0 0 1px rgba(148, 163, 184, 0.16), 0 0 0 1px rgba(96, 165, 250, 0.42);
+}
+
+.op-bottom-nav__link.is-active > span:not(.op-bottom-nav__icon),
+.op-bottom-nav__link:focus-visible > span:not(.op-bottom-nav__icon) {
+  opacity: 1;
 }
 
 .op-bottom-nav__icon {
@@ -485,14 +524,16 @@ html.dark .op-surface-card {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, color 0.2s ease;
 }
 
 .op-bottom-nav__link:hover .op-bottom-nav__icon,
 .op-bottom-nav__link.is-active .op-bottom-nav__icon,
 .op-bottom-nav__link:focus-visible .op-bottom-nav__icon {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.9), rgba(14, 165, 233, 0.84));
-  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.18);
+  background: rgba(59, 130, 246, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.18);
+  color: #ffffff;
+  transform: translateY(-1px);
 }
 
 .op-bottom-nav__badge {

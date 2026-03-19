@@ -74,6 +74,15 @@
     }
   }
 
+  function pluralizePt(count, singular, plural) {
+    return Number(count) === 1 ? singular : plural;
+  }
+
+  function countLabel(count, singular, plural) {
+    const safeCount = Number(count || 0);
+    return `${safeCount} ${pluralizePt(safeCount, singular, plural)}`;
+  }
+
   function statusWeight(status) {
     switch (status) {
       case 'pending': return 0;
@@ -195,9 +204,9 @@
   function batchPendingSummary(batch) {
     if (!batch) return 'Sem itens pendentes';
     if (batch.pendingCount === batch.totalCount) {
-      return `${batch.pendingCount} cobrança(s) pendente(s)`;
+      return `${countLabel(batch.pendingCount, 'cobrança pendente', 'cobranças pendentes')}`;
     }
-    return `${batch.pendingCount} pendente(s) de ${batch.totalCount} cobrança(s)`;
+    return `${countLabel(batch.pendingCount, 'pendência', 'pendências')} de ${countLabel(batch.totalCount, 'cobrança', 'cobranças')}`;
   }
 
   function batchStatusMeta(batch) {
@@ -220,7 +229,7 @@
     const meta = batchStatusMeta(batch);
     if (!batch) return meta.label;
     if (batch.statusSummary === 'partial' && batch.pendingCount > 0) {
-      return `${meta.label} · ${batch.pendingCount} pendente(s)`;
+      return `${meta.label} · ${countLabel(batch.pendingCount, 'pendência', 'pendências')}`;
     }
     return meta.label;
   }
@@ -281,8 +290,8 @@
         requestId: batch.reviewRequestId,
         title: `Responder envio de ${batch.counterpartName || batch.counterpartEmail || 'quem enviou'}`,
         helper: batch.statusSummary === 'partial'
-          ? `${batch.pendingCount} cobrança(s) ainda aguardam sua decisão neste envio.`
-          : `${batch.pendingCount} cobrança(s) aguardando sua decisão em um único envio.`,
+          ? `${countLabel(batch.pendingCount, 'cobrança ainda aguarda', 'cobranças ainda aguardam')} sua decisão neste envio.`
+          : `${countLabel(batch.pendingCount, 'cobrança está aguardando', 'cobranças estão aguardando')} sua decisão neste envio.`,
         meta: `${batchRangeLabel(batch)} · ${formatBRLFromCents(batch.pendingCents || batch.totalCents)}`,
         buttonLabel: batch.statusSummary === 'partial' ? 'Responder restante' : 'Abrir envio'
       });
@@ -328,8 +337,8 @@
       <p class="op-page-hero__subtitle mt-3">Tudo o que foi dividido com outras pessoas fica aqui, sem caça ao print no WhatsApp.</p>
       <% if (pushNotificationsEnabled && pushPublicKey) { %>
         <div class="op-page-hero__actions mt-4" style="justify-content: flex-start;">
-          <button type="button" data-push-toggle data-push-public-key="<%= pushPublicKey %>" data-push-status-target="#shared-debts-push-status" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-sky-500/20 transition-colors hover:bg-sky-700"><svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.389 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>Receber alertas</button>
-          <span id="shared-debts-push-status" class="text-xs font-medium text-slate-500 dark:text-slate-400">Ative os alertas neste aparelho para não perder nenhuma resposta ou confirmação.</span>
+          <button type="button" data-push-toggle data-push-public-key="<%= pushPublicKey %>" data-push-status-target="#shared-debts-push-status" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-sky-500/20 transition-colors hover:bg-sky-700"><svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.389 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>Ativar alertas</button>
+          <span id="shared-debts-push-status" class="text-xs font-medium text-slate-500 dark:text-slate-400">Ligue os alertas neste aparelho para não deixar resposta, confirmação ou novidade passar batido.</span>
         </div>
       <% } else { %>
         <div class="op-page-hero__meta mt-4">
@@ -342,12 +351,12 @@
       <div class="op-kpi-card text-center">
         <div class="op-kpi-card__label">Recebidas</div>
         <div class="op-kpi-card__value"><%= received.length %></div>
-        <div class="op-kpi-card__hint"><span class="md:hidden"><%= rawReceivedGroups.length %> mês(es)</span><span class="hidden md:inline"><%= rawReceivedGroups.length %> período(s)</span></div>
+        <div class="op-kpi-card__hint"><span class="md:hidden"><%= countLabel(rawReceivedGroups.length, 'mês', 'meses') %></span><span class="hidden md:inline"><%= countLabel(rawReceivedGroups.length, 'período', 'períodos') %></span></div>
       </div>
       <div class="op-kpi-card text-center">
         <div class="op-kpi-card__label">Enviadas</div>
         <div class="op-kpi-card__value"><%= sent.length %></div>
-        <div class="op-kpi-card__hint"><span class="md:hidden"><%= rawSentGroups.length %> mês(es)</span><span class="hidden md:inline"><%= rawSentGroups.length %> período(s)</span></div>
+        <div class="op-kpi-card__hint"><span class="md:hidden"><%= countLabel(rawSentGroups.length, 'mês', 'meses') %></span><span class="hidden md:inline"><%= countLabel(rawSentGroups.length, 'período', 'períodos') %></span></div>
       </div>
       <div class="op-kpi-card text-center">
         <div class="op-kpi-card__label text-amber-600 dark:text-amber-300">Sua vez</div>
@@ -367,7 +376,7 @@
               <h2 class="mt-1 text-2xl font-black text-slate-900 dark:text-white">Responder tudo de uma vez</h2>
               <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Quando várias cobranças chegam juntas, você decide por envio e evita repetir a mesma aprovação item por item.</p>
             </div>
-            <div class="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"><%= receivedBatchCards.length %> envio(s) aguardando sua decisão</div>
+            <div class="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"><%= countLabel(receivedBatchCards.length, 'envio aguardando sua decisão', 'envios aguardando sua decisão') %></div>
           </div>
 
           <div class="grid gap-4 xl:grid-cols-2">
@@ -399,7 +408,7 @@
                     </div>
                     <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                       <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Itens no envio</div>
-                      <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= batch.totalCount %> cobrança(s)</div>
+                      <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= countLabel(batch.totalCount, 'cobrança', 'cobranças') %></div>
                     </div>
                     <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                       <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Ação sugerida</div>
@@ -435,7 +444,7 @@
               <h2 class="mt-1 text-2xl font-black text-slate-900 dark:text-white">Aguardando resposta</h2>
               <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Cada envio acompanha várias cobranças. Abra os itens só quando precisar entrar no detalhe.</p>
             </div>
-            <div class="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"><%= sentBatchCards.length %> envio(s) aguardando resposta</div>
+            <div class="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"><%= countLabel(sentBatchCards.length, 'envio aguardando resposta', 'envios aguardando resposta') %></div>
           </div>
 
           <div class="grid gap-4 xl:grid-cols-2">
@@ -467,7 +476,7 @@
                     </div>
                     <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                       <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Itens no envio</div>
-                      <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= batch.totalCount %> cobrança(s)</div>
+                      <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= countLabel(batch.totalCount, 'cobrança', 'cobranças') %></div>
                     </div>
                     <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                       <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Status atual</div>
@@ -495,7 +504,7 @@
         <div class="flex items-start justify-between gap-4">
           <div>
             <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-200">Sua vez</div>
-            <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white"><%= actionCount %> pendência(s)</h2>
+            <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white"><%= countLabel(actionCount, 'pendência', 'pendências') %></h2>
             <p class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">As próximas ações que dependem de você aparecem aqui para abrir direto no ponto certo.</p>
           </div>
           <% if (firstQuickAction) { %>
@@ -586,8 +595,8 @@
             <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none">Cobranças que chegaram para sua aprovação e baixa.</p>
           </div>
           <div class="flex flex-wrap gap-2 sm:justify-end">
-            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= trackingFiltersActive ? `${receivedTrackingItems.length} de ${received.length}` : received.length %> cobrança(s)</span>
-            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><span class="md:hidden"><%= trackingFiltersActive ? `${receivedGroups.length} de ${rawReceivedGroups.length}` : receivedGroups.length %> mês(es)</span><span class="hidden md:inline"><%= trackingFiltersActive ? `${receivedGroups.length} de ${rawReceivedGroups.length}` : receivedGroups.length %> período(s)</span></span>
+            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= trackingFiltersActive ? `${countLabel(receivedTrackingItems.length, 'cobrança', 'cobranças')} de ${countLabel(received.length, 'cobrança', 'cobranças')}` : countLabel(received.length, 'cobrança', 'cobranças') %></span>
+            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><span class="md:hidden"><%= trackingFiltersActive ? `${countLabel(receivedGroups.length, 'mês', 'meses')} de ${countLabel(rawReceivedGroups.length, 'mês', 'meses')}` : countLabel(receivedGroups.length, 'mês', 'meses') %></span><span class="hidden md:inline"><%= trackingFiltersActive ? `${countLabel(receivedGroups.length, 'período', 'períodos')} de ${countLabel(rawReceivedGroups.length, 'período', 'períodos')}` : countLabel(receivedGroups.length, 'período', 'períodos') %></span></span>
           </div>
         </div>
       </summary>
@@ -618,7 +627,7 @@
                     <% if (monthActionCount > 0) { %>
                       <span class="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-200"><%= monthActionCount %> ação(ões)</span>
                     <% } %>
-                    <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= group.items.length %> cobrança(s)</span>
+                    <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= countLabel(group.items.length, 'cobrança', 'cobranças') %></span>
                     <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= formatBRLFromCents(group.totalCents) %></span>
                   </div>
                 </div>
@@ -652,7 +661,7 @@
                     <div>
                       <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Recebidas · <%= group.label %></div>
                       <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Marcar mês como pago</h3>
-                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= receivedMonthPayableItems.length %> cobrança(s) aceitas · <%= formatBRLFromCents(receivedMonthPayableTotal) %></p>
+                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= countLabel(receivedMonthPayableItems.length, 'cobrança aceita', 'cobranças aceitas') %> · <%= formatBRLFromCents(receivedMonthPayableTotal) %></p>
                     </div>
                     <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar atalho do mês">
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -671,7 +680,7 @@
                     </label>
                     <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                       <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
-                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Marcar <%= receivedMonthPayableItems.length %> cobrança(s) como pagas</button>
+                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Marcar <%= countLabel(receivedMonthPayableItems.length, 'cobrança como paga', 'cobranças como pagas') %></button>
                     </div>
                   </form>
                 </div>
@@ -684,7 +693,7 @@
                     <div>
                       <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Recebidas · <%= group.label %></div>
                       <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Lista completa do mês</h3>
-                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= group.items.length %> cobrança(s) · <%= formatBRLFromCents(group.totalCents) %></p>
+                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= countLabel(group.items.length, 'cobrança', 'cobranças') %> · <%= formatBRLFromCents(group.totalCents) %></p>
                     </div>
                     <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar lista do mês">
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -881,8 +890,8 @@
             <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none">Cobranças que você enviou para aprovação e baixa.</p>
           </div>
           <div class="flex flex-wrap gap-2 sm:justify-end">
-            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= trackingFiltersActive ? `${sentTrackingItems.length} de ${sent.length}` : sent.length %> cobrança(s)</span>
-            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><span class="md:hidden"><%= trackingFiltersActive ? `${sentGroups.length} de ${rawSentGroups.length}` : sentGroups.length %> mês(es)</span><span class="hidden md:inline"><%= trackingFiltersActive ? `${sentGroups.length} de ${rawSentGroups.length}` : sentGroups.length %> período(s)</span></span>
+            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= trackingFiltersActive ? `${countLabel(sentTrackingItems.length, 'cobrança', 'cobranças')} de ${countLabel(sent.length, 'cobrança', 'cobranças')}` : countLabel(sent.length, 'cobrança', 'cobranças') %></span>
+            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><span class="md:hidden"><%= trackingFiltersActive ? `${countLabel(sentGroups.length, 'mês', 'meses')} de ${countLabel(rawSentGroups.length, 'mês', 'meses')}` : countLabel(sentGroups.length, 'mês', 'meses') %></span><span class="hidden md:inline"><%= trackingFiltersActive ? `${countLabel(sentGroups.length, 'período', 'períodos')} de ${countLabel(rawSentGroups.length, 'período', 'períodos')}` : countLabel(sentGroups.length, 'período', 'períodos') %></span></span>
           </div>
         </div>
       </summary>
@@ -913,7 +922,7 @@
                     <% if (monthActionCount > 0) { %>
                       <span class="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-200"><%= monthActionCount %> ação(ões)</span>
                     <% } %>
-                    <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= group.items.length %> cobrança(s)</span>
+                    <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= countLabel(group.items.length, 'cobrança', 'cobranças') %></span>
                     <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= formatBRLFromCents(group.totalCents) %></span>
                   </div>
                 </div>
@@ -947,7 +956,7 @@
                     <div>
                       <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Enviadas · <%= group.label %></div>
                       <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Confirmar recebimento do mês</h3>
-                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= sentMonthConfirmableItems.length %> cobrança(s) com pagamento informado · <%= formatBRLFromCents(sentMonthConfirmableTotal) %></p>
+                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= countLabel(sentMonthConfirmableItems.length, 'cobrança com pagamento avisado', 'cobranças com pagamento avisado') %> · <%= formatBRLFromCents(sentMonthConfirmableTotal) %></p>
                     </div>
                     <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar confirmação do mês">
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -966,7 +975,7 @@
                     </label>
                     <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                       <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
-                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">Confirmar <%= sentMonthConfirmableItems.length %> recebimento(s)</button>
+                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">Confirmar <%= countLabel(sentMonthConfirmableItems.length, 'recebimento', 'recebimentos') %></button>
                     </div>
                   </form>
                 </div>
@@ -979,7 +988,7 @@
                     <div>
                       <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Enviadas · <%= group.label %></div>
                       <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Lista completa do mês</h3>
-                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= group.items.length %> cobrança(s) · <%= formatBRLFromCents(group.totalCents) %></p>
+                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= countLabel(group.items.length, 'cobrança', 'cobranças') %> · <%= formatBRLFromCents(group.totalCents) %></p>
                     </div>
                     <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar lista do mês">
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>

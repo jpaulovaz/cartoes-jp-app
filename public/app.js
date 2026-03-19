@@ -603,7 +603,7 @@
 
     const states = {
       idle: {
-        html: `${iconBell}Receber alertas`,
+        html: `${iconBell}Ativar alertas`,
         disabled: false,
         className: 'inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-sky-700 transition-colors'
       },
@@ -613,7 +613,7 @@
         className: 'inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors'
       },
       loading: {
-        html: `${iconSpinner}Só um instante...`,
+        html: `${iconSpinner}Preparando...`,
         disabled: true,
         className: 'inline-flex items-center justify-center rounded-2xl bg-slate-400 px-4 py-2.5 text-sm font-bold text-white shadow-sm cursor-wait'
       },
@@ -631,11 +631,11 @@
 
     if (statusEl) {
       if (state === 'enabled') {
-        statusEl.textContent = 'Tudo certo: este aparelho já pode receber alertas. Toque no botão para desligar.';
+        statusEl.textContent = 'Tudo certo! Este aparelho já vai te chamar quando pintar novidade.';
       } else if (state === 'unsupported') {
-        statusEl.textContent = 'Este navegador não suporta alertas ou o recurso ainda não foi configurado.';
+        statusEl.textContent = 'Este navegador não consegue receber alertas por aqui, ou o recurso ainda não foi configurado.';
       } else if (state === 'idle') {
-        statusEl.textContent = 'Ative os alertas neste aparelho para receber avisos mesmo fora da tela.';
+        statusEl.textContent = 'Ligue os alertas neste aparelho e deixe o app te dar um toque quando algo mudar.';
       }
     }
   }
@@ -648,7 +648,7 @@
     });
 
     if (!response.ok) {
-      throw new Error('Não consegui salvar os alertas deste aparelho no servidor.');
+      throw new Error('Não consegui guardar este aparelho para receber alertas.');
     }
   }
 
@@ -660,7 +660,7 @@
     });
 
     if (!response.ok) {
-      throw new Error('Não consegui desligar os alertas deste aparelho no servidor.');
+      throw new Error('Não consegui desligar os alertas deste aparelho agora.');
     }
   }
 
@@ -699,7 +699,7 @@
 
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
-        throw new Error('Permissão de alertas não concedida.');
+        throw new Error('Sem permissão para alertas. Se quiser, é só liberar no navegador.');
       }
 
       const subscription = await registration.pushManager.subscribe({
@@ -712,7 +712,7 @@
     } catch (error) {
       console.error(error);
       setPushToggleState(button, statusEl, 'idle');
-      window.alert(error?.message || 'Não foi possível configurar os alertas neste aparelho.');
+      window.alert(error?.message || 'Não deu para configurar os alertas neste aparelho agora.');
     }
   }
 

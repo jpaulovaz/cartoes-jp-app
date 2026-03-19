@@ -40,7 +40,7 @@
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= person.name %></span>
         <span class="badge">Ref. <%= periodLabel %></span>
-        <span class="badge"><%= items.length %> item(ns)</span>
+        <span class="badge"><%= items.length %> <%= items.length === 1 ? "item" : "itens" %></span>
       </div>
     </div>
     <div class="op-page-hero__actions">
@@ -543,22 +543,23 @@
       const remainingLabel = '<%= formatBRL(remainingCents) %>';
       const paidLabel = '<%= formatBRL(paidCents) %>';
       const messageLines = [
-        `*Olá, <%= person.name %>!* 💳`,
+        `*Oi, <%= person.name %>!* 💳`,
         '',
-        `Segue o fechamento de *<%= periodLabel %>*.`,
+        `Separei aqui o fechamento de *<%= periodLabel %>* para ficar fácil de conferir.`,
         `Total do período: *${totalLabel}*.`
       ];
 
       <% if (paidCents > 0 && remainingCents > 0) { %>
-        messageLines.push(`Já pago: *${paidLabel}*.`);
-        messageLines.push(`Saldo pendente: *${remainingLabel}*.`);
+        messageLines.push(`Já entrou: *${paidLabel}*.`);
+        messageLines.push(`Ainda falta: *${remainingLabel}*.`);
       <% } else if (paidCents > 0 && remainingCents <= 0) { %>
-        messageLines.push(`Pagamento confirmado: *${paidLabel}*.`);
+        messageLines.push(`Tá tudo quitado: *${paidLabel}*.`);
       <% } else { %>
-        messageLines.push(`Valor em aberto: *${remainingLabel}*.`);
+        messageLines.push(`Ainda ficou em aberto: *${remainingLabel}*.`);
       <% } %>
 
       messageLines.push('');
+      messageLines.push('Te mandei a imagem com os detalhes logo abaixo 👇');
       const message = messageLines.join('\n');
 
       const response = await fetch('/whatsapp/send-automation', {
@@ -576,10 +577,10 @@
         throw new Error(result.error || 'Falha na API de envio.');
       }
 
-      alert('Resumo enviado com imagem com sucesso.');
+      alert('Prontinho! O resumo foi enviado no WhatsApp com a imagem.');
     } catch (error) {
       console.error('[whatsapp] send failure', error);
-      alert(error && error.message ? error.message : 'Não foi possível enviar a imagem pelo WhatsApp agora.');
+      alert(error && error.message ? error.message : 'Não consegui enviar a imagem pelo WhatsApp agora.');
     } finally {
       restore();
     }

@@ -525,6 +525,20 @@ function normalizeEmail(value) {
   return email || null;
 }
 
+function pluralizePt(count, singular, plural) {
+  return Number(count) === 1 ? singular : plural;
+}
+
+function formatCountLabel(count, singular, plural) {
+  const safeCount = Math.max(0, Number(count || 0));
+  return `${safeCount} ${pluralizePt(safeCount, singular, plural)}`;
+}
+
+function buildNoteSuffix(note, label = 'Recado') {
+  const safeNote = String(note || '').trim();
+  return safeNote ? ` ${label}: ${safeNote}` : '';
+}
+
 function normalizeSharedDebtOriginKind(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (['single', 'multiple', 'installment', 'mixed'].includes(normalized)) return normalized;
@@ -774,11 +788,12 @@ function recordSharedDebtBatchChange(context, payload) {
 }
 
 function buildSharedDebtBatchNotificationBody({ requesterDisplayName, actionLabel, itemCount, totalCents, descriptions }) {
-  const safeCount = Number(itemCount || 0);
+  const safeCount = Math.max(0, Number(itemCount || 0));
   const formattedTotal = formatBRLFromCents(Number(totalCents || 0));
   const preview = (descriptions || []).filter(Boolean).slice(0, 2).join(' · ');
-  const previewSuffix = preview ? ` Principais itens: ${preview}.` : '';
-  return `${requesterDisplayName} ${actionLabel} ${safeCount} cobrança(s) para você, totalizando ${formattedTotal}.${previewSuffix}`;
+  const countLabel = formatCountLabel(safeCount, 'cobrança', 'cobranças');
+  const previewSuffix = preview ? ` Nessa leva entraram: ${preview}.` : '';
+  return `${requesterDisplayName} ${actionLabel} ${countLabel} para você, somando ${formattedTotal}.${previewSuffix}`;
 }
 
 function flushSharedDebtBatchNotifications(context) {
@@ -794,10 +809,10 @@ function flushSharedDebtBatchNotifications(context) {
     const onlyCreated = entry.createdCount > 0 && entry.updatedCount === 0;
     const onlyUpdated = entry.updatedCount > 0 && entry.createdCount === 0;
     const title = onlyCreated
-      ? 'Novo envio de cobranças compartilhadas'
+      ? 'Chegou um novo envio compartilhado'
       : onlyUpdated
-        ? 'Cobranças compartilhadas atualizadas'
-        : 'Cobranças compartilhadas enviadas e atualizadas';
+        ? 'Um envio compartilhado foi atualizado'
+        : 'Tem novidade em um envio compartilhado';
 
     const actionLabel = onlyCreated
       ? 'enviou'
@@ -1524,10 +1539,10 @@ function buildDueTodayPushPayload(cards, zonedToday, sequenceNo = 1) {
 
   if (cards.length === 1) {
     const card = cards[0];
-    const title = sequenceNo > 1 ? 'Lembrete: fatura vence hoje' : 'Fatura vencendo hoje';
+    const title = sequenceNo > 1 ? 'Lembrete: sua fatura vence hoje' : 'Hoje vence sua fatura';
     const body = card.paid_cents > 0
-      ? `${card.card_name} vence hoje. Ainda faltam ${formatBRLFromCents(card.remaining_cents)} para quitar no resumo.`
-      : `${card.card_name} vence hoje. Valor previsto: ${formatBRLFromCents(card.total_cents)}.`;
+      ? `${card.card_name} vence hoje. Ainda faltam ${formatBRLFromCents(card.remaining_cents)} para fechar essa conta.`
+      : `${card.card_name} vence hoje. O valor previsto é ${formatBRLFromCents(card.total_cents)}.`;
 
     return {
       title,
@@ -1538,11 +1553,11 @@ function buildDueTodayPushPayload(cards, zonedToday, sequenceNo = 1) {
   }
 
   const previewNames = cards.slice(0, 2).map(item => item.card_name).join(', ');
-  const extraCount = cards.length > 2 ? ` +${cards.length - 2}` : '';
+  const extraCount = cards.length > 2 ? ` e mais ${cards.length - 2}` : '';
 
   return {
-    title: sequenceNo > 1 ? 'Lembrete: faturas vencem hoje' : 'Faturas vencendo hoje',
-    body: `${cards.length} faturas vencem hoje (${previewNames}${extraCount}). Pendente no resumo: ${formatBRLFromCents(totalRemaining)}.`,
+    title: sequenceNo > 1 ? 'Lembrete: tem fatura vencendo hoje' : 'Hoje tem fatura vencendo',
+    body: `${formatCountLabel(cards.length, 'fatura', 'faturas')} vencem hoje. Entre elas: ${previewNames}${extraCount}. Ainda faltam ${formatBRLFromCents(totalRemaining)} para quitar tudo no resumo.`,
     href,
     tag: `card-due-today:${zonedToday.dateKey}`
   };
@@ -1962,8 +1977,8 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
             createNotification({
               userId: row.receiver_user_id,
               type: 'shared_debt_request',
-              title: 'Cobrança compartilhada atualizada',
-              body: `${requesterDisplayName} atualizou uma cobrança para ${formatBRLFromCents(row.share_cents)} referente a ${txn.description}.`,
+              title: 'Uma cobrança compartilhada foi atualizada',
+              body: `${requesterDisplayName} ajustou a cobrança de ${formatBRLFromCents(row.share_cents)} (${txn.description}).`,
               href: `/shared-debts?request=${existing.id}`,
               relatedType: 'shared_debt_request',
               relatedId: existing.id
@@ -2036,8 +2051,8 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
             createNotification({
               userId: row.receiver_user_id,
               type: 'shared_debt_request',
-              title: 'Nova cobrança compartilhada',
-              body: `${requesterDisplayName} enviou uma cobrança para você no valor de ${formatBRLFromCents(row.share_cents)} referente a ${txn.description}.`,
+              title: 'Chegou uma cobrança compartilhada',
+              body: `${requesterDisplayName} te enviou uma cobrança de ${formatBRLFromCents(row.share_cents)} (${txn.description}).`,
               href: `/shared-debts?request=${requestId}`,
               relatedType: 'shared_debt_request',
               relatedId: requestId
@@ -2884,12 +2899,12 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
   const note = String(req.body.note || '').trim() || null;
 
   if (!batchId) {
-    setFlash(req, 'error', 'Envio inválido.');
+    setFlash(req, 'error', 'Ops, esse envio não é válido.');
     return res.redirect('/shared-debts');
   }
 
   if (!['accept', 'reject'].includes(action)) {
-    setFlash(req, 'error', 'Ação inválida para este envio.');
+    setFlash(req, 'error', 'Essa ação não combina com esse envio.');
     return res.redirect(`/shared-debts?batch=${batchId}`);
   }
 
@@ -2928,11 +2943,12 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
   const eventType = nextStatus;
   const totalCents = pendingItems.reduce((sum, item) => sum + Number(item.amount_cents || 0), 0);
   const firstRequestId = Number(pendingItems[0]?.id || 0) || null;
-  const title = accepted ? 'Envio de cobranças aceito' : 'Envio de cobranças recusado';
+  const chargeCountLabel = formatCountLabel(pendingItems.length, 'cobrança', 'cobranças');
+  const title = accepted ? 'Seu envio foi aceito' : 'Seu envio foi recusado';
   const baseBody = accepted
-    ? `${actorName} aceitou ${pendingItems.length} cobrança(s) do seu envio, totalizando ${formatBRLFromCents(totalCents)}.`
-    : `${actorName} recusou ${pendingItems.length} cobrança(s) do seu envio, totalizando ${formatBRLFromCents(totalCents)}.`;
-  const body = note ? `${baseBody} Observação: ${note}` : baseBody;
+    ? `${actorName} aceitou ${chargeCountLabel} do seu envio, somando ${formatBRLFromCents(totalCents)}.`
+    : `${actorName} recusou ${chargeCountLabel} do seu envio, somando ${formatBRLFromCents(totalCents)}.`;
+  const body = `${baseBody}${buildNoteSuffix(note)}`;
 
   const updateStmt = db.prepare(`
     UPDATE shared_debt_requests
@@ -2960,8 +2976,8 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
   })();
 
   setFlash(req, 'success', accepted
-    ? `Você aceitou ${pendingItems.length} cobrança(s) deste envio.`
-    : `Você recusou ${pendingItems.length} cobrança(s) deste envio.`);
+    ? `Pronto! Você aceitou ${chargeCountLabel} deste envio.`
+    : `Pronto! Você recusou ${chargeCountLabel} deste envio.`);
   return res.redirect(`/shared-debts?batch=${batchId}`);
 });
 
@@ -2972,12 +2988,12 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
   const note = String(req.body.note || '').trim() || null;
 
   if (!requestId) {
-    setFlash(req, 'error', 'Solicitação inválida.');
+    setFlash(req, 'error', 'Ops, essa solicitação não é válida.');
     return res.redirect('/shared-debts');
   }
 
   if (!['accept', 'reject'].includes(action)) {
-    setFlash(req, 'error', 'Ação inválida para esta solicitação.');
+    setFlash(req, 'error', 'Essa ação não combina com essa solicitação.');
     return res.redirect(`/shared-debts?request=${requestId}`);
   }
 
@@ -2990,12 +3006,12 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
   `).get(requestId, userId);
 
   if (!requestRow) {
-    setFlash(req, 'error', 'Solicitação não encontrada.');
+    setFlash(req, 'error', 'Ops, não encontrei essa solicitação.');
     return res.redirect('/shared-debts');
   }
 
   if (requestRow.status !== 'pending') {
-    setFlash(req, 'info', 'Esta solicitação já foi analisada anteriormente.');
+    setFlash(req, 'info', 'Essa solicitação já tinha sido resolvida antes.');
     return res.redirect(`/shared-debts?request=${requestId}`);
   }
 
@@ -3005,11 +3021,11 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
   const accepted = action === 'accept';
   const nextStatus = accepted ? 'accepted' : 'rejected_by_receiver';
   const eventType = nextStatus;
-  const title = accepted ? 'Cobrança compartilhada aceita' : 'Cobrança compartilhada recusada';
+  const title = accepted ? 'Aceitaram sua cobrança compartilhada' : 'Recusaram sua cobrança compartilhada';
   const baseBody = accepted
-    ? `${actorName} aceitou a cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`
-    : `${actorName} recusou a cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`;
-  const body = note ? `${baseBody} Observação: ${note}` : baseBody;
+    ? `${actorName} aceitou a cobrança de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`
+    : `${actorName} recusou a cobrança de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
+  const body = `${baseBody}${buildNoteSuffix(note)}`;
 
   db.transaction(() => {
     db.prepare(`
@@ -3032,7 +3048,7 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
     });
   })();
 
-  setFlash(req, 'success', accepted ? 'Solicitação aceita com sucesso.' : 'Solicitação recusada com sucesso.');
+  setFlash(req, 'success', accepted ? 'Pronto! Você aceitou essa solicitação.' : 'Pronto! Você recusou essa solicitação.');
   return res.redirect(`/shared-debts?request=${requestId}`);
 });
 
@@ -3043,12 +3059,12 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
   const note = String(req.body.note || '').trim() || null;
 
   if (!requestId) {
-    setFlash(req, 'error', 'Solicitação inválida.');
+    setFlash(req, 'error', 'Ops, essa solicitação não é válida.');
     return res.redirect('/shared-debts');
   }
 
   if (!['accept_rejection', 'contest_rejection'].includes(action)) {
-    setFlash(req, 'error', 'Ação inválida para esta solicitação.');
+    setFlash(req, 'error', 'Essa ação não combina com essa solicitação.');
     return res.redirect(`/shared-debts?request=${requestId}`);
   }
 
@@ -3061,12 +3077,12 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
   `).get(requestId, userId);
 
   if (!requestRow) {
-    setFlash(req, 'error', 'Solicitação não encontrada.');
+    setFlash(req, 'error', 'Ops, não encontrei essa solicitação.');
     return res.redirect('/shared-debts');
   }
 
   if (requestRow.status !== 'rejected_by_receiver') {
-    setFlash(req, 'info', 'Esta solicitação não está aguardando decisão do remetente.');
+    setFlash(req, 'info', 'Essa solicitação não está esperando uma decisão de quem enviou.');
     return res.redirect(`/shared-debts?request=${requestId}`);
   }
 
@@ -3076,11 +3092,11 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
   const acceptingRejection = action === 'accept_rejection';
   const nextStatus = acceptingRejection ? 'rejection_accepted_by_sender' : 'rejection_contested_by_sender';
   const eventType = nextStatus;
-  const title = acceptingRejection ? 'Rejeição aceita pelo remetente' : 'Rejeição contestada pelo remetente';
+  const title = acceptingRejection ? 'Sua recusa foi aceita' : 'Sua recusa foi contestada';
   const baseBody = acceptingRejection
-    ? `${actorName} aceitou a sua recusa da cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`
-    : `${actorName} contestou a sua recusa da cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`;
-  const body = note ? `${baseBody} Observação: ${note}` : baseBody;
+    ? `${actorName} aceitou a sua recusa da cobrança de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`
+    : `${actorName} contestou a sua recusa da cobrança de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
+  const body = `${baseBody}${buildNoteSuffix(note)}`;
 
   db.transaction(() => {
     if (acceptingRejection) {
@@ -3111,7 +3127,7 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
     });
   })();
 
-  setFlash(req, 'success', acceptingRejection ? 'Rejeição aceita com sucesso.' : 'Rejeição contestada com sucesso.');
+  setFlash(req, 'success', acceptingRejection ? 'Pronto! Você aceitou a recusa e encerrou essa cobrança.' : 'Pronto! Você contestou a recusa dessa cobrança.');
   return res.redirect(`/shared-debts?request=${requestId}`);
 });
 
@@ -3121,7 +3137,7 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
   const note = String(req.body.note || '').trim() || null;
 
   if (!requestId) {
-    setFlash(req, 'error', 'Solicitação inválida.');
+    setFlash(req, 'error', 'Ops, essa solicitação não é válida.');
     return res.redirect('/shared-debts');
   }
 
@@ -3134,30 +3150,30 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
   `).get(requestId, userId);
 
   if (!requestRow) {
-    setFlash(req, 'error', 'Solicitação não encontrada.');
+    setFlash(req, 'error', 'Ops, não encontrei essa solicitação.');
     return res.redirect('/shared-debts');
   }
 
   if (requestRow.status === 'settled') {
-    setFlash(req, 'info', 'Esta dívida já foi liquidada anteriormente.');
+    setFlash(req, 'info', 'Essa cobrança já foi encerrada antes.');
     return res.redirect(`/shared-debts?request=${requestId}`);
   }
 
   if (requestRow.status !== 'accepted') {
-    setFlash(req, 'info', 'Somente solicitações aceitas podem ser marcadas como pagas.');
+    setFlash(req, 'info', 'Só dá para marcar pagamento em solicitações já aceitas.');
     return res.redirect(`/shared-debts?request=${requestId}`);
   }
 
   if (requestRow.payment_marked_at) {
-    setFlash(req, 'info', 'O pagamento desta solicitação já foi informado e está aguardando confirmação.');
+    setFlash(req, 'info', 'O pagamento dessa solicitação já foi avisado e agora está esperando confirmação.');
     return res.redirect(`/shared-debts?request=${requestId}`);
   }
 
   const actor = getUserRecord(userId);
   const actorName = actor?.name || requestRow.receiver_name_snapshot || actor?.email || 'O destinatário';
   const now = nowIso();
-  const baseBody = `${actorName} informou que pagou a cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`;
-  const body = note ? `${baseBody} Observação: ${note}` : baseBody;
+  const baseBody = `${actorName} avisou que já pagou a cobrança de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
+  const body = `${baseBody}${buildNoteSuffix(note)}`;
 
   db.transaction(() => {
     db.prepare(`
@@ -3172,7 +3188,7 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
     createNotification({
       userId: requestRow.requester_user_id,
       type: 'shared_debt_request',
-      title: 'Pagamento informado na dívida compartilhada',
+      title: 'Pagamento marcado como feito',
       body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
@@ -3180,7 +3196,7 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
     });
   })();
 
-  setFlash(req, 'success', 'Pagamento informado com sucesso. Agora o remetente pode confirmar o recebimento.');
+  setFlash(req, 'success', 'Pronto! Agora quem enviou a cobrança já pode confirmar o recebimento.');
   return res.redirect(`/shared-debts?request=${requestId}`);
 });
 
@@ -3190,7 +3206,7 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
   const note = String(req.body.note || '').trim() || null;
 
   if (!requestId) {
-    setFlash(req, 'error', 'Solicitação inválida.');
+    setFlash(req, 'error', 'Ops, essa solicitação não é válida.');
     return res.redirect('/shared-debts');
   }
 
@@ -3203,30 +3219,30 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
   `).get(requestId, userId);
 
   if (!requestRow) {
-    setFlash(req, 'error', 'Solicitação não encontrada.');
+    setFlash(req, 'error', 'Ops, não encontrei essa solicitação.');
     return res.redirect('/shared-debts');
   }
 
   if (requestRow.status === 'settled') {
-    setFlash(req, 'info', 'Esta dívida já foi liquidada anteriormente.');
+    setFlash(req, 'info', 'Essa cobrança já foi encerrada antes.');
     return res.redirect(`/shared-debts?request=${requestId}`);
   }
 
   if (requestRow.status !== 'accepted') {
-    setFlash(req, 'info', 'Somente solicitações aceitas podem ser liquidadas.');
+    setFlash(req, 'info', 'Só dá para encerrar solicitações já aceitas.');
     return res.redirect(`/shared-debts?request=${requestId}`);
   }
 
   if (!requestRow.payment_marked_at) {
-    setFlash(req, 'info', 'A dívida ainda não foi marcada como paga pelo destinatário.');
+    setFlash(req, 'info', 'Essa cobrança ainda não foi marcada como paga por quem recebeu.');
     return res.redirect(`/shared-debts?request=${requestId}`);
   }
 
   const actor = getUserRecord(userId);
   const actorName = actor?.name || actor?.email || 'O remetente';
   const now = nowIso();
-  const baseBody = `${actorName} confirmou o recebimento da cobrança de ${formatBRLFromCents(requestRow.amount_cents)} referente a ${requestRow.description_snapshot}.`;
-  const body = note ? `${baseBody} Observação: ${note}` : baseBody;
+  const baseBody = `${actorName} confirmou o recebimento da cobrança de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
+  const body = `${baseBody}${buildNoteSuffix(note)}`;
 
   db.transaction(() => {
     db.prepare(`
@@ -3241,7 +3257,7 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
     createNotification({
       userId: requestRow.receiver_user_id,
       type: 'shared_debt_request',
-      title: 'Recebimento confirmado na dívida compartilhada',
+      title: 'Pagamento confirmado',
       body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
@@ -3249,7 +3265,7 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
     });
   })();
 
-  setFlash(req, 'success', 'Recebimento confirmado com sucesso. A dívida foi liquidada.');
+  setFlash(req, 'success', 'Pronto! Recebimento confirmado e cobrança encerrada.');
   return res.redirect(`/shared-debts?request=${requestId}`);
 });
 
@@ -3261,7 +3277,7 @@ app.post('/shared-debts/bulk/mark-paid', ensureAuthenticated, (req, res) => {
   const fallbackRedirect = redirectBackOr(req, '/shared-debts');
 
   if (!requestIds.length) {
-    setFlash(req, 'error', 'Nenhuma cobrança válida foi selecionada para informar pagamento.');
+    setFlash(req, 'error', 'Nenhuma cobrança válida foi escolhida para marcar como paga.');
     return res.redirect(fallbackRedirect);
   }
 
@@ -3278,7 +3294,7 @@ app.post('/shared-debts/bulk/mark-paid', ensureAuthenticated, (req, res) => {
   `).all(...requestIds, userId);
 
   if (!rows.length) {
-    setFlash(req, 'info', 'Nenhuma cobrança elegível estava aguardando marcação de pagamento.');
+    setFlash(req, 'info', 'Não achei cobranças desse grupo esperando marcação de pagamento.');
     return res.redirect(fallbackRedirect);
   }
 
@@ -3301,15 +3317,16 @@ app.post('/shared-debts/bulk/mark-paid', ensureAuthenticated, (req, res) => {
       const periodLabel = buildSharedDebtBulkPeriodLabel(group.rows);
       if (group.batchId) touchSharedDebtBatch(group.batchId, now);
 
-      const bodyBase = `${actorName} informou o pagamento de ${group.rows.length} cobrança(s)` +
-        `${periodLabel ? ` referente(s) a ${periodLabel}` : ''}, totalizando ${formatBRLFromCents(group.totalCents)}.`;
-      const body = note ? `${bodyBase} Observação: ${note}` : bodyBase;
+      const chargeCountLabel = formatCountLabel(group.rows.length, 'cobrança', 'cobranças');
+      const bodyBase = `${actorName} avisou o pagamento de ${chargeCountLabel}` +
+        `${periodLabel ? ` no período ${periodLabel}` : ''}, somando ${formatBRLFromCents(group.totalCents)}.`;
+      const body = `${bodyBase}${buildNoteSuffix(note)}`;
       const firstRow = group.rows[0];
 
       createNotification({
         userId: firstRow.requester_user_id,
         type: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
-        title: group.rows.length > 1 ? 'Pagamentos informados no mês' : 'Pagamento informado na dívida compartilhada',
+        title: group.rows.length > 1 ? 'Pagamentos marcados como feitos' : 'Pagamento marcado como feito',
         body,
         href: group.batchId ? `/shared-debts?batch=${group.batchId}` : `/shared-debts?request=${firstRow.id}`,
         relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
@@ -3318,7 +3335,7 @@ app.post('/shared-debts/bulk/mark-paid', ensureAuthenticated, (req, res) => {
     });
   })();
 
-  setFlash(req, 'success', `${rows.length} cobrança(s) foram marcadas como pagas de uma vez.`);
+  setFlash(req, 'success', `Pronto! ${formatCountLabel(rows.length, 'cobrança foi marcada como paga', 'cobranças foram marcadas como pagas')} de uma vez.`);
   return res.redirect(fallbackRedirect);
 });
 
@@ -3329,7 +3346,7 @@ app.post('/shared-debts/bulk/confirm-receipt', ensureAuthenticated, (req, res) =
   const fallbackRedirect = redirectBackOr(req, '/shared-debts');
 
   if (!requestIds.length) {
-    setFlash(req, 'error', 'Nenhuma cobrança válida foi selecionada para confirmar o recebimento.');
+    setFlash(req, 'error', 'Nenhuma cobrança válida foi escolhida para confirmar o recebimento.');
     return res.redirect(fallbackRedirect);
   }
 
@@ -3346,7 +3363,7 @@ app.post('/shared-debts/bulk/confirm-receipt', ensureAuthenticated, (req, res) =
   `).all(...requestIds, userId);
 
   if (!rows.length) {
-    setFlash(req, 'info', 'Nenhuma cobrança elegível estava aguardando confirmação de recebimento.');
+    setFlash(req, 'info', 'Não achei cobranças desse grupo esperando confirmação de recebimento.');
     return res.redirect(fallbackRedirect);
   }
 
@@ -3369,15 +3386,16 @@ app.post('/shared-debts/bulk/confirm-receipt', ensureAuthenticated, (req, res) =
       const periodLabel = buildSharedDebtBulkPeriodLabel(group.rows);
       if (group.batchId) touchSharedDebtBatch(group.batchId, now);
 
-      const bodyBase = `${actorName} confirmou o recebimento de ${group.rows.length} cobrança(s)` +
-        `${periodLabel ? ` referente(s) a ${periodLabel}` : ''}, totalizando ${formatBRLFromCents(group.totalCents)}.`;
-      const body = note ? `${bodyBase} Observação: ${note}` : bodyBase;
+      const chargeCountLabel = formatCountLabel(group.rows.length, 'cobrança', 'cobranças');
+      const bodyBase = `${actorName} confirmou o recebimento de ${chargeCountLabel}` +
+        `${periodLabel ? ` no período ${periodLabel}` : ''}, somando ${formatBRLFromCents(group.totalCents)}.`;
+      const body = `${bodyBase}${buildNoteSuffix(note)}`;
       const firstRow = group.rows[0];
 
       createNotification({
         userId: firstRow.receiver_user_id,
         type: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
-        title: group.rows.length > 1 ? 'Recebimentos confirmados no mês' : 'Recebimento confirmado na dívida compartilhada',
+        title: group.rows.length > 1 ? 'Pagamentos confirmados' : 'Pagamento confirmado',
         body,
         href: group.batchId ? `/shared-debts?batch=${group.batchId}` : `/shared-debts?request=${firstRow.id}`,
         relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
@@ -3386,7 +3404,7 @@ app.post('/shared-debts/bulk/confirm-receipt', ensureAuthenticated, (req, res) =
     });
   })();
 
-  setFlash(req, 'success', `${rows.length} cobrança(s) foram liquidadas de uma vez.`);
+  setFlash(req, 'success', `Pronto! ${formatCountLabel(rows.length, 'cobrança foi encerrada', 'cobranças foram encerradas')} de uma vez.`);
   return res.redirect(fallbackRedirect);
 });
 
@@ -3434,7 +3452,7 @@ app.get("/notifications", ensureAuthenticated, (req, res) => {
 
 app.post("/notifications/read-all", ensureAuthenticated, (req, res) => {
   markAllNotificationsAsRead(req.user.id);
-  setFlash(req, 'success', 'As notificações foram marcadas como lidas.');
+  setFlash(req, 'success', 'Pronto! Seus avisos já foram marcados como lidos.');
   return res.redirect('/shared-debts');
 });
 
@@ -3442,13 +3460,13 @@ app.post("/notifications/:id/read", ensureAuthenticated, (req, res) => {
   const notificationId = Number(req.params.id);
 
   if (!notificationId) {
-    setFlash(req, 'error', 'Notificação inválida.');
+    setFlash(req, 'error', 'Ops, esse aviso não é válido.');
     return res.redirect('/shared-debts');
   }
 
   const notification = getNotificationForUser(notificationId, req.user.id);
   if (!notification) {
-    setFlash(req, 'error', 'Notificação não encontrada.');
+    setFlash(req, 'error', 'Ops, não encontrei esse aviso.');
     return res.redirect('/shared-debts');
   }
 
@@ -3460,13 +3478,13 @@ app.get("/notifications/:id/open", ensureAuthenticated, (req, res) => {
   const notificationId = Number(req.params.id);
 
   if (!notificationId) {
-    setFlash(req, 'error', 'Notificação inválida.');
+    setFlash(req, 'error', 'Ops, esse aviso não é válido.');
     return res.redirect('/shared-debts');
   }
 
   const notification = getNotificationForUser(notificationId, req.user.id);
   if (!notification) {
-    setFlash(req, 'error', 'Notificação não encontrada.');
+    setFlash(req, 'error', 'Ops, não encontrei esse aviso.');
     return res.redirect('/shared-debts');
   }
 
@@ -3721,7 +3739,7 @@ function buildOverduePaymentAlertDescription(items) {
 
   const extraCount = items.length - preview.length;
   return extraCount > 0
-    ? `${preview.join(' ')} +${extraCount} outra(s) fatura(s) vencida(s) com pendência.`
+    ? `${preview.join(' ')} E ainda tem mais ${formatCountLabel(extraCount, 'fatura vencida com pendência', 'faturas vencidas com pendência')}.`
     : preview.join(' ');
 }
 
@@ -3841,7 +3859,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       title: unreadSharedDebtNotifications.length === 1 ? newest.title : 'Dívidas compartilhadas pendentes',
       description: unreadSharedDebtNotifications.length === 1
         ? (newest.body || 'Você recebeu uma nova solicitação de dívida compartilhada.')
-        : `Você tem ${unreadSharedDebtNotifications.length} atualização(ões) sobre dívidas compartilhadas aguardando sua análise.`,
+        : `Você tem ${formatCountLabel(unreadSharedDebtNotifications.length, 'novidade', 'novidades')} sobre dívidas compartilhadas esperando sua olhada.`,
       href: newest.href || '/shared-debts'
     });
   } else {
@@ -3856,7 +3874,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
         type: 'warning',
         icon: '📨',
         title: 'Envios aguardando sua análise',
-        description: `${pendingSharedDebtCount} envio(s) de dívida compartilhada estão pendentes para você.`,
+        description: `${formatCountLabel(pendingSharedDebtCount, 'envio de dívida compartilhada', 'envios de dívida compartilhada')} ${pendingSharedDebtCount === 1 ? 'está' : 'estão'} te esperando.`,
         href: '/shared-debts#received'
       });
     }
@@ -3912,7 +3930,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       type: 'warning',
       icon: '⚖️',
       title: 'Rejeições aguardando sua decisão',
-      description: `${senderDecisionCount} solicitação(ões) recusadas aguardam você aceitar a rejeição ou contestá-la.`,
+      description: `${formatCountLabel(senderDecisionCount, 'recusa', 'recusas')} ${senderDecisionCount === 1 ? 'ainda aguarda' : 'ainda aguardam'} sua decisão para encerrar ou contestar.`,
       href: '/shared-debts#sent'
     });
   }
@@ -3930,7 +3948,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       type: 'warning',
       icon: '✅',
       title: 'Pagamentos aguardando sua confirmação',
-      description: `${pendingReceiptConfirmationCount} dívida(s) compartilhada(s) já foram marcadas como pagas e aguardam sua confirmação de recebimento.`,
+      description: `${formatCountLabel(pendingReceiptConfirmationCount, 'pagamento', 'pagamentos')} já ${pendingReceiptConfirmationCount === 1 ? 'foi marcado como feito e está' : 'foram marcados como feitos e estão'} esperando seu ok final.`,
       href: '/shared-debts#sent'
     });
   }
@@ -3955,7 +3973,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
         type: 'warning',
         icon: '👥',
         title: 'Itens sem distribuição',
-        description: `${unassignedCount} lançamento(s) deste mês ainda não foram distribuídos entre as pessoas.`,
+        description: `${formatCountLabel(unassignedCount, 'item', 'itens')} deste mês ainda ${unassignedCount === 1 ? 'não foi dividido' : 'não foram divididos'} entre as pessoas.`,
         href: `/month/${currentYear}/${currentMonth}?f_allocated=nao`
       });
     }
@@ -5055,7 +5073,7 @@ async function sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNum
 
 app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit: '25mb' }), async (req, res) => {
   if (!isAdminUser(req.user.id)) {
-    return res.status(403).json({ error: "O envio via WhatsApp está disponível apenas para administradores." });
+    return res.status(403).json({ error: "Esse atalho de envio no WhatsApp é só para administradores." });
   }
 
   try {
@@ -5066,17 +5084,17 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
     const instance = process.env.EVOLUTION_INSTANCE_NAME;
 
     if (!apiUrl || !apiKey || !instance) {
-      return res.status(400).json({ error: "Configurações da Evolution API não encontradas." });
+      return res.status(400).json({ error: "O envio automático no WhatsApp ainda não foi configurado." });
     }
 
     const cleanNumber = String(personPhone || '').replace(/\D/g, '');
     if (!cleanNumber) {
-      return res.status(400).json({ error: "A pessoa não possui telefone válido cadastrado para envio." });
+      return res.status(400).json({ error: "Essa pessoa ainda não tem um telefone válido para envio." });
     }
 
     const base64Data = String(imageBase64 || '').split(',')[1];
     if (!base64Data) {
-      return res.status(400).json({ error: "Não foi possível gerar a imagem para envio." });
+      return res.status(400).json({ error: "Não consegui montar a imagem do resumo para enviar." });
     }
 
     await sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNumber, message, base64Data);
@@ -5092,7 +5110,7 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
     });
 
     const status = e && e.response && e.response.status ? 502 : 500;
-    res.status(status).json({ error: `Falha ao enviar imagem via WhatsApp. ${summarized}`.trim() });
+    res.status(status).json({ error: `Não consegui enviar esse resumo no WhatsApp agora. ${summarized}`.trim() });
   }
 });
 // --- ROTAS DO detalhamento ---

@@ -2713,6 +2713,18 @@ function buildOrder(sort, dir) {
   return `${col} ${d}, t.id ${d}`;
 }
 
+function parseChronologicalOrder(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (["recent", "recent_first", "latest", "desc", "newest"].includes(normalized)) return "recent";
+  if (["oldest", "oldest_first", "asc", "old", "earliest"].includes(normalized)) return "oldest";
+  return null;
+}
+
+function resolveChronologicalDirection(order, fallback = "recent") {
+  const normalized = parseChronologicalOrder(order) || fallback;
+  return normalized === "oldest" ? "asc" : "desc";
+}
+
 // Rota para definir o Titular
 app.post("/people/:id/set-owner", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
@@ -3030,8 +3042,16 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   syncRecurringTransactions(userId, year, month);
 
-  const sort = (req.query.sort || "date").toString();
-  const dir = (req.query.dir || (sort === "date" ? "desc" : "asc")).toString();
+  const requestedChronologicalOrder = parseChronologicalOrder(req.query.order);
+  let sort = (req.query.sort || "date").toString();
+  let dir = (req.query.dir || (sort === "date" ? "desc" : "asc")).toString();
+  if (requestedChronologicalOrder) {
+    sort = "date";
+    dir = resolveChronologicalDirection(requestedChronologicalOrder);
+  }
+  const listOrder = sort === "date"
+    ? (dir.toLowerCase() === "asc" ? "oldest" : "recent")
+    : (requestedChronologicalOrder || "recent");
   const orderBy = buildOrder(sort, dir);
 
   const filters = {
@@ -3139,7 +3159,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     return `/month/${year}/${month}${qs ? `?${qs}` : ""}`;
   };
 
-  res.render("month", { month, year, txns, people, cards, recurringRules, formatBRLFromCents, sort, dir, sortLink, filters, isClosed });
+  res.render("month", { month, year, txns, people, cards, recurringRules, formatBRLFromCents, sort, dir, sortLink, filters, isClosed, listOrder });
 });
 
 app.post("/txn/manual", ensureAuthenticated, (req, res) => {
@@ -3717,11 +3737,13 @@ app.post("/summary/:year/:month/people/async", ensureAuthenticated, (req, res) =
   return res.json({ ok: true });
 });
 
-function getPersonStatementExportData(userId, month, year, personId) {
+function getPersonStatementExportData(userId, month, year, personId, itemOrder = "oldest") {
   syncRecurringTransactions(userId, year, month);
 
   const person = db.prepare("SELECT * FROM people WHERE id = ? AND user_id = ?").get(personId, userId);
   if (!person) return null;
+
+  const chronologicalDirection = resolveChronologicalDirection(itemOrder, "oldest").toUpperCase();
 
   const items = db.prepare(`
     SELECT t.txn_date, t.description, c.name AS card_name, a.share_cents
@@ -3735,7 +3757,7 @@ function getPersonStatementExportData(userId, month, year, personId) {
         (i.month = ? AND i.year = ?) OR
         (t.import_id IS NULL AND t.due_month = ? AND t.due_year = ?)
       )
-    ORDER BY t.txn_date IS NULL ASC, t.txn_date DESC, c.name ASC, t.id DESC
+    ORDER BY t.txn_date IS NULL ASC, t.txn_date ${chronologicalDirection}, c.name ASC, t.id ${chronologicalDirection}
   `).all(userId, personId, month, year, month, year);
 
   const totalsByCard = db.prepare(`
@@ -3776,10 +3798,11 @@ app.get("/share/:year/:month/:personId", ensureAuthenticated, (req, res) => {
   if (!parsed) return res.status(400).send("Parâmetros inválidos.");
 
   const { month, year } = parsed;
-  const exportData = getPersonStatementExportData(userId, month, year, personId);
+  const itemOrder = parseChronologicalOrder(req.query.order) || "oldest";
+  const exportData = getPersonStatementExportData(userId, month, year, personId, itemOrder);
   if (!exportData) return res.status(400).send("Pessoa inválida.");
 
-  res.render("share", { month, year, ...exportData, formatBRLFromCents });
+  res.render("share", { month, year, itemOrder, ...exportData, formatBRLFromCents });
 });
 
 app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
@@ -3790,14 +3813,17 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
 
   if (!isAdminUser(userId)) {
     setFlash(req, "error", "O envio via WhatsApp está disponível apenas para administradores.");
-    return res.redirect(`/share/${req.params.year}/${req.params.month}/${personId}`);
+    const fallbackOrder = parseChronologicalOrder(req.query.order);
+    const fallbackSuffix = fallbackOrder ? `?order=${fallbackOrder}` : '';
+    return res.redirect(`/share/${req.params.year}/${req.params.month}/${personId}${fallbackSuffix}`);
   }
 
   const { month, year } = parsed;
-  const exportData = getPersonStatementExportData(userId, month, year, personId);
+  const itemOrder = parseChronologicalOrder(req.query.order) || "oldest";
+  const exportData = getPersonStatementExportData(userId, month, year, personId, itemOrder);
   if (!exportData) return res.status(400).send("Pessoa inválida.");
 
-  res.render("whatsapp", { month, year, ...exportData, formatBRLFromCents });
+  res.render("whatsapp", { month, year, itemOrder, ...exportData, formatBRLFromCents });
 });
 
 function maskPhoneForLog(rawPhone) {

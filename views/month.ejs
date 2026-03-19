@@ -266,6 +266,16 @@
           </select>
         </div>
 
+        <div class="md:col-span-2">
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Ordem dos itens</label>
+          <select name="order"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none">
+            <option value="recent" <%= listOrder === 'recent' ? 'selected' : '' %>>Mais recentes primeiro</option>
+            <option value="oldest" <%= listOrder === 'oldest' ? 'selected' : '' %>>Mais antigos primeiro</option>
+          </select>
+          <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Ao aplicar, a lista volta a ser organizada por data.</p>
+        </div>
+
         <div class="md:col-span-4 flex flex-col sm:flex-row sm:items-end gap-3">
           <button
             class="w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 transition-all shadow-sm">Filtrar</button>

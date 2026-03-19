@@ -18,6 +18,7 @@
     return str;
   };
   const totalCents = items.reduce((acc, item) => acc + getItemCents(item), 0);
+  const selectedItemOrder = itemOrder === 'recent' ? 'recent' : 'oldest';
   const paidCents = Math.max(0, Number(paid_cents || 0) || 0);
   const rawRemainingCents = (remaining_cents ?? (totalCents - paidCents));
   const remainingCents = Math.max(0, Number(rawRemainingCents || 0) || 0);
@@ -59,6 +60,21 @@
       <% } %>
     </div>
   </section>
+
+  <div class="op-surface-card op-fade-up rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 mb-6">
+    <form method="get" action="/whatsapp/<%= year %>/<%= month %>/<%= person.id %>" class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div class="w-full md:max-w-sm">
+        <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Ordem dos itens</label>
+        <select name="order" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950">
+          <option value="recent" <%= selectedItemOrder === 'recent' ? 'selected' : '' %>>Mais recentes primeiro</option>
+          <option value="oldest" <%= selectedItemOrder === 'oldest' ? 'selected' : '' %>>Mais antigos primeiro</option>
+        </select>
+      </div>
+      <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
+        Aplicar ordem
+      </button>
+    </form>
+  </div>
 
   <% if (!person.phone) { %>
     <div class="op-inline-alert op-inline-alert--warning op-fade-up">

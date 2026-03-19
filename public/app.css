@@ -417,7 +417,10 @@ html.dark .op-surface-card {
   gap: 0.45rem;
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  scroll-snap-type: x proximity;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 0.55rem;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
   padding: 0.55rem;
   border-radius: 26px;
   background: rgba(7, 14, 31, 0.94);
@@ -449,6 +452,7 @@ html.dark .op-surface-card {
   line-height: 1.05;
   white-space: nowrap;
   scroll-snap-align: center;
+  scroll-snap-stop: always;
   transition: all 0.2s ease;
 }
 

@@ -1052,6 +1052,114 @@
 })();
 
 (function () {
+  function initBottomNavCarouselSnap() {
+    const scroller = document.querySelector('.op-bottom-nav__inner');
+    if (!(scroller instanceof HTMLElement)) return;
+
+    const getLinks = () => Array.from(scroller.querySelectorAll('.op-bottom-nav__link')).filter((link) => link instanceof HTMLElement);
+    if (getLinks().length < 2) return;
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const isMobileViewport = () => window.matchMedia('(max-width: 767px)').matches;
+
+    let snapTimer = null;
+    let isPointerDown = false;
+    let programmaticScrollLock = false;
+
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+    const releaseProgrammaticLock = (delay = 0) => {
+      window.setTimeout(() => {
+        programmaticScrollLock = false;
+      }, delay);
+    };
+
+    const snapToNearestItem = (behavior = 'smooth') => {
+      if (!isMobileViewport() || programmaticScrollLock) return;
+
+      const links = getLinks();
+      if (!links.length) return;
+
+      const viewportCenter = scroller.scrollLeft + (scroller.clientWidth / 2);
+      let closestLink = links[0];
+      let smallestDistance = Number.POSITIVE_INFINITY;
+
+      links.forEach((link) => {
+        const linkCenter = link.offsetLeft + (link.offsetWidth / 2);
+        const distance = Math.abs(linkCenter - viewportCenter);
+        if (distance < smallestDistance) {
+          smallestDistance = distance;
+          closestLink = link;
+        }
+      });
+
+      const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+      const targetScrollLeft = clamp(
+        closestLink.offsetLeft - ((scroller.clientWidth - closestLink.offsetWidth) / 2),
+        0,
+        maxScrollLeft
+      );
+
+      if (Math.abs(scroller.scrollLeft - targetScrollLeft) < 1) return;
+
+      programmaticScrollLock = true;
+      const resolvedBehavior = behavior === 'instant' || prefersReducedMotion.matches ? 'auto' : behavior;
+      scroller.scrollTo({ left: targetScrollLeft, behavior: resolvedBehavior });
+      releaseProgrammaticLock(resolvedBehavior === 'auto' ? 0 : 280);
+    };
+
+    const scheduleSnap = (delay = 90, behavior = 'smooth') => {
+      window.clearTimeout(snapTimer);
+      snapTimer = window.setTimeout(() => snapToNearestItem(behavior), delay);
+    };
+
+    scroller.addEventListener('scroll', () => {
+      if (!isMobileViewport() || isPointerDown || programmaticScrollLock) return;
+      scheduleSnap(80);
+    }, { passive: true });
+
+    const handlePointerStart = () => {
+      isPointerDown = true;
+      window.clearTimeout(snapTimer);
+    };
+
+    const handlePointerEnd = () => {
+      if (!isMobileViewport()) return;
+      isPointerDown = false;
+      scheduleSnap(70);
+    };
+
+    scroller.addEventListener('touchstart', handlePointerStart, { passive: true });
+    scroller.addEventListener('pointerdown', handlePointerStart, { passive: true });
+    scroller.addEventListener('mousedown', handlePointerStart, { passive: true });
+
+    scroller.addEventListener('touchend', handlePointerEnd, { passive: true });
+    scroller.addEventListener('touchcancel', handlePointerEnd, { passive: true });
+    scroller.addEventListener('pointerup', handlePointerEnd, { passive: true });
+    scroller.addEventListener('pointercancel', handlePointerEnd, { passive: true });
+    scroller.addEventListener('mouseup', handlePointerEnd, { passive: true });
+    scroller.addEventListener('mouseleave', () => {
+      if (isPointerDown) {
+        handlePointerEnd();
+      }
+    }, { passive: true });
+
+    window.addEventListener('resize', () => scheduleSnap(0, 'instant'), { passive: true });
+    window.addEventListener('orientationchange', () => scheduleSnap(120, 'instant'), { passive: true });
+    window.addEventListener('pageshow', () => scheduleSnap(0, 'instant'));
+    window.addEventListener('load', () => scheduleSnap(0, 'instant'), { once: true });
+
+    window.requestAnimationFrame(() => scheduleSnap(0, 'instant'));
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initBottomNavCarouselSnap);
+  } else {
+    initBottomNavCarouselSnap();
+  }
+})();
+
+(function () {
   function setButtonBusyState(button, isBusy) {
     if (!(button instanceof HTMLElement)) return;
     if (isBusy) {

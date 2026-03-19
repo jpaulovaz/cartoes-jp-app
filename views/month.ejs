@@ -493,12 +493,25 @@
 
   <style>
     .op-month-row {
+      position: relative;
       -webkit-tap-highlight-color: transparent;
     }
 
     @media (max-width: 767px) {
       .op-month-row {
         overflow: hidden;
+      }
+
+      .op-month-row.is-selected {
+        box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.92), 0 8px 20px rgba(15, 23, 42, 0.08) !important;
+      }
+
+      .dark .op-month-row.is-selected {
+        box-shadow: inset 0 0 0 2px rgba(96, 165, 250, 0.92), 0 10px 24px rgba(2, 6, 23, 0.28) !important;
+      }
+
+      .op-month-row.is-selected .op-month-row__meta {
+        border-color: rgba(59, 130, 246, 0.42);
       }
 
       .op-month-row__meta {
@@ -680,6 +693,7 @@
           const indicator = row.querySelector('[data-selection-indicator]');
           const isSelected = selectedIds.has(txnId);
 
+          row.classList.toggle('is-selected', isSelected);
           row.classList.toggle('ring-2', isSelected);
           row.classList.toggle('ring-blue-500', isSelected);
           row.classList.toggle('ring-offset-2', isSelected);
@@ -761,7 +775,7 @@
         root.innerHTML = `
           <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-month-sheet-backdrop></div>
           <div class="relative z-10 flex min-h-full items-end justify-center p-4 sm:items-center">
-            <div class="w-full max-w-lg overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+            <div class="w-full max-w-lg overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" data-month-sheet-surface>
               <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
                 <div>
                   <h3 class="text-base font-bold text-slate-900 dark:text-slate-100" data-month-sheet-title></h3>
@@ -778,6 +792,7 @@
 
         monthSheetState = {
           root,
+          surface: root.querySelector('[data-month-sheet-surface]'),
           title: root.querySelector('[data-month-sheet-title]'),
           subtitle: root.querySelector('[data-month-sheet-subtitle]'),
           body: root.querySelector('[data-month-sheet-body]'),
@@ -791,6 +806,11 @@
 
         root.querySelector('[data-month-sheet-backdrop]')?.addEventListener('click', closeMonthSheet);
         root.querySelector('[data-month-sheet-close]')?.addEventListener('click', closeMonthSheet);
+        root.addEventListener('click', (event) => {
+          const surface = monthSheetState?.surface;
+          if (!surface || monthSheetState?.root.classList.contains('hidden')) return;
+          if (!surface.contains(event.target)) closeMonthSheet();
+        });
         document.addEventListener('keydown', (event) => {
           if (event.key === 'Escape' && monthSheetState && !monthSheetState.root.classList.contains('hidden')) {
             closeMonthSheet();

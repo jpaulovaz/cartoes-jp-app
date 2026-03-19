@@ -123,7 +123,7 @@
     root.innerHTML = `
       <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-dialog-backdrop></div>
       <div class="relative z-10 flex min-h-full items-end justify-center p-4 sm:items-center">
-        <div class="w-full max-w-md overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+        <div class="w-full max-w-md overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" data-dialog-surface>
           <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
             <h3 class="text-base font-bold text-slate-900 dark:text-slate-100" data-dialog-title></h3>
           </div>
@@ -138,6 +138,7 @@
 
     dialogState = {
       root,
+      surface: root.querySelector('[data-dialog-surface]'),
       title: root.querySelector('[data-dialog-title]'),
       message: root.querySelector('[data-dialog-message]'),
       buttons: root.querySelector('[data-dialog-buttons]'),
@@ -153,6 +154,11 @@
     };
 
     root.querySelector('[data-dialog-backdrop]')?.addEventListener('click', () => closeDialog(null));
+    root.addEventListener('click', (event) => {
+      const surface = dialogState?.surface;
+      if (!dialogState?.activeResolve || !surface) return;
+      if (!surface.contains(event.target)) closeDialog(null);
+    });
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && dialogState?.activeResolve) {
         closeDialog(null);

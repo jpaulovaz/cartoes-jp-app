@@ -1298,7 +1298,12 @@
           return;
         }
         if (choice === 'delete') {
-          await executeDelete([txnId]);
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => {
+              executeDelete([txnId]);
+            });
+          });
+          return;
         }
       }
 

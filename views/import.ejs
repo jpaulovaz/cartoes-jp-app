@@ -1,130 +1,1345 @@
-<%- include("partials/header", { title: "OrganizaPay | Importar CSV" }) %>
+<%- include("partials/header", { title: `OrganizaPay | Itens ${String(month).padStart(2,'0')}/${year}` }) %>
 
-<div class="mx-auto max-w-6xl space-y-6">
-  <section class="op-page-hero op-fade-up">
-    <div>
-      <span class="op-page-hero__eyebrow">Importação guiada</span>
-      <h1 class="op-page-hero__title mt-4">Importar Fatura</h1>
-      <p class="op-page-hero__subtitle mt-3">Envie o CSV da fatura e confirme o cartão, mês e ano antes de processar.</p>
-      <div class="op-page-hero__meta mt-4">
-        <span class="badge">CSV do cartão</span>
-        <span class="badge">Período configurável</span>
+  <div class="max-w-7xl mx-auto space-y-6 pb-24">
+    <section class="op-page-hero op-fade-up">
+      <div>
+        <span class="op-page-hero__eyebrow">Gestão do mês</span>
+        <h1 class="op-page-hero__title mt-4">Lançamentos — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
+        <p class="op-page-hero__subtitle mt-3">Organize os itens do mês facilmente, com ações rápidas para distribuir, revisar e fechar.</p>
+        <div class="op-page-hero__meta mt-4">
+          <span class="badge"><%= isClosed ? 'Mês fechado' : 'Mês em edição' %></span>
+          <span class="badge"><%= txns ? txns.length : 0 %> lançamento(s)</span>
+        </div>
+        <div id="allocMsg" class="mt-3 h-5 text-sm font-bold text-emerald-600 transition-all duration-300"></div>
       </div>
-    </div>
-    <div class="op-page-hero__actions">
-      <a href="/geral" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
-        <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-        </svg>
-        Voltar para Geral
-      </a>
-    </div>
-  </section>
-
-  <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-    <section class="op-form-card op-fade-up">
-      <div class="relative z-10">
-        <div class="op-form-card__title">Arquivo da fatura</div>
-        <p class="op-form-card__subtitle">Preencha os dados do período, selecione o cartão correspondente e envie o CSV para processamento.</p>
-
-        <% if (typeof error !== 'undefined' && error) { %>
-          <div class="mt-5 rounded-[22px] border border-red-200 bg-red-50/90 px-4 py-3 text-sm font-semibold text-red-700 dark:border-red-800 dark:bg-red-900/25 dark:text-red-200">
-            <%= error %>
-          </div>
+      <div class="op-page-hero__actions">
+        <% if (isClosed) { %>
+          <button type="button" disabled
+            class="w-full rounded-2xl bg-slate-400 px-5 py-3 text-sm font-bold text-white shadow-sm dark:bg-slate-600 cursor-not-allowed">
+            🔒 Mês Fechado
+          </button>
+        <% } else { %>
+          <button onclick="document.getElementById('modalManual').classList.remove('hidden')"
+            class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Novo Item
+          </button>
         <% } %>
 
-        <form method="post" action="/import" enctype="multipart/form-data" class="mt-6 space-y-5">
-          <div>
-            <label class="op-field-label">Cartão de Crédito</label>
-            <select name="card_id" required class="op-select">
-              <option value="">Selecione o cartão correspondente...</option>
-              <% cards.forEach(c => { %>
-                <option value="<%= c.id %>"><%= c.name %></option>
-              <% }) %>
-            </select>
+        <a href="/summary/<%= year %>/<%= month %>"
+          class="w-full inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700">
+          <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6m4 6V7m4 10v-3M5 19h14"></path>
+          </svg>
+          Resumo do Mês</a>
+        <% if (canImport) { %>
+          <a href="/import"
+            class="w-full inline-flex items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700">
+            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Nova Importação</a>
+        <% } %>
+      </div>
+    </section>
+
+    <% if (isClosed) { %>
+      <div class="op-inline-alert op-inline-alert--warning">
+        <div class="op-inline-alert__icon">🔒</div>
+        <div>
+          <div class="op-inline-alert__title">Mês fechado</div>
+          <div class="op-inline-alert__text">Distribuições, exclusões e novos lançamentos para <%= String(month).padStart(2,'0') %>/<%= year %> estão bloqueados.</div>
+        </div>
+      </div>
+    <% } %>
+
+    <div class="mb-6 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
+        <div>
+          <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Lançamentos recorrentes</h2>
+        </div>
+      </div>
+
+      <% if (recurringRules && recurringRules.length) { %>
+        <div class="grid gap-4 lg:grid-cols-2">
+          <% recurringRules.forEach(rule => { %>
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/70 p-4">
+              <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div>
+                  <div class="text-base font-extrabold text-slate-800 dark:text-white"><%= rule.description %></div>
+                  <div class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= rule.card_name %> · <%= formatBRLFromCents(rule.amount_cents) %></div>
+                </div>
+                <% if (rule.status === 'active') { %>
+                  <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">Ativo</span>
+                <% } else if (rule.status === 'paused') { %>
+                  <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">Pausado</span>
+                <% } else { %>
+                  <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Encerrado</span>
+                <% } %>
+              </div>
+
+              <div class="mt-3 grid gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 sm:grid-cols-2">
+                <div>Compra recorrente no dia <span class="font-bold text-slate-700 dark:text-slate-200"><%= rule.purchase_day || '-' %></span></div>
+                <div>Primeiro vencimento <span class="font-bold text-slate-700 dark:text-slate-200"><%= rule.start_due_label %></span></div>
+                <div>Ativo a partir de <span class="font-bold text-slate-700 dark:text-slate-200"><%= rule.active_from_label %></span></div>
+                <div><span class="md:hidden">Próximo mês</span><span class="hidden md:inline">Próxima competência</span> <span class="font-bold text-slate-700 dark:text-slate-200"><%= rule.preview_label || '—' %></span></div>
+              </div>
+
+              <div class="mt-4 flex flex-wrap gap-2">
+                <% if (rule.status === 'active') { %>
+                  <form method="post" action="/recurring/<%= rule.id %>/state">
+                    <input type="hidden" name="action" value="pause">
+                    <button class="px-4 py-2 rounded-xl text-sm font-bold border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">Pausar</button>
+                  </form>
+                <% } else if (rule.status === 'paused') { %>
+                  <form method="post" action="/recurring/<%= rule.id %>/state">
+                    <input type="hidden" name="action" value="resume">
+                    <button class="px-4 py-2 rounded-xl text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700">Retomar</button>
+                  </form>
+                <% } %>
+
+                <% if (rule.status !== 'ended') { %>
+                  <form method="post" action="/recurring/<%= rule.id %>/state"
+                    data-confirm-prompt="Encerrar o lançamento recorrente <%= rule.description %>? Os lançamentos já criados permanecem no histórico, mas as próximas competências deixarão de ser geradas."
+                    data-confirm-phrase="Eu confirmo">
+                    <input type="hidden" name="action" value="end">
+                    <button class="px-4 py-2 rounded-xl text-sm font-bold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Encerrar</button>
+                  </form>
+                <% } %>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      <% } else { %>
+        <div class="op-empty-state op-empty-state--compact">
+          <div class="op-empty-state__icon">
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10m-11 9h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v11a2 2 0 002 2z"></path></svg>
+          </div>
+          <div class="op-empty-state__title">Nenhum recorrente configurado</div>
+          <p class="op-empty-state__text">Crie um novo item manual e marque a opção <strong class="text-slate-700 dark:text-slate-200">Tornar este item recorrente mensal</strong> para passar a gerenciar a repetição por aqui.</p>
+        </div>
+      <% } %>
+    </div>
+
+    <div id="modalManual"
+      class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-xl font-black text-slate-800 dark:text-white">Novo Gasto Manual</h2>
+          <button type="button" onclick="document.getElementById('modalManual').classList.add('hidden')"
+            class="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-2xl">✕</button>
+        </div>
+
+        <form action="/txn/manual" method="POST" class="space-y-4" data-auto-first-due-form>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data da Compra</label>
+              <input type="date" name="date" required data-manual-date-input <%= isClosed ? "disabled" : "" %>
+                class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cartão Utilizado</label>
+              <select name="card_id" data-manual-card-select <%= isClosed ? "disabled" : "" %>
+                class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
+                <% cards.forEach(c=> { %>
+                  <option value="<%= c.id %>" data-close-day="<%= c.close_day || '' %>" data-due-day="<%= c.due_day || '' %>">
+                    <%= c.name %>
+                  </option>
+                  <% }) %>
+              </select>
+            </div>
           </div>
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="op-field-label">Mês do vencimento</label>
-              <input name="month" type="number" min="1" max="12" placeholder="Ex: 12" required class="op-input" />
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
+              <input type="text" name="amount" placeholder="0,00" required data-money-mask inputmode="numeric" <%= isClosed ? "disabled" : "" %>
+                class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
             </div>
             <div>
-              <label class="op-field-label">Ano</label>
-              <input name="year" type="number" min="2000" max="2100" placeholder="Ex: 2026" required class="op-input" />
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Parcelas</label>
+              <input type="number" name="installments" value="1" min="1" max="99" required data-installments-input <%= isClosed ? "disabled" : "" %>
+                class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
             </div>
           </div>
 
           <div>
-            <label class="op-field-label">Arquivo CSV</label>
-            <label class="op-file-drop">
-              <div class="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/20">
-                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                </svg>
-              </div>
-              <div class="text-sm font-bold text-slate-800 dark:text-slate-100">Escolha o CSV exportado pela operadora do cartão</div>
-              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">O arquivo não é enviado para nenhum serviço externo. O processamento acontece dentro do próprio aplicativo.</p>
-              <input name="csvfile" type="file" accept=".csv,text/csv" required class="mt-4 block w-full cursor-pointer text-sm font-medium text-slate-500 file:mr-4 file:rounded-2xl file:border-0 file:bg-slate-900 file:px-4 file:py-3 file:text-sm file:font-bold file:text-white hover:file:bg-slate-800 dark:text-slate-300 dark:file:bg-slate-100 dark:file:text-slate-900 dark:hover:file:bg-white" />
-            </label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">1º Vencimento</label>
+            <input type="month" name="first_due" value="<%= year %>-<%= String(month).padStart(2, '0') %>" required data-manual-first-due <%= isClosed ? "disabled" : "" %>
+              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
+            <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Preenchido automaticamente pela data da compra e pelo fechamento do cartão, mas você pode alterar manualmente.</p>
           </div>
 
-          <div class="flex flex-col gap-3 pt-3 sm:flex-row sm:items-center sm:justify-between">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Revise os dados antes de processar para evitar duplicidade de importação.</p>
-            <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
-              <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-              </svg>
-              Processar Arquivo
-            </button>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Descrição</label>
+            <input type="text" name="description" placeholder="Ex: Monitor Dell" required <%= isClosed ? "disabled" : "" %>
+              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
+
+          <label class="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 <%= typeof isClosed !== 'undefined' && isClosed ? 'opacity-60' : '' %>">
+          <input type="checkbox" name="assign_to_owner" value="1" <%= typeof isClosed !== 'undefined' && isClosed ? 'disabled' : '' %>
+            class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
+          <span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Atribuir este item a mim</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque para lançar este item automaticamente no seu nome, inclusive nas próximas parcelas ou recorrências</span>
+          </span>
+        </label>
+
+        <label class="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 <%= isClosed ? 'opacity-60' : '' %>">
+            <input type="checkbox" name="is_recurring" value="1" data-recurring-toggle <%= isClosed ? "disabled" : "" %>
+              class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
+            <span>
+              <span class="block text-sm font-bold text-slate-800 dark:text-white">Tornar este item recorrente mensal</span>
+              <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Ideal para academia, streaming, escola, internet e condomínio. Funciona somente com 1 parcela.</span>
+            </span>
+          </label>
+
+          <% if (isClosed) { %>
+            <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+              Este mês está fechado. Abra o mês para lançar novos itens nele.
+            </div>
+          <% } else { %>
+            <button type="submit"
+              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all">
+              Criar Lançamento
+            </button>
+          <% } %>
         </form>
       </div>
-    </section>
+    </div>
 
-    <aside class="space-y-4 op-fade-up">
-      <section class="op-form-card">
-        <div class="relative z-10">
-          <div class="op-form-card__title">Como funciona</div>
-          <div class="op-step-list">
-            <div class="op-step-item">
-              <div class="op-step-item__index">1</div>
-              <div>
-                <div class="op-step-item__title">Escolha o cartão certo</div>
-                <div class="op-step-item__text">O cartão selecionado será usado como referência para o fechamento, vencimento e agrupamento do período.</div>
-              </div>
-            </div>
-            <div class="op-step-item">
-              <div class="op-step-item__index">2</div>
-              <div>
-                <div class="op-step-item__title">Confirme mês e ano</div>
-                <div class="op-step-item__text">Esses campos definem em qual período os lançamentos importados aparecerão no painel e nos resumos.</div>
-              </div>
-            </div>
-            <div class="op-step-item">
-              <div class="op-step-item__index">3</div>
-              <div>
-                <div class="op-step-item__title">Envie o CSV</div>
-                <div class="op-step-item__text">Depois do processamento, você poderá revisar o mês, distribuir pessoas e seguir com o fechamento normalmente.</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+    <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6">
+      <form method="get" action="/month/<%= year %>/<%= month %>" class="grid md:grid-cols-6 gap-4">
+        <input type="hidden" name="sort" value="<%= sort %>" />
+        <input type="hidden" name="dir" value="<%= dir %>" />
 
-      <section class="op-form-card">
-        <div class="relative z-10 space-y-3">
-          <div class="op-form-card__title">Dicas rápidas</div>
-          <div class="op-info-list">
-            <span class="op-info-pill">Importe um período por vez</span>
-            <span class="op-info-pill">Revise lançamentos recorrentes</span>
-            <span class="op-info-pill">Use /month para distribuir pessoas</span>
-          </div>
-          <p class="op-form-card__subtitle">Se a fatura tiver muitos itens, vale conferir primeiro no resumo do mês para validar total, pagamentos e participantes.</p>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Data</label>
+          <input type="date" name="f_date" value="<%= filters.f_date || '' %>"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none" />
         </div>
-      </section>
-    </aside>
+        <div class="md:col-span-2">
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Descrição</label>
+          <input name="f_desc" value="<%= filters.f_desc || '' %>"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
+            placeholder="Ex: Uber, Mercado..." />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Cartão</label>
+          <input name="f_card" value="<%= filters.f_card || '' %>"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
+            placeholder="Ex: Nubank" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Nº (Final)</label>
+          <input name="f_number" value="<%= filters.f_number || '' %>"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
+            placeholder="****" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Valor</label>
+          <input name="f_amount" value="<%= filters.f_amount || '' %>" data-money-mask inputmode="numeric"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
+            placeholder="R$ 0,00" />
+        </div>
+
+        <div class="md:col-span-1">
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Distribuído</label>
+          <select name="f_allocated"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none">
+            <option value="">Todos</option>
+            <option value="sim" <%=filters.f_allocated==='sim' ? 'selected' : '' %>>Sim</option>
+            <option value="nao" <%=filters.f_allocated==='nao' ? 'selected' : '' %>>Não</option>
+          </select>
+        </div>
+
+        <div class="md:col-span-1">
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Pessoa</label>
+          <select name="f_person"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none">
+            <option value="">Todas</option>
+            <% people.forEach(p => { %>
+              <option value="<%= p.id %>" <%= String(filters.f_person || '') === String(p.id) ? 'selected' : '' %>><%= p.name %></option>
+            <% }) %>
+          </select>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Ordem dos itens</label>
+          <select name="order"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none">
+            <option value="recent" <%= listOrder === 'recent' ? 'selected' : '' %>>Mais recentes primeiro</option>
+            <option value="oldest" <%= listOrder === 'oldest' ? 'selected' : '' %>>Mais antigos primeiro</option>
+          </select>
+          <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Ao aplicar, a lista volta a ser organizada por data.</p>
+        </div>
+
+        <div class="md:col-span-4 flex flex-col sm:flex-row sm:items-end gap-3">
+          <button
+            class="w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 transition-all shadow-sm">Filtrar</button>
+          <a class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-2.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 transition-all shadow-sm"
+            href="/month/<%= year %>/<%= month %>">Limpar</a>
+        </div>
+      </form>
+    </div>
+
+    <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Lista de lançamentos</h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              <% if (isClosed) { %>
+                Este mês está em modo somente leitura. Abra um item para consultar os detalhes sem alterar a distribuição.
+              <% } else { %>
+                Toque ou clique em um lançamento para abrir as ações. Para selecionar vários, use <strong class="font-bold text-slate-700 dark:text-slate-200">Selecionar</strong> ou segure um item no celular.
+              <% } %>
+            </p>
+          </div>
+          <% if (!isClosed) { %>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <button type="button" id="monthEnterSelectionBtn"
+                class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
+                Selecionar
+              </button>
+              <button type="button" id="monthExitSelectionBtn"
+                class="hidden inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
+                Cancelar seleção
+              </button>
+            </div>
+          <% } %>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto md:overflow-visible">
+        <table class="block md:table w-full text-sm text-left">
+          <thead
+            class="hidden md:table-header-group bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-[11px] tracking-wider">
+            <tr>
+              <th class="px-4 py-4"><a class="hover:text-blue-600 transition-colors flex items-center"
+                  href="<%= sortLink('date') %>">Data</a></th>
+              <th class="px-4 py-4"><a class="hover:text-blue-600 transition-colors flex items-center"
+                  href="<%= sortLink('desc') %>">Descrição</a></th>
+              <th class="px-4 py-4"><a class="hover:text-blue-600 transition-colors flex items-center"
+                  href="<%= sortLink('card') %>">Cartão</a></th>
+              <th class="px-4 py-4"><a class="hover:text-blue-600 transition-colors flex items-center"
+                  href="<%= sortLink('number') %>">Nº</a></th>
+              <th class="px-4 py-4 text-right"><a class="hover:text-blue-600 transition-colors inline-flex items-center"
+                  href="<%= sortLink('amount') %>">Valor</a></th>
+              <th class="px-4 py-4 text-center"><a
+                  class="hover:text-blue-600 transition-colors inline-flex items-center"
+                  href="<%= sortLink('allocated') %>">Status</a></th>
+              <th class="px-4 py-4 text-left">Resumo e ações</th>
+            </tr>
+          </thead>
+          <tbody class="block md:table-row-group">
+            <% txns.forEach(t => {
+                 const participantNames = (t.selected_ids || []).map(pid => {
+                   const person = people.find(p => Number(p.id) === Number(pid));
+                   return person ? person.name : null;
+                 }).filter(Boolean);
+                 const shortParticipantNames = participantNames.map(name => name.split(' ')[0]);
+            %>
+              <tr class="op-month-row block md:table-row mb-3 rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-800/60 md:mb-0 md:rounded-none md:border-b md:border-x-0 md:border-t-0 md:border-slate-100 md:bg-transparent md:p-0 md:shadow-none dark:md:border-slate-700 hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors align-middle space-y-1 md:space-y-0 cursor-pointer"
+                data-month-row data-txn-id="<%= t.id %>" tabindex="0" role="button" aria-label="Abrir ações para <%= t.description %>">
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                  <div class="flex items-center justify-between gap-3 md:block">
+                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Data</span>
+                    <span><%= formatDateBR(t.txn_date) %></span>
+                  </div>
+                </td>
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-bold text-slate-800 dark:text-white" title="<%= t.description %>">
+                  <div class="flex items-start justify-between gap-3 md:block">
+                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 pt-0.5">Descrição</span>
+                    <span class="text-right md:text-left break-words whitespace-normal block flex-1"><%= t.description %></span>
+                  </div>
+                </td>
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3">
+                  <div class="flex items-center justify-between gap-3 md:block">
+                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Cartão</span>
+                    <span class="inline-flex items-center px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-slate-600 text-right md:text-left">
+                      <%= t.card_name %>
+                    </span>
+                  </div>
+                </td>
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-mono text-xs text-slate-500 dark:text-slate-400">
+                  <div class="flex items-center justify-between gap-3 md:block">
+                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 not-italic font-sans">Nº</span>
+                    <span><%= t.card_number || '-' %></span>
+                  </div>
+                </td>
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-right font-black text-slate-900 dark:text-white">
+                  <div class="flex items-center justify-between gap-3 md:block">
+                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Valor</span>
+                    <span><%= formatBRLFromCents(t.amount_cents) %></span>
+                  </div>
+                </td>
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-center status-icon">
+                  <% if (t.alloc_count > 0) { %>
+                    <div class="flex items-center justify-between md:justify-center gap-3">
+                      <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</span>
+                      <div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center md:mx-auto"
+                        title="Distribuído">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                      </div>
+                    </div>
+                  <% } else { %>
+                    <div class="flex items-center justify-between md:justify-center gap-3">
+                      <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</span>
+                      <div class="w-6 h-6 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center md:mx-auto"
+                        title="Sem distribuição">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                      </div>
+                    </div>
+                  <% } %>
+                </td>
+                <td class="op-month-row__meta block md:table-cell px-3 md:px-4 py-3 md:py-3 mt-3 md:mt-0 rounded-2xl border border-slate-200/90 bg-slate-50/90 dark:border-slate-700 dark:bg-slate-900/35 md:rounded-none md:border-0 md:bg-transparent md:px-0 md:py-3">
+                  <div class="flex items-start gap-3">
+                    <% if (!isClosed) { %>
+                      <span data-selection-indicator
+                        class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-300 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-600">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                      </span>
+                    <% } %>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap gap-2">
+                        <% if (shortParticipantNames.length) { %>
+                          <% shortParticipantNames.slice(0, 3).forEach(name => { %>
+                            <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200"><%= name %></span>
+                          <% }) %>
+                          <% if (shortParticipantNames.length > 3) { %>
+                            <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">+<%= shortParticipantNames.length - 3 %></span>
+                          <% } %>
+                        <% } else { %>
+                          <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Sem participantes</span>
+                        <% } %>
+                      </div>
+
+                      <div class="mt-2 flex flex-wrap gap-2">
+                        <% if (t.has_future_installments) { %>
+                          <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200">Parcelada</span>
+                        <% } %>
+                        <% if (t.recurring_rule_id) { %>
+                          <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Recorrente</span>
+                        <% } %>
+                      </div>
+
+                      <div class="mt-2 text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                        <% if (isClosed) { %>
+                          Abra o item para consultar a distribuição deste lançamento.
+                        <% } else { %>
+                          <span class="md:hidden">Toque para ações · Segure para selecionar</span>
+                          <span class="hidden md:inline">Clique para ações · Ctrl/Cmd+clique para selecionar</span>
+                        <% } %>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <% if (txns.length===0) { %>
+      <div class="mt-6 op-empty-state op-empty-state--compact">
+        <div class="op-empty-state__icon">
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        </div>
+        <div class="op-empty-state__title">Nenhum resultado</div>
+        <p class="op-empty-state__text">Nenhum item encontrado com os filtros de busca atuais. Ajuste os critérios ou limpe a busca para voltar à lista completa.</p>
+      </div>
+      <% } %>
+
   </div>
-</div>
 
-<%- include("partials/footer") %>
+
+  <% if (!isClosed) { %>
+    <div id="monthSelectionToolbar"
+      class="op-month-selection-toolbar fixed left-4 right-4 z-50 rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-2xl shadow-slate-900/10 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95">
+      <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div class="min-w-0">
+          <div class="flex items-center gap-3">
+            <span id="monthSelectionCount"
+              class="inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-2xl bg-blue-600 px-3 text-sm font-black text-white shadow-lg shadow-blue-500/25">0</span>
+            <div>
+              <div class="text-sm font-black text-slate-900 dark:text-slate-100">Modo seleção</div>
+              <div id="monthSelectionSummary" class="text-xs font-medium text-slate-500 dark:text-slate-400">Selecione um ou mais itens para abrir as ações do lote.</div>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:justify-end">
+          <button type="button" id="monthBulkPeopleBtn"
+            class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">Participantes</button>
+          <button type="button" id="monthBulkMoveBtn"
+            class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Mover fatura</button>
+          <button type="button" id="monthBulkDeleteBtn"
+            class="inline-flex items-center justify-center rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 transition hover:-translate-y-0.5 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200 dark:hover:bg-red-900/35">Excluir</button>
+          <button type="button" id="monthBulkCancelBtn"
+            class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  <% } %>
+
+  <style>
+    .op-month-row {
+      position: relative;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    @media (max-width: 767px) {
+      .op-month-row {
+        overflow: hidden;
+      }
+
+      .op-month-row.is-selected {
+        box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.92), 0 8px 20px rgba(15, 23, 42, 0.08) !important;
+      }
+
+      .dark .op-month-row.is-selected {
+        box-shadow: inset 0 0 0 2px rgba(96, 165, 250, 0.92), 0 10px 24px rgba(2, 6, 23, 0.28) !important;
+      }
+
+      .op-month-row.is-selected .op-month-row__meta {
+        border-color: rgba(59, 130, 246, 0.42);
+      }
+
+      .op-month-row__meta {
+        position: relative;
+      }
+
+      .op-month-row__meta::before {
+        content: '';
+        position: absolute;
+        left: 1rem;
+        right: 1rem;
+        top: 0;
+        border-top: 1.5px solid rgba(148, 163, 184, 0.3);
+      }
+
+      .dark .op-month-row__meta::before {
+        border-top-color: rgba(100, 116, 139, 0.5);
+      }
+    }
+
+    @media (min-width: 768px) {
+      .op-month-row.is-selected {
+        outline: 2px solid rgba(37, 99, 235, 0.82);
+        outline-offset: -2px;
+        box-shadow: none !important;
+        background-color: rgba(239, 246, 255, 0.82) !important;
+      }
+
+      .dark .op-month-row.is-selected {
+        outline-color: rgba(96, 165, 250, 0.88);
+        background-color: rgba(30, 41, 59, 0.72) !important;
+      }
+
+      .op-month-row.is-selected .op-month-row__meta {
+        background-color: transparent !important;
+      }
+    }
+
+    .op-month-selection-toolbar {
+      bottom: calc(var(--op-mobile-bottom-clearance, 5.75rem) + 0.75rem);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(1.5rem);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .op-month-selection-toolbar.is-visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    @media (min-width: 768px) {
+      .op-month-selection-toolbar {
+        left: 50%;
+        right: auto;
+        bottom: 1.5rem;
+        width: min(760px, calc(100vw - 3rem));
+        transform: translateX(-50%) translateY(1.5rem);
+      }
+
+      .op-month-selection-toolbar.is-visible {
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+  </style>
+
+  <script>
+    window.monthViewBootstrap = {
+      month: <%= month %>,
+      year: <%= year %>,
+      isClosed: <%- JSON.stringify(!!isClosed) %>,
+      people: <%- JSON.stringify((people || []).map(p => ({ id: Number(p.id), name: p.name, is_owner: !!p.is_owner }))).replace(/</g, '\\u003c') %>,
+      txns: <%- JSON.stringify((txns || []).map(t => ({
+        id: Number(t.id),
+        description: t.description,
+        amount_cents: Number(t.amount_cents || 0),
+        selected_ids: (t.selected_ids || []).map(Number),
+        has_future_installments: !!t.has_future_installments,
+        recurring_rule_id: t.recurring_rule_id ? Number(t.recurring_rule_id) : null,
+        month: Number(t.month || month),
+        year: Number(t.year || year)
+      }))).replace(/</g, '\\u003c') %>
+    };
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const bootstrap = window.monthViewBootstrap || {};
+      const isClosed = !!bootstrap.isClosed;
+      const currentMonth = Number(bootstrap.month || 0);
+      const currentYear = Number(bootstrap.year || 0);
+      const people = Array.isArray(bootstrap.people) ? bootstrap.people : [];
+      const txns = Array.isArray(bootstrap.txns) ? bootstrap.txns : [];
+      const txnsById = new Map(txns.map(item => [String(item.id), {
+        ...item,
+        id: Number(item.id),
+        amount_cents: Number(item.amount_cents || 0),
+        month: Number(item.month || currentMonth),
+        year: Number(item.year || currentYear),
+        selected_ids: Array.isArray(item.selected_ids) ? item.selected_ids.map(Number) : [],
+        has_future_installments: !!item.has_future_installments,
+        recurring_rule_id: item.recurring_rule_id ? Number(item.recurring_rule_id) : null
+      }]));
+
+      const rows = Array.from(document.querySelectorAll('[data-month-row]'));
+      const rowById = new Map(rows.map(row => [String(row.dataset.txnId || ''), row]));
+      const allocMsg = document.getElementById('allocMsg');
+      const enterSelectionBtn = document.getElementById('monthEnterSelectionBtn');
+      const exitSelectionBtn = document.getElementById('monthExitSelectionBtn');
+      const toolbar = document.getElementById('monthSelectionToolbar');
+      const selectionCountEl = document.getElementById('monthSelectionCount');
+      const toolbarSummaryEl = document.getElementById('monthSelectionSummary');
+      const bulkPeopleBtn = document.getElementById('monthBulkPeopleBtn');
+      const bulkMoveBtn = document.getElementById('monthBulkMoveBtn');
+      const bulkDeleteBtn = document.getElementById('monthBulkDeleteBtn');
+      const bulkCancelBtn = document.getElementById('monthBulkCancelBtn');
+      const selectedIds = new Set();
+      let selectionMode = false;
+      let monthSheetState = null;
+      let messageTimer = null;
+
+      const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+      const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+      function escapeHtml(value) {
+        return String(value || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function formatMoney(value) {
+        return currencyFormatter.format((Number(value || 0)) / 100);
+      }
+
+      function formatMonthLabel(month, year) {
+        const safeMonth = Number(month || 0);
+        const safeYear = Number(year || 0);
+        const name = monthNames[safeMonth - 1] || 'Mês';
+        return `${name}/${safeYear}`;
+      }
+
+      function shiftMonthLocal(year, month, amount) {
+        let y = Number(year || 0);
+        let m = Number(month || 0) + Number(amount || 0);
+        while (m > 12) {
+          m -= 12;
+          y += 1;
+        }
+        while (m < 1) {
+          m += 12;
+          y -= 1;
+        }
+        return { month: m, year: y };
+      }
+
+      function showAllocMessage(message, tone = 'success') {
+        if (!allocMsg) return;
+        const toneClass = tone === 'error'
+          ? 'text-red-600'
+          : tone === 'warning'
+            ? 'text-amber-600'
+            : 'text-emerald-600';
+        allocMsg.innerHTML = `<span class="${toneClass} font-bold">${escapeHtml(message)}</span>`;
+        if (messageTimer) window.clearTimeout(messageTimer);
+        messageTimer = window.setTimeout(() => {
+          allocMsg.innerHTML = '';
+        }, 4500);
+      }
+
+      function getTxnItem(txnId) {
+        return txnsById.get(String(txnId)) || null;
+      }
+
+      function getTxnItems(txnIds) {
+        return (txnIds || []).map(getTxnItem).filter(Boolean);
+      }
+
+      function getSelectedTxnIds() {
+        return Array.from(selectedIds.values()).map(value => Number(value)).filter(Number.isInteger);
+      }
+
+      function sumAmounts(items) {
+        return (items || []).reduce((acc, item) => acc + Number(item.amount_cents || 0), 0);
+      }
+
+      function updateSelectionUI() {
+        const selectedTxnIds = getSelectedTxnIds();
+        const selectedItems = getTxnItems(selectedTxnIds);
+        const selectedCount = selectedItems.length;
+
+        rows.forEach(row => {
+          const txnId = String(row.dataset.txnId || '');
+          const indicator = row.querySelector('[data-selection-indicator]');
+          const isSelected = selectedIds.has(txnId);
+
+          row.classList.toggle('is-selected', isSelected);
+          row.classList.toggle('bg-blue-50/80', isSelected);
+          row.classList.toggle('dark:bg-blue-950/25', isSelected);
+
+          if (indicator) {
+            indicator.classList.toggle('hidden', !selectionMode);
+            indicator.classList.toggle('flex', selectionMode);
+            indicator.classList.toggle('border-blue-600', isSelected);
+            indicator.classList.toggle('bg-blue-600', isSelected);
+            indicator.classList.toggle('text-white', isSelected);
+            indicator.classList.toggle('shadow-lg', isSelected);
+            indicator.classList.toggle('shadow-blue-500/20', isSelected);
+            indicator.classList.toggle('border-slate-200', !isSelected);
+            indicator.classList.toggle('bg-white', !isSelected);
+            indicator.classList.toggle('text-slate-300', !isSelected);
+            indicator.classList.toggle('dark:border-slate-700', !isSelected);
+            indicator.classList.toggle('dark:bg-slate-900', !isSelected);
+            indicator.classList.toggle('dark:text-slate-600', !isSelected);
+          }
+        });
+
+        if (toolbar && selectionCountEl && toolbarSummaryEl) {
+          toolbar.classList.toggle('is-visible', selectionMode);
+          selectionCountEl.textContent = String(selectedCount);
+          toolbarSummaryEl.textContent = selectedCount
+            ? `${selectedCount} item(ns) · ${formatMoney(sumAmounts(selectedItems))}`
+            : 'Selecione um ou mais itens para abrir as ações do lote.';
+        }
+
+        [bulkPeopleBtn, bulkMoveBtn, bulkDeleteBtn].forEach(button => {
+          if (button) button.disabled = selectedCount === 0;
+        });
+
+        if (enterSelectionBtn) enterSelectionBtn.classList.toggle('hidden', selectionMode);
+        if (exitSelectionBtn) exitSelectionBtn.classList.toggle('hidden', !selectionMode);
+      }
+
+      function enterSelectionMode(initialIds = []) {
+        if (isClosed) return;
+        selectionMode = true;
+        (initialIds || []).forEach(txnId => {
+          if (txnsById.has(String(txnId))) selectedIds.add(String(txnId));
+        });
+        updateSelectionUI();
+      }
+
+      function exitSelectionMode() {
+        selectionMode = false;
+        selectedIds.clear();
+        updateSelectionUI();
+      }
+
+      function toggleSelection(txnId) {
+        const key = String(txnId || '');
+        if (!txnsById.has(key)) return;
+        if (selectedIds.has(key)) selectedIds.delete(key);
+        else selectedIds.add(key);
+        updateSelectionUI();
+      }
+
+      function toneClasses(tone = 'secondary') {
+        const base = 'w-full rounded-2xl px-4 py-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50';
+        if (tone === 'danger') return `${base} bg-red-600 text-white hover:bg-red-700 focus:ring-red-500`;
+        if (tone === 'primary') return `${base} bg-slate-900 text-white hover:bg-slate-800 focus:ring-slate-500 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white dark:focus:ring-slate-300`;
+        return `${base} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:ring-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus:ring-slate-500`;
+      }
+
+      function ensureMonthSheet() {
+        if (monthSheetState && monthSheetState.root && document.body.contains(monthSheetState.root)) {
+          return monthSheetState;
+        }
+
+        const root = document.createElement('div');
+        root.className = 'fixed inset-0 z-[9999] hidden';
+        root.innerHTML = `
+          <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-month-sheet-backdrop></div>
+          <div class="relative z-10 flex min-h-full items-end justify-center p-4 sm:items-center">
+            <div class="w-full max-w-lg overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" data-month-sheet-surface>
+              <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                <div>
+                  <h3 class="text-base font-bold text-slate-900 dark:text-slate-100" data-month-sheet-title></h3>
+                  <p class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400" data-month-sheet-subtitle></p>
+                </div>
+                <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700" data-month-sheet-close>✕</button>
+              </div>
+              <div class="max-h-[72vh] overflow-y-auto px-5 py-4" data-month-sheet-body></div>
+              <div class="flex flex-col gap-2 border-t border-slate-200 px-5 py-5 dark:border-slate-800" data-month-sheet-actions></div>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(root);
+
+        monthSheetState = {
+          root,
+          surface: root.querySelector('[data-month-sheet-surface]'),
+          title: root.querySelector('[data-month-sheet-title]'),
+          subtitle: root.querySelector('[data-month-sheet-subtitle]'),
+          body: root.querySelector('[data-month-sheet-body]'),
+          actions: root.querySelector('[data-month-sheet-actions]')
+        };
+
+        const closeMonthSheet = () => {
+          monthSheetState.root.classList.add('hidden');
+          document.body.classList.remove('overflow-hidden');
+        };
+
+        root.querySelector('[data-month-sheet-backdrop]')?.addEventListener('click', closeMonthSheet);
+        root.querySelector('[data-month-sheet-close]')?.addEventListener('click', closeMonthSheet);
+        root.addEventListener('click', (event) => {
+          const surface = monthSheetState?.surface;
+          if (!surface || monthSheetState?.root.classList.contains('hidden')) return;
+          if (!surface.contains(event.target)) closeMonthSheet();
+        });
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape' && monthSheetState && !monthSheetState.root.classList.contains('hidden')) {
+            closeMonthSheet();
+          }
+        });
+
+        monthSheetState.close = closeMonthSheet;
+        return monthSheetState;
+      }
+
+      function openMonthSheet({ title = 'Ações', subtitle = '', body = null, actions = [] } = {}) {
+        const state = ensureMonthSheet();
+        state.title.textContent = title;
+        state.subtitle.textContent = subtitle || '';
+        state.subtitle.classList.toggle('hidden', !subtitle);
+        state.body.innerHTML = '';
+        state.actions.innerHTML = '';
+
+        if (typeof body === 'string') {
+          state.body.innerHTML = body;
+        } else if (body instanceof Node) {
+          state.body.appendChild(body);
+        }
+
+        actions.forEach((action, index) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = toneClasses(action.tone || 'secondary');
+          button.textContent = action.label;
+          button.disabled = !!action.disabled;
+          button.addEventListener('click', async () => {
+            if (button.disabled) return;
+            if (!action.onClick) {
+              if (action.closeOnClick !== false) state.close();
+              return;
+            }
+            button.disabled = true;
+            try {
+              const result = await action.onClick();
+              if (result !== false && action.closeOnClick !== false) {
+                state.close();
+              }
+            } finally {
+              button.disabled = !!action.disabled;
+            }
+          });
+          state.actions.appendChild(button);
+          if (index === 0) {
+            window.requestAnimationFrame(() => button.focus());
+          }
+        });
+
+        state.root.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+        return state;
+      }
+
+      async function resolveSelectionScope(items, { actionLabel = 'alterar a distribuição', destructive = false, moveAction = false } = {}) {
+        const futureItems = (items || []).filter(item => item.has_future_installments);
+        if (!futureItems.length) {
+          if (!destructive) return 'single';
+          const confirmText = items.length > 1
+            ? `Excluir ${items.length} lançamento(s) selecionado(s)? Esta ação remove os itens e suas distribuições associadas.`
+            : 'Excluir este lançamento? Esta ação remove o item e a distribuição associada.';
+          const confirmed = window.confirmTypedAction
+            ? await window.confirmTypedAction(confirmText)
+            : window.confirm(confirmText);
+          return confirmed ? 'single' : null;
+        }
+
+        const title = destructive
+          ? (items.length > 1 ? 'Excluir lançamentos parcelados' : 'Excluir lançamento parcelado')
+          : moveAction
+            ? (items.length > 1 ? 'Mover lançamentos parcelados' : 'Mover lançamento parcelado')
+            : (items.length > 1 ? 'Aplicar em compras parceladas' : 'Aplicar em compra parcelada');
+
+        const message = destructive
+          ? `${futureItems.length} dos ${items.length} lançamento(s) selecionado(s) fazem parte de compras parceladas.\n\nEscolha se deseja excluir só os itens atuais ou também as próximas parcelas.`
+          : moveAction
+            ? `${futureItems.length} dos ${items.length} lançamento(s) selecionado(s) fazem parte de compras parceladas.\n\nEscolha se deseja mover só os itens atuais ou também deslocar as próximas parcelas.`
+            : `${futureItems.length} dos ${items.length} lançamento(s) selecionado(s) fazem parte de compras parceladas.\n\nEscolha se deseja ${actionLabel} só nos itens atuais ou também nas próximas parcelas.`;
+
+        const result = window.showActionDialog
+          ? await window.showActionDialog({
+              title,
+              message,
+              options: destructive
+                ? [
+                    { label: 'Cancelar', value: null, tone: 'secondary' },
+                    { label: 'Excluir só itens atuais', value: 'single', tone: 'danger' },
+                    { label: 'Excluir itens atuais + próximas parcelas', value: 'future', tone: 'danger' }
+                  ]
+                : moveAction
+                  ? [
+                      { label: 'Cancelar', value: null, tone: 'secondary' },
+                      { label: 'Mover só itens atuais', value: 'single', tone: 'primary' },
+                      { label: 'Mover itens atuais + próximas parcelas', value: 'future', tone: 'primary' }
+                    ]
+                  : [
+                      { label: 'Cancelar', value: null, tone: 'secondary' },
+                      { label: 'Aplicar só itens atuais', value: 'single', tone: 'primary' },
+                      { label: 'Aplicar itens atuais + próximas parcelas', value: 'future', tone: 'primary' }
+                    ]
+            })
+          : null;
+
+        return result || null;
+      }
+
+      async function postBulkAction(url, payload) {
+        try {
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          let data = null;
+          try {
+            data = await response.json();
+          } catch (_) {
+            data = null;
+          }
+
+          if (!response.ok || !data || data.ok === false) {
+            throw new Error((data && data.error) || (data && data.message) || 'Não foi possível concluir a ação.');
+          }
+
+          showAllocMessage(data.message || 'Ação concluída com sucesso.', 'success');
+          exitSelectionMode();
+          window.setTimeout(() => window.location.reload(), 450);
+          return true;
+        } catch (error) {
+          console.error(error);
+          showAllocMessage(error.message || 'Não foi possível concluir a ação.', 'error');
+          return false;
+        }
+      }
+
+      function getUniformSelection(items) {
+        if (!items.length) return [];
+        const signatures = items.map(item => (item.selected_ids || []).map(Number).sort((a, b) => a - b).join(','));
+        const first = signatures[0];
+        const same = signatures.every(signature => signature === first);
+        if (!same) return null;
+        return first ? first.split(',').map(Number).filter(Number.isInteger) : [];
+      }
+
+      function buildPersonCard(person, checked) {
+        const label = document.createElement('label');
+        label.className = 'group cursor-pointer';
+
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.name = 'person_ids';
+        input.value = String(person.id);
+        input.className = 'peer sr-only';
+        input.checked = checked;
+
+        const card = document.createElement('span');
+        card.className = 'flex min-h-[74px] items-center gap-3 rounded-[22px] border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-blue-300 group-hover:shadow-md peer-checked:border-blue-400 peer-checked:bg-blue-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-blue-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/40';
+
+        const name = document.createElement('span');
+        name.className = 'flex-1 text-sm font-bold text-slate-800 dark:text-slate-100';
+        name.textContent = person.name;
+
+        const badge = document.createElement('span');
+        badge.className = 'inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 transition-all peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 dark:peer-checked:text-white';
+        badge.innerHTML = '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+
+        card.appendChild(name);
+        card.appendChild(badge);
+        label.appendChild(input);
+        label.appendChild(card);
+        return label;
+      }
+
+      function openPeopleSheet(txnIds) {
+        const items = getTxnItems(txnIds);
+        if (!items.length) return;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'space-y-4';
+
+        const summary = document.createElement('div');
+        summary.className = 'rounded-[22px] border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200';
+        summary.textContent = items.length > 1
+          ? `${items.length} lançamento(s) selecionado(s) · ${formatMoney(sumAmounts(items))}`
+          : `${items[0].description} · ${formatMoney(items[0].amount_cents)}`;
+        wrapper.appendChild(summary);
+
+        const uniformSelection = getUniformSelection(items);
+        const initialSelectedIds = uniformSelection !== null
+          ? uniformSelection
+          : (items.length === 1 ? (items[0].selected_ids || []).map(Number) : []);
+
+        if (uniformSelection === null && items.length > 1) {
+          const note = document.createElement('div');
+          note.className = 'rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200';
+          note.textContent = 'Os itens selecionados têm distribuições diferentes. A seleção abaixo substituirá a distribuição atual de todos eles.';
+          wrapper.appendChild(note);
+        }
+
+        if (!people.length) {
+          const empty = document.createElement('div');
+          empty.className = 'rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300';
+          empty.textContent = 'Nenhuma pessoa visível neste mês para aplicar a distribuição.';
+          wrapper.appendChild(empty);
+        } else {
+          const grid = document.createElement('div');
+          grid.className = 'grid gap-3 sm:grid-cols-2';
+          people.forEach(person => {
+            grid.appendChild(buildPersonCard(person, initialSelectedIds.includes(Number(person.id))));
+          });
+          wrapper.appendChild(grid);
+        }
+
+        openMonthSheet({
+          title: items.length > 1 ? 'Aplicar participantes' : 'Selecionar participantes',
+          subtitle: items.length > 1 ? 'A distribuição será substituída em todos os itens selecionados.' : 'Escolha quem participa desta compra.',
+          body: wrapper,
+          actions: [
+            { label: 'Fechar', tone: 'secondary' },
+            {
+              label: 'Salvar distribuição',
+              tone: 'primary',
+              closeOnClick: false,
+              disabled: !people.length,
+              onClick: async () => {
+                const checkedIds = Array.from(wrapper.querySelectorAll('input[name="person_ids"]:checked'))
+                  .map(input => Number(input.value))
+                  .filter(Number.isInteger);
+                const scope = await resolveSelectionScope(items, { actionLabel: 'alterar a distribuição' });
+                if (!scope) return false;
+                const ok = await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/alloc`, {
+                  txn_ids: txnIds,
+                  person_ids: checkedIds,
+                  apply_scope: scope
+                });
+                if (ok) ensureMonthSheet().close();
+                return false;
+              }
+            }
+          ]
+        });
+      }
+
+      function openMoveSheet(txnIds) {
+        const items = getTxnItems(txnIds);
+        if (!items.length) return;
+
+        const recurringItem = items.find(item => Number(item.recurring_rule_id || 0) > 0);
+        if (recurringItem) {
+          showAllocMessage('Lançamentos recorrentes ainda não entram no fluxo de mover para outra fatura. Remova-os da seleção e tente novamente.', 'warning');
+          return;
+        }
+
+        const baseMonth = Number(items[0].month || currentMonth);
+        const baseYear = Number(items[0].year || currentYear);
+        const defaultTarget = shiftMonthLocal(baseYear, baseMonth, 1);
+        const years = [];
+        for (let year = baseYear - 1; year <= baseYear + 3; year += 1) years.push(year);
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'space-y-4';
+
+        const intro = document.createElement('div');
+        intro.className = 'rounded-[22px] border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200';
+        intro.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Seleção</div><div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">${items.length} lançamento(s) · ${escapeHtml(formatMoney(sumAmounts(items)))}</div><p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">A data da compra será mantida. O app vai ajustar apenas a fatura/mês de cobrança.</p>`;
+        wrapper.appendChild(intro);
+
+        const quickRow = document.createElement('div');
+        quickRow.className = 'grid grid-cols-2 gap-2';
+        const quickPrev = document.createElement('button');
+        quickPrev.type = 'button';
+        quickPrev.className = 'inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800';
+        quickPrev.textContent = 'Fatura anterior';
+        const quickNext = document.createElement('button');
+        quickNext.type = 'button';
+        quickNext.className = 'inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white';
+        quickNext.textContent = 'Próxima fatura';
+        quickRow.appendChild(quickPrev);
+        quickRow.appendChild(quickNext);
+        wrapper.appendChild(quickRow);
+
+        const grid = document.createElement('div');
+        grid.className = 'grid gap-3 sm:grid-cols-2';
+        const monthField = document.createElement('div');
+        const monthLabelEl = document.createElement('label');
+        monthLabelEl.className = 'mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400';
+        monthLabelEl.textContent = 'Mês da fatura';
+        const monthSelect = document.createElement('select');
+        monthSelect.className = 'w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950';
+        monthNames.forEach((name, index) => {
+          const option = document.createElement('option');
+          option.value = String(index + 1);
+          option.textContent = name;
+          if ((index + 1) === Number(defaultTarget.month)) option.selected = true;
+          monthSelect.appendChild(option);
+        });
+        monthField.appendChild(monthLabelEl);
+        monthField.appendChild(monthSelect);
+
+        const yearField = document.createElement('div');
+        const yearLabelEl = document.createElement('label');
+        yearLabelEl.className = 'mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400';
+        yearLabelEl.textContent = 'Ano da fatura';
+        const yearSelect = document.createElement('select');
+        yearSelect.className = 'w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950';
+        years.forEach(value => {
+          const option = document.createElement('option');
+          option.value = String(value);
+          option.textContent = String(value);
+          if (value === Number(defaultTarget.year)) option.selected = true;
+          yearSelect.appendChild(option);
+        });
+        yearField.appendChild(yearLabelEl);
+        yearField.appendChild(yearSelect);
+
+        grid.appendChild(monthField);
+        grid.appendChild(yearField);
+        wrapper.appendChild(grid);
+
+        const preview = document.createElement('div');
+        preview.className = 'rounded-[22px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200';
+        const updatePreview = () => {
+          preview.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-blue-500/80 dark:text-blue-300/80">Destino</div><div class="mt-1 text-sm font-black">${escapeHtml(formatMonthLabel(monthSelect.value, yearSelect.value))}</div>`;
+        };
+        monthSelect.addEventListener('change', updatePreview);
+        yearSelect.addEventListener('change', updatePreview);
+        updatePreview();
+        wrapper.appendChild(preview);
+
+        quickPrev.addEventListener('click', () => {
+          const target = shiftMonthLocal(baseYear, baseMonth, -1);
+          monthSelect.value = String(target.month);
+          yearSelect.value = String(target.year);
+          updatePreview();
+        });
+
+        quickNext.addEventListener('click', () => {
+          const target = shiftMonthLocal(baseYear, baseMonth, 1);
+          monthSelect.value = String(target.month);
+          yearSelect.value = String(target.year);
+          updatePreview();
+        });
+
+        openMonthSheet({
+          title: items.length > 1 ? 'Mover para outra fatura' : 'Mover lançamento',
+          subtitle: items.length > 1 ? 'A mudança será aplicada em todos os itens selecionados.' : 'A data da compra continuará a mesma.',
+          body: wrapper,
+          actions: [
+            { label: 'Fechar', tone: 'secondary' },
+            {
+              label: 'Mover para a fatura escolhida',
+              tone: 'primary',
+              closeOnClick: false,
+              onClick: async () => {
+                const targetMonth = Number(monthSelect.value || 0);
+                const targetYear = Number(yearSelect.value || 0);
+                if (targetMonth === baseMonth && targetYear === baseYear) {
+                  showAllocMessage('Escolha uma fatura diferente do mês atual.', 'warning');
+                  return false;
+                }
+                const scope = await resolveSelectionScope(items, { actionLabel: 'mover para outra fatura', moveAction: true });
+                if (!scope) return false;
+                const ok = await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/move`, {
+                  txn_ids: txnIds,
+                  target_month: targetMonth,
+                  target_year: targetYear,
+                  apply_scope: scope
+                });
+                if (ok) ensureMonthSheet().close();
+                return false;
+              }
+            }
+          ]
+        });
+      }
+
+      async function executeDelete(txnIds) {
+        const items = getTxnItems(txnIds);
+        if (!items.length) return;
+        const scope = await resolveSelectionScope(items, { destructive: true });
+        if (!scope) return;
+        await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/delete`, {
+          txn_ids: txnIds,
+          apply_scope: scope
+        });
+      }
+
+      async function openSingleActionMenu(txnId) {
+        const item = getTxnItem(txnId);
+        if (!item) return;
+
+        if (!window.showActionDialog) {
+          openPeopleSheet([txnId]);
+          return;
+        }
+
+        const message = [
+          formatMoney(item.amount_cents),
+          formatMonthLabel(item.month, item.year),
+          item.has_future_installments ? 'Compra parcelada' : 'Lançamento do mês'
+        ].filter(Boolean).join(' · ');
+
+        const choice = await window.showActionDialog({
+          title: item.description,
+          message,
+          options: [
+            { label: 'Selecionar participantes', value: 'people', tone: 'primary' },
+            { label: 'Mover para outra fatura', value: 'move', tone: 'secondary' },
+            { label: 'Selecionar vários', value: 'multi', tone: 'secondary' },
+            { label: 'Excluir lançamento', value: 'delete', tone: 'danger' }
+          ]
+        });
+
+        if (choice === 'people') openPeopleSheet([txnId]);
+        if (choice === 'move') openMoveSheet([txnId]);
+        if (choice === 'multi') enterSelectionMode([txnId]);
+        if (choice === 'delete') executeDelete([txnId]);
+      }
+
+      function handleRowActivation(row, event) {
+        const txnId = String(row.dataset.txnId || '');
+        if (!txnId) return;
+
+        if (selectionMode) {
+          toggleSelection(txnId);
+          return;
+        }
+
+        if (isClosed) {
+          window.location.href = `/txn/${txnId}`;
+          return;
+        }
+
+        if (event && (event.metaKey || event.ctrlKey)) {
+          enterSelectionMode([txnId]);
+          return;
+        }
+
+        openSingleActionMenu(txnId);
+      }
+
+      function attachLongPress(row) {
+        if (isClosed) return;
+        let timer = null;
+        let startX = 0;
+        let startY = 0;
+
+        const clear = () => {
+          if (timer) window.clearTimeout(timer);
+          timer = null;
+        };
+
+        row.addEventListener('touchstart', (event) => {
+          if (selectionMode) return;
+          if (!event.touches || event.touches.length !== 1) return;
+          startX = event.touches[0].clientX;
+          startY = event.touches[0].clientY;
+          const txnId = String(row.dataset.txnId || '');
+          clear();
+          timer = window.setTimeout(() => {
+            row.dataset.longPressTriggered = '1';
+            enterSelectionMode([txnId]);
+            if (navigator.vibrate) navigator.vibrate(12);
+            clear();
+          }, 430);
+        }, { passive: true });
+
+        row.addEventListener('touchmove', (event) => {
+          if (!timer || !event.touches || !event.touches.length) return;
+          const deltaX = Math.abs(event.touches[0].clientX - startX);
+          const deltaY = Math.abs(event.touches[0].clientY - startY);
+          if (deltaX > 12 || deltaY > 12) clear();
+        }, { passive: true });
+
+        row.addEventListener('touchend', clear, { passive: true });
+        row.addEventListener('touchcancel', clear, { passive: true });
+      }
+
+      rows.forEach(row => {
+        row.addEventListener('click', (event) => {
+          if (row.dataset.longPressTriggered === '1') {
+            row.dataset.longPressTriggered = '';
+            event.preventDefault();
+            return;
+          }
+          handleRowActivation(row, event);
+        });
+
+        row.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          handleRowActivation(row, event);
+        });
+
+        row.addEventListener('contextmenu', (event) => {
+          if (isClosed) return;
+          event.preventDefault();
+          handleRowActivation(row, event);
+        });
+
+        attachLongPress(row);
+      });
+
+      enterSelectionBtn?.addEventListener('click', () => enterSelectionMode());
+      exitSelectionBtn?.addEventListener('click', exitSelectionMode);
+      bulkCancelBtn?.addEventListener('click', exitSelectionMode);
+      bulkPeopleBtn?.addEventListener('click', () => openPeopleSheet(getSelectedTxnIds()));
+      bulkMoveBtn?.addEventListener('click', () => openMoveSheet(getSelectedTxnIds()));
+      bulkDeleteBtn?.addEventListener('click', () => executeDelete(getSelectedTxnIds()));
+
+      updateSelectionUI();
+    });
+  </script>
+
+  <%- include("partials/footer") %>

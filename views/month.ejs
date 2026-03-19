@@ -1246,17 +1246,111 @@
         });
       }
 
-      async function executeDelete(txnIds) {
-        const items = getTxnItems(txnIds);
-        if (!items.length) return;
-        const scope = await resolveSelectionScope(items, { destructive: true });
-        if (!scope) return;
-        const confirmed = await confirmDeleteScope(items, scope);
-        if (!confirmed) return;
-        await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/delete`, {
+      async function submitDelete(txnIds, scope = 'single') {
+        return await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/delete`, {
           txn_ids: txnIds,
           apply_scope: scope
         });
+      }
+
+      function openDeleteSheet(txnIds) {
+        const items = getTxnItems(txnIds);
+        if (!items.length) return;
+
+        const futureItems = items.filter(item => item.has_future_installments);
+        const nonInstallmentCount = Math.max(0, items.length - futureItems.length);
+        const wrapper = document.createElement('div');
+        wrapper.className = 'space-y-4';
+
+        const summary = document.createElement('div');
+        summary.className = 'rounded-[22px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900 dark:border-red-800 dark:bg-red-900/20 dark:text-red-100';
+        summary.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-red-500/80 dark:text-red-300/80">Exclusão</div><div class="mt-1 text-sm font-black">${items.length} lançamento(s) · ${escapeHtml(formatMoney(sumAmounts(items)))}</div><p class="mt-2 text-sm font-medium text-red-700/90 dark:text-red-200/90">Esta ação remove os lançamentos selecionados e as distribuições associadas.</p>`;
+        wrapper.appendChild(summary);
+
+        let scopeValue = 'single';
+
+        if (futureItems.length) {
+          const note = document.createElement('div');
+          note.className = 'rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100';
+          note.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-amber-500/90 dark:text-amber-300/80">Compras parceladas</div><p class="mt-1">${futureItems.length} item(ns) parcelado(s) exigem definição de alcance antes da exclusão.</p>${nonInstallmentCount > 0 ? `<p class="mt-2 text-sm font-medium text-amber-800/90 dark:text-amber-200/90">Os ${nonInstallmentCount} item(ns) sem parcelamento serão excluídos apenas uma vez.</p>` : ''}`;
+          wrapper.appendChild(note);
+
+          const scopeGroup = document.createElement('div');
+          scopeGroup.className = 'space-y-3';
+
+          const scopeTitle = document.createElement('div');
+          scopeTitle.className = 'text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400';
+          scopeTitle.textContent = 'Alcance da exclusão';
+          scopeGroup.appendChild(scopeTitle);
+
+          const options = [
+            {
+              value: 'single',
+              title: futureItems.length > 1 ? 'Excluir só itens atuais' : 'Excluir só item atual',
+              description: futureItems.length > 1
+                ? 'Remove apenas os lançamentos selecionados neste mês.'
+                : 'Remove apenas o lançamento selecionado neste mês.'
+            },
+            {
+              value: 'future',
+              title: futureItems.length > 1 ? 'Excluir itens atuais + próximas parcelas' : 'Excluir item atual + próximas parcelas',
+              description: futureItems.length > 1
+                ? 'Também remove as próximas parcelas de cada compra parcelada selecionada.'
+                : 'Também remove as próximas parcelas desta compra parcelada.'
+            }
+          ];
+
+          options.forEach((option, index) => {
+            const label = document.createElement('label');
+            label.className = 'group block cursor-pointer';
+
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = 'delete_scope_choice';
+            input.value = option.value;
+            input.className = 'peer sr-only';
+            input.checked = index === 0;
+            input.addEventListener('change', () => {
+              if (input.checked) scopeValue = option.value;
+            });
+
+            const card = document.createElement('span');
+            card.className = 'block rounded-[22px] border border-slate-200 bg-white px-4 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-red-300 group-hover:shadow-md peer-checked:border-red-400 peer-checked:bg-red-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-red-500 dark:peer-checked:border-red-500 dark:peer-checked:bg-red-950/30';
+            card.innerHTML = `<span class="flex items-start justify-between gap-3"><span><span class="block text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(option.title)}</span><span class="mt-1 block text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">${escapeHtml(option.description)}</span></span><span class="mt-0.5 inline-flex h-6 w-6 flex-none items-center justify-center rounded-full border border-slate-300 bg-white text-transparent peer-checked:border-red-500 peer-checked:bg-red-600 peer-checked:text-white dark:border-slate-600 dark:bg-slate-950 dark:peer-checked:border-red-500 dark:peer-checked:bg-red-500">✓</span></span>`;
+
+            label.appendChild(input);
+            label.appendChild(card);
+            scopeGroup.appendChild(label);
+          });
+
+          wrapper.appendChild(scopeGroup);
+        }
+
+        openMonthSheet({
+          title: items.length > 1 ? 'Confirmar exclusão' : 'Excluir lançamento',
+          subtitle: futureItems.length ? 'Escolha o alcance da exclusão e confirme a ação.' : 'Confirme a exclusão do lançamento selecionado.',
+          body: wrapper,
+          actions: [
+            { label: 'Cancelar', tone: 'secondary' },
+            {
+              label: items.length > 1 ? 'Excluir lançamentos' : 'Excluir lançamento',
+              tone: 'danger',
+              closeOnClick: false,
+              onClick: async () => {
+                const chosenScope = futureItems.length
+                  ? String((wrapper.querySelector('input[name="delete_scope_choice"]:checked') || {}).value || scopeValue || 'single')
+                  : 'single';
+                const ok = await submitDelete(txnIds, chosenScope);
+                if (ok) ensureMonthSheet().close();
+                return false;
+              }
+            }
+          ]
+        });
+      }
+
+      function executeDelete(txnIds) {
+        openDeleteSheet(txnIds);
       }
 
       async function openSingleActionMenu(txnId) {

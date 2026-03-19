@@ -2584,7 +2584,25 @@ function getSharedDebtRequestsReceived(userId) {
       b.resolved_at AS batch_resolved_at,
       u.name AS requester_name,
       u.email AS requester_email,
-      COALESCE(r.source_txn_date_snapshot, t.txn_date) AS source_txn_date
+      COALESCE(r.source_txn_date_snapshot, t.txn_date) AS source_txn_date,
+      COALESCE((
+        SELECT COUNT(*)
+        FROM shared_debt_requests rb
+        WHERE rb.batch_id = r.batch_id
+      ), 1) AS batch_total_count,
+      CASE
+        WHEN t.id IS NOT NULL AND (
+          COALESCE(t.parent_txn_id, 0) > 0 OR
+          EXISTS (
+            SELECT 1
+            FROM transactions tx_child
+            WHERE tx_child.user_id = t.user_id
+              AND tx_child.parent_txn_id = t.id
+            LIMIT 1
+          )
+        ) THEN 1
+        ELSE 0
+      END AS is_installment_request
     FROM shared_debt_requests r
     JOIN users u ON u.id = r.requester_user_id
     LEFT JOIN shared_debt_batches b ON b.id = r.batch_id
@@ -2621,7 +2639,25 @@ function getSharedDebtRequestsSent(userId) {
       b.resolved_at AS batch_resolved_at,
       u.name AS receiver_name,
       u.email AS receiver_email,
-      COALESCE(r.source_txn_date_snapshot, t.txn_date) AS source_txn_date
+      COALESCE(r.source_txn_date_snapshot, t.txn_date) AS source_txn_date,
+      COALESCE((
+        SELECT COUNT(*)
+        FROM shared_debt_requests rb
+        WHERE rb.batch_id = r.batch_id
+      ), 1) AS batch_total_count,
+      CASE
+        WHEN t.id IS NOT NULL AND (
+          COALESCE(t.parent_txn_id, 0) > 0 OR
+          EXISTS (
+            SELECT 1
+            FROM transactions tx_child
+            WHERE tx_child.user_id = t.user_id
+              AND tx_child.parent_txn_id = t.id
+            LIMIT 1
+          )
+        ) THEN 1
+        ELSE 0
+      END AS is_installment_request
     FROM shared_debt_requests r
     JOIN users u ON u.id = r.receiver_user_id
     LEFT JOIN shared_debt_batches b ON b.id = r.batch_id
@@ -2697,6 +2733,102 @@ function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
   };
 }
 
+
+function normalizeSharedDebtTrackingFilters(query = {}) {
+  const envio = String(query?.envio || 'all').trim().toLowerCase();
+  const origin = String(query?.origin || 'all').trim().toLowerCase();
+  const installment = String(query?.installment || 'all').trim().toLowerCase();
+
+  return {
+    envio: ['all', 'single', 'grouped'].includes(envio) ? envio : 'all',
+    origin: ['all', 'single', 'multiple', 'installment', 'mixed'].includes(origin) ? origin : 'all',
+    installment: ['all', 'yes', 'no'].includes(installment) ? installment : 'all'
+  };
+}
+
+function hasActiveSharedDebtTrackingFilters(filters = {}) {
+  const normalized = normalizeSharedDebtTrackingFilters(filters);
+  return normalized.envio !== 'all' || normalized.origin !== 'all' || normalized.installment !== 'all';
+}
+
+function isGroupedSharedDebtItem(item) {
+  const batchCount = Number(item?.batch_total_count || 0);
+  const originKind = normalizeSharedDebtOriginKind(item?.batch_origin_kind);
+  return batchCount > 1 || originKind !== 'single';
+}
+
+function filterSharedDebtTrackingItems(items = [], filters = {}) {
+  const normalized = normalizeSharedDebtTrackingFilters(filters);
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    const originKind = normalizeSharedDebtOriginKind(item?.batch_origin_kind);
+    const isGrouped = isGroupedSharedDebtItem(item);
+    const isInstallment = Number(item?.is_installment_request || 0) > 0;
+
+    if (normalized.envio === 'single' && isGrouped) return false;
+    if (normalized.envio === 'grouped' && !isGrouped) return false;
+    if (normalized.origin !== 'all' && originKind !== normalized.origin) return false;
+    if (normalized.installment === 'yes' && !isInstallment) return false;
+    if (normalized.installment === 'no' && isInstallment) return false;
+    return true;
+  });
+}
+
+function parseSharedDebtRequestIds(rawValue) {
+  const source = Array.isArray(rawValue)
+    ? rawValue
+    : String(rawValue || '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+
+  return Array.from(new Set(source.map((value) => Number(value)).filter(Boolean)));
+}
+
+function buildSharedDebtBulkPeriodLabel(rows = []) {
+  const entries = Array.from(new Set(
+    (Array.isArray(rows) ? rows : [])
+      .map((row) => {
+        const month = Number(row?.source_due_month || 0);
+        const year = Number(row?.source_due_year || 0);
+        if (!month || !year) return null;
+        return { month, year, rank: (year * 100) + month };
+      })
+      .filter(Boolean)
+      .map((entry) => JSON.stringify(entry))
+  )).map((value) => JSON.parse(value)).sort((a, b) => a.rank - b.rank);
+
+  if (!entries.length) return null;
+  if (entries.length === 1) return monthLabel(entries[0].month, entries[0].year);
+  const first = entries[0];
+  const last = entries[entries.length - 1];
+  return `${monthLabel(first.month, first.year)} até ${monthLabel(last.month, last.year)}`;
+}
+
+function groupSharedDebtRowsByBatch(rows = []) {
+  const groups = new Map();
+
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const batchId = Number(row?.batch_id || 0);
+    const requestId = Number(row?.id || 0);
+    const key = batchId ? `batch:${batchId}` : `request:${requestId}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        batchId: batchId || null,
+        requestId: requestId || null,
+        rows: [],
+        totalCents: 0
+      });
+    }
+
+    const entry = groups.get(key);
+    entry.rows.push(row);
+    entry.totalCents += Number(row?.amount_cents || 0);
+  });
+
+  return Array.from(groups.values());
+}
+
 app.get("/shared-debts", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const requestIdToHighlight = Number(req.query.request) || null;
@@ -2715,6 +2847,10 @@ app.get("/shared-debts", ensureAuthenticated, (req, res) => {
 
   const received = getSharedDebtRequestsReceived(userId);
   const sent = getSharedDebtRequestsSent(userId);
+  const sharedDebtFilters = normalizeSharedDebtTrackingFilters(req.query);
+  const sharedDebtFiltersActive = hasActiveSharedDebtTrackingFilters(sharedDebtFilters);
+  const receivedTracking = filterSharedDebtTrackingItems(received, sharedDebtFilters);
+  const sentTracking = filterSharedDebtTrackingItems(sent, sharedDebtFilters);
   const receivedPendingBatches = buildSharedDebtBatchCards(received, 'received').filter(batch => batch.pendingCount > 0);
   const sentPendingBatches = buildSharedDebtBatchCards(sent, 'sent').filter(batch => batch.pendingCount > 0);
   const eventsByRequest = getSharedDebtEventsByRequestIds([
@@ -2728,6 +2864,10 @@ app.get("/shared-debts", ensureAuthenticated, (req, res) => {
     sent,
     receivedPendingBatches,
     sentPendingBatches,
+    receivedTracking,
+    sentTracking,
+    sharedDebtFilters,
+    sharedDebtFiltersActive,
     eventsByRequest,
     requestIdToHighlight,
     batchIdToHighlight,
@@ -3112,6 +3252,144 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
   setFlash(req, 'success', 'Recebimento confirmado com sucesso. A dívida foi liquidada.');
   return res.redirect(`/shared-debts?request=${requestId}`);
 });
+
+
+app.post('/shared-debts/bulk/mark-paid', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const note = String(req.body.note || '').trim() || null;
+  const requestIds = parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id);
+  const fallbackRedirect = redirectBackOr(req, '/shared-debts');
+
+  if (!requestIds.length) {
+    setFlash(req, 'error', 'Nenhuma cobrança válida foi selecionada para informar pagamento.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const placeholders = requestIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT r.*, u.name AS requester_name, u.email AS requester_email
+    FROM shared_debt_requests r
+    JOIN users u ON u.id = r.requester_user_id
+    WHERE r.id IN (${placeholders})
+      AND r.receiver_user_id = ?
+      AND r.status = 'accepted'
+      AND r.payment_marked_at IS NULL
+    ORDER BY COALESCE(r.source_due_year, 0) DESC, COALESCE(r.source_due_month, 0) DESC, r.id ASC
+  `).all(...requestIds, userId);
+
+  if (!rows.length) {
+    setFlash(req, 'info', 'Nenhuma cobrança elegível estava aguardando marcação de pagamento.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const actor = getUserRecord(userId);
+  const actorName = actor?.name || actor?.email || 'O destinatário';
+  const now = nowIso();
+  const updateStmt = db.prepare(`
+    UPDATE shared_debt_requests
+    SET payment_marked_at = ?, payment_note = ?, updated_at = ?
+    WHERE id = ? AND receiver_user_id = ? AND status = 'accepted' AND payment_marked_at IS NULL
+  `);
+
+  db.transaction(() => {
+    rows.forEach((row) => {
+      updateStmt.run(now, note, now, row.id, userId);
+      addSharedDebtEvent({ requestId: row.id, actorUserId: userId, eventType: 'payment_marked_by_receiver', note });
+    });
+
+    groupSharedDebtRowsByBatch(rows).forEach((group) => {
+      const periodLabel = buildSharedDebtBulkPeriodLabel(group.rows);
+      if (group.batchId) touchSharedDebtBatch(group.batchId, now);
+
+      const bodyBase = `${actorName} informou o pagamento de ${group.rows.length} cobrança(s)` +
+        `${periodLabel ? ` referente(s) a ${periodLabel}` : ''}, totalizando ${formatBRLFromCents(group.totalCents)}.`;
+      const body = note ? `${bodyBase} Observação: ${note}` : bodyBase;
+      const firstRow = group.rows[0];
+
+      createNotification({
+        userId: firstRow.requester_user_id,
+        type: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
+        title: group.rows.length > 1 ? 'Pagamentos informados no mês' : 'Pagamento informado na dívida compartilhada',
+        body,
+        href: group.batchId ? `/shared-debts?batch=${group.batchId}` : `/shared-debts?request=${firstRow.id}`,
+        relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
+        relatedId: group.batchId || firstRow.id
+      });
+    });
+  })();
+
+  setFlash(req, 'success', `${rows.length} cobrança(s) foram marcadas como pagas de uma vez.`);
+  return res.redirect(fallbackRedirect);
+});
+
+app.post('/shared-debts/bulk/confirm-receipt', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const note = String(req.body.note || '').trim() || null;
+  const requestIds = parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id);
+  const fallbackRedirect = redirectBackOr(req, '/shared-debts');
+
+  if (!requestIds.length) {
+    setFlash(req, 'error', 'Nenhuma cobrança válida foi selecionada para confirmar o recebimento.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const placeholders = requestIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT r.*, u.name AS receiver_name, u.email AS receiver_email
+    FROM shared_debt_requests r
+    JOIN users u ON u.id = r.receiver_user_id
+    WHERE r.id IN (${placeholders})
+      AND r.requester_user_id = ?
+      AND r.status = 'accepted'
+      AND r.payment_marked_at IS NOT NULL
+    ORDER BY COALESCE(r.source_due_year, 0) DESC, COALESCE(r.source_due_month, 0) DESC, r.id ASC
+  `).all(...requestIds, userId);
+
+  if (!rows.length) {
+    setFlash(req, 'info', 'Nenhuma cobrança elegível estava aguardando confirmação de recebimento.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const actor = getUserRecord(userId);
+  const actorName = actor?.name || actor?.email || 'O remetente';
+  const now = nowIso();
+  const updateStmt = db.prepare(`
+    UPDATE shared_debt_requests
+    SET status = 'settled', updated_at = ?, resolved_at = ?
+    WHERE id = ? AND requester_user_id = ? AND status = 'accepted' AND payment_marked_at IS NOT NULL
+  `);
+
+  db.transaction(() => {
+    rows.forEach((row) => {
+      updateStmt.run(now, now, row.id, userId);
+      addSharedDebtEvent({ requestId: row.id, actorUserId: userId, eventType: 'settled', note });
+    });
+
+    groupSharedDebtRowsByBatch(rows).forEach((group) => {
+      const periodLabel = buildSharedDebtBulkPeriodLabel(group.rows);
+      if (group.batchId) touchSharedDebtBatch(group.batchId, now);
+
+      const bodyBase = `${actorName} confirmou o recebimento de ${group.rows.length} cobrança(s)` +
+        `${periodLabel ? ` referente(s) a ${periodLabel}` : ''}, totalizando ${formatBRLFromCents(group.totalCents)}.`;
+      const body = note ? `${bodyBase} Observação: ${note}` : bodyBase;
+      const firstRow = group.rows[0];
+
+      createNotification({
+        userId: firstRow.receiver_user_id,
+        type: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
+        title: group.rows.length > 1 ? 'Recebimentos confirmados no mês' : 'Recebimento confirmado na dívida compartilhada',
+        body,
+        href: group.batchId ? `/shared-debts?batch=${group.batchId}` : `/shared-debts?request=${firstRow.id}`,
+        relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
+        relatedId: group.batchId || firstRow.id
+      });
+    });
+  })();
+
+  setFlash(req, 'success', `${rows.length} cobrança(s) foram liquidadas de uma vez.`);
+  return res.redirect(fallbackRedirect);
+});
+
 
 app.post('/push/subscribe', ensureAuthenticated, (req, res) => {
   if (!isPushConfigured()) {

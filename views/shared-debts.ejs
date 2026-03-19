@@ -152,6 +152,25 @@
     return (group.items || []).filter(item => scope === 'received' ? isReceivedActionable(item) : isSentActionable(item)).length;
   }
 
+  function getReceivedMonthPayableItems(group) {
+    return (group?.items || []).filter(item => item?.status === 'accepted' && !item?.payment_marked_at);
+  }
+
+  function getSentMonthConfirmableItems(group) {
+    return (group?.items || []).filter(item => item?.status === 'accepted' && !!item?.payment_marked_at);
+  }
+
+  function sumAmountCents(items) {
+    return (items || []).reduce((sum, item) => sum + Number(item?.amount_cents || 0), 0);
+  }
+
+  function countDistinctCounterparts(items, scope) {
+    return new Set((items || []).map(item => {
+      if (scope === 'received') return Number(item?.requester_user_id || 0) || String(item?.requester_email || '');
+      return Number(item?.receiver_user_id || 0) || String(item?.receiver_email || '');
+    }).filter(Boolean)).size;
+  }
+
   function batchOriginLabel(kind, count) {
     switch (kind) {
       case 'installment':
@@ -218,8 +237,14 @@
     return previews.join(' · ');
   }
 
-  const receivedGroups = buildMonthGroups(received || []);
-  const sentGroups = buildMonthGroups(sent || []);
+  const trackingFilters = sharedDebtFilters || { envio: 'all', origin: 'all', installment: 'all' };
+  const trackingFiltersActive = !!sharedDebtFiltersActive;
+  const rawReceivedGroups = buildMonthGroups(received || []);
+  const rawSentGroups = buildMonthGroups(sent || []);
+  const receivedTrackingItems = Array.isArray(receivedTracking) ? receivedTracking : (received || []);
+  const sentTrackingItems = Array.isArray(sentTracking) ? sentTracking : (sent || []);
+  const receivedGroups = buildMonthGroups(receivedTrackingItems);
+  const sentGroups = buildMonthGroups(sentTrackingItems);
   const receivedBatchCards = Array.isArray(receivedPendingBatches) ? receivedPendingBatches : [];
   const sentBatchCards = Array.isArray(sentPendingBatches) ? sentPendingBatches : [];
   const receivedPendingCount = countItems(received, item => item.status === 'pending');
@@ -263,7 +288,7 @@
       });
     });
 
-    sentGroups.forEach((group) => {
+    rawSentGroups.forEach((group) => {
       (group.items || []).forEach((item) => {
         if (item.status === 'rejected_by_receiver') {
           actions.push({
@@ -317,12 +342,12 @@
       <div class="op-kpi-card text-center">
         <div class="op-kpi-card__label">Recebidas</div>
         <div class="op-kpi-card__value"><%= received.length %></div>
-        <div class="op-kpi-card__hint"><span class="md:hidden"><%= receivedGroups.length %> mês(es)</span><span class="hidden md:inline"><%= receivedGroups.length %> período(s)</span></div>
+        <div class="op-kpi-card__hint"><span class="md:hidden"><%= rawReceivedGroups.length %> mês(es)</span><span class="hidden md:inline"><%= rawReceivedGroups.length %> período(s)</span></div>
       </div>
       <div class="op-kpi-card text-center">
         <div class="op-kpi-card__label">Enviadas</div>
         <div class="op-kpi-card__value"><%= sent.length %></div>
-        <div class="op-kpi-card__hint"><span class="md:hidden"><%= sentGroups.length %> mês(es)</span><span class="hidden md:inline"><%= sentGroups.length %> período(s)</span></div>
+        <div class="op-kpi-card__hint"><span class="md:hidden"><%= rawSentGroups.length %> mês(es)</span><span class="hidden md:inline"><%= rawSentGroups.length %> período(s)</span></div>
       </div>
       <div class="op-kpi-card text-center">
         <div class="op-kpi-card__label text-amber-600 dark:text-amber-300">Sua vez</div>
@@ -497,6 +522,56 @@
     </section>
   <% } %>
 
+  <section class="op-fade-up">
+    <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
+      <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Acompanhamento detalhado</div>
+          <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Filtrar cobranças por mês</h2>
+          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Os filtros abaixo afetam a visão detalhada por mês. Os cards de envios pendentes acima continuam mostrando a caixa de entrada completa.</p>
+        </div>
+        <% if (trackingFiltersActive) { %>
+          <div class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 shadow-sm dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">Filtros ativos no acompanhamento</div>
+        <% } %>
+      </div>
+
+      <form method="GET" action="/shared-debts" class="mt-4 grid gap-3 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
+        <label class="block">
+          <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Tipo de envio</span>
+          <select name="envio" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500/20">
+            <option value="all" <%= trackingFilters.envio === 'all' ? 'selected' : '' %>>Todos os envios</option>
+            <option value="single" <%= trackingFilters.envio === 'single' ? 'selected' : '' %>>Apenas individuais</option>
+            <option value="grouped" <%= trackingFilters.envio === 'grouped' ? 'selected' : '' %>>Apenas agrupados</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Origem do envio</span>
+          <select name="origin" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500/20">
+            <option value="all" <%= trackingFilters.origin === 'all' ? 'selected' : '' %>>Todas as origens</option>
+            <option value="single" <%= trackingFilters.origin === 'single' ? 'selected' : '' %>>Avulso</option>
+            <option value="multiple" <%= trackingFilters.origin === 'multiple' ? 'selected' : '' %>>Múltiplo</option>
+            <option value="installment" <%= trackingFilters.origin === 'installment' ? 'selected' : '' %>>Parcelado</option>
+            <option value="mixed" <%= trackingFilters.origin === 'mixed' ? 'selected' : '' %>>Misto</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Parcelamento</span>
+          <select name="installment" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500/20">
+            <option value="all" <%= trackingFilters.installment === 'all' ? 'selected' : '' %>>Todos os itens</option>
+            <option value="yes" <%= trackingFilters.installment === 'yes' ? 'selected' : '' %>>Apenas parceladas</option>
+            <option value="no" <%= trackingFilters.installment === 'no' ? 'selected' : '' %>>Apenas não parceladas</option>
+          </select>
+        </label>
+        <div class="flex flex-col gap-2 sm:flex-row xl:justify-end">
+          <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Aplicar filtros</button>
+          <% if (trackingFiltersActive) { %>
+            <a href="/shared-debts" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Limpar</a>
+          <% } %>
+        </div>
+      </form>
+    </div>
+  </section>
+
   <section class="space-y-6">
     <details id="received" class="op-dual-accordion w-full self-start rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden" <%= receivedScopeOpen ? 'open' : '' %>>
       <summary class="list-none cursor-pointer px-6 py-5 bg-slate-50 dark:bg-slate-900/70">
@@ -511,8 +586,8 @@
             <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none">Cobranças que chegaram para sua aprovação e baixa.</p>
           </div>
           <div class="flex flex-wrap gap-2 sm:justify-end">
-            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= received.length %> cobrança(s)</span>
-            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><span class="md:hidden"><%= receivedGroups.length %> mês(es)</span><span class="hidden md:inline"><%= receivedGroups.length %> período(s)</span></span>
+            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= trackingFiltersActive ? `${receivedTrackingItems.length} de ${received.length}` : received.length %> cobrança(s)</span>
+            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><span class="md:hidden"><%= trackingFiltersActive ? `${receivedGroups.length} de ${rawReceivedGroups.length}` : receivedGroups.length %> mês(es)</span><span class="hidden md:inline"><%= trackingFiltersActive ? `${receivedGroups.length} de ${rawReceivedGroups.length}` : receivedGroups.length %> período(s)</span></span>
           </div>
         </div>
       </summary>
@@ -522,8 +597,8 @@
         <div class="px-5 py-5">
           <div class="op-empty-state op-empty-state--compact">
             <div class="op-empty-state__icon">📭</div>
-            <div class="op-empty-state__title">Nenhuma solicitação recebida ainda</div>
-            <p class="op-empty-state__text">Quando outro usuário compartilhar uma dívida com você, ela aparecerá aqui.</p>
+            <div class="op-empty-state__title"><%= trackingFiltersActive ? "Nenhuma cobrança recebida combina com os filtros" : "Nenhuma solicitação recebida ainda" %></div>
+            <p class="op-empty-state__text"><%= trackingFiltersActive ? "Limpe ou ajuste os filtros para voltar a enxergar todo o acompanhamento do mês." : "Quando outro usuário compartilhar uma dívida com você, ela aparecerá aqui." %></p>
           </div>
         </div>
       <% } else { %>
@@ -549,19 +624,59 @@
                 </div>
               </summary>
 
-              <% const receivedMonthSheetId = `received-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); %>
+              <% const receivedMonthSheetId = `received-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const receivedMonthBulkPaySheetId = `received-month-pay-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const receivedMonthPayableItems = getReceivedMonthPayableItems(group); const receivedMonthPayableTotal = sumAmountCents(receivedMonthPayableItems); const receivedMonthCounterparts = countDistinctCounterparts(receivedMonthPayableItems, 'received'); %>
               <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><span class="md:hidden">Visão do mês</span><span class="hidden md:inline">Visão do período</span></div>
                     <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Abra a lista completa do mês para revisar todas as cobranças recebidas de uma vez e depois entrar só na que precisar.</div>
                   </div>
-                  <button type="button" data-open-sheet="<%= receivedMonthSheetId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-100 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700">
-                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
-                    Ver lista do mês
-                  </button>
+                  <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <button type="button" data-open-sheet="<%= receivedMonthSheetId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-100 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700">
+                      <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
+                      Ver lista do mês
+                    </button>
+                    <% if (receivedMonthPayableItems.length) { %>
+                      <button type="button" data-open-sheet="<%= receivedMonthBulkPaySheetId %>" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">
+                        Marcar mês como pago
+                      </button>
+                    <% } %>
+                  </div>
                 </div>
               </div>
+              <% if (receivedMonthPayableItems.length) { %>
+              <div id="<%= receivedMonthBulkPaySheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
+                <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
+                <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-w-xl sm:rounded-[32px]">
+                  <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                    <div>
+                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Recebidas · <%= group.label %></div>
+                      <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Marcar mês como pago</h3>
+                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= receivedMonthPayableItems.length %> cobrança(s) aceitas · <%= formatBRLFromCents(receivedMonthPayableTotal) %></p>
+                    </div>
+                    <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar atalho do mês">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                  </div>
+                  <form method="POST" action="/shared-debts/bulk/mark-paid" class="space-y-4 px-5 py-4">
+                    <% receivedMonthPayableItems.forEach((item) => { %>
+                      <input type="hidden" name="request_ids" value="<%= item.id %>">
+                    <% }) %>
+                    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
+                      Este atalho marca como pagas todas as cobranças já aceitas em <strong><%= group.label %></strong>. As pendências de aprovação continuam separadas. <% if (receivedMonthCounterparts > 1) { %>O aviso será resumido para <strong><%= receivedMonthCounterparts %> pessoas</strong> conforme os envios impactados.<% } %>
+                    </div>
+                    <label class="block">
+                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação do pagamento (opcional)</span>
+                      <textarea name="note" rows="3" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20" placeholder="Ex.: Pix realizado e comprovante já enviado."></textarea>
+                    </label>
+                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                      <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Marcar <%= receivedMonthPayableItems.length %> cobrança(s) como pagas</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+              <% } %>
               <div id="<%= receivedMonthSheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
                 <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
                 <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[82vh] sm:max-w-3xl sm:rounded-[32px]">
@@ -766,8 +881,8 @@
             <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none">Cobranças que você enviou para aprovação e baixa.</p>
           </div>
           <div class="flex flex-wrap gap-2 sm:justify-end">
-            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= sent.length %> cobrança(s)</span>
-            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><span class="md:hidden"><%= sentGroups.length %> mês(es)</span><span class="hidden md:inline"><%= sentGroups.length %> período(s)</span></span>
+            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= trackingFiltersActive ? `${sentTrackingItems.length} de ${sent.length}` : sent.length %> cobrança(s)</span>
+            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><span class="md:hidden"><%= trackingFiltersActive ? `${sentGroups.length} de ${rawSentGroups.length}` : sentGroups.length %> mês(es)</span><span class="hidden md:inline"><%= trackingFiltersActive ? `${sentGroups.length} de ${rawSentGroups.length}` : sentGroups.length %> período(s)</span></span>
           </div>
         </div>
       </summary>
@@ -777,8 +892,8 @@
         <div class="px-5 py-5">
           <div class="op-empty-state op-empty-state--compact">
             <div class="op-empty-state__icon">📤</div>
-            <div class="op-empty-state__title">Nenhuma solicitação enviada ainda</div>
-            <p class="op-empty-state__text">Quando você dividir uma compra com alguém elegível, ela aparecerá aqui.</p>
+            <div class="op-empty-state__title"><%= trackingFiltersActive ? "Nenhuma cobrança enviada combina com os filtros" : "Nenhuma solicitação enviada ainda" %></div>
+            <p class="op-empty-state__text"><%= trackingFiltersActive ? "Limpe ou ajuste os filtros para voltar a enxergar todo o acompanhamento enviado." : "Quando você dividir uma compra com alguém elegível, ela aparecerá aqui." %></p>
           </div>
         </div>
       <% } else { %>
@@ -804,19 +919,59 @@
                 </div>
               </summary>
 
-              <% const sentMonthSheetId = `sent-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); %>
+              <% const sentMonthSheetId = `sent-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmSheetId = `sent-month-confirm-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmableItems = getSentMonthConfirmableItems(group); const sentMonthConfirmableTotal = sumAmountCents(sentMonthConfirmableItems); const sentMonthCounterparts = countDistinctCounterparts(sentMonthConfirmableItems, 'sent'); %>
               <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><span class="md:hidden">Visão do mês</span><span class="hidden md:inline">Visão do período</span></div>
                     <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Abra a lista completa do mês para ver todas as cobranças enviadas de uma vez e acompanhar o panorama do <span class="md:hidden">mês</span><span class="hidden md:inline">período</span>.</div>
                   </div>
-                  <button type="button" data-open-sheet="<%= sentMonthSheetId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-100 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700">
-                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
-                    Ver lista do mês
-                  </button>
+                  <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <button type="button" data-open-sheet="<%= sentMonthSheetId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-100 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700">
+                      <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
+                      Ver lista do mês
+                    </button>
+                    <% if (sentMonthConfirmableItems.length) { %>
+                      <button type="button" data-open-sheet="<%= sentMonthConfirmSheetId %>" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">
+                        Confirmar recebimento do mês
+                      </button>
+                    <% } %>
+                  </div>
                 </div>
               </div>
+              <% if (sentMonthConfirmableItems.length) { %>
+              <div id="<%= sentMonthConfirmSheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
+                <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
+                <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-w-xl sm:rounded-[32px]">
+                  <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                    <div>
+                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Enviadas · <%= group.label %></div>
+                      <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Confirmar recebimento do mês</h3>
+                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= sentMonthConfirmableItems.length %> cobrança(s) com pagamento informado · <%= formatBRLFromCents(sentMonthConfirmableTotal) %></p>
+                    </div>
+                    <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar confirmação do mês">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                  </div>
+                  <form method="POST" action="/shared-debts/bulk/confirm-receipt" class="space-y-4 px-5 py-4">
+                    <% sentMonthConfirmableItems.forEach((item) => { %>
+                      <input type="hidden" name="request_ids" value="<%= item.id %>">
+                    <% }) %>
+                    <div class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-800 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200">
+                      Este atalho liquida de uma vez todas as cobranças de <strong><%= group.label %></strong> cujo pagamento já foi informado. <% if (sentMonthCounterparts > 1) { %>Os avisos serão resumidos por envio para <strong><%= sentMonthCounterparts %> pessoas</strong>.<% } %>
+                    </div>
+                    <label class="block">
+                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação da liquidação (opcional)</span>
+                      <textarea name="note" rows="3" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20" placeholder="Ex.: Recebimento conferido no extrato deste mês."></textarea>
+                    </label>
+                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                      <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">Confirmar <%= sentMonthConfirmableItems.length %> recebimento(s)</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+              <% } %>
               <div id="<%= sentMonthSheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
                 <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
                 <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[82vh] sm:max-w-3xl sm:rounded-[32px]">

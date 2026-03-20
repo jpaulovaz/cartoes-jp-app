@@ -4994,6 +4994,94 @@ app.post("/cards/:id/delete", ensureAuthenticated, (req, res) => {
   return res.redirect("/cards");
 });
 
+function normalizeImportDuplicateText(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeImportCardNumber(value) {
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+function buildImportDuplicateFingerprint({ cardId, month, year, txnDate, description, amountCents, cardNumber }) {
+  return [
+    Number(cardId) || 0,
+    Number(year) || 0,
+    Number(month) || 0,
+    String(txnDate || "").trim(),
+    normalizeImportDuplicateText(description),
+    Number(amountCents) || 0,
+    normalizeImportCardNumber(cardNumber)
+  ].join("::");
+}
+
+function getExistingImportFingerprints(userId, cardId, month, year) {
+  const rows = db.prepare(`
+    SELECT t.txn_date, t.description, t.amount_cents, t.card_number
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND t.card_id = ?
+      AND ${EFFECTIVE_DUE_MONTH_SQL} = ?
+      AND ${EFFECTIVE_DUE_YEAR_SQL} = ?
+  `).all(userId, cardId, month, year);
+
+  return new Set(rows.map((row) => buildImportDuplicateFingerprint({
+    cardId,
+    month,
+    year,
+    txnDate: row.txn_date || "",
+    description: row.description,
+    amountCents: row.amount_cents,
+    cardNumber: row.card_number
+  })));
+}
+
+function buildImportFeedbackMessage(month, year, importedCount, skippedExistingCount, skippedCsvCount) {
+  const period = monthLabel(month, year);
+  const skippedTotal = Number(skippedExistingCount || 0) + Number(skippedCsvCount || 0);
+
+  if (importedCount > 0 && skippedTotal === 0) {
+    return {
+      type: "success",
+      message: importedCount === 1
+        ? `1 compra pousou em ${period}. Tudo certinho por aqui.`
+        : `${importedCount} compras pousaram em ${period}. Tudo certinho por aqui.`
+    };
+  }
+
+  const parts = [];
+  if (importedCount > 0) {
+    parts.push(importedCount === 1 ? "1 compra entrou" : `${importedCount} compras entraram`);
+  }
+  if (skippedExistingCount > 0) {
+    parts.push(skippedExistingCount === 1
+      ? "1 já parecia estar por aqui e ficou de fora"
+      : `${skippedExistingCount} já pareciam estar por aqui e ficaram de fora`);
+  }
+  if (skippedCsvCount > 0) {
+    parts.push(skippedCsvCount === 1
+      ? "1 veio repetida no próprio CSV e ficou de fora"
+      : `${skippedCsvCount} vieram repetidas no próprio CSV e ficaram de fora`);
+  }
+
+  if (importedCount > 0) {
+    return {
+      type: "success",
+      message: `Importação concluída em ${period}: ${parts.join('; ')}. Assim a gente evita compra clonada sem travar o que está certinho.`
+    };
+  }
+
+  return {
+    type: "info",
+    message: `Nenhuma compra nova entrou em ${period}. ${parts.join('; ')}. O app segurou tudo para evitar duplicidade.`
+  };
+}
+
 // Import
 app.get("/import", ensureAuthenticated, ensureCanImport, (req, res) => {
   const userId = req.user.id;
@@ -5018,25 +5106,77 @@ app.post("/import", ensureAuthenticated, ensureCanImport, upload.single("csvfile
     if (!card) throw new Error("Cartão inválido ou desativado.");
 
     const txns = parseCsvByCardName(card.name, req.file.buffer);
+    const existingFingerprints = getExistingImportFingerprints(userId, cardId, month, year);
+    const csvFingerprints = new Set();
+    const itemsToInsert = [];
+    let skippedExistingCount = 0;
+    let skippedCsvCount = 0;
 
-    const info = db.prepare(`
-      INSERT INTO imports(user_id, card_id, month, year, created_at, original_filename)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(userId, cardId, month, year, nowIso(), req.file.originalname);
+    for (const txn of txns) {
+      const isoDate = toISOFromBRDate(txn.txn_date) || String(txn.txn_date || "").trim() || null;
+      const fingerprint = buildImportDuplicateFingerprint({
+        cardId,
+        month,
+        year,
+        txnDate: isoDate,
+        description: txn.description,
+        amountCents: txn.amount_cents,
+        cardNumber: txn.card_number
+      });
 
-    const insTxn = db.prepare(`
-      INSERT INTO transactions(user_id, import_id, card_id, txn_date, description, amount_cents, card_number, raw_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+      if (existingFingerprints.has(fingerprint)) {
+        skippedExistingCount += 1;
+        continue;
+      }
 
-    const insertMany = db.transaction((items) => {
-      for (const t of items) {
-        const isoDate = toISOFromBRDate(t.txn_date) || null;
-        insTxn.run(userId, info.lastInsertRowid, cardId, isoDate, t.description, t.amount_cents, t.card_number || null, JSON.stringify(t.raw || {}), nowIso());
+      if (csvFingerprints.has(fingerprint)) {
+        skippedCsvCount += 1;
+        continue;
+      }
+
+      csvFingerprints.add(fingerprint);
+      itemsToInsert.push({
+        ...txn,
+        isoDate
+      });
+    }
+
+    if (!itemsToInsert.length) {
+      const feedback = buildImportFeedbackMessage(month, year, 0, skippedExistingCount, skippedCsvCount);
+      setFlash(req, feedback.type, feedback.message);
+      return res.redirect("/import");
+    }
+
+    const createImportWithTransactions = db.transaction((items) => {
+      const info = db.prepare(`
+        INSERT INTO imports(user_id, card_id, month, year, created_at, original_filename)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(userId, cardId, month, year, nowIso(), req.file.originalname);
+
+      const insTxn = db.prepare(`
+        INSERT INTO transactions(user_id, import_id, card_id, txn_date, description, amount_cents, card_number, raw_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const item of items) {
+        insTxn.run(
+          userId,
+          info.lastInsertRowid,
+          cardId,
+          item.isoDate || null,
+          item.description,
+          item.amount_cents,
+          item.card_number || null,
+          JSON.stringify(item.raw || {}),
+          nowIso()
+        );
       }
     });
 
-    insertMany(txns);
+    createImportWithTransactions(itemsToInsert);
+
+    const feedback = buildImportFeedbackMessage(month, year, itemsToInsert.length, skippedExistingCount, skippedCsvCount);
+    setFlash(req, feedback.type, feedback.message);
     res.redirect(`/month/${year}/${month}`);
   } catch (e) {
     res.status(400).render("import", { cards, error: e.message || String(e) });

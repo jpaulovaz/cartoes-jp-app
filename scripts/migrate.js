@@ -220,6 +220,7 @@ CREATE TABLE IF NOT EXISTS shared_debt_requests (
   response_note TEXT,
   payment_marked_at TEXT,
   payment_note TEXT,
+  request_kind TEXT NOT NULL DEFAULT 'card',
   status TEXT NOT NULL DEFAULT 'pending',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -386,6 +387,10 @@ if (!columnExists("shared_debt_requests", "payment_note")) {
 
 if (!columnExists("shared_debt_requests", "batch_id")) {
   db.exec("ALTER TABLE shared_debt_requests ADD COLUMN batch_id INTEGER;");
+}
+
+if (!columnExists("shared_debt_requests", "request_kind")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN request_kind TEXT NOT NULL DEFAULT 'card';");
 }
 
 if (!columnExists("shared_debt_batches", "status_summary")) {

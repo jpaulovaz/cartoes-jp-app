@@ -43,6 +43,7 @@ try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_txn_date_sn
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_marked_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_note TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN batch_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN request_kind TEXT NOT NULL DEFAULT 'card'").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN status_summary TEXT NOT NULL DEFAULT 'pending'").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN first_responded_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN resolved_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -605,9 +606,15 @@ function buildNoteSuffix(note, label = 'Recado') {
   return safeNote ? ` ${label}: ${safeNote}` : '';
 }
 
+function normalizeSharedDebtRequestKind(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (['card', 'manual'].includes(normalized)) return normalized;
+  return 'card';
+}
+
 function normalizeSharedDebtOriginKind(value) {
   const normalized = String(value || '').trim().toLowerCase();
-  if (['single', 'multiple', 'installment', 'mixed'].includes(normalized)) return normalized;
+  if (['single', 'multiple', 'installment', 'mixed', 'manual'].includes(normalized)) return normalized;
   return 'single';
 }
 
@@ -1783,6 +1790,12 @@ function getPeopleAll(userId) {
       incoming_friend_request: incomingRequest
     };
   });
+}
+
+function getManualSharedDebtEligiblePeople(userId) {
+  return getPeopleAll(userId)
+    .filter(person => person && person.can_share_charge && person.friendship_active && Number(person.active || 0) !== 0 && Number(person.is_owner || 0) === 0)
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' }));
 }
 
 function upsertPushSubscription(userId, subscription) {
@@ -3221,9 +3234,23 @@ function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE r.receiver_user_id = ?
       AND r.status = 'accepted'
-      AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
-      AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
-  `).get(userId, month, year) || { total_requests: 0, total_cents: 0 };
+      AND (
+        (
+          COALESCE(r.request_kind, 'card') = 'manual'
+          AND (
+            CAST(strftime('%Y', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) < ?
+            OR (
+              CAST(strftime('%Y', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) = ?
+              AND CAST(strftime('%m', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) <= ?
+            )
+          )
+        ) OR
+        (
+          COALESCE(r.source_due_month, i.month, t.due_month) = ?
+          AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
+        )
+      )
+  `).get(userId, year, year, month, month, year) || { total_requests: 0, total_cents: 0 };
 
   const receivable = db.prepare(`
     SELECT COUNT(*) AS total_requests, COALESCE(SUM(r.amount_cents), 0) AS total_cents
@@ -3232,9 +3259,23 @@ function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE r.requester_user_id = ?
       AND r.status = 'accepted'
-      AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
-      AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
-  `).get(userId, month, year) || { total_requests: 0, total_cents: 0 };
+      AND (
+        (
+          COALESCE(r.request_kind, 'card') = 'manual'
+          AND (
+            CAST(strftime('%Y', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) < ?
+            OR (
+              CAST(strftime('%Y', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) = ?
+              AND CAST(strftime('%m', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) <= ?
+            )
+          )
+        ) OR
+        (
+          COALESCE(r.source_due_month, i.month, t.due_month) = ?
+          AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
+        )
+      )
+  `).get(userId, year, year, month, month, year) || { total_requests: 0, total_cents: 0 };
 
   return {
     owedCents: Number(owed.total_cents || 0),
@@ -3252,7 +3293,7 @@ function normalizeSharedDebtTrackingFilters(query = {}) {
 
   return {
     envio: ['all', 'single', 'grouped'].includes(envio) ? envio : 'all',
-    origin: ['all', 'single', 'multiple', 'installment', 'mixed'].includes(origin) ? origin : 'all',
+    origin: ['all', 'single', 'multiple', 'installment', 'mixed', 'manual'].includes(origin) ? origin : 'all',
     installment: ['all', 'yes', 'no'].includes(installment) ? installment : 'all'
   };
 }
@@ -3265,7 +3306,7 @@ function hasActiveSharedDebtTrackingFilters(filters = {}) {
 function isGroupedSharedDebtItem(item) {
   const batchCount = Number(item?.batch_total_count || 0);
   const originKind = normalizeSharedDebtOriginKind(item?.batch_origin_kind);
-  return batchCount > 1 || originKind !== 'single';
+  return batchCount > 1 || !['single', 'manual'].includes(originKind);
 }
 
 function filterSharedDebtTrackingItems(items = [], filters = {}) {
@@ -3344,6 +3385,7 @@ app.get("/shared-debts", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const requestIdToHighlight = Number(req.query.request) || null;
   const batchIdToHighlight = Number(req.query.batch) || null;
+  const manualDebtEligiblePeople = getManualSharedDebtEligiblePeople(userId);
 
   db.prepare(`
     UPDATE notifications
@@ -3379,6 +3421,7 @@ app.get("/shared-debts", ensureAuthenticated, (req, res) => {
     sentTracking,
     sharedDebtFilters,
     sharedDebtFiltersActive,
+    manualDebtEligiblePeople,
     eventsByRequest,
     requestIdToHighlight,
     batchIdToHighlight,
@@ -3386,6 +3429,95 @@ app.get("/shared-debts", ensureAuthenticated, (req, res) => {
     monthLabel,
     formatDateBR
   });
+});
+
+app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const personId = Number(req.body.person_id || 0);
+  const description = String(req.body.description || '').trim();
+  const note = String(req.body.note || '').trim() || null;
+  const amountCents = centsFromPtBrMoney(req.body.amount);
+
+  if (!personId) {
+    setFlash(req, 'error', 'Escolha uma amizade para enviar esse lembrete avulso.');
+    return res.redirect('/shared-debts');
+  }
+
+  if (!description) {
+    setFlash(req, 'error', 'Dê um nome curto para essa cobrança avulsa antes de enviar.');
+    return res.redirect('/shared-debts');
+  }
+
+  if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    setFlash(req, 'error', 'Coloque um valor válido para esse lembrete seguir viagem.');
+    return res.redirect('/shared-debts');
+  }
+
+  const person = getManualSharedDebtEligiblePeople(userId).find(entry => Number(entry.id || 0) === personId);
+  if (!person) {
+    setFlash(req, 'error', 'Essa amizade não está pronta para receber cobrança avulsa agora.');
+    return res.redirect('/shared-debts');
+  }
+
+  const linkedUserId = Number(person.linked_user_id || 0);
+  if (!linkedUserId || linkedUserId === userId) {
+    setFlash(req, 'error', 'Não consegui descobrir quem está do outro lado desse lembrete.');
+    return res.redirect('/shared-debts');
+  }
+
+  const requesterPerson = getOwnerPerson(userId);
+  const actor = getUserRecord(userId);
+  const actorName = requesterPerson?.name || actor?.name || actor?.email || 'Um usuário';
+  const receiverName = person.name || person.linked_user_name || person.linked_user_email || 'essa amizade';
+  const receiverEmail = normalizeEmail(person.email || person.linked_user_email || null);
+  const now = nowIso();
+  const batchId = createSharedDebtBatch({
+    requesterUserId: userId,
+    receiverUserId: linkedUserId,
+    originKind: 'manual',
+    createdAt: now
+  });
+
+  const info = db.prepare(`
+    INSERT INTO shared_debt_requests (
+      requester_user_id, requester_person_id, receiver_user_id, source_person_id,
+      source_transaction_id, source_allocation_id, source_due_month, source_due_year, source_txn_date_snapshot,
+      card_id, card_name_snapshot, description_snapshot, amount_cents,
+      receiver_email_snapshot, receiver_name_snapshot, request_note, response_note,
+      status, batch_id, request_kind, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, NULL, NULL, ?, ?, ?, ?, ?, NULL, 'pending', ?, 'manual', ?, ?)
+  `).run(
+    userId,
+    requesterPerson?.id || null,
+    linkedUserId,
+    personId,
+    now,
+    description,
+    amountCents,
+    receiverEmail,
+    receiverName,
+    note,
+    batchId,
+    now,
+    now
+  );
+
+  const requestId = Number(info.lastInsertRowid || 0);
+  addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'created', note: note || 'Lembrete avulso enviado.' });
+  refreshSharedDebtBatch(batchId, now);
+
+  createNotification({
+    userId: linkedUserId,
+    type: 'shared_debt_request',
+    title: 'Chegou um lembrete avulso',
+    body: `${actorName} te enviou um lembrete de ${formatBRLFromCents(amountCents)} (${description}).${buildNoteSuffix(note, 'Recado')}`,
+    href: `/shared-debts?request=${requestId}`,
+    relatedType: 'shared_debt_request',
+    relatedId: requestId
+  });
+
+  setFlash(req, 'success', `Pronto! O lembrete avulso para ${receiverName} já foi enviado com a data de hoje.`);
+  return res.redirect(`/shared-debts?request=${requestId}`);
 });
 
 app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) => {
@@ -3440,10 +3572,16 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
   const totalCents = pendingItems.reduce((sum, item) => sum + Number(item.amount_cents || 0), 0);
   const firstRequestId = Number(pendingItems[0]?.id || 0) || null;
   const chargeCountLabel = formatCountLabel(pendingItems.length, 'cobrança', 'cobranças');
-  const title = accepted ? 'Seu envio foi aceito' : 'Seu envio foi recusado';
+  const isManualBatch = normalizeSharedDebtOriginKind(batchRow.origin_kind) === 'manual';
+  const itemCountLabel = isManualBatch
+    ? formatCountLabel(pendingItems.length, 'lembrete avulso', 'lembretes avulsos')
+    : chargeCountLabel;
+  const title = accepted
+    ? (isManualBatch ? 'Seu lembrete avulso foi aceito' : 'Seu envio foi aceito')
+    : (isManualBatch ? 'Seu lembrete avulso foi recusado' : 'Seu envio foi recusado');
   const baseBody = accepted
-    ? `${actorName} aceitou ${chargeCountLabel} do seu envio, somando ${formatBRLFromCents(totalCents)}.`
-    : `${actorName} recusou ${chargeCountLabel} do seu envio, somando ${formatBRLFromCents(totalCents)}.`;
+    ? `${actorName} aceitou ${itemCountLabel} do seu envio, somando ${formatBRLFromCents(totalCents)}.`
+    : `${actorName} recusou ${itemCountLabel} do seu envio, somando ${formatBRLFromCents(totalCents)}.`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
 
   const updateStmt = db.prepare(`
@@ -3517,10 +3655,14 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
   const accepted = action === 'accept';
   const nextStatus = accepted ? 'accepted' : 'rejected_by_receiver';
   const eventType = nextStatus;
-  const title = accepted ? 'Aceitaram sua cobrança compartilhada' : 'Recusaram sua cobrança compartilhada';
+  const requestKind = normalizeSharedDebtRequestKind(requestRow.request_kind);
+  const isManualRequest = requestKind === 'manual';
+  const title = accepted
+    ? (isManualRequest ? 'Aceitaram seu lembrete avulso' : 'Aceitaram sua cobrança compartilhada')
+    : (isManualRequest ? 'Recusaram seu lembrete avulso' : 'Recusaram sua cobrança compartilhada');
   const baseBody = accepted
-    ? `${actorName} aceitou a cobrança de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`
-    : `${actorName} recusou a cobrança de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
+    ? `${actorName} aceitou ${isManualRequest ? 'o lembrete avulso' : 'a cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`
+    : `${actorName} recusou ${isManualRequest ? 'o lembrete avulso' : 'a cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
 
   db.transaction(() => {
@@ -3588,10 +3730,14 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
   const acceptingRejection = action === 'accept_rejection';
   const nextStatus = acceptingRejection ? 'rejection_accepted_by_sender' : 'rejection_contested_by_sender';
   const eventType = nextStatus;
-  const title = acceptingRejection ? 'Sua recusa foi aceita' : 'Sua recusa foi contestada';
+  const requestKind = normalizeSharedDebtRequestKind(requestRow.request_kind);
+  const isManualRequest = requestKind === 'manual';
+  const title = acceptingRejection
+    ? (isManualRequest ? 'A recusa do lembrete foi aceita' : 'Sua recusa foi aceita')
+    : (isManualRequest ? 'A recusa do lembrete foi contestada' : 'Sua recusa foi contestada');
   const baseBody = acceptingRejection
-    ? `${actorName} aceitou a sua recusa da cobrança de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`
-    : `${actorName} contestou a sua recusa da cobrança de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
+    ? `${actorName} aceitou a sua recusa ${isManualRequest ? 'do lembrete avulso' : 'da cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`
+    : `${actorName} contestou a sua recusa ${isManualRequest ? 'do lembrete avulso' : 'da cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
 
   db.transaction(() => {
@@ -3668,7 +3814,9 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
   const actor = getUserRecord(userId);
   const actorName = actor?.name || requestRow.receiver_name_snapshot || actor?.email || 'O destinatário';
   const now = nowIso();
-  const baseBody = `${actorName} avisou que já pagou a cobrança de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
+  const requestKind = normalizeSharedDebtRequestKind(requestRow.request_kind);
+  const isManualRequest = requestKind === 'manual';
+  const baseBody = `${actorName} avisou que já pagou ${isManualRequest ? 'o lembrete avulso' : 'a cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
 
   db.transaction(() => {
@@ -3684,7 +3832,7 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
     createNotification({
       userId: requestRow.requester_user_id,
       type: 'shared_debt_request',
-      title: 'Pagamento marcado como feito',
+      title: isManualRequest ? 'Pagamento do lembrete marcado como feito' : 'Pagamento marcado como feito',
       body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
@@ -3737,7 +3885,9 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
   const actor = getUserRecord(userId);
   const actorName = actor?.name || actor?.email || 'O remetente';
   const now = nowIso();
-  const baseBody = `${actorName} confirmou o recebimento da cobrança de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
+  const requestKind = normalizeSharedDebtRequestKind(requestRow.request_kind);
+  const isManualRequest = requestKind === 'manual';
+  const baseBody = `${actorName} confirmou o recebimento ${isManualRequest ? 'do lembrete avulso' : 'da cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
 
   db.transaction(() => {
@@ -3753,7 +3903,7 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
     createNotification({
       userId: requestRow.receiver_user_id,
       type: 'shared_debt_request',
-      title: 'Pagamento confirmado',
+      title: isManualRequest ? 'Pagamento do lembrete confirmado' : 'Pagamento confirmado',
       body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',

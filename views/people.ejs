@@ -1,4 +1,4 @@
-<%- include("partials/header", { title: "OrganizaPay | Pessoas" }) %>
+<%- include("partials/header", { title: "OrganizaPay | Amigos" }) %>
 
 <%
   const pendingRequests = Array.isArray(pendingFriendRequests) ? pendingFriendRequests : [];
@@ -48,17 +48,30 @@
   <div class="max-w-5xl mx-auto">
     <section class="op-page-hero op-fade-up mb-8">
       <div>
-        <span class="op-page-hero__eyebrow">Participantes e amizades</span>
-        <h1 class="op-page-hero__title mt-4">Pessoas</h1>
-        <p class="op-page-hero__subtitle mt-3">Cadastre quem entra nas divisões, descubra quem também usa o OrganizaPay e libere cobranças automáticas só quando os dois lados derem o ok.</p>
+        <span class="op-page-hero__eyebrow">Sua rede no OrganizaPay</span>
+        <h1 class="op-page-hero__title mt-4">Amigos</h1>
+        <p class="op-page-hero__subtitle mt-3">Aqui mora seu círculo de confiança: quem entra nas divisões, quem já usa o app e quem topou abrir a porta para cobranças automáticas com um ok dos dois lados.</p>
         <div class="op-page-hero__meta mt-4">
-          <span class="badge"><%= people ? people.length : 0 %> participante(s)</span>
-          <span class="badge"><%= activeFriendCount %> amizade(s) ativa(s)</span>
-          <% if (pendingRequests.length) { %>
-            <span class="badge"><%= pendingRequests.length %> pedido(s) te esperando</span>
-          <% } else { %>
-            <span class="badge"><%= discoverableCount %> contato(s) já apareceram no app</span>
-          <% } %>
+          <span class="badge">Rede, convites e vínculo em um só lugar</span>
+          <span class="badge">Cobranças automáticas só com amizade ativa</span>
+        </div>
+      </div>
+
+      <div class="op-kpi-strip xl:max-w-[30rem]">
+        <div class="op-kpi-card text-center">
+          <div class="op-kpi-card__label">Na sua rede</div>
+          <div class="op-kpi-card__value"><%= people ? people.length : 0 %></div>
+          <div class="op-kpi-card__hint">contato(s) salvos</div>
+        </div>
+        <div class="op-kpi-card text-center">
+          <div class="op-kpi-card__label text-emerald-600 dark:text-emerald-300">Amizades</div>
+          <div class="op-kpi-card__value text-emerald-700 dark:text-emerald-200"><%= activeFriendCount %></div>
+          <div class="op-kpi-card__hint text-emerald-700/80 dark:text-emerald-200/80">vínculo(s) ativo(s)</div>
+        </div>
+        <div class="op-kpi-card text-center">
+          <div class="op-kpi-card__label text-sky-600 dark:text-sky-300"><%= pendingRequests.length ? 'Convites' : 'Também usam' %></div>
+          <div class="op-kpi-card__value text-sky-700 dark:text-sky-200"><%= pendingRequests.length ? pendingRequests.length : discoverableCount %></div>
+          <div class="op-kpi-card__hint text-sky-700/80 dark:text-sky-200/80"><%= pendingRequests.length ? 'te esperando' : 'já estão no app' %></div>
         </div>
       </div>
     </section>
@@ -122,11 +135,21 @@
     <% } %>
 
     <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
+      <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Monte sua rede</div>
+          <h2 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Cadastre alguém novo</h2>
+          <p class="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Começa pelo básico. Se a pessoa também usar o OrganizaPay, a amizade pode nascer daqui com um convite.</p>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+          Seu titular também mora aqui na rede.
+        </div>
+      </div>
 
       <form method="post" action="/people" id="personForm"
         class="flex flex-col gap-4 mb-8 pb-8 border-b border-slate-100 dark:border-slate-700">
         <div class="text-sm font-medium text-slate-500 dark:text-slate-400 -mb-1">
-          O e-mail é opcional, mas é ele que ajuda o app a descobrir se essa pessoa também usa o OrganizaPay.
+          O e-mail é opcional, mas ajuda o app a descobrir se esse contato também usa o OrganizaPay.
         </div>
         <input type="hidden" name="id" id="personId">
 
@@ -139,7 +162,7 @@
           </div>
           <input name="name" id="inputName"
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
-            placeholder="Nome da pessoa" required />
+            placeholder="Nome do amigo ou contato" required />
         </div>
 
         <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] items-start">
@@ -207,53 +230,35 @@
               <div class="flex flex-col gap-5">
                 <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                   <div class="flex min-w-0 flex-1 gap-4 xl:pr-4">
-                  <div class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-600 transition-colors group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:bg-blue-900/40">
-                    <%= p.name.charAt(0).toUpperCase() %>
-                    <% if (p.is_owner) { %>
-                      <span class="absolute -top-2 -right-2 text-xl drop-shadow-sm" title="Titular">👑</span>
-                    <% } else if (p.friendship_active) { %>
-                      <span class="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-200 bg-emerald-500 text-[13px] text-white shadow-sm dark:border-emerald-700" title="Amizade ativa">🔗</span>
-                    <% } %>
-                  </div>
-
-                  <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <div class="text-lg font-extrabold text-slate-800 dark:text-white"><%= p.name %></div>
-                      <button type="button" data-id="<%= p.id %>" data-name="<%= p.name %>" data-phone="<%= p.phone || '' %>" data-email="<%= p.email || '' %>" onclick="editPersonFromButton(this)"
-                        class="text-slate-400 hover:text-blue-500 transition-colors" aria-label="Editar pessoa" title="Editar pessoa">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
-                        </svg>
-                      </button>
+                    <div class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-600 transition-colors group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:bg-blue-900/40">
+                      <%= p.name.charAt(0).toUpperCase() %>
+                      <% if (p.is_owner) { %>
+                        <span class="absolute -top-2 -right-2 text-xl drop-shadow-sm" title="Titular">👑</span>
+                      <% } else if (p.friendship_active) { %>
+                        <span class="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-200 bg-emerald-500 text-[13px] text-white shadow-sm dark:border-emerald-700" title="Amizade ativa">🔗</span>
+                      <% } %>
                     </div>
 
-                    <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-                      <%= p.phone ? '📱 ' + p.phone : '📱 Telefone não informado' %>
-                    </div>
-                    <div class="mt-1 break-all text-xs font-medium text-slate-500 dark:text-slate-400">
-                      <%= p.email ? '✉️ ' + p.email : '— E-mail não informado' %>
-                    </div>
-
-                    <div class="mt-3 flex flex-wrap items-center gap-2">
-                      <%- renderPersonStatusChips(p) %>
-                    </div>
-
-                    <div class="mt-4 w-full rounded-[24px] border border-sky-100/60 bg-slate-50/90 px-4 py-4 shadow-sm shadow-sky-100/15 dark:border-slate-700 dark:bg-slate-900/70 sm:px-5 sm:py-4">
-                      <div class="flex items-start gap-3">
-                        <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-sky-600 shadow-sm ring-1 ring-sky-100 dark:bg-slate-800 dark:text-sky-300 dark:ring-slate-700" aria-hidden="true">
-                          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <div class="text-lg font-extrabold text-slate-800 dark:text-white"><%= p.name %></div>
+                        <button type="button" data-id="<%= p.id %>" data-name="<%= p.name %>" data-phone="<%= p.phone || '' %>" data-email="<%= p.email || '' %>" onclick="editPersonFromButton(this)"
+                          class="text-slate-400 hover:text-blue-500 transition-colors" aria-label="Editar pessoa" title="Editar pessoa">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
                           </svg>
-                        </span>
-                        <div class="min-w-0 flex-1">
-                          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/70 dark:text-sky-300/80">Recadinho do app</div>
-                          <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= personHintText %></p>
-                        </div>
+                        </button>
+                      </div>
+
+                      <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                        <%= p.phone ? '📱 ' + p.phone : '📱 Telefone não informado' %>
+                      </div>
+                      <div class="mt-1 break-all text-xs font-medium text-slate-500 dark:text-slate-400">
+                        <%= p.email ? '✉️ ' + p.email : '— E-mail não informado' %>
                       </div>
                     </div>
                   </div>
-                </div>
 
                   <div class="flex w-full flex-col gap-2 xl:w-[15rem] xl:shrink-0">
                     <% if (!p.is_owner) { %>
@@ -319,12 +324,31 @@
                   </div>
                 </div>
 
+                <div class="flex flex-col gap-3">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <%- renderPersonStatusChips(p) %>
+                  </div>
+
+                  <div class="w-full rounded-[24px] border border-sky-100/70 bg-slate-50/90 px-4 py-4 shadow-sm shadow-sky-100/10 dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+                    <div class="flex items-start gap-3">
+                      <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-sky-600 shadow-sm ring-1 ring-sky-100 dark:bg-slate-800 dark:text-sky-300 dark:ring-slate-700" aria-hidden="true">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                      </span>
+                      <div class="min-w-0 flex-1">
+                        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/70 dark:text-sky-300/80">Recadinho do app</div>
+                        <p class="mt-1 max-w-none text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= personHintText %></p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           <% }) %>
         <% } else { %>
           <div class="rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 px-6 py-10 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">
-            Ainda não tem ninguém cadastrado por aqui. Comece pelo titular e depois vá adicionando quem entra nas divisões.
+            Ainda não tem ninguém na sua rede por aqui. Comece pelo titular e depois vá adicionando quem entra nas divisões e nas amizades.
           </div>
         <% } %>
       </div>

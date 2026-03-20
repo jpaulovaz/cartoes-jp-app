@@ -3412,7 +3412,7 @@ app.get("/shared-debts", ensureAuthenticated, (req, res) => {
   ]);
 
   return res.render("shared-debts", {
-    title: "OrganizaPay | Dívidas Compartilhadas",
+    title: "OrganizaPay | Cobranças",
     received,
     sent,
     receivedPendingBatches,
@@ -4168,7 +4168,7 @@ app.get("/people", ensureAuthenticated, (req, res) => {
     people,
     pendingFriendRequests,
     highlightedFriendRequestId,
-    title: "Pessoas"
+    title: "Amigos"
   });
 });
 
@@ -4702,7 +4702,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   }
 
   const owner = db.prepare("SELECT * FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
-  if (!owner) return res.status(400).send("Defina um titular na aba Pessoas primeiro.");
+  if (!owner) return res.status(400).send("Defina um titular na aba Amigos primeiro.");
 
   const cardTotal = db.prepare(`
     SELECT COALESCE(SUM(a.share_cents), 0) as total
@@ -4789,7 +4789,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
         : 'Pedidos de amizade esperando resposta',
       description: pendingFriendRequests.length === 1
         ? 'Aceitando, vocês liberam cobranças automáticas dos dois lados com um ok de verdade.'
-        : `${formatCountLabel(pendingFriendRequests.length, 'pedido de amizade está', 'pedidos de amizade estão')} te esperando lá em Pessoas.`,
+        : `${formatCountLabel(pendingFriendRequests.length, 'pedido de amizade está', 'pedidos de amizade estão')} te esperando lá em Amigos.`,
       href: `/people?friendRequest=${newestFriendRequest.id}`
     });
   } else if (unreadFriendNotifications.length) {
@@ -4819,10 +4819,10 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     alerts.push({
       type: 'info',
       icon: '🤝',
-      title: unreadSharedDebtNotifications.length === 1 ? newest.title : 'Dívidas compartilhadas pendentes',
+      title: unreadSharedDebtNotifications.length === 1 ? newest.title : 'Cobranças pendentes',
       description: unreadSharedDebtNotifications.length === 1
-        ? (newest.body || 'Você recebeu uma nova solicitação de dívida compartilhada.')
-        : `Você tem ${formatCountLabel(unreadSharedDebtNotifications.length, 'novidade', 'novidades')} sobre dívidas compartilhadas esperando sua olhada.`,
+        ? (newest.body || 'Você recebeu uma nova cobrança para analisar.')
+        : `Você tem ${formatCountLabel(unreadSharedDebtNotifications.length, 'novidade', 'novidades')} em Cobranças esperando sua olhada.`,
       href: newest.href || '/shared-debts'
     });
   } else {
@@ -4837,7 +4837,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
         type: 'warning',
         icon: '📨',
         title: 'Envios aguardando sua análise',
-        description: `${formatCountLabel(pendingSharedDebtCount, 'envio de dívida compartilhada', 'envios de dívida compartilhada')} ${pendingSharedDebtCount === 1 ? 'está' : 'estão'} te esperando.`,
+        description: `${formatCountLabel(pendingSharedDebtCount, 'cobrança', 'cobranças')} ${pendingSharedDebtCount === 1 ? 'está' : 'estão'} te esperando.`,
         href: '/shared-debts#received'
       });
     }
@@ -5143,7 +5143,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
 
     const ownerPerson = assignToOwner ? getOwnerPerson(userId) : null;
     if (assignToOwner && !ownerPerson) {
-      setFlash(req, "error", "Defina um titular na aba Pessoas antes de usar 'Atribuir esse item a mim'.");
+      setFlash(req, "error", "Defina um titular na aba Amigos antes de usar 'Atribuir esse item a mim'.");
       return res.redirect(redirectBackOr(req, "/geral"));
     }
 

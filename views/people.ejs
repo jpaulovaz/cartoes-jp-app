@@ -4,6 +4,45 @@
   const pendingRequests = Array.isArray(pendingFriendRequests) ? pendingFriendRequests : [];
   const activeFriendCount = Array.isArray(people) ? people.filter(p => p && p.friendship_active).length : 0;
   const discoverableCount = Array.isArray(people) ? people.filter(p => p && p.has_app_user && !p.friendship_active).length : 0;
+  const renderPersonStatusChips = (person) => {
+    const chips = [];
+    const addChip = (classes, label) => {
+      chips.push(`<span class="inline-flex items-center whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-bold ${classes}">${label}</span>`);
+    };
+
+    if (person.is_owner) {
+      addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Titular');
+    }
+
+    if (person.active) {
+      addChip('border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200', 'Ativo');
+    } else {
+      addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Inativo');
+    }
+
+    if (person.has_app_user) {
+      addChip('border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200', 'Também usa o app');
+    }
+
+    if (!person.email) {
+      addChip('border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-200', 'Sem e-mail');
+    }
+
+    if (person.friendship_active) {
+      addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Amizade ativa');
+      if (person.can_share_charge) {
+        addChip('border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200', 'Cobrança automática liberada');
+      } else if (!person.active) {
+        addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Cobrança pausada');
+      }
+    } else if (person.friendship_state === 'pending_sent') {
+      addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pedido enviado');
+    } else if (person.friendship_state === 'pending_received') {
+      addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Pedido recebido');
+    }
+
+    return chips.join('');
+  };
 %>
 
   <div class="max-w-5xl mx-auto">
@@ -143,10 +182,31 @@
         <% if (people && people.length) { %>
           <% people.forEach((p) => {
                const isHighlighted = highlightedFriendRequestId && Number(p.incoming_friend_request_id || 0) === Number(highlightedFriendRequestId);
+               let personHintText = '';
+               if (p.is_owner) {
+                 personHintText = 'Você é o titular desta conta. Aqui o crachá já vem no bolso.';
+               } else if (!p.email) {
+                 personHintText = 'Quer descobrir se essa pessoa também usa o app? Um e-mail aqui já ajuda a abrir essa porta.';
+               } else if (!p.has_app_user) {
+                 personHintText = 'Por enquanto o app não achou uma conta OrganizaPay com esse e-mail. Se a pessoa entrar depois, o convite aparece.';
+               } else if (p.friendship_active && !p.active) {
+                 personHintText = 'A amizade segue ativa, mas este contato está inativo na sua lista. Novos envios automáticos ficam pausados até você reativar.';
+               } else if (p.friendship_active) {
+                 personHintText = 'Vocês já estão conectados. Daqui pra frente, cobranças automáticas podem circular entre vocês com o ok dos dois lados.';
+               } else if (p.friendship_state === 'pending_sent') {
+                 personHintText = 'O convite já foi enviado. Agora é aquele momento clássico de esperar o joinha chegar.';
+               } else if (p.friendship_state === 'pending_received') {
+                 personHintText = 'Essa pessoa já te chamou. É só aceitar aqui e pronto: amizade ativa, com autorização dos dois lados.';
+               } else if (!p.active) {
+                 personHintText = 'Esse contato usa o app, mas está desativado na sua lista. Reative quando quiser colocar em jogo de novo.';
+               } else {
+                 personHintText = 'O app já reconheceu essa pessoa. Se fizer sentido, mande um pedido de amizade para liberar cobranças automáticas com o ok dos dois lados.';
+               }
           %>
             <div class="group rounded-[28px] border p-5 transition-all bg-white dark:bg-slate-800 shadow-sm <%= isHighlighted ? 'border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-900/70' : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500 hover:shadow-md' %>">
-              <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                <div class="flex min-w-0 gap-4">
+              <div class="flex flex-col gap-5">
+                <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                  <div class="flex min-w-0 gap-4 xl:pr-4">
                   <div class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-600 transition-colors group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:bg-blue-900/40">
                     <%= p.name.charAt(0).toUpperCase() %>
                     <% if (p.is_owner) { %>
@@ -175,118 +235,92 @@
                       <%= p.email ? '✉️ ' + p.email : '— E-mail não informado' %>
                     </div>
 
-                    <div class="mt-3 flex flex-wrap gap-2">
-                      <% if (p.is_owner) { %>
-                        <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Titular</span>
-                      <% } %>
-                      <% if (p.active) { %>
-                        <span class="inline-flex items-center rounded-full border border-green-200 bg-green-50 px-3 py-1 text-[11px] font-bold text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200">Ativo</span>
-                      <% } else { %>
-                        <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Inativo</span>
-                      <% } %>
-                      <% if (!p.email) { %>
-                        <span class="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-bold text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-200">Sem e-mail</span>
-                      <% } %>
-                      <% if (p.has_app_user) { %>
-                        <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-bold text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200">Também usa o app</span>
-                      <% } %>
-                      <% if (p.friendship_active) { %>
-                        <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Amizade ativa</span>
-                        <% if (p.can_share_charge) { %>
-                          <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-[11px] font-bold text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200">Cobrança automática liberada</span>
-                        <% } else if (!p.active) { %>
-                          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Cobrança pausada enquanto estiver inativo</span>
-                        <% } %>
-                      <% } else if (p.friendship_state === 'pending_sent') { %>
-                        <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Pedido enviado</span>
-                      <% } else if (p.friendship_state === 'pending_received') { %>
-                        <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pedido recebido</span>
-                      <% } %>
+                    <div class="mt-3 flex flex-wrap gap-2 xl:hidden">
+                      <%- renderPersonStatusChips(p) %>
                     </div>
 
-                    <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
-                      <% if (p.is_owner) { %>
-                        Você é o titular desta conta. Aqui o crachá já vem no bolso.
-                      <% } else if (!p.email) { %>
-                        Quer descobrir se essa pessoa também usa o app? Um e-mail aqui já ajuda a abrir essa porta.
-                      <% } else if (!p.has_app_user) { %>
-                        Por enquanto o app não achou uma conta OrganizaPay com esse e-mail. Se a pessoa entrar depois, o convite aparece.
-                      <% } else if (p.friendship_active && !p.active) { %>
-                        A amizade segue ativa, mas este contato está inativo na sua lista. Novos envios automáticos ficam pausados até você reativar.
-                      <% } else if (p.friendship_active) { %>
-                        Vocês já estão conectados. A partir daqui, cobranças automáticas podem viajar entre vocês sem depender de match mágico.
-                      <% } else if (p.friendship_state === 'pending_sent') { %>
-                        O convite já foi enviado. Agora é o momento clássico de esperar o joinha chegar.
-                      <% } else if (p.friendship_state === 'pending_received') { %>
-                        Essa pessoa já te chamou. É só aceitar aqui e pronto: amizade ativa, com autorização dos dois lados.
-                      <% } else if (!p.active) { %>
-                        Esse contato usa o app, mas está desativado na sua lista. Reative quando quiser colocar em jogo de novo.
-                      <% } else { %>
-                        O app já reconheceu essa pessoa. Se fizer sentido, mande um pedido de amizade para liberar cobranças automáticas com consentimento de verdade.
-                      <% } %>
+                    <div class="mt-4 w-full rounded-[24px] border border-sky-100/80 bg-gradient-to-r from-sky-50/85 via-white to-slate-50/95 px-4 py-4 shadow-sm shadow-sky-100/40 dark:border-slate-700 dark:from-slate-900/95 dark:via-slate-900/82 dark:to-slate-900/68 dark:shadow-none sm:px-5">
+                      <div class="flex items-start gap-3">
+                        <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/90 text-sky-600 shadow-sm ring-1 ring-sky-100 dark:bg-slate-800 dark:text-sky-300 dark:ring-slate-700" aria-hidden="true">
+                          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                          </svg>
+                        </span>
+                        <div class="min-w-0 flex-1">
+                          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/80 dark:text-sky-300/80">Lembrete do app</div>
+                          <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= personHintText %></p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div class="flex w-full flex-col gap-2 xl:w-[15rem] xl:shrink-0">
-                  <% if (!p.is_owner) { %>
-                    <% if (p.friendship_state === 'active') { %>
-                      <form method="post" action="/people/<%= p.id %>/unfriend" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novos envios automáticos entre vocês param na hora.">
-                        <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">
-                          Desfazer amizade
-                        </button>
-                      </form>
-                    <% } else if (p.friendship_state === 'pending_sent') { %>
-                      <form method="post" action="/friend-requests/<%= p.outgoing_friend_request_id %>/cancel">
-                        <button class="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-700 transition-all hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">
-                          Cancelar pedido
-                        </button>
-                      </form>
-                    <% } else if (p.friendship_state === 'pending_received') { %>
-                      <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
-                        <input type="hidden" name="action" value="accept">
-                        <button class="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
-                          Aceitar amizade
-                        </button>
-                      </form>
-                      <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
-                        <input type="hidden" name="action" value="reject">
-                        <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">
-                          Recusar
-                        </button>
-                      </form>
-                    <% } else if (p.has_app_user && p.active) { %>
-                      <form method="post" action="/people/<%= p.id %>/send-friend-request">
-                        <button class="w-full rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">
-                          Enviar pedido de amizade
-                        </button>
-                      </form>
-                    <% } else { %>
-                      <div class="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-center text-sm font-semibold text-slate-400 dark:border-slate-700 dark:text-slate-500">
-                        Sem ação de amizade por enquanto
-                      </div>
+                  <div class="flex w-full flex-col gap-2 xl:w-[15rem] xl:shrink-0">
+                    <% if (!p.is_owner) { %>
+                      <% if (p.friendship_state === 'active') { %>
+                        <form method="post" action="/people/<%= p.id %>/unfriend" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novos envios automáticos entre vocês param na hora.">
+                          <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">
+                            Desfazer amizade
+                          </button>
+                        </form>
+                      <% } else if (p.friendship_state === 'pending_sent') { %>
+                        <form method="post" action="/friend-requests/<%= p.outgoing_friend_request_id %>/cancel">
+                          <button class="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-700 transition-all hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">
+                            Cancelar pedido
+                          </button>
+                        </form>
+                      <% } else if (p.friendship_state === 'pending_received') { %>
+                        <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
+                          <input type="hidden" name="action" value="accept">
+                          <button class="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+                            Aceitar amizade
+                          </button>
+                        </form>
+                        <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
+                          <input type="hidden" name="action" value="reject">
+                          <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">
+                            Recusar
+                          </button>
+                        </form>
+                      <% } else if (p.has_app_user && p.active) { %>
+                        <form method="post" action="/people/<%= p.id %>/send-friend-request">
+                          <button class="w-full rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">
+                            Enviar pedido de amizade
+                          </button>
+                        </form>
+                      <% } else { %>
+                        <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">
+                          Convite indisponível
+                        </div>
+                      <% } %>
                     <% } %>
-                  <% } %>
 
-                  <div class="grid gap-2 pt-1">
-                    <form method="post" action="/people/<%= p.id %>/set-owner">
-                      <button class="w-full px-3 py-2.5 text-xs font-bold rounded-xl border <%= p.is_owner ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400' : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600' %> shadow-sm transition-colors">
-                        <%= p.is_owner ? "É você" : "Marcar como você" %>
-                      </button>
-                    </form>
-                    <form method="post" action="/people/<%= p.id %>/toggle">
-                      <button class="w-full px-3 py-2.5 text-xs font-bold rounded-xl border <%= p.active ? 'border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20' : 'border-green-200 dark:border-green-900 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20' %> transition-colors bg-white dark:bg-slate-700 shadow-sm">
-                        <%= p.active ? "Desativar" : "Reativar" %>
-                      </button>
-                    </form>
-                    <form method="post" action="/people/<%= p.id %>/delete"
-                      data-confirm-prompt="Excluir <%= p.name %>? A exclusão só acontece se não houver histórico nem vínculo ligado a essa pessoa."
-                      data-confirm-phrase="Eu confirmo">
-                      <button class="w-full px-3 py-2.5 text-xs font-bold rounded-xl border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors bg-white dark:bg-slate-700 shadow-sm">
-                        Excluir
-                      </button>
-                    </form>
+                    <div class="grid gap-2 pt-1">
+                      <% if (!p.is_owner) { %>
+                        <form method="post" action="/people/<%= p.id %>/set-owner">
+                          <button class="w-full px-3 py-2.5 text-xs font-bold rounded-xl border bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 shadow-sm transition-colors">
+                            Marcar como você
+                          </button>
+                        </form>
+                      <% } %>
+                      <form method="post" action="/people/<%= p.id %>/toggle">
+                        <button class="w-full px-3 py-2.5 text-xs font-bold rounded-xl border <%= p.active ? 'border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20' : 'border-green-200 dark:border-green-900 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20' %> transition-colors bg-white dark:bg-slate-700 shadow-sm">
+                          <%= p.active ? "Desativar" : "Reativar" %>
+                        </button>
+                      </form>
+                      <form method="post" action="/people/<%= p.id %>/delete"
+                        data-confirm-prompt="Excluir <%= p.name %>? A exclusão só acontece se não houver histórico nem vínculo ligado a essa pessoa."
+                        data-confirm-phrase="Eu confirmo">
+                        <button class="w-full px-3 py-2.5 text-xs font-bold rounded-xl border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors bg-white dark:bg-slate-700 shadow-sm">
+                          Excluir
+                        </button>
+                      </form>
+                    </div>
                   </div>
+                </div>
+
+                <div class="hidden xl:flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-700/80">
+                  <%- renderPersonStatusChips(p) %>
                 </div>
               </div>
             </div>

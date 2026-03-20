@@ -473,6 +473,7 @@ app.use((req, res, next) => {
   res.locals.formatDateBR = formatDateBR;
   res.locals.flash = req.session?.flash || null;
   res.locals.unreadNotificationCount = 0;
+  res.locals.readNotificationCount = 0;
   res.locals.recentNotifications = [];
   res.locals.pushNotificationsEnabled = isPushConfigured();
   res.locals.pushPublicKey = isPushConfigured() ? PUSH_PUBLIC_KEY : '';
@@ -485,7 +486,8 @@ app.use((req, res, next) => {
 
   if (req.isAuthenticated() && req.user?.id) {
     res.locals.unreadNotificationCount = Number(getUnreadNotificationCount(req.user.id) || 0);
-    res.locals.recentNotifications = getRecentNotificationsPreview(req.user.id, 6);
+    res.locals.readNotificationCount = Number(getReadNotificationCount(req.user.id) || 0);
+    res.locals.recentNotifications = getNotificationsForUser(req.user.id);
     const currentUser = getUserRecord(req.user.id);
 
     if (currentUser) {
@@ -1694,6 +1696,14 @@ function getUnreadNotificationCount(userId) {
   `).get(userId)?.total || 0;
 }
 
+function getReadNotificationCount(userId) {
+  return db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM notifications
+    WHERE user_id = ? AND is_read = 1
+  `).get(userId)?.total || 0;
+}
+
 function getNotificationsForUser(userId) {
   return db.prepare(`
     SELECT *
@@ -1737,6 +1747,13 @@ function markAllNotificationsAsRead(userId) {
     SET is_read = 1, read_at = COALESCE(read_at, ?)
     WHERE user_id = ? AND is_read = 0
   `).run(nowIso(), userId);
+}
+
+function clearReadNotifications(userId) {
+  return db.prepare(`
+    DELETE FROM notifications
+    WHERE user_id = ? AND is_read = 1
+  `).run(userId);
 }
 
 function addSharedDebtEvent({ requestId, actorUserId, eventType, note = null }) {
@@ -3460,7 +3477,7 @@ app.post('/push/unsubscribe', ensureAuthenticated, (req, res) => {
 });
 
 app.get("/notifications", ensureAuthenticated, (req, res) => {
-  return res.redirect('/shared-debts');
+  return res.redirect('/geral');
 });
 
 app.post("/notifications/read-all", ensureAuthenticated, (req, res) => {
@@ -3469,22 +3486,35 @@ app.post("/notifications/read-all", ensureAuthenticated, (req, res) => {
   return res.redirect(redirectBackOr(req, '/geral'));
 });
 
+app.post('/notifications/clear-read', ensureAuthenticated, (req, res) => {
+  const result = clearReadNotifications(req.user.id);
+  const removedCount = Number(result?.changes || 0);
+
+  if (removedCount > 0) {
+    setFlash(req, 'success', `Tudo certo! ${formatCountLabel(removedCount, 'aviso antigo saiu da lista', 'avisos antigos saíram da lista')}.`);
+  } else {
+    setFlash(req, 'info', 'Por enquanto não há aviso antigo para limpar.');
+  }
+
+  return res.redirect(redirectBackOr(req, '/geral'));
+});
+
 app.post("/notifications/:id/read", ensureAuthenticated, (req, res) => {
   const notificationId = Number(req.params.id);
 
   if (!notificationId) {
     setFlash(req, 'error', 'Ops, esse aviso não é válido.');
-    return res.redirect('/shared-debts');
+    return res.redirect('/geral');
   }
 
   const notification = getNotificationForUser(notificationId, req.user.id);
   if (!notification) {
     setFlash(req, 'error', 'Ops, não encontrei esse aviso.');
-    return res.redirect('/shared-debts');
+    return res.redirect('/geral');
   }
 
   markNotificationAsRead(notificationId, req.user.id);
-  return res.redirect(notification.href || '/shared-debts');
+  return res.redirect(notification.href || '/geral');
 });
 
 app.get("/notifications/:id/open", ensureAuthenticated, (req, res) => {
@@ -3492,13 +3522,13 @@ app.get("/notifications/:id/open", ensureAuthenticated, (req, res) => {
 
   if (!notificationId) {
     setFlash(req, 'error', 'Ops, esse aviso não é válido.');
-    return res.redirect('/shared-debts');
+    return res.redirect('/geral');
   }
 
   const notification = getNotificationForUser(notificationId, req.user.id);
   if (!notification) {
     setFlash(req, 'error', 'Ops, não encontrei esse aviso.');
-    return res.redirect('/shared-debts');
+    return res.redirect('/geral');
   }
 
   markNotificationAsRead(notificationId, req.user.id);
@@ -3508,7 +3538,7 @@ app.get("/notifications/:id/open", ensureAuthenticated, (req, res) => {
     return res.redirect(targetHref);
   }
 
-  return res.redirect('/shared-debts');
+  return res.redirect('/geral');
 });
 
 // People

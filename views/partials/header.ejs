@@ -115,6 +115,7 @@
      const ownerNameParts = ownerDisplayName.split(/\s+/).filter(Boolean);
      const ownerShortName = ownerNameParts.slice(0, 2).join(' ') || 'Titular';
      const unreadNotifications = Number(typeof unreadNotificationCount !== 'undefined' ? unreadNotificationCount : 0) || 0;
+     const readNotifications = Number(typeof readNotificationCount !== 'undefined' ? readNotificationCount : 0) || 0;
      const recentNotificationItems = Array.isArray(recentNotifications) ? recentNotifications : [];
   %>
 
@@ -192,7 +193,8 @@
             <img src="/icon-192.png" alt="OrganizaPay" class="h-12 w-12 rounded-[1.1rem] object-cover shadow-[0_10px_24px_rgba(37,99,235,0.3)]">
             <span class="min-w-0">
               <span class="block truncate text-sm font-black text-white"><%= ownerShortName %></span>
-              <span class="block truncate text-xs font-medium text-slate-300">Seu cantinho financeiro</span>
+              <span class="block truncate text-xs font-medium text-slate-300 sm:hidden">Seu cantinho</span>
+              <span class="hidden truncate text-xs font-medium text-slate-300 sm:block">Seu cantinho financeiro</span>
             </span>
           </a>
           <button type="button" class="op-utility-btn op-utility-btn--notify shrink-0" data-push-center-open data-push-center-open-variant="icon" data-push-visual-state="loading" aria-haspopup="dialog" aria-controls="notification-center" aria-expanded="false" title="Abrir central de alertas" aria-label="Abrir central de alertas">
@@ -220,7 +222,7 @@
 
   <div id="notification-center" data-notification-center class="fixed inset-0 z-[10040] hidden" aria-hidden="true">
     <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-notification-center-backdrop></div>
-    <div class="relative z-10 flex min-h-full items-end justify-center p-3 sm:items-start sm:px-4 sm:pt-24">
+    <div class="relative z-10 flex min-h-full items-end justify-center overflow-y-auto px-3 py-3 sm:items-start sm:px-4 sm:pt-24 sm:pb-6">
       <section class="op-notification-center w-full max-w-xl overflow-hidden rounded-[30px] border border-slate-200 bg-white/95 shadow-2xl ring-1 ring-slate-200 backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95 dark:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="notification-center-title">
         <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 dark:border-slate-800 sm:px-6">
           <div>
@@ -231,7 +233,7 @@
           <button type="button" class="op-icon-btn shrink-0" data-notification-center-close aria-label="Fechar central de alertas">✕</button>
         </div>
 
-        <div class="space-y-5 px-5 py-5 sm:px-6">
+        <div class="op-notification-center__body space-y-5 px-5 py-5 sm:px-6">
           <div class="rounded-[26px] border border-sky-100 bg-sky-50/80 p-4 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/20">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div class="min-w-0 flex-1">
@@ -248,13 +250,22 @@
           <section class="space-y-3">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 class="text-base font-black text-slate-900 dark:text-white">Últimos avisos</h3>
-                <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><% if (unreadNotifications > 0) { %>Você tem <strong class="text-slate-900 dark:text-white"><%= unreadNotifications %></strong> <%= unreadNotifications === 1 ? 'aviso sem abrir' : 'avisos sem abrir' %>.<% } else { %>Tudo em dia por aqui. Quando surgir novidade, ela aparece nesta lista.<% } %></p>
+                <h3 class="text-base font-black text-slate-900 dark:text-white">Seus avisos</h3>
+                <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><% if (unreadNotifications > 0) { %>Você tem <strong class="text-slate-900 dark:text-white"><%= unreadNotifications %></strong> <%= unreadNotifications === 1 ? 'aviso sem abrir' : 'avisos sem abrir' %>.<% } else if (recentNotificationItems.length) { %>Tudo em dia por aqui. Os avisos mais novos aparecem primeiro.<% } else { %>Tudo em dia por aqui. Quando surgir novidade, ela aparece nesta lista.<% } %></p>
               </div>
-              <% if (unreadNotifications > 0) { %>
-                <form method="POST" action="/notifications/read-all" class="shrink-0">
-                  <button type="submit" class="op-btn op-btn-ghost">Marcar tudo como visto</button>
-                </form>
+              <% if (unreadNotifications > 0 || readNotifications > 0) { %>
+                <div class="flex flex-wrap gap-2 sm:justify-end">
+                  <% if (unreadNotifications > 0) { %>
+                    <form method="POST" action="/notifications/read-all" class="shrink-0">
+                      <button type="submit" class="op-btn op-btn-ghost">Marcar tudo como visto</button>
+                    </form>
+                  <% } %>
+                  <% if (readNotifications > 0) { %>
+                    <form method="POST" action="/notifications/clear-read" class="shrink-0">
+                      <button type="submit" class="op-btn op-btn-ghost" title="Tira da lista só os avisos que você já abriu">Limpar antigas</button>
+                    </form>
+                  <% } %>
+                </div>
               <% } %>
             </div>
 

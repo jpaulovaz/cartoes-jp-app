@@ -641,6 +641,12 @@ html.dark .op-page-hero__subtitle {
     justify-content: flex-end;
     max-width: 50%;
   }
+
+  .op-page-hero__actions--geral {
+    width: fit-content;
+    max-width: none;
+    margin-left: auto;
+  }
 }
 
 .op-kpi-strip {
@@ -2061,8 +2067,20 @@ html.dark .op-surface-card table tbody th {
 }
 
 .op-notification-center {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: min(88vh, 56rem);
+  max-height: min(88dvh, 56rem);
+}
+
+.op-notification-center__body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
-  max-height: min(82vh, 52rem);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .op-notification-item {
@@ -2122,7 +2140,8 @@ html.dark .op-notification-item__icon {
 
 @media (max-width: 639px) {
   .op-notification-center {
-    max-height: 86vh;
+    max-height: calc(100vh - 0.75rem);
+    max-height: calc(100dvh - 0.75rem);
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
   }

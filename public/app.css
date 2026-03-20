@@ -2066,6 +2066,39 @@ html.dark .op-surface-card table tbody th {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.op-summary-scroll-shell {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.op-summary-money-input {
+  width: 6rem;
+  min-width: 6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.op-summary-amount-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 1024px) {
+  .op-summary-money-input {
+    width: 7rem;
+    min-width: 7rem;
+  }
+}
+
+@media (max-width: 1023px) {
+  .op-summary-money-input {
+    width: 8.75rem;
+    min-width: 8.75rem;
+  }
+
+  .op-summary-amount-cell {
+    min-width: 8.25rem;
+  }
+}
+
 .op-notification-center {
   display: flex;
   flex-direction: column;

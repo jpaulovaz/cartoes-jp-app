@@ -303,6 +303,8 @@
       }
     };
 
+    form.__opRefreshFirstDue = refreshSuggestion;
+
     dateInput.addEventListener('change', refreshSuggestion);
     dateInput.addEventListener('input', refreshSuggestion);
     cardSelect.addEventListener('change', refreshSuggestion);
@@ -311,6 +313,105 @@
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-auto-first-due-form]').forEach(bindAutoFirstDue);
   });
+})();
+
+(function () {
+  function getLocalTodayISO() {
+    const now = new Date();
+    const local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+    return local.toISOString().slice(0, 10);
+  }
+
+  function focusManualAmount(input) {
+    if (!(input instanceof HTMLInputElement)) return;
+
+    const focusNow = () => {
+      try {
+        input.focus({ preventScroll: true });
+      } catch (error) {
+        input.focus();
+      }
+      try {
+        input.select();
+      } catch (error) {
+        // noop
+      }
+    };
+
+    focusNow();
+    requestAnimationFrame(focusNow);
+    window.setTimeout(focusNow, 120);
+  }
+
+  function syncManualPurchaseDefaults(modal) {
+    if (!(modal instanceof HTMLElement)) return;
+
+    const form = modal.querySelector('[data-auto-first-due-form]');
+    if (!(form instanceof HTMLFormElement)) return;
+
+    const dateInput = form.querySelector('[data-manual-date-input]');
+    if (dateInput instanceof HTMLInputElement && !dateInput.value) {
+      dateInput.value = getLocalTodayISO();
+    }
+
+    if (typeof form.__opRefreshFirstDue === 'function') {
+      form.__opRefreshFirstDue();
+    }
+  }
+
+  function setupManualPurchaseModal() {
+    const modal = document.querySelector('[data-manual-modal]');
+    if (!(modal instanceof HTMLElement)) return;
+
+    const form = modal.querySelector('[data-auto-first-due-form]');
+    const amountInput = modal.querySelector('[data-manual-amount-input]');
+    const openButtons = Array.from(document.querySelectorAll('[data-manual-modal-open]')).filter((element) => element instanceof HTMLElement);
+    const closeButtons = Array.from(modal.querySelectorAll('[data-manual-modal-close]')).filter((element) => element instanceof HTMLElement);
+
+    const openModal = () => {
+      modal.classList.remove('hidden');
+      modal.setAttribute('aria-hidden', 'false');
+      syncManualPurchaseDefaults(modal);
+      if (amountInput instanceof HTMLInputElement) {
+        focusManualAmount(amountInput);
+      }
+    };
+
+    const closeModal = () => {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+    };
+
+    openButtons.forEach((button) => {
+      button.addEventListener('click', openModal);
+    });
+
+    closeButtons.forEach((button) => {
+      button.addEventListener('click', closeModal);
+    });
+
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) {
+        closeModal();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+        closeModal();
+      }
+    });
+
+    if (form instanceof HTMLFormElement) {
+      form.addEventListener('submit', () => {
+        modal.setAttribute('aria-hidden', 'true');
+      });
+    }
+
+    syncManualPurchaseDefaults(modal);
+  }
+
+  document.addEventListener('DOMContentLoaded', setupManualPurchaseModal);
 })();
 
 (function () {

@@ -14,7 +14,7 @@
 
     <div class="space-y-3 lg:ml-auto lg:flex lg:max-w-[32rem] lg:flex-col lg:items-end">
       <div class="op-page-hero__actions op-page-hero__actions--geral">
-        <button onclick="document.getElementById('modalManual').classList.remove('hidden')"
+        <button type="button" data-manual-modal-open
           class="op-btn op-btn-success">
           <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
@@ -44,12 +44,12 @@
   </section>
 
 
-  <div id="modalManual"
+  <div id="modalManual" data-manual-modal aria-hidden="true"
     class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
       <div class="flex justify-between items-center mb-6">
         <h2 class="text-xl font-black text-slate-800 dark:text-white">Adicionar compra</h2>
-        <button type="button" onclick="document.getElementById('modalManual').classList.add('hidden')"
+        <button type="button" data-manual-modal-close
           class="op-icon-btn" aria-label="Fechar janela">✕</button>
       </div>
 
@@ -76,7 +76,7 @@
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
-            <input type="text" name="amount" placeholder="0,00" required data-money-mask inputmode="numeric"
+            <input type="text" name="amount" placeholder="0,00" required data-money-mask data-manual-amount-input inputmode="decimal" enterkeyhint="next" autocapitalize="off" autocomplete="off"
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
           <div>

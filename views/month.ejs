@@ -802,16 +802,18 @@
         root.innerHTML = `
           <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-month-sheet-backdrop></div>
           <div class="relative z-10 flex min-h-full items-end justify-center p-4 sm:items-center">
-            <div class="w-full max-w-lg overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" data-month-sheet-surface>
-              <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-                <div>
-                  <h3 class="text-base font-bold text-slate-900 dark:text-slate-100" data-month-sheet-title></h3>
-                  <p class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400" data-month-sheet-subtitle></p>
+            <div class="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" data-month-sheet-surface>
+              <div class="shrink-0 border-b border-slate-200 px-5 py-4 dark:border-slate-800" data-month-sheet-header>
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-slate-100" data-month-sheet-title></h3>
+                    <p class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400" data-month-sheet-subtitle></p>
+                  </div>
+                  <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700" data-month-sheet-close>✕</button>
                 </div>
-                <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700" data-month-sheet-close>✕</button>
               </div>
-              <div class="max-h-[72vh] overflow-y-auto px-5 py-4" data-month-sheet-body></div>
-              <div class="flex flex-col gap-2 border-t border-slate-200 px-5 py-5 dark:border-slate-800" data-month-sheet-actions></div>
+              <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4" data-month-sheet-body></div>
+              <div class="shrink-0 flex flex-col gap-2 border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95" data-month-sheet-actions></div>
             </div>
           </div>
         `;
@@ -820,6 +822,7 @@
         monthSheetState = {
           root,
           surface: root.querySelector('[data-month-sheet-surface]'),
+          header: root.querySelector('[data-month-sheet-header]'),
           title: root.querySelector('[data-month-sheet-title]'),
           subtitle: root.querySelector('[data-month-sheet-subtitle]'),
           body: root.querySelector('[data-month-sheet-body]'),
@@ -854,11 +857,12 @@
 
       function openMonthSheet({ title = 'Ações', subtitle = '', body = null, actions = [], onClose = null, size = 'default' } = {}) {
         const state = ensureMonthSheet();
-        const surfaceSizeClass = size === 'wide' ? 'max-w-5xl' : 'max-w-lg';
-        const bodyHeightClass = size === 'wide' ? 'max-h-[78vh]' : 'max-h-[72vh]';
+        const surfaceSizeClass = size === 'people' ? 'max-w-6xl' : (size === 'wide' ? 'max-w-5xl' : 'max-w-lg');
         state.onClose = typeof onClose === 'function' ? onClose : null;
-        state.surface.className = `w-full ${surfaceSizeClass} overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700`;
-        state.body.className = `${bodyHeightClass} overflow-y-auto px-5 py-4`;
+        state.surface.className = `flex max-h-[calc(100vh-2rem)] w-full ${surfaceSizeClass} flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700`;
+        state.header.className = 'shrink-0 border-b border-slate-200 px-5 py-4 dark:border-slate-800';
+        state.body.className = `min-h-0 flex-1 overflow-y-auto px-5 py-4 ${size === 'people' ? 'xl:px-6 xl:py-5' : ''}`.trim();
+        state.actions.className = 'shrink-0 flex flex-col gap-2 border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95';
         state.title.textContent = title;
         state.subtitle.textContent = subtitle || '';
         state.subtitle.classList.toggle('hidden', !subtitle);
@@ -1036,14 +1040,14 @@
         input.checked = checked;
 
         const card = document.createElement('span');
-        card.className = 'flex min-h-[74px] items-center gap-3 rounded-[22px] border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-blue-300 group-hover:shadow-md peer-checked:border-blue-400 peer-checked:bg-blue-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-blue-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/40';
+        card.className = 'flex min-h-[74px] items-center gap-2 rounded-[20px] border border-slate-200/80 bg-white/80 px-3 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-blue-300 group-hover:shadow-md peer-checked:border-blue-400 peer-checked:bg-blue-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-blue-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/40 xl:min-h-[70px]';
 
         const name = document.createElement('span');
-        name.className = 'flex-1 text-sm font-bold text-slate-800 dark:text-slate-100';
+        name.className = 'min-w-0 flex-1 text-sm font-bold leading-5 text-slate-800 dark:text-slate-100';
         name.textContent = person.name;
 
         const badge = document.createElement('span');
-        badge.className = 'inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 transition-all peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 dark:peer-checked:text-white';
+        badge.className = 'inline-flex h-9 w-9 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 transition-all peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 dark:peer-checked:text-white';
         badge.innerHTML = '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
 
         card.appendChild(name);
@@ -1088,7 +1092,7 @@
 
       function buildSplitModeOption({ title, description, value, checked, accentClass }) {
         const label = document.createElement('label');
-        label.className = 'group cursor-pointer';
+        label.className = 'group h-full cursor-pointer';
 
         const input = document.createElement('input');
         input.type = 'radio';
@@ -1136,7 +1140,7 @@
         }
 
         const contentLayout = document.createElement('div');
-        contentLayout.className = 'space-y-4 lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.95fr)] lg:items-start lg:gap-4 lg:space-y-0';
+        contentLayout.className = 'space-y-4';
         const selectionColumn = document.createElement('div');
         selectionColumn.className = 'space-y-4';
         const settingsColumn = document.createElement('div');
@@ -1152,7 +1156,7 @@
           selectionColumn.appendChild(empty);
         } else {
           const grid = document.createElement('div');
-          grid.className = 'grid gap-3 md:grid-cols-2';
+          grid.className = 'grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5';
           people.forEach(person => {
             grid.appendChild(buildPersonCard(person, initialSelectedIds.includes(Number(person.id))));
           });
@@ -1167,6 +1171,9 @@
         splitModeTitle.className = 'text-sm font-black text-slate-900 dark:text-slate-100';
         splitModeTitle.textContent = 'Como você quer dividir essa compra?';
         splitModeSection.appendChild(splitModeTitle);
+
+        const splitModeBody = document.createElement('div');
+        splitModeBody.className = 'space-y-3';
 
         const splitModeGrid = document.createElement('div');
         splitModeGrid.className = 'grid gap-3 md:grid-cols-2';
@@ -1187,10 +1194,10 @@
         });
         splitModeGrid.appendChild(equalOption);
         splitModeGrid.appendChild(exactOption);
-        splitModeSection.appendChild(splitModeGrid);
+        splitModeBody.appendChild(splitModeGrid);
 
         const exactPanel = document.createElement('div');
-        exactPanel.className = 'space-y-3 rounded-[24px] border border-violet-200 bg-violet-50/80 p-4 dark:border-violet-900/70 dark:bg-violet-950/20';
+        exactPanel.className = 'space-y-3 rounded-[24px] border border-violet-200 bg-violet-50/80 p-4 dark:border-violet-900/70 dark:bg-violet-950/20 xl:flex xl:h-full xl:min-h-[220px] xl:flex-col xl:overflow-hidden';
         exactPanel.hidden = true;
 
         const exactIntro = document.createElement('div');
@@ -1201,12 +1208,15 @@
         exactPanel.appendChild(exactIntro);
 
         const exactFields = document.createElement('div');
-        exactFields.className = 'grid gap-3';
+        exactFields.className = 'grid gap-3 xl:min-h-0 xl:flex-1 xl:content-start xl:overflow-y-auto xl:pr-1';
         exactPanel.appendChild(exactFields);
 
         const exactTotals = document.createElement('div');
         exactTotals.className = 'rounded-[18px] border border-white/70 bg-white/85 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900/60';
         exactPanel.appendChild(exactTotals);
+
+        splitModeBody.appendChild(exactPanel);
+        splitModeSection.appendChild(splitModeBody);
 
         const multiExactNote = document.createElement('div');
         multiExactNote.className = 'rounded-[22px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200';
@@ -1214,7 +1224,6 @@
         multiExactNote.hidden = items.length === 1;
 
         settingsColumn.appendChild(splitModeSection);
-        settingsColumn.appendChild(exactPanel);
         settingsColumn.appendChild(multiExactNote);
 
         const modeInputs = () => Array.from(splitModeGrid.querySelectorAll('input[name="split_mode_choice"]'));
@@ -1315,6 +1324,8 @@
           multiExactNote.hidden = items.length === 1;
 
           if (!canPickMode) {
+            splitModeBody.className = 'space-y-3';
+            splitModeGrid.className = 'grid gap-3 md:grid-cols-2';
             exactPanel.hidden = true;
             exactTotals.innerHTML = '';
             syncSaveButtonState();
@@ -1322,6 +1333,12 @@
           }
 
           const wantsExact = getSplitMode() === 'exact';
+          splitModeBody.className = wantsExact
+            ? 'space-y-3 xl:grid xl:grid-cols-[minmax(260px,320px)_minmax(0,1fr)] xl:items-stretch xl:gap-4 xl:space-y-0'
+            : 'space-y-3';
+          splitModeGrid.className = wantsExact
+            ? 'grid gap-3 md:grid-cols-2 xl:h-full xl:grid-cols-1 xl:auto-rows-fr'
+            : 'grid gap-3 md:grid-cols-2';
           exactPanel.hidden = !wantsExact;
           if (wantsExact) {
             renderExactFields();
@@ -1348,7 +1365,7 @@
             ? 'A distribuição será substituída em todos os itens selecionados.'
             : 'Escolha quem participa e, se quiser, dite o valor de cada um.',
           body: wrapper,
-          size: 'wide',
+          size: 'people',
           actions: [
             { label: 'Fechar', tone: 'secondary' },
             {

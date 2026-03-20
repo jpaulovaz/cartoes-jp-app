@@ -4,7 +4,6 @@
      const mFoot = dFoot.getMonth() + 1;
      const yFoot = dFoot.getFullYear();
      const bottomDashboardHref = (typeof dashboardHref !== 'undefined' && dashboardHref) ? dashboardHref : `/detalhamento/${yFoot}/${mFoot}`;
-     const unreadBottomNotifications = Number(typeof unreadNotificationCount !== 'undefined' ? unreadNotificationCount : 0) || 0;
      const bottomCanImportData = Number((user && user.can_import) ?? (typeof canImport !== 'undefined' ? canImport : 1)) !== 0;
      const bottomIsAdmin = !!(user && user.role === 'admin');
   %>
@@ -26,9 +25,6 @@
       <a href="/shared-debts" data-nav-key="shared" class="op-bottom-nav__link">
         <span class="op-bottom-nav__icon">
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>
-          <% if (unreadBottomNotifications > 0) { %>
-            <span class="op-bottom-nav__badge"><%= unreadBottomNotifications > 99 ? '99+' : unreadBottomNotifications %></span>
-          <% } %>
         </span>
         <span>Dívidas</span>
       </a>

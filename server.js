@@ -473,6 +473,7 @@ app.use((req, res, next) => {
   res.locals.formatDateBR = formatDateBR;
   res.locals.flash = req.session?.flash || null;
   res.locals.unreadNotificationCount = 0;
+  res.locals.recentNotifications = [];
   res.locals.pushNotificationsEnabled = isPushConfigured();
   res.locals.pushPublicKey = isPushConfigured() ? PUSH_PUBLIC_KEY : '';
   const now = dayjs();
@@ -484,6 +485,7 @@ app.use((req, res, next) => {
 
   if (req.isAuthenticated() && req.user?.id) {
     res.locals.unreadNotificationCount = Number(getUnreadNotificationCount(req.user.id) || 0);
+    res.locals.recentNotifications = getRecentNotificationsPreview(req.user.id, 6);
     const currentUser = getUserRecord(req.user.id);
 
     if (currentUser) {
@@ -1699,6 +1701,17 @@ function getNotificationsForUser(userId) {
     WHERE user_id = ?
     ORDER BY created_at DESC, id DESC
   `).all(userId);
+}
+
+function getRecentNotificationsPreview(userId, limit = 6) {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 6, 10));
+  return db.prepare(`
+    SELECT *
+    FROM notifications
+    WHERE user_id = ?
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?
+  `).all(userId, safeLimit);
 }
 
 function getNotificationForUser(notificationId, userId) {
@@ -3453,7 +3466,7 @@ app.get("/notifications", ensureAuthenticated, (req, res) => {
 app.post("/notifications/read-all", ensureAuthenticated, (req, res) => {
   markAllNotificationsAsRead(req.user.id);
   setFlash(req, 'success', 'Pronto! Seus avisos já foram marcados como lidos.');
-  return res.redirect('/shared-debts');
+  return res.redirect(redirectBackOr(req, '/geral'));
 });
 
 app.post("/notifications/:id/read", ensureAuthenticated, (req, res) => {

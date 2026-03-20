@@ -205,6 +205,7 @@ CREATE TABLE IF NOT EXISTS shared_debt_requests (
   requester_user_id INTEGER NOT NULL,
   requester_person_id INTEGER,
   receiver_user_id INTEGER NOT NULL,
+  batch_id INTEGER,
   source_transaction_id INTEGER,
   source_allocation_id INTEGER,
   source_due_month INTEGER,
@@ -219,6 +220,7 @@ CREATE TABLE IF NOT EXISTS shared_debt_requests (
   response_note TEXT,
   payment_marked_at TEXT,
   payment_note TEXT,
+  request_kind TEXT NOT NULL DEFAULT 'card',
   status TEXT NOT NULL DEFAULT 'pending',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -227,9 +229,24 @@ CREATE TABLE IF NOT EXISTS shared_debt_requests (
   FOREIGN KEY (requester_user_id) REFERENCES users(id),
   FOREIGN KEY (requester_person_id) REFERENCES people(id),
   FOREIGN KEY (receiver_user_id) REFERENCES users(id),
+  FOREIGN KEY (batch_id) REFERENCES shared_debt_batches(id),
   FOREIGN KEY (source_transaction_id) REFERENCES transactions(id),
   FOREIGN KEY (source_allocation_id) REFERENCES allocations(id),
   FOREIGN KEY (card_id) REFERENCES cards(id)
+);
+
+CREATE TABLE IF NOT EXISTS shared_debt_batches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  requester_user_id INTEGER NOT NULL,
+  receiver_user_id INTEGER NOT NULL,
+  origin_kind TEXT NOT NULL DEFAULT 'single',
+  status_summary TEXT NOT NULL DEFAULT 'pending',
+  first_responded_at TEXT,
+  resolved_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (requester_user_id) REFERENCES users(id),
+  FOREIGN KEY (receiver_user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS shared_debt_events (
@@ -279,6 +296,58 @@ CREATE TABLE IF NOT EXISTS scheduled_push_logs (
   UNIQUE(user_id, event_type, date_key, sequence_no),
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS friend_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  requester_user_id INTEGER NOT NULL,
+  target_user_id INTEGER NOT NULL,
+  source_person_id INTEGER,
+  requester_name_snapshot TEXT,
+  requester_email_snapshot TEXT,
+  target_name_snapshot TEXT,
+  target_email_snapshot TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  responded_at TEXT,
+  resolved_at TEXT,
+  response_note TEXT,
+  FOREIGN KEY (requester_user_id) REFERENCES users(id),
+  FOREIGN KEY (target_user_id) REFERENCES users(id),
+  FOREIGN KEY (source_person_id) REFERENCES people(id)
+);
+
+CREATE TABLE IF NOT EXISTS friendships (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_low_id INTEGER NOT NULL,
+  user_high_id INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  ended_at TEXT,
+  ended_by_user_id INTEGER,
+  origin_request_id INTEGER,
+  source TEXT NOT NULL DEFAULT 'friend_request',
+  UNIQUE(user_low_id, user_high_id),
+  FOREIGN KEY (user_low_id) REFERENCES users(id),
+  FOREIGN KEY (user_high_id) REFERENCES users(id),
+  FOREIGN KEY (ended_by_user_id) REFERENCES users(id),
+  FOREIGN KEY (origin_request_id) REFERENCES friend_requests(id)
+);
+
+CREATE TABLE IF NOT EXISTS person_app_links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_user_id INTEGER NOT NULL,
+  person_id INTEGER NOT NULL,
+  linked_user_id INTEGER NOT NULL,
+  match_kind TEXT NOT NULL DEFAULT 'friendship',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(owner_user_id, person_id),
+  FOREIGN KEY (owner_user_id) REFERENCES users(id),
+  FOREIGN KEY (person_id) REFERENCES people(id),
+  FOREIGN KEY (linked_user_id) REFERENCES users(id)
+);
 `);
 
 db.exec(`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id);`);
@@ -316,6 +385,26 @@ if (!columnExists("shared_debt_requests", "payment_note")) {
   db.exec("ALTER TABLE shared_debt_requests ADD COLUMN payment_note TEXT;");
 }
 
+if (!columnExists("shared_debt_requests", "batch_id")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN batch_id INTEGER;");
+}
+
+if (!columnExists("shared_debt_requests", "request_kind")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN request_kind TEXT NOT NULL DEFAULT 'card';");
+}
+
+if (!columnExists("shared_debt_batches", "status_summary")) {
+  db.exec("ALTER TABLE shared_debt_batches ADD COLUMN status_summary TEXT NOT NULL DEFAULT 'pending';");
+}
+
+if (!columnExists("shared_debt_batches", "first_responded_at")) {
+  db.exec("ALTER TABLE shared_debt_batches ADD COLUMN first_responded_at TEXT;");
+}
+
+if (!columnExists("shared_debt_batches", "resolved_at")) {
+  db.exec("ALTER TABLE shared_debt_batches ADD COLUMN resolved_at TEXT;");
+}
+
 // ===== ÍNDICES =====
 db.exec(`
 CREATE INDEX IF NOT EXISTS idx_cards_user ON cards(user_id);
@@ -334,10 +423,19 @@ CREATE INDEX IF NOT EXISTS idx_recurring_exceptions_rule_month ON recurring_exce
 CREATE INDEX IF NOT EXISTS idx_people_email ON people(user_id, email);
 CREATE INDEX IF NOT EXISTS idx_shared_debts_receiver_status ON shared_debt_requests(receiver_user_id, status, created_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debts_requester_status ON shared_debt_requests(requester_user_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_shared_debts_batch_id ON shared_debt_requests(batch_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debts_source_allocation ON shared_debt_requests(source_allocation_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debts_source_person ON shared_debt_requests(requester_user_id, source_transaction_id, source_person_id);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_receiver ON shared_debt_batches(receiver_user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batches(requester_user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_events_request ON shared_debt_events(request_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at);
+CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_status ON friend_requests(requester_user_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_friend_requests_target_status ON friend_requests(target_user_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_friend_requests_pair_status ON friend_requests(requester_user_id, target_user_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_friendships_pair_status ON friendships(user_low_id, user_high_id, status);
+CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_person ON person_app_links(owner_user_id, person_id);
+CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_linked ON person_app_links(owner_user_id, linked_user_id);
 `);
 
 // ===== CATEGORIAS PADRÃO =====

@@ -1,4 +1,4 @@
-<%- include("partials/header", { title: "Compartilhar Resumo" }) %>
+<%- include("partials/header", { title: "Mandar resumo" }) %>
 <%
   const periodLabel = `${String(month).padStart(2, '0')}/${year}`;
   const getItemCents = (item) => {
@@ -8,7 +8,7 @@
     return 0;
   };
   const formatBRL = (cents) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((Number(cents) || 0) / 100);
-  const getDescription = (item) => (item && (item.description || item.title || item.name || item.label)) || 'Lançamento';
+  const getDescription = (item) => (item && (item.description || item.title || item.name || item.label)) || 'Compra';
   const itemDate = (item) => {
     const raw = (item && (item.txn_date || item.date || item.purchase_date || item.created_at || item.imported_at)) || '';
     if (!raw) return '';
@@ -26,17 +26,17 @@
   const captureScale = items.length > 48 ? 1.85 : 2;
   const heroText = remainingCents > 0
     ? (paidCents > 0
-        ? 'Confira abaixo os lançamentos deste período, o valor já pago e o saldo que ainda falta para concluir o pagamento.'
-        : 'Confira abaixo os lançamentos deste período e o valor que ainda falta pagar neste período.')
-    : 'Confira abaixo os lançamentos deste período e a confirmação de que o pagamento já foi concluído.';
+        ? 'Confira abaixo as compras deste período, o valor já pago e o saldo que ainda falta para fechar tudo.'
+        : 'Confira abaixo as compras deste período e o valor que ainda falta pagar.')
+    : 'Confira abaixo as compras deste período e a confirmação de que o pagamento já foi concluído.';
 %>
 
 <div class="op-page-shell">
   <section class="op-page-hero op-fade-up">
     <div>
       <span class="op-page-hero__eyebrow">Compartilhamento rápido</span>
-      <h1 class="op-page-hero__title mt-4">Compartilhar Resumo</h1>
-      <p class="op-page-hero__subtitle mt-3">Gere uma imagem pronta para download ou compartilhamento rápido com a pessoa indicada.</p>
+      <h1 class="op-page-hero__title mt-4">Mandar resumo</h1>
+      <p class="op-page-hero__subtitle mt-3">Monte uma imagem bonitinha e pronta para mandar para a pessoa certa.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= person.name %></span>
         <span class="badge">Ref. <%= periodLabel %></span>
@@ -48,13 +48,13 @@
         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
         Voltar
       </a>
-      <button id="btnPng" type="button" data-loading-label="Gerando PNG..." class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+      <button id="btnPng" type="button" data-loading-label="Gerando imagem..." class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-        Baixar PNG
+        Baixar imagem
       </button>
       <button id="btnShare" type="button" data-loading-label="Preparando compartilhamento..." class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700">
         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C9.886 12.64 11.278 12.25 12.75 12.25c1.472 0 2.864.39 4.066 1.092M8.684 13.342 5.5 15.25m3.184-1.908a3 3 0 10-1.368-2.53m9.5 2.53L19.5 15.25m-2.684-1.908a3 3 0 11 1.368-2.53M12 6v7" /></svg>
-        Compartilhar
+        Abrir compartilhamento
       </button>
     </div>
   </section>
@@ -62,20 +62,20 @@
   <div class="op-surface-card op-fade-up rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 mb-6">
     <form method="get" action="/share/<%= year %>/<%= month %>/<%= person.id %>" class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
       <div class="w-full md:max-w-sm">
-        <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Ordem dos itens</label>
+        <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Como ordenar os itens</label>
         <select name="order" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950">
           <option value="recent" <%= selectedItemOrder === 'recent' ? 'selected' : '' %>>Mais recentes primeiro</option>
           <option value="oldest" <%= selectedItemOrder === 'oldest' ? 'selected' : '' %>>Mais antigos primeiro</option>
         </select>
       </div>
       <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
-        Aplicar ordem
+        Atualizar ordem
       </button>
     </form>
   </div>
 
   <div class="op-preview-shell op-fade-up">
-    <div class="op-preview-shell__label">Prévia do cartão compartilhável</div>
+    <div class="op-preview-shell__label">Prévia da imagem</div>
     <div class="flex justify-center pb-2">
       <%- include('partials/share-summary-card', {
         cardId: 'cardPreview',
@@ -92,7 +92,7 @@
         remainingCents,
         exportMode: false,
         captureScale,
-        footerLeft: 'Gerado pelo OrganizaPay',
+        footerLeft: 'Feito no OrganizaPay',
         totalLabel: 'Total do período',
         paymentTitle: 'Situação do pagamento',
         heroText
@@ -117,7 +117,7 @@
     remainingCents,
     exportMode: true,
     captureScale,
-    footerLeft: 'Gerado pelo OrganizaPay',
+    footerLeft: 'Feito no OrganizaPay',
     totalLabel: 'Total do período',
     paymentTitle: 'Situação do pagamento',
     heroText
@@ -545,7 +545,7 @@
   }
 
   async function downloadReceipt() {
-    const restore = setBusy(document.getElementById('btnPng'), 'Gerando PNG...');
+    const restore = setBusy(document.getElementById('btnPng'), 'Gerando imagem...');
     try {
       const file = await prepareShareFile(true);
       triggerDownloadFromFile(file);

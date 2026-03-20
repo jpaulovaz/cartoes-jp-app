@@ -3,9 +3,9 @@
   <div class="max-w-4xl mx-auto">
     <section class="op-page-hero op-fade-up mb-8">
       <div>
-        <span class="op-page-hero__eyebrow">Configuração base</span>
-        <h1 class="op-page-hero__title mt-4">Cartões de Crédito</h1>
-        <p class="op-page-hero__subtitle mt-3">Organize seus cartões, vencimentos e fechamento em um só lugar.</p>
+        <span class="op-page-hero__eyebrow">Base do app</span>
+        <h1 class="op-page-hero__title mt-4">Cartões</h1>
+        <p class="op-page-hero__subtitle mt-3">Deixe fechamento e vencimento redondinhos para o app fazer as contas sem drama.</p>
         <div class="op-page-hero__meta mt-4">
           <span class="badge"><%= cards ? cards.length : 0 %> cartão(ões)</span>
           <span class="badge">Fechamento e vencimento em um só lugar</span>
@@ -37,11 +37,11 @@
           </div>
           <div class="md:col-span-3">
             <button type="submit"
-              class="w-full inline-flex items-center justify-center px-4 py-3 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5">
+              class="op-btn op-btn-primary op-btn--block">
               <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
               </svg>
-              Adicionar
+              Salvar cartão
             </button>
           </div>
         </div>
@@ -50,8 +50,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
-          O sistema empurra automaticamente o vencimento para o próximo dia útil considerando feriados nacionais e fins
-          de semana. O fechamento é usado para sugerir o primeiro mês da fatura nos lançamentos manuais.
+          Se o vencimento cair em fim de semana ou feriado nacional, o app joga para o próximo dia útil. O fechamento ajuda a sugerir em qual fatura a compra entra.
         </p>
       </form>
 
@@ -104,7 +103,7 @@
                 </div>
                 <button
                   class="px-4 py-2 text-sm font-bold rounded-lg bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-600 hover:text-blue-700 hover:border-blue-300 dark:hover:border-blue-500 transition-colors shadow-sm">
-                  Salvar
+                  Salvar ajuste
                 </button>
               </div>
             </form>

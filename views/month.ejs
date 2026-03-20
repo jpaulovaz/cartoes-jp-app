@@ -4,43 +4,43 @@
     <section class="op-page-hero op-fade-up">
       <div>
         <span class="op-page-hero__eyebrow">Gestão do mês</span>
-        <h1 class="op-page-hero__title mt-4">Lançamentos — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
-        <p class="op-page-hero__subtitle mt-3">Organize os itens do mês facilmente, com ações rápidas para distribuir, revisar e fechar.</p>
+        <h1 class="op-page-hero__title mt-4">Compras do mês — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
+        <p class="op-page-hero__subtitle mt-3">Revise as compras do mês, divida valores e deixe tudo redondinho sem sofrer no caminho.</p>
         <div class="op-page-hero__meta mt-4">
           <span class="badge"><%= isClosed ? 'Mês fechado' : 'Mês em edição' %></span>
-          <span class="badge"><%= txns ? txns.length : 0 %> lançamento(s)</span>
+          <span class="badge"><%= txns ? txns.length : 0 %> item(ns)</span>
         </div>
         <div id="allocMsg" class="mt-3 h-5 text-sm font-bold text-emerald-600 transition-all duration-300"></div>
       </div>
       <div class="op-page-hero__actions">
         <% if (isClosed) { %>
           <button type="button" disabled
-            class="w-full rounded-2xl bg-slate-400 px-5 py-3 text-sm font-bold text-white shadow-sm dark:bg-slate-600 cursor-not-allowed">
+            class="op-btn op-btn-muted op-btn--block">
             🔒 Mês Fechado
           </button>
         <% } else { %>
-          <button onclick="document.getElementById('modalManual').classList.remove('hidden')"
-            class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+          <button type="button" data-manual-modal-open
+            class="op-btn op-btn-success op-btn--block">
             <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
             </svg>
-            Novo Item
+            Nova compra
           </button>
         <% } %>
 
         <a href="/summary/<%= year %>/<%= month %>"
-          class="w-full inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700">
+          class="op-btn op-btn-info op-btn--block">
           <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6m4 6V7m4 10v-3M5 19h14"></path>
           </svg>
-          Resumo do Mês</a>
+          Resumo do mês</a>
         <% if (canImport) { %>
           <a href="/import"
-            class="w-full inline-flex items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700">
+            class="op-btn op-btn-primary op-btn--block">
             <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
             </svg>
-            Nova Importação</a>
+            Importar fatura</a>
         <% } %>
       </div>
     </section>
@@ -49,8 +49,8 @@
       <div class="op-inline-alert op-inline-alert--warning">
         <div class="op-inline-alert__icon">🔒</div>
         <div>
-          <div class="op-inline-alert__title">Mês fechado</div>
-          <div class="op-inline-alert__text">Distribuições, exclusões e novos lançamentos para <%= String(month).padStart(2,'0') %>/<%= year %> estão bloqueados.</div>
+          <div class="op-inline-alert__title">Mês fechado por aqui</div>
+          <div class="op-inline-alert__text">Distribuições, exclusões e novas compras em <%= String(month).padStart(2,'0') %>/<%= year %> estão bloqueadas.</div>
         </div>
       </div>
     <% } %>
@@ -58,7 +58,7 @@
     <div class="mb-6 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
       <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
         <div>
-          <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Lançamentos recorrentes</h2>
+          <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Compras que se repetem</h2>
         </div>
       </div>
 
@@ -102,7 +102,7 @@
 
                 <% if (rule.status !== 'ended') { %>
                   <form method="post" action="/recurring/<%= rule.id %>/state"
-                    data-confirm-prompt="Encerrar o lançamento recorrente <%= rule.description %>? Os lançamentos já criados permanecem no histórico, mas as próximas competências deixarão de ser geradas."
+                    data-confirm-prompt="Encerrar a compra recorrente <%= rule.description %>? As compras já criadas continuam no histórico, mas as próximas competências deixam de ser geradas."
                     data-confirm-phrase="Eu confirmo">
                     <input type="hidden" name="action" value="end">
                     <button class="px-4 py-2 rounded-xl text-sm font-bold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Encerrar</button>
@@ -117,19 +117,19 @@
           <div class="op-empty-state__icon">
             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10m-11 9h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v11a2 2 0 002 2z"></path></svg>
           </div>
-          <div class="op-empty-state__title">Nenhum recorrente configurado</div>
-          <p class="op-empty-state__text">Crie um novo item manual e marque a opção <strong class="text-slate-700 dark:text-slate-200">Tornar este item recorrente mensal</strong> para passar a gerenciar a repetição por aqui.</p>
+          <div class="op-empty-state__title">Nenhuma compra recorrente por aqui</div>
+          <p class="op-empty-state__text">Crie uma compra manual e marque <strong class="text-slate-700 dark:text-slate-200">Repetir todo mês</strong> para deixar essa rotina no piloto semi-automático.</p>
         </div>
       <% } %>
     </div>
 
-    <div id="modalManual"
+    <div id="modalManual" data-manual-modal aria-hidden="true"
       class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
         <div class="flex justify-between items-center mb-6">
-          <h2 class="text-xl font-black text-slate-800 dark:text-white">Novo Gasto Manual</h2>
-          <button type="button" onclick="document.getElementById('modalManual').classList.add('hidden')"
-            class="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-2xl">✕</button>
+          <h2 class="text-xl font-black text-slate-800 dark:text-white">Adicionar compra</h2>
+          <button type="button" data-manual-modal-close
+            class="op-icon-btn" aria-label="Fechar janela">✕</button>
         </div>
 
         <form action="/txn/manual" method="POST" class="space-y-4" data-auto-first-due-form>
@@ -140,7 +140,7 @@
                 class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cartão Utilizado</label>
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cartão</label>
               <select name="card_id" data-manual-card-select <%= isClosed ? "disabled" : "" %>
                 class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                 <% cards.forEach(c=> { %>
@@ -155,7 +155,7 @@
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
-              <input type="text" name="amount" placeholder="0,00" required data-money-mask inputmode="numeric" <%= isClosed ? "disabled" : "" %>
+              <input type="text" name="amount" placeholder="0,00" required data-money-mask data-manual-amount-input inputmode="decimal" enterkeyhint="next" autocapitalize="off" autocomplete="off" <%= isClosed ? "disabled" : "" %>
                 class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
             </div>
             <div>
@@ -166,10 +166,10 @@
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">1º Vencimento</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Vai cair em qual fatura?</label>
             <input type="month" name="first_due" value="<%= year %>-<%= String(month).padStart(2, '0') %>" required data-manual-first-due <%= isClosed ? "disabled" : "" %>
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
-            <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Preenchido automaticamente pela data da compra e pelo fechamento do cartão, mas você pode alterar manualmente.</p>
+            <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">A gente sugere isso pela data da compra e pelo fechamento do cartão. Se precisar, pode ajustar sem cerimônia.</p>
           </div>
 
           <div>
@@ -182,8 +182,8 @@
           <input type="checkbox" name="assign_to_owner" value="1" <%= typeof isClosed !== 'undefined' && isClosed ? 'disabled' : '' %>
             class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
           <span>
-            <span class="block text-sm font-bold text-slate-800 dark:text-white">Atribuir este item a mim</span>
-            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque para lançar este item automaticamente no seu nome, inclusive nas próximas parcelas ou recorrências</span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Essa compra é minha</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque para jogar esta compra direto no seu nome — e isso também vale para próximas parcelas ou repetições.</span>
           </span>
         </label>
 
@@ -191,8 +191,8 @@
             <input type="checkbox" name="is_recurring" value="1" data-recurring-toggle <%= isClosed ? "disabled" : "" %>
               class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
             <span>
-              <span class="block text-sm font-bold text-slate-800 dark:text-white">Tornar este item recorrente mensal</span>
-              <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Ideal para academia, streaming, escola, internet e condomínio. Funciona somente com 1 parcela.</span>
+              <span class="block text-sm font-bold text-slate-800 dark:text-white">Repetir todo mês</span>
+              <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Perfeito para academia, streaming, escola, internet e afins. Só funciona com 1 parcela.</span>
             </span>
           </label>
 
@@ -203,7 +203,7 @@
           <% } else { %>
             <button type="submit"
               class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all">
-              Criar Lançamento
+              Salvar compra
             </button>
           <% } %>
         </form>
@@ -286,6 +286,33 @@
     </div>
 
     <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Lista de compras</h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              <% if (isClosed) { %>
+                Este mês está em modo somente leitura. Abra um item para consultar os detalhes sem alterar a distribuição.
+              <% } else { %>
+                Toque ou clique em uma compra para abrir as ações. Para selecionar várias, use <strong class="font-bold text-slate-700 dark:text-slate-200">Selecionar</strong> ou segure um item no celular.
+              <% } %>
+            </p>
+          </div>
+          <% if (!isClosed) { %>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <button type="button" id="monthEnterSelectionBtn"
+                class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
+                Selecionar
+              </button>
+              <button type="button" id="monthExitSelectionBtn"
+                class="hidden inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
+                Cancelar seleção
+              </button>
+            </div>
+          <% } %>
+        </div>
+      </div>
+
       <div class="overflow-x-auto md:overflow-visible">
         <table class="block md:table w-full text-sm text-left">
           <thead
@@ -303,13 +330,20 @@
                   href="<%= sortLink('amount') %>">Valor</a></th>
               <th class="px-4 py-4 text-center"><a
                   class="hover:text-blue-600 transition-colors inline-flex items-center"
-                  href="<%= sortLink('allocated') %>">Ok?</a></th>
-              <th class="px-4 py-4 text-center w-[240px]">Distribuição Rápida</th>
+                  href="<%= sortLink('allocated') %>">Status</a></th>
+              <th class="px-4 py-4 text-left">Resumo e ações</th>
             </tr>
           </thead>
           <tbody class="block md:table-row-group">
-            <% txns.forEach(t=> { %>
-              <tr class="block md:table-row p-4 md:p-0 border-b border-slate-100 dark:border-slate-700 last:border-b-0 hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors group align-middle space-y-1 md:space-y-0">
+            <% txns.forEach(t => {
+                 const participantNames = (t.selected_ids || []).map(pid => {
+                   const person = people.find(p => Number(p.id) === Number(pid));
+                   return person ? person.name : null;
+                 }).filter(Boolean);
+                 const shortParticipantNames = participantNames.map(name => name.split(' ')[0]);
+            %>
+              <tr class="op-month-row block md:table-row mb-3 rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-800/60 md:mb-0 md:rounded-none md:border-b md:border-x-0 md:border-t-0 md:border-slate-100 md:bg-transparent md:p-0 md:shadow-none dark:md:border-slate-700 hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors align-middle space-y-1 md:space-y-0 cursor-pointer"
+                data-month-row data-txn-id="<%= t.id %>" tabindex="0" role="button" aria-label="Abrir ações para <%= t.description %>">
                 <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
                   <div class="flex items-center justify-between gap-3 md:block">
                     <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Data</span>
@@ -333,7 +367,7 @@
                 <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-mono text-xs text-slate-500 dark:text-slate-400">
                   <div class="flex items-center justify-between gap-3 md:block">
                     <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 not-italic font-sans">Nº</span>
-                    <span><%= t.card_number || "-" %></span>
+                    <span><%= t.card_number || '-' %></span>
                   </div>
                 </td>
                 <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-right font-black text-slate-900 dark:text-white">
@@ -342,155 +376,80 @@
                     <span><%= formatBRLFromCents(t.amount_cents) %></span>
                   </div>
                 </td>
-
                 <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-center status-icon">
-                  <% if (t.alloc_count> 0) { %>
+                  <% if (t.alloc_count > 0) { %>
                     <div class="flex items-center justify-between md:justify-center gap-3">
                       <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</span>
-                      <div
-                        class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center md:mx-auto"
+                      <div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center md:mx-auto"
                         title="Distribuído">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
                         </svg>
                       </div>
                     </div>
-                    <% } else { %>
-                      <div class="flex items-center justify-between md:justify-center gap-3">
-                        <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</span>
-                        <div
-                          class="w-6 h-6 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center md:mx-auto"
-                          title="Não Distribuído">
-                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                          </svg>
-                        </div>
+                  <% } else { %>
+                    <div class="flex items-center justify-between md:justify-center gap-3">
+                      <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</span>
+                      <div class="w-6 h-6 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center md:mx-auto"
+                        title="Sem distribuição">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
                       </div>
-                      <% } %>
+                    </div>
+                  <% } %>
                 </td>
-
-                <td class="block md:table-cell px-0 md:px-4 py-3 md:py-3 mt-3 md:mt-0 border-t border-dashed border-slate-200 dark:border-slate-700 md:border-t-0">
-                  <div class="md:hidden">
-                    <div class="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Distribuição Rápida</div>
-                    <form method="post" action="/txn/<%= t.id %>/alloc" data-alloc-form="<%= t.id %>" data-form-variant="mobile" data-installment-scope-form="alloc" data-has-future-installments="<%= t.has_future_installments ? '1' : '0' %>" data-installment-label="<%= t.description %>"
-                      class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 shadow-inner transition-colors duration-300">
-
-                      <div
-                        class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-3 gap-y-2 mb-3 min-w-0 md:min-w-[380px] border border-slate-100 dark:border-slate-700 rounded-xl p-2 bg-slate-50/40 dark:bg-slate-900/40">
-                        <% people.forEach(p=> { %>
-                          <label class="flex items-center gap-2 cursor-pointer select-none group py-0.5 min-w-0">
-                            <input type="checkbox" name="person_ids" value="<%= p.id %>" <%=(t.selected_ids &&
-                              t.selected_ids.includes(p.id)) ? "checked" : "" %> <%= isClosed ? "disabled" : "" %>
-                            class="w-4 h-4 text-blue-600 rounded border-slate-300 dark:border-slate-600 focus:ring-blue-500 bg-white dark:bg-slate-800 shrink-0" />
-
-                            <span class="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-blue-600 truncate">
-                              <%= p.name.split(' ')[0] %>
-                          </span>
-                        </label>
-                      <% }) %>
-                    </div>
-
-                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
-                      <% if (isClosed) { %>
-                        <div class="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-                          Mês fechado: distribuição e exclusão bloqueadas.
-                        </div>
-                      <% } else { %>
-                        <button type="submit"
-                          class="w-full sm:w-auto px-4 py-2 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-transform active:scale-95 btn-salvar-indiv">Salvar</button>
-
-                        <button type="button" onclick="copyAlloc('<%= t.id %>')"
-                                  class="w-full sm:w-auto px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
-                                  title="Copiar atribuição">Copiar</button>
-
-                        <button type="button" onclick="pasteAlloc('<%= t.id %>')"
-                            class="w-full sm:w-auto px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
-                            title="Colar atribuição">Colar</button>
-
-                        <button type="submit" form="delete-txn-<%= t.id %>"
-                            class="w-full sm:w-auto sm:ml-auto px-3 py-2 text-xs font-bold rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
-                            Excluir
-                        </button>
-                      <% } %>
-                    </div>
-                    </form>
+                <td class="op-month-row__meta block md:table-cell px-3 md:px-4 py-3 md:py-3 mt-3 md:mt-0 rounded-2xl border border-slate-200/90 bg-slate-50/90 dark:border-slate-700 dark:bg-slate-900/35 md:rounded-none md:border-0 md:bg-transparent md:px-0 md:py-3">
+                  <div class="flex items-start gap-3">
                     <% if (!isClosed) { %>
-                      <form id="delete-txn-<%= t.id %>" method="post" action="/txn/<%= t.id %>/delete"
-                        data-confirm-prompt="Excluir este lançamento? Esta ação remove o item e a distribuição associada."
-                        data-confirm-phrase="Eu confirmo"
-                        data-installment-scope-form="delete"
-                        data-has-future-installments="<%= t.has_future_installments ? '1' : '0' %>"
-                        data-installment-label="<%= t.description %>"></form>
+                      <span data-selection-indicator
+                        class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-300 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-600">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                      </span>
                     <% } %>
-                  </div>
-
-                  <div class="hidden md:block">
-                    <% if (isClosed) { %>
-                      <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200 text-left">
-                        Mês fechado: distribuição e exclusão bloqueadas.
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap gap-2">
+                        <% if (shortParticipantNames.length) { %>
+                          <% shortParticipantNames.slice(0, 3).forEach(name => { %>
+                            <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200"><%= name %></span>
+                          <% }) %>
+                          <% if (shortParticipantNames.length > 3) { %>
+                            <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">+<%= shortParticipantNames.length - 3 %></span>
+                          <% } %>
+                        <% } else { %>
+                          <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Sem participantes</span>
+                        <% } %>
                       </div>
-                    <% } else { %>
-                      <form id="alloc-desktop-<%= t.id %>" method="post" action="/txn/<%= t.id %>/alloc" data-alloc-form="<%= t.id %>" data-form-variant="desktop" data-installment-scope-form="alloc" data-has-future-installments="<%= t.has_future_installments ? '1' : '0' %>" data-installment-label="<%= t.description %>"
-                        class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 shadow-inner transition-colors duration-300">
-                        <div class="flex flex-col gap-2">
-                          <button type="submit"
-                            class="w-full px-4 py-2 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-transform active:scale-95 btn-salvar-indiv">Salvar</button>
 
-                          <div class="grid grid-cols-2 gap-2">
-                            <button type="button" onclick="copyAlloc('<%= t.id %>')"
-                                    class="w-full px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
-                                    title="Copiar atribuição">Copiar</button>
+                      <div class="mt-2 flex flex-wrap gap-2">
+                        <% if (t.has_future_installments) { %>
+                          <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200">Parcelada</span>
+                        <% } %>
+                        <% if (t.recurring_rule_id) { %>
+                          <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Recorrente</span>
+                        <% } %>
+                      </div>
 
-                            <button type="button" onclick="pasteAlloc('<%= t.id %>')"
-                                class="w-full px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
-                                title="Colar atribuição">Colar</button>
-                          </div>
-
-                          <button type="submit" form="delete-txn-desktop-<%= t.id %>"
-                              class="w-full px-3 py-2 text-xs font-bold rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
-                              Excluir
-                          </button>
-                        </div>
-                      </form>
-                      <form id="delete-txn-desktop-<%= t.id %>" method="post" action="/txn/<%= t.id %>/delete"
-                        data-confirm-prompt="Excluir este lançamento? Esta ação remove o item e a distribuição associada."
-                        data-confirm-phrase="Eu confirmo"
-                        data-installment-scope-form="delete"
-                        data-has-future-installments="<%= t.has_future_installments ? '1' : '0' %>"
-                        data-installment-label="<%= t.description %>"></form>
-                    <% } %>
-                  </div>
-                </td>
-              </tr>
-              <tr class="hidden md:table-row bg-transparent">
-                <td colspan="7" class="px-4 pb-4 pt-0">
-                  <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-4 py-3">
-                    <div class="flex items-center justify-between gap-3 mb-3">
-                      <span class="text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Participantes</span>
-                      <span class="text-[11px] font-semibold text-slate-400 dark:text-slate-500">Marque quem participa deste lançamento</span>
-                    </div>
-                    <div class="flex flex-wrap gap-2.5">
-                      <% people.forEach(p=> { %>
-                        <label class="inline-flex items-center gap-2 cursor-pointer select-none rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 min-w-[120px] max-w-full hover:border-blue-300 dark:hover:border-blue-500 transition-colors">
-                          <input type="checkbox" name="person_ids" form="alloc-desktop-<%= t.id %>" value="<%= p.id %>" <%=(t.selected_ids &&
-                            t.selected_ids.includes(p.id)) ? "checked" : "" %> <%= isClosed ? "disabled" : "" %>
-                          class="w-4 h-4 text-blue-600 rounded border-slate-300 dark:border-slate-600 focus:ring-blue-500 bg-white dark:bg-slate-800 shrink-0" />
-                          <span class="text-xs font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">
-                            <%= p.name.split(' ')[0] %>
-                          </span>
-                        </label>
-                      <% }) %>
+                      <div class="mt-2 text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                        <% if (isClosed) { %>
+                          Abra a compra para consultar a divisão dela.
+                        <% } else { %>
+                          <span class="md:hidden">Toque para ações · Segure para selecionar</span>
+                          <span class="hidden md:inline">Clique para ações · Ctrl/Cmd+clique para selecionar</span>
+                        <% } %>
+                      </div>
                     </div>
                   </div>
                 </td>
               </tr>
-              <% }) %>
+            <% }) %>
           </tbody>
         </table>
       </div>
     </div>
-
     <% if (txns.length===0) { %>
       <div class="mt-6 op-empty-state op-empty-state--compact">
         <div class="op-empty-state__icon">
@@ -503,255 +462,1037 @@
 
   </div>
 
+
   <% if (!isClosed) { %>
-  <div id="globalSaveBar"
-    class="fixed bottom-4 left-4 right-4 md:right-auto md:bottom-6 md:left-1/2 md:-translate-x-1/2 bg-slate-900 text-white px-4 sm:px-6 py-4 rounded-2xl shadow-2xl z-50 items-stretch sm:items-center gap-4 sm:gap-5 transition-transform duration-300 translate-y-32 flex flex-col sm:flex-row opacity-0 pointer-events-none">
-    <div class="flex items-center gap-3">
-      <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center font-bold shadow-inner"
-        id="modCount">0</div>
-      <span class="font-medium text-sm">itens alterados e não salvos</span>
+    <div id="monthSelectionToolbar"
+      class="op-month-selection-toolbar fixed left-4 right-4 z-50 rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-2xl shadow-slate-900/10 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95">
+      <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div class="min-w-0">
+          <div class="flex items-center gap-3">
+            <span id="monthSelectionCount"
+              class="inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-2xl bg-blue-600 px-3 text-sm font-black text-white shadow-lg shadow-blue-500/25">0</span>
+            <div>
+              <div class="text-sm font-black text-slate-900 dark:text-slate-100">Modo seleção</div>
+              <div id="monthSelectionSummary" class="text-xs font-medium text-slate-500 dark:text-slate-400">Selecione um ou mais itens para abrir as ações do lote.</div>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:justify-end">
+          <button type="button" id="monthBulkPeopleBtn"
+            class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">Participantes</button>
+          <button type="button" id="monthBulkMoveBtn"
+            class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Mover fatura</button>
+          <button type="button" id="monthBulkDeleteBtn"
+            class="inline-flex items-center justify-center rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 transition hover:-translate-y-0.5 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200 dark:hover:bg-red-900/35">Excluir</button>
+          <button type="button" id="monthBulkCancelBtn"
+            class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Cancelar</button>
+        </div>
+      </div>
     </div>
-    <button id="btnGlobalSave" onclick="saveAllModified()"
-      class="w-full sm:w-auto justify-center px-6 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-sm shadow-sm transition-colors flex items-center">
-      Salvar Tudo Agora
-    </button>
-  </div>
   <% } %>
 
+  <style>
+    .op-month-row {
+      position: relative;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    @media (max-width: 767px) {
+      .op-month-row {
+        overflow: hidden;
+      }
+
+      .op-month-row.is-selected {
+        box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.92), 0 8px 20px rgba(15, 23, 42, 0.08) !important;
+      }
+
+      .dark .op-month-row.is-selected {
+        box-shadow: inset 0 0 0 2px rgba(96, 165, 250, 0.92), 0 10px 24px rgba(2, 6, 23, 0.28) !important;
+      }
+
+      .op-month-row.is-selected .op-month-row__meta {
+        border-color: rgba(59, 130, 246, 0.42);
+      }
+
+      .op-month-row__meta {
+        position: relative;
+      }
+
+      .op-month-row__meta::before {
+        content: '';
+        position: absolute;
+        left: 1rem;
+        right: 1rem;
+        top: 0;
+        border-top: 1.5px solid rgba(148, 163, 184, 0.3);
+      }
+
+      .dark .op-month-row__meta::before {
+        border-top-color: rgba(100, 116, 139, 0.5);
+      }
+    }
+
+    @media (min-width: 768px) {
+      .op-month-row.is-selected > td {
+        background-color: rgba(239, 246, 255, 0.9) !important;
+        box-shadow: inset 0 2px 0 rgba(37, 99, 235, 0.9), inset 0 -2px 0 rgba(37, 99, 235, 0.9);
+      }
+
+      .op-month-row.is-selected > td:first-child {
+        box-shadow: inset 2px 0 0 rgba(37, 99, 235, 0.9), inset 0 2px 0 rgba(37, 99, 235, 0.9), inset 0 -2px 0 rgba(37, 99, 235, 0.9);
+      }
+
+      .op-month-row.is-selected > td:last-child {
+        box-shadow: inset -2px 0 0 rgba(37, 99, 235, 0.9), inset 0 2px 0 rgba(37, 99, 235, 0.9), inset 0 -2px 0 rgba(37, 99, 235, 0.9);
+      }
+
+      .dark .op-month-row.is-selected > td {
+        background-color: rgba(30, 41, 59, 0.92) !important;
+        box-shadow: inset 0 2px 0 rgba(96, 165, 250, 0.92), inset 0 -2px 0 rgba(96, 165, 250, 0.92);
+      }
+
+      .dark .op-month-row.is-selected > td:first-child {
+        box-shadow: inset 2px 0 0 rgba(96, 165, 250, 0.92), inset 0 2px 0 rgba(96, 165, 250, 0.92), inset 0 -2px 0 rgba(96, 165, 250, 0.92);
+      }
+
+      .dark .op-month-row.is-selected > td:last-child {
+        box-shadow: inset -2px 0 0 rgba(96, 165, 250, 0.92), inset 0 2px 0 rgba(96, 165, 250, 0.92), inset 0 -2px 0 rgba(96, 165, 250, 0.92);
+      }
+    }
+
+    .op-month-selection-toolbar {
+      bottom: calc(var(--op-mobile-bottom-clearance, 5.75rem) + 0.75rem);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(1.5rem);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .op-month-selection-toolbar.is-visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    @media (min-width: 768px) {
+      .op-month-selection-toolbar {
+        left: 50%;
+        right: auto;
+        bottom: 1.5rem;
+        width: min(760px, calc(100vw - 3rem));
+        transform: translateX(-50%) translateY(1.5rem);
+      }
+
+      .op-month-selection-toolbar.is-visible {
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+  </style>
+
   <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const modifiedForms = new Set();
-      const globalSaveBar = document.getElementById('globalSaveBar');
-      const modCount = document.getElementById('modCount');
+    window.monthViewBootstrap = {
+      month: <%= month %>,
+      year: <%= year %>,
+      isClosed: <%- JSON.stringify(!!isClosed) %>,
+      people: <%- JSON.stringify((people || []).map(p => ({ id: Number(p.id), name: p.name, is_owner: !!p.is_owner }))).replace(/</g, '\\u003c') %>,
+      txns: <%- JSON.stringify((txns || []).map(t => ({
+        id: Number(t.id),
+        description: t.description,
+        amount_cents: Number(t.amount_cents || 0),
+        selected_ids: (t.selected_ids || []).map(Number),
+        has_future_installments: !!t.has_future_installments,
+        recurring_rule_id: t.recurring_rule_id ? Number(t.recurring_rule_id) : null,
+        month: Number(t.month || month),
+        year: Number(t.year || year)
+      }))).replace(/</g, '\\u003c') %>
+    };
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const bootstrap = window.monthViewBootstrap || {};
+      const isClosed = !!bootstrap.isClosed;
+      const currentMonth = Number(bootstrap.month || 0);
+      const currentYear = Number(bootstrap.year || 0);
+      const people = Array.isArray(bootstrap.people) ? bootstrap.people : [];
+      const txns = Array.isArray(bootstrap.txns) ? bootstrap.txns : [];
+      const txnsById = new Map(txns.map(item => [String(item.id), {
+        ...item,
+        id: Number(item.id),
+        amount_cents: Number(item.amount_cents || 0),
+        month: Number(item.month || currentMonth),
+        year: Number(item.year || currentYear),
+        selected_ids: Array.isArray(item.selected_ids) ? item.selected_ids.map(Number) : [],
+        has_future_installments: !!item.has_future_installments,
+        recurring_rule_id: item.recurring_rule_id ? Number(item.recurring_rule_id) : null
+      }]));
+
+      const rows = Array.from(document.querySelectorAll('[data-month-row]'));
+      const rowById = new Map(rows.map(row => [String(row.dataset.txnId || ''), row]));
       const allocMsg = document.getElementById('allocMsg');
-      const btnGlobalSave = document.getElementById('btnGlobalSave');
+      const enterSelectionBtn = document.getElementById('monthEnterSelectionBtn');
+      const exitSelectionBtn = document.getElementById('monthExitSelectionBtn');
+      const toolbar = document.getElementById('monthSelectionToolbar');
+      const selectionCountEl = document.getElementById('monthSelectionCount');
+      const toolbarSummaryEl = document.getElementById('monthSelectionSummary');
+      const bulkPeopleBtn = document.getElementById('monthBulkPeopleBtn');
+      const bulkMoveBtn = document.getElementById('monthBulkMoveBtn');
+      const bulkDeleteBtn = document.getElementById('monthBulkDeleteBtn');
+      const bulkCancelBtn = document.getElementById('monthBulkCancelBtn');
+      const selectedIds = new Set();
+      let selectionMode = false;
+      let monthSheetState = null;
+      let messageTimer = null;
 
-      function getPersonCheckboxes(form) {
-        const inner = Array.from(form.querySelectorAll('input[name="person_ids"]'));
-        if (!form.id) return inner;
-        const linked = Array.from(document.querySelectorAll(`input[name="person_ids"][form="${form.id}"]`));
-        return Array.from(new Set([...inner, ...linked]));
+      const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+      const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+      function escapeHtml(value) {
+        return String(value || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
       }
 
-      function syncSiblingForms(form) {
-        const txnId = String(form?.dataset?.allocForm || '').trim();
-        if (!txnId) return;
+      function formatMoney(value) {
+        return currencyFormatter.format((Number(value || 0)) / 100);
+      }
 
-        const selectedIds = new Set(
-          getPersonCheckboxes(form)
-            .filter(cb => cb.checked)
-            .map(cb => String(cb.value))
-        );
+      function formatMonthLabel(month, year) {
+        const safeMonth = Number(month || 0);
+        const safeYear = Number(year || 0);
+        const name = monthNames[safeMonth - 1] || 'Mês';
+        return `${name}/${safeYear}`;
+      }
 
-        document.querySelectorAll(`form[data-alloc-form="${txnId}"]`).forEach(otherForm => {
-          if (otherForm === form) return;
-          getPersonCheckboxes(otherForm).forEach(cb => {
-            cb.checked = selectedIds.has(String(cb.value));
-          });
+      function shiftMonthLocal(year, month, amount) {
+        let y = Number(year || 0);
+        let m = Number(month || 0) + Number(amount || 0);
+        while (m > 12) {
+          m -= 12;
+          y += 1;
+        }
+        while (m < 1) {
+          m += 12;
+          y -= 1;
+        }
+        return { month: m, year: y };
+      }
+
+      function showAllocMessage(message, tone = 'success') {
+        if (!allocMsg) return;
+        const toneClass = tone === 'error'
+          ? 'text-red-600'
+          : tone === 'warning'
+            ? 'text-amber-600'
+            : 'text-emerald-600';
+        allocMsg.innerHTML = `<span class="${toneClass} font-bold">${escapeHtml(message)}</span>`;
+        if (messageTimer) window.clearTimeout(messageTimer);
+        messageTimer = window.setTimeout(() => {
+          allocMsg.innerHTML = '';
+        }, 4500);
+      }
+
+      function getTxnItem(txnId) {
+        return txnsById.get(String(txnId)) || null;
+      }
+
+      function getTxnItems(txnIds) {
+        return (txnIds || []).map(getTxnItem).filter(Boolean);
+      }
+
+      function getSelectedTxnIds() {
+        return Array.from(selectedIds.values()).map(value => Number(value)).filter(Number.isInteger);
+      }
+
+      function sumAmounts(items) {
+        return (items || []).reduce((acc, item) => acc + Number(item.amount_cents || 0), 0);
+      }
+
+      function updateSelectionUI() {
+        const selectedTxnIds = getSelectedTxnIds();
+        const selectedItems = getTxnItems(selectedTxnIds);
+        const selectedCount = selectedItems.length;
+
+        rows.forEach(row => {
+          const txnId = String(row.dataset.txnId || '');
+          const indicator = row.querySelector('[data-selection-indicator]');
+          const isSelected = selectedIds.has(txnId);
+
+          row.classList.toggle('is-selected', isSelected);
+
+          if (indicator) {
+            indicator.classList.toggle('hidden', !selectionMode);
+            indicator.classList.toggle('flex', selectionMode);
+            indicator.classList.toggle('border-blue-600', isSelected);
+            indicator.classList.toggle('bg-blue-600', isSelected);
+            indicator.classList.toggle('text-white', isSelected);
+            indicator.classList.toggle('shadow-lg', isSelected);
+            indicator.classList.toggle('shadow-blue-500/20', isSelected);
+            indicator.classList.toggle('border-slate-200', !isSelected);
+            indicator.classList.toggle('bg-white', !isSelected);
+            indicator.classList.toggle('text-slate-300', !isSelected);
+            indicator.classList.toggle('dark:border-slate-700', !isSelected);
+            indicator.classList.toggle('dark:bg-slate-900', !isSelected);
+            indicator.classList.toggle('dark:text-slate-600', !isSelected);
+          }
         });
+
+        if (toolbar && selectionCountEl && toolbarSummaryEl) {
+          toolbar.classList.toggle('is-visible', selectionMode);
+          selectionCountEl.textContent = String(selectedCount);
+          toolbarSummaryEl.textContent = selectedCount
+            ? `${selectedCount} item(ns) · ${formatMoney(sumAmounts(selectedItems))}`
+            : 'Selecione um ou mais itens para abrir as ações do lote.';
+        }
+
+        [bulkPeopleBtn, bulkMoveBtn, bulkDeleteBtn].forEach(button => {
+          if (button) button.disabled = selectedCount === 0;
+        });
+
+        if (enterSelectionBtn) enterSelectionBtn.classList.toggle('hidden', selectionMode);
+        if (exitSelectionBtn) exitSelectionBtn.classList.toggle('hidden', !selectionMode);
       }
 
-      function getVisibleAllocForm(txnId) {
-        const forms = Array.from(document.querySelectorAll(`form[data-alloc-form="${txnId.trim()}"]`));
-        return forms.find(form => form.offsetParent !== null) || forms[0] || null;
+      function enterSelectionMode(initialIds = []) {
+        if (isClosed) return;
+        selectionMode = true;
+        (initialIds || []).forEach(txnId => {
+          if (txnsById.has(String(txnId))) selectedIds.add(String(txnId));
+        });
+        updateSelectionUI();
       }
 
-      document.querySelectorAll('form[data-alloc-form]').forEach(form => {
-        const handleChange = () => {
-          syncSiblingForms(form);
-          markAsModified(form);
+      function exitSelectionMode() {
+        selectionMode = false;
+        selectedIds.clear();
+        updateSelectionUI();
+      }
+
+      function toggleSelection(txnId) {
+        const key = String(txnId || '');
+        if (!txnsById.has(key)) return;
+        if (selectedIds.has(key)) selectedIds.delete(key);
+        else selectedIds.add(key);
+        updateSelectionUI();
+      }
+
+      function toneClasses(tone = 'secondary') {
+        const base = 'w-full rounded-2xl px-4 py-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50';
+        if (tone === 'danger') return `${base} bg-red-600 text-white hover:bg-red-700 focus:ring-red-500`;
+        if (tone === 'primary') return `${base} bg-slate-900 text-white hover:bg-slate-800 focus:ring-slate-500 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white dark:focus:ring-slate-300`;
+        return `${base} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:ring-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus:ring-slate-500`;
+      }
+
+      function ensureMonthSheet() {
+        if (monthSheetState && monthSheetState.root && document.body.contains(monthSheetState.root)) {
+          return monthSheetState;
+        }
+
+        const root = document.createElement('div');
+        root.className = 'fixed inset-0 z-[9999] hidden';
+        root.innerHTML = `
+          <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-month-sheet-backdrop></div>
+          <div class="relative z-10 flex min-h-full items-end justify-center p-4 sm:items-center">
+            <div class="w-full max-w-lg overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" data-month-sheet-surface>
+              <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                <div>
+                  <h3 class="text-base font-bold text-slate-900 dark:text-slate-100" data-month-sheet-title></h3>
+                  <p class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400" data-month-sheet-subtitle></p>
+                </div>
+                <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700" data-month-sheet-close>✕</button>
+              </div>
+              <div class="max-h-[72vh] overflow-y-auto px-5 py-4" data-month-sheet-body></div>
+              <div class="flex flex-col gap-2 border-t border-slate-200 px-5 py-5 dark:border-slate-800" data-month-sheet-actions></div>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(root);
+
+        monthSheetState = {
+          root,
+          surface: root.querySelector('[data-month-sheet-surface]'),
+          title: root.querySelector('[data-month-sheet-title]'),
+          subtitle: root.querySelector('[data-month-sheet-subtitle]'),
+          body: root.querySelector('[data-month-sheet-body]'),
+          actions: root.querySelector('[data-month-sheet-actions]'),
+          onClose: null
         };
 
-        form.addEventListener('change', handleChange);
-        getPersonCheckboxes(form).forEach(input => {
-          input.addEventListener('change', handleChange);
+        const closeMonthSheet = () => {
+          monthSheetState.root.classList.add('hidden');
+          document.body.classList.remove('overflow-hidden');
+          const handler = monthSheetState.onClose;
+          monthSheetState.onClose = null;
+          if (typeof handler === 'function') handler();
+        };
+
+        root.querySelector('[data-month-sheet-backdrop]')?.addEventListener('click', closeMonthSheet);
+        root.querySelector('[data-month-sheet-close]')?.addEventListener('click', closeMonthSheet);
+        root.addEventListener('click', (event) => {
+          const surface = monthSheetState?.surface;
+          if (!surface || monthSheetState?.root.classList.contains('hidden')) return;
+          if (!surface.contains(event.target)) closeMonthSheet();
         });
-
-        form.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          await saveForm(form);
-        });
-      });
-
-      function markAsModified(form) {
-        modifiedForms.add(form);
-        form.classList.add('bg-amber-50', 'border-amber-300');
-        updateGlobalBar();
-      }
-
-      function updateGlobalBar() {
-        if (modifiedForms.size > 0) {
-          globalSaveBar.classList.remove('translate-y-32', 'opacity-0', 'pointer-events-none');
-          modCount.innerText = modifiedForms.size;
-        } else {
-          globalSaveBar.classList.add('translate-y-32', 'opacity-0', 'pointer-events-none');
-        }
-      }
-
-      function formHasFutureInstallments(form) {
-        return String(form?.dataset?.hasFutureInstallments || '') === '1';
-      }
-
-      async function resolveBatchInstallmentStrategy(forms) {
-        const formsWithFutureInstallments = forms.filter(formHasFutureInstallments);
-        if (!formsWithFutureInstallments.length || forms.length <= 1) {
-          return 'ask';
-        }
-
-        const result = await window.showActionDialog({
-          title: 'Salvar vários lançamentos',
-          message: `Você alterou ${forms.length} lançamento(s). ${formsWithFutureInstallments.length} deles fazem parte de compras parceladas.\n\nEscolha como deseja aplicar a distribuição nas parcelas futuras.`,
-          options: [
-            { label: 'Cancelar', value: null, tone: 'secondary' },
-            { label: 'Perguntar item a item', value: 'ask', tone: 'secondary' },
-            { label: 'Aplicar só a atual para todos os parcelados', value: 'single', tone: 'primary' },
-            { label: 'Aplicar atual + próximas para todos os parcelados', value: 'future', tone: 'primary' }
-          ]
-        });
-
-        return result;
-      }
-
-      window.saveForm = async function (form, options = {}) {
-        const btn = form.querySelector('.btn-salvar-indiv');
-        const originalText = btn ? btn.innerHTML : 'Salvar';
-        if (btn) {
-          btn.innerHTML = '...';
-          btn.disabled = true;
-        }
-
-        const hasFutureInstallments = formHasFutureInstallments(form);
-        const requestedStrategy = String(options.scopeStrategy || 'ask').trim().toLowerCase();
-        let chosenScope = 'single';
-
-        if (hasFutureInstallments) {
-          if (requestedStrategy === 'single' || requestedStrategy === 'future') {
-            chosenScope = requestedStrategy;
-          } else {
-            chosenScope = window.resolveInstallmentScope
-              ? await window.resolveInstallmentScope(form, { actionLabel: "alterar a distribuição" })
-              : 'single';
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape' && monthSheetState && !monthSheetState.root.classList.contains('hidden')) {
+            closeMonthSheet();
           }
+        });
+
+        monthSheetState.close = closeMonthSheet;
+        return monthSheetState;
+      }
+
+      function openMonthSheet({ title = 'Ações', subtitle = '', body = null, actions = [], onClose = null } = {}) {
+        const state = ensureMonthSheet();
+        state.onClose = typeof onClose === 'function' ? onClose : null;
+        state.title.textContent = title;
+        state.subtitle.textContent = subtitle || '';
+        state.subtitle.classList.toggle('hidden', !subtitle);
+        state.body.innerHTML = '';
+        state.actions.innerHTML = '';
+
+        if (typeof body === 'string') {
+          state.body.innerHTML = body;
+        } else if (body instanceof Node) {
+          state.body.appendChild(body);
         }
 
-        if (!chosenScope) {
-          if (btn) {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
+        if (state.root.parentElement === document.body) {
+          document.body.appendChild(state.root);
+        }
+
+        actions.forEach((action, index) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = toneClasses(action.tone || 'secondary');
+          button.textContent = action.label;
+          button.disabled = !!action.disabled;
+          button.addEventListener('click', async () => {
+            if (button.disabled) return;
+            if (!action.onClick) {
+              if (action.closeOnClick !== false) state.close();
+              return;
+            }
+            button.disabled = true;
+            try {
+              const result = await action.onClick();
+              if (result !== false && action.closeOnClick !== false) {
+                state.close();
+              }
+            } finally {
+              button.disabled = !!action.disabled;
+            }
+          });
+          state.actions.appendChild(button);
+          if (index === 0) {
+            window.requestAnimationFrame(() => button.focus());
           }
-          return false;
+        });
+
+        state.root.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+        return state;
+      }
+
+      async function resolveSelectionScope(items, { actionLabel = 'alterar a distribuição', destructive = false, moveAction = false } = {}) {
+        const futureItems = (items || []).filter(item => item.has_future_installments);
+        if (!futureItems.length) {
+          return 'single';
         }
 
-        const formData = new URLSearchParams(new FormData(form));
-        formData.set('apply_scope', chosenScope);
+        const nonInstallmentCount = Math.max(0, (items || []).length - futureItems.length);
+        const title = destructive
+          ? (items.length > 1 ? 'Excluir compras parceladas' : 'Excluir compra parcelada')
+          : moveAction
+            ? (items.length > 1 ? 'Mover compras parceladas' : 'Mover compra parcelada')
+            : (items.length > 1 ? 'Aplicar participantes em compras parceladas' : 'Aplicar participantes em compra parcelada');
 
+        const messageParts = [
+          `${items.length} compra(s) · ${formatMoney(sumAmounts(items))}`,
+          `${futureItems.length} item(ns) parcelado(s) exigem confirmação de alcance antes de concluir ${actionLabel}.`,
+          'Só compras atuais: altera apenas as compras selecionadas agora.',
+          'Itens atuais + próximas parcelas: também aplica a ação nas próximas parcelas de cada compra parcelada selecionada.'
+        ];
+
+        if (nonInstallmentCount > 0) {
+          messageParts.push(`Os ${nonInstallmentCount} item(ns) sem parcelamento continuam sendo alterados apenas uma vez.`);
+        }
+
+        if (moveAction) {
+          messageParts.push('A data da compra será mantida; o app ajusta apenas a fatura/mês de cobrança.');
+        }
+
+        if (window.showActionDialog) {
+          return await window.showActionDialog({
+            title,
+            message: messageParts.join('\n\n'),
+            options: destructive
+              ? [
+                  { label: 'Cancelar', value: null, tone: 'secondary' },
+                  { label: 'Excluir só itens atuais', value: 'single', tone: 'danger' },
+                  { label: 'Excluir itens atuais + próximas parcelas', value: 'future', tone: 'danger' }
+                ]
+              : moveAction
+                ? [
+                    { label: 'Cancelar', value: null, tone: 'secondary' },
+                    { label: 'Mover só itens atuais', value: 'single', tone: 'primary' },
+                    { label: 'Mover itens atuais + próximas parcelas', value: 'future', tone: 'primary' }
+                  ]
+                : [
+                    { label: 'Cancelar', value: null, tone: 'secondary' },
+                    { label: 'Aplicar só itens atuais', value: 'single', tone: 'primary' },
+                    { label: 'Aplicar itens atuais + próximas parcelas', value: 'future', tone: 'primary' }
+                  ]
+          });
+        }
+
+        const fallbackText = items.length > 1
+          ? `Aplicar ${actionLabel} em ${items.length} compra(s), incluindo próximas parcelas das compras parceladas?`
+          : `Aplicar ${actionLabel} incluindo próximas parcelas desta compra parcelada?`;
+        return window.confirm(fallbackText) ? 'future' : 'single';
+      }
+
+      async function confirmDeleteScope(items, scope) {
+        const safeScope = String(scope || 'single');
+        const count = Array.isArray(items) ? items.length : 0;
+        const hasFuture = safeScope === 'future';
+        const message = hasFuture
+          ? (count > 1
+              ? 'Confirmar a exclusão das compras selecionadas e também das próximas parcelas das compras parceladas envolvidas? Isso apaga os itens e as divisões associadas.'
+              : 'Confirmar a exclusão desta compra e também das próximas parcelas desta compra parcelada? Isso apaga o item e as divisões associadas.')
+          : (count > 1
+              ? `Confirmar a exclusão de ${count} compra(s) selecionada(s)? Isso apaga os itens e as divisões associadas.`
+              : 'Confirmar a exclusão desta compra? Isso apaga o item e a divisão associada.');
+
+        if (window.confirmTypedAction) {
+          return await window.confirmTypedAction(message);
+        }
+
+        return window.confirm(message);
+      }
+
+      async function postBulkAction(url, payload) {
         try {
-          const response = await fetch(form.action, {
+          const response = await fetch(url, {
             method: 'POST',
-            body: formData,
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
           });
 
-          if (!response.ok) {
-            throw new Error(await response.text() || 'Erro ao salvar.');
+          let data = null;
+          try {
+            data = await response.json();
+          } catch (_) {
+            data = null;
           }
 
-          modifiedForms.delete(form);
-          form.classList.remove('bg-amber-50', 'border-amber-300');
-
-          const statusTd = form.closest('tr').querySelector('.status-icon');
-          if (statusTd) {
-            const isAllocated = getPersonCheckboxes(form).filter(cb => cb.checked).length > 0;
-            if (isAllocated) {
-              statusTd.innerHTML = `<div class="flex items-center justify-between md:justify-center gap-3"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</span><div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center md:mx-auto" title="Distribuído"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg></div></div>`;
-            } else {
-              statusTd.innerHTML = `<div class="flex items-center justify-between md:justify-center gap-3"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</span><div class="w-6 h-6 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center md:mx-auto" title="Não Distribuído"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div></div>`;
-            }
+          if (!response.ok || !data || data.ok === false) {
+            throw new Error((data && data.error) || (data && data.message) || 'Não foi possível concluir a ação.');
           }
 
-          allocMsg.innerHTML = '<span class="text-emerald-600">Item salvo!</span>';
-          setTimeout(() => allocMsg.innerHTML = '', 3000);
-          updateGlobalBar();
+          showAllocMessage(data.message || 'Ação concluída com sucesso.', 'success');
+          exitSelectionMode();
+          window.setTimeout(() => window.location.reload(), 450);
           return true;
-        } catch (err) {
-          allocMsg.innerHTML = `<span class="text-red-600">${err.message || 'Erro ao salvar.'}</span>`;
+        } catch (error) {
+          console.error(error);
+          showAllocMessage(error.message || 'Não foi possível concluir a ação.', 'error');
           return false;
-        } finally {
-          if (btn) {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-          }
         }
-      };
+      }
 
-      window.saveAllModified = async function () {
-        const formsToSave = Array.from(modifiedForms);
-        if (!formsToSave.length) return;
+      function getUniformSelection(items) {
+        if (!items.length) return [];
+        const signatures = items.map(item => (item.selected_ids || []).map(Number).sort((a, b) => a - b).join(','));
+        const first = signatures[0];
+        const same = signatures.every(signature => signature === first);
+        if (!same) return null;
+        return first ? first.split(',').map(Number).filter(Number.isInteger) : [];
+      }
 
-        const originalText = btnGlobalSave.innerHTML;
-        btnGlobalSave.innerHTML = 'Processando...';
-        btnGlobalSave.disabled = true;
+      function buildPersonCard(person, checked) {
+        const label = document.createElement('label');
+        label.className = 'group cursor-pointer';
 
-        try {
-          const scopeStrategy = await resolveBatchInstallmentStrategy(formsToSave);
-          if (!scopeStrategy) {
-            return;
-          }
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.name = 'person_ids';
+        input.value = String(person.id);
+        input.className = 'peer sr-only';
+        input.checked = checked;
 
-          let successCount = 0;
-          let failureCount = 0;
+        const card = document.createElement('span');
+        card.className = 'flex min-h-[74px] items-center gap-3 rounded-[22px] border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-blue-300 group-hover:shadow-md peer-checked:border-blue-400 peer-checked:bg-blue-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-blue-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/40';
 
-          for (const form of formsToSave) {
-            const ok = await saveForm(form, { scopeStrategy });
-            if (ok) successCount += 1;
-            else failureCount += 1;
-          }
+        const name = document.createElement('span');
+        name.className = 'flex-1 text-sm font-bold text-slate-800 dark:text-slate-100';
+        name.textContent = person.name;
 
-          if (failureCount === 0) {
-            allocMsg.innerHTML = '<span class="text-emerald-600 font-extrabold text-base">Todas as alterações foram salvas com sucesso!</span>';
-          } else if (successCount > 0) {
-            allocMsg.innerHTML = `<span class="text-amber-600 font-extrabold text-base">${successCount} item(ns) salvo(s) e ${failureCount} com pendência.</span>`;
-          }
-          setTimeout(() => allocMsg.innerHTML = '', 4000);
-        } finally {
-          btnGlobalSave.innerHTML = originalText;
-          btnGlobalSave.disabled = false;
+        const badge = document.createElement('span');
+        badge.className = 'inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 transition-all peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 dark:peer-checked:text-white';
+        badge.innerHTML = '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+
+        card.appendChild(name);
+        card.appendChild(badge);
+        label.appendChild(input);
+        label.appendChild(card);
+        return label;
+      }
+
+      function openPeopleSheet(txnIds) {
+        const items = getTxnItems(txnIds);
+        if (!items.length) return;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'space-y-4';
+
+        const summary = document.createElement('div');
+        summary.className = 'rounded-[22px] border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200';
+        summary.textContent = items.length > 1
+          ? `${items.length} compra(s) selecionada(s) · ${formatMoney(sumAmounts(items))}`
+          : `${items[0].description} · ${formatMoney(items[0].amount_cents)}`;
+        wrapper.appendChild(summary);
+
+        const uniformSelection = getUniformSelection(items);
+        const initialSelectedIds = uniformSelection !== null
+          ? uniformSelection
+          : (items.length === 1 ? (items[0].selected_ids || []).map(Number) : []);
+
+        if (uniformSelection === null && items.length > 1) {
+          const note = document.createElement('div');
+          note.className = 'rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200';
+          note.textContent = 'Os itens selecionados têm distribuições diferentes. A seleção abaixo substituirá a distribuição atual de todos eles.';
+          wrapper.appendChild(note);
         }
-      };
 
-      window.copyAlloc = function (txnId) {
-        const form = getVisibleAllocForm(txnId);
-        if (!form) return;
+        if (!people.length) {
+          const empty = document.createElement('div');
+          empty.className = 'rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300';
+          empty.textContent = 'Nenhuma pessoa visível neste mês para aplicar a distribuição.';
+          wrapper.appendChild(empty);
+        } else {
+          const grid = document.createElement('div');
+          grid.className = 'grid gap-3 sm:grid-cols-2';
+          people.forEach(person => {
+            grid.appendChild(buildPersonCard(person, initialSelectedIds.includes(Number(person.id))));
+          });
+          wrapper.appendChild(grid);
+        }
 
-        const cbs = getPersonCheckboxes(form).filter(cb => cb.checked);
-        const values = Array.from(cbs).map(cb => cb.value);
+        openMonthSheet({
+          title: items.length > 1 ? 'Aplicar participantes' : 'Selecionar participantes',
+          subtitle: items.length > 1 ? 'A distribuição será substituída em todos os itens selecionados.' : 'Escolha quem participa desta compra.',
+          body: wrapper,
+          actions: [
+            { label: 'Fechar', tone: 'secondary' },
+            {
+              label: 'Salvar distribuição',
+              tone: 'primary',
+              closeOnClick: false,
+              disabled: !people.length,
+              onClick: async () => {
+                const checkedIds = Array.from(wrapper.querySelectorAll('input[name="person_ids"]:checked'))
+                  .map(input => Number(input.value))
+                  .filter(Number.isInteger);
+                const scope = await resolveSelectionScope(items, { actionLabel: 'alterar a distribuição' });
+                if (!scope) return false;
+                const ok = await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/alloc`, {
+                  txn_ids: txnIds,
+                  person_ids: checkedIds,
+                  apply_scope: scope
+                });
+                if (ok) ensureMonthSheet().close();
+                return false;
+              }
+            }
+          ]
+        });
+      }
 
-        localStorage.setItem("allocClipboard", JSON.stringify(values));
+      function openMoveSheet(txnIds) {
+        const items = getTxnItems(txnIds);
+        if (!items.length) return;
 
-        allocMsg.innerHTML = '<span class="text-blue-600 font-bold">Atribuição copiada!</span>';
-        setTimeout(() => allocMsg.innerHTML = '', 3000);
-      };
-
-      window.pasteAlloc = function (txnId) {
-        const raw = localStorage.getItem("allocClipboard");
-        if (!raw) {
-          allocMsg.innerHTML = '<span class="text-amber-600 font-bold">Nenhuma atribuição copiada. Use o botão Copiar antes.</span>';
+        const recurringItem = items.find(item => Number(item.recurring_rule_id || 0) > 0);
+        if (recurringItem) {
+          showAllocMessage('Compras recorrentes ainda não entram no fluxo de mover para outra fatura. Remova-as da seleção e tente novamente.', 'warning');
           return;
         }
 
-        const ids = JSON.parse(raw);
-        const form = getVisibleAllocForm(txnId);
-        if (!form) return;
+        const baseMonth = Number(items[0].month || currentMonth);
+        const baseYear = Number(items[0].year || currentYear);
+        const defaultTarget = shiftMonthLocal(baseYear, baseMonth, 1);
+        const years = [];
+        for (let year = baseYear - 1; year <= baseYear + 3; year += 1) years.push(year);
 
-        const cbs = getPersonCheckboxes(form);
-        cbs.forEach(cb => {
-          cb.checked = ids.includes(cb.value);
+        const wrapper = document.createElement('div');
+        wrapper.className = 'space-y-4';
+
+        const intro = document.createElement('div');
+        intro.className = 'rounded-[22px] border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200';
+        intro.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Seleção</div><div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">${items.length} compra(s) · ${escapeHtml(formatMoney(sumAmounts(items)))}</div><p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">A data da compra será mantida. O app vai ajustar apenas a fatura/mês de cobrança.</p>`;
+        wrapper.appendChild(intro);
+
+        const quickRow = document.createElement('div');
+        quickRow.className = 'grid grid-cols-2 gap-2';
+        const quickPrev = document.createElement('button');
+        quickPrev.type = 'button';
+        quickPrev.className = 'inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800';
+        quickPrev.textContent = 'Fatura anterior';
+        const quickNext = document.createElement('button');
+        quickNext.type = 'button';
+        quickNext.className = 'inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white';
+        quickNext.textContent = 'Próxima fatura';
+        quickRow.appendChild(quickPrev);
+        quickRow.appendChild(quickNext);
+        wrapper.appendChild(quickRow);
+
+        const grid = document.createElement('div');
+        grid.className = 'grid gap-3 sm:grid-cols-2';
+        const monthField = document.createElement('div');
+        const monthLabelEl = document.createElement('label');
+        monthLabelEl.className = 'mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400';
+        monthLabelEl.textContent = 'Mês da fatura';
+        const monthSelect = document.createElement('select');
+        monthSelect.className = 'w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950';
+        monthNames.forEach((name, index) => {
+          const option = document.createElement('option');
+          option.value = String(index + 1);
+          option.textContent = name;
+          if ((index + 1) === Number(defaultTarget.month)) option.selected = true;
+          monthSelect.appendChild(option);
+        });
+        monthField.appendChild(monthLabelEl);
+        monthField.appendChild(monthSelect);
+
+        const yearField = document.createElement('div');
+        const yearLabelEl = document.createElement('label');
+        yearLabelEl.className = 'mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400';
+        yearLabelEl.textContent = 'Ano da fatura';
+        const yearSelect = document.createElement('select');
+        yearSelect.className = 'w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950';
+        years.forEach(value => {
+          const option = document.createElement('option');
+          option.value = String(value);
+          option.textContent = String(value);
+          if (value === Number(defaultTarget.year)) option.selected = true;
+          yearSelect.appendChild(option);
+        });
+        yearField.appendChild(yearLabelEl);
+        yearField.appendChild(yearSelect);
+
+        grid.appendChild(monthField);
+        grid.appendChild(yearField);
+        wrapper.appendChild(grid);
+
+        const preview = document.createElement('div');
+        preview.className = 'rounded-[22px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200';
+        const updatePreview = () => {
+          preview.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-blue-500/80 dark:text-blue-300/80">Destino</div><div class="mt-1 text-sm font-black">${escapeHtml(formatMonthLabel(monthSelect.value, yearSelect.value))}</div>`;
+        };
+        monthSelect.addEventListener('change', updatePreview);
+        yearSelect.addEventListener('change', updatePreview);
+        updatePreview();
+        wrapper.appendChild(preview);
+
+        quickPrev.addEventListener('click', () => {
+          const target = shiftMonthLocal(baseYear, baseMonth, -1);
+          monthSelect.value = String(target.month);
+          yearSelect.value = String(target.year);
+          updatePreview();
         });
 
-        syncSiblingForms(form);
-        markAsModified(form);
-        allocMsg.innerHTML = '<span class="text-blue-600 font-bold">Colado! Não esqueça de Salvar.</span>';
-      };
+        quickNext.addEventListener('click', () => {
+          const target = shiftMonthLocal(baseYear, baseMonth, 1);
+          monthSelect.value = String(target.month);
+          yearSelect.value = String(target.year);
+          updatePreview();
+        });
+
+        openMonthSheet({
+          title: items.length > 1 ? 'Mover para outra fatura' : 'Mover compra',
+          subtitle: items.length > 1 ? 'A mudança será aplicada em todos os itens selecionados.' : 'A data da compra continuará a mesma.',
+          body: wrapper,
+          actions: [
+            { label: 'Fechar', tone: 'secondary' },
+            {
+              label: 'Mover para a fatura escolhida',
+              tone: 'primary',
+              closeOnClick: false,
+              onClick: async () => {
+                const targetMonth = Number(monthSelect.value || 0);
+                const targetYear = Number(yearSelect.value || 0);
+                if (targetMonth === baseMonth && targetYear === baseYear) {
+                  showAllocMessage('Escolha uma fatura diferente do mês atual.', 'warning');
+                  return false;
+                }
+                const scope = await resolveSelectionScope(items, { actionLabel: 'mover para outra fatura', moveAction: true });
+                if (!scope) return false;
+                const ok = await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/move`, {
+                  txn_ids: txnIds,
+                  target_month: targetMonth,
+                  target_year: targetYear,
+                  apply_scope: scope
+                });
+                if (ok) ensureMonthSheet().close();
+                return false;
+              }
+            }
+          ]
+        });
+      }
+
+      async function submitDelete(txnIds, scope = 'single') {
+        return await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/delete`, {
+          txn_ids: txnIds,
+          apply_scope: scope
+        });
+      }
+
+      function openDeleteSheet(txnIds) {
+        const items = getTxnItems(txnIds);
+        if (!items.length) return;
+
+        const futureItems = items.filter(item => item.has_future_installments);
+        const nonInstallmentCount = Math.max(0, items.length - futureItems.length);
+        const wrapper = document.createElement('div');
+        wrapper.className = 'space-y-4';
+
+        const summary = document.createElement('div');
+        summary.className = 'rounded-[22px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900 dark:border-red-800 dark:bg-red-900/20 dark:text-red-100';
+        summary.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-red-500/80 dark:text-red-300/80">Exclusão</div><div class="mt-1 text-sm font-black">${items.length} compra(s) · ${escapeHtml(formatMoney(sumAmounts(items)))}</div><p class="mt-2 text-sm font-medium text-red-700/90 dark:text-red-200/90">Isso apaga as compras selecionadas e as divisões associadas.</p>`;
+        wrapper.appendChild(summary);
+
+        let scopeValue = 'single';
+
+        if (futureItems.length) {
+          const note = document.createElement('div');
+          note.className = 'rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100';
+          note.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-amber-500/90 dark:text-amber-300/80">Compras parceladas</div><p class="mt-1">${futureItems.length} item(ns) parcelado(s) exigem definição de alcance antes da exclusão.</p>${nonInstallmentCount > 0 ? `<p class="mt-2 text-sm font-medium text-amber-800/90 dark:text-amber-200/90">Os ${nonInstallmentCount} item(ns) sem parcelamento serão excluídos apenas uma vez.</p>` : ''}`;
+          wrapper.appendChild(note);
+
+          const scopeGroup = document.createElement('div');
+          scopeGroup.className = 'space-y-3';
+
+          const scopeTitle = document.createElement('div');
+          scopeTitle.className = 'text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400';
+          scopeTitle.textContent = 'Alcance da exclusão';
+          scopeGroup.appendChild(scopeTitle);
+
+          const options = [
+            {
+              value: 'single',
+              title: futureItems.length > 1 ? 'Excluir só itens atuais' : 'Excluir só item atual',
+              description: futureItems.length > 1
+                ? 'Remove apenas as compras selecionadas neste mês.'
+                : 'Remove apenas a compra selecionada neste mês.'
+            },
+            {
+              value: 'future',
+              title: futureItems.length > 1 ? 'Excluir itens atuais + próximas parcelas' : 'Excluir item atual + próximas parcelas',
+              description: futureItems.length > 1
+                ? 'Também remove as próximas parcelas de cada compra parcelada selecionada.'
+                : 'Também remove as próximas parcelas desta compra parcelada.'
+            }
+          ];
+
+          options.forEach((option, index) => {
+            const label = document.createElement('label');
+            label.className = 'group block cursor-pointer';
+
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = 'delete_scope_choice';
+            input.value = option.value;
+            input.className = 'peer sr-only';
+            input.checked = index === 0;
+            input.addEventListener('change', () => {
+              if (input.checked) scopeValue = option.value;
+            });
+
+            const card = document.createElement('span');
+            card.className = 'block rounded-[22px] border border-slate-200 bg-white px-4 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-red-300 group-hover:shadow-md peer-checked:border-red-400 peer-checked:bg-red-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-red-500 dark:peer-checked:border-red-500 dark:peer-checked:bg-red-950/30';
+            card.innerHTML = `<span class="flex items-start justify-between gap-3"><span><span class="block text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(option.title)}</span><span class="mt-1 block text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">${escapeHtml(option.description)}</span></span><span class="mt-0.5 inline-flex h-6 w-6 flex-none items-center justify-center rounded-full border border-slate-300 bg-white text-transparent peer-checked:border-red-500 peer-checked:bg-red-600 peer-checked:text-white dark:border-slate-600 dark:bg-slate-950 dark:peer-checked:border-red-500 dark:peer-checked:bg-red-500">✓</span></span>`;
+
+            label.appendChild(input);
+            label.appendChild(card);
+            scopeGroup.appendChild(label);
+          });
+
+          wrapper.appendChild(scopeGroup);
+        }
+
+        openMonthSheet({
+          title: items.length > 1 ? 'Confirmar exclusão' : 'Excluir compra',
+          subtitle: futureItems.length ? 'Escolha o alcance da exclusão e confirme a ação.' : 'Confirme a exclusão da compra selecionada.',
+          body: wrapper,
+          actions: [
+            { label: 'Cancelar', tone: 'secondary' },
+            {
+              label: items.length > 1 ? 'Excluir compras' : 'Excluir compra',
+              tone: 'danger',
+              closeOnClick: false,
+              onClick: async () => {
+                const chosenScope = futureItems.length
+                  ? String((wrapper.querySelector('input[name="delete_scope_choice"]:checked') || {}).value || scopeValue || 'single')
+                  : 'single';
+                const ok = await submitDelete(txnIds, chosenScope);
+                if (ok) ensureMonthSheet().close();
+                return false;
+              }
+            }
+          ]
+        });
+      }
+
+      function executeDelete(txnIds) {
+        openDeleteSheet(txnIds);
+      }
+
+      async function openSingleActionMenu(txnId) {
+        const item = getTxnItem(txnId);
+        if (!item) return;
+
+        if (!window.showActionDialog) {
+          openPeopleSheet([txnId]);
+          return;
+        }
+
+        const message = [
+          formatMoney(item.amount_cents),
+          formatMonthLabel(item.month, item.year),
+          item.has_future_installments ? 'Compra parcelada' : 'Compra do mês'
+        ].filter(Boolean).join(' · ');
+
+        const choice = await window.showActionDialog({
+          title: item.description,
+          message,
+          options: [
+            { label: 'Selecionar participantes', value: 'people', tone: 'primary' },
+            { label: 'Mover para outra fatura', value: 'move', tone: 'secondary' },
+            { label: 'Selecionar vários', value: 'multi', tone: 'secondary' },
+            { label: 'Excluir compra', value: 'delete', tone: 'danger' }
+          ]
+        });
+
+        if (choice === 'people') {
+          openPeopleSheet([txnId]);
+          return;
+        }
+        if (choice === 'move') {
+          openMoveSheet([txnId]);
+          return;
+        }
+        if (choice === 'multi') {
+          enterSelectionMode([txnId]);
+          return;
+        }
+        if (choice === 'delete') {
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => {
+              executeDelete([txnId]);
+            });
+          });
+          return;
+        }
+      }
+
+      function handleRowActivation(row, event) {
+        const txnId = String(row.dataset.txnId || '');
+        if (!txnId) return;
+
+        if (selectionMode) {
+          toggleSelection(txnId);
+          return;
+        }
+
+        if (isClosed) {
+          window.location.href = `/txn/${txnId}`;
+          return;
+        }
+
+        if (event && (event.metaKey || event.ctrlKey)) {
+          enterSelectionMode([txnId]);
+          return;
+        }
+
+        openSingleActionMenu(txnId);
+      }
+
+      function attachLongPress(row) {
+        if (isClosed) return;
+        let timer = null;
+        let startX = 0;
+        let startY = 0;
+
+        const clear = () => {
+          if (timer) window.clearTimeout(timer);
+          timer = null;
+        };
+
+        row.addEventListener('touchstart', (event) => {
+          if (selectionMode) return;
+          if (!event.touches || event.touches.length !== 1) return;
+          startX = event.touches[0].clientX;
+          startY = event.touches[0].clientY;
+          const txnId = String(row.dataset.txnId || '');
+          clear();
+          timer = window.setTimeout(() => {
+            row.dataset.longPressTriggered = '1';
+            enterSelectionMode([txnId]);
+            if (navigator.vibrate) navigator.vibrate(12);
+            clear();
+          }, 430);
+        }, { passive: true });
+
+        row.addEventListener('touchmove', (event) => {
+          if (!timer || !event.touches || !event.touches.length) return;
+          const deltaX = Math.abs(event.touches[0].clientX - startX);
+          const deltaY = Math.abs(event.touches[0].clientY - startY);
+          if (deltaX > 12 || deltaY > 12) clear();
+        }, { passive: true });
+
+        row.addEventListener('touchend', clear, { passive: true });
+        row.addEventListener('touchcancel', clear, { passive: true });
+      }
+
+      rows.forEach(row => {
+        row.addEventListener('click', (event) => {
+          if (row.dataset.longPressTriggered === '1') {
+            row.dataset.longPressTriggered = '';
+            event.preventDefault();
+            return;
+          }
+          handleRowActivation(row, event);
+        });
+
+        row.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          handleRowActivation(row, event);
+        });
+
+        row.addEventListener('contextmenu', (event) => {
+          if (isClosed) return;
+          event.preventDefault();
+          handleRowActivation(row, event);
+        });
+
+        attachLongPress(row);
+      });
+
+      enterSelectionBtn?.addEventListener('click', () => enterSelectionMode());
+      exitSelectionBtn?.addEventListener('click', exitSelectionMode);
+      bulkCancelBtn?.addEventListener('click', exitSelectionMode);
+      bulkPeopleBtn?.addEventListener('click', () => openPeopleSheet(getSelectedTxnIds()));
+      bulkMoveBtn?.addEventListener('click', () => openMoveSheet(getSelectedTxnIds()));
+      bulkDeleteBtn?.addEventListener('click', () => executeDelete(getSelectedTxnIds()));
+
+      updateSelectionUI();
     });
   </script>
 

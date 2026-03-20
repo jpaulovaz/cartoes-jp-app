@@ -53,7 +53,7 @@
       .map(cb => cb.value);
 
     if (selected.length === 0) {
-      alert("Selecione pelo menos uma pessoa para copiar!");
+      alert("Selecione pelo menos uma pessoa antes de copiar.");
       return;
     }
 
@@ -69,7 +69,7 @@
     const data = localStorage.getItem('copiedAlloc');
 
     if (!data) {
-      alert("Nenhuma atribuição copiada. Use o botão Copiar antes.");
+      alert("Nada copiado ainda. Use o botão Copiar primeiro.");
       return;
     }
 
@@ -108,9 +108,26 @@
     return `${base} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:ring-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus:ring-slate-500`;
   }
 
+  function hasVisibleMonthSheet() {
+    const surface = document.querySelector('[data-month-sheet-surface]');
+    if (!surface) return false;
+    const root = surface.closest('.fixed.inset-0');
+    return !!(root && !root.classList.contains('hidden'));
+  }
+
   function setDialogVisibility(state, visible) {
     state.root.classList.toggle('hidden', !visible);
-    document.body.classList.toggle('overflow-hidden', visible);
+    if (visible) {
+      if (state.root.parentElement === document.body) {
+        document.body.appendChild(state.root);
+      }
+      document.body.classList.add('overflow-hidden');
+      return;
+    }
+
+    if (!hasVisibleMonthSheet()) {
+      document.body.classList.remove('overflow-hidden');
+    }
   }
 
   function ensureActionDialog() {
@@ -119,11 +136,11 @@
     }
 
     const root = document.createElement('div');
-    root.className = 'fixed inset-0 z-[9999] hidden';
+    root.className = 'fixed inset-0 z-[10050] hidden';
     root.innerHTML = `
       <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-dialog-backdrop></div>
       <div class="relative z-10 flex min-h-full items-end justify-center p-4 sm:items-center">
-        <div class="w-full max-w-md overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+        <div class="w-full max-w-md overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" data-dialog-surface>
           <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
             <h3 class="text-base font-bold text-slate-900 dark:text-slate-100" data-dialog-title></h3>
           </div>
@@ -138,6 +155,7 @@
 
     dialogState = {
       root,
+      surface: root.querySelector('[data-dialog-surface]'),
       title: root.querySelector('[data-dialog-title]'),
       message: root.querySelector('[data-dialog-message]'),
       buttons: root.querySelector('[data-dialog-buttons]'),
@@ -153,6 +171,11 @@
     };
 
     root.querySelector('[data-dialog-backdrop]')?.addEventListener('click', () => closeDialog(null));
+    root.addEventListener('click', (event) => {
+      const surface = dialogState?.surface;
+      if (!dialogState?.activeResolve || !surface) return;
+      if (!surface.contains(event.target)) closeDialog(null);
+    });
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && dialogState?.activeResolve) {
         closeDialog(null);
@@ -163,7 +186,7 @@
     return dialogState;
   }
 
-  function showActionDialog({ title = 'Confirmar ação', message = '', options = [] } = {}) {
+  function showActionDialog({ title = 'Confirma essa ação?', message = '', options = [] } = {}) {
     const state = ensureActionDialog();
 
     if (state.activeResolve) {
@@ -197,7 +220,7 @@
 
   async function confirmTypedAction(message, phrase = 'Eu confirmo') {
     const result = await showActionDialog({
-      title: 'Confirmar exclusão',
+      title: 'Confirma a exclusão?',
       message,
       options: [
         { label: 'Cancelar', value: false, tone: 'secondary' },
@@ -280,6 +303,8 @@
       }
     };
 
+    form.__opRefreshFirstDue = refreshSuggestion;
+
     dateInput.addEventListener('change', refreshSuggestion);
     dateInput.addEventListener('input', refreshSuggestion);
     cardSelect.addEventListener('change', refreshSuggestion);
@@ -288,6 +313,105 @@
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-auto-first-due-form]').forEach(bindAutoFirstDue);
   });
+})();
+
+(function () {
+  function getLocalTodayISO() {
+    const now = new Date();
+    const local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+    return local.toISOString().slice(0, 10);
+  }
+
+  function focusManualAmount(input) {
+    if (!(input instanceof HTMLInputElement)) return;
+
+    const focusNow = () => {
+      try {
+        input.focus({ preventScroll: true });
+      } catch (error) {
+        input.focus();
+      }
+      try {
+        input.select();
+      } catch (error) {
+        // noop
+      }
+    };
+
+    focusNow();
+    requestAnimationFrame(focusNow);
+    window.setTimeout(focusNow, 120);
+  }
+
+  function syncManualPurchaseDefaults(modal) {
+    if (!(modal instanceof HTMLElement)) return;
+
+    const form = modal.querySelector('[data-auto-first-due-form]');
+    if (!(form instanceof HTMLFormElement)) return;
+
+    const dateInput = form.querySelector('[data-manual-date-input]');
+    if (dateInput instanceof HTMLInputElement && !dateInput.value) {
+      dateInput.value = getLocalTodayISO();
+    }
+
+    if (typeof form.__opRefreshFirstDue === 'function') {
+      form.__opRefreshFirstDue();
+    }
+  }
+
+  function setupManualPurchaseModal() {
+    const modal = document.querySelector('[data-manual-modal]');
+    if (!(modal instanceof HTMLElement)) return;
+
+    const form = modal.querySelector('[data-auto-first-due-form]');
+    const amountInput = modal.querySelector('[data-manual-amount-input]');
+    const openButtons = Array.from(document.querySelectorAll('[data-manual-modal-open]')).filter((element) => element instanceof HTMLElement);
+    const closeButtons = Array.from(modal.querySelectorAll('[data-manual-modal-close]')).filter((element) => element instanceof HTMLElement);
+
+    const openModal = () => {
+      modal.classList.remove('hidden');
+      modal.setAttribute('aria-hidden', 'false');
+      syncManualPurchaseDefaults(modal);
+      if (amountInput instanceof HTMLInputElement) {
+        focusManualAmount(amountInput);
+      }
+    };
+
+    const closeModal = () => {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+    };
+
+    openButtons.forEach((button) => {
+      button.addEventListener('click', openModal);
+    });
+
+    closeButtons.forEach((button) => {
+      button.addEventListener('click', closeModal);
+    });
+
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) {
+        closeModal();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+        closeModal();
+      }
+    });
+
+    if (form instanceof HTMLFormElement) {
+      form.addEventListener('submit', () => {
+        modal.setAttribute('aria-hidden', 'true');
+      });
+    }
+
+    syncManualPurchaseDefaults(modal);
+  }
+
+  document.addEventListener('DOMContentLoaded', setupManualPurchaseModal);
 })();
 
 (function () {
@@ -553,6 +677,11 @@
 })();
 
 (function () {
+  const iconBell = '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.389 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>';
+  const iconBellOff = '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364L4.636 4.636m13.728 13.728A9.953 9.953 0 0112 20a9.953 9.953 0 01-5.895-1.93M6.343 6.343A5.97 5.97 0 006 8v3.159c0 .538-.214 1.055-.595 1.436L4 14h16l-1.405-1.405A2.032 2.032 0 0118 11.159V8a6 6 0 00-9.33-4.958M9 17a3 3 0 006 0"></path></svg>';
+  const iconSpinner = '<svg class="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>';
+  const iconBlocked = '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636A9 9 0 115.636 18.364M19 19L5 5"></path></svg>';
+
   function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
     const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -570,51 +699,216 @@
     return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   }
 
-  function setPushToggleState(button, statusEl, state) {
-    if (!(button instanceof HTMLButtonElement)) return;
+  function getPushPublicKey(button) {
+    const buttonKey = String(button?.dataset?.pushPublicKey || '').trim();
+    if (buttonKey) return buttonKey;
+    return String(document.body?.dataset?.pushPublicKey || '').trim();
+  }
 
-    const iconBell = '<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.389 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>';
-    const iconBellOff = '<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364L4.636 4.636m13.728 13.728A9.953 9.953 0 0112 20a9.953 9.953 0 01-5.895-1.93M6.343 6.343A5.97 5.97 0 006 8v3.159c0 .538-.214 1.055-.595 1.436L4 14h16l-1.405-1.405A2.032 2.032 0 0118 11.159V8a6 6 0 00-9.33-4.958M9 17a3 3 0 006 0"></path></svg>';
-    const iconSpinner = '<svg class="w-5 h-5 mr-2 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>';
-    const iconBlocked = '<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636A9 9 0 115.636 18.364M19 19L5 5"></path></svg>';
+  function getPushStatusMessage(state) {
+    if (state === 'enabled') return 'Tudo certo! Este aparelho já vai te chamar quando pintar novidade.';
+    if (state === 'blocked') return 'Os alertas foram bloqueados neste navegador. Para ligar de novo, libere a permissão nas configurações do navegador.';
+    if (state === 'unsupported') return 'Este navegador não consegue receber alertas por aqui, ou o recurso ainda não foi configurado.';
+    if (state === 'loading') return 'Preparando os alertas deste aparelho...';
+    return 'Ligue os alertas neste aparelho e deixe o app te dar um toque quando algo mudar.';
+  }
 
+  function getToggleStateConfig(state) {
     const states = {
       idle: {
-        html: `${iconBell}Ativar push`,
+        html: `${iconBell}Ativar alertas`,
         disabled: false,
-        className: 'inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-sky-700 transition-colors'
+        className: 'op-btn op-btn-warning-soft op-btn--block'
+      },
+      blocked: {
+        html: `${iconBlocked}Alertas bloqueados`,
+        disabled: true,
+        className: 'op-btn op-btn-danger-soft op-btn--block'
       },
       enabled: {
-        html: `${iconBellOff}Desativar push`,
+        html: `${iconBellOff}Desligar alertas`,
         disabled: false,
-        className: 'inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors'
+        className: 'op-btn op-btn-success op-btn--block'
       },
       loading: {
-        html: `${iconSpinner}Processando...`,
+        html: `${iconSpinner}Preparando...`,
         disabled: true,
-        className: 'inline-flex items-center justify-center rounded-2xl bg-slate-400 px-4 py-2.5 text-sm font-bold text-white shadow-sm cursor-wait'
+        className: 'op-btn op-btn-muted op-btn--block'
       },
       unsupported: {
-        html: `${iconBlocked}Push indisponível`,
+        html: `${iconBlocked}Alertas indisponíveis`,
         disabled: true,
-        className: 'inline-flex items-center justify-center rounded-2xl bg-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm cursor-not-allowed dark:bg-slate-700 dark:text-slate-200'
+        className: 'op-btn op-btn-muted op-btn--block'
       }
     };
 
-    const chosen = states[state] || states.idle;
+    return states[state] || states.idle;
+  }
+
+  function getCenterTriggerConfig(state, variant) {
+    if (variant === 'cta') {
+      if (state === 'enabled') {
+        return {
+          html: `${iconBell}<span>Alertas ligados</span>`,
+          helper: 'Tudo pronto: este aparelho já pode receber avisos de vencimento, respostas e confirmações.',
+          ariaLabel: 'Gerenciar alertas deste aparelho'
+        };
+      }
+
+      if (state === 'blocked') {
+        return {
+          html: `${iconBlocked}<span>Alertas bloqueados</span>`,
+          helper: 'Os alertas foram barrados pelo navegador. Toque aqui para ver como está e ajustar quando quiser.',
+          ariaLabel: 'Ver status dos alertas deste aparelho'
+        };
+      }
+
+      if (state === 'unsupported') {
+        return {
+          html: `${iconBell}<span>Ver alertas</span>`,
+          helper: 'Neste navegador o push não rola, mas o sininho segue guardando seus avisos recentes.',
+          ariaLabel: 'Abrir central de alertas'
+        };
+      }
+
+      if (state === 'loading') {
+        return {
+          html: `${iconSpinner}<span>Checando alertas...</span>`,
+          helper: 'Só um confere rápido para descobrir como este aparelho está com os alertas.',
+          ariaLabel: 'Abrir central de alertas'
+        };
+      }
+
+      return {
+        html: `${iconBellOff}<span>Ativar alertas</span>`,
+        helper: 'Receba avisos de vencimento, respostas e confirmações neste aparelho — sem precisar caçar novidade no app.',
+        ariaLabel: 'Ativar alertas deste aparelho'
+      };
+    }
+
+    if (state === 'enabled') {
+      return {
+        icon: iconBell,
+        ariaLabel: 'Abrir central de alertas'
+      };
+    }
+
+    if (state === 'blocked') {
+      return {
+        icon: iconBlocked,
+        ariaLabel: 'Abrir central de alertas. Os alertas deste aparelho estão bloqueados.'
+      };
+    }
+
+    if (state === 'unsupported') {
+      return {
+        icon: iconBell,
+        ariaLabel: 'Abrir central de alertas'
+      };
+    }
+
+    if (state === 'loading') {
+      return {
+        icon: iconSpinner,
+        ariaLabel: 'Abrir central de alertas'
+      };
+    }
+
+    return {
+      icon: iconBellOff,
+      ariaLabel: 'Abrir central de alertas e ativar alertas neste aparelho'
+    };
+  }
+
+  function showPushToast(message, tone = 'info') {
+    if (!message) return;
+
+    let container = document.querySelector('[data-push-toast-root]');
+    if (!(container instanceof HTMLElement)) {
+      container = document.createElement('div');
+      container.dataset.pushToastRoot = '1';
+      container.className = 'pointer-events-none fixed inset-x-0 top-4 z-[10060] flex justify-center px-4';
+      document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    const toneClasses = tone === 'success'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-100'
+      : tone === 'error'
+        ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/35 dark:text-red-100'
+        : 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-900/35 dark:text-sky-100';
+    toast.className = `pointer-events-auto w-full max-w-md rounded-[22px] border px-4 py-3 text-sm font-semibold shadow-2xl backdrop-blur ${toneClasses}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+
+    window.setTimeout(() => {
+      toast.remove();
+      if (container && !container.childElementCount) container.remove();
+    }, 3200);
+  }
+
+  function setPushToggleState(button, statusEl, state) {
+    if (!(button instanceof HTMLButtonElement)) return;
+
+    const chosen = getToggleStateConfig(state);
     button.innerHTML = chosen.html;
     button.disabled = chosen.disabled;
     button.className = chosen.className;
 
-    if (statusEl) {
-      if (state === 'enabled') {
-        statusEl.textContent = 'Este aparelho já pode receber notificações push. Toque no botão para desativar.';
-      } else if (state === 'unsupported') {
-        statusEl.textContent = 'Este navegador não suporta push ou o recurso não está configurado.';
-      } else if (state === 'idle') {
-        statusEl.textContent = 'Ative as notificações push neste aparelho para receber avisos mesmo fora da tela.';
-      }
+    if (statusEl instanceof HTMLElement) {
+      statusEl.textContent = getPushStatusMessage(state);
     }
+  }
+
+  function setPushCenterTriggerState(trigger, state) {
+    if (!(trigger instanceof HTMLElement)) return;
+
+    const variant = String(trigger.dataset.pushCenterOpenVariant || 'icon').trim();
+    const chosen = getCenterTriggerConfig(state, variant);
+    trigger.dataset.pushVisualState = state;
+
+    if (variant === 'cta') {
+      const labelHost = trigger.querySelector('[data-push-center-label]');
+      if (labelHost) labelHost.innerHTML = chosen.html;
+      trigger.setAttribute('aria-label', chosen.ariaLabel);
+      trigger.setAttribute('title', chosen.ariaLabel);
+      const copySelector = String(trigger.dataset.pushCopyTarget || '').trim();
+      const copyTarget = copySelector ? document.querySelector(copySelector) : null;
+      if (copyTarget instanceof HTMLElement && chosen.helper) {
+        copyTarget.textContent = chosen.helper;
+      }
+      return;
+    }
+
+    const iconHost = trigger.querySelector('[data-push-center-icon]');
+    if (iconHost) {
+      const badge = iconHost.querySelector('.op-utility-btn__badge');
+      const badgeMarkup = badge ? badge.outerHTML : '';
+      iconHost.innerHTML = `${chosen.icon}${badgeMarkup}`;
+    }
+
+    const badgeText = trigger.querySelector('.op-utility-btn__badge')?.textContent?.trim();
+    const badgeSuffix = badgeText ? `. ${badgeText} aviso${badgeText === '1' ? '' : 's'} sem abrir.` : '';
+    trigger.setAttribute('aria-label', `${chosen.ariaLabel}${badgeSuffix}`.trim());
+    trigger.setAttribute('title', 'Abrir central de alertas');
+  }
+
+  function syncPushCenterTriggers(state) {
+    document.querySelectorAll('[data-push-center-open]').forEach((trigger) => {
+      setPushCenterTriggerState(trigger, state);
+    });
+  }
+
+  async function resolvePushState(publicKey) {
+    if (!supportsPushNotifications() || !publicKey) {
+      return 'unsupported';
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    const existingSubscription = await registration.pushManager.getSubscription();
+    if (existingSubscription) return 'enabled';
+    if (Notification.permission === 'denied') return 'blocked';
+    return 'idle';
   }
 
   async function sendSubscriptionToServer(subscription) {
@@ -625,7 +919,7 @@
     });
 
     if (!response.ok) {
-      throw new Error('Não foi possível salvar a inscrição de push no servidor.');
+      throw new Error('Não consegui guardar este aparelho para receber alertas.');
     }
   }
 
@@ -637,31 +931,41 @@
     });
 
     if (!response.ok) {
-      throw new Error('Não foi possível remover a inscrição de push no servidor.');
+      throw new Error('Não consegui desligar os alertas deste aparelho agora.');
     }
   }
 
-  async function syncPushButton(button, statusEl) {
-    const publicKey = String(button.dataset.pushPublicKey || '').trim();
+  async function syncPushUi() {
+    const sampleButton = document.querySelector('[data-push-toggle]');
+    const publicKey = getPushPublicKey(sampleButton);
+    const nextState = await resolvePushState(publicKey);
 
-    if (!supportsPushNotifications() || !publicKey) {
-      setPushToggleState(button, statusEl, 'unsupported');
-      return;
-    }
+    document.querySelectorAll('[data-push-toggle]').forEach((button) => {
+      if (!(button instanceof HTMLButtonElement)) return;
+      const statusSelector = String(button.dataset.pushStatusTarget || '').trim();
+      const statusEl = statusSelector ? document.querySelector(statusSelector) : null;
+      setPushToggleState(button, statusEl, nextState);
+    });
 
-    const registration = await navigator.serviceWorker.ready;
-    const existingSubscription = await registration.pushManager.getSubscription();
-    setPushToggleState(button, statusEl, existingSubscription ? 'enabled' : 'idle');
+    syncPushCenterTriggers(nextState);
+    return nextState;
   }
 
   async function togglePush(button, statusEl) {
-    const publicKey = String(button.dataset.pushPublicKey || '').trim();
+    const publicKey = getPushPublicKey(button);
     if (!publicKey) {
       setPushToggleState(button, statusEl, 'unsupported');
+      syncPushCenterTriggers('unsupported');
       return;
     }
 
-    setPushToggleState(button, statusEl, 'loading');
+    document.querySelectorAll('[data-push-toggle]').forEach((item) => {
+      if (!(item instanceof HTMLButtonElement)) return;
+      const selector = String(item.dataset.pushStatusTarget || '').trim();
+      const itemStatusEl = selector ? document.querySelector(selector) : null;
+      setPushToggleState(item, itemStatusEl, 'loading');
+    });
+    syncPushCenterTriggers('loading');
 
     try {
       const registration = await navigator.serviceWorker.ready;
@@ -670,13 +974,19 @@
       if (existingSubscription) {
         await removeSubscriptionFromServer(existingSubscription.endpoint);
         await existingSubscription.unsubscribe();
-        setPushToggleState(button, statusEl, 'idle');
+        const nextState = await syncPushUi();
+        showPushToast(nextState === 'blocked'
+          ? 'Os alertas ficaram bloqueados neste navegador.'
+          : 'Pronto! Os alertas deste aparelho foram desligados.', 'info');
         return;
       }
 
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
-        throw new Error('Permissão de notificações não concedida.');
+        await syncPushUi();
+        throw new Error(permission === 'denied'
+          ? 'Os alertas foram bloqueados pelo navegador. Para liberar, ajuste a permissão nas configurações do navegador.'
+          : 'Sem permissão para alertas. Se quiser, é só liberar no navegador.');
       }
 
       const subscription = await registration.pushManager.subscribe({
@@ -685,31 +995,90 @@
       });
 
       await sendSubscriptionToServer(subscription);
-      setPushToggleState(button, statusEl, 'enabled');
+      await syncPushUi();
+      showPushToast('Boa! Este aparelho já está pronto para receber alertas.', 'success');
     } catch (error) {
       console.error(error);
-      setPushToggleState(button, statusEl, 'idle');
-      window.alert(error?.message || 'Não foi possível configurar as notificações push neste aparelho.');
+      await syncPushUi().catch((syncError) => console.error(syncError));
+      window.alert(error?.message || 'Não deu para configurar os alertas neste aparelho agora.');
     }
   }
 
+  function setupNotificationCenter() {
+    const center = document.querySelector('[data-notification-center]');
+    if (!(center instanceof HTMLElement)) return;
+
+    const openButtons = Array.from(document.querySelectorAll('[data-push-center-open]')).filter((element) => element instanceof HTMLElement);
+    const closeButtons = Array.from(center.querySelectorAll('[data-notification-center-close]')).filter((element) => element instanceof HTMLElement);
+    const backdrop = center.querySelector('[data-notification-center-backdrop]');
+    const focusTarget = center.querySelector('[data-notification-center-close]');
+
+    function setExpanded(expanded) {
+      openButtons.forEach((button) => {
+        button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      });
+    }
+
+    function openCenter() {
+      center.classList.remove('hidden');
+      center.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('op-notification-center-open');
+      setExpanded(true);
+      window.requestAnimationFrame(() => {
+        if (focusTarget instanceof HTMLElement) focusTarget.focus();
+      });
+    }
+
+    function closeCenter() {
+      center.classList.add('hidden');
+      center.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('op-notification-center-open');
+      setExpanded(false);
+    }
+
+    openButtons.forEach((button) => {
+      button.addEventListener('click', () => openCenter());
+    });
+
+    closeButtons.forEach((button) => {
+      button.addEventListener('click', () => closeCenter());
+    });
+
+    if (backdrop instanceof HTMLElement) {
+      backdrop.addEventListener('click', () => closeCenter());
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !center.classList.contains('hidden')) {
+        closeCenter();
+      }
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
+    setupNotificationCenter();
+
     document.querySelectorAll('[data-push-toggle]').forEach((button) => {
       if (!(button instanceof HTMLButtonElement)) return;
 
-      const statusSelector = String(button.dataset.pushStatusTarget || '').trim();
-      const statusEl = statusSelector ? document.querySelector(statusSelector) : null;
-      syncPushButton(button, statusEl).catch((error) => {
-        console.error(error);
-        setPushToggleState(button, statusEl, 'unsupported');
-      });
-
       button.addEventListener('click', () => {
+        const statusSelector = String(button.dataset.pushStatusTarget || '').trim();
+        const statusEl = statusSelector ? document.querySelector(statusSelector) : null;
         togglePush(button, statusEl).catch((error) => {
           console.error(error);
-          setPushToggleState(button, statusEl, 'idle');
         });
       });
+    });
+
+    syncPushUi().catch((error) => {
+      console.error(error);
+      document.querySelectorAll('[data-push-toggle]').forEach((button) => {
+        if (!(button instanceof HTMLButtonElement)) return;
+        const statusSelector = String(button.dataset.pushStatusTarget || '').trim();
+        const statusEl = statusSelector ? document.querySelector(statusSelector) : null;
+        setPushToggleState(button, statusEl, 'unsupported');
+      });
+      syncPushCenterTriggers('unsupported');
     });
   });
 })();
@@ -727,14 +1096,14 @@
     return field;
   }
 
-  async function resolveInstallmentScope(form, { actionLabel = 'alterar a distribuição', destructive = false } = {}) {
+  async function resolveInstallmentScope(form, { actionLabel = 'ajustar a divisão', destructive = false } = {}) {
     const hasFuture = String(form?.dataset?.hasFutureInstallments || '') === '1';
     const field = ensureHiddenScopeField(form);
 
     if (!hasFuture) {
       if (destructive) {
         const confirmed = await window.confirmTypedAction(
-          form?.dataset?.confirmPrompt || 'Excluir este lançamento? Esta ação remove o item e a distribuição associada.'
+          form?.dataset?.confirmPrompt || 'Excluir este item? Isso apaga a compra e a divisão dela.'
         );
         if (!confirmed) return null;
       }
@@ -745,13 +1114,13 @@
     const label = String(form?.dataset?.installmentLabel || '').trim();
     const message = [
       destructive
-        ? 'Este lançamento faz parte de um parcelamento. Escolha o alcance da exclusão.'
-        : `Este lançamento faz parte de um parcelamento. Escolha se deseja ${actionLabel} só nesta parcela ou também nas próximas.`,
-      label ? `Lançamento: ${label}` : ''
+        ? 'Este item faz parte de uma compra parcelada. Escolha o alcance da exclusão.'
+        : `Este item faz parte de uma compra parcelada. Escolha se deseja ${actionLabel} só nesta parcela ou também nas próximas.`,
+      label ? `Compra: ${label}` : ''
     ].filter(Boolean).join('\n\n');
 
     const result = await window.showActionDialog({
-      title: destructive ? 'Excluir lançamento parcelado' : 'Aplicar em compra parcelada',
+      title: destructive ? 'Excluir compra parcelada' : 'Aplicar em compra parcelada',
       message,
       options: destructive
         ? [
@@ -789,7 +1158,7 @@
 
     (async () => {
       if (needsScope) {
-        const actionLabel = formType === 'delete' ? 'excluir este lançamento' : 'alterar a distribuição';
+        const actionLabel = formType === 'delete' ? 'excluir esta compra' : 'ajustar a divisão';
         const chosenScope = await resolveInstallmentScope(form, {
           actionLabel,
           destructive: formType === 'delete'
@@ -816,13 +1185,13 @@
 
 (function () {
   function detectNavKey(pathname) {
-    if (/^\/geral(?:\/|$)/.test(pathname)) return 'geral';
+    if (/^\/geral(?:\/|$)/.test(pathname) || /^\/month(?:\/|$)/.test(pathname) || /^\/summary(?:\/|$)/.test(pathname)) return 'geral';
     if (/^\/shared-debts(?:\/|$)/.test(pathname) || /^\/notifications(?:\/|$)/.test(pathname)) return 'shared';
     if (/^\/people(?:\/|$)/.test(pathname)) return 'people';
     if (/^\/cards(?:\/|$)/.test(pathname)) return 'cards';
     if (/^\/import(?:\/|$)/.test(pathname)) return 'import';
     if (/^\/admin(?:\/|$)/.test(pathname)) return 'admin';
-    if (/^\/month(?:\/|$)/.test(pathname) || /^\/summary(?:\/|$)/.test(pathname) || /^\/detalhamento(?:\/|$)/.test(pathname) || /^\/txn(?:\/|$)/.test(pathname) || pathname === '/') return 'painel';
+    if (/^\/detalhamento(?:\/|$)/.test(pathname) || /^\/txn(?:\/|$)/.test(pathname) || pathname === '/') return 'painel';
     return '';
   }
 

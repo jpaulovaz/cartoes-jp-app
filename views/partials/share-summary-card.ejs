@@ -1,12 +1,12 @@
 <%
   const safeHeroText = typeof heroText !== 'undefined'
     ? heroText
-    : 'Confira abaixo os lançamentos deste período e o valor que ainda falta para concluir o pagamento.';
+    : 'Confira abaixo as compras deste período e o valor que ainda falta para fechar tudo.';
   const safePeriodLabelText = typeof periodLabelText !== 'undefined' ? periodLabelText : 'Período';
   const safePaymentTitle = typeof paymentTitle !== 'undefined' ? paymentTitle : 'Situação do pagamento';
   const safeTotalLabel = typeof totalLabel !== 'undefined' ? totalLabel : 'Total do período';
-  const safeListTitle = typeof listTitle !== 'undefined' ? listTitle : 'Lançamentos do período';
-  const safeFooterLeft = typeof footerLeft !== 'undefined' ? footerLeft : 'Gerado pelo OrganizaPay';
+  const safeListTitle = typeof listTitle !== 'undefined' ? listTitle : 'Compras do período';
+  const safeFooterLeft = typeof footerLeft !== 'undefined' ? footerLeft : 'Feito no OrganizaPay';
   const safeCaptureScale = typeof captureScale !== 'undefined' ? captureScale : 2;
   const numericTotalCents = Number(totalCents || 0) || 0;
   const paidValueCents = Number(typeof paidCents !== 'undefined' ? paidCents : 0) || 0;

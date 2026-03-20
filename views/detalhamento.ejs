@@ -41,7 +41,7 @@
                     <div>
                         <span class="op-page-hero__eyebrow">Painel principal</span>
                         <h1 class="op-page-hero__title mt-4">👑 Meu Controle</h1>
-                        <p class="op-page-hero__subtitle mt-3">Titular: <span class="font-bold text-blue-600 dark:text-blue-300"><%= owner.name %></span>. Acompanhe contas, cartões, saldo e próximos passos do mês de uma forma fácil.</p>
+                        <p class="op-page-hero__subtitle mt-3">Titular: <span class="font-bold text-blue-600 dark:text-blue-300"><%= owner.name %></span>. Acompanhe contas, cartões, saldo e próximos passos do mês sem precisar abrir mil telas.</p>
                     </div>
 
                     <div class="op-page-hero__actions w-full lg:max-w-[32rem]">
@@ -57,14 +57,13 @@
                             </button>
                         <% } %>
 
-                        <button type="button"
-                            onclick="document.getElementById('modalManualDetalhamento').classList.remove('hidden')"
+                        <button type="button" data-manual-modal-open
                             <%= (isClosed || !cards || !cards.length) ? 'disabled' : '' %>
                             class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 <%= (isClosed || !cards || !cards.length) ? 'opacity-60 cursor-not-allowed hover:bg-emerald-600' : 'hover:bg-emerald-700' %>">
                             <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                             </svg>
-                            Novo Item
+                            Nova compra
                         </button>
 
                         <div class="col-span-2 w-full flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 p-1 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/70">
@@ -80,13 +79,13 @@
                     </div>
                 </section>
 
-                <div id="modalManualDetalhamento"
+                <div id="modalManualDetalhamento" data-manual-modal aria-hidden="true"
                     class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
                         <div class="flex justify-between items-center mb-6">
-                            <h2 class="text-xl font-black text-slate-800 dark:text-white">Novo Gasto Manual</h2>
-                            <button type="button" onclick="document.getElementById('modalManualDetalhamento').classList.add('hidden')"
-                                class="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-2xl">✕</button>
+                            <h2 class="text-xl font-black text-slate-800 dark:text-white">Adicionar compra</h2>
+                            <button type="button" data-manual-modal-close
+                                class="op-icon-btn" aria-label="Fechar janela">✕</button>
                         </div>
 
                         <form action="/txn/manual" method="POST" class="space-y-4" data-auto-first-due-form>
@@ -97,7 +96,7 @@
                                         class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cartão Utilizado</label>
+                                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cartão</label>
                                     <select name="card_id" data-manual-card-select <%= isClosed ? 'disabled' : '' %>
                                         class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                                         <% cards.forEach(c => { %>
@@ -112,7 +111,7 @@
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
-                                    <input type="text" name="amount" placeholder="0,00" required data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %>
+                                    <input type="text" name="amount" placeholder="0,00" required data-money-mask data-manual-amount-input inputmode="decimal" enterkeyhint="next" autocapitalize="off" autocomplete="off" <%= isClosed ? 'disabled' : '' %>
                                         class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                                 </div>
                                 <div>
@@ -123,10 +122,10 @@
                             </div>
 
                             <div>
-                                <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">1º Vencimento</label>
+                                <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Vai cair em qual fatura?</label>
                                 <input type="month" name="first_due" value="<%= year %>-<%= String(month).padStart(2, '0') %>" required data-manual-first-due <%= isClosed ? 'disabled' : '' %>
                                     class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
-                                <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Preenchido automaticamente pela data da compra e pelo fechamento do cartão, mas você pode alterar manualmente.</p>
+                                <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">A gente sugere isso pela data da compra e pelo fechamento do cartão. Se precisar, pode ajustar sem cerimônia.</p>
                             </div>
 
                             <div>
@@ -139,8 +138,8 @@
           <input type="checkbox" name="assign_to_owner" value="1" <%= typeof isClosed !== 'undefined' && isClosed ? 'disabled' : '' %>
             class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
           <span>
-            <span class="block text-sm font-bold text-slate-800 dark:text-white">Atribuir este item a mim</span>
-            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque para lançar este item automaticamente no seu nome, inclusive nas próximas parcelas ou recorrências</span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Essa compra é minha</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque para jogar esta compra direto no seu nome — e isso também vale para próximas parcelas ou repetições.</span>
           </span>
         </label>
 
@@ -148,8 +147,8 @@
                                 <input type="checkbox" name="is_recurring" value="1" data-recurring-toggle <%= isClosed ? 'disabled' : '' %>
                                     class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
                                 <span>
-                                    <span class="block text-sm font-bold text-slate-800 dark:text-white">Tornar este item recorrente mensal</span>
-                                    <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Ideal para academia, streaming, escola, internet e condomínio. Funciona somente com 1 parcela.</span>
+                                    <span class="block text-sm font-bold text-slate-800 dark:text-white">Repetir todo mês</span>
+                                    <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Perfeito para academia, streaming, escola, internet e afins. Só funciona com 1 parcela.</span>
                                 </span>
                             </label>
 
@@ -160,7 +159,7 @@
                             <% } else { %>
                                 <button type="submit"
                                     class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all">
-                                    Criar Lançamento
+                                    Salvar compra
                                 </button>
                             <% } %>
                         </form>
@@ -205,7 +204,7 @@
                     <a href="/shared-debts#received" class="block bg-sky-500 p-5 rounded-3xl text-white shadow-sm border border-sky-600 hover:-translate-y-0.5 transition-transform">
                         <div class="flex items-start justify-between gap-4">
                             <div>
-                                <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Dívidas com Amigos</p>
+                                <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Cobranças pra pagar</p>
                                 <h3 class="text-xl xl:text-2xl font-black mt-1">
                                     <%= formatBRLFromCents(sharedDebtOwedCents) %>
                                 </h3>
@@ -214,13 +213,13 @@
                                 </p>
                                 <p class="mt-3 text-xs font-bold uppercase tracking-[0.18em] opacity-90">Abrir cobranças recebidas</p>
                             </div>
-                            <div class="h-12 w-12 shrink-0 rounded-2xl bg-white/15 flex items-center justify-center text-2xl">🤝</div>
+                            <div class="h-12 w-12 shrink-0 rounded-2xl bg-white/15 flex items-center justify-center text-2xl">🧾</div>
                         </div>
                     </a>
                     <a href="/shared-debts#sent" class="block bg-cyan-600 p-5 rounded-3xl text-white shadow-sm border border-cyan-700 hover:-translate-y-0.5 transition-transform">
                         <div class="flex items-start justify-between gap-4">
                             <div>
-                                <p class="text-xs font-bold opacity-80 uppercase tracking-wider">A Receber de Amigos</p>
+                                <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Cobranças pra receber</p>
                                 <h3 class="text-xl xl:text-2xl font-black mt-1">
                                     <%= formatBRLFromCents(sharedDebtReceivableCents) %>
                                 </h3>
@@ -237,8 +236,8 @@
                 <% if (alerts && alerts.length) { %>
                     <div class="mb-8 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                         <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
-                            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Alertas rápidos</h2>
-                            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Sinais importantes para manter o mês em dia.</p>
+                            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Olho vivo no mês</h2>
+                            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Os pontos que merecem sua atenção antes que virem dor de cabeça.</p>
                         </div>
                         <div class="p-4 md:p-5 grid gap-3">
                             <% alerts.forEach(alert => { %>

@@ -6,41 +6,51 @@
     <div>
       <span class="op-page-hero__eyebrow">Visão consolidada</span>
       <h1 class="op-page-hero__title mt-4">Visão Geral</h1>
-      <p class="op-page-hero__subtitle mt-3">Todas as suas faturas em um só lugar.</p>
+      <p class="op-page-hero__subtitle mt-3">Seu mês financeiro, sem bagunça e sem caça ao número perdido.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><span class="md:hidden"><%= groupedRecent ? groupedRecent.filter(group => !group.__section).length : 0 %> mês(es) disponível(eis)</span><span class="hidden md:inline"><%= groupedRecent ? groupedRecent.filter(group => !group.__section).length : 0 %> período(s) disponível(eis)</span></span>
       </div>
     </div>
 
-    <div class="op-page-hero__actions">
-      <button onclick="document.getElementById('modalManual').classList.remove('hidden')"
-        class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
-        <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-        </svg>
-        Novo Item
-      </button>
-
-      <% if (canImport) { %>
-        <a href="/import"
-          class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
+    <div class="space-y-3 lg:ml-auto lg:flex lg:max-w-[32rem] lg:flex-col lg:items-end">
+      <div class="op-page-hero__actions op-page-hero__actions--geral">
+        <button type="button" data-manual-modal-open
+          class="op-btn op-btn-success">
           <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
           </svg>
-          Nova Importação
-        </a>
-      <% } %>
+          Nova compra
+        </button>
+
+        <button type="button" class="op-btn op-btn--alert-entry" data-push-center-open data-push-center-open-variant="cta" data-push-visual-state="loading" data-push-copy-target="#geral-alertas-status" aria-haspopup="dialog" aria-controls="notification-center">
+          <span data-push-center-label>
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.389 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>
+            <span>Alertas do app</span>
+          </span>
+        </button>
+
+        <% if (canImport) { %>
+          <a href="/import"
+            class="op-btn op-btn-primary">
+            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Importar fatura
+          </a>
+        <% } %>
+      </div>
+      <p id="geral-alertas-status" class="text-xs font-semibold leading-6 text-slate-500 dark:text-slate-400 lg:max-w-[30rem] lg:text-right">Receba avisos de vencimento, respostas e confirmações neste aparelho — sem precisar caçar novidade no app.</p>
     </div>
   </section>
 
 
-  <div id="modalManual"
+  <div id="modalManual" data-manual-modal aria-hidden="true"
     class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
       <div class="flex justify-between items-center mb-6">
-        <h2 class="text-xl font-black text-slate-800 dark:text-white">Novo Gasto Manual</h2>
-        <button type="button" onclick="document.getElementById('modalManual').classList.add('hidden')"
-          class="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-2xl">✕</button>
+        <h2 class="text-xl font-black text-slate-800 dark:text-white">Adicionar compra</h2>
+        <button type="button" data-manual-modal-close
+          class="op-icon-btn" aria-label="Fechar janela">✕</button>
       </div>
 
       <form action="/txn/manual" method="POST" class="space-y-4" data-auto-first-due-form>
@@ -51,7 +61,7 @@
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
           <div>
-            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cartão Utilizado</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cartão</label>
             <select name="card_id" data-manual-card-select
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
               <% cards.forEach(c=> { %>
@@ -66,7 +76,7 @@
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
-            <input type="text" name="amount" placeholder="0,00" required data-money-mask inputmode="numeric"
+            <input type="text" name="amount" placeholder="0,00" required data-money-mask data-manual-amount-input inputmode="decimal" enterkeyhint="next" autocapitalize="off" autocomplete="off"
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
           <div>
@@ -77,10 +87,10 @@
         </div>
 
         <div>
-          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">1º Vencimento</label>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Vai cair em qual fatura?</label>
           <input type="month" name="first_due" value="<%= featuredOpenGroup ? `${featuredOpenGroup.year}-${String(featuredOpenGroup.month).padStart(2, '0')}` : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}` %>" required data-manual-first-due
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
-          <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Preenchido automaticamente pela data da compra e pelo fechamento do cartão, mas você pode alterar manualmente.</p>
+          <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">A gente sugere isso pela data da compra e pelo fechamento do cartão. Se precisar, pode ajustar sem cerimônia.</p>
         </div>
 
         <div>
@@ -93,8 +103,8 @@
           <input type="checkbox" name="assign_to_owner" value="1"
             class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
           <span>
-            <span class="block text-sm font-bold text-slate-800 dark:text-white">Atribuir este item a mim</span>
-            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque para lançar este item automaticamente no seu nome, inclusive nas próximas parcelas ou recorrências</span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Essa compra é minha</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque para jogar esta compra direto no seu nome — e isso também vale para próximas parcelas ou repetições.</span>
           </span>
         </label>
 
@@ -102,14 +112,14 @@
           <input type="checkbox" name="is_recurring" value="1" data-recurring-toggle
             class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
           <span>
-            <span class="block text-sm font-bold text-slate-800 dark:text-white">Tornar este item recorrente mensal</span>
-            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Ideal para academia, streaming, escola, internet e condomínio. Funciona somente com 1 parcela.</span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Repetir todo mês</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Perfeito para academia, streaming, escola, internet e afins. Só funciona com 1 parcela.</span>
           </span>
         </label>
 
         <button type="submit"
-          class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all">
-          Criar Lançamento
+          class="op-btn op-btn-success op-btn--block">
+          Salvar compra
         </button>
       </form>
     </div>
@@ -123,17 +133,17 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
           </svg>
         </div>
-        <div class="op-empty-state__title">Nenhuma fatura encontrada</div>
+        <div class="op-empty-state__title">Nada por aqui ainda</div>
         <% if (canImport) { %>
-          <p class="op-empty-state__text max-w-sm mx-auto">Comece importando o primeiro arquivo CSV gerado pelos seus cartões ou crie um lançamento manual para iniciar <span class="md:hidden">o mês</span><span class="hidden md:inline">o período</span>.</p>
+          <p class="op-empty-state__text max-w-sm mx-auto">Comece trazendo o primeiro CSV do cartão ou crie uma compra manual para colocar <span class="md:hidden">o mês</span><span class="hidden md:inline">o período</span> pra rodar.</p>
           <div class="op-empty-state__actions">
-            <a class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700" href="/import">
+            <a class="op-btn op-btn-info" href="/import">
               <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-              Fazer primeira importação
+              Trazer primeira fatura
             </a>
           </div>
         <% } else { %>
-          <p class="op-empty-state__text max-w-sm mx-auto">Ainda não há lançamentos para exibir <span class="md:hidden">neste mês</span><span class="hidden md:inline">neste período</span>. Seu usuário não possui permissão para importar faturas, mas você pode continuar usando os lançamentos manuais.</p>
+          <p class="op-empty-state__text max-w-sm mx-auto">Ainda não há compras para mostrar <span class="md:hidden">neste mês</span><span class="hidden md:inline">neste período</span>. Seu acesso não permite importar faturas, mas as compras manuais seguem liberadas.</p>
         <% } %>
       </div>
       <% } else { %>
@@ -270,8 +280,8 @@
 
                       <div class="mt-auto space-y-2">
                         <a href="/month/<%= card.year %>/<%= card.month %>?f_card=<%= card.card_name %>"
-                          class="block w-full text-center px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-sm rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 hover:border-slate-300 dark:hover:border-slate-500 transition-colors">
-                          Ver transações deste cartão
+                          class="op-btn op-btn-ghost op-btn--block">
+                          Ver compras deste cartão
                         </a>
                         <% if (group.isClosed) { %>
                           <div class="block w-full text-center px-4 py-2.5 bg-amber-50 border border-amber-200 text-amber-800 font-semibold text-sm rounded-lg dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200">
@@ -279,11 +289,11 @@
                           </div>
                         <% } else { %>
                           <form method="post" action="/geral/<%= card.year %>/<%= card.month %>/card/<%= card.card_id %>/delete"
-                            data-confirm-prompt="Excluir todos os lançamentos do cartão <%= card.card_name %> em <%= group.label %>? Esta ação remove os itens e as distribuições associadas."
+                            data-confirm-prompt="Excluir todas as compras do cartão <%= card.card_name %> em <%= group.label %>? Isso apaga os itens e as divisões associadas."
                             data-confirm-phrase="Eu confirmo">
                             <button
-                              class="block w-full text-center px-4 py-2.5 bg-red-50 border border-red-200 text-red-700 font-semibold text-sm rounded-lg hover:bg-red-100 hover:border-red-300 transition-colors">
-                              Excluir lançamentos
+                              class="op-btn op-btn-danger-soft op-btn--block">
+                              Excluir compras
                             </button>
                           </form>
                         <% } %>

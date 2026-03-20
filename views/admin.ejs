@@ -84,8 +84,12 @@
                const selected = activeSectionKey === item.key;
           %>
             <a href="#admin-section-<%= item.key %>"
+               data-admin-nav-link
+               data-admin-nav-key="<%= item.key %>"
+               data-admin-nav-target="admin-section-<%= item.key %>"
+               aria-current="<%= selected ? 'location' : 'false' %>"
                class="flex items-start gap-3 rounded-2xl border px-4 py-3 transition-all <%= selected ? 'border-blue-200 bg-blue-50 text-blue-700 shadow-sm dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-200' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/30 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900/50' %>">
-              <span class="mt-1 h-2.5 w-2.5 rounded-full <%= selected ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600' %>"></span>
+              <span data-admin-nav-dot class="mt-1 h-2.5 w-2.5 rounded-full <%= selected ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600' %>"></span>
               <span class="min-w-0">
                 <span class="block text-sm font-black tracking-tight"><%= item.title %></span>
                 <span class="mt-1 block text-xs font-medium text-current/80"><%= item.description %></span>
@@ -443,12 +447,78 @@
     });
   });
 
+  const adminNavLinks = Array.from(document.querySelectorAll('[data-admin-nav-link]'));
+  const adminSections = Array.from(document.querySelectorAll('[id^="admin-section-"]'));
+  const adminNavActiveClasses = ['border-blue-200', 'bg-blue-50', 'text-blue-700', 'shadow-sm', 'dark:border-blue-800', 'dark:bg-blue-900/30', 'dark:text-blue-200'];
+  const adminNavInactiveClasses = ['border-slate-200', 'bg-white', 'text-slate-700', 'dark:border-slate-700', 'dark:bg-slate-900/30', 'dark:text-slate-200'];
+  const adminNavDotActiveClasses = ['bg-blue-500'];
+  const adminNavDotInactiveClasses = ['bg-slate-300', 'dark:bg-slate-600'];
+
+  function setAdminNavActive(activeKey) {
+    if (!activeKey) return;
+    adminNavLinks.forEach((link) => {
+      const isActive = link.dataset.adminNavKey === activeKey;
+      link.classList.toggle('hover:border-slate-300', !isActive);
+      link.classList.toggle('hover:bg-slate-50', !isActive);
+      link.classList.toggle('dark:hover:border-slate-600', !isActive);
+      link.classList.toggle('dark:hover:bg-slate-900/50', !isActive);
+      adminNavActiveClasses.forEach((className) => link.classList.toggle(className, isActive));
+      adminNavInactiveClasses.forEach((className) => link.classList.toggle(className, !isActive));
+      link.setAttribute('aria-current', isActive ? 'location' : 'false');
+      const dot = link.querySelector('[data-admin-nav-dot]');
+      if (dot) {
+        adminNavDotActiveClasses.forEach((className) => dot.classList.toggle(className, isActive));
+        adminNavDotInactiveClasses.forEach((className) => dot.classList.toggle(className, !isActive));
+      }
+    });
+  }
+
+  function syncAdminNavWithViewport() {
+    if (!adminSections.length) return;
+    const viewportAnchor = Math.max(132, Math.min(window.innerHeight * 0.24, 220));
+    let currentSection = adminSections[0];
+
+    adminSections.forEach((section) => {
+      const rect = section.getBoundingClientRect();
+      if (rect.top - viewportAnchor <= 0) {
+        currentSection = section;
+      }
+    });
+
+    const activeKeyFromViewport = currentSection.id.replace('admin-section-', '');
+    setAdminNavActive(activeKeyFromViewport);
+  }
+
+  let adminNavTicking = false;
+  function requestAdminNavSync() {
+    if (adminNavTicking) return;
+    adminNavTicking = true;
+    window.requestAnimationFrame(() => {
+      syncAdminNavWithViewport();
+      adminNavTicking = false;
+    });
+  }
+
+  adminNavLinks.forEach((link) => {
+    link.addEventListener('click', () => {
+      setAdminNavActive(link.dataset.adminNavKey || 'access');
+      window.setTimeout(requestAdminNavSync, 180);
+    });
+  });
+
+  window.addEventListener('scroll', requestAdminNavSync, { passive: true });
+  window.addEventListener('resize', requestAdminNavSync);
+
   window.addEventListener('load', () => {
-    if (!activeAdminSection || activeAdminSection === 'access') return;
-    const target = document.getElementById(`admin-section-${activeAdminSection}`);
-    if (target) {
-      target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    if (activeAdminSection && activeAdminSection !== 'access') {
+      const target = document.getElementById(`admin-section-${activeAdminSection}`);
+      if (target) {
+        target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }
     }
+
+    requestAdminNavSync();
+    window.setTimeout(requestAdminNavSync, 220);
   });
 </script>
 

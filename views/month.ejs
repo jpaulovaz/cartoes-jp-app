@@ -602,6 +602,7 @@
         description: t.description,
         amount_cents: Number(t.amount_cents || 0),
         selected_ids: (t.selected_ids || []).map(Number),
+        selected_shares: Object.fromEntries(Object.entries(t.selected_shares || {}).map(([key, value]) => [Number(key), Number(value || 0)])),
         has_future_installments: !!t.has_future_installments,
         recurring_rule_id: t.recurring_rule_id ? Number(t.recurring_rule_id) : null,
         month: Number(t.month || month),
@@ -625,6 +626,9 @@
         month: Number(item.month || currentMonth),
         year: Number(item.year || currentYear),
         selected_ids: Array.isArray(item.selected_ids) ? item.selected_ids.map(Number) : [],
+        selected_shares: item.selected_shares && typeof item.selected_shares === 'object'
+          ? Object.fromEntries(Object.entries(item.selected_shares).map(([key, value]) => [Number(key), Number(value || 0)]))
+          : {},
         has_future_installments: !!item.has_future_installments,
         recurring_rule_id: item.recurring_rule_id ? Number(item.recurring_rule_id) : null
       }]));
@@ -1045,6 +1049,71 @@
         return label;
       }
 
+      function buildEqualShareMapLocal(totalCents, personIds) {
+        const ids = Array.from(new Set((personIds || []).map(Number).filter(Number.isInteger)));
+        const shareMap = {};
+        if (!ids.length) return shareMap;
+        const numericTotal = Number(totalCents || 0);
+        const share = Math.floor(numericTotal / ids.length);
+        const remainder = numericTotal - (share * ids.length);
+        ids.forEach((pid, idx) => {
+          const extra = idx < Math.abs(remainder) ? Math.sign(remainder) : 0;
+          shareMap[pid] = share + extra;
+        });
+        return shareMap;
+      }
+
+      function normalizeSelectedShares(item) {
+        const map = {};
+        if (!item || !item.selected_shares || typeof item.selected_shares !== 'object') return map;
+        Object.entries(item.selected_shares).forEach(([rawKey, rawValue]) => {
+          const key = Number(rawKey || 0);
+          if (Number.isInteger(key) && key > 0) map[key] = Number(rawValue || 0);
+        });
+        return map;
+      }
+
+      function inferItemSplitMode(item) {
+        const selectedIds = Array.isArray(item?.selected_ids) ? item.selected_ids.map(Number).filter(Number.isInteger) : [];
+        if (selectedIds.length <= 1) return 'equal';
+        const currentMap = normalizeSelectedShares(item);
+        const actualValues = selectedIds.map(id => Number(currentMap[id] || 0)).sort((a, b) => a - b);
+        const expectedMap = buildEqualShareMapLocal(Number(item?.amount_cents || 0), selectedIds);
+        const expectedValues = selectedIds.map(id => Number(expectedMap[id] || 0)).sort((a, b) => a - b);
+        return actualValues.length === expectedValues.length && actualValues.every((value, index) => value === expectedValues[index])
+          ? 'equal'
+          : 'exact';
+      }
+
+      function bindDynamicMoneyMask(input) {
+        if (!(input instanceof HTMLInputElement)) return;
+        if (window.OPMoneyMask && typeof window.OPMoneyMask.bind === 'function') {
+          window.OPMoneyMask.bind(input);
+          return;
+        }
+        input.setAttribute('inputmode', 'numeric');
+      }
+
+      function buildSplitModeOption({ title, description, value, checked, accentClass }) {
+        const label = document.createElement('label');
+        label.className = 'group cursor-pointer';
+
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'split_mode_choice';
+        input.value = value;
+        input.className = 'peer sr-only';
+        input.checked = checked;
+
+        const card = document.createElement('span');
+        card.className = `flex h-full items-start gap-3 rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:shadow-md ${accentClass} dark:border-slate-700 dark:bg-slate-900/55`;
+        card.innerHTML = `<span class="mt-0.5 inline-flex h-10 w-10 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500 transition-all peer-checked:border-current peer-checked:bg-current peer-checked:text-white dark:border-slate-700 dark:bg-slate-950">${value === 'exact' ? '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-3.314 0-6 2.239-6 5 0 1.657.97 3.126 2.465 4.038L8 21l3.211-2.14A7.43 7.43 0 0012 19c3.314 0 6-2.239 6-5s-2.686-5-6-5z"></path></svg>' : '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'}</span><span class="min-w-0"><span class="block text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(title)}</span><span class="mt-1 block text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">${escapeHtml(description)}</span></span>`;
+
+        label.appendChild(input);
+        label.appendChild(card);
+        return label;
+      }
+
       function openPeopleSheet(txnIds) {
         const items = getTxnItems(txnIds);
         if (!items.length) return;
@@ -1060,9 +1129,12 @@
         wrapper.appendChild(summary);
 
         const uniformSelection = getUniformSelection(items);
+        const singleItem = items.length === 1 ? items[0] : null;
         const initialSelectedIds = uniformSelection !== null
           ? uniformSelection
-          : (items.length === 1 ? (items[0].selected_ids || []).map(Number) : []);
+          : (singleItem ? (singleItem.selected_ids || []).map(Number) : []);
+        const exactModeAvailable = !!singleItem && Number(singleItem.amount_cents || 0) >= 0;
+        const draftShares = { ...(singleItem ? normalizeSelectedShares(singleItem) : {}) };
 
         if (uniformSelection === null && items.length > 1) {
           const note = document.createElement('div');
@@ -1085,28 +1157,227 @@
           wrapper.appendChild(grid);
         }
 
+        const splitModeSection = document.createElement('section');
+        splitModeSection.className = 'space-y-3';
+        splitModeSection.hidden = true;
+
+        const splitModeTitle = document.createElement('div');
+        splitModeTitle.className = 'text-sm font-black text-slate-900 dark:text-slate-100';
+        splitModeTitle.textContent = 'Como você quer dividir essa compra?';
+        splitModeSection.appendChild(splitModeTitle);
+
+        const splitModeGrid = document.createElement('div');
+        splitModeGrid.className = 'grid gap-3 md:grid-cols-2';
+
+        const initialMode = singleItem ? inferItemSplitMode(singleItem) : 'equal';
+        const equalOption = buildSplitModeOption({
+          title: 'Partes iguais',
+          description: 'O app reparte sozinho entre as pessoas marcadas.',
+          value: 'equal',
+          checked: initialMode !== 'exact',
+          accentClass: 'peer-checked:border-emerald-400 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 dark:peer-checked:border-emerald-500 dark:peer-checked:bg-emerald-950/25'
+        });
+        const exactOption = buildSplitModeOption({
+          title: 'Valor definido',
+          description: 'Você dita o valor de cada pessoa, sem chute e sem susto.',
+          value: 'exact',
+          checked: initialMode === 'exact',
+          accentClass: 'peer-checked:border-violet-400 peer-checked:bg-violet-50 peer-checked:text-violet-700 dark:peer-checked:border-violet-500 dark:peer-checked:bg-violet-950/25'
+        });
+        splitModeGrid.appendChild(equalOption);
+        splitModeGrid.appendChild(exactOption);
+        splitModeSection.appendChild(splitModeGrid);
+
+        const exactPanel = document.createElement('div');
+        exactPanel.className = 'space-y-3 rounded-[24px] border border-violet-200 bg-violet-50/80 p-4 dark:border-violet-900/70 dark:bg-violet-950/20';
+        exactPanel.hidden = true;
+
+        const exactIntro = document.createElement('div');
+        exactIntro.className = 'text-sm font-semibold text-violet-900 dark:text-violet-200';
+        exactIntro.textContent = singleItem
+          ? `Total da compra: ${formatMoney(singleItem.amount_cents)}. Preencha até fechar certinho.`
+          : 'Valor definido fica disponível quando você abre uma compra por vez.';
+        exactPanel.appendChild(exactIntro);
+
+        const exactFields = document.createElement('div');
+        exactFields.className = 'grid gap-3';
+        exactPanel.appendChild(exactFields);
+
+        const exactTotals = document.createElement('div');
+        exactTotals.className = 'rounded-[18px] border border-white/70 bg-white/85 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900/60';
+        exactPanel.appendChild(exactTotals);
+
+        const multiExactNote = document.createElement('div');
+        multiExactNote.className = 'rounded-[22px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200';
+        multiExactNote.textContent = 'Quer usar valores definidos? Abra uma compra por vez. Em seleção múltipla, o app mantém só a divisão em partes iguais para não misturar os totais.';
+        multiExactNote.hidden = items.length === 1;
+
+        wrapper.appendChild(splitModeSection);
+        wrapper.appendChild(exactPanel);
+        wrapper.appendChild(multiExactNote);
+
+        const modeInputs = () => Array.from(splitModeGrid.querySelectorAll('input[name="split_mode_choice"]'));
+        const getSelectedIds = () => Array.from(wrapper.querySelectorAll('input[name="person_ids"]:checked'))
+          .map(input => Number(input.value))
+          .filter(Number.isInteger);
+
+        function getSplitMode() {
+          const active = splitModeGrid.querySelector('input[name="split_mode_choice"]:checked');
+          return active ? String(active.value || 'equal') : 'equal';
+        }
+
+        function setSplitMode(nextMode) {
+          modeInputs().forEach((input) => {
+            input.checked = input.value === nextMode;
+          });
+        }
+
+        function renderExactFields() {
+          exactFields.innerHTML = '';
+          if (!singleItem) return;
+          const selectedIds = getSelectedIds();
+          const defaultMap = buildEqualShareMapLocal(Number(singleItem.amount_cents || 0), selectedIds);
+
+          selectedIds.forEach((personId) => {
+            const person = people.find(entry => Number(entry.id) === Number(personId));
+            if (!person) return;
+            if (draftShares[personId] === undefined) draftShares[personId] = defaultMap[personId] || 0;
+
+            const row = document.createElement('label');
+            row.className = 'rounded-[20px] border border-white/80 bg-white/90 px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/70';
+
+            const header = document.createElement('div');
+            header.className = 'mb-2 flex items-center justify-between gap-3';
+            header.innerHTML = `<span class="text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(person.name)}</span><span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Digite a parte dessa pessoa</span>`;
+            row.appendChild(header);
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.name = `share_amounts[${personId}]`;
+            input.placeholder = '0,00';
+            input.value = window.OPMoneyMask && typeof window.OPMoneyMask.formatFromCents === 'function'
+              ? window.OPMoneyMask.formatFromCents(draftShares[personId])
+              : formatMoney(draftShares[personId]);
+            input.className = 'w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900/70 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20';
+            input.setAttribute('data-money-mask', '1');
+            bindDynamicMoneyMask(input);
+            input.addEventListener('input', () => {
+              draftShares[personId] = window.OPMoneyMask && typeof window.OPMoneyMask.toCents === 'function'
+                ? window.OPMoneyMask.toCents(input.value)
+                : Number(String(input.value || '').replace(/\D/g, '')) || 0;
+              syncExactTotals();
+            });
+            row.appendChild(input);
+            exactFields.appendChild(row);
+          });
+        }
+
+        function syncExactTotals() {
+          if (!singleItem) {
+            exactTotals.innerHTML = '';
+            return;
+          }
+          const selectedIds = getSelectedIds();
+          const typedTotal = selectedIds.reduce((sum, personId) => sum + Number(draftShares[personId] || 0), 0);
+          const targetTotal = Number(singleItem.amount_cents || 0);
+          const diff = targetTotal - typedTotal;
+          let toneClass = 'text-emerald-700 dark:text-emerald-300';
+          let helperText = 'Fechou certinho. Agora é só salvar.';
+          if (diff > 0) {
+            toneClass = 'text-amber-700 dark:text-amber-300';
+            helperText = `Ainda falta ${formatMoney(diff)} para bater com o total.`;
+          } else if (diff < 0) {
+            toneClass = 'text-red-700 dark:text-red-300';
+            helperText = `Passou ${formatMoney(Math.abs(diff))}. Dá uma aparada e segue o baile.`;
+          }
+          exactTotals.innerHTML = `
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">Resumo da divisão</div>
+                <div class="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-300">Compra: ${escapeHtml(formatMoney(targetTotal))}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">Somando agora</div>
+                <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">${escapeHtml(formatMoney(typedTotal))}</div>
+              </div>
+            </div>
+            <div class="mt-3 text-sm font-bold ${toneClass}">${escapeHtml(helperText)}</div>
+          `;
+        }
+
+        function syncSplitUi() {
+          const selectedIds = getSelectedIds();
+          const canPickMode = exactModeAvailable && selectedIds.length > 1;
+          splitModeSection.hidden = !canPickMode;
+          multiExactNote.hidden = items.length === 1;
+
+          if (!canPickMode) {
+            setSplitMode('equal');
+            exactPanel.hidden = true;
+            exactTotals.innerHTML = '';
+            return;
+          }
+
+          const wantsExact = getSplitMode() === 'exact';
+          exactPanel.hidden = !wantsExact;
+          if (wantsExact) {
+            renderExactFields();
+            syncExactTotals();
+          }
+        }
+
+        wrapper.querySelectorAll('input[name="person_ids"]').forEach((input) => {
+          input.addEventListener('change', () => {
+            syncSplitUi();
+          });
+        });
+        modeInputs().forEach((input) => {
+          input.addEventListener('change', () => {
+            syncSplitUi();
+          });
+        });
+        syncSplitUi();
+
         openMonthSheet({
           title: items.length > 1 ? 'Aplicar participantes' : 'Selecionar participantes',
-          subtitle: items.length > 1 ? 'A distribuição será substituída em todos os itens selecionados.' : 'Escolha quem participa desta compra.',
+          subtitle: items.length > 1
+            ? 'A distribuição será substituída em todos os itens selecionados.'
+            : 'Escolha quem participa e, se quiser, dite o valor de cada um.',
           body: wrapper,
           actions: [
             { label: 'Fechar', tone: 'secondary' },
             {
-              label: 'Salvar distribuição',
+              label: 'Salvar divisão',
               tone: 'primary',
               closeOnClick: false,
               disabled: !people.length,
               onClick: async () => {
-                const checkedIds = Array.from(wrapper.querySelectorAll('input[name="person_ids"]:checked'))
-                  .map(input => Number(input.value))
-                  .filter(Number.isInteger);
-                const scope = await resolveSelectionScope(items, { actionLabel: 'alterar a distribuição' });
-                if (!scope) return false;
-                const ok = await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/alloc`, {
+                const checkedIds = getSelectedIds();
+                const payload = {
                   txn_ids: txnIds,
                   person_ids: checkedIds,
-                  apply_scope: scope
-                });
+                  apply_scope: 'single'
+                };
+
+                if (singleItem && checkedIds.length > 1 && getSplitMode() === 'exact') {
+                  const targetTotal = Number(singleItem.amount_cents || 0);
+                  const typedTotal = checkedIds.reduce((sum, personId) => sum + Number(draftShares[personId] || 0), 0);
+                  if (typedTotal !== targetTotal) {
+                    syncExactTotals();
+                    showAllocMessage('Os valores definidos ainda não fecharam com o total da compra.', 'warning');
+                    return false;
+                  }
+                  payload.split_mode = 'exact';
+                  payload.share_amounts = checkedIds.reduce((acc, personId) => {
+                    acc[personId] = Number(draftShares[personId] || 0);
+                    return acc;
+                  }, {});
+                }
+
+                const scope = await resolveSelectionScope(items, { actionLabel: 'alterar a distribuição' });
+                if (!scope) return false;
+                payload.apply_scope = scope;
+                const ok = await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/alloc`, payload);
                 if (ok) ensureMonthSheet().close();
                 return false;
               }

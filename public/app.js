@@ -515,6 +515,19 @@
     });
   }
 
+  window.OPMoneyMask = {
+    bind: bindMoneyMask,
+    toCents(value) {
+      const digits = extractMoneyDigits(value);
+      return digits ? Number(digits) : 0;
+    },
+    formatFromCents(cents) {
+      const numeric = Number(cents);
+      if (!Number.isFinite(numeric)) return '';
+      return formatMoneyDigits(String(Math.max(0, Math.round(numeric))));
+    }
+  };
+
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-money-mask]').forEach(bindMoneyMask);
   });

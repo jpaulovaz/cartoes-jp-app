@@ -222,6 +222,140 @@ const { computeDueDate } = require("./src/dueDate");
 const EFFECTIVE_DUE_MONTH_SQL = "COALESCE(t.due_month, i.month)";
 const EFFECTIVE_DUE_YEAR_SQL = "COALESCE(t.due_year, i.year)";
 
+function normalizeAllocationPersonIds(rawPersonIds, validPeople) {
+  let personIds = rawPersonIds || [];
+  if (!Array.isArray(personIds)) personIds = [personIds];
+  return Array.from(new Set(personIds.map(Number).filter(pid => validPeople.has(pid))));
+}
+
+function buildEqualShareMap(totalCents, personIds) {
+  const normalizedIds = Array.from(new Set((personIds || []).map(Number).filter(Boolean)));
+  const shareMap = {};
+  if (!normalizedIds.length) return shareMap;
+
+  const numericTotal = Number(totalCents || 0);
+  const share = Math.floor(numericTotal / normalizedIds.length);
+  const remainder = numericTotal - (share * normalizedIds.length);
+
+  normalizedIds.forEach((pid, idx) => {
+    const extra = idx < Math.abs(remainder) ? Math.sign(remainder) : 0;
+    shareMap[pid] = share + extra;
+  });
+
+  return shareMap;
+}
+
+function inferAllocationMode(totalCents, allocationRows) {
+  const rows = Array.isArray(allocationRows) ? allocationRows : [];
+  const personIds = rows.map(row => Number(row.person_id || row.id || 0)).filter(Boolean);
+  if (personIds.length <= 1) return 'equal';
+
+  const actualValues = rows
+    .map(row => Number(row.share_cents || 0))
+    .sort((a, b) => a - b);
+  const expectedValues = personIds
+    .map(pid => Number(buildEqualShareMap(totalCents, personIds)[pid] || 0))
+    .sort((a, b) => a - b);
+
+  if (actualValues.length !== expectedValues.length) return 'exact';
+  return actualValues.every((value, index) => value === expectedValues[index]) ? 'equal' : 'exact';
+}
+
+function normalizeShareAmountInput(rawValue) {
+  if (rawValue === null || rawValue === undefined) return null;
+  if (typeof rawValue === 'number' && Number.isFinite(rawValue)) return Math.round(rawValue);
+
+  const stringValue = String(rawValue).trim();
+  if (!stringValue) return null;
+  if (/^-?\d+$/.test(stringValue)) return Number(stringValue);
+
+  const digits = stringValue.replace(/\D/g, '');
+  if (!digits) return null;
+  return Number(digits);
+}
+
+function parseAllocationPlan({
+  rawPersonIds,
+  validPeople,
+  rawSplitMode,
+  rawShareAmounts,
+  targetRows
+}) {
+  const personIds = normalizeAllocationPersonIds(rawPersonIds, validPeople);
+  if (!personIds.length) {
+    return { personIds: [], splitMode: 'equal', shareMapsByTxnId: new Map() };
+  }
+
+  const requestedMode = String(rawSplitMode || 'equal').trim().toLowerCase();
+  const splitMode = personIds.length > 1 && requestedMode === 'exact' ? 'exact' : 'equal';
+
+  if (splitMode !== 'exact') {
+    const shareMapsByTxnId = new Map();
+    (targetRows || []).forEach((targetTxn) => {
+      shareMapsByTxnId.set(Number(targetTxn.id), buildEqualShareMap(Number(targetTxn.amount_cents || 0), personIds));
+    });
+    return { personIds, splitMode: 'equal', shareMapsByTxnId };
+  }
+
+  const rows = Array.isArray(targetRows) ? targetRows : [];
+  const baseAmount = Number(rows[0]?.amount_cents || 0);
+  if (baseAmount < 0) {
+    throw new Error('Valor definido ainda não está disponível para lançamentos negativos. Aqui, siga em partes iguais.');
+  }
+  const differentAmountRow = rows.find(row => Number(row.amount_cents || 0) !== baseAmount);
+  if (differentAmountRow) {
+    throw new Error('O valor definido só funciona quando todas as compras escolhidas têm o mesmo valor. Use partes iguais ou aplique em uma compra por vez.');
+  }
+
+  const shareSource = rawShareAmounts && typeof rawShareAmounts === 'object' ? rawShareAmounts : {};
+  const shareMap = {};
+
+  for (const personId of personIds) {
+    const rawValue = Object.prototype.hasOwnProperty.call(shareSource, personId)
+      ? shareSource[personId]
+      : shareSource[String(personId)];
+    const cents = normalizeShareAmountInput(rawValue);
+    if (cents === null || !Number.isFinite(cents) || cents < 0) {
+      throw new Error('Revise os valores definidos. Cada pessoa marcada precisa ter um valor válido.');
+    }
+    shareMap[personId] = cents;
+  }
+
+  const totalDefined = personIds.reduce((sum, personId) => sum + Number(shareMap[personId] || 0), 0);
+  if (totalDefined !== baseAmount) {
+    const diff = Math.abs(baseAmount - totalDefined);
+    const diffLabel = formatBRLFromCents(diff);
+    if (totalDefined < baseAmount) {
+      throw new Error(`Ainda falta ${diffLabel} para fechar o total da compra.`);
+    }
+    throw new Error(`Passou ${diffLabel} do total da compra. Dá uma aparada e tenta de novo.`);
+  }
+
+  const shareMapsByTxnId = new Map();
+  rows.forEach((targetTxn) => {
+    shareMapsByTxnId.set(Number(targetTxn.id), { ...shareMap });
+  });
+
+  return { personIds, splitMode: 'exact', shareMapsByTxnId };
+}
+
+function replaceAllocationsForTransactions(userId, targetRows, allocationPlan) {
+  const del = db.prepare("DELETE FROM allocations WHERE transaction_id = ? AND user_id = ?");
+  const ins = db.prepare("INSERT INTO allocations(user_id, transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?, ?)");
+
+  db.transaction(() => {
+    (targetRows || []).forEach((targetTxn) => {
+      clearSharedDebtAllocationLinksForTransaction(userId, targetTxn.id);
+      del.run(targetTxn.id, userId);
+
+      const shareMap = allocationPlan.shareMapsByTxnId.get(Number(targetTxn.id)) || {};
+      (allocationPlan.personIds || []).forEach((personId) => {
+        ins.run(userId, targetTxn.id, personId, Number(shareMap[personId] || 0), nowIso());
+      });
+    });
+  })();
+}
+
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -5733,6 +5867,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   const allocCountExpr = "(SELECT COUNT(*) FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id)";
   const selectedCsvExpr = "(SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id)";
+  const selectedSharesCsvExpr = "(SELECT GROUP_CONCAT(a.person_id || ':' || a.share_cents) FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id)";
 
   const where = [`((${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?))`];
   const params = [month, year, month, year];
@@ -5787,7 +5922,8 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
            COALESCE(t.due_month, i.month) AS month,
            COALESCE(t.due_year, i.year) AS year,
            ${allocCountExpr} AS alloc_count,
-           ${selectedCsvExpr} AS selected_csv
+           ${selectedCsvExpr} AS selected_csv,
+           ${selectedSharesCsvExpr} AS selected_shares_csv
     FROM transactions t
     LEFT JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
@@ -5797,6 +5933,14 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   txns.forEach(t => {
     t.selected_ids = (t.selected_csv ? t.selected_csv.split(",").map(x => Number(x)) : []).filter(Boolean);
+    t.selected_shares = {};
+    if (t.selected_shares_csv) {
+      String(t.selected_shares_csv).split(',').forEach((entry) => {
+        const [personIdRaw, shareRaw] = String(entry || '').split(':');
+        const personId = Number(personIdRaw || 0);
+        if (personId) t.selected_shares[personId] = Number(shareRaw || 0);
+      });
+    }
     t.has_future_installments = hasFutureInstallments(userId, t);
   });
 
@@ -6010,34 +6154,27 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
     return res.status(423).send(getMonthLockMessage(lockedTarget.month, lockedTarget.year));
   }
 
-  let personIds = req.body.person_ids || [];
-  if (!Array.isArray(personIds)) personIds = [personIds];
   const validPeople = new Set(getPeopleAll(userId).map(p => p.id));
-  personIds = personIds.map(Number).filter(pid => validPeople.has(pid));
 
-  const del = db.prepare("DELETE FROM allocations WHERE transaction_id = ? AND user_id = ?");
-  const ins = db.prepare("INSERT INTO allocations(user_id, transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?, ?)");
-
-  db.transaction(() => {
-    targetRows.forEach(targetTxn => {
-      clearSharedDebtAllocationLinksForTransaction(userId, targetTxn.id);
-      del.run(targetTxn.id, userId);
-      if (personIds.length > 0) {
-        const share = Math.floor(targetTxn.amount_cents / personIds.length);
-        const remainder = targetTxn.amount_cents - (share * personIds.length);
-        personIds.forEach((pid, idx) => {
-          const s = share + (idx < Math.abs(remainder) ? Math.sign(remainder) : 0);
-          ins.run(userId, targetTxn.id, pid, s, nowIso());
-        });
-      }
+  try {
+    const allocationPlan = parseAllocationPlan({
+      rawPersonIds: req.body.person_ids,
+      validPeople,
+      rawSplitMode: req.body.split_mode,
+      rawShareAmounts: req.body.share_amounts,
+      targetRows
     });
-  })();
 
-  syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
-    originKind: detectSharedDebtOriginKindFromRows(targetRows)
-  });
+    replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
 
-  res.redirect(`/month/${txn.year}/${txn.month}`);
+    syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
+      originKind: detectSharedDebtOriginKindFromRows(targetRows)
+    });
+
+    res.redirect(`/month/${txn.year}/${txn.month}`);
+  } catch (error) {
+    res.status(400).send(error.message || 'Não foi possível salvar a divisão dessa compra.');
+  }
 });
 
 // Detail page
@@ -6057,13 +6194,19 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
   if (!txn) return res.status(404).send("Transação não encontrada.");
 
   const people = getVisiblePeopleForTransaction(userId, id);
-  const selected = db.prepare("SELECT person_id FROM allocations WHERE transaction_id = ? AND user_id = ?")
-    .all(id, userId)
-    .map(r => r.person_id);
+  const allocationRows = db.prepare("SELECT person_id, share_cents FROM allocations WHERE transaction_id = ? AND user_id = ? ORDER BY id ASC")
+    .all(id, userId);
+  const selected = allocationRows.map(r => Number(r.person_id)).filter(Boolean);
+  const selectedShares = {};
+  allocationRows.forEach((row) => {
+    const personId = Number(row.person_id || 0);
+    if (personId) selectedShares[personId] = Number(row.share_cents || 0);
+  });
   const isClosed = isMonthClosed(userId, txn.month, txn.year);
   const hasFutureInstallmentsForTxn = hasFutureInstallments(userId, txn);
+  const initialSplitMode = inferAllocationMode(Number(txn.amount_cents || 0), allocationRows);
 
-  res.render("txn", { txn, people, selected, formatBRLFromCents, isClosed, hasFutureInstallments: hasFutureInstallmentsForTxn });
+  res.render("txn", { txn, people, selected, selectedShares, initialSplitMode, formatBRLFromCents, isClosed, hasFutureInstallments: hasFutureInstallmentsForTxn });
 });
 
 app.post("/txn/:id", ensureAuthenticated, (req, res) => {
@@ -6086,34 +6229,28 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
     return res.redirect(`/month/${txn.year}/${txn.month}`);
   }
 
-  let personIds = req.body.person_ids || [];
-  if (!Array.isArray(personIds)) personIds = [personIds];
   const validPeople = new Set(getPeopleAll(userId).map(p => p.id));
-  personIds = personIds.map(Number).filter(pid => validPeople.has(pid));
 
-  const del = db.prepare("DELETE FROM allocations WHERE transaction_id = ? AND user_id = ?");
-  const ins = db.prepare("INSERT INTO allocations(user_id, transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?, ?)");
-
-  db.transaction(() => {
-    targetRows.forEach(targetTxn => {
-      clearSharedDebtAllocationLinksForTransaction(userId, targetTxn.id);
-      del.run(targetTxn.id, userId);
-      if (personIds.length > 0) {
-        const share = Math.floor(targetTxn.amount_cents / personIds.length);
-        const remainder = targetTxn.amount_cents - (share * personIds.length);
-        personIds.forEach((pid, idx) => {
-          const s = share + (idx < Math.abs(remainder) ? Math.sign(remainder) : 0);
-          ins.run(userId, targetTxn.id, pid, s, nowIso());
-        });
-      }
+  try {
+    const allocationPlan = parseAllocationPlan({
+      rawPersonIds: req.body.person_ids,
+      validPeople,
+      rawSplitMode: req.body.split_mode,
+      rawShareAmounts: req.body.share_amounts,
+      targetRows
     });
-  })();
 
-  syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
-    originKind: detectSharedDebtOriginKindFromRows(targetRows)
-  });
+    replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
 
-  res.redirect(`/month/${txn.year}/${txn.month}`);
+    syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
+      originKind: detectSharedDebtOriginKindFromRows(targetRows)
+    });
+
+    res.redirect(`/month/${txn.year}/${txn.month}`);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não foi possível salvar a divisão dessa compra.');
+    res.redirect(`/txn/${txn.id}`);
+  }
 });
 
 app.post("/txn/:id/delete", ensureAuthenticated, (req, res) => {
@@ -6179,38 +6316,33 @@ app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
   }
 
   const validPeople = new Set(getPeopleAll(userId).map(p => p.id));
-  const personIds = normalizeTxnIds(req.body.person_ids).filter(pid => validPeople.has(pid));
 
-  const del = db.prepare("DELETE FROM allocations WHERE transaction_id = ? AND user_id = ?");
-  const ins = db.prepare("INSERT INTO allocations(user_id, transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?, ?)");
-
-  db.transaction(() => {
-    targetRows.forEach(targetTxn => {
-      clearSharedDebtAllocationLinksForTransaction(userId, targetTxn.id);
-      del.run(targetTxn.id, userId);
-      if (personIds.length > 0) {
-        const share = Math.floor(targetTxn.amount_cents / personIds.length);
-        const remainder = targetTxn.amount_cents - (share * personIds.length);
-        personIds.forEach((pid, idx) => {
-          const extra = idx < Math.abs(remainder) ? Math.sign(remainder) : 0;
-          ins.run(userId, targetTxn.id, pid, share + extra, nowIso());
-        });
-      }
+  try {
+    const allocationPlan = parseAllocationPlan({
+      rawPersonIds: req.body.person_ids,
+      validPeople,
+      rawSplitMode: req.body.split_mode,
+      rawShareAmounts: req.body.share_amounts,
+      targetRows
     });
-  })();
 
-  syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
-    originKind: detectSharedDebtOriginKindFromRows(targetRows)
-  });
+    replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
 
-  return res.json({
-    ok: true,
-    affected_count: targetRows.length,
-    source_count: sourceRows.length,
-    message: targetRows.length > 1
-      ? `${targetRows.length} lançamento(s) tiveram a distribuição atualizada.`
-      : 'Distribuição atualizada com sucesso.'
-  });
+    syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
+      originKind: detectSharedDebtOriginKindFromRows(targetRows)
+    });
+
+    return res.json({
+      ok: true,
+      affected_count: targetRows.length,
+      source_count: sourceRows.length,
+      message: targetRows.length > 1
+        ? `${targetRows.length} lançamento(s) tiveram a distribuição atualizada.`
+        : 'Distribuição atualizada com sucesso.'
+    });
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error.message || 'Não foi possível atualizar a distribuição agora.' });
+  }
 });
 
 app.post("/month/:year/:month/bulk/delete", ensureAuthenticated, (req, res) => {

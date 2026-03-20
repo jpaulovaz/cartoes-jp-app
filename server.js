@@ -97,11 +97,72 @@ db.prepare(`
     FOREIGN KEY (user_id) REFERENCES users(id)
   )
 `).run();
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS friend_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requester_user_id INTEGER NOT NULL,
+    target_user_id INTEGER NOT NULL,
+    source_person_id INTEGER,
+    requester_name_snapshot TEXT,
+    requester_email_snapshot TEXT,
+    target_name_snapshot TEXT,
+    target_email_snapshot TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    responded_at TEXT,
+    resolved_at TEXT,
+    response_note TEXT,
+    FOREIGN KEY (requester_user_id) REFERENCES users(id),
+    FOREIGN KEY (target_user_id) REFERENCES users(id),
+    FOREIGN KEY (source_person_id) REFERENCES people(id)
+  )
+`).run();
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS friendships (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_low_id INTEGER NOT NULL,
+    user_high_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    ended_at TEXT,
+    ended_by_user_id INTEGER,
+    origin_request_id INTEGER,
+    source TEXT NOT NULL DEFAULT 'friend_request',
+    UNIQUE(user_low_id, user_high_id),
+    FOREIGN KEY (user_low_id) REFERENCES users(id),
+    FOREIGN KEY (user_high_id) REFERENCES users(id),
+    FOREIGN KEY (ended_by_user_id) REFERENCES users(id),
+    FOREIGN KEY (origin_request_id) REFERENCES friend_requests(id)
+  )
+`).run();
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS person_app_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL,
+    person_id INTEGER NOT NULL,
+    linked_user_id INTEGER NOT NULL,
+    match_kind TEXT NOT NULL DEFAULT 'friendship',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(owner_user_id, person_id),
+    FOREIGN KEY (owner_user_id) REFERENCES users(id),
+    FOREIGN KEY (person_id) REFERENCES people(id),
+    FOREIGN KEY (linked_user_id) REFERENCES users(id)
+  )
+`).run();
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_scheduled_push_logs_event_date ON scheduled_push_logs(event_type, date_key, user_id, sequence_no)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_requests_batch_id ON shared_debt_requests(batch_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_receiver ON shared_debt_batches(receiver_user_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batches(requester_user_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_status ON friend_requests(requester_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_target_status ON friend_requests(target_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_pair_status ON friend_requests(requester_user_id, target_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friendships_pair_status ON friendships(user_low_id, user_high_id, status)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_person ON person_app_links(owner_user_id, person_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_linked ON person_app_links(owner_user_id, linked_user_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("ALTER TABLE closed_months ADD COLUMN user_id INTEGER").run(); } catch (e) { /* Coluna já existe ou tabela ainda não precisava de ajuste */ }
 try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_closed_months_user_month_year ON closed_months(user_id, month, year)").run(); } catch (e) { /* Índice já existe */ }
 
@@ -182,6 +243,7 @@ const CARD_DUE_PUSH_MINUTE = parseEnvInt(process.env.CARD_DUE_PUSH_MINUTE, 0, { 
 const CARD_DUE_PUSH_MAX_SENDS_PER_DAY = parseEnvInt(process.env.CARD_DUE_PUSH_MAX_SENDS_PER_DAY, 1, { min: 0, max: 5 });
 const CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES = parseEnvInt(process.env.CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES, 0, { min: 0, max: 1440 });
 const CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES = parseEnvInt(process.env.CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES, 10, { min: 1, max: 120 });
+const FRIENDSHIP_GATE_SHARED_DEBT_ENABLED = parseEnvBoolean(process.env.FRIENDSHIP_GATE_SHARED_DEBT_ENABLED, true);
 let pushRuntimeEnabled = false;
 let scheduledDuePushSweepRunning = false;
 
@@ -1221,40 +1283,6 @@ function getCardsByIds(userId, ids) {
   `).all(userId, ...uniqueIds);
 }
 
-function getPeopleAll(userId) {
-  const rows = db.prepare(`
-    SELECT
-      p.id,
-      p.name,
-      COALESCE(p.active, 1) AS active,
-      COALESCE(p.is_owner, 0) AS is_owner,
-      p.phone,
-      p.email,
-      u.id AS linked_user_id,
-      u.name AS linked_user_name,
-      u.email AS linked_user_email
-    FROM people p
-    LEFT JOIN users u
-      ON p.email IS NOT NULL
-     AND lower(u.email) = lower(p.email)
-    WHERE p.user_id = ?
-    ORDER BY COALESCE(p.is_owner, 0) DESC, COALESCE(p.active, 1) DESC, p.name
-  `).all(userId);
-
-  return rows.map((person) => {
-    const hasAppUser = !!person.linked_user_id;
-    const isActive = Number(person.active || 0) !== 0;
-    const isOwner = Number(person.is_owner || 0) !== 0;
-    const hasEmail = !!normalizeEmail(person.email);
-
-    return {
-      ...person,
-      has_app_user: hasAppUser,
-      can_share_charge: hasAppUser && hasEmail && isActive && !isOwner
-    };
-  });
-}
-
 function getPeopleActive(userId) {
   return db.prepare("SELECT id, name, active, email FROM people WHERE user_id = ? AND active = 1 ORDER BY name").all(userId);
 }
@@ -1344,6 +1372,417 @@ function getVisibleCardsForMonth(userId, month, year) {
 
 function getOwnerPerson(userId) {
   return db.prepare("SELECT id, name FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
+}
+
+function normalizeFriendRequestStatus(value) {
+  const status = String(value || '').trim().toLowerCase();
+  return status || 'pending';
+}
+
+function getFriendPair(userAId, userBId) {
+  const safeA = Number(userAId || 0);
+  const safeB = Number(userBId || 0);
+  if (!safeA || !safeB) return null;
+  return safeA < safeB
+    ? { low: safeA, high: safeB }
+    : { low: safeB, high: safeA };
+}
+
+function getFriendshipBetweenUsers(userAId, userBId) {
+  const pair = getFriendPair(userAId, userBId);
+  if (!pair) return null;
+
+  return db.prepare(`
+    SELECT *
+    FROM friendships
+    WHERE user_low_id = ? AND user_high_id = ?
+    LIMIT 1
+  `).get(pair.low, pair.high);
+}
+
+function getActiveFriendshipBetweenUsers(userAId, userBId) {
+  const row = getFriendshipBetweenUsers(userAId, userBId);
+  return row && String(row.status || '') === 'active' ? row : null;
+}
+
+function getFriendshipMapForUser(userId, remoteIds) {
+  const uniqueIds = Array.from(new Set((remoteIds || []).map(Number).filter(id => id > 0 && id !== Number(userId || 0))));
+  const map = new Map();
+  if (!uniqueIds.length) return map;
+
+  const placeholders = uniqueIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT *,
+      CASE WHEN user_low_id = ? THEN user_high_id ELSE user_low_id END AS remote_user_id
+    FROM friendships
+    WHERE status = 'active'
+      AND (
+        (user_low_id = ? AND user_high_id IN (${placeholders})) OR
+        (user_high_id = ? AND user_low_id IN (${placeholders}))
+      )
+  `).all(userId, userId, ...uniqueIds, userId, ...uniqueIds);
+
+  rows.forEach(row => {
+    map.set(Number(row.remote_user_id || 0), row);
+  });
+
+  return map;
+}
+
+function getPendingOutgoingFriendRequestByPersonMap(userId, personIds) {
+  const uniqueIds = Array.from(new Set((personIds || []).map(Number).filter(Boolean)));
+  const map = new Map();
+  if (!uniqueIds.length) return map;
+
+  const placeholders = uniqueIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT *
+    FROM friend_requests
+    WHERE requester_user_id = ?
+      AND status = 'pending'
+      AND source_person_id IN (${placeholders})
+    ORDER BY created_at DESC, id DESC
+  `).all(userId, ...uniqueIds);
+
+  rows.forEach(row => {
+    const personId = Number(row.source_person_id || 0);
+    if (personId && !map.has(personId)) {
+      map.set(personId, row);
+    }
+  });
+
+  return map;
+}
+
+function getPendingIncomingFriendRequestMap(userId, remoteIds) {
+  const uniqueIds = Array.from(new Set((remoteIds || []).map(Number).filter(id => id > 0 && id !== Number(userId || 0))));
+  const map = new Map();
+  if (!uniqueIds.length) return map;
+
+  const placeholders = uniqueIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT fr.*, u.name AS requester_name, u.email AS requester_email
+    FROM friend_requests fr
+    JOIN users u ON u.id = fr.requester_user_id
+    WHERE fr.target_user_id = ?
+      AND fr.status = 'pending'
+      AND fr.requester_user_id IN (${placeholders})
+    ORDER BY fr.created_at DESC, fr.id DESC
+  `).all(userId, ...uniqueIds);
+
+  rows.forEach(row => {
+    const remoteUserId = Number(row.requester_user_id || 0);
+    if (remoteUserId && !map.has(remoteUserId)) {
+      map.set(remoteUserId, row);
+    }
+  });
+
+  return map;
+}
+
+function getResolvedAppUserForPerson(userId, personId) {
+  const row = db.prepare(`
+    SELECT
+      p.id,
+      p.name,
+      p.email,
+      pal.linked_user_id AS stable_linked_user_id,
+      stable_u.name AS stable_linked_user_name,
+      stable_u.email AS stable_linked_user_email,
+      matched_u.id AS email_matched_user_id,
+      matched_u.name AS email_matched_user_name,
+      matched_u.email AS email_matched_user_email
+    FROM people p
+    LEFT JOIN person_app_links pal
+      ON pal.owner_user_id = p.user_id AND pal.person_id = p.id
+    LEFT JOIN users stable_u ON stable_u.id = pal.linked_user_id
+    LEFT JOIN users matched_u
+      ON pal.linked_user_id IS NULL
+     AND p.email IS NOT NULL
+     AND trim(p.email) <> ''
+     AND lower(matched_u.email) = lower(p.email)
+    WHERE p.user_id = ? AND p.id = ?
+    LIMIT 1
+  `).get(userId, personId);
+
+  if (!row) return null;
+
+  const linkedUserId = Number(row.stable_linked_user_id || row.email_matched_user_id || 0);
+  if (!linkedUserId || linkedUserId === Number(userId || 0)) return null;
+
+  const via = row.stable_linked_user_id ? 'person_link' : 'email_match';
+  return {
+    linked_user_id: linkedUserId,
+    linked_user_name: row.stable_linked_user_name || row.email_matched_user_name || null,
+    linked_user_email: normalizeEmail(row.stable_linked_user_email || row.email_matched_user_email || null),
+    via,
+    person: row
+  };
+}
+
+function upsertPersonAppLink({ ownerUserId, personId, linkedUserId, matchKind = 'friendship' }) {
+  const safeOwnerUserId = Number(ownerUserId || 0);
+  const safePersonId = Number(personId || 0);
+  const safeLinkedUserId = Number(linkedUserId || 0);
+  if (!safeOwnerUserId || !safePersonId || !safeLinkedUserId) return false;
+
+  const now = nowIso();
+  db.prepare(`
+    INSERT INTO person_app_links (owner_user_id, person_id, linked_user_id, match_kind, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(owner_user_id, person_id) DO UPDATE SET
+      linked_user_id = excluded.linked_user_id,
+      match_kind = excluded.match_kind,
+      updated_at = excluded.updated_at
+  `).run(safeOwnerUserId, safePersonId, safeLinkedUserId, String(matchKind || 'friendship'), now, now);
+
+  return true;
+}
+
+function findLinkedPersonForRemoteUser(ownerUserId, remoteUserId) {
+  return db.prepare(`
+    SELECT p.*
+    FROM person_app_links pal
+    JOIN people p ON p.id = pal.person_id AND p.user_id = pal.owner_user_id
+    WHERE pal.owner_user_id = ? AND pal.linked_user_id = ?
+    ORDER BY COALESCE(p.active, 1) DESC, p.id ASC
+    LIMIT 1
+  `).get(ownerUserId, remoteUserId);
+}
+
+function ensureFriendPersonForUser({ ownerUserId, remoteUserId, preferredName = null, preferredEmail = null }) {
+  const safeOwnerUserId = Number(ownerUserId || 0);
+  const safeRemoteUserId = Number(remoteUserId || 0);
+  if (!safeOwnerUserId || !safeRemoteUserId) return null;
+
+  const existingLinked = findLinkedPersonForRemoteUser(safeOwnerUserId, safeRemoteUserId);
+  if (existingLinked) {
+    upsertPersonAppLink({ ownerUserId: safeOwnerUserId, personId: existingLinked.id, linkedUserId: safeRemoteUserId, matchKind: 'friendship' });
+    return existingLinked;
+  }
+
+  const normalizedEmail = normalizeEmail(preferredEmail);
+  let person = null;
+
+  if (normalizedEmail) {
+    person = db.prepare(`
+      SELECT *
+      FROM people
+      WHERE user_id = ? AND email IS NOT NULL AND lower(email) = lower(?)
+      ORDER BY COALESCE(active, 1) DESC, id ASC
+      LIMIT 1
+    `).get(safeOwnerUserId, normalizedEmail);
+  }
+
+  if (!person) {
+    const baseName = String(preferredName || '').trim() || 'Contato OrganizaPay';
+    const now = nowIso();
+    const candidateNames = [baseName, `${baseName} (app)`, `${baseName} OrganizaPay`];
+
+    for (const candidateName of candidateNames) {
+      const inserted = db.prepare(`
+        INSERT OR IGNORE INTO people (user_id, name, phone, email, active, is_owner, created_at)
+        VALUES (?, ?, '', ?, 1, 0, ?)
+      `).run(safeOwnerUserId, candidateName, normalizedEmail, now);
+
+      const insertedId = Number(inserted.lastInsertRowid || 0);
+      if (insertedId) {
+        person = db.prepare(`SELECT * FROM people WHERE id = ? AND user_id = ?`).get(insertedId, safeOwnerUserId);
+        if (person) break;
+      }
+    }
+  }
+
+  if (!person) return null;
+
+  upsertPersonAppLink({ ownerUserId: safeOwnerUserId, personId: person.id, linkedUserId: safeRemoteUserId, matchKind: 'friendship' });
+  return person;
+}
+
+function upsertFriendship({ userAId, userBId, status = 'active', originRequestId = null, source = 'friend_request', endedByUserId = null }) {
+  const pair = getFriendPair(userAId, userBId);
+  if (!pair) return null;
+
+  const now = nowIso();
+  const normalizedStatus = String(status || 'active');
+  const endedAt = normalizedStatus === 'active' ? null : now;
+
+  db.prepare(`
+    INSERT INTO friendships (
+      user_low_id, user_high_id, status, created_at, updated_at, ended_at, ended_by_user_id, origin_request_id, source
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_low_id, user_high_id) DO UPDATE SET
+      status = excluded.status,
+      updated_at = excluded.updated_at,
+      ended_at = excluded.ended_at,
+      ended_by_user_id = excluded.ended_by_user_id,
+      origin_request_id = COALESCE(excluded.origin_request_id, friendships.origin_request_id),
+      source = excluded.source
+  `).run(
+    pair.low,
+    pair.high,
+    normalizedStatus,
+    now,
+    now,
+    endedAt,
+    normalizedStatus === 'active' ? null : Number(endedByUserId || 0) || null,
+    Number(originRequestId || 0) || null,
+    String(source || 'friend_request')
+  );
+
+  return getFriendshipBetweenUsers(pair.low, pair.high);
+}
+
+function getPendingFriendRequestById(requestId) {
+  return db.prepare(`
+    SELECT
+      fr.*,
+      requester_u.name AS requester_name,
+      requester_u.email AS requester_email,
+      target_u.name AS target_name,
+      target_u.email AS target_email
+    FROM friend_requests fr
+    JOIN users requester_u ON requester_u.id = fr.requester_user_id
+    JOIN users target_u ON target_u.id = fr.target_user_id
+    WHERE fr.id = ?
+    LIMIT 1
+  `).get(requestId);
+}
+
+function getPendingFriendRequestBetweenUsers(requesterUserId, targetUserId) {
+  return db.prepare(`
+    SELECT *
+    FROM friend_requests
+    WHERE requester_user_id = ? AND target_user_id = ? AND status = 'pending'
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
+  `).get(requesterUserId, targetUserId);
+}
+
+function getPendingReceivedFriendRequests(userId) {
+  return db.prepare(`
+    SELECT
+      fr.*,
+      requester_u.name AS requester_name,
+      requester_u.email AS requester_email,
+      linked_person.id AS linked_person_id,
+      linked_person.name AS linked_person_name
+    FROM friend_requests fr
+    JOIN users requester_u ON requester_u.id = fr.requester_user_id
+    LEFT JOIN person_app_links pal
+      ON pal.owner_user_id = ? AND pal.linked_user_id = fr.requester_user_id
+    LEFT JOIN people linked_person
+      ON linked_person.id = pal.person_id AND linked_person.user_id = pal.owner_user_id
+    WHERE fr.target_user_id = ? AND fr.status = 'pending'
+    ORDER BY fr.created_at DESC, fr.id DESC
+  `).all(userId, userId);
+}
+
+function closeOtherPendingFriendRequestsBetweenUsers(userAId, userBId, excludeRequestId = null, status = 'merged') {
+  const pair = getFriendPair(userAId, userBId);
+  if (!pair) return;
+
+  const safeExcludeId = Number(excludeRequestId || 0) || null;
+  const now = nowIso();
+  const rows = db.prepare(`
+    SELECT id
+    FROM friend_requests
+    WHERE status = 'pending'
+      AND (
+        (requester_user_id = ? AND target_user_id = ?) OR
+        (requester_user_id = ? AND target_user_id = ?)
+      )
+      ${safeExcludeId ? 'AND id <> ?' : ''}
+  `).all(
+    pair.low,
+    pair.high,
+    pair.high,
+    pair.low,
+    ...(safeExcludeId ? [safeExcludeId] : [])
+  );
+
+  rows.forEach(row => {
+    db.prepare(`
+      UPDATE friend_requests
+      SET status = ?, updated_at = ?, responded_at = COALESCE(responded_at, ?), resolved_at = COALESCE(resolved_at, ?)
+      WHERE id = ? AND status = 'pending'
+    `).run(String(status || 'merged'), now, now, now, row.id);
+  });
+}
+
+function getPeopleAll(userId) {
+  const rows = db.prepare(`
+    SELECT
+      p.id,
+      p.name,
+      COALESCE(p.active, 1) AS active,
+      COALESCE(p.is_owner, 0) AS is_owner,
+      p.phone,
+      p.email,
+      pal.linked_user_id AS stable_linked_user_id,
+      stable_u.name AS stable_linked_user_name,
+      stable_u.email AS stable_linked_user_email,
+      matched_u.id AS email_matched_user_id,
+      matched_u.name AS email_matched_user_name,
+      matched_u.email AS email_matched_user_email
+    FROM people p
+    LEFT JOIN person_app_links pal
+      ON pal.owner_user_id = p.user_id AND pal.person_id = p.id
+    LEFT JOIN users stable_u ON stable_u.id = pal.linked_user_id
+    LEFT JOIN users matched_u
+      ON pal.linked_user_id IS NULL
+     AND p.email IS NOT NULL
+     AND trim(p.email) <> ''
+     AND lower(matched_u.email) = lower(p.email)
+    WHERE p.user_id = ?
+    ORDER BY COALESCE(p.is_owner, 0) DESC, COALESCE(p.active, 1) DESC, p.name
+  `).all(userId);
+
+  const remoteIds = rows
+    .map(row => Number(row.stable_linked_user_id || row.email_matched_user_id || 0))
+    .filter(id => id > 0 && id !== Number(userId || 0));
+  const personIds = rows.map(row => Number(row.id || 0)).filter(Boolean);
+  const friendshipMap = getFriendshipMapForUser(userId, remoteIds);
+  const outgoingMap = getPendingOutgoingFriendRequestByPersonMap(userId, personIds);
+  const incomingMap = getPendingIncomingFriendRequestMap(userId, remoteIds);
+
+  return rows.map((person) => {
+    const linkedUserId = Number(person.stable_linked_user_id || person.email_matched_user_id || 0) || null;
+    const hasAppUser = !!linkedUserId && linkedUserId !== Number(userId || 0);
+    const isActive = Number(person.active || 0) !== 0;
+    const isOwner = Number(person.is_owner || 0) !== 0;
+    const friendship = hasAppUser ? friendshipMap.get(linkedUserId) : null;
+    const outgoingRequest = outgoingMap.get(Number(person.id || 0)) || null;
+    const incomingRequest = !outgoingRequest && hasAppUser ? (incomingMap.get(linkedUserId) || null) : null;
+    const friendshipActive = !!friendship;
+    const canShareCharge = FRIENDSHIP_GATE_SHARED_DEBT_ENABLED
+      ? friendshipActive && isActive && !isOwner
+      : hasAppUser && !!normalizeEmail(person.email) && isActive && !isOwner;
+
+    let friendshipState = 'none';
+    if (friendshipActive) friendshipState = 'active';
+    else if (outgoingRequest) friendshipState = 'pending_sent';
+    else if (incomingRequest) friendshipState = 'pending_received';
+    else if (hasAppUser) friendshipState = 'discoverable';
+
+    return {
+      ...person,
+      linked_user_id: linkedUserId,
+      linked_user_name: person.stable_linked_user_name || person.email_matched_user_name || null,
+      linked_user_email: normalizeEmail(person.stable_linked_user_email || person.email_matched_user_email || null),
+      discovery_via: person.stable_linked_user_id ? 'person_link' : (hasAppUser ? 'email_match' : null),
+      has_app_user: hasAppUser,
+      can_share_charge: canShareCharge,
+      friendship_state: friendshipState,
+      friendship_active: friendshipActive,
+      outgoing_friend_request_id: outgoingRequest ? Number(outgoingRequest.id || 0) : null,
+      incoming_friend_request_id: incomingRequest ? Number(incomingRequest.id || 0) : null,
+      friendship_id: friendship ? Number(friendship.id || 0) : null,
+      friendship: friendship || null,
+      outgoing_friend_request: outgoingRequest,
+      incoming_friend_request: incomingRequest
+    };
+  });
 }
 
 function upsertPushSubscription(userId, subscription) {
@@ -1862,27 +2301,54 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
   const requesterPerson = getOwnerPerson(userId);
   const requesterDisplayName = requesterPerson?.name || context?.requesterDisplayName || getUserRecord(userId)?.name || 'Um usuário';
 
-  const eligibleRows = db.prepare(`
-    SELECT
-      a.id AS allocation_id,
-      a.person_id,
-      a.share_cents,
-      p.name AS person_name,
-      p.email AS person_email,
-      u.id AS receiver_user_id,
-      u.name AS receiver_user_name,
-      u.email AS receiver_user_email
-    FROM allocations a
-    JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id
-    JOIN users u ON lower(u.email) = lower(p.email)
-    WHERE a.user_id = ?
-      AND a.transaction_id = ?
-      AND p.email IS NOT NULL
-      AND trim(p.email) <> ''
-      AND u.id <> ?
-      AND a.share_cents > 0
-    ORDER BY a.id
-  `).all(userId, txnId, userId);
+  const eligibleRows = (FRIENDSHIP_GATE_SHARED_DEBT_ENABLED
+    ? db.prepare(`
+      SELECT
+        a.id AS allocation_id,
+        a.person_id,
+        a.share_cents,
+        p.name AS person_name,
+        COALESCE(p.email, remote_u.email) AS person_email,
+        remote_u.id AS receiver_user_id,
+        remote_u.name AS receiver_user_name,
+        remote_u.email AS receiver_user_email
+      FROM allocations a
+      JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id
+      JOIN person_app_links pal ON pal.owner_user_id = p.user_id AND pal.person_id = p.id
+      JOIN users remote_u ON remote_u.id = pal.linked_user_id
+      JOIN friendships f
+        ON f.status = 'active'
+       AND f.user_low_id = CASE WHEN p.user_id < pal.linked_user_id THEN p.user_id ELSE pal.linked_user_id END
+       AND f.user_high_id = CASE WHEN p.user_id < pal.linked_user_id THEN pal.linked_user_id ELSE p.user_id END
+      WHERE a.user_id = ?
+        AND a.transaction_id = ?
+        AND COALESCE(p.active, 1) = 1
+        AND COALESCE(p.is_owner, 0) = 0
+        AND remote_u.id <> ?
+        AND a.share_cents > 0
+      ORDER BY a.id
+    `).all(userId, txnId, userId)
+    : db.prepare(`
+      SELECT
+        a.id AS allocation_id,
+        a.person_id,
+        a.share_cents,
+        p.name AS person_name,
+        p.email AS person_email,
+        u.id AS receiver_user_id,
+        u.name AS receiver_user_name,
+        u.email AS receiver_user_email
+      FROM allocations a
+      JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id
+      JOIN users u ON lower(u.email) = lower(p.email)
+      WHERE a.user_id = ?
+        AND a.transaction_id = ?
+        AND p.email IS NOT NULL
+        AND trim(p.email) <> ''
+        AND u.id <> ?
+        AND a.share_cents > 0
+      ORDER BY a.id
+    `).all(userId, txnId, userId));
 
   const existingRequests = db.prepare(`
     SELECT *
@@ -3545,7 +4011,15 @@ app.get("/notifications/:id/open", ensureAuthenticated, (req, res) => {
 app.get("/people", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const people = getPeopleAll(userId);
-  res.render("people", { people, title: "Pessoas" });
+  const pendingFriendRequests = getPendingReceivedFriendRequests(userId);
+  const highlightedFriendRequestId = Number(req.query.friendRequest || req.query.friend_request || 0) || null;
+
+  res.render("people", {
+    people,
+    pendingFriendRequests,
+    highlightedFriendRequestId,
+    title: "Pessoas"
+  });
 });
 
 app.post("/people", ensureAuthenticated, (req, res) => {
@@ -3562,6 +4036,256 @@ app.post("/people", ensureAuthenticated, (req, res) => {
   }
 
   res.redirect("/people");
+});
+
+app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const personId = Number(req.params.id);
+  const person = db.prepare(`
+    SELECT id, name, email, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner
+    FROM people
+    WHERE id = ? AND user_id = ?
+    LIMIT 1
+  `).get(personId, userId);
+
+  if (!person) {
+    setFlash(req, 'error', 'Não encontrei essa pessoa por aqui.');
+    return res.redirect('/people');
+  }
+
+  if (Number(person.is_owner || 0) !== 0) {
+    setFlash(req, 'info', 'Você já está no seu próprio time. Esse pedido não precisa existir.');
+    return res.redirect('/people');
+  }
+
+  if (Number(person.active || 0) === 0) {
+    setFlash(req, 'info', 'Reative essa pessoa antes de mandar um pedido de amizade.');
+    return res.redirect('/people');
+  }
+
+  const resolved = getResolvedAppUserForPerson(userId, personId);
+  if (!resolved?.linked_user_id) {
+    setFlash(req, 'info', 'Essa pessoa ainda não apareceu como usuária do OrganizaPay. Quando isso rolar, o botão vem pra festa.');
+    return res.redirect('/people');
+  }
+
+  if (Number(resolved.linked_user_id || 0) === Number(userId || 0)) {
+    setFlash(req, 'info', 'Pedido para você mesmo não entra na fila.');
+    return res.redirect('/people');
+  }
+
+  if (getActiveFriendshipBetweenUsers(userId, resolved.linked_user_id)) {
+    setFlash(req, 'success', `${person.name} já está com amizade ativa por aqui.`);
+    return res.redirect('/people');
+  }
+
+  const incomingPending = getPendingFriendRequestBetweenUsers(resolved.linked_user_id, userId);
+  if (incomingPending) {
+    setFlash(req, 'info', 'Boa! Essa pessoa já te mandou um pedido. É só aceitar para liberar as cobranças automáticas dos dois lados.');
+    return res.redirect(`/people?friendRequest=${incomingPending.id}`);
+  }
+
+  const outgoingPending = getPendingFriendRequestBetweenUsers(userId, resolved.linked_user_id);
+  if (outgoingPending) {
+    setFlash(req, 'info', 'Esse pedido já foi enviado e está só esperando o outro lado dar o ok.');
+    return res.redirect('/people');
+  }
+
+  const requester = getUserRecord(userId);
+  const targetUser = getUserRecord(resolved.linked_user_id);
+  const now = nowIso();
+  const info = db.prepare(`
+    INSERT INTO friend_requests (
+      requester_user_id, target_user_id, source_person_id,
+      requester_name_snapshot, requester_email_snapshot,
+      target_name_snapshot, target_email_snapshot,
+      status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+  `).run(
+    userId,
+    resolved.linked_user_id,
+    personId,
+    requester?.name || getOwnerPerson(userId)?.name || requester?.email || 'Um usuário',
+    normalizeEmail(requester?.email),
+    targetUser?.name || resolved.linked_user_name || person.name,
+    normalizeEmail(targetUser?.email || resolved.linked_user_email || person.email),
+    now,
+    now
+  );
+
+  const requestId = Number(info.lastInsertRowid || 0);
+  createNotification({
+    userId: resolved.linked_user_id,
+    type: 'friend_request',
+    title: 'Chegou um pedido de amizade',
+    body: `${requester?.name || person.name || 'Alguém'} quer virar seu contato de confiança no OrganizaPay.`,
+    href: `/people?friendRequest=${requestId}`,
+    relatedType: 'friend_request',
+    relatedId: requestId
+  });
+
+  setFlash(req, 'success', `Pedido enviado para ${person.name}. Agora é só esperar o outro lado dar o joinha.`);
+  return res.redirect('/people');
+});
+
+app.post('/friend-requests/:id/cancel', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const requestId = Number(req.params.id);
+  const requestRow = getPendingFriendRequestById(requestId);
+
+  if (!requestRow || Number(requestRow.requester_user_id || 0) !== userId || normalizeFriendRequestStatus(requestRow.status) !== 'pending') {
+    setFlash(req, 'info', 'Esse pedido já andou ou não existe mais.');
+    return res.redirect('/people');
+  }
+
+  const now = nowIso();
+  db.prepare(`
+    UPDATE friend_requests
+    SET status = 'cancelled_by_requester', updated_at = ?, responded_at = COALESCE(responded_at, ?), resolved_at = COALESCE(resolved_at, ?)
+    WHERE id = ? AND requester_user_id = ? AND status = 'pending'
+  `).run(now, now, now, requestId, userId);
+
+  setFlash(req, 'success', 'Pedido cancelado. Nada foi criado entre vocês.');
+  return res.redirect('/people');
+});
+
+app.post('/friend-requests/:id/respond', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const requestId = Number(req.params.id);
+  const action = String(req.body.action || '').trim().toLowerCase();
+  const requestRow = getPendingFriendRequestById(requestId);
+
+  if (!requestRow || Number(requestRow.target_user_id || 0) !== userId || normalizeFriendRequestStatus(requestRow.status) !== 'pending') {
+    setFlash(req, 'info', 'Esse pedido já mudou de estado ou não existe mais.');
+    return res.redirect('/people');
+  }
+
+  if (!['accept', 'reject'].includes(action)) {
+    setFlash(req, 'error', 'Não entendi a resposta desse pedido.');
+    return res.redirect('/people');
+  }
+
+  const now = nowIso();
+  const requesterUser = getUserRecord(requestRow.requester_user_id);
+  const targetUser = getUserRecord(requestRow.target_user_id);
+
+  if (action === 'accept') {
+    db.transaction(() => {
+      db.prepare(`
+        UPDATE friend_requests
+        SET status = 'accepted', updated_at = ?, responded_at = COALESCE(responded_at, ?), resolved_at = COALESCE(resolved_at, ?)
+        WHERE id = ? AND target_user_id = ? AND status = 'pending'
+      `).run(now, now, now, requestId, userId);
+
+      closeOtherPendingFriendRequestsBetweenUsers(requestRow.requester_user_id, requestRow.target_user_id, requestId, 'merged');
+      const friendship = upsertFriendship({
+        userAId: requestRow.requester_user_id,
+        userBId: requestRow.target_user_id,
+        status: 'active',
+        originRequestId: requestId,
+        source: 'friend_request'
+      });
+
+      if (Number(requestRow.source_person_id || 0) > 0) {
+        upsertPersonAppLink({
+          ownerUserId: requestRow.requester_user_id,
+          personId: requestRow.source_person_id,
+          linkedUserId: requestRow.target_user_id,
+          matchKind: 'friendship'
+        });
+      }
+
+      ensureFriendPersonForUser({
+        ownerUserId: requestRow.target_user_id,
+        remoteUserId: requestRow.requester_user_id,
+        preferredName: requestRow.requester_name_snapshot || requesterUser?.name || requesterUser?.email,
+        preferredEmail: requestRow.requester_email_snapshot || requesterUser?.email
+      });
+
+      createNotification({
+        userId: requestRow.requester_user_id,
+        type: 'friendship_update',
+        title: 'Amizade ativada',
+        body: `${targetUser?.name || 'Essa pessoa'} aceitou seu pedido. Agora vocês já podem trocar cobranças automáticas com mais privacidade.`,
+        href: '/people',
+        relatedType: 'friend_request',
+        relatedId: requestId
+      });
+    })();
+
+    setFlash(req, 'success', `${requestRow.requester_name || 'Pedido aceito'} entrou para sua rede. Cobranças automáticas entre vocês já estão liberadas.`);
+    return res.redirect('/people');
+  }
+
+  db.prepare(`
+    UPDATE friend_requests
+    SET status = 'rejected', updated_at = ?, responded_at = COALESCE(responded_at, ?), resolved_at = COALESCE(resolved_at, ?)
+    WHERE id = ? AND target_user_id = ? AND status = 'pending'
+  `).run(now, now, now, requestId, userId);
+
+  createNotification({
+    userId: requestRow.requester_user_id,
+    type: 'friendship_update',
+    title: 'Pedido não aceito',
+    body: `${targetUser?.name || 'Essa pessoa'} preferiu não ativar a amizade agora.`,
+    href: '/people',
+    relatedType: 'friend_request',
+    relatedId: requestId
+  });
+
+  setFlash(req, 'success', 'Pedido recusado. Nada mudou nas cobranças e a vida segue leve.');
+  return res.redirect('/people');
+});
+
+app.post('/people/:id/unfriend', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const personId = Number(req.params.id);
+  const person = db.prepare(`
+    SELECT id, name
+    FROM people
+    WHERE id = ? AND user_id = ?
+    LIMIT 1
+  `).get(personId, userId);
+
+  if (!person) {
+    setFlash(req, 'error', 'Não encontrei essa pessoa por aqui.');
+    return res.redirect('/people');
+  }
+
+  const resolved = getResolvedAppUserForPerson(userId, personId);
+  if (!resolved?.linked_user_id) {
+    setFlash(req, 'info', 'Esse contato não está ligado a um usuário do app.');
+    return res.redirect('/people');
+  }
+
+  const friendship = getActiveFriendshipBetweenUsers(userId, resolved.linked_user_id);
+  if (!friendship) {
+    setFlash(req, 'info', 'A amizade já não estava ativa.');
+    return res.redirect('/people');
+  }
+
+  const now = nowIso();
+  db.prepare(`
+    UPDATE friendships
+    SET status = 'ended', updated_at = ?, ended_at = ?, ended_by_user_id = ?
+    WHERE id = ? AND status = 'active'
+  `).run(now, now, userId, friendship.id);
+
+  closeOtherPendingFriendRequestsBetweenUsers(userId, resolved.linked_user_id, null, 'merged');
+
+  const actor = getUserRecord(userId);
+  createNotification({
+    userId: resolved.linked_user_id,
+    type: 'friendship_update',
+    title: 'Amizade desfeita',
+    body: `${actor?.name || 'Um contato'} desfez a amizade no OrganizaPay. O histórico continua, mas novos envios automáticos param por aqui.`,
+    href: '/people',
+    relatedType: 'friendship',
+    relatedId: friendship.id
+  });
+
+  setFlash(req, 'success', `Amizade com ${person.name} desfeita. O histórico ficou salvo, mas novos envios automáticos param daqui pra frente.`);
+  return res.redirect('/people');
 });
 
 app.post("/people/:id/toggle", ensureAuthenticated, (req, res) => {
@@ -3584,11 +4308,13 @@ app.post("/people/:id/delete", ensureAuthenticated, (req, res) => {
   const usage = db.prepare(`
     SELECT
       EXISTS(SELECT 1 FROM allocations WHERE user_id = ? AND person_id = ?) AS has_allocations,
-      EXISTS(SELECT 1 FROM person_payments WHERE user_id = ? AND person_id = ?) AS has_payments
-  `).get(userId, personId, userId, personId);
+      EXISTS(SELECT 1 FROM person_payments WHERE user_id = ? AND person_id = ?) AS has_payments,
+      EXISTS(SELECT 1 FROM person_app_links WHERE owner_user_id = ? AND person_id = ?) AS has_app_link,
+      EXISTS(SELECT 1 FROM friend_requests WHERE requester_user_id = ? AND source_person_id = ?) AS has_friend_history
+  `).get(userId, personId, userId, personId, userId, personId, userId, personId);
 
-  if (usage.has_allocations || usage.has_payments) {
-    setFlash(req, "info", `Não foi possível excluir ${person.name} porque já existe histórico vinculado. Use Desativar para ocultar sem perder os dados passados.`);
+  if (usage.has_allocations || usage.has_payments || usage.has_app_link || usage.has_friend_history) {
+    setFlash(req, "info", `Não foi possível excluir ${person.name} porque já existe histórico ou vínculo ligado a essa pessoa. Use Desativar para tirar de cena sem perder o passado.`);
     return res.redirect("/people");
   }
 
@@ -3883,6 +4609,50 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const sharedDebtSummary = getAcceptedSharedDebtSummaryForMonth(userId, currentMonth, currentYear);
 
   const alerts = [];
+  const pendingFriendRequests = db.prepare(`
+    SELECT fr.id, fr.created_at, requester_u.name AS requester_name
+    FROM friend_requests fr
+    JOIN users requester_u ON requester_u.id = fr.requester_user_id
+    WHERE fr.target_user_id = ? AND fr.status = 'pending'
+    ORDER BY fr.created_at DESC, fr.id DESC
+    LIMIT 5
+  `).all(userId);
+
+  const unreadFriendNotifications = db.prepare(`
+    SELECT title, body, href, created_at
+    FROM notifications
+    WHERE user_id = ? AND is_read = 0 AND (
+      related_type IN ('friend_request', 'friendship') OR
+      type IN ('friend_request', 'friendship_update')
+    )
+    ORDER BY created_at DESC, id DESC
+    LIMIT 5
+  `).all(userId);
+
+  if (pendingFriendRequests.length) {
+    const newestFriendRequest = pendingFriendRequests[0];
+    alerts.push({
+      type: 'info',
+      icon: '💚',
+      title: pendingFriendRequests.length === 1
+        ? `${newestFriendRequest.requester_name || 'Alguém'} quer entrar na sua rede`
+        : 'Pedidos de amizade esperando resposta',
+      description: pendingFriendRequests.length === 1
+        ? 'Aceitando, vocês liberam cobranças automáticas dos dois lados com um ok de verdade.'
+        : `${formatCountLabel(pendingFriendRequests.length, 'pedido de amizade está', 'pedidos de amizade estão')} te esperando lá em Pessoas.`,
+      href: `/people?friendRequest=${newestFriendRequest.id}`
+    });
+  } else if (unreadFriendNotifications.length) {
+    const newestFriendNotification = unreadFriendNotifications[0];
+    alerts.push({
+      type: 'info',
+      icon: '💌',
+      title: newestFriendNotification.title || 'Tem novidade na sua rede',
+      description: newestFriendNotification.body || 'Seu espaço de amizades ganhou novidade no OrganizaPay.',
+      href: newestFriendNotification.href || '/people'
+    });
+  }
+
   const unreadSharedDebtNotifications = db.prepare(`
     SELECT title, body, href, created_at
     FROM notifications

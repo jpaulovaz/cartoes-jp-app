@@ -852,9 +852,13 @@
         return monthSheetState;
       }
 
-      function openMonthSheet({ title = 'Ações', subtitle = '', body = null, actions = [], onClose = null } = {}) {
+      function openMonthSheet({ title = 'Ações', subtitle = '', body = null, actions = [], onClose = null, size = 'default' } = {}) {
         const state = ensureMonthSheet();
+        const surfaceSizeClass = size === 'wide' ? 'max-w-5xl' : 'max-w-lg';
+        const bodyHeightClass = size === 'wide' ? 'max-h-[78vh]' : 'max-h-[72vh]';
         state.onClose = typeof onClose === 'function' ? onClose : null;
+        state.surface.className = `w-full ${surfaceSizeClass} overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700`;
+        state.body.className = `${bodyHeightClass} overflow-y-auto px-5 py-4`;
         state.title.textContent = title;
         state.subtitle.textContent = subtitle || '';
         state.subtitle.classList.toggle('hidden', !subtitle);
@@ -1073,18 +1077,6 @@
         return map;
       }
 
-      function inferItemSplitMode(item) {
-        const selectedIds = Array.isArray(item?.selected_ids) ? item.selected_ids.map(Number).filter(Number.isInteger) : [];
-        if (selectedIds.length <= 1) return 'equal';
-        const currentMap = normalizeSelectedShares(item);
-        const actualValues = selectedIds.map(id => Number(currentMap[id] || 0)).sort((a, b) => a - b);
-        const expectedMap = buildEqualShareMapLocal(Number(item?.amount_cents || 0), selectedIds);
-        const expectedValues = selectedIds.map(id => Number(expectedMap[id] || 0)).sort((a, b) => a - b);
-        return actualValues.length === expectedValues.length && actualValues.every((value, index) => value === expectedValues[index])
-          ? 'equal'
-          : 'exact';
-      }
-
       function bindDynamicMoneyMask(input) {
         if (!(input instanceof HTMLInputElement)) return;
         if (window.OPMoneyMask && typeof window.OPMoneyMask.bind === 'function') {
@@ -1143,18 +1135,28 @@
           wrapper.appendChild(note);
         }
 
+        const contentLayout = document.createElement('div');
+        contentLayout.className = 'space-y-4 lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.95fr)] lg:items-start lg:gap-4 lg:space-y-0';
+        const selectionColumn = document.createElement('div');
+        selectionColumn.className = 'space-y-4';
+        const settingsColumn = document.createElement('div');
+        settingsColumn.className = 'space-y-4';
+        contentLayout.appendChild(selectionColumn);
+        contentLayout.appendChild(settingsColumn);
+        wrapper.appendChild(contentLayout);
+
         if (!people.length) {
           const empty = document.createElement('div');
           empty.className = 'rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300';
           empty.textContent = 'Nenhuma pessoa visível neste mês para aplicar a distribuição.';
-          wrapper.appendChild(empty);
+          selectionColumn.appendChild(empty);
         } else {
           const grid = document.createElement('div');
-          grid.className = 'grid gap-3 sm:grid-cols-2';
+          grid.className = 'grid gap-3 md:grid-cols-2';
           people.forEach(person => {
             grid.appendChild(buildPersonCard(person, initialSelectedIds.includes(Number(person.id))));
           });
-          wrapper.appendChild(grid);
+          selectionColumn.appendChild(grid);
         }
 
         const splitModeSection = document.createElement('section');
@@ -1169,19 +1171,18 @@
         const splitModeGrid = document.createElement('div');
         splitModeGrid.className = 'grid gap-3 md:grid-cols-2';
 
-        const initialMode = singleItem ? inferItemSplitMode(singleItem) : 'equal';
         const equalOption = buildSplitModeOption({
           title: 'Partes iguais',
           description: 'O app reparte sozinho entre as pessoas marcadas.',
           value: 'equal',
-          checked: initialMode !== 'exact',
+          checked: false,
           accentClass: 'peer-checked:border-emerald-400 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 dark:peer-checked:border-emerald-500 dark:peer-checked:bg-emerald-950/25'
         });
         const exactOption = buildSplitModeOption({
           title: 'Valor definido',
           description: 'Você dita o valor de cada pessoa, sem chute e sem susto.',
           value: 'exact',
-          checked: initialMode === 'exact',
+          checked: false,
           accentClass: 'peer-checked:border-violet-400 peer-checked:bg-violet-50 peer-checked:text-violet-700 dark:peer-checked:border-violet-500 dark:peer-checked:bg-violet-950/25'
         });
         splitModeGrid.appendChild(equalOption);
@@ -1212,24 +1213,19 @@
         multiExactNote.textContent = 'Quer usar valores definidos? Abra uma compra por vez. Em seleção múltipla, o app mantém só a divisão em partes iguais para não misturar os totais.';
         multiExactNote.hidden = items.length === 1;
 
-        wrapper.appendChild(splitModeSection);
-        wrapper.appendChild(exactPanel);
-        wrapper.appendChild(multiExactNote);
+        settingsColumn.appendChild(splitModeSection);
+        settingsColumn.appendChild(exactPanel);
+        settingsColumn.appendChild(multiExactNote);
 
         const modeInputs = () => Array.from(splitModeGrid.querySelectorAll('input[name="split_mode_choice"]'));
         const getSelectedIds = () => Array.from(wrapper.querySelectorAll('input[name="person_ids"]:checked'))
           .map(input => Number(input.value))
           .filter(Number.isInteger);
+        let saveActionButton = null;
 
         function getSplitMode() {
           const active = splitModeGrid.querySelector('input[name="split_mode_choice"]:checked');
-          return active ? String(active.value || 'equal') : 'equal';
-        }
-
-        function setSplitMode(nextMode) {
-          modeInputs().forEach((input) => {
-            input.checked = input.value === nextMode;
-          });
+          return active ? String(active.value || '') : '';
         }
 
         function renderExactFields() {
@@ -1305,6 +1301,13 @@
           `;
         }
 
+        function syncSaveButtonState() {
+          if (!saveActionButton) return;
+          const selectedIds = getSelectedIds();
+          const needsExplicitChoice = exactModeAvailable && selectedIds.length > 1;
+          saveActionButton.disabled = !people.length || (needsExplicitChoice && !getSplitMode());
+        }
+
         function syncSplitUi() {
           const selectedIds = getSelectedIds();
           const canPickMode = exactModeAvailable && selectedIds.length > 1;
@@ -1312,9 +1315,9 @@
           multiExactNote.hidden = items.length === 1;
 
           if (!canPickMode) {
-            setSplitMode('equal');
             exactPanel.hidden = true;
             exactTotals.innerHTML = '';
+            syncSaveButtonState();
             return;
           }
 
@@ -1323,7 +1326,10 @@
           if (wantsExact) {
             renderExactFields();
             syncExactTotals();
+          } else {
+            exactTotals.innerHTML = '';
           }
+          syncSaveButtonState();
         }
 
         wrapper.querySelectorAll('input[name="person_ids"]').forEach((input) => {
@@ -1336,14 +1342,13 @@
             syncSplitUi();
           });
         });
-        syncSplitUi();
-
-        openMonthSheet({
+        const sheetState = openMonthSheet({
           title: items.length > 1 ? 'Aplicar participantes' : 'Selecionar participantes',
           subtitle: items.length > 1
             ? 'A distribuição será substituída em todos os itens selecionados.'
             : 'Escolha quem participa e, se quiser, dite o valor de cada um.',
           body: wrapper,
+          size: 'wide',
           actions: [
             { label: 'Fechar', tone: 'secondary' },
             {
@@ -1359,6 +1364,16 @@
                   apply_scope: 'single'
                 };
 
+                if (checkedIds.length > 1) {
+                  const selectedMode = exactModeAvailable ? getSplitMode() : 'equal';
+                  if (exactModeAvailable && !selectedMode) {
+                    showAllocMessage('Escolha o tipo de divisão antes de salvar.', 'warning');
+                    syncSplitUi();
+                    return false;
+                  }
+                  payload.split_mode = selectedMode;
+                }
+
                 if (singleItem && checkedIds.length > 1 && getSplitMode() === 'exact') {
                   const targetTotal = Number(singleItem.amount_cents || 0);
                   const typedTotal = checkedIds.reduce((sum, personId) => sum + Number(draftShares[personId] || 0), 0);
@@ -1367,7 +1382,6 @@
                     showAllocMessage('Os valores definidos ainda não fecharam com o total da compra.', 'warning');
                     return false;
                   }
-                  payload.split_mode = 'exact';
                   payload.share_amounts = checkedIds.reduce((acc, personId) => {
                     acc[personId] = Number(draftShares[personId] || 0);
                     return acc;
@@ -1384,6 +1398,8 @@
             }
           ]
         });
+        saveActionButton = sheetState.actions.querySelectorAll('button')[1] || null;
+        syncSplitUi();
       }
 
       function openMoveSheet(txnIds) {

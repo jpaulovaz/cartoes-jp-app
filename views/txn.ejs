@@ -22,7 +22,7 @@
         Voltar para o mês
       </a>
       <% if (!isClosed) { %>
-        <button type="submit" form="txn-alloc-form" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+        <button type="submit" form="txn-alloc-form" data-txn-save-button class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
           <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
           </svg>
@@ -83,7 +83,7 @@
             <div class="text-sm font-black text-slate-900 dark:text-slate-100">Como você quer dividir essa compra?</div>
             <div class="grid gap-3 md:grid-cols-2">
               <label class="group <%= isClosed ? 'cursor-default' : 'cursor-pointer' %>">
-                <input class="peer sr-only" type="radio" name="split_mode" value="equal" data-split-mode-input <%= initialSplitMode !== 'exact' ? 'checked' : '' %> <%= isClosed ? 'disabled' : '' %> />
+                <input class="peer sr-only" type="radio" name="split_mode" value="equal" data-split-mode-input <%= isClosed && initialSplitMode !== 'exact' ? 'checked' : '' %> <%= isClosed ? 'disabled' : '' %> />
                 <span class="flex h-full items-start gap-3 rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:shadow-md peer-checked:border-emerald-400 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 dark:border-slate-700 dark:bg-slate-900/55 dark:peer-checked:border-emerald-500 dark:peer-checked:bg-emerald-950/25 dark:peer-checked:text-emerald-200">
                   <span class="mt-0.5 inline-flex h-10 w-10 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500 transition-all peer-checked:border-emerald-500 peer-checked:bg-emerald-600 peer-checked:text-white dark:border-slate-700 dark:bg-slate-950 dark:peer-checked:border-emerald-500 dark:peer-checked:bg-emerald-500">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -98,7 +98,7 @@
               </label>
 
               <label class="group <%= isClosed ? 'cursor-default' : 'cursor-pointer' %>">
-                <input class="peer sr-only" type="radio" name="split_mode" value="exact" data-split-mode-input <%= initialSplitMode === 'exact' ? 'checked' : '' %> <%= isClosed ? 'disabled' : '' %> />
+                <input class="peer sr-only" type="radio" name="split_mode" value="exact" data-split-mode-input <%= isClosed && initialSplitMode === 'exact' ? 'checked' : '' %> <%= isClosed ? 'disabled' : '' %> />
                 <span class="flex h-full items-start gap-3 rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:shadow-md peer-checked:border-violet-400 peer-checked:bg-violet-50 peer-checked:text-violet-700 dark:border-slate-700 dark:bg-slate-900/55 dark:peer-checked:border-violet-500 dark:peer-checked:bg-violet-950/25 dark:peer-checked:text-violet-200">
                   <span class="mt-0.5 inline-flex h-10 w-10 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500 transition-all peer-checked:border-violet-500 peer-checked:bg-violet-600 peer-checked:text-white dark:border-slate-700 dark:bg-slate-950 dark:peer-checked:border-violet-500 dark:peer-checked:bg-violet-500">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -130,7 +130,7 @@
 
           <% if (!isClosed) { %>
             <div class="flex flex-col gap-3 pt-1 sm:flex-row sm:flex-wrap">
-              <button class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Salvar</button>
+              <button type="submit" data-txn-save-button class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Salvar</button>
               <button type="submit" form="delete-txn-form" class="inline-flex items-center justify-center rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-bold text-red-700 transition-all hover:-translate-y-0.5 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200 dark:hover:bg-red-900/35">Excluir compra</button>
             </div>
           <% } else { %>
@@ -218,6 +218,7 @@
     const exactSummary = form.querySelector('[data-exact-summary]');
     const errorBox = form.querySelector('[data-split-error]');
     const modeInputs = Array.from(form.querySelectorAll('[data-split-mode-input]'));
+    const saveButtons = Array.from(document.querySelectorAll('[data-txn-save-button]'));
     const draftShares = {};
 
     function formatMoney(cents) {
@@ -254,13 +255,7 @@
 
     function getSplitMode() {
       const active = modeInputs.find(input => input.checked);
-      return active ? String(active.value || 'equal') : 'equal';
-    }
-
-    function setSplitMode(nextMode) {
-      modeInputs.forEach((input) => {
-        input.checked = input.value === nextMode;
-      });
+      return active ? String(active.value || '') : '';
     }
 
     function bindMoneyMask(input) {
@@ -364,15 +359,24 @@
       });
     }
 
+    function syncSaveButtons() {
+      const requiresModeChoice = !isClosed && amountCents >= 0 && getSelectedIds().length > 1;
+      const shouldDisable = requiresModeChoice && !getSplitMode();
+      saveButtons.forEach((button) => {
+        button.disabled = shouldDisable;
+        button.setAttribute('aria-disabled', shouldDisable ? 'true' : 'false');
+      });
+    }
+
     function syncUi() {
       const selectedIds = getSelectedIds();
       const canChooseMode = selectedIds.length > 1 && amountCents >= 0;
       if (splitModeShell) splitModeShell.hidden = !canChooseMode;
 
       if (!canChooseMode) {
-        setSplitMode('equal');
         if (exactShell) exactShell.hidden = true;
         showError('');
+        syncSaveButtons();
         return;
       }
 
@@ -384,6 +388,7 @@
       } else {
         showError('');
       }
+      syncSaveButtons();
     }
 
     selectedIdsSeed.forEach((personId) => {
@@ -404,6 +409,13 @@
     if (!isClosed) {
       form.addEventListener('submit', (event) => {
         const selectedIds = getSelectedIds();
+        const needsModeChoice = amountCents >= 0 && selectedIds.length > 1;
+        if (needsModeChoice && !getSplitMode()) {
+          event.preventDefault();
+          showError('Escolha como a compra será dividida antes de salvar.');
+          syncSaveButtons();
+          return;
+        }
         if (selectedIds.length > 1 && getSplitMode() === 'exact') {
           const typedTotal = selectedIds.reduce((sum, personId) => sum + Number(draftShares[personId] || 0), 0);
           if (typedTotal !== amountCents) {

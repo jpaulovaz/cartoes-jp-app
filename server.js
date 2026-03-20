@@ -279,25 +279,32 @@ function parseAllocationPlan({
   validPeople,
   rawSplitMode,
   rawShareAmounts,
-  targetRows
+  targetRows,
+  requireSplitModeSelection = false
 }) {
   const personIds = normalizeAllocationPersonIds(rawPersonIds, validPeople);
   if (!personIds.length) {
     return { personIds: [], splitMode: 'equal', shareMapsByTxnId: new Map() };
   }
 
-  const requestedMode = String(rawSplitMode || 'equal').trim().toLowerCase();
+  const rows = Array.isArray(targetRows) ? targetRows : [];
+  const requestedMode = String(rawSplitMode || '').trim().toLowerCase();
+  const mustChooseSplitMode = !!requireSplitModeSelection && personIds.length > 1;
+
+  if (mustChooseSplitMode && requestedMode !== 'equal' && requestedMode !== 'exact') {
+    throw new Error('Escolha como a compra será dividida antes de salvar.');
+  }
+
   const splitMode = personIds.length > 1 && requestedMode === 'exact' ? 'exact' : 'equal';
 
   if (splitMode !== 'exact') {
     const shareMapsByTxnId = new Map();
-    (targetRows || []).forEach((targetTxn) => {
+    rows.forEach((targetTxn) => {
       shareMapsByTxnId.set(Number(targetTxn.id), buildEqualShareMap(Number(targetTxn.amount_cents || 0), personIds));
     });
     return { personIds, splitMode: 'equal', shareMapsByTxnId };
   }
 
-  const rows = Array.isArray(targetRows) ? targetRows : [];
   const baseAmount = Number(rows[0]?.amount_cents || 0);
   if (baseAmount < 0) {
     throw new Error('Valor definido ainda não está disponível para lançamentos negativos. Aqui, siga em partes iguais.');
@@ -6162,7 +6169,8 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
       validPeople,
       rawSplitMode: req.body.split_mode,
       rawShareAmounts: req.body.share_amounts,
-      targetRows
+      targetRows,
+      requireSplitModeSelection: Number(txn.amount_cents || 0) >= 0
     });
 
     replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
@@ -6237,7 +6245,8 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
       validPeople,
       rawSplitMode: req.body.split_mode,
       rawShareAmounts: req.body.share_amounts,
-      targetRows
+      targetRows,
+      requireSplitModeSelection: Number(txn.amount_cents || 0) >= 0
     });
 
     replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
@@ -6323,7 +6332,8 @@ app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
       validPeople,
       rawSplitMode: req.body.split_mode,
       rawShareAmounts: req.body.share_amounts,
-      targetRows
+      targetRows,
+      requireSplitModeSelection: sourceRows.length === 1 && Number(sourceRows[0].amount_cents || 0) >= 0
     });
 
     replaceAllocationsForTransactions(userId, targetRows, allocationPlan);

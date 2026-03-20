@@ -1439,7 +1439,7 @@ function buildBackupAdminState() {
     recentRestores,
     running: backupJobRunning,
     restoring: backupRestoreRunning,
-    guideUrl: '/admin/backup/guide'
+    guideUrl: '/admin/guide'
   };
 }
 
@@ -8012,18 +8012,31 @@ app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
   }
 });
 
+function downloadAdminGuide(res, activeSection = 'access') {
+  const guidePath = path.join(__dirname, 'public', 'docs', 'guia-central-admin-organizapay.pdf');
+  if (!fs.existsSync(guidePath)) {
+    return renderAdmin(res, { error: 'O guia em PDF ainda não está disponível neste servidor.', activeSection });
+  }
+
+  return res.download(guidePath, 'guia-central-admin-organizapay.pdf');
+}
+
+app.get('/admin/guide', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  return downloadAdminGuide(res, 'access');
+});
+
 app.get('/admin/backup/guide', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   if (!isAdminUser(userId)) {
     return res.status(403).send('Acesso negado.');
   }
 
-  const guidePath = path.join(__dirname, 'public', 'docs', 'guia-backup-organizapay.pdf');
-  if (!fs.existsSync(guidePath)) {
-    return renderAdmin(res, { error: 'O guia em PDF ainda não está disponível neste servidor.', activeSection: 'backup' });
-  }
-
-  return res.download(guidePath, 'guia-backup-organizapay.pdf');
+  return downloadAdminGuide(res, 'backup');
 });
 
 app.get('/admin/backup/google/connect', ensureAuthenticated, (req, res) => {

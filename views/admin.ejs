@@ -6,25 +6,60 @@
     warning: 'border-amber-200 bg-amber-50/90 text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300',
     muted: 'border-slate-200 bg-slate-50/90 text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200'
   };
+  const toneBadgeClasses = {
+    success: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200',
+    warning: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200',
+    muted: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300'
+  };
   const activeSectionKey = typeof activeSection !== 'undefined' && activeSection ? activeSection : 'access';
   const backupState = typeof backupPanel !== 'undefined' && backupPanel ? backupPanel : null;
+  const adminGuideUrl = backupState && backupState.guideUrl ? backupState.guideUrl : '/admin/guide';
   const navItems = [{ key: 'access', title: 'Acessos', description: 'Quem entra no app' }].concat((settingsSections || []).map(section => ({
     key: section.key,
     title: section.title,
     description: section.eyebrow || 'Configuração'
   })));
+  const statusIconByKey = {
+    google: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 5v14m7-7H5"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M16.5 7.5A5.5 5.5 0 0012 5a5.5 5.5 0 00-4.5 2.5"></path></svg>',
+    whatsapp: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M8 17l-2.5 1 .8-2.3A7 7 0 1119 12a7 7 0 01-11 5z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M10 10.5c.4 1.2 1.3 2.1 2.5 2.5"></path></svg>',
+    push: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M15 17h5l-1.4-1.4a2 2 0 01-.6-1.4V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M9 17a3 3 0 006 0"></path></svg>',
+    backup: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M4 7a2 2 0 012-2h12a2 2 0 012 2v3H4V7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M4 10h16v7a2 2 0 01-2 2H6a2 2 0 01-2-2v-7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M9 14h6"></path></svg>',
+    session: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 3l7 4v5c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V7l7-4z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 9v3l2 2"></path></svg>'
+  };
+  function renderStatusIcon(key) {
+    return statusIconByKey[key] || '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 6v6l4 2"></path><circle cx="12" cy="12" r="9" stroke-width="1.9"></circle></svg>';
+  }
 %>
 
 <div class="max-w-[1500px] mx-auto space-y-8">
-  <section class="op-page-hero op-fade-up">
-    <div class="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-      <div class="max-w-3xl">
+  <section class="op-page-hero op-page-hero--admin op-fade-up">
+    <div class="grid gap-6 xl:grid-cols-[minmax(0,1.15fr),minmax(360px,0.95fr)] xl:items-start">
+      <div class="min-w-0">
         <span class="op-page-hero__eyebrow">Central de configuração</span>
         <h1 class="op-page-hero__title mt-4">Admin virou a casinha oficial das configurações</h1>
         <p class="op-page-hero__subtitle mt-3">
           O <code>.env</code> entrou em modo aposentadoria elegante: agora ele fica como plano B de bootstrap,
           enquanto as configurações do dia a dia moram aqui, separadas por assunto e com recarga automática sempre que der.
         </p>
+
+        <div class="op-admin-hero-actions mt-6">
+          <a href="<%= adminGuideUrl %>" class="op-admin-hero-action op-admin-hero-action--primary">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12m0 0l4-4m-4 4l-4-4"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 18v1a2 2 0 002 2h12a2 2 0 002-2v-1"></path></svg>
+            <span>
+              <span class="block">Baixar guia completo da central</span>
+              <span class="mt-0.5 block text-xs font-bold text-white/70 dark:text-white/80">PDF com passo a passo de todas as seções do /admin</span>
+            </span>
+          </a>
+
+          <a href="#admin-section-backup" class="op-admin-hero-action op-admin-hero-action--secondary">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7a2 2 0 012-2h12a2 2 0 012 2v3H4V7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 10h16v7a2 2 0 01-2 2H6a2 2 0 01-2-2v-7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14h6"></path></svg>
+            <span>
+              <span class="block">Ir para backup e restauração</span>
+              <span class="mt-0.5 block text-xs font-bold text-slate-500 dark:text-slate-400">Atalho rápido para o cofre do app</span>
+            </span>
+          </a>
+        </div>
+
         <div class="op-page-hero__meta mt-5 flex flex-wrap gap-2">
           <span class="badge"><%= users ? users.length : 0 %> acesso(s) liberado(s)</span>
           <span class="badge"><%= totalConfigItems %> ajustes na central</span>
@@ -33,16 +68,38 @@
         </div>
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-2 xl:w-[420px]">
-        <% (statusCards || []).forEach((card) => { %>
-          <div class="rounded-3xl border p-4 shadow-sm <%= toneClasses[card.tone] || toneClasses.muted %>">
-            <div class="flex items-center justify-between gap-3">
-              <div class="text-sm font-extrabold tracking-tight"><%= card.title %></div>
-              <span class="rounded-full border border-current/20 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em]"><%= card.status %></span>
-            </div>
-            <p class="mt-3 text-sm font-medium leading-relaxed text-current/90"><%= card.text %></p>
+      <div class="op-admin-status-panel">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div class="min-w-0">
+            <span class="text-xs font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Visão rápida</span>
+            <h2 class="mt-2 text-xl font-black tracking-tight text-slate-900 dark:text-white">Saúde dos serviços e atalhos da central</h2>
+            <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">
+              Um resumo do que já está pronto e do que ainda pede carinho, sem transformar o topo da página num Tetris de quadrados.
+            </p>
           </div>
-        <% }) %>
+          <span class="inline-flex items-center self-start rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+            <%= (statusCards || []).length %> serviço(s) monitorado(s)
+          </span>
+        </div>
+
+        <div class="mt-5 space-y-3">
+          <% (statusCards || []).forEach((card) => { %>
+            <article class="op-admin-status-item op-admin-status-item--<%= card.tone || 'muted' %>">
+              <div class="op-admin-status-item__icon">
+                <%- renderStatusIcon(card.key) %>
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div class="min-w-0">
+                    <div class="text-sm font-black tracking-tight text-slate-900 dark:text-white"><%= card.title %></div>
+                    <p class="mt-1 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300"><%= card.text %></p>
+                  </div>
+                  <span class="inline-flex items-center self-start rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] whitespace-nowrap <%= toneBadgeClasses[card.tone] || toneBadgeClasses.muted %>"><%= card.status %></span>
+                </div>
+              </div>
+            </article>
+          <% }) %>
+        </div>
       </div>
     </div>
   </section>
@@ -107,6 +164,9 @@
           <li>• Porta e segredo de sessão pedem um restart para vestir a roupa nova.</li>
           <li>• O <code>.env</code> continua como paraquedas de emergência, não como painel do dia a dia.</li>
         </ul>
+        <a href="<%= adminGuideUrl %>" class="mt-5 inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900/40">
+          Baixar guia completo em PDF
+        </a>
       </div>
     </aside>
 
@@ -396,7 +456,7 @@
                     <div class="text-xs font-black uppercase tracking-[0.18em] text-blue-500 dark:text-blue-300">Ações rápidas</div>
                     <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Mão no botão quando você quiser</h3>
                     <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">
-                      Dá para disparar um backup agora, baixar o guia em PDF e cuidar da conexão com o Google sem sair desta seção.
+                      Dá para disparar um backup agora, baixar o guia completo da central e cuidar da conexão com o Google sem sair desta seção.
                     </p>
                   </div>
 
@@ -408,7 +468,7 @@
                     </form>
 
                     <a href="<%= backupState.guideUrl %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-black text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition">
-                      Baixar guia em PDF
+                      Baixar guia completo da central
                     </a>
 
                     <% if (backupState.googleConnected) { %>

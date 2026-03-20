@@ -1,9 +1,16 @@
 require('dotenv').config(); // Carrega as variáveis do .env
 const path = require("path");
+const fs = require("fs");
+const fsp = fs.promises;
+const os = require("os");
+const crypto = require('crypto');
 const express = require("express");
 const multer = require("multer");
 const axios = require('axios');
 const dayjs = require("dayjs");
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
+const BetterSqlite3 = require('better-sqlite3');
 
 let webPush = null;
 try {
@@ -12,12 +19,36 @@ try {
   webPush = null;
 }
 
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
 // Novas dependências para Auth
 const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const SQLiteStore = require('connect-sqlite3')(session);
 const db = require("./src/db");
+const {
+  BACKUP_FILE_PREFIX,
+  BACKUP_MANIFEST_FILENAME,
+  BACKUP_SIGNATURE,
+  DEFAULT_PRIMARY_BACKUP_DIR,
+  DEFAULT_SECONDARY_BACKUP_DIR,
+  backupStatusTone,
+  copyFileIfExists,
+  createTempWorkspace,
+  createZipFromDirectory,
+  ensureDir,
+  extractZip,
+  formatBytes,
+  hashFileSha256,
+  listZipEntries,
+  pruneBackupDirectory,
+  resolveConfiguredDirectory,
+  toDisplayPath,
+  triggerLabel,
+  validateZipEntries
+} = require("./src/backupEngine");
 const {
   SETTING_SECTIONS,
   SETTING_DEFINITIONS,
@@ -363,8 +394,53 @@ function replaceAllocationsForTransactions(userId, targetRows, allocationPlan) {
   })();
 }
 
+
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS backup_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    backup_name TEXT NOT NULL,
+    trigger_kind TEXT NOT NULL DEFAULT 'manual',
+    status TEXT NOT NULL DEFAULT 'success',
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    local_primary_path TEXT,
+    local_secondary_path TEXT,
+    google_file_id TEXT,
+    google_view_link TEXT,
+    google_folder_id TEXT,
+    manifest_json TEXT,
+    message TEXT,
+    created_by_user_id INTEGER,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+  )
+`).run();
+
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS backup_restores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    backup_name TEXT,
+    uploaded_filename TEXT,
+    status TEXT NOT NULL DEFAULT 'success',
+    message TEXT,
+    safety_backup_run_id INTEGER,
+    restored_by_user_id INTEGER,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    FOREIGN KEY (safety_backup_run_id) REFERENCES backup_runs(id),
+    FOREIGN KEY (restored_by_user_id) REFERENCES users(id)
+  )
+`).run();
+
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_backup_runs_started_at ON backup_runs(started_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_backup_restores_started_at ON backup_restores(started_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
+const backupRestoreUpload = multer({
+  dest: path.join(os.tmpdir(), 'organizapay-restore-uploads'),
+  limits: { fileSize: 250 * 1024 * 1024 }
+});
 
 const currentConfigTimestamp = () => dayjs().toISOString();
 const appSettingsInsertIfMissing = db.prepare(`
@@ -381,8 +457,29 @@ const appSettingsUpsert = db.prepare(`
 `);
 const appSettingsSelectAll = db.prepare(`SELECT key, value, updated_at, updated_by_user_id FROM app_settings ORDER BY key ASC`);
 const appSettingsSelectValueByKey = db.prepare(`SELECT value FROM app_settings WHERE key = ? LIMIT 1`);
+const appSettingsDeleteByKey = db.prepare(`DELETE FROM app_settings WHERE key = ?`);
 const APP_SETUP_COMPLETED_KEY = 'APP_SETUP_COMPLETED';
 const GOOGLE_SETUP_KEYS = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'];
+const BACKUP_GOOGLE_REFRESH_TOKEN_KEY = 'BACKUP_GOOGLE_REFRESH_TOKEN';
+const BACKUP_GOOGLE_CONNECTED_EMAIL_KEY = 'BACKUP_GOOGLE_CONNECTED_EMAIL';
+const BACKUP_GOOGLE_CONNECTED_AT_KEY = 'BACKUP_GOOGLE_CONNECTED_AT';
+const BACKUP_GOOGLE_FOLDER_ID_KEY = 'BACKUP_GOOGLE_FOLDER_ID';
+const BACKUP_GOOGLE_SCOPE_KEY = 'BACKUP_GOOGLE_SCOPE';
+const BACKUP_GOOGLE_FOLDER_NAME_META_KEY = 'BACKUP_GOOGLE_FOLDER_NAME_META';
+
+const backupRunsInsert = db.prepare(`
+  INSERT INTO backup_runs (
+    backup_name, trigger_kind, status, size_bytes, local_primary_path, local_secondary_path,
+    google_file_id, google_view_link, google_folder_id, manifest_json, message, created_by_user_id, started_at, finished_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const backupRunsSelectRecent = db.prepare(`SELECT * FROM backup_runs ORDER BY started_at DESC LIMIT ?`);
+const backupRunsSelectById = db.prepare(`SELECT * FROM backup_runs WHERE id = ? LIMIT 1`);
+const backupRestoresInsert = db.prepare(`
+  INSERT INTO backup_restores (backup_name, uploaded_filename, status, message, safety_backup_run_id, restored_by_user_id, started_at, finished_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const backupRestoresSelectRecent = db.prepare(`SELECT * FROM backup_restores ORDER BY started_at DESC LIMIT ?`);
 
 let runtimeSettingsCache = {};
 let appSetupCompleted = false;
@@ -391,6 +488,10 @@ let googleAuthConfigured = false;
 let scheduledDuePushSweepRunning = false;
 let duePushSchedulerInitialHandle = null;
 let duePushSchedulerIntervalHandle = null;
+let backupSchedulerHandle = null;
+let backupSchedulerNextRunAt = null;
+let backupJobRunning = false;
+let backupRestoreRunning = false;
 
 function seedAppSettingsFromBootstrap() {
   const now = currentConfigTimestamp();
@@ -472,6 +573,33 @@ function getSettingInt(key, fallback = 0) {
       max: definition?.max ?? null
     }
   );
+}
+
+function getInternalSettingValue(key, fallback = '') {
+  const row = appSettingsSelectValueByKey.get(key);
+  const value = row?.value == null ? '' : String(row.value);
+  return value || fallback;
+}
+
+function setInternalSettings(entries, updatedByUserId = null) {
+  const now = currentConfigTimestamp();
+  db.transaction(() => {
+    Object.entries(entries || {}).forEach(([key, value]) => {
+      appSettingsUpsert.run(key, String(value ?? ''), now, updatedByUserId || null);
+    });
+  })();
+}
+
+function clearInternalSettings(keys, updatedByUserId = null) {
+  const now = currentConfigTimestamp();
+  db.transaction(() => {
+    (keys || []).forEach((key) => {
+      appSettingsDeleteByKey.run(key);
+    });
+    if (updatedByUserId) {
+      appSettingsUpsert.run(APP_SETUP_COMPLETED_KEY, '1', now, updatedByUserId);
+    }
+  })();
 }
 
 function getPushRuntimeConfig() {
@@ -588,6 +716,734 @@ function isGoogleAuthConfigured() {
   return googleAuthConfigured;
 }
 
+function getBackupRuntimeConfig() {
+  const fallbackTimeZone = 'America/Sao_Paulo';
+  const configuredTimeZone = getSettingText('BACKUP_TIMEZONE', fallbackTimeZone) || fallbackTimeZone;
+  const safeTimeZone = (() => {
+    try {
+      Intl.DateTimeFormat('pt-BR', { timeZone: configuredTimeZone }).format(new Date());
+      return configuredTimeZone;
+    } catch (error) {
+      return fallbackTimeZone;
+    }
+  })();
+
+  return {
+    enabled: getSettingBoolean('BACKUP_ENABLED', true),
+    frequency: getSettingText('BACKUP_FREQUENCY', 'daily') || 'daily',
+    timeZone: safeTimeZone,
+    hour: getSettingInt('BACKUP_HOUR', 3),
+    minute: getSettingInt('BACKUP_MINUTE', 30),
+    weekday: getSettingInt('BACKUP_WEEKDAY', 0),
+    keepCount: getSettingInt('BACKUP_KEEP_COUNT', 15),
+    localPrimaryDir: resolveConfiguredDirectory(__dirname, getSettingText('BACKUP_LOCAL_PRIMARY_DIR', DEFAULT_PRIMARY_BACKUP_DIR), DEFAULT_PRIMARY_BACKUP_DIR),
+    localSecondaryDir: resolveConfiguredDirectory(__dirname, getSettingText('BACKUP_LOCAL_SECONDARY_DIR', DEFAULT_SECONDARY_BACKUP_DIR), DEFAULT_SECONDARY_BACKUP_DIR),
+    googleEnabled: getSettingBoolean('BACKUP_GOOGLE_ENABLED', false),
+    googleFolderName: getSettingText('BACKUP_GOOGLE_FOLDER_NAME', 'OrganizaPay Backups') || 'OrganizaPay Backups',
+    googleRefreshToken: getInternalSettingValue(BACKUP_GOOGLE_REFRESH_TOKEN_KEY),
+    googleConnectedEmail: getInternalSettingValue(BACKUP_GOOGLE_CONNECTED_EMAIL_KEY),
+    googleConnectedAt: getInternalSettingValue(BACKUP_GOOGLE_CONNECTED_AT_KEY),
+    googleFolderId: getInternalSettingValue(BACKUP_GOOGLE_FOLDER_ID_KEY),
+    googleScope: getInternalSettingValue(BACKUP_GOOGLE_SCOPE_KEY),
+    googleFolderNameMeta: getInternalSettingValue(BACKUP_GOOGLE_FOLDER_NAME_META_KEY)
+  };
+}
+
+function formatAdminDateTime(dateValue, timeZone = 'America/Sao_Paulo') {
+  if (!dateValue) return '-';
+  try {
+    return dayjs(dateValue).tz(timeZone).format('DD/MM/YYYY HH:mm');
+  } catch (error) {
+    return dayjs(dateValue).format('DD/MM/YYYY HH:mm');
+  }
+}
+
+function getBackupFrequencyLabel(frequency) {
+  const labels = {
+    manual: 'Só manual',
+    hourly: 'A cada hora',
+    daily: 'Todo dia',
+    weekly: 'Toda semana'
+  };
+  return labels[String(frequency || '').trim()] || 'Manual';
+}
+
+function assertBackupDirectories(config) {
+  if (!config.localPrimaryDir || !config.localSecondaryDir) {
+    throw new Error('As duas pastas locais do backup precisam estar definidas.');
+  }
+
+  if (path.resolve(config.localPrimaryDir) === path.resolve(config.localSecondaryDir)) {
+    throw new Error('As duas pastas locais do backup precisam ser diferentes para o espelho ter graça de verdade.');
+  }
+}
+
+function getGoogleBackupRedirectUri() {
+  const callbackUrl = getSettingText('GOOGLE_CALLBACK_URL');
+  if (!callbackUrl) return '';
+
+  try {
+    const url = new URL(callbackUrl);
+    url.pathname = '/admin/backup/google/callback';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  } catch (error) {
+    return '';
+  }
+}
+
+function buildGoogleBackupAuthUrl(req) {
+  const clientId = getSettingText('GOOGLE_CLIENT_ID');
+  const clientSecret = getSettingText('GOOGLE_CLIENT_SECRET');
+  const redirectUri = getGoogleBackupRedirectUri();
+
+  if (!clientId || !clientSecret || !redirectUri) {
+    throw new Error('Antes de conectar o Google Drive, preencha Client ID, Client secret e a URL de retorno do login com Google.');
+  }
+
+  const state = crypto.randomBytes(24).toString('hex');
+  if (req.session) {
+    req.session.backupGoogleAuthState = state;
+    req.session.backupGoogleAuthCreatedAt = Date.now();
+  }
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    access_type: 'offline',
+    prompt: 'consent',
+    include_granted_scopes: 'true',
+    scope: ['openid', 'email', 'https://www.googleapis.com/auth/drive.file'].join(' '),
+    state
+  });
+
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+}
+
+async function exchangeGoogleBackupCodeForTokens(code) {
+  const clientId = getSettingText('GOOGLE_CLIENT_ID');
+  const clientSecret = getSettingText('GOOGLE_CLIENT_SECRET');
+  const redirectUri = getGoogleBackupRedirectUri();
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    code,
+    grant_type: 'authorization_code',
+    redirect_uri: redirectUri
+  });
+
+  const response = await axios.post('https://oauth2.googleapis.com/token', body.toString(), {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    timeout: 20000
+  });
+
+  return response.data || {};
+}
+
+async function refreshGoogleBackupAccessToken(refreshToken) {
+  const token = String(refreshToken || '').trim();
+  if (!token) {
+    throw new Error('Conecte uma conta Google antes de tentar enviar backup para o Drive.');
+  }
+
+  const body = new URLSearchParams({
+    client_id: getSettingText('GOOGLE_CLIENT_ID'),
+    client_secret: getSettingText('GOOGLE_CLIENT_SECRET'),
+    refresh_token: token,
+    grant_type: 'refresh_token'
+  });
+
+  const response = await axios.post('https://oauth2.googleapis.com/token', body.toString(), {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    timeout: 20000
+  });
+
+  const accessToken = String(response.data?.access_token || '').trim();
+  if (!accessToken) {
+    throw new Error('O Google não devolveu um access token para o backup agora.');
+  }
+
+  return accessToken;
+}
+
+async function fetchGoogleBackupProfile(accessToken) {
+  const response = await axios.get('https://openidconnect.googleapis.com/v1/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    timeout: 20000
+  });
+  return response.data || {};
+}
+
+async function googleDriveRequest({ method = 'GET', url, accessToken, params, data, headers = {} }) {
+  const response = await axios({
+    method,
+    url,
+    params,
+    data,
+    timeout: 45000,
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...headers
+    }
+  });
+
+  return response.data || {};
+}
+
+function escapeDriveQueryValue(value) {
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+}
+
+async function ensureGoogleBackupFolder(accessToken, config, updatedByUserId = null) {
+  const configuredFolderId = String(config.googleFolderId || '').trim();
+  if (configuredFolderId) {
+    try {
+      const folder = await googleDriveRequest({
+        url: `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(configuredFolderId)}`,
+        accessToken,
+        params: { fields: 'id,name,mimeType,webViewLink' }
+      });
+      if (folder && folder.id && folder.mimeType === 'application/vnd.google-apps.folder') {
+        if (folder.name && folder.name !== getInternalSettingValue(BACKUP_GOOGLE_FOLDER_NAME_META_KEY)) {
+          setInternalSettings({ [BACKUP_GOOGLE_FOLDER_NAME_META_KEY]: folder.name }, updatedByUserId);
+        }
+        return folder;
+      }
+    } catch (error) {
+      // Segue para busca/criação por nome.
+    }
+  }
+
+  const folderName = String(config.googleFolderName || 'OrganizaPay Backups').trim() || 'OrganizaPay Backups';
+  const found = await googleDriveRequest({
+    url: 'https://www.googleapis.com/drive/v3/files',
+    accessToken,
+    params: {
+      q: `mimeType='application/vnd.google-apps.folder' and trashed=false and name='${escapeDriveQueryValue(folderName)}'`,
+      pageSize: 1,
+      fields: 'files(id,name,mimeType,webViewLink)',
+      spaces: 'drive'
+    }
+  });
+
+  let folder = Array.isArray(found.files) ? found.files[0] : null;
+
+  if (!folder) {
+    folder = await googleDriveRequest({
+      method: 'POST',
+      url: 'https://www.googleapis.com/drive/v3/files',
+      accessToken,
+      params: { fields: 'id,name,mimeType,webViewLink' },
+      data: {
+        name: folderName,
+        mimeType: 'application/vnd.google-apps.folder'
+      },
+      headers: { 'Content-Type': 'application/json; charset=UTF-8' }
+    });
+  }
+
+  if (!folder?.id) {
+    throw new Error('Não consegui preparar a pasta do Google Drive para os backups.');
+  }
+
+  setInternalSettings({
+    [BACKUP_GOOGLE_FOLDER_ID_KEY]: folder.id,
+    [BACKUP_GOOGLE_FOLDER_NAME_META_KEY]: folder.name || folderName
+  }, updatedByUserId);
+
+  return folder;
+}
+
+async function uploadBackupZipToGoogle({ filePath, fileName, config, updatedByUserId = null }) {
+  const accessToken = await refreshGoogleBackupAccessToken(config.googleRefreshToken);
+  const folder = await ensureGoogleBackupFolder(accessToken, config, updatedByUserId);
+  const fileBuffer = await fsp.readFile(filePath);
+  const boundary = `organizapay-${crypto.randomBytes(12).toString('hex')}`;
+  const metadata = {
+    name: fileName,
+    parents: [folder.id]
+  };
+
+  const prefix = Buffer.from(
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\nContent-Type: application/zip\r\n\r\n`
+  );
+  const suffix = Buffer.from(`\r\n--${boundary}--`);
+  const payload = Buffer.concat([prefix, fileBuffer, suffix]);
+
+  const uploaded = await googleDriveRequest({
+    method: 'POST',
+    url: 'https://www.googleapis.com/upload/drive/v3/files',
+    accessToken,
+    params: {
+      uploadType: 'multipart',
+      fields: 'id,name,webViewLink,webContentLink,createdTime,size,parents'
+    },
+    data: payload,
+    headers: {
+      'Content-Type': `multipart/related; boundary=${boundary}`
+    }
+  });
+
+  return {
+    fileId: uploaded.id || '',
+    viewLink: uploaded.webViewLink || (uploaded.id ? `https://drive.google.com/file/d/${uploaded.id}/view` : ''),
+    folderId: folder.id,
+    folderName: folder.name || config.googleFolderName,
+    accessToken
+  };
+}
+
+async function pruneGoogleBackupFiles({ accessToken, folderId, keepCount }) {
+  if (!accessToken || !folderId) return;
+  const keep = Math.max(1, Number(keepCount || 1));
+  const listed = await googleDriveRequest({
+    url: 'https://www.googleapis.com/drive/v3/files',
+    accessToken,
+    params: {
+      q: `'${escapeDriveQueryValue(folderId)}' in parents and trashed=false and name contains '${BACKUP_FILE_PREFIX}'`,
+      orderBy: 'createdTime desc',
+      pageSize: Math.max(keep + 10, 50),
+      fields: 'files(id,name,createdTime)'
+    }
+  });
+
+  const extras = (Array.isArray(listed.files) ? listed.files : []).slice(keep);
+  for (const file of extras) {
+    if (!file?.id) continue;
+    try {
+      await googleDriveRequest({
+        method: 'DELETE',
+        url: `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}`,
+        accessToken
+      });
+    } catch (error) {
+      console.warn('Falha ao limpar backup antigo do Google Drive:', error?.response?.data?.error?.message || error?.message || error);
+    }
+  }
+}
+
+function buildBackupFileName({ triggerKind = 'manual', timeZone = 'America/Sao_Paulo' } = {}) {
+  const stamp = dayjs().tz(timeZone).format('YYYYMMDD-HHmmss');
+  const normalizedTrigger = String(triggerKind || 'manual').replace(/[^a-z0-9_-]/gi, '-').toLowerCase();
+  return `${BACKUP_FILE_PREFIX}-${stamp}-${normalizedTrigger}.zip`;
+}
+
+async function collectBackupManifestEntries(filesRoot, backupName) {
+  const manifestFiles = [];
+
+  async function walk(relativeDir = '') {
+    const absoluteDir = path.join(filesRoot, relativeDir);
+    const entries = await fsp.readdir(absoluteDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const nextRelative = relativeDir ? path.join(relativeDir, entry.name) : entry.name;
+      const absolutePath = path.join(filesRoot, nextRelative);
+      if (entry.isDirectory()) {
+        await walk(nextRelative);
+        continue;
+      }
+      const stat = await fsp.stat(absolutePath);
+      manifestFiles.push({
+        logicalPath: nextRelative.replace(/\\/g, '/'),
+        sizeBytes: stat.size,
+        sha256: await hashFileSha256(absolutePath)
+      });
+    }
+  }
+
+  await walk();
+  manifestFiles.sort((a, b) => a.logicalPath.localeCompare(b.logicalPath));
+
+  return {
+    signature: BACKUP_SIGNATURE,
+    app: 'OrganizaPay',
+    backupName,
+    createdAt: currentConfigTimestamp(),
+    files: manifestFiles
+  };
+}
+
+async function runBackupRetention(config) {
+  await pruneBackupDirectory(config.localPrimaryDir, BACKUP_FILE_PREFIX, config.keepCount);
+  await pruneBackupDirectory(config.localSecondaryDir, BACKUP_FILE_PREFIX, config.keepCount);
+}
+
+async function createServerBackup({ triggerKind = 'manual', createdByUserId = null, messagePrefix = '' } = {}) {
+  if (backupJobRunning || backupRestoreRunning) {
+    throw new Error('Já tem uma operação de backup ou restauração rodando. Deixa essa terminar antes de chamar outra.');
+  }
+
+  backupJobRunning = true;
+  const startedAt = currentConfigTimestamp();
+  const config = getBackupRuntimeConfig();
+  let workspace = null;
+  let backupName = buildBackupFileName({ triggerKind, timeZone: config.timeZone });
+  let localPrimaryPath = '';
+  let localSecondaryPath = '';
+  let googleFileId = '';
+  let googleViewLink = '';
+  let googleFolderId = config.googleFolderId || '';
+  let sizeBytes = 0;
+  let manifestJson = '';
+  let finalStatus = 'success';
+  let finalMessage = messagePrefix ? String(messagePrefix).trim() : 'Backup criado com sucesso.';
+
+  try {
+    assertBackupDirectories(config);
+    workspace = await createTempWorkspace('organizapay-backup-');
+    const payloadRoot = path.join(workspace, 'payload');
+    const filesRoot = path.join(payloadRoot, 'files');
+    const dbSnapshotPath = path.join(filesRoot, 'data', 'app.db');
+    await ensureDir(path.dirname(dbSnapshotPath));
+    await db.backup(dbSnapshotPath);
+
+    await copyFileIfExists(path.join(__dirname, '.env'), path.join(filesRoot, '.env'));
+
+    const sessionFiles = ['sessions.sqlite', 'sessions.sqlite-shm', 'sessions.sqlite-wal'];
+    for (const fileName of sessionFiles) {
+      await copyFileIfExists(path.join(__dirname, fileName), path.join(filesRoot, fileName));
+    }
+
+    const manifest = await collectBackupManifestEntries(filesRoot, backupName);
+    manifest.triggerKind = triggerKind;
+    manifest.createdByUserId = createdByUserId || null;
+    manifestJson = JSON.stringify(manifest);
+    await fsp.writeFile(path.join(payloadRoot, BACKUP_MANIFEST_FILENAME), JSON.stringify(manifest, null, 2), 'utf8');
+
+    const zipPath = path.join(workspace, backupName);
+    await createZipFromDirectory(payloadRoot, zipPath);
+    const zipStat = await fsp.stat(zipPath);
+    sizeBytes = zipStat.size;
+
+    await ensureDir(config.localPrimaryDir);
+    await ensureDir(config.localSecondaryDir);
+
+    localPrimaryPath = path.join(config.localPrimaryDir, backupName);
+    localSecondaryPath = path.join(config.localSecondaryDir, backupName);
+
+    await fsp.copyFile(zipPath, localPrimaryPath);
+    await fsp.copyFile(zipPath, localSecondaryPath);
+    await runBackupRetention(config);
+
+    if (config.googleEnabled) {
+      if (!config.googleRefreshToken) {
+        finalStatus = 'warning';
+        finalMessage = `${finalMessage} As cópias locais foram salvas, mas o Google Drive ainda não está conectado.`.trim();
+      } else {
+        try {
+          const googleResult = await uploadBackupZipToGoogle({
+            filePath: zipPath,
+            fileName: backupName,
+            config,
+            updatedByUserId: createdByUserId
+          });
+          googleFileId = googleResult.fileId || '';
+          googleViewLink = googleResult.viewLink || '';
+          googleFolderId = googleResult.folderId || googleFolderId;
+          await pruneGoogleBackupFiles({
+            accessToken: googleResult.accessToken,
+            folderId: googleResult.folderId,
+            keepCount: config.keepCount
+          });
+        } catch (error) {
+          finalStatus = 'warning';
+          finalMessage = `${finalMessage} As cópias locais ficaram salvas, mas o envio ao Google Drive tropeçou: ${error?.response?.data?.error?.message || error?.message || error}`;
+        }
+      }
+    }
+
+    const finishedAt = currentConfigTimestamp();
+    const result = backupRunsInsert.run(
+      backupName,
+      triggerKind,
+      finalStatus,
+      sizeBytes,
+      localPrimaryPath || null,
+      localSecondaryPath || null,
+      googleFileId || null,
+      googleViewLink || null,
+      googleFolderId || null,
+      manifestJson || null,
+      finalMessage || null,
+      createdByUserId || null,
+      startedAt,
+      finishedAt
+    );
+
+    return {
+      id: Number(result.lastInsertRowid),
+      backupName,
+      status: finalStatus,
+      message: finalMessage,
+      sizeBytes,
+      localPrimaryPath,
+      localSecondaryPath,
+      googleFileId,
+      googleViewLink,
+      googleFolderId,
+      startedAt,
+      finishedAt
+    };
+  } catch (error) {
+    const finishedAt = currentConfigTimestamp();
+    const message = error?.response?.data?.error?.message || error?.message || 'Não consegui criar o backup agora.';
+    const result = backupRunsInsert.run(
+      backupName,
+      triggerKind,
+      'error',
+      sizeBytes || 0,
+      localPrimaryPath || null,
+      localSecondaryPath || null,
+      googleFileId || null,
+      googleViewLink || null,
+      googleFolderId || null,
+      manifestJson || null,
+      message,
+      createdByUserId || null,
+      startedAt,
+      finishedAt
+    );
+    const enrichedError = new Error(message);
+    enrichedError.backupRunId = Number(result.lastInsertRowid);
+    throw enrichedError;
+  } finally {
+    backupJobRunning = false;
+    if (workspace) {
+      await fsp.rm(workspace, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+}
+
+async function restoreServerBackupFromZip({ zipPath, uploadedFilename, restoredByUserId = null }) {
+  if (backupJobRunning || backupRestoreRunning) {
+    throw new Error('Tem outra operação de backup ou restauração em andamento. Vamos por partes para não tropeçar na própria extensão.');
+  }
+
+  backupRestoreRunning = true;
+  const startedAt = currentConfigTimestamp();
+  let workspace = null;
+  let backupName = null;
+  let safetyBackupRunId = null;
+
+  try {
+    workspace = await createTempWorkspace('organizapay-restore-');
+    const entries = await listZipEntries(zipPath);
+    validateZipEntries(entries);
+    await extractZip(zipPath, workspace);
+
+    const manifestPath = path.join(workspace, BACKUP_MANIFEST_FILENAME);
+    const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8'));
+    if (!manifest || manifest.signature !== BACKUP_SIGNATURE) {
+      throw new Error('O arquivo enviado não tem a assinatura oficial de backup do OrganizaPay.');
+    }
+
+    backupName = String(manifest.backupName || '').trim() || path.basename(zipPath);
+    const sourceDbPath = path.join(workspace, 'files', 'data', 'app.db');
+    const sourceDbStat = await fsp.stat(sourceDbPath).catch(() => null);
+    if (!sourceDbStat || !sourceDbStat.isFile()) {
+      throw new Error('Esse backup não trouxe a cópia do banco principal. A restauração foi cancelada.');
+    }
+
+    const safetyBackup = await createServerBackup({
+      triggerKind: 'before_restore',
+      createdByUserId: restoredByUserId,
+      messagePrefix: 'Backup de segurança criado antes da restauração.'
+    });
+    safetyBackupRunId = safetyBackup.id;
+
+    try {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch (error) {
+      // Segue o baile se o checkpoint não rolar.
+    }
+
+    const sourceDb = new BetterSqlite3(sourceDbPath, { fileMustExist: true });
+    try {
+      await sourceDb.backup(path.join(__dirname, 'data', 'app.db'));
+    } finally {
+      sourceDb.close();
+    }
+
+    const restorableFiles = ['sessions.sqlite', 'sessions.sqlite-shm', 'sessions.sqlite-wal', '.env'];
+    for (const fileName of restorableFiles) {
+      const sourcePath = path.join(workspace, 'files', fileName);
+      const targetPath = path.join(__dirname, fileName);
+      const exists = await copyFileIfExists(sourcePath, targetPath);
+      if (exists && fileName.startsWith('sessions.sqlite')) {
+        // Nada além de copiar. Sessões antigas podem precisar de restart para valerem de vez.
+      }
+    }
+
+    refreshRuntimeSettings();
+
+    const finishedAt = currentConfigTimestamp();
+    backupRestoresInsert.run(
+      backupName,
+      uploadedFilename || path.basename(zipPath),
+      'success',
+      'Backup restaurado com sucesso. O banco voltou para a foto salva no zip.',
+      safetyBackupRunId || null,
+      restoredByUserId || null,
+      startedAt,
+      finishedAt
+    );
+
+    return {
+      backupName,
+      safetyBackupRunId,
+      message: 'Backup restaurado com sucesso. O banco voltou para a foto salva no zip.'
+    };
+  } catch (error) {
+    const finishedAt = currentConfigTimestamp();
+    const message = error?.response?.data?.error?.message || error?.message || 'Não consegui restaurar o backup agora.';
+    backupRestoresInsert.run(
+      backupName || null,
+      uploadedFilename || path.basename(zipPath),
+      'error',
+      message,
+      safetyBackupRunId || null,
+      restoredByUserId || null,
+      startedAt,
+      finishedAt
+    );
+    throw new Error(message);
+  } finally {
+    backupRestoreRunning = false;
+    if (workspace) {
+      await fsp.rm(workspace, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+}
+
+function getNextBackupRunAt(config = getBackupRuntimeConfig(), fromDate = dayjs()) {
+  if (!config.enabled || !config.frequency || config.frequency === 'manual') return null;
+
+  const now = fromDate.tz(config.timeZone);
+  if (config.frequency === 'hourly') {
+    let next = now.startOf('hour').minute(config.minute).second(0).millisecond(0);
+    if (!next.isAfter(now)) next = next.add(1, 'hour');
+    return next;
+  }
+
+  if (config.frequency === 'daily') {
+    let next = now.hour(config.hour).minute(config.minute).second(0).millisecond(0);
+    if (!next.isAfter(now)) next = next.add(1, 'day');
+    return next;
+  }
+
+  if (config.frequency === 'weekly') {
+    let next = now.hour(config.hour).minute(config.minute).second(0).millisecond(0);
+    const today = next.day();
+    let daysAhead = (Number(config.weekday) - today + 7) % 7;
+    if (daysAhead === 0 && !next.isAfter(now)) daysAhead = 7;
+    next = next.add(daysAhead, 'day');
+    return next;
+  }
+
+  return null;
+}
+
+function clearBackupScheduler() {
+  if (backupSchedulerHandle) {
+    clearTimeout(backupSchedulerHandle);
+    backupSchedulerHandle = null;
+  }
+  backupSchedulerNextRunAt = null;
+}
+
+function restartBackupScheduler() {
+  clearBackupScheduler();
+
+  const config = getBackupRuntimeConfig();
+  if (!config.enabled || config.frequency === 'manual') {
+    return;
+  }
+
+  let nextRun = null;
+  try {
+    assertBackupDirectories(config);
+    nextRun = getNextBackupRunAt(config);
+  } catch (error) {
+    console.warn('Backup automático não foi agendado:', error?.message || error);
+    return;
+  }
+
+  if (!nextRun) return;
+
+  backupSchedulerNextRunAt = nextRun.toISOString();
+  const delayMs = Math.max(1000, Math.min(nextRun.diff(dayjs()), 2147483647));
+
+  backupSchedulerHandle = setTimeout(async () => {
+    try {
+      const result = await createServerBackup({ triggerKind: 'scheduled' });
+      if (result.status !== 'success') {
+        console.warn('Backup automático finalizado com aviso:', result.message);
+      }
+    } catch (error) {
+      console.error('Falha no backup automático:', error?.message || error);
+    } finally {
+      restartBackupScheduler();
+    }
+  }, delayMs);
+}
+
+function mapBackupRunForAdmin(row, timeZone) {
+  if (!row) return null;
+  return {
+    ...row,
+    triggerLabel: triggerLabel(row.trigger_kind),
+    statusTone: backupStatusTone(row.status),
+    startedAtLabel: formatAdminDateTime(row.started_at, timeZone),
+    finishedAtLabel: formatAdminDateTime(row.finished_at, timeZone),
+    sizeLabel: formatBytes(row.size_bytes),
+    localPrimaryAvailable: !!(row.local_primary_path && fs.existsSync(row.local_primary_path)),
+    localSecondaryAvailable: !!(row.local_secondary_path && fs.existsSync(row.local_secondary_path)),
+    googleAvailable: !!row.google_file_id,
+    googleViewLink: row.google_view_link || (row.google_file_id ? `https://drive.google.com/file/d/${row.google_file_id}/view` : ''),
+    message: row.message || ''
+  };
+}
+
+function buildBackupAdminState() {
+  const config = getBackupRuntimeConfig();
+  const recentRuns = backupRunsSelectRecent.all(8).map((row) => mapBackupRunForAdmin(row, config.timeZone));
+  const recentRestores = backupRestoresSelectRecent.all(6).map((row) => ({
+    ...row,
+    statusTone: backupStatusTone(row.status),
+    startedAtLabel: formatAdminDateTime(row.started_at, config.timeZone),
+    finishedAtLabel: formatAdminDateTime(row.finished_at, config.timeZone)
+  }));
+  const nextRunAt = backupSchedulerNextRunAt ? dayjs(backupSchedulerNextRunAt).tz(config.timeZone) : null;
+
+  return {
+    config,
+    googleConnected: !!config.googleRefreshToken,
+    googleReadyForAuth: !!(getSettingText('GOOGLE_CLIENT_ID') && getSettingText('GOOGLE_CLIENT_SECRET') && getGoogleBackupRedirectUri()),
+    googleRedirectUri: getGoogleBackupRedirectUri(),
+    googleEmail: config.googleConnectedEmail || '',
+    googleFolderId: config.googleFolderId || '',
+    googleFolderName: config.googleFolderNameMeta || config.googleFolderName,
+    nextRunAtIso: nextRunAt ? nextRunAt.toISOString() : '',
+    nextRunAtLabel: nextRunAt ? formatAdminDateTime(nextRunAt.toISOString(), config.timeZone) : 'Automação em folga',
+    frequencyLabel: getBackupFrequencyLabel(config.frequency),
+    localPrimaryDisplay: toDisplayPath(__dirname, config.localPrimaryDir),
+    localSecondaryDisplay: toDisplayPath(__dirname, config.localSecondaryDir),
+    keepCountLabel: `${config.keepCount} pacote(s)`,
+    recentRuns,
+    recentRestores,
+    running: backupJobRunning,
+    restoring: backupRestoreRunning,
+    guideUrl: '/admin/backup/guide'
+  };
+}
+
+
 function clearCardDueTodayPushScheduler() {
   if (duePushSchedulerInitialHandle) {
     clearTimeout(duePushSchedulerInitialHandle);
@@ -624,6 +1480,7 @@ function refreshRuntimeSettings({ restartScheduler = true } = {}) {
   configureGoogleStrategy();
   if (restartScheduler) {
     restartCardDueTodayPushScheduler();
+    restartBackupScheduler();
   }
   return runtimeSettingsCache;
 }
@@ -652,6 +1509,26 @@ function buildAdminStatusCards() {
   const pushReady = isPushConfigured();
   const timeoutMinutes = getSettingInt('INACTIVITY_TIMEOUT_MINUTES', 0);
   const duePushEnabled = getSettingBoolean('CARD_DUE_PUSH_ENABLED', true);
+  const backupConfig = getBackupRuntimeConfig();
+  const lastBackup = backupRunsSelectRecent.all(1).map((row) => mapBackupRunForAdmin(row, backupConfig.timeZone))[0] || null;
+  const backupConnectedToGoogle = !!backupConfig.googleRefreshToken;
+  const backupTone = !backupConfig.enabled
+    ? 'muted'
+    : lastBackup?.status === 'error'
+      ? 'warning'
+      : 'success';
+  const backupStatus = !backupConfig.enabled
+    ? 'Manual'
+    : backupConfig.googleEnabled && !backupConnectedToGoogle
+      ? 'Local ok, Google pendente'
+      : lastBackup
+        ? (lastBackup.status === 'success' ? 'Protegido' : 'Com aviso')
+        : 'Agendado';
+  const backupText = !backupConfig.enabled
+    ? 'O cofre automático está pausado, mas o botão manual continua pronto para entrar em campo.'
+    : lastBackup
+      ? `${lastBackup.triggerLabel} em ${lastBackup.startedAtLabel}. ${lastBackup.message}`
+      : 'A rotina automática está armada e esperando a próxima janela para salvar a memória do app.';
 
   return [
     {
@@ -680,6 +1557,13 @@ function buildAdminStatusCards() {
       text: pushReady
         ? 'As chaves VAPID estão válidas e o sininho pode tocar neste navegador.'
         : 'Faltam as chaves VAPID completas para o push acordar.'
+    },
+    {
+      key: 'backup',
+      title: 'Backup do servidor',
+      tone: backupTone,
+      status: backupStatus,
+      text: backupText
     },
     {
       key: 'session',
@@ -765,6 +1649,7 @@ function renderAdmin(res, { error = null, success = null, activeSection = 'acces
     activeSection,
     settingsSections: buildAdminSettingsSections(),
     statusCards: buildAdminStatusCards(),
+    backupPanel: buildBackupAdminState(),
     totalConfigItems: SETTING_DEFINITIONS.length,
     autoReloadCount: SETTING_DEFINITIONS.filter((item) => !item.restartRequired).length,
     restartRequiredCount: SETTING_DEFINITIONS.filter((item) => item.restartRequired).length,
@@ -7080,6 +7965,14 @@ app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
       nextValues[definition.key] = sanitizeSettingValue(definition, rawValue);
     });
 
+    if (sectionKey === 'backup') {
+      const primaryDir = resolveConfiguredDirectory(__dirname, nextValues.BACKUP_LOCAL_PRIMARY_DIR, DEFAULT_PRIMARY_BACKUP_DIR);
+      const secondaryDir = resolveConfiguredDirectory(__dirname, nextValues.BACKUP_LOCAL_SECONDARY_DIR, DEFAULT_SECONDARY_BACKUP_DIR);
+      if (path.resolve(primaryDir) === path.resolve(secondaryDir)) {
+        throw new Error('As duas pastas locais do backup precisam ser diferentes. Espelho no mesmo lugar vira só déjà vu.');
+      }
+    }
+
     updateAppSettings(nextValues, userId);
 
     const changedDefinitions = definitions.filter((definition) => String(previousValues[definition.key] ?? '') !== String(nextValues[definition.key] ?? ''));
@@ -7106,11 +7999,208 @@ app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
       success += ' Sem o trio VAPID completo, o sininho ainda não acorda.';
     }
 
+    if (sectionKey === 'backup') {
+      const backupConfig = getBackupRuntimeConfig();
+      if (backupConfig.googleEnabled && !backupConfig.googleRefreshToken) {
+        success += ' O Google Drive ficou habilitado, mas ainda falta conectar uma conta ali no bloco da seção.';
+      }
+    }
+
     return renderAdmin(res, { success, activeSection: sectionKey });
   } catch (err) {
     return renderAdmin(res, { error: err.message || 'Não consegui salvar essa seção agora.', activeSection: sectionKey });
   }
 });
+
+app.get('/admin/backup/guide', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  const guidePath = path.join(__dirname, 'public', 'docs', 'guia-backup-organizapay.pdf');
+  if (!fs.existsSync(guidePath)) {
+    return renderAdmin(res, { error: 'O guia em PDF ainda não está disponível neste servidor.', activeSection: 'backup' });
+  }
+
+  return res.download(guidePath, 'guia-backup-organizapay.pdf');
+});
+
+app.get('/admin/backup/google/connect', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  try {
+    const authUrl = buildGoogleBackupAuthUrl(req);
+    return res.redirect(authUrl);
+  } catch (error) {
+    return renderAdmin(res, { error: error.message || 'Não consegui preparar a conexão com o Google Drive agora.', activeSection: 'backup' });
+  }
+});
+
+app.get('/admin/backup/google/callback', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  const returnedState = String(req.query.state || '').trim();
+  const expectedState = String(req.session?.backupGoogleAuthState || '').trim();
+  delete req.session.backupGoogleAuthState;
+  delete req.session.backupGoogleAuthCreatedAt;
+
+  if (req.query.error) {
+    return renderAdmin(res, {
+      error: `O Google devolveu um não agora: ${String(req.query.error_description || req.query.error)}`,
+      activeSection: 'backup'
+    });
+  }
+
+  if (!returnedState || !expectedState || returnedState !== expectedState) {
+    return renderAdmin(res, { error: 'A validação da conexão com o Google Drive não bateu. Tenta conectar de novo.', activeSection: 'backup' });
+  }
+
+  const code = String(req.query.code || '').trim();
+  if (!code) {
+    return renderAdmin(res, { error: 'O Google não devolveu o código de autorização do backup.', activeSection: 'backup' });
+  }
+
+  try {
+    const tokens = await exchangeGoogleBackupCodeForTokens(code);
+    const refreshToken = String(tokens.refresh_token || '').trim() || getInternalSettingValue(BACKUP_GOOGLE_REFRESH_TOKEN_KEY);
+    if (!refreshToken) {
+      throw new Error('O Google não devolveu refresh token. Revogue o acesso anterior e conecte novamente para liberar o modo automático.');
+    }
+
+    const accessToken = String(tokens.access_token || '').trim();
+    const profile = accessToken ? await fetchGoogleBackupProfile(accessToken).catch(() => ({})) : {};
+    const config = getBackupRuntimeConfig();
+    const folder = accessToken ? await ensureGoogleBackupFolder(accessToken, { ...config, googleRefreshToken: refreshToken }, userId).catch(() => null) : null;
+
+    setInternalSettings({
+      [BACKUP_GOOGLE_REFRESH_TOKEN_KEY]: refreshToken,
+      [BACKUP_GOOGLE_CONNECTED_EMAIL_KEY]: String(profile.email || config.googleConnectedEmail || '').trim(),
+      [BACKUP_GOOGLE_CONNECTED_AT_KEY]: currentConfigTimestamp(),
+      [BACKUP_GOOGLE_SCOPE_KEY]: String(tokens.scope || '').trim(),
+      [BACKUP_GOOGLE_FOLDER_ID_KEY]: folder?.id || config.googleFolderId || '',
+      [BACKUP_GOOGLE_FOLDER_NAME_META_KEY]: folder?.name || config.googleFolderName
+    }, userId);
+
+    return renderAdmin(res, {
+      success: `Google Drive conectado com sucesso${profile.email ? ` na conta ${profile.email}` : ''}. Agora o backup pode subir pra nuvem também.`,
+      activeSection: 'backup'
+    });
+  } catch (error) {
+    return renderAdmin(res, {
+      error: error?.response?.data?.error?.message || error.message || 'Não consegui concluir a conexão com o Google Drive agora.',
+      activeSection: 'backup'
+    });
+  }
+});
+
+app.post('/admin/backup/google/disconnect', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  clearInternalSettings([
+    BACKUP_GOOGLE_REFRESH_TOKEN_KEY,
+    BACKUP_GOOGLE_CONNECTED_EMAIL_KEY,
+    BACKUP_GOOGLE_CONNECTED_AT_KEY,
+    BACKUP_GOOGLE_FOLDER_ID_KEY,
+    BACKUP_GOOGLE_SCOPE_KEY,
+    BACKUP_GOOGLE_FOLDER_NAME_META_KEY
+  ], userId);
+
+  return renderAdmin(res, {
+    success: 'Conta do Google Drive desconectada. As cópias locais continuam valendo e a nuvem ficou de folga.',
+    activeSection: 'backup'
+  });
+});
+
+app.post('/admin/backup/run', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  try {
+    const result = await createServerBackup({ triggerKind: 'manual', createdByUserId: userId });
+    return renderAdmin(res, {
+      success: `${result.message} Pacote ${result.backupName} salvo com ${result.sizeBytes ? formatBytes(result.sizeBytes) : 'tamanho ainda tímido'} de puro carinho preventivo.`,
+      activeSection: 'backup'
+    });
+  } catch (error) {
+    return renderAdmin(res, {
+      error: error.message || 'Não consegui criar o backup manual agora.',
+      activeSection: 'backup'
+    });
+  }
+});
+
+app.post('/admin/backup/restore', ensureAuthenticated, backupRestoreUpload.single('backup_zip'), async (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  const uploadedPath = req.file?.path;
+  const uploadedName = req.file?.originalname || 'backup.zip';
+  if (!uploadedPath) {
+    return renderAdmin(res, { error: 'Escolha um .zip de backup antes de mandar restaurar.', activeSection: 'backup' });
+  }
+
+  try {
+    const result = await restoreServerBackupFromZip({
+      zipPath: uploadedPath,
+      uploadedFilename: uploadedName,
+      restoredByUserId: userId
+    });
+
+    const extra = result.safetyBackupRunId
+      ? ` Antes da restauração eu ainda gerei um backup de segurança (ID ${result.safetyBackupRunId}) para ninguém passar aperto.`
+      : '';
+
+    return renderAdmin(res, {
+      success: `${result.message}${extra}`,
+      activeSection: 'backup'
+    });
+  } catch (error) {
+    return renderAdmin(res, {
+      error: error.message || 'Não consegui restaurar o backup agora.',
+      activeSection: 'backup'
+    });
+  } finally {
+    if (uploadedPath) {
+      await fsp.rm(uploadedPath, { force: true }).catch(() => {});
+    }
+  }
+});
+
+app.get('/admin/backup/download/:backupId/:slot', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  const backupId = Number(req.params.backupId);
+  const slot = String(req.params.slot || '').trim().toLowerCase();
+  const row = Number.isInteger(backupId) && backupId > 0 ? backupRunsSelectById.get(backupId) : null;
+  if (!row) {
+    return renderAdmin(res, { error: 'Backup não encontrado para download.', activeSection: 'backup' });
+  }
+
+  const targetPath = slot === 'secondary' ? row.local_secondary_path : row.local_primary_path;
+  if (!targetPath || !fs.existsSync(targetPath)) {
+    return renderAdmin(res, { error: 'Esse arquivo local não está mais disponível neste servidor.', activeSection: 'backup' });
+  }
+
+  return res.download(targetPath, path.basename(targetPath));
+});
+
 
 app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;

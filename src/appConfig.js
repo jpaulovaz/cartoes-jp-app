@@ -35,6 +35,13 @@ const SETTING_SECTIONS = [
     icon: 'friends'
   },
   {
+    key: 'backup',
+    title: 'Backup e restauração',
+    eyebrow: 'Rede de segurança',
+    description: 'Define a rotina que guarda a memória do app em dois cantinhos do servidor e, se você quiser, também no Google Drive.',
+    icon: 'archive'
+  },
+  {
     key: 'system',
     title: 'Sistema',
     eyebrow: 'Ajustes da casa',
@@ -283,6 +290,149 @@ const SETTING_DEFINITIONS = [
     autoReload: true
   },
   {
+    key: 'BACKUP_ENABLED',
+    section: 'backup',
+    label: 'Backup automático ligado',
+    helper: 'Quando ligado, o servidor cria backups sozinho na periodicidade escolhida. O botão manual continua disponível de todo jeito.',
+    input: 'switch',
+    defaultValue: '1',
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'BACKUP_FREQUENCY',
+    section: 'backup',
+    label: 'Periodicidade',
+    helper: 'Escolha o ritmo do backup automático. Manual deixa a automação de folga e mantém só o botão de executar agora.',
+    input: 'select',
+    defaultValue: 'daily',
+    options: [
+      { value: 'manual', label: 'Só manual' },
+      { value: 'hourly', label: 'A cada hora' },
+      { value: 'daily', label: 'Todo dia' },
+      { value: 'weekly', label: 'Toda semana' }
+    ],
+    required: true,
+    autoReload: true
+  },
+  {
+    key: 'BACKUP_TIMEZONE',
+    section: 'backup',
+    label: 'Fuso horário do backup',
+    helper: 'Relógio usado para calcular as execuções automáticas. O clássico da casa é America/Sao_Paulo.',
+    input: 'text',
+    defaultValue: 'America/Sao_Paulo',
+    placeholder: 'America/Sao_Paulo',
+    monospace: true,
+    required: true,
+    autoReload: true
+  },
+  {
+    key: 'BACKUP_HOUR',
+    section: 'backup',
+    label: 'Hora preferida',
+    helper: 'Usada nos modos diário e semanal. No modo por hora ela serve só como referência visual.',
+    input: 'number',
+    defaultValue: '3',
+    min: 0,
+    max: 23,
+    step: 1,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'BACKUP_MINUTE',
+    section: 'backup',
+    label: 'Minuto preferido',
+    helper: 'Minuto exato do disparo automático para os modos diário e semanal.',
+    input: 'number',
+    defaultValue: '30',
+    min: 0,
+    max: 59,
+    step: 1,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'BACKUP_WEEKDAY',
+    section: 'backup',
+    label: 'Dia da semana',
+    helper: 'Entra em cena quando a periodicidade está em toda semana.',
+    input: 'select',
+    defaultValue: '0',
+    options: [
+      { value: '0', label: 'Domingo' },
+      { value: '1', label: 'Segunda-feira' },
+      { value: '2', label: 'Terça-feira' },
+      { value: '3', label: 'Quarta-feira' },
+      { value: '4', label: 'Quinta-feira' },
+      { value: '5', label: 'Sexta-feira' },
+      { value: '6', label: 'Sábado' }
+    ],
+    required: true,
+    autoReload: true
+  },
+  {
+    key: 'BACKUP_KEEP_COUNT',
+    section: 'backup',
+    label: 'Quantidade de backups para guardar',
+    helper: 'O app mantém só os mais recentes em cada destino para o servidor não virar acumulador compulsivo.',
+    input: 'number',
+    defaultValue: '15',
+    min: 1,
+    max: 180,
+    step: 1,
+    required: true,
+    autoReload: true
+  },
+  {
+    key: 'BACKUP_LOCAL_PRIMARY_DIR',
+    section: 'backup',
+    label: 'Pasta local principal',
+    helper: 'Pode ser relativa ao projeto ou absoluta no servidor. É a primeira cópia do cofre.',
+    input: 'text',
+    defaultValue: 'data/backups/local-principal',
+    placeholder: 'data/backups/local-principal',
+    monospace: true,
+    required: true,
+    autoReload: true,
+    fullWidth: true
+  },
+  {
+    key: 'BACKUP_LOCAL_SECONDARY_DIR',
+    section: 'backup',
+    label: 'Pasta local espelho',
+    helper: 'Segunda cópia local para não depender de um lugar só. Vale outra pasta ou outro volume do servidor.',
+    input: 'text',
+    defaultValue: 'data/backups/local-espelho',
+    placeholder: 'data/backups/local-espelho',
+    monospace: true,
+    required: true,
+    autoReload: true,
+    fullWidth: true
+  },
+  {
+    key: 'BACKUP_GOOGLE_ENABLED',
+    section: 'backup',
+    label: 'Mandar cópia para o Google Drive',
+    helper: 'Liga o envio extra para a nuvem. A conexão da conta Google é feita no bloco logo abaixo da seção.',
+    input: 'switch',
+    defaultValue: '0',
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'BACKUP_GOOGLE_FOLDER_NAME',
+    section: 'backup',
+    label: 'Nome da pasta no Google Drive',
+    helper: 'Se a pasta ainda não existir, o OrganizaPay cria uma com esse nome na conta conectada.',
+    input: 'text',
+    defaultValue: 'OrganizaPay Backups',
+    placeholder: 'OrganizaPay Backups',
+    required: true,
+    autoReload: true
+  },
+  {
     key: 'PORT',
     section: 'system',
     label: 'Porta do servidor',
@@ -346,6 +496,18 @@ function sanitizeSettingValue(definition, rawValue) {
     return parseBooleanSetting(value, parseBooleanSetting(definition.defaultValue, false)) ? '1' : '0';
   }
 
+  if (definition.input === 'select') {
+    const options = Array.isArray(definition.options)
+      ? definition.options.map((option) => String(option && typeof option === 'object' ? option.value : option))
+      : [];
+    const fallback = String(definition.defaultValue ?? '');
+    const nextValue = value === '' ? fallback : value;
+    if (options.length && !options.includes(nextValue)) {
+      throw new Error(`${definition.label} precisa usar uma das opções disponíveis.`);
+    }
+    return nextValue;
+  }
+
   if (definition.input === 'number') {
     const fallback = parseIntegerSetting(definition.defaultValue, 0, {
       min: definition.min ?? null,
@@ -380,6 +542,26 @@ function sanitizeSettingValue(definition, rawValue) {
 
   if (definition.key === 'SESSION_SECRET' && value && value.length < 16) {
     throw new Error('O segredo da sessão precisa ter pelo menos 16 caracteres para não cochilar no ponto.');
+  }
+
+  if (definition.key === 'BACKUP_TIMEZONE' && value) {
+    try {
+      Intl.DateTimeFormat('pt-BR', { timeZone: value }).format(new Date());
+    } catch (error) {
+      throw new Error('O fuso do backup precisa ser um identificador válido, tipo America/Sao_Paulo.');
+    }
+  }
+
+  if ((definition.key === 'BACKUP_LOCAL_PRIMARY_DIR' || definition.key === 'BACKUP_LOCAL_SECONDARY_DIR') && value) {
+    if (value.includes('\u0000')) {
+      throw new Error(`${definition.label} tem um caractere esquisito no caminho e não dá para salvar assim.`);
+    }
+  }
+
+  if (definition.key === 'BACKUP_GOOGLE_FOLDER_NAME' && value) {
+    if (/[\\/]/.test(value)) {
+      throw new Error('O nome da pasta do Google Drive não pode ter barras.');
+    }
   }
 
   return value;

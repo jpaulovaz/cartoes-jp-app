@@ -7,6 +7,7 @@
     muted: 'border-slate-200 bg-slate-50/90 text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200'
   };
   const activeSectionKey = typeof activeSection !== 'undefined' && activeSection ? activeSection : 'access';
+  const backupState = typeof backupPanel !== 'undefined' && backupPanel ? backupPanel : null;
   const navItems = [{ key: 'access', title: 'Acessos', description: 'Quem entra no app' }].concat((settingsSections || []).map(section => ({
     key: section.key,
     title: section.title,
@@ -278,6 +279,20 @@
                       <textarea name="<%= field.key %>" rows="<%= field.rows || 4 %>" placeholder="<%= field.placeholder || '' %>"
                         class="mt-4 w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium text-slate-800 dark:text-slate-100 <%= field.monospace ? 'font-mono tracking-tight' : '' %>"><%= field.value %></textarea>
                     </label>
+                  <% } else if (field.input === 'select') { %>
+                    <label class="block rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-5 py-4">
+                      <span class="flex flex-wrap items-center gap-2">
+                        <span class="text-sm font-black text-slate-900 dark:text-white"><%= field.label %></span>
+                        <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300"><%= field.appliesLabel %></span>
+                      </span>
+                      <span class="mt-2 block text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400"><%= field.helper %></span>
+                      <select name="<%= field.key %>"
+                        class="mt-4 w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium text-slate-800 dark:text-slate-100 <%= field.monospace ? 'font-mono tracking-tight' : '' %>">
+                        <% (field.options || []).forEach((option) => { const optionValue = String(option && typeof option === 'object' ? option.value : option); const optionLabel = option && typeof option === 'object' ? option.label : optionValue; %>
+                          <option value="<%= optionValue %>" <%= String(field.value) === optionValue ? 'selected' : '' %>><%= optionLabel %></option>
+                        <% }) %>
+                      </select>
+                    </label>
                   <% } else { %>
                     <label class="block rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-5 py-4">
                       <span class="flex flex-wrap items-center gap-2">
@@ -316,6 +331,221 @@
               </button>
             </div>
           </form>
+          <% if (section.key === 'backup' && backupState) { %>
+            <div class="border-t border-slate-100 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/20 p-6 sm:p-8 space-y-6">
+              <div class="grid gap-4 xl:grid-cols-3">
+                <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
+                  <div class="text-xs font-black uppercase tracking-[0.18em] text-emerald-500 dark:text-emerald-300">Rotina</div>
+                  <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Agenda do cofre</h3>
+                  <p class="mt-3 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
+                    <span class="font-black text-slate-900 dark:text-white"><%= backupState.frequencyLabel %></span>
+                    <% if (backupState.config.enabled && backupState.config.frequency !== 'manual') { %>
+                      • próxima rodada em <span class="font-black text-slate-900 dark:text-white"><%= backupState.nextRunAtLabel %></span>
+                    <% } else { %>
+                      • automação em pausa elegante, só no manual.
+                    <% } %>
+                  </p>
+                  <div class="mt-4 flex flex-wrap gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                    <span class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-1"><%= backupState.config.timeZone %></span>
+                    <span class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-1">Guarda <%= backupState.keepCountLabel %></span>
+                  </div>
+                </div>
+
+                <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
+                  <div class="text-xs font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Cofre local</div>
+                  <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Duas cópias no servidor</h3>
+                  <div class="mt-4 space-y-3 text-sm font-medium text-slate-600 dark:text-slate-300">
+                    <div>
+                      <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Principal</div>
+                      <code class="mt-1 block text-xs sm:text-sm break-all text-slate-700 dark:text-slate-200"><%= backupState.localPrimaryDisplay %></code>
+                    </div>
+                    <div>
+                      <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Espelho</div>
+                      <code class="mt-1 block text-xs sm:text-sm break-all text-slate-700 dark:text-slate-200"><%= backupState.localSecondaryDisplay %></code>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="rounded-3xl border <%= backupState.googleConnected ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/20' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800' %> p-5">
+                  <div class="text-xs font-black uppercase tracking-[0.18em] <%= backupState.googleConnected ? 'text-emerald-600 dark:text-emerald-300' : 'text-violet-500 dark:text-violet-300' %>">Google Drive</div>
+                  <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white"><%= backupState.googleConnected ? 'Conta conectada' : 'Conexão pendente' %></h3>
+                  <p class="mt-3 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
+                    <% if (backupState.googleConnected) { %>
+                      <span class="font-black text-slate-900 dark:text-white"><%= backupState.googleEmail || 'Conta conectada' %></span>
+                      <% if (backupState.googleFolderName) { %>
+                        • pasta <span class="font-black text-slate-900 dark:text-white"><%= backupState.googleFolderName %></span>
+                      <% } %>
+                    <% } else if (backupState.googleReadyForAuth) { %>
+                      O login do Google já está configurado. Falta só conectar a conta que vai receber os backups na nuvem.
+                    <% } else { %>
+                      Primeiro salve o Client ID, o Client secret e a URL de retorno do Google. Depois o botão de conectar acorda.
+                    <% } %>
+                  </p>
+                  <% if (backupState.googleRedirectUri) { %>
+                    <div class="mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 px-4 py-3">
+                      <div class="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Redirect URI do backup</div>
+                      <code class="mt-2 block text-[11px] sm:text-xs break-all text-slate-700 dark:text-slate-200"><%= backupState.googleRedirectUri %></code>
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+
+              <div class="grid gap-6 xl:grid-cols-[minmax(0,1.1fr),minmax(0,0.9fr)]">
+                <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 space-y-4">
+                  <div>
+                    <div class="text-xs font-black uppercase tracking-[0.18em] text-blue-500 dark:text-blue-300">Ações rápidas</div>
+                    <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Mão no botão quando você quiser</h3>
+                    <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">
+                      Dá para disparar um backup agora, baixar o guia em PDF e cuidar da conexão com o Google sem sair desta seção.
+                    </p>
+                  </div>
+
+                  <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <form action="/admin/backup/run" method="POST">
+                      <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-blue-500 dark:hover:bg-blue-400">
+                        Fazer backup agora
+                      </button>
+                    </form>
+
+                    <a href="<%= backupState.guideUrl %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-black text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition">
+                      Baixar guia em PDF
+                    </a>
+
+                    <% if (backupState.googleConnected) { %>
+                      <form action="/admin/backup/google/disconnect" method="POST">
+                        <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-700 transition hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/40">
+                          Desconectar Google
+                        </button>
+                      </form>
+                    <% } else if (backupState.googleReadyForAuth) { %>
+                      <a href="/admin/backup/google/connect" class="inline-flex items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200 dark:hover:bg-emerald-950/40">
+                        Conectar Google Drive
+                      </a>
+                    <% } else { %>
+                      <div class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-black text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-900/30">
+                        Configure o Google primeiro
+                      </div>
+                    <% } %>
+                  </div>
+
+                  <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-4 py-4 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
+                    O zip sempre nasce com manifesto próprio do OrganizaPay, duas cópias locais e, se a nuvem estiver conectada, uma terceira viagem para o Google Drive.
+                  </div>
+                </div>
+
+                <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 space-y-4">
+                  <div>
+                    <div class="text-xs font-black uppercase tracking-[0.18em] text-rose-500 dark:text-rose-300">Restauração</div>
+                    <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Trazer um backup de volta</h3>
+                    <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">
+                      Envie um <code>.zip</code> criado pelo próprio OrganizaPay. Antes de restaurar, o app tira mais uma foto de segurança por garantia.
+                    </p>
+                  </div>
+
+                  <form action="/admin/backup/restore" method="POST" enctype="multipart/form-data" class="space-y-4">
+                    <label class="block rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/40 px-4 py-4">
+                      <span class="block text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Arquivo do backup</span>
+                      <input type="file" name="backup_zip" accept=".zip,application/zip" required
+                        class="mt-3 block w-full text-sm font-medium text-slate-700 dark:text-slate-200 file:mr-4 file:rounded-xl file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-black file:text-white hover:file:bg-slate-800 dark:file:bg-blue-500 dark:hover:file:bg-blue-400">
+                    </label>
+                    <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl bg-rose-600 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-rose-700 dark:bg-rose-500 dark:hover:bg-rose-400">
+                      Restaurar backup selecionado
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Histórico</div>
+                    <h3 class="mt-1 text-lg font-black tracking-tight text-slate-900 dark:text-white">Backups mais recentes</h3>
+                  </div>
+                  <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Os downloads locais aparecem quando o arquivo ainda está no cofre do servidor.</p>
+                </div>
+
+                <div class="overflow-x-auto rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                  <table class="w-full min-w-[980px] text-sm text-left">
+                    <thead class="bg-slate-50 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-[11px] tracking-wider">
+                      <tr>
+                        <th class="px-4 py-4 text-center">Quando</th>
+                        <th class="px-4 py-4 text-center">Origem</th>
+                        <th class="px-4 py-4 text-center">Status</th>
+                        <th class="px-4 py-4 text-center">Tamanho</th>
+                        <th class="px-4 py-4 text-center">Arquivos</th>
+                        <th class="px-4 py-4 text-center">Resumo</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                      <% if (backupState.recentRuns && backupState.recentRuns.length > 0) { %>
+                        <% backupState.recentRuns.forEach((run) => { %>
+                          <tr class="align-top hover:bg-slate-50/70 dark:hover:bg-slate-700/30 transition-colors">
+                            <td class="px-4 py-4 text-slate-700 dark:text-slate-200 font-semibold whitespace-nowrap"><%= run.startedAtLabel %></td>
+                            <td class="px-4 py-4 text-slate-600 dark:text-slate-300"><%= run.triggerLabel %></td>
+                            <td class="px-4 py-4 text-center">
+                              <span class="inline-flex min-w-[118px] items-center justify-center rounded-xl px-3 py-1 text-xs font-black border <%= run.statusTone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200' : run.statusTone === 'warning' ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200' : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300' %>">
+                                <%= run.status === 'success' ? 'Sucesso' : run.status === 'warning' ? 'Com aviso' : 'Falhou' %>
+                              </span>
+                            </td>
+                            <td class="px-4 py-4 text-center font-semibold text-slate-700 dark:text-slate-200"><%= run.sizeLabel %></td>
+                            <td class="px-4 py-4">
+                              <div class="flex flex-wrap justify-center gap-2">
+                                <% if (run.localPrimaryAvailable) { %>
+                                  <a href="/admin/backup/download/<%= run.id %>/primary" class="inline-flex items-center rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/40">Local 1</a>
+                                <% } %>
+                                <% if (run.localSecondaryAvailable) { %>
+                                  <a href="/admin/backup/download/<%= run.id %>/secondary" class="inline-flex items-center rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/40">Local 2</a>
+                                <% } %>
+                                <% if (run.googleAvailable && run.googleViewLink) { %>
+                                  <a href="<%= run.googleViewLink %>" target="_blank" rel="noreferrer" class="inline-flex items-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200 dark:hover:bg-emerald-950/40">Google</a>
+                                <% } %>
+                                <% if (!run.localPrimaryAvailable && !run.localSecondaryAvailable && !run.googleAvailable) { %>
+                                  <span class="inline-flex items-center rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-black text-slate-400 dark:text-slate-500">Sem arquivo disponível</span>
+                                <% } %>
+                              </div>
+                            </td>
+                            <td class="px-4 py-4 text-slate-600 dark:text-slate-300"><%= run.message %></td>
+                          </tr>
+                        <% }) %>
+                      <% } else { %>
+                        <tr>
+                          <td colspan="6" class="px-4 py-8 text-center text-sm font-medium text-slate-500 dark:text-slate-400">Nenhum backup gravado ainda. O cofre está esperando o primeiro zip chegar.</td>
+                        </tr>
+                      <% } %>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <div>
+                  <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Últimas restaurações</div>
+                  <h3 class="mt-1 text-lg font-black tracking-tight text-slate-900 dark:text-white">Histórico de volta ao passado</h3>
+                </div>
+                <div class="grid gap-4 lg:grid-cols-2">
+                  <% if (backupState.recentRestores && backupState.recentRestores.length > 0) { %>
+                    <% backupState.recentRestores.forEach((restore) => { %>
+                      <div class="rounded-3xl border <%= restore.statusTone === 'success' ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/60 dark:bg-emerald-950/20' : restore.statusTone === 'warning' ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800' %> p-5">
+                        <div class="flex items-start justify-between gap-3">
+                          <div>
+                            <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500"><%= restore.startedAtLabel %></div>
+                            <h4 class="mt-2 text-base font-black tracking-tight text-slate-900 dark:text-white"><%= restore.backup_name || restore.uploaded_filename || 'Backup restaurado' %></h4>
+                          </div>
+                          <span class="rounded-full border border-current/20 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] <%= restore.statusTone === 'success' ? 'text-emerald-700 dark:text-emerald-200' : restore.statusTone === 'warning' ? 'text-amber-700 dark:text-amber-200' : 'text-slate-600 dark:text-slate-300' %>"><%= restore.status === 'success' ? 'Sucesso' : restore.status === 'warning' ? 'Aviso' : 'Falhou' %></span>
+                        </div>
+                        <p class="mt-3 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300"><%= restore.message || 'Sem recado extra nesta restauração.' %></p>
+                      </div>
+                    <% }) %>
+                  <% } else { %>
+                    <div class="rounded-3xl border border-dashed border-slate-300 dark:border-slate-600 bg-white/70 dark:bg-slate-900/30 p-5 text-sm font-medium text-slate-500 dark:text-slate-400 lg:col-span-2">
+                      Nenhuma restauração registrada ainda. Melhor continuar assim, mas bom saber que a porta de volta existe.
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+            </div>
+          <% } %>
+
         </section>
       <% }) %>
     </div>

@@ -658,6 +658,16 @@ function setFlash(req, type, message) {
   req.session.flash = { type, message };
 }
 
+function setImportReport(req, report) {
+  if (!req.session) return;
+  req.session.importReport = report || null;
+}
+
+function setImportFormSeed(req, seed) {
+  if (!req.session) return;
+  req.session.importFormSeed = seed || null;
+}
+
 // --- MIDDLEWARES DE BODY PARSER (DEVE VIR ANTES DAS ROTAS) ---
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
@@ -954,6 +964,8 @@ app.use((req, res, next) => {
   res.locals.nomeTitular = "Detalhamento Contas";
   res.locals.formatDateBR = formatDateBR;
   res.locals.flash = req.session?.flash || null;
+  res.locals.importReport = req.session?.importReport || null;
+  res.locals.importFormSeed = req.session?.importFormSeed || null;
   res.locals.unreadNotificationCount = 0;
   res.locals.readNotificationCount = 0;
   res.locals.recentNotifications = [];
@@ -964,6 +976,12 @@ app.use((req, res, next) => {
 
   if (req.session?.flash) {
     delete req.session.flash;
+  }
+  if (req.session?.importReport) {
+    delete req.session.importReport;
+  }
+  if (req.session?.importFormSeed) {
+    delete req.session.importFormSeed;
   }
 
   if (req.isAuthenticated() && req.user?.id) {
@@ -5019,7 +5037,35 @@ function buildImportDuplicateFingerprint({ cardId, month, year, txnDate, descrip
   ].join("::");
 }
 
-function getExistingImportFingerprints(userId, cardId, month, year) {
+function buildImportDuplicateGroupItem({ txnDate, description, amountCents, cardNumber, count = 0, existingCount = 0, csvCount = 0 }) {
+  return {
+    txnDate: String(txnDate || '').trim() || null,
+    description: String(description || '').trim() || '(sem descrição)',
+    amountCents: Number(amountCents) || 0,
+    cardNumber: normalizeImportCardNumber(cardNumber) || null,
+    count: Math.max(0, Number(count || 0)),
+    existingCount: Math.max(0, Number(existingCount || 0)),
+    csvCount: Math.max(0, Number(csvCount || 0))
+  };
+}
+
+function compareImportDuplicateGroupItems(a, b) {
+  const dateA = String(a?.txnDate || '');
+  const dateB = String(b?.txnDate || '');
+  if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+  const descA = normalizeImportDuplicateText(a?.description);
+  const descB = normalizeImportDuplicateText(b?.description);
+  if (descA !== descB) return descA.localeCompare(descB, 'pt-BR');
+
+  const amountA = Number(a?.amountCents || 0);
+  const amountB = Number(b?.amountCents || 0);
+  if (amountA !== amountB) return amountB - amountA;
+
+  return normalizeImportCardNumber(a?.cardNumber).localeCompare(normalizeImportCardNumber(b?.cardNumber));
+}
+
+function getExistingImportFingerprintCounts(userId, cardId, month, year) {
   const rows = db.prepare(`
     SELECT t.txn_date, t.description, t.amount_cents, t.card_number
     FROM transactions t
@@ -5030,22 +5076,29 @@ function getExistingImportFingerprints(userId, cardId, month, year) {
       AND ${EFFECTIVE_DUE_YEAR_SQL} = ?
   `).all(userId, cardId, month, year);
 
-  return new Set(rows.map((row) => buildImportDuplicateFingerprint({
-    cardId,
-    month,
-    year,
-    txnDate: row.txn_date || "",
-    description: row.description,
-    amountCents: row.amount_cents,
-    cardNumber: row.card_number
-  })));
+  const counts = new Map();
+  for (const row of rows) {
+    const fingerprint = buildImportDuplicateFingerprint({
+      cardId,
+      month,
+      year,
+      txnDate: row.txn_date || '',
+      description: row.description,
+      amountCents: row.amount_cents,
+      cardNumber: row.card_number
+    });
+    counts.set(fingerprint, (counts.get(fingerprint) || 0) + 1);
+  }
+
+  return counts;
 }
 
-function buildImportFeedbackMessage(month, year, importedCount, skippedExistingCount, skippedCsvCount) {
+function buildImportFeedbackMessage(month, year, importedCount, skippedExistingCount, repeatedCsvGroupCount) {
   const period = monthLabel(month, year);
-  const skippedTotal = Number(skippedExistingCount || 0) + Number(skippedCsvCount || 0);
+  const skippedCount = Math.max(0, Number(skippedExistingCount || 0));
+  const repeatedCount = Math.max(0, Number(repeatedCsvGroupCount || 0));
 
-  if (importedCount > 0 && skippedTotal === 0) {
+  if (importedCount > 0 && skippedCount === 0 && repeatedCount === 0) {
     return {
       type: "success",
       message: importedCount === 1
@@ -5056,36 +5109,62 @@ function buildImportFeedbackMessage(month, year, importedCount, skippedExistingC
 
   const parts = [];
   if (importedCount > 0) {
-    parts.push(importedCount === 1 ? "1 compra entrou" : `${importedCount} compras entraram`);
+    parts.push(importedCount === 1 ? '1 compra entrou' : `${importedCount} compras entraram`);
   }
-  if (skippedExistingCount > 0) {
-    parts.push(skippedExistingCount === 1
-      ? "1 já parecia estar por aqui e ficou de fora"
-      : `${skippedExistingCount} já pareciam estar por aqui e ficaram de fora`);
+  if (skippedCount > 0) {
+    parts.push(skippedCount === 1
+      ? '1 linha ficou de fora por prudência, porque já havia uma igualzinha por aqui'
+      : `${skippedCount} linhas ficaram de fora por prudência, porque já havia iguais por aqui`);
   }
-  if (skippedCsvCount > 0) {
-    parts.push(skippedCsvCount === 1
-      ? "1 veio repetida no próprio CSV e ficou de fora"
-      : `${skippedCsvCount} vieram repetidas no próprio CSV e ficaram de fora`);
+  if (repeatedCount > 0) {
+    parts.push(repeatedCount === 1
+      ? 'o CSV trouxe 1 grupinho de linhas idênticas e eu deixei passar, porque isso também pode ser compra legítima'
+      : `o CSV trouxe ${repeatedCount} grupinhos de linhas idênticas e eu deixei passar, porque isso também pode ser compra legítima`);
   }
 
   if (importedCount > 0) {
     return {
-      type: "success",
-      message: `Importação concluída em ${period}: ${parts.join('; ')}. Assim a gente evita compra clonada sem travar o que está certinho.`
+      type: skippedCount > 0 ? 'info' : 'success',
+      message: `Importação concluída em ${period}: ${parts.join('; ')}.`
     };
   }
 
   return {
-    type: "info",
-    message: `Nenhuma compra nova entrou em ${period}. ${parts.join('; ')}. O app segurou tudo para evitar duplicidade.`
+    type: 'info',
+    message: `Nenhuma compra nova entrou em ${period}. ${parts.join('; ')}.`
+  };
+}
+
+function buildImportReport(month, year, importedCount, skippedExistingGroups, repeatedCsvGroups) {
+  const skippedGroups = Array.isArray(skippedExistingGroups)
+    ? skippedExistingGroups.slice().sort(compareImportDuplicateGroupItems)
+    : [];
+  const repeatedGroups = Array.isArray(repeatedCsvGroups)
+    ? repeatedCsvGroups.slice().sort(compareImportDuplicateGroupItems)
+    : [];
+
+  return {
+    periodLabel: monthLabel(month, year),
+    month: Number(month),
+    year: Number(year),
+    targetHref: `/month/${year}/${month}`,
+    importedCount: Math.max(0, Number(importedCount || 0)),
+    skippedExistingCount: skippedGroups.reduce((sum, item) => sum + Math.max(0, Number(item.count || 0)), 0),
+    repeatedCsvGroupCount: repeatedGroups.length,
+    skippedExistingGroups: skippedGroups,
+    repeatedCsvGroups: repeatedGroups
   };
 }
 
 // Import
 app.get("/import", ensureAuthenticated, ensureCanImport, (req, res) => {
   const userId = req.user.id;
-  res.render("import", { cards: getActiveCards(userId), error: null });
+  res.render("import", {
+    cards: getActiveCards(userId),
+    error: null,
+    formSeed: res.locals.importFormSeed || null,
+    importReport: res.locals.importReport || null
+  });
 });
 
 app.post("/import", ensureAuthenticated, ensureCanImport, upload.single("csvfile"), (req, res) => {
@@ -5096,6 +5175,7 @@ app.post("/import", ensureAuthenticated, ensureCanImport, upload.single("csvfile
     const cardId = Number(req.body.card_id);
     const month = Number(req.body.month);
     const year = Number(req.body.year);
+    const formSeed = { cardId, month, year };
 
     if (!req.file) throw new Error("Envie um arquivo CSV.");
     if (!cardId) throw new Error("Selecione o cartão.");
@@ -5106,11 +5186,11 @@ app.post("/import", ensureAuthenticated, ensureCanImport, upload.single("csvfile
     if (!card) throw new Error("Cartão inválido ou desativado.");
 
     const txns = parseCsvByCardName(card.name, req.file.buffer);
-    const existingFingerprints = getExistingImportFingerprints(userId, cardId, month, year);
-    const csvFingerprints = new Set();
+    const existingCounts = getExistingImportFingerprintCounts(userId, cardId, month, year);
+    const csvCounts = new Map();
+    const repeatedCsvGroups = new Map();
+    const skippedExistingGroups = new Map();
     const itemsToInsert = [];
-    let skippedExistingCount = 0;
-    let skippedCsvCount = 0;
 
     for (const txn of txns) {
       const isoDate = toISOFromBRDate(txn.txn_date) || String(txn.txn_date || "").trim() || null;
@@ -5124,27 +5204,43 @@ app.post("/import", ensureAuthenticated, ensureCanImport, upload.single("csvfile
         cardNumber: txn.card_number
       });
 
-      if (existingFingerprints.has(fingerprint)) {
-        skippedExistingCount += 1;
+      const nextCsvCount = (csvCounts.get(fingerprint) || 0) + 1;
+      csvCounts.set(fingerprint, nextCsvCount);
+
+      if (nextCsvCount > 1) {
+        const repeatedGroup = repeatedCsvGroups.get(fingerprint) || buildImportDuplicateGroupItem({
+          txnDate: isoDate,
+          description: txn.description,
+          amountCents: txn.amount_cents,
+          cardNumber: txn.card_number,
+          csvCount: nextCsvCount
+        });
+        repeatedGroup.csvCount = nextCsvCount;
+        repeatedCsvGroups.set(fingerprint, repeatedGroup);
+      }
+
+      const existingCount = existingCounts.get(fingerprint) || 0;
+      if (nextCsvCount <= existingCount) {
+        const skippedGroup = skippedExistingGroups.get(fingerprint) || buildImportDuplicateGroupItem({
+          txnDate: isoDate,
+          description: txn.description,
+          amountCents: txn.amount_cents,
+          cardNumber: txn.card_number,
+          existingCount,
+          csvCount: nextCsvCount,
+          count: 0
+        });
+        skippedGroup.count += 1;
+        skippedGroup.existingCount = existingCount;
+        skippedGroup.csvCount = nextCsvCount;
+        skippedExistingGroups.set(fingerprint, skippedGroup);
         continue;
       }
 
-      if (csvFingerprints.has(fingerprint)) {
-        skippedCsvCount += 1;
-        continue;
-      }
-
-      csvFingerprints.add(fingerprint);
       itemsToInsert.push({
         ...txn,
         isoDate
       });
-    }
-
-    if (!itemsToInsert.length) {
-      const feedback = buildImportFeedbackMessage(month, year, 0, skippedExistingCount, skippedCsvCount);
-      setFlash(req, feedback.type, feedback.message);
-      return res.redirect("/import");
     }
 
     const createImportWithTransactions = db.transaction((items) => {
@@ -5173,13 +5269,52 @@ app.post("/import", ensureAuthenticated, ensureCanImport, upload.single("csvfile
       }
     });
 
-    createImportWithTransactions(itemsToInsert);
+    if (itemsToInsert.length) {
+      createImportWithTransactions(itemsToInsert);
+    }
 
-    const feedback = buildImportFeedbackMessage(month, year, itemsToInsert.length, skippedExistingCount, skippedCsvCount);
+    const skippedExistingList = Array.from(skippedExistingGroups.values()).map((group) => ({
+      ...group,
+      csvCount: csvCounts.get(buildImportDuplicateFingerprint({
+        cardId,
+        month,
+        year,
+        txnDate: group.txnDate,
+        description: group.description,
+        amountCents: group.amountCents,
+        cardNumber: group.cardNumber
+      })) || group.csvCount || group.count,
+      existingCount: group.existingCount || 0
+    }));
+    const repeatedCsvList = Array.from(repeatedCsvGroups.values());
+    const skippedExistingCount = skippedExistingList.reduce((sum, item) => sum + Number(item.count || 0), 0);
+    const feedback = buildImportFeedbackMessage(month, year, itemsToInsert.length, skippedExistingCount, repeatedCsvList.length);
+
     setFlash(req, feedback.type, feedback.message);
-    res.redirect(`/month/${year}/${month}`);
+    setImportFormSeed(req, formSeed);
+
+    if (skippedExistingCount > 0) {
+      setImportReport(req, buildImportReport(month, year, itemsToInsert.length, skippedExistingList, repeatedCsvList));
+      return res.redirect("/import");
+    }
+
+    setImportReport(req, null);
+    if (itemsToInsert.length > 0) {
+      return res.redirect(`/month/${year}/${month}`);
+    }
+
+    return res.redirect("/import");
   } catch (e) {
-    res.status(400).render("import", { cards, error: e.message || String(e) });
+    res.status(400).render("import", {
+      cards,
+      error: e.message || String(e),
+      formSeed: {
+        cardId: Number(req.body.card_id) || null,
+        month: Number(req.body.month) || null,
+        year: Number(req.body.year) || null
+      },
+      importReport: null
+    });
   }
 });
 

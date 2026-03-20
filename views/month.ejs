@@ -801,9 +801,9 @@
         root.className = 'fixed inset-0 z-[9999] hidden';
         root.innerHTML = `
           <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-month-sheet-backdrop></div>
-          <div class="relative z-10 flex min-h-full items-end justify-center p-4 sm:items-center">
-            <div class="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" data-month-sheet-surface>
-              <div class="shrink-0 border-b border-slate-200 px-5 py-4 dark:border-slate-800" data-month-sheet-header>
+          <div class="relative z-10 flex min-h-full items-end justify-center p-2 sm:items-center sm:p-4">
+            <div class="flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-full max-w-lg flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 sm:h-auto sm:max-h-[calc(100dvh-2rem)] dark:bg-slate-900 dark:ring-slate-700" data-month-sheet-surface>
+              <div class="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-5 dark:border-slate-800" data-month-sheet-header>
                 <div class="flex items-center justify-between gap-3">
                   <div>
                     <h3 class="text-base font-bold text-slate-900 dark:text-slate-100" data-month-sheet-title></h3>
@@ -812,8 +812,8 @@
                   <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700" data-month-sheet-close>✕</button>
                 </div>
               </div>
-              <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4" data-month-sheet-body></div>
-              <div class="shrink-0 flex flex-col gap-2 border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95" data-month-sheet-actions></div>
+              <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5" data-month-sheet-body></div>
+              <div class="shrink-0 flex flex-col gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-5 sm:py-4" data-month-sheet-actions style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));"></div>
             </div>
           </div>
         `;
@@ -857,12 +857,13 @@
 
       function openMonthSheet({ title = 'Ações', subtitle = '', body = null, actions = [], onClose = null, size = 'default' } = {}) {
         const state = ensureMonthSheet();
-        const surfaceSizeClass = size === 'people' ? 'max-w-6xl' : (size === 'wide' ? 'max-w-5xl' : 'max-w-lg');
+        const surfaceSizeClass = size === 'people' ? 'sm:max-w-6xl' : (size === 'wide' ? 'sm:max-w-5xl' : 'sm:max-w-lg');
         state.onClose = typeof onClose === 'function' ? onClose : null;
-        state.surface.className = `flex max-h-[calc(100vh-2rem)] w-full ${surfaceSizeClass} flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700`;
-        state.header.className = 'shrink-0 border-b border-slate-200 px-5 py-4 dark:border-slate-800';
-        state.body.className = `min-h-0 flex-1 overflow-y-auto px-5 py-4 ${size === 'people' ? 'xl:px-6 xl:py-5' : ''}`.trim();
-        state.actions.className = 'shrink-0 flex flex-col gap-2 border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95';
+        state.surface.className = `flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-full ${surfaceSizeClass} flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 sm:h-auto sm:max-h-[calc(100dvh-2rem)] dark:bg-slate-900 dark:ring-slate-700`;
+        state.header.className = 'shrink-0 border-b border-slate-200 px-4 py-4 sm:px-5 dark:border-slate-800';
+        state.body.className = `min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 ${size === 'people' ? 'xl:px-6 xl:py-5' : ''}`.trim();
+        state.actions.className = 'shrink-0 flex flex-col gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-5 sm:py-4';
+        state.actions.style.paddingBottom = 'calc(0.75rem + env(safe-area-inset-bottom, 0px))';
         state.title.textContent = title;
         state.subtitle.textContent = subtitle || '';
         state.subtitle.classList.toggle('hidden', !subtitle);
@@ -1030,7 +1031,7 @@
 
       function buildPersonCard(person, checked) {
         const label = document.createElement('label');
-        label.className = 'group cursor-pointer';
+        label.className = 'group min-w-0 cursor-pointer';
 
         const input = document.createElement('input');
         input.type = 'checkbox';
@@ -1040,14 +1041,14 @@
         input.checked = checked;
 
         const card = document.createElement('span');
-        card.className = 'flex min-h-[74px] items-center gap-2 rounded-[20px] border border-slate-200/80 bg-white/80 px-3 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-blue-300 group-hover:shadow-md peer-checked:border-blue-400 peer-checked:bg-blue-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-blue-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/40 xl:min-h-[70px]';
+        card.className = 'flex min-h-[58px] items-center gap-2 rounded-[18px] border border-slate-200/80 bg-white/90 px-3 py-2.5 shadow-sm transition-all group-hover:border-blue-300 group-hover:shadow-md peer-checked:border-blue-500 peer-checked:bg-blue-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/60 dark:group-hover:border-blue-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/35';
 
         const name = document.createElement('span');
         name.className = 'min-w-0 flex-1 text-sm font-bold leading-5 text-slate-800 dark:text-slate-100';
         name.textContent = person.name;
 
         const badge = document.createElement('span');
-        badge.className = 'inline-flex h-9 w-9 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 transition-all peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 dark:peer-checked:text-white';
+        badge.className = 'inline-flex h-8 w-8 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 transition-all peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 dark:peer-checked:text-white';
         badge.innerHTML = '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
 
         card.appendChild(name);
@@ -1102,8 +1103,8 @@
         input.checked = checked;
 
         const card = document.createElement('span');
-        card.className = `flex h-full items-start gap-3 rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:shadow-md ${accentClass} dark:border-slate-700 dark:bg-slate-900/55`;
-        card.innerHTML = `<span class="mt-0.5 inline-flex h-10 w-10 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500 transition-all peer-checked:border-current peer-checked:bg-current peer-checked:text-white dark:border-slate-700 dark:bg-slate-950">${value === 'exact' ? '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-3.314 0-6 2.239-6 5 0 1.657.97 3.126 2.465 4.038L8 21l3.211-2.14A7.43 7.43 0 0012 19c3.314 0 6-2.239 6-5s-2.686-5-6-5z"></path></svg>' : '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'}</span><span class="min-w-0"><span class="block text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(title)}</span><span class="mt-1 block text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">${escapeHtml(description)}</span></span>`;
+        card.className = `flex h-full items-start gap-3 rounded-[20px] border border-slate-200 bg-white px-4 py-3.5 shadow-sm transition-all group-hover:border-slate-300 group-hover:shadow-md ${accentClass} dark:border-slate-700 dark:bg-slate-900/60`;
+        card.innerHTML = `<span class="mt-0.5 inline-flex h-9 w-9 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500 transition-all peer-checked:border-current peer-checked:bg-current peer-checked:text-white dark:border-slate-700 dark:bg-slate-950">${value === 'exact' ? '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-3.314 0-6 2.239-6 5 0 1.657.97 3.126 2.465 4.038L8 21l3.211-2.14A7.43 7.43 0 0012 19c3.314 0 6-2.239 6-5s-2.686-5-6-5z"></path></svg>' : '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'}</span><span class="min-w-0"><span class="block text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(title)}</span><span class="mt-1 block text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">${escapeHtml(description)}</span></span>`;
 
         label.appendChild(input);
         label.appendChild(card);
@@ -1139,44 +1140,54 @@
           wrapper.appendChild(note);
         }
 
-        const contentLayout = document.createElement('div');
-        contentLayout.className = 'space-y-4';
-        const selectionColumn = document.createElement('div');
-        selectionColumn.className = 'space-y-4';
-        const settingsColumn = document.createElement('div');
-        settingsColumn.className = 'space-y-4';
-        contentLayout.appendChild(selectionColumn);
-        contentLayout.appendChild(settingsColumn);
-        wrapper.appendChild(contentLayout);
+        const selectionSection = document.createElement('section');
+        selectionSection.className = 'space-y-3';
+        wrapper.appendChild(selectionSection);
+
+        const selectionHeader = document.createElement('div');
+        selectionHeader.className = 'flex flex-wrap items-start justify-between gap-3';
+        selectionHeader.innerHTML = `
+          <div>
+            <div class="text-sm font-black text-slate-900 dark:text-slate-100">Quem entra nessa divisão?</div>
+            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Marque as pessoas participantes. A grade fica mais compacta para aguentar de 2 até 20 nomes sem engolir os botões finais.</p>
+          </div>
+        `;
+        selectionSection.appendChild(selectionHeader);
+
+        const selectionCounter = document.createElement('span');
+        selectionCounter.className = 'inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300';
+        selectionHeader.appendChild(selectionCounter);
 
         if (!people.length) {
           const empty = document.createElement('div');
           empty.className = 'rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300';
           empty.textContent = 'Nenhuma pessoa visível neste mês para aplicar a distribuição.';
-          selectionColumn.appendChild(empty);
+          selectionSection.appendChild(empty);
         } else {
           const grid = document.createElement('div');
-          grid.className = 'grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5';
+          grid.className = 'grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5';
           people.forEach(person => {
             grid.appendChild(buildPersonCard(person, initialSelectedIds.includes(Number(person.id))));
           });
-          selectionColumn.appendChild(grid);
+          selectionSection.appendChild(grid);
         }
 
         const splitModeSection = document.createElement('section');
-        splitModeSection.className = 'space-y-3';
+        splitModeSection.className = 'space-y-3 hidden';
         splitModeSection.hidden = true;
 
-        const splitModeTitle = document.createElement('div');
-        splitModeTitle.className = 'text-sm font-black text-slate-900 dark:text-slate-100';
-        splitModeTitle.textContent = 'Como você quer dividir essa compra?';
-        splitModeSection.appendChild(splitModeTitle);
+        const splitModeHeader = document.createElement('div');
+        splitModeHeader.innerHTML = `
+          <div class="text-sm font-black text-slate-900 dark:text-slate-100">Como você quer dividir essa compra?</div>
+          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Quando entram 2 ou mais pessoas, escolha o estilo da divisão antes de salvar.</p>
+        `;
+        splitModeSection.appendChild(splitModeHeader);
 
         const splitModeBody = document.createElement('div');
         splitModeBody.className = 'space-y-3';
 
         const splitModeGrid = document.createElement('div');
-        splitModeGrid.className = 'grid gap-3 md:grid-cols-2';
+        splitModeGrid.className = 'grid gap-2 sm:grid-cols-2 lg:max-w-[30rem]';
 
         const equalOption = buildSplitModeOption({
           title: 'Partes iguais',
@@ -1197,7 +1208,7 @@
         splitModeBody.appendChild(splitModeGrid);
 
         const exactPanel = document.createElement('div');
-        exactPanel.className = 'space-y-3 rounded-[24px] border border-violet-200 bg-violet-50/80 p-4 dark:border-violet-900/70 dark:bg-violet-950/20 xl:flex xl:h-full xl:min-h-[220px] xl:flex-col xl:overflow-hidden';
+        exactPanel.className = 'space-y-4 rounded-[24px] border border-violet-200 bg-violet-50/80 p-4 dark:border-violet-900/70 dark:bg-violet-950/20 hidden';
         exactPanel.hidden = true;
 
         const exactIntro = document.createElement('div');
@@ -1208,7 +1219,7 @@
         exactPanel.appendChild(exactIntro);
 
         const exactFields = document.createElement('div');
-        exactFields.className = 'grid gap-3 xl:min-h-0 xl:flex-1 xl:content-start xl:overflow-y-auto xl:pr-1';
+        exactFields.className = 'grid gap-3 lg:grid-cols-2';
         exactPanel.appendChild(exactFields);
 
         const exactTotals = document.createElement('div');
@@ -1217,20 +1228,33 @@
 
         splitModeBody.appendChild(exactPanel);
         splitModeSection.appendChild(splitModeBody);
+        wrapper.appendChild(splitModeSection);
 
         const multiExactNote = document.createElement('div');
         multiExactNote.className = 'rounded-[22px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200';
         multiExactNote.textContent = 'Quer usar valores definidos? Abra uma compra por vez. Em seleção múltipla, o app mantém só a divisão em partes iguais para não misturar os totais.';
         multiExactNote.hidden = items.length === 1;
-
-        settingsColumn.appendChild(splitModeSection);
-        settingsColumn.appendChild(multiExactNote);
+        multiExactNote.classList.toggle('hidden', items.length === 1);
+        wrapper.appendChild(multiExactNote);
 
         const modeInputs = () => Array.from(splitModeGrid.querySelectorAll('input[name="split_mode_choice"]'));
         const getSelectedIds = () => Array.from(wrapper.querySelectorAll('input[name="person_ids"]:checked'))
           .map(input => Number(input.value))
           .filter(Number.isInteger);
         let saveActionButton = null;
+
+        function clearSplitModeChoice() {
+          modeInputs().forEach((input) => {
+            input.checked = false;
+          });
+        }
+
+        function syncSelectionCounter() {
+          const count = getSelectedIds().length;
+          selectionCounter.textContent = count === 0
+            ? 'Ninguém marcado'
+            : (count === 1 ? '1 participante marcado' : `${count} participantes marcados`);
+        }
 
         function getSplitMode() {
           const active = splitModeGrid.querySelector('input[name="split_mode_choice"]:checked');
@@ -1320,32 +1344,28 @@
         function syncSplitUi() {
           const selectedIds = getSelectedIds();
           const canPickMode = exactModeAvailable && selectedIds.length > 1;
-          splitModeSection.hidden = !canPickMode;
-          multiExactNote.hidden = items.length === 1;
-
           if (!canPickMode) {
-            splitModeBody.className = 'space-y-3';
-            splitModeGrid.className = 'grid gap-3 md:grid-cols-2';
-            exactPanel.hidden = true;
-            exactTotals.innerHTML = '';
-            syncSaveButtonState();
-            return;
+            clearSplitModeChoice();
           }
 
-          const wantsExact = getSplitMode() === 'exact';
-          splitModeBody.className = wantsExact
-            ? 'space-y-3 xl:grid xl:grid-cols-[minmax(260px,320px)_minmax(0,1fr)] xl:items-stretch xl:gap-4 xl:space-y-0'
-            : 'space-y-3';
-          splitModeGrid.className = wantsExact
-            ? 'grid gap-3 md:grid-cols-2 xl:h-full xl:grid-cols-1 xl:auto-rows-fr'
-            : 'grid gap-3 md:grid-cols-2';
+          splitModeSection.hidden = !canPickMode;
+          splitModeSection.classList.toggle('hidden', !canPickMode);
+          multiExactNote.hidden = items.length === 1;
+          multiExactNote.classList.toggle('hidden', items.length === 1);
+
+          const wantsExact = canPickMode && getSplitMode() === 'exact';
           exactPanel.hidden = !wantsExact;
+          exactPanel.classList.toggle('hidden', !wantsExact);
+
           if (wantsExact) {
             renderExactFields();
             syncExactTotals();
           } else {
+            exactFields.innerHTML = '';
             exactTotals.innerHTML = '';
           }
+
+          syncSelectionCounter();
           syncSaveButtonState();
         }
 
@@ -1416,6 +1436,7 @@
           ]
         });
         saveActionButton = sheetState.actions.querySelectorAll('button')[1] || null;
+        syncSelectionCounter();
         syncSplitUi();
       }
 

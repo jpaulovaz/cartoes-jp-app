@@ -348,6 +348,14 @@ CREATE TABLE IF NOT EXISTS person_app_links (
   FOREIGN KEY (person_id) REFERENCES people(id),
   FOREIGN KEY (linked_user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT,
+  updated_at TEXT NOT NULL,
+  updated_by_user_id INTEGER,
+  FOREIGN KEY (updated_by_user_id) REFERENCES users(id)
+);
 `);
 
 db.exec(`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id);`);

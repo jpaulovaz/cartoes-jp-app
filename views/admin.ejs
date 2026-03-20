@@ -1,314 +1,455 @@
 <%- include("partials/header", { title: "OrganizaPay | Administração" }) %>
 
-  <div class="max-w-6xl mx-auto space-y-8">
-    <section class="op-page-hero op-fade-up">
-      <div>
-        <span class="op-page-hero__eyebrow">Acesso e permissões</span>
-        <h1 class="op-page-hero__title mt-4">Painel de administração</h1>
-        <p class="op-page-hero__subtitle mt-3">Controle quem pode entrar, o que cada pessoa vê e quem pode importar faturas.</p>
-        <div class="op-page-hero__meta mt-4">
-          <span class="badge"><%= users ? users.length : 0 %> usuário(s)</span>
-          <span class="badge">Permissões e importação</span>
+<%
+  const toneClasses = {
+    success: 'border-emerald-200 bg-emerald-50/90 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300',
+    warning: 'border-amber-200 bg-amber-50/90 text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300',
+    muted: 'border-slate-200 bg-slate-50/90 text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200'
+  };
+  const activeSectionKey = typeof activeSection !== 'undefined' && activeSection ? activeSection : 'access';
+  const navItems = [{ key: 'access', title: 'Acessos', description: 'Quem entra no app' }].concat((settingsSections || []).map(section => ({
+    key: section.key,
+    title: section.title,
+    description: section.eyebrow || 'Configuração'
+  })));
+%>
+
+<div class="max-w-[1500px] mx-auto space-y-8">
+  <section class="op-page-hero op-fade-up">
+    <div class="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+      <div class="max-w-3xl">
+        <span class="op-page-hero__eyebrow">Central de configuração</span>
+        <h1 class="op-page-hero__title mt-4">Admin virou a casinha oficial das configurações</h1>
+        <p class="op-page-hero__subtitle mt-3">
+          O <code>.env</code> entrou em modo aposentadoria elegante: agora ele fica como plano B de bootstrap,
+          enquanto as configurações do dia a dia moram aqui, separadas por assunto e com recarga automática sempre que der.
+        </p>
+        <div class="op-page-hero__meta mt-5 flex flex-wrap gap-2">
+          <span class="badge"><%= users ? users.length : 0 %> acesso(s) liberado(s)</span>
+          <span class="badge"><%= totalConfigItems %> ajustes na central</span>
+          <span class="badge"><%= autoReloadCount %> entram na hora</span>
+          <span class="badge"><%= restartRequiredCount %> pedem restart</span>
         </div>
       </div>
 
-    </section>
-
-    <% if (typeof error !== 'undefined' && error) { %>
-      <div class="op-inline-alert op-inline-alert--warning">
-        <div class="op-inline-alert__icon">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-        </div>
-        <div>
-          <div class="op-inline-alert__title">Atenção</div>
-          <div class="op-inline-alert__text"><%= error %></div>
-        </div>
-      </div>
-      <% } %>
-
-        <% if (typeof success !== 'undefined' && success) { %>
-          <div class="op-inline-alert op-inline-alert--success">
-            <div class="op-inline-alert__icon">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+      <div class="grid gap-3 sm:grid-cols-2 xl:w-[420px]">
+        <% (statusCards || []).forEach((card) => { %>
+          <div class="rounded-3xl border p-4 shadow-sm <%= toneClasses[card.tone] || toneClasses.muted %>">
+            <div class="flex items-center justify-between gap-3">
+              <div class="text-sm font-extrabold tracking-tight"><%= card.title %></div>
+              <span class="rounded-full border border-current/20 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em]"><%= card.status %></span>
             </div>
-            <div>
-              <div class="op-inline-alert__title">Tudo certo por aqui</div>
-              <div class="op-inline-alert__text"><%= success %></div>
+            <p class="mt-3 text-sm font-medium leading-relaxed text-current/90"><%= card.text %></p>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+  </section>
+
+  <% if (typeof error !== 'undefined' && error) { %>
+    <div class="op-inline-alert op-inline-alert--warning">
+      <div class="op-inline-alert__icon">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      </div>
+      <div>
+        <div class="op-inline-alert__title">Tem um ajuste pedindo atenção</div>
+        <div class="op-inline-alert__text"><%= error %></div>
+      </div>
+    </div>
+  <% } %>
+
+  <% if (typeof success !== 'undefined' && success) { %>
+    <div class="op-inline-alert op-inline-alert--success">
+      <div class="op-inline-alert__icon">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+      </div>
+      <div>
+        <div class="op-inline-alert__title">Tudo salvo bonitinho</div>
+        <div class="op-inline-alert__text"><%= success %></div>
+      </div>
+    </div>
+  <% } %>
+
+  <div class="grid gap-8 xl:grid-cols-[280px,minmax(0,1fr)]">
+    <aside class="xl:sticky xl:top-32 self-start space-y-4">
+      <div class="op-surface-card rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/95">
+        <div class="text-xs font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Mapa da central</div>
+        <h2 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Navegação rápida</h2>
+        <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">
+          No desktop fica uma beleza pular de seção em seção. No mobile ela acompanha, só que em formato empilhado.
+        </p>
+
+        <nav class="mt-5 space-y-2">
+          <% navItems.forEach((item) => {
+               const selected = activeSectionKey === item.key;
+          %>
+            <a href="#admin-section-<%= item.key %>"
+               class="flex items-start gap-3 rounded-2xl border px-4 py-3 transition-all <%= selected ? 'border-blue-200 bg-blue-50 text-blue-700 shadow-sm dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-200' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/30 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900/50' %>">
+              <span class="mt-1 h-2.5 w-2.5 rounded-full <%= selected ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600' %>"></span>
+              <span class="min-w-0">
+                <span class="block text-sm font-black tracking-tight"><%= item.title %></span>
+                <span class="mt-1 block text-xs font-medium text-current/80"><%= item.description %></span>
+              </span>
+            </a>
+          <% }) %>
+        </nav>
+      </div>
+
+      <div class="op-surface-card rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/95">
+        <div class="text-xs font-black uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Como funciona</div>
+        <ul class="mt-4 space-y-3 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
+          <li>• Quase tudo entra em campo assim que você salva.</li>
+          <li>• Porta e segredo de sessão pedem um restart para vestir a roupa nova.</li>
+          <li>• O <code>.env</code> continua como paraquedas de emergência, não como painel do dia a dia.</li>
+        </ul>
+      </div>
+    </aside>
+
+    <div class="space-y-8 min-w-0">
+      <section id="admin-section-access" class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
+        <div class="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-700 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
+          <div class="max-w-2xl">
+            <span class="text-xs font-black uppercase tracking-[0.18em] text-blue-500 dark:text-blue-300">Acessos</span>
+            <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Quem pode entrar e o que cada pessoa pode fazer</h2>
+            <p class="mt-3 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">
+              Aqui você libera entrada, escolhe quem pode importar e define quem também pode cuidar da central.
+            </p>
+          </div>
+
+          <button type="button" onclick="openAddUserModal()"
+            class="inline-flex items-center justify-center px-4 py-3 text-sm font-bold text-white bg-blue-600 dark:bg-blue-500 rounded-2xl hover:bg-blue-700 dark:hover:bg-blue-600 shadow-sm transition-all hover:-translate-y-0.5">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Liberar acesso
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[920px] text-sm text-left">
+            <thead class="bg-slate-50 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-[11px] tracking-wider">
+              <tr>
+                <th class="px-4 py-4 text-center">Usuário</th>
+                <th class="px-4 py-4 text-center">Email</th>
+                <th class="px-4 py-4 text-center">Nível</th>
+                <th class="px-4 py-4 text-center">Importação</th>
+                <th class="px-4 py-4 text-center">Criado em</th>
+                <th class="px-4 py-4 text-center">Último acesso</th>
+                <th class="px-4 py-4 text-center">Ações</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+              <% if (users && users.length > 0) { %>
+                <% users.forEach(u => { const isSelf = user && u.id === user.id; %>
+                  <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-700/40 transition-colors align-middle">
+                    <td class="px-4 py-4">
+                      <div class="font-extrabold text-slate-800 dark:text-white"><%= u.name || '-' %></div>
+                      <div class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">ID <%= u.id %></div>
+                    </td>
+                    <td class="px-4 py-4 font-medium text-slate-600 dark:text-slate-300"><%= u.email %></td>
+                    <td class="px-4 py-4 text-center">
+                      <% if (u.role === 'admin') { %>
+                        <span class="inline-flex min-w-[118px] items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800">Administrador</span>
+                      <% } else { %>
+                        <span class="inline-flex min-w-[118px] items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600">Usuário</span>
+                      <% } %>
+                    </td>
+                    <td class="px-4 py-4 text-center">
+                      <% if (Number(u.can_import ?? 1) !== 0) { %>
+                        <span class="inline-flex min-w-[104px] items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">Permitida</span>
+                      <% } else { %>
+                        <span class="inline-flex min-w-[104px] items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">Bloqueada</span>
+                      <% } %>
+                    </td>
+                    <td class="px-4 py-4 text-center font-medium text-slate-600 dark:text-slate-300"><%= u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '-' %></td>
+                    <td class="px-4 py-4 text-center font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap"><%= u.last_login ? new Date(u.last_login).toLocaleString('pt-BR') : 'Nunca acessou' %></td>
+                    <td class="px-4 py-4 text-right">
+                      <div class="inline-flex items-center justify-end gap-2 flex-wrap">
+                        <button type="button"
+                          onclick="openEditUserModal(this)"
+                          data-user-id="<%= u.id %>"
+                          data-user-email="<%= u.email %>"
+                          data-user-name="<%= u.name || '' %>"
+                          data-user-role="<%= u.role || 'user' %>"
+                          data-user-can-import="<%= Number(u.can_import ?? 1) !== 0 ? '1' : '0' %>"
+                          class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700 transition-colors bg-white dark:bg-slate-800 shadow-sm">
+                          <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h2m-1 0v14m7-7H5"></path>
+                          </svg>
+                          Ajustar
+                        </button>
+
+                        <% if (!isSelf) { %>
+                          <form action="/admin/remove-user/<%= u.id %>" method="POST" onsubmit="return confirm('Tem certeza que deseja remover esse acesso?')">
+                            <button type="submit" class="inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-bold border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors bg-white dark:bg-slate-800 shadow-sm">
+                              <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 7h12M9 7V4h6v3m-7 4v6m4-6v6m5 2H7a2 2 0 01-2-2V7h14v10a2 2 0 01-2 2z"></path>
+                              </svg>
+                              Remover
+                            </button>
+                          </form>
+                        <% } %>
+                      </div>
+                    </td>
+                  </tr>
+                <% }) %>
+              <% } else { %>
+                <tr>
+                  <td colspan="7" class="px-4 py-6">
+                    <div class="op-empty-state op-empty-state--compact">
+                      <div class="op-empty-state__icon">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v6m3-3h-6m-6 6H5a2 2 0 01-2-2V8a2 2 0 012-2h4l2-2h2l2 2h4a2 2 0 012 2v4"></path></svg>
+                      </div>
+                      <div class="op-empty-state__title">Nenhum usuário encontrado</div>
+                      <p class="op-empty-state__text">Cadastre o primeiro e-mail autorizado para começar a distribuir acessos ao aplicativo.</p>
+                    </div>
+                  </td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid gap-6 p-6 sm:p-8 border-t border-slate-100 dark:border-slate-700 xl:grid-cols-2">
+          <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
+            <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Lembrete rápido</div>
+            <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Acesso ao app</h3>
+            <ul class="mt-4 space-y-3 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
+              <li>• Só e-mails autorizados nessa lista conseguem entrar.</li>
+              <li>• Quem for admin cuida do app e também desta central.</li>
+              <li>• Quem estiver sem importação liberada nem vê os atalhos da importação.</li>
+            </ul>
+          </div>
+          <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
+            <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Primeiro login</div>
+            <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Titular automático</h3>
+            <p class="mt-3 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
+              No primeiro login com Google, o OrganizaPay cria uma pessoa titular usando o nome do perfil.
+              É o app já arrumando a casa antes da pessoa começar a brincar com as finanças.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <% (settingsSections || []).forEach((section) => { %>
+        <section id="admin-section-<%= section.key %>" class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
+          <div class="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-700 flex flex-col xl:flex-row xl:items-end xl:justify-between gap-5">
+            <div class="max-w-3xl">
+              <span class="text-xs font-black uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300"><%= section.eyebrow %></span>
+              <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= section.title %></h2>
+              <p class="mt-3 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400"><%= section.description %></p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <span class="badge"><%= section.fields.length %> ajuste(s)</span>
+              <span class="badge"><%= section.fields.some(field => field.restartRequired) ? 'Tem item com restart' : 'Tudo entra na hora' %></span>
             </div>
           </div>
-          <% } %>
 
-            <div class="space-y-8">
-              <section class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <div class="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div>
-                    <h2 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Pessoas com acesso</h2>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-                      <%= users.length %>
-                        <%= users.length===1 ? 'usuário cadastrado' : 'usuários cadastrados' %>
-                    </p>
-                  </div>
-
-                  <button type="button" onclick="openAddUserModal()"
-                    class="inline-flex items-center justify-center px-4 py-2.5 text-sm font-bold text-white bg-blue-600 dark:bg-blue-500 rounded-xl hover:bg-blue-700 dark:hover:bg-blue-600 shadow-sm transition-all hover:-translate-y-0.5">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 4v16m8-8H4"></path>
-                    </svg>
-                    Liberar acesso
-                  </button>
+          <form action="/admin/settings/<%= section.key %>" method="POST" class="p-6 sm:p-8 space-y-6">
+            <div class="grid gap-4 md:grid-cols-2">
+              <% section.fields.forEach((field) => { %>
+                <div class="<%= field.fullWidth ? 'md:col-span-2' : '' %>">
+                  <% if (field.input === 'switch') { %>
+                    <label class="flex h-full items-start gap-4 rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-5 py-4 cursor-pointer transition hover:border-slate-300 dark:hover:border-slate-600">
+                      <input type="checkbox" name="<%= field.key %>" value="1" <%= field.boolValue ? 'checked' : '' %>
+                        class="mt-1 h-5 w-5 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-800">
+                      <span class="min-w-0">
+                        <span class="flex flex-wrap items-center gap-2">
+                          <span class="text-sm font-black text-slate-900 dark:text-white"><%= field.label %></span>
+                          <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300"><%= field.appliesLabel %></span>
+                        </span>
+                        <span class="mt-2 block text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400"><%= field.helper %></span>
+                      </span>
+                    </label>
+                  <% } else if (field.input === 'textarea') { %>
+                    <label class="block rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-5 py-4">
+                      <span class="flex flex-wrap items-center gap-2">
+                        <span class="text-sm font-black text-slate-900 dark:text-white"><%= field.label %></span>
+                        <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300"><%= field.appliesLabel %></span>
+                        <% if (field.secret) { %>
+                          <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">Sensível</span>
+                        <% } %>
+                      </span>
+                      <span class="mt-2 block text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400"><%= field.helper %></span>
+                      <textarea name="<%= field.key %>" rows="<%= field.rows || 4 %>" placeholder="<%= field.placeholder || '' %>"
+                        class="mt-4 w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium text-slate-800 dark:text-slate-100 <%= field.monospace ? 'font-mono tracking-tight' : '' %>"><%= field.value %></textarea>
+                    </label>
+                  <% } else { %>
+                    <label class="block rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-5 py-4">
+                      <span class="flex flex-wrap items-center gap-2">
+                        <span class="text-sm font-black text-slate-900 dark:text-white"><%= field.label %></span>
+                        <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300"><%= field.appliesLabel %></span>
+                        <% if (field.secret) { %>
+                          <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">Sensível</span>
+                        <% } %>
+                      </span>
+                      <span class="mt-2 block text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400"><%= field.helper %></span>
+                      <div class="mt-4 relative">
+                        <input type="<%= field.input === 'password' ? 'password' : field.input %>" name="<%= field.key %>" value="<%= field.value %>"
+                          placeholder="<%= field.placeholder || '' %>"
+                          <%= field.min != null ? `min="${field.min}"` : '' %>
+                          <%= field.max != null ? `max="${field.max}"` : '' %>
+                          <%= field.step != null ? `step="${field.step}"` : '' %>
+                          class="w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium text-slate-800 dark:text-slate-100 <%= field.secret ? 'pr-24' : '' %> <%= field.monospace ? 'font-mono tracking-tight' : '' %>">
+                        <% if (field.input === 'password') { %>
+                          <button type="button" data-secret-toggle class="absolute inset-y-2 right-2 inline-flex items-center rounded-xl border border-slate-200 dark:border-slate-700 px-3 text-xs font-black text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
+                            Mostrar
+                          </button>
+                        <% } %>
+                      </div>
+                    </label>
+                  <% } %>
                 </div>
-
-                <div class="overflow-x-auto">
-                  <table class="w-full text-sm text-left">
-                    <thead
-                      class="bg-slate-50 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-[11px] tracking-wider">
-                      <tr>
-                        <th class="px-4 py-4 text-center">Usuário</th>
-                        <th class="px-4 py-4 text-center">Email</th>
-                        <th class="px-4 py-4 text-center">Nível</th>
-                        <th class="px-4 py-4 text-center">Importação</th>
-                        <th class="px-4 py-4 text-center">Criado em</th>
-                        <th class="px-4 py-4 text-center">Último acesso</th>
-                        <th class="px-4 py-4 text-center">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                      <% if (users && users.length > 0) { %>
-                        <% users.forEach(u => { const isSelf = user && u.id === user.id; %>
-                          <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-700/40 transition-colors align-middle">
-                            <td class="px-4 py-4">
-                              <div class="font-extrabold text-slate-800 dark:text-white"><%= u.name || '-' %></div>
-                              <div class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">ID <%= u.id %></div>
-                            </td>
-                            <td class="px-4 py-4 font-medium text-slate-600 dark:text-slate-300"><%= u.email %></td>
-                            <td class="px-4 py-4">
-                              <% if (u.role === 'admin') { %>
-                                <span
-                                  class="inline-flex min-w-[118px] items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800">Administrador</span>
-                                <% } else { %>
-                                  <span
-                                    class="inline-flex min-w-[118px] items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600">Usuário</span>
-                                  <% } %>
-                            </td>
-                            <td class="px-4 py-4">
-                              <% if (Number(u.can_import ?? 1) !== 0) { %>
-                                <span class="inline-flex min-w-[104px] items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">Permitida</span>
-                              <% } else { %>
-                                <span class="inline-flex min-w-[104px] items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">Bloqueada</span>
-                              <% } %>
-                            </td>
-                            <td class="px-4 py-4 font-medium text-slate-600 dark:text-slate-300">
-                              <%= u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '-' %>
-                            </td>
-                            <td class="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                              <%= u.last_login ? new Date(u.last_login).toLocaleString('pt-BR') : 'Nunca acessou' %>
-                            </td>
-                            <td class="px-4 py-4 text-right">
-                              <div class="inline-flex items-center justify-end gap-2 flex-wrap">
-                                <button type="button"
-                                  onclick="openEditUserModal(this)"
-                                  data-user-id="<%= u.id %>"
-                                  data-user-email="<%= u.email %>"
-                                  data-user-name="<%= u.name || '' %>"
-                                  data-user-role="<%= u.role || 'user' %>"
-                                  data-user-can-import="<%= Number(u.can_import ?? 1) !== 0 ? '1' : '0' %>"
-                                  class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700 transition-colors bg-white dark:bg-slate-800 shadow-sm">
-                                  <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.586-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.414-8.586z">
-                                    </path>
-                                  </svg>
-                                  Editar
-                                </button>
-
-                                <% if (isSelf) { %>
-                                  <span
-                                    class="inline-flex min-w-[104px] items-center justify-center px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">Você</span>
-                                <% } else { %>
-                                  <form action="/admin/remove-user/<%= u.id %>" method="POST" class="inline"
-                                    onsubmit="return confirm('Tem certeza que deseja remover esse acesso? A pessoa vai deixar de entrar no app.');">
-                                    <button type="submit"
-                                      class="inline-flex min-w-[104px] items-center justify-center px-3 py-1.5 rounded-lg text-xs font-bold border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors bg-white dark:bg-slate-800 shadow-sm">
-                                      <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                          d="M6 7h12M9 7V4h6v3m-7 4v6m4-6v6m5 2H7a2 2 0 01-2-2V7h14v10a2 2 0 01-2 2z">
-                                        </path>
-                                      </svg>
-                                      Remover
-                                    </button>
-                                  </form>
-                                <% } %>
-                              </div>
-                            </td>
-                          </tr>
-                          <% }) %>
-                            <% } else { %>
-                              <tr>
-                                <td colspan="7" class="px-4 py-6">
-                                  <div class="op-empty-state op-empty-state--compact">
-                                    <div class="op-empty-state__icon">
-                                      <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v6m3-3h-6m-6 6H5a2 2 0 01-2-2V8a2 2 0 012-2h4l2-2h2l2 2h4a2 2 0 012 2v4"></path></svg>
-                                    </div>
-                                    <div class="op-empty-state__title">Nenhum usuário encontrado</div>
-                                    <p class="op-empty-state__text">Cadastre o primeiro e-mail autorizado para começar a distribuir acessos ao aplicativo.</p>
-                                  </div>
-                                </td>
-                              </tr>
-                              <% } %>
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-
-              <section class="grid gap-6 xl:grid-cols-2">
-                <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-                  <h2 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Informações do app</h2>
-                  <div class="mt-5 space-y-4 text-sm">
-                    <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4">
-                      <div class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Autenticação</div>
-                      <div class="font-semibold text-slate-800 dark:text-slate-200">Google OAuth 2.0</div>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4">
-                      <div class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Isolamento</div>
-                      <div class="font-semibold text-slate-800 dark:text-slate-200">Cada pessoa vê apenas os próprios dados</div>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4">
-                      <div class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Titular automático</div>
-                      <div class="font-semibold text-slate-800 dark:text-slate-200">No primeiro login Google é criada uma pessoa titular com o nome do perfil</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-                  <h2 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Como funciona o acesso?</h2>
-                  <ol class="mt-5 space-y-3 text-sm font-medium text-slate-600 dark:text-slate-300 list-decimal list-inside">
-                    <li>Apenas emails cadastrados nesta lista podem entrar no sistema.</li>
-                    <li>No primeiro login com Google, a pessoa já ganha um perfil principal automaticamente.</li>
-                    <li>Quem está no nível <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">admin</code> acessa esta área para gerenciar contas.</li>
-                    <li>Quem está no nível <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">user</code> usa só as abas do app.</li>
-                  </ol>
-                </div>
-              </section>
+              <% }) %>
             </div>
-  </div>
 
-  <div id="addUserModal"
-    class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl border border-slate-200 dark:border-slate-700"
-      onclick="event.stopPropagation()">
-      <div class="flex justify-between items-center mb-6">
-        <div>
-          <h2 id="userModalTitle" class="text-xl font-black text-slate-800 dark:text-white">Liberar novo acesso</h2>
-          <p id="userModalDescription" class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Esse e-mail poderá entrar no app usando a conta Google correspondente.</p>
-        </div>
-        <button type="button" onclick="closeAddUserModal()"
-          class="op-icon-btn" aria-label="Fechar janela">✕</button>
-      </div>
-
-      <form id="userForm" action="/admin/add-user" method="POST" class="space-y-4">
-        <div>
-          <label for="email" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Email do Google</label>
-          <input type="email" id="email" name="email" required placeholder="exemplo@gmail.com"
-            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
-        </div>
-
-        <div>
-          <label for="name" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Nome (Opcional)</label>
-          <input type="text" id="name" name="name" placeholder="Nome da pessoa"
-            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
-          <p class="text-xs font-medium text-slate-400 mt-2">Se ficar em branco, usamos a parte anterior ao <code>@</code>.</p>
-        </div>
-
-        <div>
-          <label for="role" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Nível de acesso</label>
-          <select id="role" name="role"
-            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
-            <option value="user" selected>Usuário (usa o app)</option>
-            <option value="admin">Administrador (app + painel)</option>
-          </select>
-        </div>
-
-        <label class="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3">
-          <input type="checkbox" id="can_import" name="can_import" value="1" checked
-            class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-800">
-          <span>
-            <span class="block text-sm font-bold text-slate-800 dark:text-white">Pode importar fatura?</span>
-            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Se ficar desmarcado, essa pessoa não verá os botões nem poderá usar a importação.</span>
-          </span>
-        </label>
-
-        <div class="flex flex-col sm:flex-row gap-3 pt-2">
-          <button type="button" onclick="closeAddUserModal()"
-            class="flex-1 px-5 py-3 rounded-xl font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all">
-            Cancelar
-          </button>
-          <button type="submit"
-            class="flex-1 px-5 py-3 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5">
-            <span id="userModalSubmitLabel">Liberar acesso</span>
-          </button>
-        </div>
-      </form>
+            <div class="flex flex-col gap-3 rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <p class="text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400 max-w-2xl">
+                Salvou? O OrganizaPay recarrega sozinho tudo o que conseguir. O que depende de restart ganha aviso sem drama.
+              </p>
+              <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-blue-500 dark:hover:bg-blue-400">
+                Salvar esta seção
+              </button>
+            </div>
+          </form>
+        </section>
+      <% }) %>
     </div>
   </div>
+</div>
 
-  <script>
-    const addUserModal = document.getElementById('addUserModal');
-    const userForm = document.getElementById('userForm');
-    const userModalTitle = document.getElementById('userModalTitle');
-    const userModalDescription = document.getElementById('userModalDescription');
-    const userModalSubmitLabel = document.getElementById('userModalSubmitLabel');
-    const emailField = document.getElementById('email');
-    const nameField = document.getElementById('name');
-    const roleField = document.getElementById('role');
-    const canImportField = document.getElementById('can_import');
+<div id="addUserModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl border border-slate-200 dark:border-slate-700" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-center mb-6">
+      <div>
+        <h2 id="userModalTitle" class="text-xl font-black text-slate-800 dark:text-white">Liberar novo acesso</h2>
+        <p id="userModalDescription" class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Esse e-mail poderá entrar no app usando a conta Google correspondente.</p>
+      </div>
+      <button type="button" onclick="closeAddUserModal()" class="op-icon-btn" aria-label="Fechar janela">✕</button>
+    </div>
 
-    function configureUserModalForAdd() {
-      if (!userForm) return;
-      userForm.action = '/admin/add-user';
-      userModalTitle.textContent = 'Liberar novo acesso';
-      userModalDescription.textContent = 'Esse e-mail poderá entrar no app usando a conta Google correspondente.';
-      userModalSubmitLabel.textContent = 'Liberar acesso';
-      emailField.value = '';
-      nameField.value = '';
-      roleField.value = 'user';
-      canImportField.checked = true;
+    <form id="userForm" action="/admin/add-user" method="POST" class="space-y-4">
+      <div>
+        <label for="email" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Email do Google</label>
+        <input type="email" id="email" name="email" required placeholder="exemplo@gmail.com"
+          class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
+      </div>
+
+      <div>
+        <label for="name" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Nome (Opcional)</label>
+        <input type="text" id="name" name="name" placeholder="Nome da pessoa"
+          class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
+        <p class="text-xs font-medium text-slate-400 mt-2">Se ficar em branco, usamos a parte anterior ao <code>@</code>.</p>
+      </div>
+
+      <div>
+        <label for="role" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Nível de acesso</label>
+        <select id="role" name="role"
+          class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
+          <option value="user" selected>Usuário (usa o app)</option>
+          <option value="admin">Administrador (app + painel)</option>
+        </select>
+      </div>
+
+      <label class="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3">
+        <input type="checkbox" id="can_import" name="can_import" value="1" checked
+          class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-800">
+        <span>
+          <span class="block text-sm font-bold text-slate-800 dark:text-white">Pode importar fatura?</span>
+          <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Se ficar desmarcado, essa pessoa não verá os botões nem poderá usar a importação.</span>
+        </span>
+      </label>
+
+      <div class="flex flex-col sm:flex-row gap-3 pt-2">
+        <button type="button" onclick="closeAddUserModal()"
+          class="flex-1 px-5 py-3 rounded-xl font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all">
+          Cancelar
+        </button>
+        <button type="submit"
+          class="flex-1 px-5 py-3 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5">
+          <span id="userModalSubmitLabel">Liberar acesso</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const addUserModal = document.getElementById('addUserModal');
+  const userForm = document.getElementById('userForm');
+  const userModalTitle = document.getElementById('userModalTitle');
+  const userModalDescription = document.getElementById('userModalDescription');
+  const userModalSubmitLabel = document.getElementById('userModalSubmitLabel');
+  const emailField = document.getElementById('email');
+  const nameField = document.getElementById('name');
+  const roleField = document.getElementById('role');
+  const canImportField = document.getElementById('can_import');
+  const activeAdminSection = <%- JSON.stringify(activeSectionKey) %>;
+
+  function configureUserModalForAdd() {
+    if (!userForm) return;
+    userForm.action = '/admin/add-user';
+    userModalTitle.textContent = 'Liberar novo acesso';
+    userModalDescription.textContent = 'Esse e-mail poderá entrar no app usando a conta Google correspondente.';
+    userModalSubmitLabel.textContent = 'Liberar acesso';
+    emailField.value = '';
+    nameField.value = '';
+    roleField.value = 'user';
+    canImportField.checked = true;
+  }
+
+  function openAddUserModal() {
+    configureUserModalForAdd();
+    addUserModal.classList.remove('hidden');
+  }
+
+  function openEditUserModal(button) {
+    if (!button || !userForm) return;
+    userForm.action = `/admin/update-user/${button.dataset.userId}`;
+    userModalTitle.textContent = 'Editar permissões';
+    userModalDescription.textContent = 'Atualize os dados de acesso mantendo as permissões desejadas para essa pessoa.';
+    userModalSubmitLabel.textContent = 'Salvar mudanças';
+    emailField.value = button.dataset.userEmail || '';
+    nameField.value = button.dataset.userName || '';
+    roleField.value = button.dataset.userRole || 'user';
+    canImportField.checked = button.dataset.userCanImport === '1';
+    addUserModal.classList.remove('hidden');
+  }
+
+  function closeAddUserModal() {
+    addUserModal.classList.add('hidden');
+    configureUserModalForAdd();
+  }
+
+  addUserModal?.addEventListener('click', (event) => {
+    if (event.target === addUserModal) {
+      closeAddUserModal();
     }
+  });
 
-    function openAddUserModal() {
-      configureUserModalForAdd();
-      addUserModal.classList.remove('hidden');
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && addUserModal && !addUserModal.classList.contains('hidden')) {
+      closeAddUserModal();
     }
+  });
 
-    function openEditUserModal(button) {
-      if (!button || !userForm) return;
-      userForm.action = `/admin/update-user/${button.dataset.userId}`;
-      userModalTitle.textContent = 'Editar permissões';
-      userModalDescription.textContent = 'Atualize os dados de acesso mantendo as permissões desejadas para essa pessoa.';
-      userModalSubmitLabel.textContent = 'Salvar mudanças';
-      emailField.value = button.dataset.userEmail || '';
-      nameField.value = button.dataset.userName || '';
-      roleField.value = button.dataset.userRole || 'user';
-      canImportField.checked = button.dataset.userCanImport === '1';
-      addUserModal.classList.remove('hidden');
-    }
-
-    function closeAddUserModal() {
-      addUserModal.classList.add('hidden');
-      configureUserModalForAdd();
-    }
-
-    addUserModal?.addEventListener('click', (event) => {
-      if (event.target === addUserModal) {
-        closeAddUserModal();
-      }
+  document.querySelectorAll('[data-secret-toggle]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const input = button.parentElement?.querySelector('input');
+      if (!input) return;
+      const revealing = input.type === 'password';
+      input.type = revealing ? 'text' : 'password';
+      button.textContent = revealing ? 'Esconder' : 'Mostrar';
     });
+  });
 
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && addUserModal && !addUserModal.classList.contains('hidden')) {
-        closeAddUserModal();
-      }
-    });
-  </script>
+  window.addEventListener('load', () => {
+    if (!activeAdminSection || activeAdminSection === 'access') return;
+    const target = document.getElementById(`admin-section-${activeAdminSection}`);
+    if (target) {
+      target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  });
+</script>
 
-  <%- include("partials/footer") %>
+<%- include("partials/footer") %>

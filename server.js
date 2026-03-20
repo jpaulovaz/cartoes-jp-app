@@ -18,6 +18,18 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const SQLiteStore = require('connect-sqlite3')(session);
 const db = require("./src/db");
+const {
+  SETTING_SECTIONS,
+  SETTING_DEFINITIONS,
+  getSettingDefinition,
+  getSettingDefinitionsBySection,
+  getSettingSection,
+  getSectionTitle,
+  buildSeedValue,
+  parseBooleanSetting,
+  parseIntegerSetting,
+  sanitizeSettingValue
+} = require("./src/appConfig");
 
 // --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
 require('./scripts/migrate.js');
@@ -213,57 +225,311 @@ const EFFECTIVE_DUE_YEAR_SQL = "COALESCE(t.due_year, i.year)";
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
-const PUSH_PUBLIC_KEY = String(process.env.VAPID_PUBLIC_KEY || '').trim();
-const PUSH_PRIVATE_KEY = String(process.env.VAPID_PRIVATE_KEY || '').trim();
-const PUSH_SUBJECT = String(process.env.VAPID_SUBJECT || 'mailto:no-reply@organizapay.local').trim();
-const INACTIVITY_TIMEOUT_MINUTES = Number(String(process.env.INACTIVITY_TIMEOUT_MINUTES || '0').trim().replace(',', '.')) || 0;
-const INACTIVITY_TIMEOUT_MS = INACTIVITY_TIMEOUT_MINUTES > 0 ? Math.round(INACTIVITY_TIMEOUT_MINUTES * 60 * 1000) : 0;
+const currentConfigTimestamp = () => dayjs().toISOString();
+const appSettingsInsertIfMissing = db.prepare(`
+  INSERT OR IGNORE INTO app_settings (key, value, updated_at, updated_by_user_id)
+  VALUES (?, ?, ?, NULL)
+`);
+const appSettingsUpsert = db.prepare(`
+  INSERT INTO app_settings (key, value, updated_at, updated_by_user_id)
+  VALUES (?, ?, ?, ?)
+  ON CONFLICT(key) DO UPDATE SET
+    value = excluded.value,
+    updated_at = excluded.updated_at,
+    updated_by_user_id = excluded.updated_by_user_id
+`);
+const appSettingsSelectAll = db.prepare(`SELECT key, value, updated_at, updated_by_user_id FROM app_settings ORDER BY key ASC`);
 
-function parseEnvBoolean(value, fallback = false) {
-  if (value == null || value === '') return fallback;
-  const normalized = String(value).trim().toLowerCase();
-  if (['1', 'true', 'yes', 'y', 'on', 'sim', 's'].includes(normalized)) return true;
-  if (['0', 'false', 'no', 'n', 'off', 'nao', 'não'].includes(normalized)) return false;
-  return fallback;
-}
-
-function parseEnvInt(value, fallback, { min = null, max = null } = {}) {
-  const parsed = Number(String(value ?? '').trim().replace(',', '.'));
-  if (!Number.isFinite(parsed)) return fallback;
-
-  let result = Math.trunc(parsed);
-  if (min != null && result < min) result = min;
-  if (max != null && result > max) result = max;
-  return result;
-}
-
-const CARD_DUE_PUSH_ENABLED = parseEnvBoolean(process.env.CARD_DUE_PUSH_ENABLED, true);
-const CARD_DUE_PUSH_TIMEZONE = String(process.env.CARD_DUE_PUSH_TIMEZONE || 'America/Sao_Paulo').trim() || 'America/Sao_Paulo';
-const CARD_DUE_PUSH_HOUR = parseEnvInt(process.env.CARD_DUE_PUSH_HOUR, 10, { min: 0, max: 23 });
-const CARD_DUE_PUSH_MINUTE = parseEnvInt(process.env.CARD_DUE_PUSH_MINUTE, 0, { min: 0, max: 59 });
-const CARD_DUE_PUSH_MAX_SENDS_PER_DAY = parseEnvInt(process.env.CARD_DUE_PUSH_MAX_SENDS_PER_DAY, 1, { min: 0, max: 5 });
-const CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES = parseEnvInt(process.env.CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES, 0, { min: 0, max: 1440 });
-const CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES = parseEnvInt(process.env.CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES, 10, { min: 1, max: 120 });
-const FRIENDSHIP_GATE_SHARED_DEBT_ENABLED = parseEnvBoolean(process.env.FRIENDSHIP_GATE_SHARED_DEBT_ENABLED, true);
+let runtimeSettingsCache = {};
 let pushRuntimeEnabled = false;
+let googleAuthConfigured = false;
 let scheduledDuePushSweepRunning = false;
+let duePushSchedulerInitialHandle = null;
+let duePushSchedulerIntervalHandle = null;
+
+function seedAppSettingsFromBootstrap() {
+  const now = currentConfigTimestamp();
+  SETTING_DEFINITIONS.forEach((definition) => {
+    appSettingsInsertIfMissing.run(definition.key, buildSeedValue(definition), now);
+  });
+}
+
+function readRuntimeSettingsFromDb() {
+  const rows = appSettingsSelectAll.all();
+  const stored = new Map(rows.map((row) => [row.key, row.value == null ? '' : String(row.value)]));
+  const next = {};
+  SETTING_DEFINITIONS.forEach((definition) => {
+    next[definition.key] = stored.has(definition.key)
+      ? stored.get(definition.key)
+      : buildSeedValue(definition);
+  });
+  return next;
+}
+
+function getSettingValue(key) {
+  const definition = getSettingDefinition(key);
+  if (Object.prototype.hasOwnProperty.call(runtimeSettingsCache, key)) {
+    return runtimeSettingsCache[key] == null ? '' : String(runtimeSettingsCache[key]);
+  }
+  return definition ? buildSeedValue(definition) : '';
+}
+
+function getSettingText(key, fallback = '') {
+  const value = String(getSettingValue(key) || '').trim();
+  return value || fallback;
+}
+
+function getSettingBoolean(key, fallback = false) {
+  const definition = getSettingDefinition(key);
+  return parseBooleanSetting(
+    getSettingValue(key),
+    definition ? parseBooleanSetting(definition.defaultValue, fallback) : fallback
+  );
+}
+
+function getSettingInt(key, fallback = 0) {
+  const definition = getSettingDefinition(key);
+  return parseIntegerSetting(
+    getSettingValue(key),
+    definition ? parseIntegerSetting(definition.defaultValue, fallback, {
+      min: definition.min ?? null,
+      max: definition.max ?? null
+    }) : fallback,
+    {
+      min: definition?.min ?? null,
+      max: definition?.max ?? null
+    }
+  );
+}
+
+function getPushRuntimeConfig() {
+  return {
+    publicKey: getSettingText('VAPID_PUBLIC_KEY'),
+    privateKey: getSettingText('VAPID_PRIVATE_KEY'),
+    subject: getSettingText('VAPID_SUBJECT', 'mailto:no-reply@organizapay.local'),
+    duePushEnabled: getSettingBoolean('CARD_DUE_PUSH_ENABLED', true),
+    timezone: getSettingText('CARD_DUE_PUSH_TIMEZONE', 'America/Sao_Paulo') || 'America/Sao_Paulo',
+    hour: getSettingInt('CARD_DUE_PUSH_HOUR', 10),
+    minute: getSettingInt('CARD_DUE_PUSH_MINUTE', 0),
+    maxSendsPerDay: getSettingInt('CARD_DUE_PUSH_MAX_SENDS_PER_DAY', 1),
+    repeatIntervalMinutes: getSettingInt('CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES', 0),
+    checkIntervalMinutes: getSettingInt('CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES', 10)
+  };
+}
+
+function getInactivityTimeoutMs() {
+  const minutes = getSettingInt('INACTIVITY_TIMEOUT_MINUTES', 0);
+  return minutes > 0 ? Math.round(minutes * 60 * 1000) : 0;
+}
+
+function isFriendshipGateEnabled() {
+  return getSettingBoolean('FRIENDSHIP_GATE_SHARED_DEBT_ENABLED', true);
+}
 
 function isPushConfigured() {
   return pushRuntimeEnabled;
 }
 
-if (webPush && PUSH_PUBLIC_KEY && PUSH_PRIVATE_KEY) {
-  try {
-    webPush.setVapidDetails(PUSH_SUBJECT, PUSH_PUBLIC_KEY, PUSH_PRIVATE_KEY);
-    pushRuntimeEnabled = true;
-  } catch (err) {
-    pushRuntimeEnabled = false;
-    console.warn('⚠️  Push Web configurado de forma inválida. Verifique VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY e VAPID_SUBJECT.');
-  }
-} else if (PUSH_PUBLIC_KEY || PUSH_PRIVATE_KEY) {
-  console.warn('⚠️  Push Web desativado: faltam dependência web-push ou variáveis VAPID completas.');
+function getPushPublicKey() {
+  return isPushConfigured() ? getSettingText('VAPID_PUBLIC_KEY') : '';
 }
 
+function applyPushRuntimeConfig() {
+  const config = getPushRuntimeConfig();
+  pushRuntimeEnabled = false;
+
+  if (!webPush) {
+    return false;
+  }
+
+  if (config.publicKey && config.privateKey) {
+    try {
+      webPush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
+      pushRuntimeEnabled = true;
+    } catch (err) {
+      pushRuntimeEnabled = false;
+      console.warn('⚠️  Push Web configurado de forma inválida. Verifique VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY e VAPID_SUBJECT.');
+    }
+  } else if (config.publicKey || config.privateKey) {
+    console.warn('⚠️  Push Web desativado: faltam dependência web-push ou variáveis VAPID completas.');
+  }
+
+  return pushRuntimeEnabled;
+}
+
+function configureGoogleStrategy() {
+  if (typeof passport.unuse === 'function') {
+    try { passport.unuse('google'); } catch (err) { }
+  }
+
+  googleAuthConfigured = false;
+
+  const clientID = getSettingText('GOOGLE_CLIENT_ID');
+  const clientSecret = getSettingText('GOOGLE_CLIENT_SECRET');
+  const callbackURL = getSettingText('GOOGLE_CALLBACK_URL', 'http://localhost:3001/auth/google/callback');
+
+  if (!clientID || !clientSecret) {
+    console.warn('⚠️  Google OAuth não configurado. Ajuste a seção Login com Google na área Admin.');
+    return false;
+  }
+
+  passport.use(new GoogleStrategy({
+    clientID,
+    clientSecret,
+    callbackURL
+  }, (accessToken, refreshToken, profile, done) => {
+    const email = profile.emails?.[0]?.value;
+    const name = profile.displayName;
+
+    if (!email) {
+      return done(null, false, { message: 'Email não encontrado no perfil Google.' });
+    }
+
+    const authorizedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+
+    if (!authorizedUser) {
+      return done(null, false, { message: 'Email não autorizado. Entre em contato com o administrador.' });
+    }
+
+    const isFirstGoogleLogin = !authorizedUser.last_login;
+
+    db.prepare('UPDATE users SET last_login = ? WHERE email = ?').run(dayjs().toISOString(), email);
+
+    if (isFirstGoogleLogin) {
+      ensureDefaultOwnerPerson(authorizedUser.id, name || authorizedUser.name || email.split('@')[0], email);
+    }
+
+    return done(null, {
+      id: authorizedUser.id,
+      email,
+      name: authorizedUser.name || name || email.split('@')[0],
+      role: authorizedUser.role,
+      can_import: Number(authorizedUser.can_import ?? 1)
+    });
+  }));
+
+  googleAuthConfigured = true;
+  return true;
+}
+
+function isGoogleAuthConfigured() {
+  return googleAuthConfigured;
+}
+
+function clearCardDueTodayPushScheduler() {
+  if (duePushSchedulerInitialHandle) {
+    clearTimeout(duePushSchedulerInitialHandle);
+    duePushSchedulerInitialHandle = null;
+  }
+  if (duePushSchedulerIntervalHandle) {
+    clearInterval(duePushSchedulerIntervalHandle);
+    duePushSchedulerIntervalHandle = null;
+  }
+}
+
+function restartCardDueTodayPushScheduler() {
+  clearCardDueTodayPushScheduler();
+
+  const config = getPushRuntimeConfig();
+  if (!isPushConfigured() || !config.duePushEnabled || config.maxSendsPerDay <= 0) {
+    return;
+  }
+
+  const intervalMs = Math.max(1, config.checkIntervalMinutes) * 60 * 1000;
+  duePushSchedulerInitialHandle = setTimeout(() => {
+    runCardDueTodayPushSweep().catch(err => console.error('Falha no agendamento inicial de push de vencimento:', err?.message || err));
+  }, 15000);
+
+  duePushSchedulerIntervalHandle = setInterval(() => {
+    runCardDueTodayPushSweep().catch(err => console.error('Falha no agendamento recorrente de push de vencimento:', err?.message || err));
+  }, intervalMs);
+}
+
+function refreshRuntimeSettings({ restartScheduler = true } = {}) {
+  runtimeSettingsCache = readRuntimeSettingsFromDb();
+  applyPushRuntimeConfig();
+  configureGoogleStrategy();
+  if (restartScheduler) {
+    restartCardDueTodayPushScheduler();
+  }
+  return runtimeSettingsCache;
+}
+
+function updateAppSettings(entries, updatedByUserId = null) {
+  const now = currentConfigTimestamp();
+  const rows = Object.entries(entries || {});
+  db.transaction(() => {
+    rows.forEach(([key, value]) => {
+      appSettingsUpsert.run(key, String(value ?? ''), now, updatedByUserId || null);
+    });
+  })();
+  return refreshRuntimeSettings();
+}
+
+function buildAdminStatusCards() {
+  const googleReady = isGoogleAuthConfigured();
+  const whatsappReady = !!(getSettingText('EVOLUTION_API_URL') && getSettingText('EVOLUTION_API_KEY') && getSettingText('EVOLUTION_INSTANCE_NAME'));
+  const pushReady = isPushConfigured();
+  const timeoutMinutes = getSettingInt('INACTIVITY_TIMEOUT_MINUTES', 0);
+  const duePushEnabled = getSettingBoolean('CARD_DUE_PUSH_ENABLED', true);
+
+  return [
+    {
+      key: 'google',
+      title: 'Login Google',
+      tone: googleReady ? 'success' : 'muted',
+      status: googleReady ? 'Prontinho' : 'Falta tempero',
+      text: googleReady
+        ? 'As chaves do Google estão no lugar e a porta de entrada está liberada.'
+        : 'Ainda faltam dados do OAuth para esse login trabalhar bonito.'
+    },
+    {
+      key: 'whatsapp',
+      title: 'WhatsApp automático',
+      tone: whatsappReady ? 'success' : 'muted',
+      status: whatsappReady ? 'No jogo' : 'Descansando',
+      text: whatsappReady
+        ? 'A ponte com a Evolution está montada e pronta para mandar resumos.'
+        : 'Sem URL, key ou instância completas o WhatsApp continua no banco de reservas.'
+    },
+    {
+      key: 'push',
+      title: 'Alertas push',
+      tone: pushReady ? 'success' : 'warning',
+      status: pushReady ? (duePushEnabled ? 'Tinindo' : 'Push ok, lembrete pausado') : 'Ainda em silêncio',
+      text: pushReady
+        ? 'As chaves VAPID estão válidas e o sininho pode tocar neste navegador.'
+        : 'Faltam as chaves VAPID completas para o push acordar.'
+    },
+    {
+      key: 'session',
+      title: 'Sessão do app',
+      tone: timeoutMinutes > 0 ? 'success' : 'muted',
+      status: timeoutMinutes > 0 ? `${timeoutMinutes} min` : 'Sem timeout',
+      text: timeoutMinutes > 0
+        ? 'Quem cochila demais precisa entrar de novo depois do tempo configurado.'
+        : 'Sem tempo de inatividade: a sessão segue até o logout manual ou expiração padrão do cookie.'
+    }
+  ];
+}
+
+function buildAdminSettingsSections() {
+  return SETTING_SECTIONS.map((section) => ({
+    ...section,
+    fields: getSettingDefinitionsBySection(section.key).map((definition) => ({
+      ...definition,
+      value: getSettingValue(definition.key),
+      boolValue: getSettingBoolean(definition.key),
+      appliesLabel: definition.restartRequired ? 'Pede restart' : 'Entra na hora'
+    }))
+  }));
+}
+
+seedAppSettingsFromBootstrap();
+refreshRuntimeSettings({ restartScheduler: false });
+
+const BOOTSTRAP_SESSION_SECRET = getSettingText('SESSION_SECRET', 'chave-secreta-padrao');
+const BOOTSTRAP_PORT = getSettingInt('PORT', 3001);
 const DEFAULT_FINANCE_CATEGORIES = ['Prestação Apartamento', 'Luz', 'Internet', 'Condomínio', 'Tim'];
 
 function getUserRecord(userId) {
@@ -310,12 +576,20 @@ function ensureDefaultOwnerPerson(userId, preferredName, preferredEmail = null) 
   })();
 }
 
-function renderAdmin(res, { error = null, success = null } = {}) {
+function renderAdmin(res, { error = null, success = null, activeSection = 'access' } = {}) {
   return res.render('admin', {
     title: 'OrganizaPay | Administração',
     users: getAllUsers(),
     error,
-    success
+    success,
+    activeSection,
+    settingsSections: buildAdminSettingsSections(),
+    statusCards: buildAdminStatusCards(),
+    totalConfigItems: SETTING_DEFINITIONS.length,
+    autoReloadCount: SETTING_DEFINITIONS.filter((item) => !item.restartRequired).length,
+    restartRequiredCount: SETTING_DEFINITIONS.filter((item) => item.restartRequired).length,
+    googleConfigured: isGoogleAuthConfigured(),
+    pushConfigured: isPushConfigured()
   });
 }
 
@@ -338,7 +612,7 @@ app.use((req, res, next) => {
 // --- CONFIGURAÇÃO DE SESSÃO E AUTH ---
 app.use(session({
   store: new SQLiteStore({ db: 'sessions.sqlite', dir: './' }),
-  secret: process.env.SESSION_SECRET || 'chave-secreta-padrao',
+  secret: BOOTSTRAP_SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 } // 30 dias
@@ -383,7 +657,8 @@ function expireSessionForInactivity(req, res) {
 }
 
 app.use((req, res, next) => {
-  if (!INACTIVITY_TIMEOUT_MS || !req.isAuthenticated || !req.isAuthenticated()) {
+  const inactivityTimeoutMs = getInactivityTimeoutMs();
+  if (!inactivityTimeoutMs || !req.isAuthenticated || !req.isAuthenticated()) {
     return next();
   }
 
@@ -394,7 +669,7 @@ app.use((req, res, next) => {
   const now = Date.now();
   const lastActivityAt = Number(req.session?.lastActivityAt || 0);
 
-  if (lastActivityAt && now - lastActivityAt > INACTIVITY_TIMEOUT_MS) {
+  if (lastActivityAt && now - lastActivityAt > inactivityTimeoutMs) {
     return expireSessionForInactivity(req, res);
   }
 
@@ -404,50 +679,6 @@ app.use((req, res, next) => {
 
   return next();
 });
-
-// ===== GOOGLE OAUTH STRATEGY =====
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL || "http://localhost:3001/auth/google/callback"
-  }, (accessToken, refreshToken, profile, done) => {
-    const email = profile.emails?.[0]?.value;
-    const name = profile.displayName;
-    const googleId = profile.id;
-
-    if (!email) {
-      return done(null, false, { message: 'Email não encontrado no perfil Google.' });
-    }
-
-    // Verifica se o email está autorizado
-    const authorizedUser = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
-
-    if (!authorizedUser) {
-      return done(null, false, { message: 'Email não autorizado. Entre em contato com o administrador.' });
-    }
-
-    const isFirstGoogleLogin = !authorizedUser.last_login;
-
-    // Atualiza last_login
-    db.prepare("UPDATE users SET last_login = ? WHERE email = ?").run(dayjs().toISOString(), email);
-
-    if (isFirstGoogleLogin) {
-      ensureDefaultOwnerPerson(authorizedUser.id, name || authorizedUser.name || email.split('@')[0], email);
-    }
-
-    // Retorna o usuário
-    return done(null, {
-      id: authorizedUser.id,
-      email,
-      name: authorizedUser.name || name || email.split('@')[0],
-      role: authorizedUser.role,
-      can_import: Number(authorizedUser.can_import ?? 1)
-    });
-  }));
-} else {
-  console.warn('⚠️  Google OAuth não configurado. Verifique GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET no .env');
-}
 
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
@@ -481,6 +712,8 @@ app.get('/login', (req, res) => {
     error = 'Sua sessão expirou por inatividade. Faça login novamente.';
   } else if (String(req.query.error || '').trim().toLowerCase() === 'auth_failed') {
     error = 'Não foi possível concluir a autenticação. Tente novamente.';
+  } else if (String(req.query.error || '').trim().toLowerCase() === 'google_not_configured') {
+    error = 'O login com Google ainda não está configurado. Ajuste isso na área Admin antes de sair distribuindo logins.';
   }
 
   res.render('login_oauth', { error });
@@ -492,12 +725,24 @@ app.get(['/privacy-policy', '/politica-de-privacidade'], (req, res) => {
   });
 });
 
-app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+app.get('/auth/google', (req, res, next) => {
+  if (!isGoogleAuthConfigured()) {
+    return res.redirect('/login?error=google_not_configured');
+  }
 
-const handleGoogleCallback = passport.authenticate('google', {
-  successRedirect: '/',
-  failureRedirect: '/login?error=auth_failed'
+  return passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
 });
+
+const handleGoogleCallback = (req, res, next) => {
+  if (!isGoogleAuthConfigured()) {
+    return res.redirect('/login?error=google_not_configured');
+  }
+
+  return passport.authenticate('google', {
+    successRedirect: '/',
+    failureRedirect: '/login?error=auth_failed'
+  })(req, res, next);
+};
 
 app.get('/auth/google/callback', handleGoogleCallback);
 
@@ -539,7 +784,7 @@ app.use((req, res, next) => {
   res.locals.readNotificationCount = 0;
   res.locals.recentNotifications = [];
   res.locals.pushNotificationsEnabled = isPushConfigured();
-  res.locals.pushPublicKey = isPushConfigured() ? PUSH_PUBLIC_KEY : '';
+  res.locals.pushPublicKey = getPushPublicKey();
   const now = dayjs();
   res.locals.dashboardHref = `/detalhamento/${now.year()}/${now.month() + 1}`;
 
@@ -1762,7 +2007,7 @@ function getPeopleAll(userId) {
     const outgoingRequest = outgoingMap.get(Number(person.id || 0)) || null;
     const incomingRequest = !outgoingRequest && hasAppUser ? (incomingMap.get(linkedUserId) || null) : null;
     const friendshipActive = !!friendship;
-    const canShareCharge = FRIENDSHIP_GATE_SHARED_DEBT_ENABLED
+    const canShareCharge = isFriendshipGateEnabled()
       ? friendshipActive && isActive && !isOwner
       : hasAppUser && !!normalizeEmail(person.email) && isActive && !isOwner;
 
@@ -2058,13 +2303,15 @@ async function sendPushNotificationToUser(userId, payload) {
 
 async function runCardDueTodayPushSweep() {
   if (scheduledDuePushSweepRunning) return;
-  if (!isPushConfigured() || !CARD_DUE_PUSH_ENABLED || CARD_DUE_PUSH_MAX_SENDS_PER_DAY <= 0) return;
+
+  const pushConfig = getPushRuntimeConfig();
+  if (!isPushConfigured() || !pushConfig.duePushEnabled || pushConfig.maxSendsPerDay <= 0) return;
 
   scheduledDuePushSweepRunning = true;
 
   try {
-    const zonedNow = getZonedDateParts(CARD_DUE_PUSH_TIMEZONE);
-    const firstSendMinute = (CARD_DUE_PUSH_HOUR * 60) + CARD_DUE_PUSH_MINUTE;
+    const zonedNow = getZonedDateParts(pushConfig.timezone);
+    const firstSendMinute = (pushConfig.hour * 60) + pushConfig.minute;
     if (zonedNow.minutesOfDay < firstSendMinute) {
       return;
     }
@@ -2076,14 +2323,14 @@ async function runCardDueTodayPushSweep() {
 
       const logs = getScheduledPushLogs(userId, 'card_due_today', zonedNow.dateKey);
       const nextSequenceNo = logs.length + 1;
-      if (nextSequenceNo > CARD_DUE_PUSH_MAX_SENDS_PER_DAY) continue;
+      if (nextSequenceNo > pushConfig.maxSendsPerDay) continue;
 
       if (logs.length) {
-        if (CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES <= 0) continue;
+        if (pushConfig.repeatIntervalMinutes <= 0) continue;
 
         const lastSentAt = dayjs(logs[logs.length - 1].created_at);
         if (!lastSentAt.isValid()) continue;
-        if (dayjs().diff(lastSentAt, 'minute') < CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES) continue;
+        if (dayjs().diff(lastSentAt, 'minute') < pushConfig.repeatIntervalMinutes) continue;
       }
 
       const payload = buildDueTodayPushPayload(cardsDueToday, zonedNow, nextSequenceNo);
@@ -2106,18 +2353,7 @@ async function runCardDueTodayPushSweep() {
 }
 
 function startCardDueTodayPushScheduler() {
-  if (!isPushConfigured() || !CARD_DUE_PUSH_ENABLED || CARD_DUE_PUSH_MAX_SENDS_PER_DAY <= 0) {
-    return;
-  }
-
-  const intervalMs = Math.max(1, CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES) * 60 * 1000;
-  setTimeout(() => {
-    runCardDueTodayPushSweep().catch(err => console.error('Falha no agendamento inicial de push de vencimento:', err?.message || err));
-  }, 15000);
-
-  setInterval(() => {
-    runCardDueTodayPushSweep().catch(err => console.error('Falha no agendamento recorrente de push de vencimento:', err?.message || err));
-  }, intervalMs);
+  restartCardDueTodayPushScheduler();
 }
 
 function queuePushNotification(userId, payload) {
@@ -2314,7 +2550,7 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
   const requesterPerson = getOwnerPerson(userId);
   const requesterDisplayName = requesterPerson?.name || context?.requesterDisplayName || getUserRecord(userId)?.name || 'Um usuário';
 
-  const eligibleRows = (FRIENDSHIP_GATE_SHARED_DEBT_ENABLED
+  const eligibleRows = (isFriendshipGateEnabled()
     ? db.prepare(`
       SELECT
         a.id AS allocation_id,
@@ -6042,9 +6278,9 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
   try {
     const { personPhone, message, imageBase64 } = req.body;
 
-    const apiUrl = process.env.EVOLUTION_API_URL;
-    const apiKey = process.env.EVOLUTION_API_KEY;
-    const instance = process.env.EVOLUTION_INSTANCE_NAME;
+    const apiUrl = getSettingText('EVOLUTION_API_URL');
+    const apiKey = getSettingText('EVOLUTION_API_KEY');
+    const instance = getSettingText('EVOLUTION_INSTANCE_NAME');
 
     if (!apiUrl || !apiKey || !instance) {
       return res.status(400).json({ error: "O envio automático no WhatsApp ainda não foi configurado." });
@@ -6194,6 +6430,64 @@ app.get("/admin", ensureAuthenticated, (req, res) => {
   return renderAdmin(res);
 });
 
+app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const sectionKey = String(req.params.section || '').trim();
+  const section = getSettingSection(sectionKey);
+
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  if (!section) {
+    return renderAdmin(res, { error: 'Seção de configuração não encontrada.', activeSection: 'access' });
+  }
+
+  const definitions = getSettingDefinitionsBySection(sectionKey);
+  const previousValues = Object.fromEntries(definitions.map((definition) => [definition.key, getSettingValue(definition.key)]));
+
+  try {
+    const nextValues = {};
+
+    definitions.forEach((definition) => {
+      const rawValue = definition.input === 'switch'
+        ? (req.body[definition.key] ? '1' : '0')
+        : req.body[definition.key];
+      nextValues[definition.key] = sanitizeSettingValue(definition, rawValue);
+    });
+
+    updateAppSettings(nextValues, userId);
+
+    const changedDefinitions = definitions.filter((definition) => String(previousValues[definition.key] ?? '') !== String(nextValues[definition.key] ?? ''));
+    const liveChanges = changedDefinitions.filter((definition) => !definition.restartRequired);
+    const restartChanges = changedDefinitions.filter((definition) => definition.restartRequired);
+
+    let success = changedDefinitions.length
+      ? `${section.title} salva com sucesso.`
+      : `${section.title} conferida. Não achei nada novo para salvar.`;
+
+    if (liveChanges.length) {
+      success += ' O que dava para recarregar na hora já entrou em campo.';
+    }
+
+    if (restartChanges.length) {
+      success += ` Para ${restartChanges.map((definition) => definition.label).join(', ')} valerem, reinicie o servidor.`;
+    }
+
+    if (sectionKey === 'google' && !isGoogleAuthConfigured()) {
+      success += ' Enquanto Client ID e secret não estiverem completos, o login com Google segue de folga.';
+    }
+
+    if (sectionKey === 'push' && !isPushConfigured()) {
+      success += ' Sem o trio VAPID completo, o sininho ainda não acorda.';
+    }
+
+    return renderAdmin(res, { success, activeSection: sectionKey });
+  } catch (err) {
+    return renderAdmin(res, { error: err.message || 'Não consegui salvar essa seção agora.', activeSection: sectionKey });
+  }
+});
+
 app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const { email, name, role } = req.body;
@@ -6307,7 +6601,7 @@ app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = BOOTSTRAP_PORT || 3001;
 
 app.listen(PORT, () => {
   console.log(`✅ Rodando em http://localhost:${PORT}`);

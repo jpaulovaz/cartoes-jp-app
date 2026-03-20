@@ -89,7 +89,9 @@
 
               <div class="mt-4 flex flex-wrap gap-2">
                 <% if (rule.status === 'active') { %>
-                  <form method="post" action="/recurring/<%= rule.id %>/state">
+                  <form method="post" action="/recurring/<%= rule.id %>/state"
+                    data-confirm-prompt="Pausar a compra recorrente <%= rule.description %>? Se a compra deste mês ainda não rolou, ela sai junto com as próximas. Se já rolou, o mês atual fica guardado."
+                    data-confirm-phrase="Eu confirmo">
                     <input type="hidden" name="action" value="pause">
                     <button class="px-4 py-2 rounded-xl text-sm font-bold border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">Pausar</button>
                   </form>
@@ -102,7 +104,7 @@
 
                 <% if (rule.status !== 'ended') { %>
                   <form method="post" action="/recurring/<%= rule.id %>/state"
-                    data-confirm-prompt="Encerrar a compra recorrente <%= rule.description %>? As compras já criadas continuam no histórico, mas as próximas competências deixam de ser geradas."
+                    data-confirm-prompt="Encerrar a compra recorrente <%= rule.description %>? Se a compra deste mês ainda não rolou, ela sai junto com as próximas. O que já rolou continua no histórico."
                     data-confirm-phrase="Eu confirmo">
                     <input type="hidden" name="action" value="end">
                     <button class="px-4 py-2 rounded-xl text-sm font-bold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Encerrar</button>

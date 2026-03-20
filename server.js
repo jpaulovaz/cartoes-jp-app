@@ -1659,19 +1659,46 @@ function getRecurringPreview(rule) {
   return null;
 }
 
-function removeFutureRecurringTransactions(userId, ruleId, fromYear, fromMonth) {
+function getRecurringOccurrenceDateForMonth(rule, targetYear, targetMonth) {
+  if (!rule) return null;
+
+  const startYear = Number(rule.start_due_year || 0);
+  const startMonth = Number(rule.start_due_month || 0);
+  const year = Number(targetYear || 0);
+  const month = Number(targetMonth || 0);
+  if (!startYear || !startMonth || !year || !month) return null;
+
+  const offset = ((year - startYear) * 12) + (month - startMonth);
+  if (offset < 0) return null;
+
+  return occurrenceDateFromStart(rule.start_txn_date, offset);
+}
+
+function shouldKeepCurrentRecurringMonth(rule, referenceDate = dayjs()) {
+  const currentDate = dayjs(referenceDate);
+  const occurrenceDate = getRecurringOccurrenceDateForMonth(rule, currentDate.year(), currentDate.month() + 1);
+  if (!occurrenceDate) return false;
+
+  const occurrence = dayjs(occurrenceDate);
+  if (!occurrence.isValid()) return false;
+
+  return !currentDate.isBefore(occurrence, 'day');
+}
+
+function removeFutureRecurringTransactions(userId, ruleId, fromYear, fromMonth, { includeCurrentMonth = false } = {}) {
   const rows = db.prepare(`
-    SELECT t.id, t.import_id
+    SELECT t.id, t.import_id, t.due_month, t.due_year
     FROM transactions t
     WHERE t.user_id = ?
       AND t.recurring_rule_id = ?
-      AND (t.due_year > ? OR (t.due_year = ? AND t.due_month > ?))
-  `).all(userId, ruleId, fromYear, fromYear, fromMonth);
+      AND (
+        t.due_year > ? OR
+        (t.due_year = ? AND t.due_month > ?) OR
+        (${includeCurrentMonth ? '1' : '0'} = 1 AND t.due_year = ? AND t.due_month = ?)
+      )
+  `).all(userId, ruleId, fromYear, fromYear, fromMonth, fromYear, fromMonth);
 
-  const removable = rows.filter(row => {
-    const due = db.prepare("SELECT due_month, due_year FROM transactions WHERE id = ? AND user_id = ?").get(row.id, userId);
-    return due && !isMonthClosed(userId, due.due_month, due.due_year);
-  });
+  const removable = rows.filter(row => row && row.due_month && row.due_year && !isMonthClosed(userId, row.due_month, row.due_year));
 
   if (removable.length) {
     deleteTransactionsAndAllocations(userId, removable);
@@ -5661,10 +5688,14 @@ app.post("/recurring/:id/state", ensureAuthenticated, (req, res) => {
   const currentYear = today.year();
   const currentMonth = today.month() + 1;
 
+  const keepCurrentMonth = shouldKeepCurrentRecurringMonth(rule, today);
+
   if (action === 'pause') {
     db.prepare("UPDATE recurring_rules SET status = 'paused', updated_at = ? WHERE id = ? AND user_id = ?").run(nowIso(), ruleId, userId);
-    removeFutureRecurringTransactions(userId, ruleId, currentYear, currentMonth);
-    setFlash(req, "success", `${rule.description} foi pausado.`);
+    removeFutureRecurringTransactions(userId, ruleId, currentYear, currentMonth, { includeCurrentMonth: !keepCurrentMonth });
+    setFlash(req, "success", keepCurrentMonth
+      ? `${rule.description} foi pausado. O mês atual ficou no histórico e o restante da frente saiu de cena.`
+      : `${rule.description} foi pausado. Como a compra deste mês ainda não tinha acontecido, ela também saiu junto com o futuro.`);
   } else if (action === 'resume') {
     db.prepare(`
       UPDATE recurring_rules
@@ -5675,8 +5706,10 @@ app.post("/recurring/:id/state", ensureAuthenticated, (req, res) => {
     setFlash(req, "success", `${rule.description} foi reativado.`);
   } else if (action === 'end') {
     db.prepare("UPDATE recurring_rules SET status = 'ended', ended_at = ?, updated_at = ? WHERE id = ? AND user_id = ?").run(nowIso(), nowIso(), ruleId, userId);
-    removeFutureRecurringTransactions(userId, ruleId, currentYear, currentMonth);
-    setFlash(req, "success", `${rule.description} foi encerrado.`);
+    removeFutureRecurringTransactions(userId, ruleId, currentYear, currentMonth, { includeCurrentMonth: !keepCurrentMonth });
+    setFlash(req, "success", keepCurrentMonth
+      ? `${rule.description} foi encerrado. O que já caiu neste mês ficou guardado, e o restante da frente saiu de cena.`
+      : `${rule.description} foi encerrado. Como a compra deste mês ainda não tinha acontecido, ela também foi retirada junto com as próximas.`);
   } else {
     setFlash(req, "error", "Ação inválida para lançamento recorrente.");
   }

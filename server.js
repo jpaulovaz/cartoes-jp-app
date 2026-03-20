@@ -239,8 +239,12 @@ const appSettingsUpsert = db.prepare(`
     updated_by_user_id = excluded.updated_by_user_id
 `);
 const appSettingsSelectAll = db.prepare(`SELECT key, value, updated_at, updated_by_user_id FROM app_settings ORDER BY key ASC`);
+const appSettingsSelectValueByKey = db.prepare(`SELECT value FROM app_settings WHERE key = ? LIMIT 1`);
+const APP_SETUP_COMPLETED_KEY = 'APP_SETUP_COMPLETED';
+const GOOGLE_SETUP_KEYS = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'];
 
 let runtimeSettingsCache = {};
+let appSetupCompleted = false;
 let pushRuntimeEnabled = false;
 let googleAuthConfigured = false;
 let scheduledDuePushSweepRunning = false;
@@ -266,11 +270,38 @@ function readRuntimeSettingsFromDb() {
   return next;
 }
 
+function readSetupCompletedFlagFromDb() {
+  const row = appSettingsSelectValueByKey.get(APP_SETUP_COMPLETED_KEY);
+  return parseBooleanSetting(row?.value, false);
+}
+
+function isAppSetupCompleted() {
+  return appSetupCompleted;
+}
+
+function getUsersCount() {
+  return Number(db.prepare('SELECT COUNT(*) AS total FROM users').get()?.total || 0);
+}
+
+function isInitialSetupRequired() {
+  return !isAppSetupCompleted() && getUsersCount() === 0;
+}
+
 function getSettingValue(key) {
   const definition = getSettingDefinition(key);
-  if (Object.prototype.hasOwnProperty.call(runtimeSettingsCache, key)) {
-    return runtimeSettingsCache[key] == null ? '' : String(runtimeSettingsCache[key]);
+  const hasRuntimeValue = Object.prototype.hasOwnProperty.call(runtimeSettingsCache, key);
+  const storedValue = hasRuntimeValue
+    ? (runtimeSettingsCache[key] == null ? '' : String(runtimeSettingsCache[key]))
+    : '';
+
+  if (!isAppSetupCompleted() && definition && !String(storedValue || '').trim()) {
+    return buildSeedValue(definition);
   }
+
+  if (hasRuntimeValue) {
+    return storedValue;
+  }
+
   return definition ? buildSeedValue(definition) : '';
 }
 
@@ -447,12 +478,17 @@ function restartCardDueTodayPushScheduler() {
 
 function refreshRuntimeSettings({ restartScheduler = true } = {}) {
   runtimeSettingsCache = readRuntimeSettingsFromDb();
+  appSetupCompleted = readSetupCompletedFlagFromDb();
   applyPushRuntimeConfig();
   configureGoogleStrategy();
   if (restartScheduler) {
     restartCardDueTodayPushScheduler();
   }
   return runtimeSettingsCache;
+}
+
+function markAppSetupCompleted(value, updatedByUserId = null) {
+  appSettingsUpsert.run(APP_SETUP_COMPLETED_KEY, value ? '1' : '0', currentConfigTimestamp(), updatedByUserId || null);
 }
 
 function updateAppSettings(entries, updatedByUserId = null) {
@@ -462,6 +498,9 @@ function updateAppSettings(entries, updatedByUserId = null) {
     rows.forEach(([key, value]) => {
       appSettingsUpsert.run(key, String(value ?? ''), now, updatedByUserId || null);
     });
+    if (updatedByUserId) {
+      appSettingsUpsert.run(APP_SETUP_COMPLETED_KEY, '1', now, updatedByUserId);
+    }
   })();
   return refreshRuntimeSettings();
 }
@@ -593,6 +632,27 @@ function renderAdmin(res, { error = null, success = null, activeSection = 'acces
   });
 }
 
+function buildSetupFormSeed(overrides = {}) {
+  return {
+    admin_name: String(overrides.admin_name || '').trim(),
+    admin_email: String(overrides.admin_email || '').trim(),
+    GOOGLE_CLIENT_ID: String(overrides.GOOGLE_CLIENT_ID ?? getSettingValue('GOOGLE_CLIENT_ID') ?? '').trim(),
+    GOOGLE_CLIENT_SECRET: String(overrides.GOOGLE_CLIENT_SECRET ?? getSettingValue('GOOGLE_CLIENT_SECRET') ?? '').trim(),
+    GOOGLE_CALLBACK_URL: String(overrides.GOOGLE_CALLBACK_URL ?? getSettingValue('GOOGLE_CALLBACK_URL') ?? '').trim()
+  };
+}
+
+function renderSetup(res, { error = null, success = null, form = {} } = {}) {
+  return res.render('setup', {
+    title: 'OrganizaPay | Primeira configuração',
+    error,
+    success,
+    form: buildSetupFormSeed(form),
+    googleReady: isGoogleAuthConfigured(),
+    setupRequired: isInitialSetupRequired()
+  });
+}
+
 function setFlash(req, type, message) {
   if (!req.session) return;
   req.session.flash = { type, message };
@@ -688,12 +748,12 @@ function ensureAuthenticated(req, res, next) {
   if (req.isAuthenticated()) {
     return next();
   }
-  res.redirect('/login');
+  return res.redirect(isInitialSetupRequired() ? '/setup' : '/login');
 }
 
 function ensureCanImport(req, res, next) {
   if (!req.isAuthenticated()) {
-    return res.redirect('/login');
+    return res.redirect(isInitialSetupRequired() ? '/setup' : '/login');
   }
 
   if (Number(req.user?.can_import ?? 1) !== 0) {
@@ -704,9 +764,107 @@ function ensureCanImport(req, res, next) {
   return res.redirect(redirectBackOr(req, '/'));
 }
 
-// ===== ROTAS DE AUTH =====
+// ===== ROTAS DE AUTH E BOOTSTRAP =====
+app.get('/setup', (req, res) => {
+  if (!isInitialSetupRequired()) {
+    return res.redirect(req.isAuthenticated?.() ? '/' : '/login');
+  }
+
+  return renderSetup(res);
+});
+
+app.post('/setup', (req, res) => {
+  if (!isInitialSetupRequired()) {
+    return res.redirect('/login');
+  }
+
+  const rawForm = {
+    admin_name: String(req.body.admin_name || '').trim(),
+    admin_email: String(req.body.admin_email || '').trim(),
+    GOOGLE_CLIENT_ID: req.body.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: req.body.GOOGLE_CLIENT_SECRET,
+    GOOGLE_CALLBACK_URL: req.body.GOOGLE_CALLBACK_URL
+  };
+
+  const safeAdminEmail = normalizeEmail(rawForm.admin_email);
+  const safeAdminName = String(rawForm.admin_name || '').trim();
+
+  if (!safeAdminEmail || !safeAdminEmail.includes('@')) {
+    return renderSetup(res, {
+      error: 'Me passa um e-mail válido para o admin inaugural. É ele que vai ganhar a chave mestra do app.',
+      form: rawForm
+    });
+  }
+
+  try {
+    const nextSettings = {};
+
+    GOOGLE_SETUP_KEYS.forEach((key) => {
+      const definition = getSettingDefinition(key);
+      const sanitized = sanitizeSettingValue(definition, rawForm[key]);
+      nextSettings[key] = key === 'GOOGLE_CALLBACK_URL' && !String(sanitized || '').trim()
+        ? buildSeedValue(definition)
+        : sanitized;
+    });
+
+    if (!String(nextSettings.GOOGLE_CLIENT_ID || '').trim() || !String(nextSettings.GOOGLE_CLIENT_SECRET || '').trim()) {
+      throw new Error('Para o Google acordar bonito, preciso de Client ID e Client secret completos.');
+    }
+
+    const now = currentConfigTimestamp();
+
+    db.transaction(() => {
+      Object.entries(nextSettings).forEach(([key, value]) => {
+        appSettingsUpsert.run(key, String(value ?? ''), now, null);
+      });
+
+      const existingUser = db.prepare('SELECT id, email, name, role, can_import FROM users WHERE email = ?').get(safeAdminEmail);
+      let adminId = null;
+
+      if (existingUser) {
+        db.prepare(`
+          UPDATE users
+             SET name = ?,
+                 role = 'admin',
+                 can_import = 1
+           WHERE id = ?
+        `).run(safeAdminName || existingUser.name || safeAdminEmail.split('@')[0], existingUser.id);
+        adminId = existingUser.id;
+      } else {
+        const result = db.prepare(`
+          INSERT INTO users (email, name, role, can_import, created_at, last_login)
+          VALUES (?, ?, 'admin', 1, ?, NULL)
+        `).run(safeAdminEmail, safeAdminName || safeAdminEmail.split('@')[0], now);
+        adminId = Number(result.lastInsertRowid);
+      }
+
+      if (!adminId) {
+        throw new Error('Não consegui preparar o admin inicial agora.');
+      }
+
+      const insertCat = db.prepare('INSERT OR IGNORE INTO finance_categories (user_id, name) VALUES (?, ?)');
+      DEFAULT_FINANCE_CATEGORIES.forEach((category) => insertCat.run(adminId, category));
+
+      markAppSetupCompleted(true, adminId);
+    })();
+
+    refreshRuntimeSettings();
+    return res.redirect('/login?setup=done');
+  } catch (err) {
+    return renderSetup(res, {
+      error: err.message || 'A primeira configuração tropeçou aqui. Tenta de novo que eu arrumo a passarela.',
+      form: rawForm
+    });
+  }
+});
+
 app.get('/login', (req, res) => {
+  if (isInitialSetupRequired()) {
+    return res.redirect('/setup');
+  }
+
   let error = null;
+  let notice = null;
 
   if (String(req.query.reason || '').trim().toLowerCase() === 'idle') {
     error = 'Sua sessão expirou por inatividade. Faça login novamente.';
@@ -716,7 +874,11 @@ app.get('/login', (req, res) => {
     error = 'O login com Google ainda não está configurado. Ajuste isso na área Admin antes de sair distribuindo logins.';
   }
 
-  res.render('login_oauth', { error });
+  if (String(req.query.setup || '').trim().toLowerCase() === 'done') {
+    notice = 'Casa arrumada. Agora é só entrar com o Google do admin inaugural e seguir o baile.';
+  }
+
+  res.render('login_oauth', { error, notice });
 });
 
 app.get(['/privacy-policy', '/politica-de-privacidade'], (req, res) => {
@@ -726,6 +888,10 @@ app.get(['/privacy-policy', '/politica-de-privacidade'], (req, res) => {
 });
 
 app.get('/auth/google', (req, res, next) => {
+  if (isInitialSetupRequired()) {
+    return res.redirect('/setup');
+  }
+
   if (!isGoogleAuthConfigured()) {
     return res.redirect('/login?error=google_not_configured');
   }
@@ -734,6 +900,10 @@ app.get('/auth/google', (req, res, next) => {
 });
 
 const handleGoogleCallback = (req, res, next) => {
+  if (isInitialSetupRequired()) {
+    return res.redirect('/setup');
+  }
+
   if (!isGoogleAuthConfigured()) {
     return res.redirect('/login?error=google_not_configured');
   }
@@ -751,14 +921,18 @@ app.get('/auth/callback', handleGoogleCallback);
 
 // Compatibilidade com a rota antiga de login por POST.
 app.post('/login', (req, res) => {
-  res.redirect('/auth/google');
+  if (isInitialSetupRequired()) {
+    return res.redirect('/setup');
+  }
+
+  return res.redirect('/auth/google');
 });
 
 app.get('/logout', (req, res) => {
   req.logout((err) => {
     if (err) return res.status(500).send('Erro ao fazer logout');
     req.session.destroy(() => {
-      res.redirect('/login');
+      res.redirect(isInitialSetupRequired() ? '/setup' : '/login');
     });
   });
 });

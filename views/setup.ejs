@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title || 'OrganizaPay | Primeira configuração' %></title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#020617">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="OrganizaPay">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } } };
+    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  </script>
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body class="op-auth-page font-sans">
+  <div class="mx-auto flex min-h-screen w-full max-w-7xl items-center justify-center px-4 py-6 sm:px-6 lg:px-8">
+    <div class="op-auth-card w-full overflow-hidden rounded-[34px] border border-white/70 bg-white/95 shadow-[0_40px_120px_rgba(15,23,42,0.22)] backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+      <div class="grid xl:grid-cols-[1.1fr,0.9fr]">
+        <section class="relative overflow-hidden border-b border-slate-200/80 px-6 py-8 sm:px-8 lg:px-10 xl:border-b-0 xl:border-r dark:border-slate-700/80">
+          <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.16),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.14),transparent_36%)]"></div>
+          <div class="relative z-10">
+            <img src="/logo.png" alt="OrganizaPay" class="mb-6 w-full max-w-[250px] drop-shadow-[0_20px_28px_rgba(37,99,235,0.18)] sm:max-w-[290px]">
+
+            <div class="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200">
+              Primeira configuração
+            </div>
+
+            <h1 class="mt-5 max-w-2xl text-3xl font-black tracking-tight text-slate-900 dark:text-white sm:text-4xl">
+              Bora deixar a casa pronta para o primeiro login.
+            </h1>
+            <p class="mt-4 max-w-2xl text-sm leading-7 text-slate-600 dark:text-slate-300 sm:text-[15px]">
+              Esta etapa rápida prepara o Google e cria o admin inaugural. Depois disso, o app fecha a portinha
+              e segue trabalhando só com login Google, do jeitinho organizado que a gente gosta.
+            </p>
+
+            <div class="mt-7 grid gap-4 sm:grid-cols-2">
+              <div class="rounded-3xl border border-slate-200 bg-slate-50/90 p-5 dark:border-slate-700 dark:bg-slate-950/50">
+                <div class="text-xs font-black uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Como funciona</div>
+                <h2 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Bootstrap esperto</h2>
+                <p class="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                  Se o <code class="rounded bg-slate-100 px-1.5 py-0.5 text-[12px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">.env</code>
+                  já trouxe alguma chave, ela aparece aqui aquecida. Você confere, salva e toca o barco sem digitar tudo do zero.
+                </p>
+              </div>
+              <div class="rounded-3xl border border-slate-200 bg-slate-50/90 p-5 dark:border-slate-700 dark:bg-slate-950/50">
+                <div class="text-xs font-black uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Depois daqui</div>
+                <h2 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Central no Admin</h2>
+                <p class="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                  Google salvo, admin criado. A partir daí, o resto das chaves e ajustes mora no painel Admin,
+                  com recarga na hora sempre que der para acordar sem restart.
+                </p>
+              </div>
+            </div>
+
+            <div class="mt-7 rounded-3xl border border-emerald-200 bg-emerald-50/90 p-5 dark:border-emerald-500/25 dark:bg-emerald-500/10">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center rounded-full border border-emerald-300 bg-white px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-400/30 dark:bg-slate-900/40 dark:text-emerald-200">
+                  <%= googleReady ? 'Google já encontrou o caminho' : 'Google ainda precisa das chaves' %>
+                </span>
+                <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+                  Foco em desktop, mas sem esquecer o mobile
+                </span>
+              </div>
+              <p class="mt-3 text-sm leading-6 text-emerald-800 dark:text-emerald-100">
+                Dica amiga: use aqui o mesmo e-mail Google que vai assumir o volante do app. Assim o primeiro acesso já entra sem tropeço.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section class="px-6 py-8 sm:px-8 lg:px-10">
+          <% if (typeof error !== 'undefined' && error) { %>
+            <div class="mb-5 rounded-[24px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 dark:border-red-800 dark:bg-red-900/25 dark:text-red-200">
+              <%= error %>
+            </div>
+          <% } %>
+
+          <% if (typeof success !== 'undefined' && success) { %>
+            <div class="mb-5 rounded-[24px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-200">
+              <%= success %>
+            </div>
+          <% } %>
+
+          <form action="/setup" method="POST" class="space-y-6">
+            <div class="rounded-[30px] border border-slate-200 bg-slate-50/80 p-5 dark:border-slate-700 dark:bg-slate-950/40">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <div class="text-xs font-black uppercase tracking-[0.18em] text-blue-500 dark:text-blue-300">Passo 1</div>
+                  <h2 class="mt-2 text-xl font-black tracking-tight text-slate-900 dark:text-white">Google OAuth</h2>
+                  <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                    O trio que libera o login bonito: Client ID, secret e URL de retorno.
+                  </p>
+                </div>
+                <span class="hidden rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 sm:inline-flex">
+                  Entra na hora
+                </span>
+              </div>
+
+              <div class="mt-5 space-y-4">
+                <label class="block">
+                  <span class="mb-2 block text-sm font-black text-slate-800 dark:text-slate-100">Client ID</span>
+                  <input type="text" name="GOOGLE_CLIENT_ID" value="<%= form.GOOGLE_CLIENT_ID %>" autocomplete="off" spellcheck="false"
+                    class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/15"
+                    placeholder="1234567890-abc.apps.googleusercontent.com">
+                  <span class="mt-2 block text-xs leading-5 text-slate-500 dark:text-slate-400">Se o <code class="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-800">.env</code> já trouxe esse dado, ele aparece aqui prontinho.</span>
+                </label>
+
+                <label class="block">
+                  <span class="mb-2 block text-sm font-black text-slate-800 dark:text-slate-100">Client secret</span>
+                  <input type="password" name="GOOGLE_CLIENT_SECRET" value="<%= form.GOOGLE_CLIENT_SECRET %>" autocomplete="off" spellcheck="false"
+                    class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/15"
+                    placeholder="Cole o segredo do Google aqui">
+                </label>
+
+                <label class="block">
+                  <span class="mb-2 block text-sm font-black text-slate-800 dark:text-slate-100">URL de retorno</span>
+                  <input type="url" name="GOOGLE_CALLBACK_URL" value="<%= form.GOOGLE_CALLBACK_URL %>" autocomplete="off" spellcheck="false"
+                    class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/15"
+                    placeholder="https://seu-dominio.com/auth/google/callback">
+                  <span class="mt-2 block text-xs leading-5 text-slate-500 dark:text-slate-400">Normalmente termina em <code class="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-800">/auth/google/callback</code>.</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="rounded-[30px] border border-slate-200 bg-slate-50/80 p-5 dark:border-slate-700 dark:bg-slate-950/40">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <div class="text-xs font-black uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Passo 2</div>
+                  <h2 class="mt-2 text-xl font-black tracking-tight text-slate-900 dark:text-white">Admin inaugural</h2>
+                  <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                    Quem vai entrar primeiro, abrir a central Admin e cuidar do resto das chaves da casa.
+                  </p>
+                </div>
+                <span class="hidden rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 sm:inline-flex">
+                  Cria o acesso inicial
+                </span>
+              </div>
+
+              <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                <label class="block sm:col-span-1">
+                  <span class="mb-2 block text-sm font-black text-slate-800 dark:text-slate-100">Nome</span>
+                  <input type="text" name="admin_name" value="<%= form.admin_name %>"
+                    class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-400 dark:focus:ring-violet-500/15"
+                    placeholder="João do painel mágico">
+                  <span class="mt-2 block text-xs leading-5 text-slate-500 dark:text-slate-400">Se deixar vazio, eu puxo o apelido a partir do e-mail.</span>
+                </label>
+
+                <label class="block sm:col-span-1">
+                  <span class="mb-2 block text-sm font-black text-slate-800 dark:text-slate-100">E-mail Google do admin</span>
+                  <input type="email" name="admin_email" value="<%= form.admin_email %>" required
+                    class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-400 dark:focus:ring-violet-500/15"
+                    placeholder="voce@dominio.com">
+                  <span class="mt-2 block text-xs leading-5 text-slate-500 dark:text-slate-400">É este e-mail que vai conseguir atravessar a porta no primeiro login.</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
+              <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div class="text-sm font-black text-slate-900 dark:text-white">Salvar e fechar a fase de obra</div>
+                  <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                    Quando salvar, o app considera a casa pronta e passa a trabalhar com login Google como porta oficial.
+                  </p>
+                </div>
+                <button type="submit"
+                  class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-blue-600 via-sky-500 to-violet-500 px-6 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-600/30">
+                  Salvar e abrir o tapete azul
+                </button>
+              </div>
+            </div>
+          </form>
+        </section>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

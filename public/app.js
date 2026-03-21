@@ -515,6 +515,19 @@
     });
   }
 
+  window.OPMoneyMask = {
+    bind: bindMoneyMask,
+    toCents(value) {
+      const digits = extractMoneyDigits(value);
+      return digits ? Number(digits) : 0;
+    },
+    formatFromCents(cents) {
+      const numeric = Number(cents);
+      if (!Number.isFinite(numeric)) return '';
+      return formatMoneyDigits(String(Math.max(0, Math.round(numeric))));
+    }
+  };
+
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-money-mask]').forEach(bindMoneyMask);
   });
@@ -1587,5 +1600,157 @@
     document.addEventListener('DOMContentLoaded', bindSubmitLoadingStates);
   } else {
     bindSubmitLoadingStates();
+  }
+})();
+
+(function () {
+  const LAST_VISIT_STORAGE_KEY = 'organizapay:last-visit';
+  const STATUS_STYLE_ID = 'organizapay-network-pill-style';
+
+  function rememberLastVisit() {
+    if (window.location.pathname === '/offline.html') return;
+
+    const payload = {
+      title: document.title || 'OrganizaPay',
+      path: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+      timestamp: new Date().toISOString()
+    };
+
+    try {
+      localStorage.setItem(LAST_VISIT_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+      // Sem drama: se o navegador bloquear storage, o app segue o baile.
+    }
+  }
+
+  function initLastVisitMemory() {
+    rememberLastVisit();
+    window.addEventListener('pageshow', rememberLastVisit);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        rememberLastVisit();
+      }
+    });
+  }
+
+  function injectStatusStyles() {
+    if (document.getElementById(STATUS_STYLE_ID)) return;
+
+    const style = document.createElement('style');
+    style.id = STATUS_STYLE_ID;
+    style.textContent = `
+      .op-network-pill {
+        position: fixed;
+        left: 50%;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 5.75rem);
+        transform: translate(-50%, 1rem);
+        z-index: 70;
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        min-width: min(92vw, 320px);
+        max-width: min(92vw, 420px);
+        padding: 0.9rem 1rem;
+        border-radius: 999px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        background: rgba(15, 23, 42, 0.94);
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.24);
+        color: #f8fafc;
+        font-size: 0.92rem;
+        line-height: 1.3;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 180ms ease, transform 180ms ease;
+      }
+
+      .op-network-pill--visible {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+
+      .op-network-pill__dot {
+        flex: 0 0 auto;
+        width: 0.7rem;
+        height: 0.7rem;
+        border-radius: 999px;
+        background: #f59e0b;
+        box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.14);
+      }
+
+      .op-network-pill[data-state="online"] .op-network-pill__dot {
+        background: #22c55e;
+        box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.14);
+      }
+
+      @media (min-width: 768px) {
+        .op-network-pill {
+          bottom: 1.5rem;
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function createStatusPill() {
+    injectStatusStyles();
+
+    const pill = document.createElement('div');
+    pill.className = 'op-network-pill';
+    pill.setAttribute('role', 'status');
+    pill.setAttribute('aria-live', 'polite');
+    pill.innerHTML = '<span class="op-network-pill__dot" aria-hidden="true"></span><span data-network-pill-message></span>';
+    document.body.appendChild(pill);
+    return pill;
+  }
+
+  function initConnectivityFeedback() {
+    if (window.location.pathname === '/offline.html') return;
+
+    const pill = createStatusPill();
+    const messageNode = pill.querySelector('[data-network-pill-message]');
+    let hideTimer = null;
+    let hasShownOffline = false;
+
+    function show(message, state, autoHideMs) {
+      if (!(messageNode instanceof HTMLElement)) return;
+      window.clearTimeout(hideTimer);
+      pill.dataset.state = state;
+      messageNode.textContent = message;
+      pill.classList.add('op-network-pill--visible');
+
+      if (autoHideMs) {
+        hideTimer = window.setTimeout(() => {
+          pill.classList.remove('op-network-pill--visible');
+        }, autoHideMs);
+      }
+    }
+
+    function handleOffline() {
+      hasShownOffline = true;
+      show('Sem internet. Entramos no modo sobrevivência até a conexão voltar.', 'offline');
+    }
+
+    function handleOnline() {
+      if (!hasShownOffline) return;
+      show('Conexão de volta. Bora continuar de onde parou.', 'online', 2600);
+    }
+
+    if (!navigator.onLine) {
+      handleOffline();
+    }
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      initLastVisitMemory();
+      initConnectivityFeedback();
+    });
+  } else {
+    initLastVisitMemory();
+    initConnectivityFeedback();
   }
 })();

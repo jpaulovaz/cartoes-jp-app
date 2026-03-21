@@ -1,9 +1,16 @@
 require('dotenv').config(); // Carrega as variáveis do .env
 const path = require("path");
+const fs = require("fs");
+const fsp = fs.promises;
+const os = require("os");
+const crypto = require('crypto');
 const express = require("express");
 const multer = require("multer");
 const axios = require('axios');
 const dayjs = require("dayjs");
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
+const BetterSqlite3 = require('better-sqlite3');
 
 let webPush = null;
 try {
@@ -12,12 +19,48 @@ try {
   webPush = null;
 }
 
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
 // Novas dependências para Auth
 const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const SQLiteStore = require('connect-sqlite3')(session);
 const db = require("./src/db");
+const {
+  BACKUP_FILE_PREFIX,
+  BACKUP_MANIFEST_FILENAME,
+  BACKUP_SIGNATURE,
+  DEFAULT_PRIMARY_BACKUP_DIR,
+  DEFAULT_SECONDARY_BACKUP_DIR,
+  backupStatusTone,
+  copyFileIfExists,
+  createTempWorkspace,
+  createZipFromDirectory,
+  ensureDir,
+  extractZip,
+  formatBytes,
+  hashFileSha256,
+  listZipEntries,
+  pruneBackupDirectory,
+  resolveConfiguredDirectory,
+  toDisplayPath,
+  triggerLabel,
+  validateZipEntries
+} = require("./src/backupEngine");
+const {
+  SETTING_SECTIONS,
+  SETTING_DEFINITIONS,
+  getSettingDefinition,
+  getSettingDefinitionsBySection,
+  getSettingSection,
+  getSectionTitle,
+  buildSeedValue,
+  parseBooleanSetting,
+  parseIntegerSetting,
+  sanitizeSettingValue
+} = require("./src/appConfig");
 
 // --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
 require('./scripts/migrate.js');
@@ -210,60 +253,1347 @@ const { computeDueDate } = require("./src/dueDate");
 const EFFECTIVE_DUE_MONTH_SQL = "COALESCE(t.due_month, i.month)";
 const EFFECTIVE_DUE_YEAR_SQL = "COALESCE(t.due_year, i.year)";
 
+function normalizeAllocationPersonIds(rawPersonIds, validPeople) {
+  let personIds = rawPersonIds || [];
+  if (!Array.isArray(personIds)) personIds = [personIds];
+  return Array.from(new Set(personIds.map(Number).filter(pid => validPeople.has(pid))));
+}
+
+function buildEqualShareMap(totalCents, personIds) {
+  const normalizedIds = Array.from(new Set((personIds || []).map(Number).filter(Boolean)));
+  const shareMap = {};
+  if (!normalizedIds.length) return shareMap;
+
+  const numericTotal = Number(totalCents || 0);
+  const share = Math.floor(numericTotal / normalizedIds.length);
+  const remainder = numericTotal - (share * normalizedIds.length);
+
+  normalizedIds.forEach((pid, idx) => {
+    const extra = idx < Math.abs(remainder) ? Math.sign(remainder) : 0;
+    shareMap[pid] = share + extra;
+  });
+
+  return shareMap;
+}
+
+function inferAllocationMode(totalCents, allocationRows) {
+  const rows = Array.isArray(allocationRows) ? allocationRows : [];
+  const personIds = rows.map(row => Number(row.person_id || row.id || 0)).filter(Boolean);
+  if (personIds.length <= 1) return 'equal';
+
+  const actualValues = rows
+    .map(row => Number(row.share_cents || 0))
+    .sort((a, b) => a - b);
+  const expectedValues = personIds
+    .map(pid => Number(buildEqualShareMap(totalCents, personIds)[pid] || 0))
+    .sort((a, b) => a - b);
+
+  if (actualValues.length !== expectedValues.length) return 'exact';
+  return actualValues.every((value, index) => value === expectedValues[index]) ? 'equal' : 'exact';
+}
+
+function normalizeShareAmountInput(rawValue) {
+  if (rawValue === null || rawValue === undefined) return null;
+  if (typeof rawValue === 'number' && Number.isFinite(rawValue)) return Math.round(rawValue);
+
+  const stringValue = String(rawValue).trim();
+  if (!stringValue) return null;
+  if (/^-?\d+$/.test(stringValue)) return Number(stringValue);
+
+  const digits = stringValue.replace(/\D/g, '');
+  if (!digits) return null;
+  return Number(digits);
+}
+
+function parseAllocationPlan({
+  rawPersonIds,
+  validPeople,
+  rawSplitMode,
+  rawShareAmounts,
+  targetRows,
+  requireSplitModeSelection = false
+}) {
+  const personIds = normalizeAllocationPersonIds(rawPersonIds, validPeople);
+  if (!personIds.length) {
+    return { personIds: [], splitMode: 'equal', shareMapsByTxnId: new Map() };
+  }
+
+  const rows = Array.isArray(targetRows) ? targetRows : [];
+  const requestedMode = String(rawSplitMode || '').trim().toLowerCase();
+  const mustChooseSplitMode = !!requireSplitModeSelection && personIds.length > 1;
+
+  if (mustChooseSplitMode && requestedMode !== 'equal' && requestedMode !== 'exact') {
+    throw new Error('Escolha como a compra será dividida antes de salvar.');
+  }
+
+  const splitMode = personIds.length > 1 && requestedMode === 'exact' ? 'exact' : 'equal';
+
+  if (splitMode !== 'exact') {
+    const shareMapsByTxnId = new Map();
+    rows.forEach((targetTxn) => {
+      shareMapsByTxnId.set(Number(targetTxn.id), buildEqualShareMap(Number(targetTxn.amount_cents || 0), personIds));
+    });
+    return { personIds, splitMode: 'equal', shareMapsByTxnId };
+  }
+
+  const baseAmount = Number(rows[0]?.amount_cents || 0);
+  if (baseAmount < 0) {
+    throw new Error('Valor definido ainda não está disponível para lançamentos negativos. Aqui, siga em partes iguais.');
+  }
+  const differentAmountRow = rows.find(row => Number(row.amount_cents || 0) !== baseAmount);
+  if (differentAmountRow) {
+    throw new Error('O valor definido só funciona quando todas as compras escolhidas têm o mesmo valor. Use partes iguais ou aplique em uma compra por vez.');
+  }
+
+  const shareSource = rawShareAmounts && typeof rawShareAmounts === 'object' ? rawShareAmounts : {};
+  const shareMap = {};
+
+  for (const personId of personIds) {
+    const rawValue = Object.prototype.hasOwnProperty.call(shareSource, personId)
+      ? shareSource[personId]
+      : shareSource[String(personId)];
+    const cents = normalizeShareAmountInput(rawValue);
+    if (cents === null || !Number.isFinite(cents) || cents < 0) {
+      throw new Error('Revise os valores definidos. Cada pessoa marcada precisa ter um valor válido.');
+    }
+    shareMap[personId] = cents;
+  }
+
+  const totalDefined = personIds.reduce((sum, personId) => sum + Number(shareMap[personId] || 0), 0);
+  if (totalDefined !== baseAmount) {
+    const diff = Math.abs(baseAmount - totalDefined);
+    const diffLabel = formatBRLFromCents(diff);
+    if (totalDefined < baseAmount) {
+      throw new Error(`Ainda falta ${diffLabel} para fechar o total da compra.`);
+    }
+    throw new Error(`Passou ${diffLabel} do total da compra. Dá uma aparada e tenta de novo.`);
+  }
+
+  const shareMapsByTxnId = new Map();
+  rows.forEach((targetTxn) => {
+    shareMapsByTxnId.set(Number(targetTxn.id), { ...shareMap });
+  });
+
+  return { personIds, splitMode: 'exact', shareMapsByTxnId };
+}
+
+function replaceAllocationsForTransactions(userId, targetRows, allocationPlan) {
+  const del = db.prepare("DELETE FROM allocations WHERE transaction_id = ? AND user_id = ?");
+  const ins = db.prepare("INSERT INTO allocations(user_id, transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?, ?)");
+
+  db.transaction(() => {
+    (targetRows || []).forEach((targetTxn) => {
+      clearSharedDebtAllocationLinksForTransaction(userId, targetTxn.id);
+      del.run(targetTxn.id, userId);
+
+      const shareMap = allocationPlan.shareMapsByTxnId.get(Number(targetTxn.id)) || {};
+      (allocationPlan.personIds || []).forEach((personId) => {
+        ins.run(userId, targetTxn.id, personId, Number(shareMap[personId] || 0), nowIso());
+      });
+    });
+  })();
+}
+
+
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS backup_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    backup_name TEXT NOT NULL,
+    trigger_kind TEXT NOT NULL DEFAULT 'manual',
+    status TEXT NOT NULL DEFAULT 'success',
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    local_primary_path TEXT,
+    local_secondary_path TEXT,
+    google_file_id TEXT,
+    google_view_link TEXT,
+    google_folder_id TEXT,
+    manifest_json TEXT,
+    message TEXT,
+    created_by_user_id INTEGER,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+  )
+`).run();
+
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS backup_restores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    backup_name TEXT,
+    uploaded_filename TEXT,
+    status TEXT NOT NULL DEFAULT 'success',
+    message TEXT,
+    safety_backup_run_id INTEGER,
+    restored_by_user_id INTEGER,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    FOREIGN KEY (safety_backup_run_id) REFERENCES backup_runs(id),
+    FOREIGN KEY (restored_by_user_id) REFERENCES users(id)
+  )
+`).run();
+
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_backup_runs_started_at ON backup_runs(started_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_backup_restores_started_at ON backup_restores(started_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
+const backupRestoreUpload = multer({
+  dest: path.join(os.tmpdir(), 'organizapay-restore-uploads'),
+  limits: { fileSize: 250 * 1024 * 1024 }
+});
 
-const PUSH_PUBLIC_KEY = String(process.env.VAPID_PUBLIC_KEY || '').trim();
-const PUSH_PRIVATE_KEY = String(process.env.VAPID_PRIVATE_KEY || '').trim();
-const PUSH_SUBJECT = String(process.env.VAPID_SUBJECT || 'mailto:no-reply@organizapay.local').trim();
-const INACTIVITY_TIMEOUT_MINUTES = Number(String(process.env.INACTIVITY_TIMEOUT_MINUTES || '0').trim().replace(',', '.')) || 0;
-const INACTIVITY_TIMEOUT_MS = INACTIVITY_TIMEOUT_MINUTES > 0 ? Math.round(INACTIVITY_TIMEOUT_MINUTES * 60 * 1000) : 0;
+const currentConfigTimestamp = () => dayjs().toISOString();
+const appSettingsInsertIfMissing = db.prepare(`
+  INSERT OR IGNORE INTO app_settings (key, value, updated_at, updated_by_user_id)
+  VALUES (?, ?, ?, NULL)
+`);
+const appSettingsUpsert = db.prepare(`
+  INSERT INTO app_settings (key, value, updated_at, updated_by_user_id)
+  VALUES (?, ?, ?, ?)
+  ON CONFLICT(key) DO UPDATE SET
+    value = excluded.value,
+    updated_at = excluded.updated_at,
+    updated_by_user_id = excluded.updated_by_user_id
+`);
+const appSettingsSelectAll = db.prepare(`SELECT key, value, updated_at, updated_by_user_id FROM app_settings ORDER BY key ASC`);
+const appSettingsSelectValueByKey = db.prepare(`SELECT value FROM app_settings WHERE key = ? LIMIT 1`);
+const appSettingsDeleteByKey = db.prepare(`DELETE FROM app_settings WHERE key = ?`);
+const APP_SETUP_COMPLETED_KEY = 'APP_SETUP_COMPLETED';
+const GOOGLE_SETUP_KEYS = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'];
+const BACKUP_GOOGLE_REFRESH_TOKEN_KEY = 'BACKUP_GOOGLE_REFRESH_TOKEN';
+const BACKUP_GOOGLE_CONNECTED_EMAIL_KEY = 'BACKUP_GOOGLE_CONNECTED_EMAIL';
+const BACKUP_GOOGLE_CONNECTED_AT_KEY = 'BACKUP_GOOGLE_CONNECTED_AT';
+const BACKUP_GOOGLE_FOLDER_ID_KEY = 'BACKUP_GOOGLE_FOLDER_ID';
+const BACKUP_GOOGLE_SCOPE_KEY = 'BACKUP_GOOGLE_SCOPE';
+const BACKUP_GOOGLE_FOLDER_NAME_META_KEY = 'BACKUP_GOOGLE_FOLDER_NAME_META';
 
-function parseEnvBoolean(value, fallback = false) {
-  if (value == null || value === '') return fallback;
-  const normalized = String(value).trim().toLowerCase();
-  if (['1', 'true', 'yes', 'y', 'on', 'sim', 's'].includes(normalized)) return true;
-  if (['0', 'false', 'no', 'n', 'off', 'nao', 'não'].includes(normalized)) return false;
-  return fallback;
-}
+const backupRunsInsert = db.prepare(`
+  INSERT INTO backup_runs (
+    backup_name, trigger_kind, status, size_bytes, local_primary_path, local_secondary_path,
+    google_file_id, google_view_link, google_folder_id, manifest_json, message, created_by_user_id, started_at, finished_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const backupRunsSelectRecent = db.prepare(`SELECT * FROM backup_runs ORDER BY started_at DESC LIMIT ?`);
+const backupRunsSelectById = db.prepare(`SELECT * FROM backup_runs WHERE id = ? LIMIT 1`);
+const backupRestoresInsert = db.prepare(`
+  INSERT INTO backup_restores (backup_name, uploaded_filename, status, message, safety_backup_run_id, restored_by_user_id, started_at, finished_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const backupRestoresSelectRecent = db.prepare(`SELECT * FROM backup_restores ORDER BY started_at DESC LIMIT ?`);
 
-function parseEnvInt(value, fallback, { min = null, max = null } = {}) {
-  const parsed = Number(String(value ?? '').trim().replace(',', '.'));
-  if (!Number.isFinite(parsed)) return fallback;
-
-  let result = Math.trunc(parsed);
-  if (min != null && result < min) result = min;
-  if (max != null && result > max) result = max;
-  return result;
-}
-
-const CARD_DUE_PUSH_ENABLED = parseEnvBoolean(process.env.CARD_DUE_PUSH_ENABLED, true);
-const CARD_DUE_PUSH_TIMEZONE = String(process.env.CARD_DUE_PUSH_TIMEZONE || 'America/Sao_Paulo').trim() || 'America/Sao_Paulo';
-const CARD_DUE_PUSH_HOUR = parseEnvInt(process.env.CARD_DUE_PUSH_HOUR, 10, { min: 0, max: 23 });
-const CARD_DUE_PUSH_MINUTE = parseEnvInt(process.env.CARD_DUE_PUSH_MINUTE, 0, { min: 0, max: 59 });
-const CARD_DUE_PUSH_MAX_SENDS_PER_DAY = parseEnvInt(process.env.CARD_DUE_PUSH_MAX_SENDS_PER_DAY, 1, { min: 0, max: 5 });
-const CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES = parseEnvInt(process.env.CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES, 0, { min: 0, max: 1440 });
-const CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES = parseEnvInt(process.env.CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES, 10, { min: 1, max: 120 });
-const FRIENDSHIP_GATE_SHARED_DEBT_ENABLED = parseEnvBoolean(process.env.FRIENDSHIP_GATE_SHARED_DEBT_ENABLED, true);
+let runtimeSettingsCache = {};
+let appSetupCompleted = false;
 let pushRuntimeEnabled = false;
+let googleAuthConfigured = false;
 let scheduledDuePushSweepRunning = false;
+let duePushSchedulerInitialHandle = null;
+let duePushSchedulerIntervalHandle = null;
+let backupSchedulerHandle = null;
+let backupSchedulerNextRunAt = null;
+let backupJobRunning = false;
+let backupRestoreRunning = false;
+
+function seedAppSettingsFromBootstrap() {
+  const now = currentConfigTimestamp();
+  SETTING_DEFINITIONS.forEach((definition) => {
+    appSettingsInsertIfMissing.run(definition.key, buildSeedValue(definition), now);
+  });
+}
+
+function readRuntimeSettingsFromDb() {
+  const rows = appSettingsSelectAll.all();
+  const stored = new Map(rows.map((row) => [row.key, row.value == null ? '' : String(row.value)]));
+  const next = {};
+  SETTING_DEFINITIONS.forEach((definition) => {
+    next[definition.key] = stored.has(definition.key)
+      ? stored.get(definition.key)
+      : buildSeedValue(definition);
+  });
+  return next;
+}
+
+function readSetupCompletedFlagFromDb() {
+  const row = appSettingsSelectValueByKey.get(APP_SETUP_COMPLETED_KEY);
+  return parseBooleanSetting(row?.value, false);
+}
+
+function isAppSetupCompleted() {
+  return appSetupCompleted;
+}
+
+function getUsersCount() {
+  return Number(db.prepare('SELECT COUNT(*) AS total FROM users').get()?.total || 0);
+}
+
+function isInitialSetupRequired() {
+  return !isAppSetupCompleted() && getUsersCount() === 0;
+}
+
+function getSettingValue(key) {
+  const definition = getSettingDefinition(key);
+  const hasRuntimeValue = Object.prototype.hasOwnProperty.call(runtimeSettingsCache, key);
+  const storedValue = hasRuntimeValue
+    ? (runtimeSettingsCache[key] == null ? '' : String(runtimeSettingsCache[key]))
+    : '';
+
+  if (!isAppSetupCompleted() && definition && !String(storedValue || '').trim()) {
+    return buildSeedValue(definition);
+  }
+
+  if (hasRuntimeValue) {
+    return storedValue;
+  }
+
+  return definition ? buildSeedValue(definition) : '';
+}
+
+function getSettingText(key, fallback = '') {
+  const value = String(getSettingValue(key) || '').trim();
+  return value || fallback;
+}
+
+function getSettingBoolean(key, fallback = false) {
+  const definition = getSettingDefinition(key);
+  return parseBooleanSetting(
+    getSettingValue(key),
+    definition ? parseBooleanSetting(definition.defaultValue, fallback) : fallback
+  );
+}
+
+function getSettingInt(key, fallback = 0) {
+  const definition = getSettingDefinition(key);
+  return parseIntegerSetting(
+    getSettingValue(key),
+    definition ? parseIntegerSetting(definition.defaultValue, fallback, {
+      min: definition.min ?? null,
+      max: definition.max ?? null
+    }) : fallback,
+    {
+      min: definition?.min ?? null,
+      max: definition?.max ?? null
+    }
+  );
+}
+
+function getInternalSettingValue(key, fallback = '') {
+  const row = appSettingsSelectValueByKey.get(key);
+  const value = row?.value == null ? '' : String(row.value);
+  return value || fallback;
+}
+
+function setInternalSettings(entries, updatedByUserId = null) {
+  const now = currentConfigTimestamp();
+  db.transaction(() => {
+    Object.entries(entries || {}).forEach(([key, value]) => {
+      appSettingsUpsert.run(key, String(value ?? ''), now, updatedByUserId || null);
+    });
+  })();
+}
+
+function clearInternalSettings(keys, updatedByUserId = null) {
+  const now = currentConfigTimestamp();
+  db.transaction(() => {
+    (keys || []).forEach((key) => {
+      appSettingsDeleteByKey.run(key);
+    });
+    if (updatedByUserId) {
+      appSettingsUpsert.run(APP_SETUP_COMPLETED_KEY, '1', now, updatedByUserId);
+    }
+  })();
+}
+
+function getPushRuntimeConfig() {
+  return {
+    publicKey: getSettingText('VAPID_PUBLIC_KEY'),
+    privateKey: getSettingText('VAPID_PRIVATE_KEY'),
+    subject: getSettingText('VAPID_SUBJECT', 'mailto:no-reply@organizapay.local'),
+    duePushEnabled: getSettingBoolean('CARD_DUE_PUSH_ENABLED', true),
+    timezone: getSettingText('CARD_DUE_PUSH_TIMEZONE', 'America/Sao_Paulo') || 'America/Sao_Paulo',
+    hour: getSettingInt('CARD_DUE_PUSH_HOUR', 10),
+    minute: getSettingInt('CARD_DUE_PUSH_MINUTE', 0),
+    maxSendsPerDay: getSettingInt('CARD_DUE_PUSH_MAX_SENDS_PER_DAY', 1),
+    repeatIntervalMinutes: getSettingInt('CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES', 0),
+    checkIntervalMinutes: getSettingInt('CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES', 10)
+  };
+}
+
+function getInactivityTimeoutMs() {
+  const minutes = getSettingInt('INACTIVITY_TIMEOUT_MINUTES', 0);
+  return minutes > 0 ? Math.round(minutes * 60 * 1000) : 0;
+}
+
+function isFriendshipGateEnabled() {
+  return getSettingBoolean('FRIENDSHIP_GATE_SHARED_DEBT_ENABLED', true);
+}
 
 function isPushConfigured() {
   return pushRuntimeEnabled;
 }
 
-if (webPush && PUSH_PUBLIC_KEY && PUSH_PRIVATE_KEY) {
-  try {
-    webPush.setVapidDetails(PUSH_SUBJECT, PUSH_PUBLIC_KEY, PUSH_PRIVATE_KEY);
-    pushRuntimeEnabled = true;
-  } catch (err) {
-    pushRuntimeEnabled = false;
-    console.warn('⚠️  Push Web configurado de forma inválida. Verifique VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY e VAPID_SUBJECT.');
-  }
-} else if (PUSH_PUBLIC_KEY || PUSH_PRIVATE_KEY) {
-  console.warn('⚠️  Push Web desativado: faltam dependência web-push ou variáveis VAPID completas.');
+function getPushPublicKey() {
+  return isPushConfigured() ? getSettingText('VAPID_PUBLIC_KEY') : '';
 }
 
+function applyPushRuntimeConfig() {
+  const config = getPushRuntimeConfig();
+  pushRuntimeEnabled = false;
+
+  if (!webPush) {
+    return false;
+  }
+
+  if (config.publicKey && config.privateKey) {
+    try {
+      webPush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
+      pushRuntimeEnabled = true;
+    } catch (err) {
+      pushRuntimeEnabled = false;
+      console.warn('⚠️  Push Web configurado de forma inválida. Verifique VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY e VAPID_SUBJECT.');
+    }
+  } else if (config.publicKey || config.privateKey) {
+    console.warn('⚠️  Push Web desativado: faltam dependência web-push ou variáveis VAPID completas.');
+  }
+
+  return pushRuntimeEnabled;
+}
+
+function configureGoogleStrategy() {
+  if (typeof passport.unuse === 'function') {
+    try { passport.unuse('google'); } catch (err) { }
+  }
+
+  googleAuthConfigured = false;
+
+  const clientID = getSettingText('GOOGLE_CLIENT_ID');
+  const clientSecret = getSettingText('GOOGLE_CLIENT_SECRET');
+  const callbackURL = getSettingText('GOOGLE_CALLBACK_URL', 'http://localhost:3001/auth/google/callback');
+
+  if (!clientID || !clientSecret) {
+    console.warn('⚠️  Google OAuth não configurado. Ajuste a seção Login com Google na área Admin.');
+    return false;
+  }
+
+  passport.use(new GoogleStrategy({
+    clientID,
+    clientSecret,
+    callbackURL
+  }, (accessToken, refreshToken, profile, done) => {
+    const email = profile.emails?.[0]?.value;
+    const name = profile.displayName;
+
+    if (!email) {
+      return done(null, false, { message: 'Email não encontrado no perfil Google.' });
+    }
+
+    const authorizedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+
+    if (!authorizedUser) {
+      return done(null, false, { message: 'Email não autorizado. Entre em contato com o administrador.' });
+    }
+
+    const isFirstGoogleLogin = !authorizedUser.last_login;
+
+    db.prepare('UPDATE users SET last_login = ? WHERE email = ?').run(dayjs().toISOString(), email);
+
+    if (isFirstGoogleLogin) {
+      ensureDefaultOwnerPerson(authorizedUser.id, name || authorizedUser.name || email.split('@')[0], email);
+    }
+
+    return done(null, {
+      id: authorizedUser.id,
+      email,
+      name: authorizedUser.name || name || email.split('@')[0],
+      role: authorizedUser.role,
+      can_import: Number(authorizedUser.can_import ?? 1)
+    });
+  }));
+
+  googleAuthConfigured = true;
+  return true;
+}
+
+function isGoogleAuthConfigured() {
+  return googleAuthConfigured;
+}
+
+function getBackupRuntimeConfig() {
+  const fallbackTimeZone = 'America/Sao_Paulo';
+  const configuredTimeZone = getSettingText('BACKUP_TIMEZONE', fallbackTimeZone) || fallbackTimeZone;
+  const safeTimeZone = (() => {
+    try {
+      Intl.DateTimeFormat('pt-BR', { timeZone: configuredTimeZone }).format(new Date());
+      return configuredTimeZone;
+    } catch (error) {
+      return fallbackTimeZone;
+    }
+  })();
+
+  return {
+    enabled: getSettingBoolean('BACKUP_ENABLED', true),
+    frequency: getSettingText('BACKUP_FREQUENCY', 'daily') || 'daily',
+    timeZone: safeTimeZone,
+    hour: getSettingInt('BACKUP_HOUR', 3),
+    minute: getSettingInt('BACKUP_MINUTE', 30),
+    weekday: getSettingInt('BACKUP_WEEKDAY', 0),
+    keepCount: getSettingInt('BACKUP_KEEP_COUNT', 15),
+    localPrimaryDir: resolveConfiguredDirectory(__dirname, getSettingText('BACKUP_LOCAL_PRIMARY_DIR', DEFAULT_PRIMARY_BACKUP_DIR), DEFAULT_PRIMARY_BACKUP_DIR),
+    localSecondaryDir: resolveConfiguredDirectory(__dirname, getSettingText('BACKUP_LOCAL_SECONDARY_DIR', DEFAULT_SECONDARY_BACKUP_DIR), DEFAULT_SECONDARY_BACKUP_DIR),
+    googleEnabled: getSettingBoolean('BACKUP_GOOGLE_ENABLED', false),
+    googleFolderName: getSettingText('BACKUP_GOOGLE_FOLDER_NAME', 'OrganizaPay Backups') || 'OrganizaPay Backups',
+    googleRefreshToken: getInternalSettingValue(BACKUP_GOOGLE_REFRESH_TOKEN_KEY),
+    googleConnectedEmail: getInternalSettingValue(BACKUP_GOOGLE_CONNECTED_EMAIL_KEY),
+    googleConnectedAt: getInternalSettingValue(BACKUP_GOOGLE_CONNECTED_AT_KEY),
+    googleFolderId: getInternalSettingValue(BACKUP_GOOGLE_FOLDER_ID_KEY),
+    googleScope: getInternalSettingValue(BACKUP_GOOGLE_SCOPE_KEY),
+    googleFolderNameMeta: getInternalSettingValue(BACKUP_GOOGLE_FOLDER_NAME_META_KEY)
+  };
+}
+
+function formatAdminDateTime(dateValue, timeZone = 'America/Sao_Paulo') {
+  if (!dateValue) return '-';
+  try {
+    return dayjs(dateValue).tz(timeZone).format('DD/MM/YYYY HH:mm');
+  } catch (error) {
+    return dayjs(dateValue).format('DD/MM/YYYY HH:mm');
+  }
+}
+
+function getBackupFrequencyLabel(frequency) {
+  const labels = {
+    manual: 'Só manual',
+    hourly: 'A cada hora',
+    daily: 'Todo dia',
+    weekly: 'Toda semana'
+  };
+  return labels[String(frequency || '').trim()] || 'Manual';
+}
+
+function assertBackupDirectories(config) {
+  if (!config.localPrimaryDir || !config.localSecondaryDir) {
+    throw new Error('As duas pastas locais do backup precisam estar definidas.');
+  }
+
+  if (path.resolve(config.localPrimaryDir) === path.resolve(config.localSecondaryDir)) {
+    throw new Error('As duas pastas locais do backup precisam ser diferentes para o espelho ter graça de verdade.');
+  }
+}
+
+function getGoogleBackupRedirectUri() {
+  const callbackUrl = getSettingText('GOOGLE_CALLBACK_URL');
+  if (!callbackUrl) return '';
+
+  try {
+    const url = new URL(callbackUrl);
+    url.pathname = '/admin/backup/google/callback';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  } catch (error) {
+    return '';
+  }
+}
+
+function buildGoogleBackupAuthUrl(req) {
+  const clientId = getSettingText('GOOGLE_CLIENT_ID');
+  const clientSecret = getSettingText('GOOGLE_CLIENT_SECRET');
+  const redirectUri = getGoogleBackupRedirectUri();
+
+  if (!clientId || !clientSecret || !redirectUri) {
+    throw new Error('Antes de conectar o Google Drive, preencha Client ID, Client secret e a URL de retorno do login com Google.');
+  }
+
+  const state = crypto.randomBytes(24).toString('hex');
+  if (req.session) {
+    req.session.backupGoogleAuthState = state;
+    req.session.backupGoogleAuthCreatedAt = Date.now();
+  }
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    access_type: 'offline',
+    prompt: 'consent',
+    include_granted_scopes: 'true',
+    scope: ['openid', 'email', 'https://www.googleapis.com/auth/drive.file'].join(' '),
+    state
+  });
+
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+}
+
+async function exchangeGoogleBackupCodeForTokens(code) {
+  const clientId = getSettingText('GOOGLE_CLIENT_ID');
+  const clientSecret = getSettingText('GOOGLE_CLIENT_SECRET');
+  const redirectUri = getGoogleBackupRedirectUri();
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    code,
+    grant_type: 'authorization_code',
+    redirect_uri: redirectUri
+  });
+
+  const response = await axios.post('https://oauth2.googleapis.com/token', body.toString(), {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    timeout: 20000
+  });
+
+  return response.data || {};
+}
+
+async function refreshGoogleBackupAccessToken(refreshToken) {
+  const token = String(refreshToken || '').trim();
+  if (!token) {
+    throw new Error('Conecte uma conta Google antes de tentar enviar backup para o Drive.');
+  }
+
+  const body = new URLSearchParams({
+    client_id: getSettingText('GOOGLE_CLIENT_ID'),
+    client_secret: getSettingText('GOOGLE_CLIENT_SECRET'),
+    refresh_token: token,
+    grant_type: 'refresh_token'
+  });
+
+  const response = await axios.post('https://oauth2.googleapis.com/token', body.toString(), {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    timeout: 20000
+  });
+
+  const accessToken = String(response.data?.access_token || '').trim();
+  if (!accessToken) {
+    throw new Error('O Google não devolveu um access token para o backup agora.');
+  }
+
+  return accessToken;
+}
+
+async function fetchGoogleBackupProfile(accessToken) {
+  const response = await axios.get('https://openidconnect.googleapis.com/v1/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    timeout: 20000
+  });
+  return response.data || {};
+}
+
+async function googleDriveRequest({ method = 'GET', url, accessToken, params, data, headers = {} }) {
+  const response = await axios({
+    method,
+    url,
+    params,
+    data,
+    timeout: 45000,
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...headers
+    }
+  });
+
+  return response.data || {};
+}
+
+function escapeDriveQueryValue(value) {
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+}
+
+async function ensureGoogleBackupFolder(accessToken, config, updatedByUserId = null) {
+  const configuredFolderId = String(config.googleFolderId || '').trim();
+  if (configuredFolderId) {
+    try {
+      const folder = await googleDriveRequest({
+        url: `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(configuredFolderId)}`,
+        accessToken,
+        params: { fields: 'id,name,mimeType,webViewLink' }
+      });
+      if (folder && folder.id && folder.mimeType === 'application/vnd.google-apps.folder') {
+        if (folder.name && folder.name !== getInternalSettingValue(BACKUP_GOOGLE_FOLDER_NAME_META_KEY)) {
+          setInternalSettings({ [BACKUP_GOOGLE_FOLDER_NAME_META_KEY]: folder.name }, updatedByUserId);
+        }
+        return folder;
+      }
+    } catch (error) {
+      // Segue para busca/criação por nome.
+    }
+  }
+
+  const folderName = String(config.googleFolderName || 'OrganizaPay Backups').trim() || 'OrganizaPay Backups';
+  const found = await googleDriveRequest({
+    url: 'https://www.googleapis.com/drive/v3/files',
+    accessToken,
+    params: {
+      q: `mimeType='application/vnd.google-apps.folder' and trashed=false and name='${escapeDriveQueryValue(folderName)}'`,
+      pageSize: 1,
+      fields: 'files(id,name,mimeType,webViewLink)',
+      spaces: 'drive'
+    }
+  });
+
+  let folder = Array.isArray(found.files) ? found.files[0] : null;
+
+  if (!folder) {
+    folder = await googleDriveRequest({
+      method: 'POST',
+      url: 'https://www.googleapis.com/drive/v3/files',
+      accessToken,
+      params: { fields: 'id,name,mimeType,webViewLink' },
+      data: {
+        name: folderName,
+        mimeType: 'application/vnd.google-apps.folder'
+      },
+      headers: { 'Content-Type': 'application/json; charset=UTF-8' }
+    });
+  }
+
+  if (!folder?.id) {
+    throw new Error('Não consegui preparar a pasta do Google Drive para os backups.');
+  }
+
+  setInternalSettings({
+    [BACKUP_GOOGLE_FOLDER_ID_KEY]: folder.id,
+    [BACKUP_GOOGLE_FOLDER_NAME_META_KEY]: folder.name || folderName
+  }, updatedByUserId);
+
+  return folder;
+}
+
+async function uploadBackupZipToGoogle({ filePath, fileName, config, updatedByUserId = null }) {
+  const accessToken = await refreshGoogleBackupAccessToken(config.googleRefreshToken);
+  const folder = await ensureGoogleBackupFolder(accessToken, config, updatedByUserId);
+  const fileBuffer = await fsp.readFile(filePath);
+  const boundary = `organizapay-${crypto.randomBytes(12).toString('hex')}`;
+  const metadata = {
+    name: fileName,
+    parents: [folder.id]
+  };
+
+  const prefix = Buffer.from(
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\nContent-Type: application/zip\r\n\r\n`
+  );
+  const suffix = Buffer.from(`\r\n--${boundary}--`);
+  const payload = Buffer.concat([prefix, fileBuffer, suffix]);
+
+  const uploaded = await googleDriveRequest({
+    method: 'POST',
+    url: 'https://www.googleapis.com/upload/drive/v3/files',
+    accessToken,
+    params: {
+      uploadType: 'multipart',
+      fields: 'id,name,webViewLink,webContentLink,createdTime,size,parents'
+    },
+    data: payload,
+    headers: {
+      'Content-Type': `multipart/related; boundary=${boundary}`
+    }
+  });
+
+  return {
+    fileId: uploaded.id || '',
+    viewLink: uploaded.webViewLink || (uploaded.id ? `https://drive.google.com/file/d/${uploaded.id}/view` : ''),
+    folderId: folder.id,
+    folderName: folder.name || config.googleFolderName,
+    accessToken
+  };
+}
+
+async function pruneGoogleBackupFiles({ accessToken, folderId, keepCount }) {
+  if (!accessToken || !folderId) return;
+  const keep = Math.max(1, Number(keepCount || 1));
+  const listed = await googleDriveRequest({
+    url: 'https://www.googleapis.com/drive/v3/files',
+    accessToken,
+    params: {
+      q: `'${escapeDriveQueryValue(folderId)}' in parents and trashed=false and name contains '${BACKUP_FILE_PREFIX}'`,
+      orderBy: 'createdTime desc',
+      pageSize: Math.max(keep + 10, 50),
+      fields: 'files(id,name,createdTime)'
+    }
+  });
+
+  const extras = (Array.isArray(listed.files) ? listed.files : []).slice(keep);
+  for (const file of extras) {
+    if (!file?.id) continue;
+    try {
+      await googleDriveRequest({
+        method: 'DELETE',
+        url: `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}`,
+        accessToken
+      });
+    } catch (error) {
+      console.warn('Falha ao limpar backup antigo do Google Drive:', error?.response?.data?.error?.message || error?.message || error);
+    }
+  }
+}
+
+function buildBackupFileName({ triggerKind = 'manual', timeZone = 'America/Sao_Paulo' } = {}) {
+  const stamp = dayjs().tz(timeZone).format('YYYYMMDD-HHmmss');
+  const normalizedTrigger = String(triggerKind || 'manual').replace(/[^a-z0-9_-]/gi, '-').toLowerCase();
+  return `${BACKUP_FILE_PREFIX}-${stamp}-${normalizedTrigger}.zip`;
+}
+
+async function collectBackupManifestEntries(filesRoot, backupName) {
+  const manifestFiles = [];
+
+  async function walk(relativeDir = '') {
+    const absoluteDir = path.join(filesRoot, relativeDir);
+    const entries = await fsp.readdir(absoluteDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const nextRelative = relativeDir ? path.join(relativeDir, entry.name) : entry.name;
+      const absolutePath = path.join(filesRoot, nextRelative);
+      if (entry.isDirectory()) {
+        await walk(nextRelative);
+        continue;
+      }
+      const stat = await fsp.stat(absolutePath);
+      manifestFiles.push({
+        logicalPath: nextRelative.replace(/\\/g, '/'),
+        sizeBytes: stat.size,
+        sha256: await hashFileSha256(absolutePath)
+      });
+    }
+  }
+
+  await walk();
+  manifestFiles.sort((a, b) => a.logicalPath.localeCompare(b.logicalPath));
+
+  return {
+    signature: BACKUP_SIGNATURE,
+    app: 'OrganizaPay',
+    backupName,
+    createdAt: currentConfigTimestamp(),
+    files: manifestFiles
+  };
+}
+
+async function runBackupRetention(config) {
+  await pruneBackupDirectory(config.localPrimaryDir, BACKUP_FILE_PREFIX, config.keepCount);
+  await pruneBackupDirectory(config.localSecondaryDir, BACKUP_FILE_PREFIX, config.keepCount);
+}
+
+async function createServerBackup({ triggerKind = 'manual', createdByUserId = null, messagePrefix = '' } = {}) {
+  if (backupJobRunning || backupRestoreRunning) {
+    throw new Error('Já tem uma operação de backup ou restauração rodando. Deixa essa terminar antes de chamar outra.');
+  }
+
+  backupJobRunning = true;
+  const startedAt = currentConfigTimestamp();
+  const config = getBackupRuntimeConfig();
+  let workspace = null;
+  let backupName = buildBackupFileName({ triggerKind, timeZone: config.timeZone });
+  let localPrimaryPath = '';
+  let localSecondaryPath = '';
+  let googleFileId = '';
+  let googleViewLink = '';
+  let googleFolderId = config.googleFolderId || '';
+  let sizeBytes = 0;
+  let manifestJson = '';
+  let finalStatus = 'success';
+  let finalMessage = messagePrefix ? String(messagePrefix).trim() : 'Backup criado com sucesso.';
+
+  try {
+    assertBackupDirectories(config);
+    workspace = await createTempWorkspace('organizapay-backup-');
+    const payloadRoot = path.join(workspace, 'payload');
+    const filesRoot = path.join(payloadRoot, 'files');
+    const dbSnapshotPath = path.join(filesRoot, 'data', 'app.db');
+    await ensureDir(path.dirname(dbSnapshotPath));
+    await db.backup(dbSnapshotPath);
+
+    await copyFileIfExists(path.join(__dirname, '.env'), path.join(filesRoot, '.env'));
+
+    const sessionFiles = ['sessions.sqlite', 'sessions.sqlite-shm', 'sessions.sqlite-wal'];
+    for (const fileName of sessionFiles) {
+      await copyFileIfExists(path.join(__dirname, fileName), path.join(filesRoot, fileName));
+    }
+
+    const manifest = await collectBackupManifestEntries(filesRoot, backupName);
+    manifest.triggerKind = triggerKind;
+    manifest.createdByUserId = createdByUserId || null;
+    manifestJson = JSON.stringify(manifest);
+    await fsp.writeFile(path.join(payloadRoot, BACKUP_MANIFEST_FILENAME), JSON.stringify(manifest, null, 2), 'utf8');
+
+    const zipPath = path.join(workspace, backupName);
+    await createZipFromDirectory(payloadRoot, zipPath);
+    const zipStat = await fsp.stat(zipPath);
+    sizeBytes = zipStat.size;
+
+    await ensureDir(config.localPrimaryDir);
+    await ensureDir(config.localSecondaryDir);
+
+    localPrimaryPath = path.join(config.localPrimaryDir, backupName);
+    localSecondaryPath = path.join(config.localSecondaryDir, backupName);
+
+    await fsp.copyFile(zipPath, localPrimaryPath);
+    await fsp.copyFile(zipPath, localSecondaryPath);
+    await runBackupRetention(config);
+
+    if (config.googleEnabled) {
+      if (!config.googleRefreshToken) {
+        finalStatus = 'warning';
+        finalMessage = `${finalMessage} As cópias locais foram salvas, mas o Google Drive ainda não está conectado.`.trim();
+      } else {
+        try {
+          const googleResult = await uploadBackupZipToGoogle({
+            filePath: zipPath,
+            fileName: backupName,
+            config,
+            updatedByUserId: createdByUserId
+          });
+          googleFileId = googleResult.fileId || '';
+          googleViewLink = googleResult.viewLink || '';
+          googleFolderId = googleResult.folderId || googleFolderId;
+          await pruneGoogleBackupFiles({
+            accessToken: googleResult.accessToken,
+            folderId: googleResult.folderId,
+            keepCount: config.keepCount
+          });
+        } catch (error) {
+          finalStatus = 'warning';
+          finalMessage = `${finalMessage} As cópias locais ficaram salvas, mas o envio ao Google Drive tropeçou: ${error?.response?.data?.error?.message || error?.message || error}`;
+        }
+      }
+    }
+
+    const finishedAt = currentConfigTimestamp();
+    const result = backupRunsInsert.run(
+      backupName,
+      triggerKind,
+      finalStatus,
+      sizeBytes,
+      localPrimaryPath || null,
+      localSecondaryPath || null,
+      googleFileId || null,
+      googleViewLink || null,
+      googleFolderId || null,
+      manifestJson || null,
+      finalMessage || null,
+      createdByUserId || null,
+      startedAt,
+      finishedAt
+    );
+
+    return {
+      id: Number(result.lastInsertRowid),
+      backupName,
+      status: finalStatus,
+      message: finalMessage,
+      sizeBytes,
+      localPrimaryPath,
+      localSecondaryPath,
+      googleFileId,
+      googleViewLink,
+      googleFolderId,
+      startedAt,
+      finishedAt
+    };
+  } catch (error) {
+    const finishedAt = currentConfigTimestamp();
+    const message = error?.response?.data?.error?.message || error?.message || 'Não consegui criar o backup agora.';
+    const result = backupRunsInsert.run(
+      backupName,
+      triggerKind,
+      'error',
+      sizeBytes || 0,
+      localPrimaryPath || null,
+      localSecondaryPath || null,
+      googleFileId || null,
+      googleViewLink || null,
+      googleFolderId || null,
+      manifestJson || null,
+      message,
+      createdByUserId || null,
+      startedAt,
+      finishedAt
+    );
+    const enrichedError = new Error(message);
+    enrichedError.backupRunId = Number(result.lastInsertRowid);
+    throw enrichedError;
+  } finally {
+    backupJobRunning = false;
+    if (workspace) {
+      await fsp.rm(workspace, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+}
+
+async function restoreServerBackupFromZip({ zipPath, uploadedFilename, restoredByUserId = null }) {
+  if (backupJobRunning || backupRestoreRunning) {
+    throw new Error('Tem outra operação de backup ou restauração em andamento. Vamos por partes para não tropeçar na própria extensão.');
+  }
+
+  backupRestoreRunning = true;
+  const startedAt = currentConfigTimestamp();
+  let workspace = null;
+  let backupName = null;
+  let safetyBackupRunId = null;
+
+  try {
+    workspace = await createTempWorkspace('organizapay-restore-');
+    const entries = await listZipEntries(zipPath);
+    validateZipEntries(entries);
+    await extractZip(zipPath, workspace);
+
+    const manifestPath = path.join(workspace, BACKUP_MANIFEST_FILENAME);
+    const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8'));
+    if (!manifest || manifest.signature !== BACKUP_SIGNATURE) {
+      throw new Error('O arquivo enviado não tem a assinatura oficial de backup do OrganizaPay.');
+    }
+
+    backupName = String(manifest.backupName || '').trim() || path.basename(zipPath);
+    const sourceDbPath = path.join(workspace, 'files', 'data', 'app.db');
+    const sourceDbStat = await fsp.stat(sourceDbPath).catch(() => null);
+    if (!sourceDbStat || !sourceDbStat.isFile()) {
+      throw new Error('Esse backup não trouxe a cópia do banco principal. A restauração foi cancelada.');
+    }
+
+    const safetyBackup = await createServerBackup({
+      triggerKind: 'before_restore',
+      createdByUserId: restoredByUserId,
+      messagePrefix: 'Backup de segurança criado antes da restauração.'
+    });
+    safetyBackupRunId = safetyBackup.id;
+
+    try {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch (error) {
+      // Segue o baile se o checkpoint não rolar.
+    }
+
+    const sourceDb = new BetterSqlite3(sourceDbPath, { fileMustExist: true });
+    try {
+      await sourceDb.backup(path.join(__dirname, 'data', 'app.db'));
+    } finally {
+      sourceDb.close();
+    }
+
+    const restorableFiles = ['sessions.sqlite', 'sessions.sqlite-shm', 'sessions.sqlite-wal', '.env'];
+    for (const fileName of restorableFiles) {
+      const sourcePath = path.join(workspace, 'files', fileName);
+      const targetPath = path.join(__dirname, fileName);
+      const exists = await copyFileIfExists(sourcePath, targetPath);
+      if (exists && fileName.startsWith('sessions.sqlite')) {
+        // Nada além de copiar. Sessões antigas podem precisar de restart para valerem de vez.
+      }
+    }
+
+    refreshRuntimeSettings();
+
+    const finishedAt = currentConfigTimestamp();
+    backupRestoresInsert.run(
+      backupName,
+      uploadedFilename || path.basename(zipPath),
+      'success',
+      'Backup restaurado com sucesso. O banco voltou para a foto salva no zip.',
+      safetyBackupRunId || null,
+      restoredByUserId || null,
+      startedAt,
+      finishedAt
+    );
+
+    return {
+      backupName,
+      safetyBackupRunId,
+      message: 'Backup restaurado com sucesso. O banco voltou para a foto salva no zip.'
+    };
+  } catch (error) {
+    const finishedAt = currentConfigTimestamp();
+    const message = error?.response?.data?.error?.message || error?.message || 'Não consegui restaurar o backup agora.';
+    backupRestoresInsert.run(
+      backupName || null,
+      uploadedFilename || path.basename(zipPath),
+      'error',
+      message,
+      safetyBackupRunId || null,
+      restoredByUserId || null,
+      startedAt,
+      finishedAt
+    );
+    throw new Error(message);
+  } finally {
+    backupRestoreRunning = false;
+    if (workspace) {
+      await fsp.rm(workspace, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+}
+
+function getNextBackupRunAt(config = getBackupRuntimeConfig(), fromDate = dayjs()) {
+  if (!config.enabled || !config.frequency || config.frequency === 'manual') return null;
+
+  const now = fromDate.tz(config.timeZone);
+  if (config.frequency === 'hourly') {
+    let next = now.startOf('hour').minute(config.minute).second(0).millisecond(0);
+    if (!next.isAfter(now)) next = next.add(1, 'hour');
+    return next;
+  }
+
+  if (config.frequency === 'daily') {
+    let next = now.hour(config.hour).minute(config.minute).second(0).millisecond(0);
+    if (!next.isAfter(now)) next = next.add(1, 'day');
+    return next;
+  }
+
+  if (config.frequency === 'weekly') {
+    let next = now.hour(config.hour).minute(config.minute).second(0).millisecond(0);
+    const today = next.day();
+    let daysAhead = (Number(config.weekday) - today + 7) % 7;
+    if (daysAhead === 0 && !next.isAfter(now)) daysAhead = 7;
+    next = next.add(daysAhead, 'day');
+    return next;
+  }
+
+  return null;
+}
+
+function clearBackupScheduler() {
+  if (backupSchedulerHandle) {
+    clearTimeout(backupSchedulerHandle);
+    backupSchedulerHandle = null;
+  }
+  backupSchedulerNextRunAt = null;
+}
+
+function restartBackupScheduler() {
+  clearBackupScheduler();
+
+  const config = getBackupRuntimeConfig();
+  if (!config.enabled || config.frequency === 'manual') {
+    return;
+  }
+
+  let nextRun = null;
+  try {
+    assertBackupDirectories(config);
+    nextRun = getNextBackupRunAt(config);
+  } catch (error) {
+    console.warn('Backup automático não foi agendado:', error?.message || error);
+    return;
+  }
+
+  if (!nextRun) return;
+
+  backupSchedulerNextRunAt = nextRun.toISOString();
+  const delayMs = Math.max(1000, Math.min(nextRun.diff(dayjs()), 2147483647));
+
+  backupSchedulerHandle = setTimeout(async () => {
+    try {
+      const result = await createServerBackup({ triggerKind: 'scheduled' });
+      if (result.status !== 'success') {
+        console.warn('Backup automático finalizado com aviso:', result.message);
+      }
+    } catch (error) {
+      console.error('Falha no backup automático:', error?.message || error);
+    } finally {
+      restartBackupScheduler();
+    }
+  }, delayMs);
+}
+
+function mapBackupRunForAdmin(row, timeZone) {
+  if (!row) return null;
+  return {
+    ...row,
+    triggerLabel: triggerLabel(row.trigger_kind),
+    statusTone: backupStatusTone(row.status),
+    startedAtLabel: formatAdminDateTime(row.started_at, timeZone),
+    finishedAtLabel: formatAdminDateTime(row.finished_at, timeZone),
+    sizeLabel: formatBytes(row.size_bytes),
+    localPrimaryAvailable: !!(row.local_primary_path && fs.existsSync(row.local_primary_path)),
+    localSecondaryAvailable: !!(row.local_secondary_path && fs.existsSync(row.local_secondary_path)),
+    googleAvailable: !!row.google_file_id,
+    googleViewLink: row.google_view_link || (row.google_file_id ? `https://drive.google.com/file/d/${row.google_file_id}/view` : ''),
+    message: row.message || ''
+  };
+}
+
+function buildBackupAdminState() {
+  const config = getBackupRuntimeConfig();
+  const recentRuns = backupRunsSelectRecent.all(8).map((row) => mapBackupRunForAdmin(row, config.timeZone));
+  const recentRestores = backupRestoresSelectRecent.all(6).map((row) => ({
+    ...row,
+    statusTone: backupStatusTone(row.status),
+    startedAtLabel: formatAdminDateTime(row.started_at, config.timeZone),
+    finishedAtLabel: formatAdminDateTime(row.finished_at, config.timeZone)
+  }));
+  const nextRunAt = backupSchedulerNextRunAt ? dayjs(backupSchedulerNextRunAt).tz(config.timeZone) : null;
+
+  return {
+    config,
+    googleConnected: !!config.googleRefreshToken,
+    googleReadyForAuth: !!(getSettingText('GOOGLE_CLIENT_ID') && getSettingText('GOOGLE_CLIENT_SECRET') && getGoogleBackupRedirectUri()),
+    googleRedirectUri: getGoogleBackupRedirectUri(),
+    googleEmail: config.googleConnectedEmail || '',
+    googleFolderId: config.googleFolderId || '',
+    googleFolderName: config.googleFolderNameMeta || config.googleFolderName,
+    nextRunAtIso: nextRunAt ? nextRunAt.toISOString() : '',
+    nextRunAtLabel: nextRunAt ? formatAdminDateTime(nextRunAt.toISOString(), config.timeZone) : 'Automação em folga',
+    frequencyLabel: getBackupFrequencyLabel(config.frequency),
+    localPrimaryDisplay: toDisplayPath(__dirname, config.localPrimaryDir),
+    localSecondaryDisplay: toDisplayPath(__dirname, config.localSecondaryDir),
+    keepCountLabel: `${config.keepCount} pacote(s)`,
+    recentRuns,
+    recentRestores,
+    running: backupJobRunning,
+    restoring: backupRestoreRunning,
+    guideUrl: '/admin/guide'
+  };
+}
+
+
+function clearCardDueTodayPushScheduler() {
+  if (duePushSchedulerInitialHandle) {
+    clearTimeout(duePushSchedulerInitialHandle);
+    duePushSchedulerInitialHandle = null;
+  }
+  if (duePushSchedulerIntervalHandle) {
+    clearInterval(duePushSchedulerIntervalHandle);
+    duePushSchedulerIntervalHandle = null;
+  }
+}
+
+function restartCardDueTodayPushScheduler() {
+  clearCardDueTodayPushScheduler();
+
+  const config = getPushRuntimeConfig();
+  if (!isPushConfigured() || !config.duePushEnabled || config.maxSendsPerDay <= 0) {
+    return;
+  }
+
+  const intervalMs = Math.max(1, config.checkIntervalMinutes) * 60 * 1000;
+  duePushSchedulerInitialHandle = setTimeout(() => {
+    runCardDueTodayPushSweep().catch(err => console.error('Falha no agendamento inicial de push de vencimento:', err?.message || err));
+  }, 15000);
+
+  duePushSchedulerIntervalHandle = setInterval(() => {
+    runCardDueTodayPushSweep().catch(err => console.error('Falha no agendamento recorrente de push de vencimento:', err?.message || err));
+  }, intervalMs);
+}
+
+function refreshRuntimeSettings({ restartScheduler = true } = {}) {
+  runtimeSettingsCache = readRuntimeSettingsFromDb();
+  appSetupCompleted = readSetupCompletedFlagFromDb();
+  applyPushRuntimeConfig();
+  configureGoogleStrategy();
+  if (restartScheduler) {
+    restartCardDueTodayPushScheduler();
+    restartBackupScheduler();
+  }
+  return runtimeSettingsCache;
+}
+
+function markAppSetupCompleted(value, updatedByUserId = null) {
+  appSettingsUpsert.run(APP_SETUP_COMPLETED_KEY, value ? '1' : '0', currentConfigTimestamp(), updatedByUserId || null);
+}
+
+function updateAppSettings(entries, updatedByUserId = null) {
+  const now = currentConfigTimestamp();
+  const rows = Object.entries(entries || {});
+  db.transaction(() => {
+    rows.forEach(([key, value]) => {
+      appSettingsUpsert.run(key, String(value ?? ''), now, updatedByUserId || null);
+    });
+    if (updatedByUserId) {
+      appSettingsUpsert.run(APP_SETUP_COMPLETED_KEY, '1', now, updatedByUserId);
+    }
+  })();
+  return refreshRuntimeSettings();
+}
+
+function buildAdminStatusCards() {
+  const googleReady = isGoogleAuthConfigured();
+  const whatsappReady = !!(getSettingText('EVOLUTION_API_URL') && getSettingText('EVOLUTION_API_KEY') && getSettingText('EVOLUTION_INSTANCE_NAME'));
+  const pushReady = isPushConfigured();
+  const timeoutMinutes = getSettingInt('INACTIVITY_TIMEOUT_MINUTES', 0);
+  const duePushEnabled = getSettingBoolean('CARD_DUE_PUSH_ENABLED', true);
+  const backupConfig = getBackupRuntimeConfig();
+  const lastBackup = backupRunsSelectRecent.all(1).map((row) => mapBackupRunForAdmin(row, backupConfig.timeZone))[0] || null;
+  const backupConnectedToGoogle = !!backupConfig.googleRefreshToken;
+  const backupTone = !backupConfig.enabled
+    ? 'muted'
+    : lastBackup?.status === 'error'
+      ? 'warning'
+      : 'success';
+  const backupStatus = !backupConfig.enabled
+    ? 'Manual'
+    : backupConfig.googleEnabled && !backupConnectedToGoogle
+      ? 'Local ok, Google pendente'
+      : lastBackup
+        ? (lastBackup.status === 'success' ? 'Protegido' : 'Com aviso')
+        : 'Agendado';
+  const backupText = !backupConfig.enabled
+    ? 'O cofre automático está pausado, mas o botão manual continua pronto para entrar em campo.'
+    : lastBackup
+      ? `${lastBackup.triggerLabel} em ${lastBackup.startedAtLabel}. ${lastBackup.message}`
+      : 'A rotina automática está armada e esperando a próxima janela para salvar a memória do app.';
+
+  return [
+    {
+      key: 'google',
+      title: 'Login Google',
+      tone: googleReady ? 'success' : 'muted',
+      status: googleReady ? 'Prontinho' : 'Falta tempero',
+      text: googleReady
+        ? 'As chaves do Google estão no lugar e a porta de entrada está liberada.'
+        : 'Ainda faltam dados do OAuth para esse login trabalhar bonito.'
+    },
+    {
+      key: 'whatsapp',
+      title: 'WhatsApp automático',
+      tone: whatsappReady ? 'success' : 'muted',
+      status: whatsappReady ? 'No jogo' : 'Descansando',
+      text: whatsappReady
+        ? 'A ponte com a Evolution está montada e pronta para mandar resumos.'
+        : 'Sem URL, key ou instância completas o WhatsApp continua no banco de reservas.'
+    },
+    {
+      key: 'push',
+      title: 'Alertas push',
+      tone: pushReady ? 'success' : 'warning',
+      status: pushReady ? (duePushEnabled ? 'Tinindo' : 'Push ok, lembrete pausado') : 'Ainda em silêncio',
+      text: pushReady
+        ? 'As chaves VAPID estão válidas e o sininho pode tocar neste navegador.'
+        : 'Faltam as chaves VAPID completas para o push acordar.'
+    },
+    {
+      key: 'backup',
+      title: 'Backup do servidor',
+      tone: backupTone,
+      status: backupStatus,
+      text: backupText
+    },
+    {
+      key: 'session',
+      title: 'Sessão do app',
+      tone: timeoutMinutes > 0 ? 'success' : 'muted',
+      status: timeoutMinutes > 0 ? `${timeoutMinutes} min` : 'Sem timeout',
+      text: timeoutMinutes > 0
+        ? 'Quem cochila demais precisa entrar de novo depois do tempo configurado.'
+        : 'Sem tempo de inatividade: a sessão segue até o logout manual ou expiração padrão do cookie.'
+    }
+  ];
+}
+
+function buildAdminSettingsSections() {
+  return SETTING_SECTIONS.map((section) => ({
+    ...section,
+    fields: getSettingDefinitionsBySection(section.key).map((definition) => ({
+      ...definition,
+      value: getSettingValue(definition.key),
+      boolValue: getSettingBoolean(definition.key),
+      appliesLabel: definition.restartRequired ? 'Pede restart' : 'Entra na hora'
+    }))
+  }));
+}
+
+seedAppSettingsFromBootstrap();
+refreshRuntimeSettings({ restartScheduler: false });
+
+const BOOTSTRAP_SESSION_SECRET = getSettingText('SESSION_SECRET', 'chave-secreta-padrao');
+const BOOTSTRAP_PORT = getSettingInt('PORT', 3001);
 const DEFAULT_FINANCE_CATEGORIES = ['Prestação Apartamento', 'Luz', 'Internet', 'Condomínio', 'Tim'];
 
 function getUserRecord(userId) {
@@ -310,18 +1640,58 @@ function ensureDefaultOwnerPerson(userId, preferredName, preferredEmail = null) 
   })();
 }
 
-function renderAdmin(res, { error = null, success = null } = {}) {
+function renderAdmin(res, { error = null, success = null, activeSection = 'access' } = {}) {
   return res.render('admin', {
     title: 'OrganizaPay | Administração',
     users: getAllUsers(),
     error,
-    success
+    success,
+    activeSection,
+    settingsSections: buildAdminSettingsSections(),
+    statusCards: buildAdminStatusCards(),
+    backupPanel: buildBackupAdminState(),
+    totalConfigItems: SETTING_DEFINITIONS.length,
+    autoReloadCount: SETTING_DEFINITIONS.filter((item) => !item.restartRequired).length,
+    restartRequiredCount: SETTING_DEFINITIONS.filter((item) => item.restartRequired).length,
+    googleConfigured: isGoogleAuthConfigured(),
+    pushConfigured: isPushConfigured()
+  });
+}
+
+function buildSetupFormSeed(overrides = {}) {
+  return {
+    admin_name: String(overrides.admin_name || '').trim(),
+    admin_email: String(overrides.admin_email || '').trim(),
+    GOOGLE_CLIENT_ID: String(overrides.GOOGLE_CLIENT_ID ?? getSettingValue('GOOGLE_CLIENT_ID') ?? '').trim(),
+    GOOGLE_CLIENT_SECRET: String(overrides.GOOGLE_CLIENT_SECRET ?? getSettingValue('GOOGLE_CLIENT_SECRET') ?? '').trim(),
+    GOOGLE_CALLBACK_URL: String(overrides.GOOGLE_CALLBACK_URL ?? getSettingValue('GOOGLE_CALLBACK_URL') ?? '').trim()
+  };
+}
+
+function renderSetup(res, { error = null, success = null, form = {} } = {}) {
+  return res.render('setup', {
+    title: 'OrganizaPay | Primeira configuração',
+    error,
+    success,
+    form: buildSetupFormSeed(form),
+    googleReady: isGoogleAuthConfigured(),
+    setupRequired: isInitialSetupRequired()
   });
 }
 
 function setFlash(req, type, message) {
   if (!req.session) return;
   req.session.flash = { type, message };
+}
+
+function setImportReport(req, report) {
+  if (!req.session) return;
+  req.session.importReport = report || null;
+}
+
+function setImportFormSeed(req, seed) {
+  if (!req.session) return;
+  req.session.importFormSeed = seed || null;
 }
 
 // --- MIDDLEWARES DE BODY PARSER (DEVE VIR ANTES DAS ROTAS) ---
@@ -338,7 +1708,7 @@ app.use((req, res, next) => {
 // --- CONFIGURAÇÃO DE SESSÃO E AUTH ---
 app.use(session({
   store: new SQLiteStore({ db: 'sessions.sqlite', dir: './' }),
-  secret: process.env.SESSION_SECRET || 'chave-secreta-padrao',
+  secret: BOOTSTRAP_SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 } // 30 dias
@@ -383,7 +1753,8 @@ function expireSessionForInactivity(req, res) {
 }
 
 app.use((req, res, next) => {
-  if (!INACTIVITY_TIMEOUT_MS || !req.isAuthenticated || !req.isAuthenticated()) {
+  const inactivityTimeoutMs = getInactivityTimeoutMs();
+  if (!inactivityTimeoutMs || !req.isAuthenticated || !req.isAuthenticated()) {
     return next();
   }
 
@@ -394,7 +1765,7 @@ app.use((req, res, next) => {
   const now = Date.now();
   const lastActivityAt = Number(req.session?.lastActivityAt || 0);
 
-  if (lastActivityAt && now - lastActivityAt > INACTIVITY_TIMEOUT_MS) {
+  if (lastActivityAt && now - lastActivityAt > inactivityTimeoutMs) {
     return expireSessionForInactivity(req, res);
   }
 
@@ -405,50 +1776,6 @@ app.use((req, res, next) => {
   return next();
 });
 
-// ===== GOOGLE OAUTH STRATEGY =====
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL || "http://localhost:3001/auth/google/callback"
-  }, (accessToken, refreshToken, profile, done) => {
-    const email = profile.emails?.[0]?.value;
-    const name = profile.displayName;
-    const googleId = profile.id;
-
-    if (!email) {
-      return done(null, false, { message: 'Email não encontrado no perfil Google.' });
-    }
-
-    // Verifica se o email está autorizado
-    const authorizedUser = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
-
-    if (!authorizedUser) {
-      return done(null, false, { message: 'Email não autorizado. Entre em contato com o administrador.' });
-    }
-
-    const isFirstGoogleLogin = !authorizedUser.last_login;
-
-    // Atualiza last_login
-    db.prepare("UPDATE users SET last_login = ? WHERE email = ?").run(dayjs().toISOString(), email);
-
-    if (isFirstGoogleLogin) {
-      ensureDefaultOwnerPerson(authorizedUser.id, name || authorizedUser.name || email.split('@')[0], email);
-    }
-
-    // Retorna o usuário
-    return done(null, {
-      id: authorizedUser.id,
-      email,
-      name: authorizedUser.name || name || email.split('@')[0],
-      role: authorizedUser.role,
-      can_import: Number(authorizedUser.can_import ?? 1)
-    });
-  }));
-} else {
-  console.warn('⚠️  Google OAuth não configurado. Verifique GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET no .env');
-}
-
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
 
@@ -457,12 +1784,12 @@ function ensureAuthenticated(req, res, next) {
   if (req.isAuthenticated()) {
     return next();
   }
-  res.redirect('/login');
+  return res.redirect(isInitialSetupRequired() ? '/setup' : '/login');
 }
 
 function ensureCanImport(req, res, next) {
   if (!req.isAuthenticated()) {
-    return res.redirect('/login');
+    return res.redirect(isInitialSetupRequired() ? '/setup' : '/login');
   }
 
   if (Number(req.user?.can_import ?? 1) !== 0) {
@@ -473,17 +1800,121 @@ function ensureCanImport(req, res, next) {
   return res.redirect(redirectBackOr(req, '/'));
 }
 
-// ===== ROTAS DE AUTH =====
+// ===== ROTAS DE AUTH E BOOTSTRAP =====
+app.get('/setup', (req, res) => {
+  if (!isInitialSetupRequired()) {
+    return res.redirect(req.isAuthenticated?.() ? '/' : '/login');
+  }
+
+  return renderSetup(res);
+});
+
+app.post('/setup', (req, res) => {
+  if (!isInitialSetupRequired()) {
+    return res.redirect('/login');
+  }
+
+  const rawForm = {
+    admin_name: String(req.body.admin_name || '').trim(),
+    admin_email: String(req.body.admin_email || '').trim(),
+    GOOGLE_CLIENT_ID: req.body.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: req.body.GOOGLE_CLIENT_SECRET,
+    GOOGLE_CALLBACK_URL: req.body.GOOGLE_CALLBACK_URL
+  };
+
+  const safeAdminEmail = normalizeEmail(rawForm.admin_email);
+  const safeAdminName = String(rawForm.admin_name || '').trim();
+
+  if (!safeAdminEmail || !safeAdminEmail.includes('@')) {
+    return renderSetup(res, {
+      error: 'Me passa um e-mail válido para o admin inaugural. É ele que vai ganhar a chave mestra do app.',
+      form: rawForm
+    });
+  }
+
+  try {
+    const nextSettings = {};
+
+    GOOGLE_SETUP_KEYS.forEach((key) => {
+      const definition = getSettingDefinition(key);
+      const sanitized = sanitizeSettingValue(definition, rawForm[key]);
+      nextSettings[key] = key === 'GOOGLE_CALLBACK_URL' && !String(sanitized || '').trim()
+        ? buildSeedValue(definition)
+        : sanitized;
+    });
+
+    if (!String(nextSettings.GOOGLE_CLIENT_ID || '').trim() || !String(nextSettings.GOOGLE_CLIENT_SECRET || '').trim()) {
+      throw new Error('Para o Google acordar bonito, preciso de Client ID e Client secret completos.');
+    }
+
+    const now = currentConfigTimestamp();
+
+    db.transaction(() => {
+      Object.entries(nextSettings).forEach(([key, value]) => {
+        appSettingsUpsert.run(key, String(value ?? ''), now, null);
+      });
+
+      const existingUser = db.prepare('SELECT id, email, name, role, can_import FROM users WHERE email = ?').get(safeAdminEmail);
+      let adminId = null;
+
+      if (existingUser) {
+        db.prepare(`
+          UPDATE users
+             SET name = ?,
+                 role = 'admin',
+                 can_import = 1
+           WHERE id = ?
+        `).run(safeAdminName || existingUser.name || safeAdminEmail.split('@')[0], existingUser.id);
+        adminId = existingUser.id;
+      } else {
+        const result = db.prepare(`
+          INSERT INTO users (email, name, role, can_import, created_at, last_login)
+          VALUES (?, ?, 'admin', 1, ?, NULL)
+        `).run(safeAdminEmail, safeAdminName || safeAdminEmail.split('@')[0], now);
+        adminId = Number(result.lastInsertRowid);
+      }
+
+      if (!adminId) {
+        throw new Error('Não consegui preparar o admin inicial agora.');
+      }
+
+      const insertCat = db.prepare('INSERT OR IGNORE INTO finance_categories (user_id, name) VALUES (?, ?)');
+      DEFAULT_FINANCE_CATEGORIES.forEach((category) => insertCat.run(adminId, category));
+
+      markAppSetupCompleted(true, adminId);
+    })();
+
+    refreshRuntimeSettings();
+    return res.redirect('/login?setup=done');
+  } catch (err) {
+    return renderSetup(res, {
+      error: err.message || 'A primeira configuração tropeçou aqui. Tenta de novo que eu arrumo a passarela.',
+      form: rawForm
+    });
+  }
+});
+
 app.get('/login', (req, res) => {
+  if (isInitialSetupRequired()) {
+    return res.redirect('/setup');
+  }
+
   let error = null;
+  let notice = null;
 
   if (String(req.query.reason || '').trim().toLowerCase() === 'idle') {
     error = 'Sua sessão expirou por inatividade. Faça login novamente.';
   } else if (String(req.query.error || '').trim().toLowerCase() === 'auth_failed') {
     error = 'Não foi possível concluir a autenticação. Tente novamente.';
+  } else if (String(req.query.error || '').trim().toLowerCase() === 'google_not_configured') {
+    error = 'O login com Google ainda não está configurado. Ajuste isso na área Admin antes de sair distribuindo logins.';
   }
 
-  res.render('login_oauth', { error });
+  if (String(req.query.setup || '').trim().toLowerCase() === 'done') {
+    notice = 'Casa arrumada. Agora é só entrar com o Google do admin inaugural e seguir o baile.';
+  }
+
+  res.render('login_oauth', { error, notice });
 });
 
 app.get(['/privacy-policy', '/politica-de-privacidade'], (req, res) => {
@@ -492,12 +1923,32 @@ app.get(['/privacy-policy', '/politica-de-privacidade'], (req, res) => {
   });
 });
 
-app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+app.get('/auth/google', (req, res, next) => {
+  if (isInitialSetupRequired()) {
+    return res.redirect('/setup');
+  }
 
-const handleGoogleCallback = passport.authenticate('google', {
-  successRedirect: '/',
-  failureRedirect: '/login?error=auth_failed'
+  if (!isGoogleAuthConfigured()) {
+    return res.redirect('/login?error=google_not_configured');
+  }
+
+  return passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
 });
+
+const handleGoogleCallback = (req, res, next) => {
+  if (isInitialSetupRequired()) {
+    return res.redirect('/setup');
+  }
+
+  if (!isGoogleAuthConfigured()) {
+    return res.redirect('/login?error=google_not_configured');
+  }
+
+  return passport.authenticate('google', {
+    successRedirect: '/',
+    failureRedirect: '/login?error=auth_failed'
+  })(req, res, next);
+};
 
 app.get('/auth/google/callback', handleGoogleCallback);
 
@@ -506,14 +1957,18 @@ app.get('/auth/callback', handleGoogleCallback);
 
 // Compatibilidade com a rota antiga de login por POST.
 app.post('/login', (req, res) => {
-  res.redirect('/auth/google');
+  if (isInitialSetupRequired()) {
+    return res.redirect('/setup');
+  }
+
+  return res.redirect('/auth/google');
 });
 
 app.get('/logout', (req, res) => {
   req.logout((err) => {
     if (err) return res.status(500).send('Erro ao fazer logout');
     req.session.destroy(() => {
-      res.redirect('/login');
+      res.redirect(isInitialSetupRequired() ? '/setup' : '/login');
     });
   });
 });
@@ -535,16 +1990,24 @@ app.use((req, res, next) => {
   res.locals.nomeTitular = "Detalhamento Contas";
   res.locals.formatDateBR = formatDateBR;
   res.locals.flash = req.session?.flash || null;
+  res.locals.importReport = req.session?.importReport || null;
+  res.locals.importFormSeed = req.session?.importFormSeed || null;
   res.locals.unreadNotificationCount = 0;
   res.locals.readNotificationCount = 0;
   res.locals.recentNotifications = [];
   res.locals.pushNotificationsEnabled = isPushConfigured();
-  res.locals.pushPublicKey = isPushConfigured() ? PUSH_PUBLIC_KEY : '';
+  res.locals.pushPublicKey = getPushPublicKey();
   const now = dayjs();
   res.locals.dashboardHref = `/detalhamento/${now.year()}/${now.month() + 1}`;
 
   if (req.session?.flash) {
     delete req.session.flash;
+  }
+  if (req.session?.importReport) {
+    delete req.session.importReport;
+  }
+  if (req.session?.importFormSeed) {
+    delete req.session.importFormSeed;
   }
 
   if (req.isAuthenticated() && req.user?.id) {
@@ -1240,19 +2703,46 @@ function getRecurringPreview(rule) {
   return null;
 }
 
-function removeFutureRecurringTransactions(userId, ruleId, fromYear, fromMonth) {
+function getRecurringOccurrenceDateForMonth(rule, targetYear, targetMonth) {
+  if (!rule) return null;
+
+  const startYear = Number(rule.start_due_year || 0);
+  const startMonth = Number(rule.start_due_month || 0);
+  const year = Number(targetYear || 0);
+  const month = Number(targetMonth || 0);
+  if (!startYear || !startMonth || !year || !month) return null;
+
+  const offset = ((year - startYear) * 12) + (month - startMonth);
+  if (offset < 0) return null;
+
+  return occurrenceDateFromStart(rule.start_txn_date, offset);
+}
+
+function shouldKeepCurrentRecurringMonth(rule, referenceDate = dayjs()) {
+  const currentDate = dayjs(referenceDate);
+  const occurrenceDate = getRecurringOccurrenceDateForMonth(rule, currentDate.year(), currentDate.month() + 1);
+  if (!occurrenceDate) return false;
+
+  const occurrence = dayjs(occurrenceDate);
+  if (!occurrence.isValid()) return false;
+
+  return !currentDate.isBefore(occurrence, 'day');
+}
+
+function removeFutureRecurringTransactions(userId, ruleId, fromYear, fromMonth, { includeCurrentMonth = false } = {}) {
   const rows = db.prepare(`
-    SELECT t.id, t.import_id
+    SELECT t.id, t.import_id, t.due_month, t.due_year
     FROM transactions t
     WHERE t.user_id = ?
       AND t.recurring_rule_id = ?
-      AND (t.due_year > ? OR (t.due_year = ? AND t.due_month > ?))
-  `).all(userId, ruleId, fromYear, fromYear, fromMonth);
+      AND (
+        t.due_year > ? OR
+        (t.due_year = ? AND t.due_month > ?) OR
+        (${includeCurrentMonth ? '1' : '0'} = 1 AND t.due_year = ? AND t.due_month = ?)
+      )
+  `).all(userId, ruleId, fromYear, fromYear, fromMonth, fromYear, fromMonth);
 
-  const removable = rows.filter(row => {
-    const due = db.prepare("SELECT due_month, due_year FROM transactions WHERE id = ? AND user_id = ?").get(row.id, userId);
-    return due && !isMonthClosed(userId, due.due_month, due.due_year);
-  });
+  const removable = rows.filter(row => row && row.due_month && row.due_year && !isMonthClosed(userId, row.due_month, row.due_year));
 
   if (removable.length) {
     deleteTransactionsAndAllocations(userId, removable);
@@ -1762,7 +3252,7 @@ function getPeopleAll(userId) {
     const outgoingRequest = outgoingMap.get(Number(person.id || 0)) || null;
     const incomingRequest = !outgoingRequest && hasAppUser ? (incomingMap.get(linkedUserId) || null) : null;
     const friendshipActive = !!friendship;
-    const canShareCharge = FRIENDSHIP_GATE_SHARED_DEBT_ENABLED
+    const canShareCharge = isFriendshipGateEnabled()
       ? friendshipActive && isActive && !isOwner
       : hasAppUser && !!normalizeEmail(person.email) && isActive && !isOwner;
 
@@ -2058,13 +3548,15 @@ async function sendPushNotificationToUser(userId, payload) {
 
 async function runCardDueTodayPushSweep() {
   if (scheduledDuePushSweepRunning) return;
-  if (!isPushConfigured() || !CARD_DUE_PUSH_ENABLED || CARD_DUE_PUSH_MAX_SENDS_PER_DAY <= 0) return;
+
+  const pushConfig = getPushRuntimeConfig();
+  if (!isPushConfigured() || !pushConfig.duePushEnabled || pushConfig.maxSendsPerDay <= 0) return;
 
   scheduledDuePushSweepRunning = true;
 
   try {
-    const zonedNow = getZonedDateParts(CARD_DUE_PUSH_TIMEZONE);
-    const firstSendMinute = (CARD_DUE_PUSH_HOUR * 60) + CARD_DUE_PUSH_MINUTE;
+    const zonedNow = getZonedDateParts(pushConfig.timezone);
+    const firstSendMinute = (pushConfig.hour * 60) + pushConfig.minute;
     if (zonedNow.minutesOfDay < firstSendMinute) {
       return;
     }
@@ -2076,14 +3568,14 @@ async function runCardDueTodayPushSweep() {
 
       const logs = getScheduledPushLogs(userId, 'card_due_today', zonedNow.dateKey);
       const nextSequenceNo = logs.length + 1;
-      if (nextSequenceNo > CARD_DUE_PUSH_MAX_SENDS_PER_DAY) continue;
+      if (nextSequenceNo > pushConfig.maxSendsPerDay) continue;
 
       if (logs.length) {
-        if (CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES <= 0) continue;
+        if (pushConfig.repeatIntervalMinutes <= 0) continue;
 
         const lastSentAt = dayjs(logs[logs.length - 1].created_at);
         if (!lastSentAt.isValid()) continue;
-        if (dayjs().diff(lastSentAt, 'minute') < CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES) continue;
+        if (dayjs().diff(lastSentAt, 'minute') < pushConfig.repeatIntervalMinutes) continue;
       }
 
       const payload = buildDueTodayPushPayload(cardsDueToday, zonedNow, nextSequenceNo);
@@ -2106,18 +3598,7 @@ async function runCardDueTodayPushSweep() {
 }
 
 function startCardDueTodayPushScheduler() {
-  if (!isPushConfigured() || !CARD_DUE_PUSH_ENABLED || CARD_DUE_PUSH_MAX_SENDS_PER_DAY <= 0) {
-    return;
-  }
-
-  const intervalMs = Math.max(1, CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES) * 60 * 1000;
-  setTimeout(() => {
-    runCardDueTodayPushSweep().catch(err => console.error('Falha no agendamento inicial de push de vencimento:', err?.message || err));
-  }, 15000);
-
-  setInterval(() => {
-    runCardDueTodayPushSweep().catch(err => console.error('Falha no agendamento recorrente de push de vencimento:', err?.message || err));
-  }, intervalMs);
+  restartCardDueTodayPushScheduler();
 }
 
 function queuePushNotification(userId, payload) {
@@ -2314,7 +3795,7 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
   const requesterPerson = getOwnerPerson(userId);
   const requesterDisplayName = requesterPerson?.name || context?.requesterDisplayName || getUserRecord(userId)?.name || 'Um usuário';
 
-  const eligibleRows = (FRIENDSHIP_GATE_SHARED_DEBT_ENABLED
+  const eligibleRows = (isFriendshipGateEnabled()
     ? db.prepare(`
       SELECT
         a.id AS allocation_id,
@@ -4557,10 +6038,159 @@ app.post("/cards/:id/delete", ensureAuthenticated, (req, res) => {
   return res.redirect("/cards");
 });
 
+function normalizeImportDuplicateText(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeImportCardNumber(value) {
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+function buildImportDuplicateFingerprint({ cardId, month, year, txnDate, description, amountCents, cardNumber }) {
+  return [
+    Number(cardId) || 0,
+    Number(year) || 0,
+    Number(month) || 0,
+    String(txnDate || "").trim(),
+    normalizeImportDuplicateText(description),
+    Number(amountCents) || 0,
+    normalizeImportCardNumber(cardNumber)
+  ].join("::");
+}
+
+function buildImportDuplicateGroupItem({ txnDate, description, amountCents, cardNumber, count = 0, existingCount = 0, csvCount = 0 }) {
+  return {
+    txnDate: String(txnDate || '').trim() || null,
+    description: String(description || '').trim() || '(sem descrição)',
+    amountCents: Number(amountCents) || 0,
+    cardNumber: normalizeImportCardNumber(cardNumber) || null,
+    count: Math.max(0, Number(count || 0)),
+    existingCount: Math.max(0, Number(existingCount || 0)),
+    csvCount: Math.max(0, Number(csvCount || 0))
+  };
+}
+
+function compareImportDuplicateGroupItems(a, b) {
+  const dateA = String(a?.txnDate || '');
+  const dateB = String(b?.txnDate || '');
+  if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+  const descA = normalizeImportDuplicateText(a?.description);
+  const descB = normalizeImportDuplicateText(b?.description);
+  if (descA !== descB) return descA.localeCompare(descB, 'pt-BR');
+
+  const amountA = Number(a?.amountCents || 0);
+  const amountB = Number(b?.amountCents || 0);
+  if (amountA !== amountB) return amountB - amountA;
+
+  return normalizeImportCardNumber(a?.cardNumber).localeCompare(normalizeImportCardNumber(b?.cardNumber));
+}
+
+function getExistingImportFingerprintCounts(userId, cardId, month, year) {
+  const rows = db.prepare(`
+    SELECT t.txn_date, t.description, t.amount_cents, t.card_number
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND t.card_id = ?
+      AND ${EFFECTIVE_DUE_MONTH_SQL} = ?
+      AND ${EFFECTIVE_DUE_YEAR_SQL} = ?
+  `).all(userId, cardId, month, year);
+
+  const counts = new Map();
+  for (const row of rows) {
+    const fingerprint = buildImportDuplicateFingerprint({
+      cardId,
+      month,
+      year,
+      txnDate: row.txn_date || '',
+      description: row.description,
+      amountCents: row.amount_cents,
+      cardNumber: row.card_number
+    });
+    counts.set(fingerprint, (counts.get(fingerprint) || 0) + 1);
+  }
+
+  return counts;
+}
+
+function buildImportFeedbackMessage(month, year, importedCount, skippedExistingCount, repeatedCsvGroupCount) {
+  const period = monthLabel(month, year);
+  const skippedCount = Math.max(0, Number(skippedExistingCount || 0));
+  const repeatedCount = Math.max(0, Number(repeatedCsvGroupCount || 0));
+
+  if (importedCount > 0 && skippedCount === 0 && repeatedCount === 0) {
+    return {
+      type: "success",
+      message: importedCount === 1
+        ? `1 compra pousou em ${period}. Tudo certinho por aqui.`
+        : `${importedCount} compras pousaram em ${period}. Tudo certinho por aqui.`
+    };
+  }
+
+  const parts = [];
+  if (importedCount > 0) {
+    parts.push(importedCount === 1 ? '1 compra entrou' : `${importedCount} compras entraram`);
+  }
+  if (skippedCount > 0) {
+    parts.push(skippedCount === 1
+      ? '1 linha ficou de fora por prudência, porque já havia uma igualzinha por aqui'
+      : `${skippedCount} linhas ficaram de fora por prudência, porque já havia iguais por aqui`);
+  }
+  if (repeatedCount > 0) {
+    parts.push(repeatedCount === 1
+      ? 'o CSV trouxe 1 grupinho de linhas idênticas e eu deixei passar, porque isso também pode ser compra legítima'
+      : `o CSV trouxe ${repeatedCount} grupinhos de linhas idênticas e eu deixei passar, porque isso também pode ser compra legítima`);
+  }
+
+  if (importedCount > 0) {
+    return {
+      type: skippedCount > 0 ? 'info' : 'success',
+      message: `Importação concluída em ${period}: ${parts.join('; ')}.`
+    };
+  }
+
+  return {
+    type: 'info',
+    message: `Nenhuma compra nova entrou em ${period}. ${parts.join('; ')}.`
+  };
+}
+
+function buildImportReport(month, year, importedCount, skippedExistingGroups, repeatedCsvGroups) {
+  const skippedGroups = Array.isArray(skippedExistingGroups)
+    ? skippedExistingGroups.slice().sort(compareImportDuplicateGroupItems)
+    : [];
+  const repeatedGroups = Array.isArray(repeatedCsvGroups)
+    ? repeatedCsvGroups.slice().sort(compareImportDuplicateGroupItems)
+    : [];
+
+  return {
+    periodLabel: monthLabel(month, year),
+    month: Number(month),
+    year: Number(year),
+    targetHref: `/month/${year}/${month}`,
+    importedCount: Math.max(0, Number(importedCount || 0)),
+    skippedExistingCount: skippedGroups.reduce((sum, item) => sum + Math.max(0, Number(item.count || 0)), 0),
+    repeatedCsvGroupCount: repeatedGroups.length,
+    skippedExistingGroups: skippedGroups,
+    repeatedCsvGroups: repeatedGroups
+  };
+}
+
 // Import
 app.get("/import", ensureAuthenticated, ensureCanImport, (req, res) => {
   const userId = req.user.id;
-  res.render("import", { cards: getActiveCards(userId), error: null });
+  res.render("import", {
+    cards: getActiveCards(userId),
+    error: null,
+    formSeed: res.locals.importFormSeed || null,
+    importReport: res.locals.importReport || null
+  });
 });
 
 app.post("/import", ensureAuthenticated, ensureCanImport, upload.single("csvfile"), (req, res) => {
@@ -4571,6 +6201,7 @@ app.post("/import", ensureAuthenticated, ensureCanImport, upload.single("csvfile
     const cardId = Number(req.body.card_id);
     const month = Number(req.body.month);
     const year = Number(req.body.year);
+    const formSeed = { cardId, month, year };
 
     if (!req.file) throw new Error("Envie um arquivo CSV.");
     if (!cardId) throw new Error("Selecione o cartão.");
@@ -4581,28 +6212,135 @@ app.post("/import", ensureAuthenticated, ensureCanImport, upload.single("csvfile
     if (!card) throw new Error("Cartão inválido ou desativado.");
 
     const txns = parseCsvByCardName(card.name, req.file.buffer);
+    const existingCounts = getExistingImportFingerprintCounts(userId, cardId, month, year);
+    const csvCounts = new Map();
+    const repeatedCsvGroups = new Map();
+    const skippedExistingGroups = new Map();
+    const itemsToInsert = [];
 
-    const info = db.prepare(`
-      INSERT INTO imports(user_id, card_id, month, year, created_at, original_filename)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(userId, cardId, month, year, nowIso(), req.file.originalname);
+    for (const txn of txns) {
+      const isoDate = toISOFromBRDate(txn.txn_date) || String(txn.txn_date || "").trim() || null;
+      const fingerprint = buildImportDuplicateFingerprint({
+        cardId,
+        month,
+        year,
+        txnDate: isoDate,
+        description: txn.description,
+        amountCents: txn.amount_cents,
+        cardNumber: txn.card_number
+      });
 
-    const insTxn = db.prepare(`
-      INSERT INTO transactions(user_id, import_id, card_id, txn_date, description, amount_cents, card_number, raw_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+      const nextCsvCount = (csvCounts.get(fingerprint) || 0) + 1;
+      csvCounts.set(fingerprint, nextCsvCount);
 
-    const insertMany = db.transaction((items) => {
-      for (const t of items) {
-        const isoDate = toISOFromBRDate(t.txn_date) || null;
-        insTxn.run(userId, info.lastInsertRowid, cardId, isoDate, t.description, t.amount_cents, t.card_number || null, JSON.stringify(t.raw || {}), nowIso());
+      if (nextCsvCount > 1) {
+        const repeatedGroup = repeatedCsvGroups.get(fingerprint) || buildImportDuplicateGroupItem({
+          txnDate: isoDate,
+          description: txn.description,
+          amountCents: txn.amount_cents,
+          cardNumber: txn.card_number,
+          csvCount: nextCsvCount
+        });
+        repeatedGroup.csvCount = nextCsvCount;
+        repeatedCsvGroups.set(fingerprint, repeatedGroup);
+      }
+
+      const existingCount = existingCounts.get(fingerprint) || 0;
+      if (nextCsvCount <= existingCount) {
+        const skippedGroup = skippedExistingGroups.get(fingerprint) || buildImportDuplicateGroupItem({
+          txnDate: isoDate,
+          description: txn.description,
+          amountCents: txn.amount_cents,
+          cardNumber: txn.card_number,
+          existingCount,
+          csvCount: nextCsvCount,
+          count: 0
+        });
+        skippedGroup.count += 1;
+        skippedGroup.existingCount = existingCount;
+        skippedGroup.csvCount = nextCsvCount;
+        skippedExistingGroups.set(fingerprint, skippedGroup);
+        continue;
+      }
+
+      itemsToInsert.push({
+        ...txn,
+        isoDate
+      });
+    }
+
+    const createImportWithTransactions = db.transaction((items) => {
+      const info = db.prepare(`
+        INSERT INTO imports(user_id, card_id, month, year, created_at, original_filename)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(userId, cardId, month, year, nowIso(), req.file.originalname);
+
+      const insTxn = db.prepare(`
+        INSERT INTO transactions(user_id, import_id, card_id, txn_date, description, amount_cents, card_number, raw_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const item of items) {
+        insTxn.run(
+          userId,
+          info.lastInsertRowid,
+          cardId,
+          item.isoDate || null,
+          item.description,
+          item.amount_cents,
+          item.card_number || null,
+          JSON.stringify(item.raw || {}),
+          nowIso()
+        );
       }
     });
 
-    insertMany(txns);
-    res.redirect(`/month/${year}/${month}`);
+    if (itemsToInsert.length) {
+      createImportWithTransactions(itemsToInsert);
+    }
+
+    const skippedExistingList = Array.from(skippedExistingGroups.values()).map((group) => ({
+      ...group,
+      csvCount: csvCounts.get(buildImportDuplicateFingerprint({
+        cardId,
+        month,
+        year,
+        txnDate: group.txnDate,
+        description: group.description,
+        amountCents: group.amountCents,
+        cardNumber: group.cardNumber
+      })) || group.csvCount || group.count,
+      existingCount: group.existingCount || 0
+    }));
+    const repeatedCsvList = Array.from(repeatedCsvGroups.values());
+    const skippedExistingCount = skippedExistingList.reduce((sum, item) => sum + Number(item.count || 0), 0);
+    const feedback = buildImportFeedbackMessage(month, year, itemsToInsert.length, skippedExistingCount, repeatedCsvList.length);
+
+    setFlash(req, feedback.type, feedback.message);
+    setImportFormSeed(req, formSeed);
+
+    if (skippedExistingCount > 0) {
+      setImportReport(req, buildImportReport(month, year, itemsToInsert.length, skippedExistingList, repeatedCsvList));
+      return res.redirect("/import");
+    }
+
+    setImportReport(req, null);
+    if (itemsToInsert.length > 0) {
+      return res.redirect(`/month/${year}/${month}`);
+    }
+
+    return res.redirect("/import");
   } catch (e) {
-    res.status(400).render("import", { cards, error: e.message || String(e) });
+    res.status(400).render("import", {
+      cards,
+      error: e.message || String(e),
+      formSeed: {
+        cardId: Number(req.body.card_id) || null,
+        month: Number(req.body.month) || null,
+        year: Number(req.body.year) || null
+      },
+      importReport: null
+    });
   }
 });
 
@@ -5021,6 +6759,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   const allocCountExpr = "(SELECT COUNT(*) FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id)";
   const selectedCsvExpr = "(SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id)";
+  const selectedSharesCsvExpr = "(SELECT GROUP_CONCAT(a.person_id || ':' || a.share_cents) FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id)";
 
   const where = [`((${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?))`];
   const params = [month, year, month, year];
@@ -5075,7 +6814,8 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
            COALESCE(t.due_month, i.month) AS month,
            COALESCE(t.due_year, i.year) AS year,
            ${allocCountExpr} AS alloc_count,
-           ${selectedCsvExpr} AS selected_csv
+           ${selectedCsvExpr} AS selected_csv,
+           ${selectedSharesCsvExpr} AS selected_shares_csv
     FROM transactions t
     LEFT JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
@@ -5085,6 +6825,14 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   txns.forEach(t => {
     t.selected_ids = (t.selected_csv ? t.selected_csv.split(",").map(x => Number(x)) : []).filter(Boolean);
+    t.selected_shares = {};
+    if (t.selected_shares_csv) {
+      String(t.selected_shares_csv).split(',').forEach((entry) => {
+        const [personIdRaw, shareRaw] = String(entry || '').split(':');
+        const personId = Number(personIdRaw || 0);
+        if (personId) t.selected_shares[personId] = Number(shareRaw || 0);
+      });
+    }
     t.has_future_installments = hasFutureInstallments(userId, t);
   });
 
@@ -5251,10 +6999,14 @@ app.post("/recurring/:id/state", ensureAuthenticated, (req, res) => {
   const currentYear = today.year();
   const currentMonth = today.month() + 1;
 
+  const keepCurrentMonth = shouldKeepCurrentRecurringMonth(rule, today);
+
   if (action === 'pause') {
     db.prepare("UPDATE recurring_rules SET status = 'paused', updated_at = ? WHERE id = ? AND user_id = ?").run(nowIso(), ruleId, userId);
-    removeFutureRecurringTransactions(userId, ruleId, currentYear, currentMonth);
-    setFlash(req, "success", `${rule.description} foi pausado.`);
+    removeFutureRecurringTransactions(userId, ruleId, currentYear, currentMonth, { includeCurrentMonth: !keepCurrentMonth });
+    setFlash(req, "success", keepCurrentMonth
+      ? `${rule.description} foi pausado. O mês atual ficou no histórico e o restante da frente saiu de cena.`
+      : `${rule.description} foi pausado. Como a compra deste mês ainda não tinha acontecido, ela também saiu junto com o futuro.`);
   } else if (action === 'resume') {
     db.prepare(`
       UPDATE recurring_rules
@@ -5265,8 +7017,10 @@ app.post("/recurring/:id/state", ensureAuthenticated, (req, res) => {
     setFlash(req, "success", `${rule.description} foi reativado.`);
   } else if (action === 'end') {
     db.prepare("UPDATE recurring_rules SET status = 'ended', ended_at = ?, updated_at = ? WHERE id = ? AND user_id = ?").run(nowIso(), nowIso(), ruleId, userId);
-    removeFutureRecurringTransactions(userId, ruleId, currentYear, currentMonth);
-    setFlash(req, "success", `${rule.description} foi encerrado.`);
+    removeFutureRecurringTransactions(userId, ruleId, currentYear, currentMonth, { includeCurrentMonth: !keepCurrentMonth });
+    setFlash(req, "success", keepCurrentMonth
+      ? `${rule.description} foi encerrado. O que já caiu neste mês ficou guardado, e o restante da frente saiu de cena.`
+      : `${rule.description} foi encerrado. Como a compra deste mês ainda não tinha acontecido, ela também foi retirada junto com as próximas.`);
   } else {
     setFlash(req, "error", "Ação inválida para lançamento recorrente.");
   }
@@ -5292,34 +7046,28 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
     return res.status(423).send(getMonthLockMessage(lockedTarget.month, lockedTarget.year));
   }
 
-  let personIds = req.body.person_ids || [];
-  if (!Array.isArray(personIds)) personIds = [personIds];
   const validPeople = new Set(getPeopleAll(userId).map(p => p.id));
-  personIds = personIds.map(Number).filter(pid => validPeople.has(pid));
 
-  const del = db.prepare("DELETE FROM allocations WHERE transaction_id = ? AND user_id = ?");
-  const ins = db.prepare("INSERT INTO allocations(user_id, transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?, ?)");
-
-  db.transaction(() => {
-    targetRows.forEach(targetTxn => {
-      clearSharedDebtAllocationLinksForTransaction(userId, targetTxn.id);
-      del.run(targetTxn.id, userId);
-      if (personIds.length > 0) {
-        const share = Math.floor(targetTxn.amount_cents / personIds.length);
-        const remainder = targetTxn.amount_cents - (share * personIds.length);
-        personIds.forEach((pid, idx) => {
-          const s = share + (idx < Math.abs(remainder) ? Math.sign(remainder) : 0);
-          ins.run(userId, targetTxn.id, pid, s, nowIso());
-        });
-      }
+  try {
+    const allocationPlan = parseAllocationPlan({
+      rawPersonIds: req.body.person_ids,
+      validPeople,
+      rawSplitMode: req.body.split_mode,
+      rawShareAmounts: req.body.share_amounts,
+      targetRows,
+      requireSplitModeSelection: Number(txn.amount_cents || 0) >= 0
     });
-  })();
 
-  syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
-    originKind: detectSharedDebtOriginKindFromRows(targetRows)
-  });
+    replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
 
-  res.redirect(`/month/${txn.year}/${txn.month}`);
+    syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
+      originKind: detectSharedDebtOriginKindFromRows(targetRows)
+    });
+
+    res.redirect(`/month/${txn.year}/${txn.month}`);
+  } catch (error) {
+    res.status(400).send(error.message || 'Não foi possível salvar a divisão dessa compra.');
+  }
 });
 
 // Detail page
@@ -5339,13 +7087,19 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
   if (!txn) return res.status(404).send("Transação não encontrada.");
 
   const people = getVisiblePeopleForTransaction(userId, id);
-  const selected = db.prepare("SELECT person_id FROM allocations WHERE transaction_id = ? AND user_id = ?")
-    .all(id, userId)
-    .map(r => r.person_id);
+  const allocationRows = db.prepare("SELECT person_id, share_cents FROM allocations WHERE transaction_id = ? AND user_id = ? ORDER BY id ASC")
+    .all(id, userId);
+  const selected = allocationRows.map(r => Number(r.person_id)).filter(Boolean);
+  const selectedShares = {};
+  allocationRows.forEach((row) => {
+    const personId = Number(row.person_id || 0);
+    if (personId) selectedShares[personId] = Number(row.share_cents || 0);
+  });
   const isClosed = isMonthClosed(userId, txn.month, txn.year);
   const hasFutureInstallmentsForTxn = hasFutureInstallments(userId, txn);
+  const initialSplitMode = inferAllocationMode(Number(txn.amount_cents || 0), allocationRows);
 
-  res.render("txn", { txn, people, selected, formatBRLFromCents, isClosed, hasFutureInstallments: hasFutureInstallmentsForTxn });
+  res.render("txn", { txn, people, selected, selectedShares, initialSplitMode, formatBRLFromCents, isClosed, hasFutureInstallments: hasFutureInstallmentsForTxn });
 });
 
 app.post("/txn/:id", ensureAuthenticated, (req, res) => {
@@ -5368,34 +7122,29 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
     return res.redirect(`/month/${txn.year}/${txn.month}`);
   }
 
-  let personIds = req.body.person_ids || [];
-  if (!Array.isArray(personIds)) personIds = [personIds];
   const validPeople = new Set(getPeopleAll(userId).map(p => p.id));
-  personIds = personIds.map(Number).filter(pid => validPeople.has(pid));
 
-  const del = db.prepare("DELETE FROM allocations WHERE transaction_id = ? AND user_id = ?");
-  const ins = db.prepare("INSERT INTO allocations(user_id, transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?, ?)");
-
-  db.transaction(() => {
-    targetRows.forEach(targetTxn => {
-      clearSharedDebtAllocationLinksForTransaction(userId, targetTxn.id);
-      del.run(targetTxn.id, userId);
-      if (personIds.length > 0) {
-        const share = Math.floor(targetTxn.amount_cents / personIds.length);
-        const remainder = targetTxn.amount_cents - (share * personIds.length);
-        personIds.forEach((pid, idx) => {
-          const s = share + (idx < Math.abs(remainder) ? Math.sign(remainder) : 0);
-          ins.run(userId, targetTxn.id, pid, s, nowIso());
-        });
-      }
+  try {
+    const allocationPlan = parseAllocationPlan({
+      rawPersonIds: req.body.person_ids,
+      validPeople,
+      rawSplitMode: req.body.split_mode,
+      rawShareAmounts: req.body.share_amounts,
+      targetRows,
+      requireSplitModeSelection: Number(txn.amount_cents || 0) >= 0
     });
-  })();
 
-  syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
-    originKind: detectSharedDebtOriginKindFromRows(targetRows)
-  });
+    replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
 
-  res.redirect(`/month/${txn.year}/${txn.month}`);
+    syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
+      originKind: detectSharedDebtOriginKindFromRows(targetRows)
+    });
+
+    res.redirect(`/month/${txn.year}/${txn.month}`);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não foi possível salvar a divisão dessa compra.');
+    res.redirect(`/txn/${txn.id}`);
+  }
 });
 
 app.post("/txn/:id/delete", ensureAuthenticated, (req, res) => {
@@ -5461,38 +7210,34 @@ app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
   }
 
   const validPeople = new Set(getPeopleAll(userId).map(p => p.id));
-  const personIds = normalizeTxnIds(req.body.person_ids).filter(pid => validPeople.has(pid));
 
-  const del = db.prepare("DELETE FROM allocations WHERE transaction_id = ? AND user_id = ?");
-  const ins = db.prepare("INSERT INTO allocations(user_id, transaction_id, person_id, share_cents, created_at) VALUES (?, ?, ?, ?, ?)");
-
-  db.transaction(() => {
-    targetRows.forEach(targetTxn => {
-      clearSharedDebtAllocationLinksForTransaction(userId, targetTxn.id);
-      del.run(targetTxn.id, userId);
-      if (personIds.length > 0) {
-        const share = Math.floor(targetTxn.amount_cents / personIds.length);
-        const remainder = targetTxn.amount_cents - (share * personIds.length);
-        personIds.forEach((pid, idx) => {
-          const extra = idx < Math.abs(remainder) ? Math.sign(remainder) : 0;
-          ins.run(userId, targetTxn.id, pid, share + extra, nowIso());
-        });
-      }
+  try {
+    const allocationPlan = parseAllocationPlan({
+      rawPersonIds: req.body.person_ids,
+      validPeople,
+      rawSplitMode: req.body.split_mode,
+      rawShareAmounts: req.body.share_amounts,
+      targetRows,
+      requireSplitModeSelection: sourceRows.length === 1 && Number(sourceRows[0].amount_cents || 0) >= 0
     });
-  })();
 
-  syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
-    originKind: detectSharedDebtOriginKindFromRows(targetRows)
-  });
+    replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
 
-  return res.json({
-    ok: true,
-    affected_count: targetRows.length,
-    source_count: sourceRows.length,
-    message: targetRows.length > 1
-      ? `${targetRows.length} lançamento(s) tiveram a distribuição atualizada.`
-      : 'Distribuição atualizada com sucesso.'
-  });
+    syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
+      originKind: detectSharedDebtOriginKindFromRows(targetRows)
+    });
+
+    return res.json({
+      ok: true,
+      affected_count: targetRows.length,
+      source_count: sourceRows.length,
+      message: targetRows.length > 1
+        ? `${targetRows.length} lançamento(s) tiveram a distribuição atualizada.`
+        : 'Distribuição atualizada com sucesso.'
+    });
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error.message || 'Não foi possível atualizar a distribuição agora.' });
+  }
 });
 
 app.post("/month/:year/:month/bulk/delete", ensureAuthenticated, (req, res) => {
@@ -6042,9 +7787,9 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
   try {
     const { personPhone, message, imageBase64 } = req.body;
 
-    const apiUrl = process.env.EVOLUTION_API_URL;
-    const apiKey = process.env.EVOLUTION_API_KEY;
-    const instance = process.env.EVOLUTION_INSTANCE_NAME;
+    const apiUrl = getSettingText('EVOLUTION_API_URL');
+    const apiKey = getSettingText('EVOLUTION_API_KEY');
+    const instance = getSettingText('EVOLUTION_INSTANCE_NAME');
 
     if (!apiUrl || !apiKey || !instance) {
       return res.status(400).json({ error: "O envio automático no WhatsApp ainda não foi configurado." });
@@ -6194,6 +7939,282 @@ app.get("/admin", ensureAuthenticated, (req, res) => {
   return renderAdmin(res);
 });
 
+app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const sectionKey = String(req.params.section || '').trim();
+  const section = getSettingSection(sectionKey);
+
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  if (!section) {
+    return renderAdmin(res, { error: 'Seção de configuração não encontrada.', activeSection: 'access' });
+  }
+
+  const definitions = getSettingDefinitionsBySection(sectionKey);
+  const previousValues = Object.fromEntries(definitions.map((definition) => [definition.key, getSettingValue(definition.key)]));
+
+  try {
+    const nextValues = {};
+
+    definitions.forEach((definition) => {
+      const rawValue = definition.input === 'switch'
+        ? (req.body[definition.key] ? '1' : '0')
+        : req.body[definition.key];
+      nextValues[definition.key] = sanitizeSettingValue(definition, rawValue);
+    });
+
+    if (sectionKey === 'backup') {
+      const primaryDir = resolveConfiguredDirectory(__dirname, nextValues.BACKUP_LOCAL_PRIMARY_DIR, DEFAULT_PRIMARY_BACKUP_DIR);
+      const secondaryDir = resolveConfiguredDirectory(__dirname, nextValues.BACKUP_LOCAL_SECONDARY_DIR, DEFAULT_SECONDARY_BACKUP_DIR);
+      if (path.resolve(primaryDir) === path.resolve(secondaryDir)) {
+        throw new Error('As duas pastas locais do backup precisam ser diferentes. Espelho no mesmo lugar vira só déjà vu.');
+      }
+    }
+
+    updateAppSettings(nextValues, userId);
+
+    const changedDefinitions = definitions.filter((definition) => String(previousValues[definition.key] ?? '') !== String(nextValues[definition.key] ?? ''));
+    const liveChanges = changedDefinitions.filter((definition) => !definition.restartRequired);
+    const restartChanges = changedDefinitions.filter((definition) => definition.restartRequired);
+
+    let success = changedDefinitions.length
+      ? `${section.title} salva com sucesso.`
+      : `${section.title} conferida. Não achei nada novo para salvar.`;
+
+    if (liveChanges.length) {
+      success += ' O que dava para recarregar na hora já entrou em campo.';
+    }
+
+    if (restartChanges.length) {
+      success += ` Para ${restartChanges.map((definition) => definition.label).join(', ')} valerem, reinicie o servidor.`;
+    }
+
+    if (sectionKey === 'google' && !isGoogleAuthConfigured()) {
+      success += ' Enquanto Client ID e secret não estiverem completos, o login com Google segue de folga.';
+    }
+
+    if (sectionKey === 'push' && !isPushConfigured()) {
+      success += ' Sem o trio VAPID completo, o sininho ainda não acorda.';
+    }
+
+    if (sectionKey === 'backup') {
+      const backupConfig = getBackupRuntimeConfig();
+      if (backupConfig.googleEnabled && !backupConfig.googleRefreshToken) {
+        success += ' O Google Drive ficou habilitado, mas ainda falta conectar uma conta ali no bloco da seção.';
+      }
+    }
+
+    return renderAdmin(res, { success, activeSection: sectionKey });
+  } catch (err) {
+    return renderAdmin(res, { error: err.message || 'Não consegui salvar essa seção agora.', activeSection: sectionKey });
+  }
+});
+
+function downloadAdminGuide(res, activeSection = 'access') {
+  const guidePath = path.join(__dirname, 'public', 'docs', 'guia-central-admin-organizapay.pdf');
+  if (!fs.existsSync(guidePath)) {
+    return renderAdmin(res, { error: 'O guia em PDF ainda não está disponível neste servidor.', activeSection });
+  }
+
+  return res.download(guidePath, 'guia-central-admin-organizapay.pdf');
+}
+
+app.get('/admin/guide', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  return downloadAdminGuide(res, 'access');
+});
+
+app.get('/admin/backup/guide', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  return downloadAdminGuide(res, 'backup');
+});
+
+app.get('/admin/backup/google/connect', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  try {
+    const authUrl = buildGoogleBackupAuthUrl(req);
+    return res.redirect(authUrl);
+  } catch (error) {
+    return renderAdmin(res, { error: error.message || 'Não consegui preparar a conexão com o Google Drive agora.', activeSection: 'backup' });
+  }
+});
+
+app.get('/admin/backup/google/callback', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  const returnedState = String(req.query.state || '').trim();
+  const expectedState = String(req.session?.backupGoogleAuthState || '').trim();
+  delete req.session.backupGoogleAuthState;
+  delete req.session.backupGoogleAuthCreatedAt;
+
+  if (req.query.error) {
+    return renderAdmin(res, {
+      error: `O Google devolveu um não agora: ${String(req.query.error_description || req.query.error)}`,
+      activeSection: 'backup'
+    });
+  }
+
+  if (!returnedState || !expectedState || returnedState !== expectedState) {
+    return renderAdmin(res, { error: 'A validação da conexão com o Google Drive não bateu. Tenta conectar de novo.', activeSection: 'backup' });
+  }
+
+  const code = String(req.query.code || '').trim();
+  if (!code) {
+    return renderAdmin(res, { error: 'O Google não devolveu o código de autorização do backup.', activeSection: 'backup' });
+  }
+
+  try {
+    const tokens = await exchangeGoogleBackupCodeForTokens(code);
+    const refreshToken = String(tokens.refresh_token || '').trim() || getInternalSettingValue(BACKUP_GOOGLE_REFRESH_TOKEN_KEY);
+    if (!refreshToken) {
+      throw new Error('O Google não devolveu refresh token. Revogue o acesso anterior e conecte novamente para liberar o modo automático.');
+    }
+
+    const accessToken = String(tokens.access_token || '').trim();
+    const profile = accessToken ? await fetchGoogleBackupProfile(accessToken).catch(() => ({})) : {};
+    const config = getBackupRuntimeConfig();
+    const folder = accessToken ? await ensureGoogleBackupFolder(accessToken, { ...config, googleRefreshToken: refreshToken }, userId).catch(() => null) : null;
+
+    setInternalSettings({
+      [BACKUP_GOOGLE_REFRESH_TOKEN_KEY]: refreshToken,
+      [BACKUP_GOOGLE_CONNECTED_EMAIL_KEY]: String(profile.email || config.googleConnectedEmail || '').trim(),
+      [BACKUP_GOOGLE_CONNECTED_AT_KEY]: currentConfigTimestamp(),
+      [BACKUP_GOOGLE_SCOPE_KEY]: String(tokens.scope || '').trim(),
+      [BACKUP_GOOGLE_FOLDER_ID_KEY]: folder?.id || config.googleFolderId || '',
+      [BACKUP_GOOGLE_FOLDER_NAME_META_KEY]: folder?.name || config.googleFolderName
+    }, userId);
+
+    return renderAdmin(res, {
+      success: `Google Drive conectado com sucesso${profile.email ? ` na conta ${profile.email}` : ''}. Agora o backup pode subir pra nuvem também.`,
+      activeSection: 'backup'
+    });
+  } catch (error) {
+    return renderAdmin(res, {
+      error: error?.response?.data?.error?.message || error.message || 'Não consegui concluir a conexão com o Google Drive agora.',
+      activeSection: 'backup'
+    });
+  }
+});
+
+app.post('/admin/backup/google/disconnect', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  clearInternalSettings([
+    BACKUP_GOOGLE_REFRESH_TOKEN_KEY,
+    BACKUP_GOOGLE_CONNECTED_EMAIL_KEY,
+    BACKUP_GOOGLE_CONNECTED_AT_KEY,
+    BACKUP_GOOGLE_FOLDER_ID_KEY,
+    BACKUP_GOOGLE_SCOPE_KEY,
+    BACKUP_GOOGLE_FOLDER_NAME_META_KEY
+  ], userId);
+
+  return renderAdmin(res, {
+    success: 'Conta do Google Drive desconectada. As cópias locais continuam valendo e a nuvem ficou de folga.',
+    activeSection: 'backup'
+  });
+});
+
+app.post('/admin/backup/run', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  try {
+    const result = await createServerBackup({ triggerKind: 'manual', createdByUserId: userId });
+    return renderAdmin(res, {
+      success: `${result.message} Pacote ${result.backupName} salvo com ${result.sizeBytes ? formatBytes(result.sizeBytes) : 'tamanho ainda tímido'} de puro carinho preventivo.`,
+      activeSection: 'backup'
+    });
+  } catch (error) {
+    return renderAdmin(res, {
+      error: error.message || 'Não consegui criar o backup manual agora.',
+      activeSection: 'backup'
+    });
+  }
+});
+
+app.post('/admin/backup/restore', ensureAuthenticated, backupRestoreUpload.single('backup_zip'), async (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  const uploadedPath = req.file?.path;
+  const uploadedName = req.file?.originalname || 'backup.zip';
+  if (!uploadedPath) {
+    return renderAdmin(res, { error: 'Escolha um .zip de backup antes de mandar restaurar.', activeSection: 'backup' });
+  }
+
+  try {
+    const result = await restoreServerBackupFromZip({
+      zipPath: uploadedPath,
+      uploadedFilename: uploadedName,
+      restoredByUserId: userId
+    });
+
+    const extra = result.safetyBackupRunId
+      ? ` Antes da restauração eu ainda gerei um backup de segurança (ID ${result.safetyBackupRunId}) para ninguém passar aperto.`
+      : '';
+
+    return renderAdmin(res, {
+      success: `${result.message}${extra}`,
+      activeSection: 'backup'
+    });
+  } catch (error) {
+    return renderAdmin(res, {
+      error: error.message || 'Não consegui restaurar o backup agora.',
+      activeSection: 'backup'
+    });
+  } finally {
+    if (uploadedPath) {
+      await fsp.rm(uploadedPath, { force: true }).catch(() => {});
+    }
+  }
+});
+
+app.get('/admin/backup/download/:backupId/:slot', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  const backupId = Number(req.params.backupId);
+  const slot = String(req.params.slot || '').trim().toLowerCase();
+  const row = Number.isInteger(backupId) && backupId > 0 ? backupRunsSelectById.get(backupId) : null;
+  if (!row) {
+    return renderAdmin(res, { error: 'Backup não encontrado para download.', activeSection: 'backup' });
+  }
+
+  const targetPath = slot === 'secondary' ? row.local_secondary_path : row.local_primary_path;
+  if (!targetPath || !fs.existsSync(targetPath)) {
+    return renderAdmin(res, { error: 'Esse arquivo local não está mais disponível neste servidor.', activeSection: 'backup' });
+  }
+
+  return res.download(targetPath, path.basename(targetPath));
+});
+
+
 app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const { email, name, role } = req.body;
@@ -6307,7 +8328,7 @@ app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = BOOTSTRAP_PORT || 3001;
 
 app.listen(PORT, () => {
   console.log(`✅ Rodando em http://localhost:${PORT}`);

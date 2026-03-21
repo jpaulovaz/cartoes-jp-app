@@ -1,18 +1,128 @@
-// Este é o Service Worker básico para permitir a instalação do PWA
-self.addEventListener('install', (e) => {
-  console.log('[Service Worker] Instalado com sucesso!');
-  self.skipWaiting();
+const STATIC_CACHE = 'organizapay-static-v20260320-1';
+const RUNTIME_CACHE = 'organizapay-runtime-v20260320-1';
+const OFFLINE_FALLBACK_URL = '/offline.html';
+const PRECACHE_URLS = [
+  OFFLINE_FALLBACK_URL,
+  '/app.css',
+  '/app.js',
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/apple-touch-icon.png',
+  '/favicon-32x32.png',
+  '/favicon-16x16.png',
+  '/favicon.ico',
+  '/logo.png'
+];
+const CACHEABLE_DESTINATIONS = new Set(['style', 'script', 'image', 'font', 'manifest']);
+
+self.addEventListener('install', (event) => {
+  event.waitUntil((async () => {
+    const cache = await caches.open(STATIC_CACHE);
+    await cache.addAll(PRECACHE_URLS);
+    await self.skipWaiting();
+  })());
 });
 
-self.addEventListener('activate', (e) => {
-  console.log('[Service Worker] Ativado!');
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    const cacheNames = await caches.keys();
+    await Promise.all(
+      cacheNames
+        .filter((cacheName) => ![STATIC_CACHE, RUNTIME_CACHE].includes(cacheName))
+        .map((cacheName) => caches.delete(cacheName))
+    );
+
+    if (self.registration && 'navigationPreload' in self.registration) {
+      try {
+        await self.registration.navigationPreload.enable();
+      } catch (error) {
+        // Alguns navegadores simplesmente não suportam a feature.
+      }
+    }
+
+    await self.clients.claim();
+  })());
 });
 
-self.addEventListener('fetch', (e) => {
-  // Por enquanto, ele apenas repassa as requisições normais da internet
-  e.respondWith(fetch(e.request).catch(() => {
-    // Se a internet cair, você pode tratar aqui no futuro
-  }));
+function isSameOrigin(url) {
+  return url.origin === self.location.origin;
+}
+
+function shouldCacheResponse(response) {
+  return !!response && (response.ok || response.type === 'opaque');
+}
+
+async function staleWhileRevalidate(request, event) {
+  const cache = await caches.open(RUNTIME_CACHE);
+  const cachedResponse = await cache.match(request);
+
+  const networkPromise = fetch(request)
+    .then((networkResponse) => {
+      if (shouldCacheResponse(networkResponse)) {
+        return cache.put(request, networkResponse.clone()).then(() => networkResponse);
+      }
+      return networkResponse;
+    });
+
+  if (cachedResponse) {
+    if (event && typeof event.waitUntil === 'function') {
+      event.waitUntil(networkPromise.catch(() => undefined));
+    }
+    return cachedResponse;
+  }
+
+  try {
+    return await networkPromise;
+  } catch (error) {
+    return Response.error();
+  }
+}
+
+async function handleNavigationRequest(event) {
+  try {
+    const preloadResponse = await event.preloadResponse;
+    if (preloadResponse) {
+      return preloadResponse;
+    }
+
+    const networkResponse = await fetch(event.request);
+    return networkResponse;
+  } catch (error) {
+    const offlineResponse = await caches.match(OFFLINE_FALLBACK_URL, { ignoreSearch: true });
+    if (offlineResponse) {
+      return offlineResponse;
+    }
+
+    return new Response('Sem internet no momento.', {
+      status: 503,
+      statusText: 'Offline',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+    });
+  }
+}
+
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+
+  if (request.method !== 'GET') {
+    return;
+  }
+
+  const requestUrl = new URL(request.url);
+
+  if (request.mode === 'navigate') {
+    event.respondWith(handleNavigationRequest(event));
+    return;
+  }
+
+  if (!isSameOrigin(requestUrl)) {
+    return;
+  }
+
+  if (CACHEABLE_DESTINATIONS.has(request.destination)) {
+    event.respondWith(staleWhileRevalidate(request, event));
+  }
 });
 
 self.addEventListener('push', (event) => {

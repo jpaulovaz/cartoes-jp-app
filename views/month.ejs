@@ -89,7 +89,9 @@
 
               <div class="mt-4 flex flex-wrap gap-2">
                 <% if (rule.status === 'active') { %>
-                  <form method="post" action="/recurring/<%= rule.id %>/state">
+                  <form method="post" action="/recurring/<%= rule.id %>/state"
+                    data-confirm-prompt="Pausar a compra recorrente <%= rule.description %>? Se a compra deste mês ainda não rolou, ela sai junto com as próximas. Se já rolou, o mês atual fica guardado."
+                    data-confirm-phrase="Eu confirmo">
                     <input type="hidden" name="action" value="pause">
                     <button class="px-4 py-2 rounded-xl text-sm font-bold border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">Pausar</button>
                   </form>
@@ -102,7 +104,7 @@
 
                 <% if (rule.status !== 'ended') { %>
                   <form method="post" action="/recurring/<%= rule.id %>/state"
-                    data-confirm-prompt="Encerrar a compra recorrente <%= rule.description %>? As compras já criadas continuam no histórico, mas as próximas competências deixam de ser geradas."
+                    data-confirm-prompt="Encerrar a compra recorrente <%= rule.description %>? Se a compra deste mês ainda não rolou, ela sai junto com as próximas. O que já rolou continua no histórico."
                     data-confirm-phrase="Eu confirmo">
                     <input type="hidden" name="action" value="end">
                     <button class="px-4 py-2 rounded-xl text-sm font-bold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Encerrar</button>
@@ -600,6 +602,7 @@
         description: t.description,
         amount_cents: Number(t.amount_cents || 0),
         selected_ids: (t.selected_ids || []).map(Number),
+        selected_shares: Object.fromEntries(Object.entries(t.selected_shares || {}).map(([key, value]) => [Number(key), Number(value || 0)])),
         has_future_installments: !!t.has_future_installments,
         recurring_rule_id: t.recurring_rule_id ? Number(t.recurring_rule_id) : null,
         month: Number(t.month || month),
@@ -623,6 +626,9 @@
         month: Number(item.month || currentMonth),
         year: Number(item.year || currentYear),
         selected_ids: Array.isArray(item.selected_ids) ? item.selected_ids.map(Number) : [],
+        selected_shares: item.selected_shares && typeof item.selected_shares === 'object'
+          ? Object.fromEntries(Object.entries(item.selected_shares).map(([key, value]) => [Number(key), Number(value || 0)]))
+          : {},
         has_future_installments: !!item.has_future_installments,
         recurring_rule_id: item.recurring_rule_id ? Number(item.recurring_rule_id) : null
       }]));
@@ -795,17 +801,19 @@
         root.className = 'fixed inset-0 z-[9999] hidden';
         root.innerHTML = `
           <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-month-sheet-backdrop></div>
-          <div class="relative z-10 flex min-h-full items-end justify-center p-4 sm:items-center">
-            <div class="w-full max-w-lg overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" data-month-sheet-surface>
-              <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-                <div>
-                  <h3 class="text-base font-bold text-slate-900 dark:text-slate-100" data-month-sheet-title></h3>
-                  <p class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400" data-month-sheet-subtitle></p>
+          <div class="relative z-10 flex min-h-full items-end justify-center p-2 sm:items-center sm:p-4">
+            <div class="flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-full max-w-lg flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 sm:h-auto sm:max-h-[calc(100dvh-2rem)] dark:bg-slate-900 dark:ring-slate-700" data-month-sheet-surface>
+              <div class="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-5 dark:border-slate-800" data-month-sheet-header>
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-slate-100" data-month-sheet-title></h3>
+                    <p class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400" data-month-sheet-subtitle></p>
+                  </div>
+                  <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700" data-month-sheet-close>✕</button>
                 </div>
-                <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700" data-month-sheet-close>✕</button>
               </div>
-              <div class="max-h-[72vh] overflow-y-auto px-5 py-4" data-month-sheet-body></div>
-              <div class="flex flex-col gap-2 border-t border-slate-200 px-5 py-5 dark:border-slate-800" data-month-sheet-actions></div>
+              <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5" data-month-sheet-body></div>
+              <div class="shrink-0 flex flex-col gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-5 sm:py-4" data-month-sheet-actions style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));"></div>
             </div>
           </div>
         `;
@@ -814,6 +822,7 @@
         monthSheetState = {
           root,
           surface: root.querySelector('[data-month-sheet-surface]'),
+          header: root.querySelector('[data-month-sheet-header]'),
           title: root.querySelector('[data-month-sheet-title]'),
           subtitle: root.querySelector('[data-month-sheet-subtitle]'),
           body: root.querySelector('[data-month-sheet-body]'),
@@ -846,9 +855,15 @@
         return monthSheetState;
       }
 
-      function openMonthSheet({ title = 'Ações', subtitle = '', body = null, actions = [], onClose = null } = {}) {
+      function openMonthSheet({ title = 'Ações', subtitle = '', body = null, actions = [], onClose = null, size = 'default' } = {}) {
         const state = ensureMonthSheet();
+        const surfaceSizeClass = size === 'people' ? 'sm:max-w-6xl' : (size === 'wide' ? 'sm:max-w-5xl' : 'sm:max-w-lg');
         state.onClose = typeof onClose === 'function' ? onClose : null;
+        state.surface.className = `flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-full ${surfaceSizeClass} flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 sm:h-auto sm:max-h-[calc(100dvh-2rem)] dark:bg-slate-900 dark:ring-slate-700`;
+        state.header.className = 'shrink-0 border-b border-slate-200 px-4 py-4 sm:px-5 dark:border-slate-800';
+        state.body.className = `min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 ${size === 'people' ? 'xl:px-6 xl:py-5' : ''}`.trim();
+        state.actions.className = 'shrink-0 flex flex-col gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-5 sm:py-4';
+        state.actions.style.paddingBottom = 'calc(0.75rem + env(safe-area-inset-bottom, 0px))';
         state.title.textContent = title;
         state.subtitle.textContent = subtitle || '';
         state.subtitle.classList.toggle('hidden', !subtitle);
@@ -1016,7 +1031,7 @@
 
       function buildPersonCard(person, checked) {
         const label = document.createElement('label');
-        label.className = 'group cursor-pointer';
+        label.className = 'group min-w-0 cursor-pointer';
 
         const input = document.createElement('input');
         input.type = 'checkbox';
@@ -1026,18 +1041,71 @@
         input.checked = checked;
 
         const card = document.createElement('span');
-        card.className = 'flex min-h-[74px] items-center gap-3 rounded-[22px] border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-blue-300 group-hover:shadow-md peer-checked:border-blue-400 peer-checked:bg-blue-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-blue-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/40';
+        card.className = 'flex min-h-[58px] items-center gap-2 rounded-[18px] border border-slate-200/80 bg-white/90 px-3 py-2.5 shadow-sm transition-all group-hover:border-blue-300 group-hover:shadow-md peer-checked:border-blue-500 peer-checked:bg-blue-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/60 dark:group-hover:border-blue-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/35';
 
         const name = document.createElement('span');
-        name.className = 'flex-1 text-sm font-bold text-slate-800 dark:text-slate-100';
+        name.className = 'min-w-0 flex-1 text-sm font-bold leading-5 text-slate-800 dark:text-slate-100';
         name.textContent = person.name;
 
         const badge = document.createElement('span');
-        badge.className = 'inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 transition-all peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 dark:peer-checked:text-white';
+        badge.className = 'inline-flex h-8 w-8 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 transition-all peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 dark:peer-checked:text-white';
         badge.innerHTML = '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
 
         card.appendChild(name);
         card.appendChild(badge);
+        label.appendChild(input);
+        label.appendChild(card);
+        return label;
+      }
+
+      function buildEqualShareMapLocal(totalCents, personIds) {
+        const ids = Array.from(new Set((personIds || []).map(Number).filter(Number.isInteger)));
+        const shareMap = {};
+        if (!ids.length) return shareMap;
+        const numericTotal = Number(totalCents || 0);
+        const share = Math.floor(numericTotal / ids.length);
+        const remainder = numericTotal - (share * ids.length);
+        ids.forEach((pid, idx) => {
+          const extra = idx < Math.abs(remainder) ? Math.sign(remainder) : 0;
+          shareMap[pid] = share + extra;
+        });
+        return shareMap;
+      }
+
+      function normalizeSelectedShares(item) {
+        const map = {};
+        if (!item || !item.selected_shares || typeof item.selected_shares !== 'object') return map;
+        Object.entries(item.selected_shares).forEach(([rawKey, rawValue]) => {
+          const key = Number(rawKey || 0);
+          if (Number.isInteger(key) && key > 0) map[key] = Number(rawValue || 0);
+        });
+        return map;
+      }
+
+      function bindDynamicMoneyMask(input) {
+        if (!(input instanceof HTMLInputElement)) return;
+        if (window.OPMoneyMask && typeof window.OPMoneyMask.bind === 'function') {
+          window.OPMoneyMask.bind(input);
+          return;
+        }
+        input.setAttribute('inputmode', 'numeric');
+      }
+
+      function buildSplitModeOption({ title, description, value, checked, accentClass }) {
+        const label = document.createElement('label');
+        label.className = 'group h-full cursor-pointer';
+
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'split_mode_choice';
+        input.value = value;
+        input.className = 'peer sr-only';
+        input.checked = checked;
+
+        const card = document.createElement('span');
+        card.className = `flex h-full items-start gap-3 rounded-[20px] border border-slate-200 bg-white px-4 py-3.5 shadow-sm transition-all group-hover:border-slate-300 group-hover:shadow-md ${accentClass} dark:border-slate-700 dark:bg-slate-900/60`;
+        card.innerHTML = `<span class="mt-0.5 inline-flex h-9 w-9 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500 transition-all peer-checked:border-current peer-checked:bg-current peer-checked:text-white dark:border-slate-700 dark:bg-slate-950">${value === 'exact' ? '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-3.314 0-6 2.239-6 5 0 1.657.97 3.126 2.465 4.038L8 21l3.211-2.14A7.43 7.43 0 0012 19c3.314 0 6-2.239 6-5s-2.686-5-6-5z"></path></svg>' : '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'}</span><span class="min-w-0"><span class="block text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(title)}</span><span class="mt-1 block text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">${escapeHtml(description)}</span></span>`;
+
         label.appendChild(input);
         label.appendChild(card);
         return label;
@@ -1058,9 +1126,12 @@
         wrapper.appendChild(summary);
 
         const uniformSelection = getUniformSelection(items);
+        const singleItem = items.length === 1 ? items[0] : null;
         const initialSelectedIds = uniformSelection !== null
           ? uniformSelection
-          : (items.length === 1 ? (items[0].selected_ids || []).map(Number) : []);
+          : (singleItem ? (singleItem.selected_ids || []).map(Number) : []);
+        const exactModeAvailable = !!singleItem && Number(singleItem.amount_cents || 0) >= 0;
+        const draftShares = { ...(singleItem ? normalizeSelectedShares(singleItem) : {}) };
 
         if (uniformSelection === null && items.length > 1) {
           const note = document.createElement('div');
@@ -1069,48 +1140,304 @@
           wrapper.appendChild(note);
         }
 
+        const selectionSection = document.createElement('section');
+        selectionSection.className = 'space-y-3';
+        wrapper.appendChild(selectionSection);
+
+        const selectionHeader = document.createElement('div');
+        selectionHeader.className = 'flex flex-wrap items-start justify-between gap-3';
+        selectionHeader.innerHTML = `
+          <div>
+            <div class="text-sm font-black text-slate-900 dark:text-slate-100">Quem entra nessa divisão?</div>
+            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Marque as pessoas participantes. A grade fica mais compacta para aguentar de 2 até 20 nomes sem engolir os botões finais.</p>
+          </div>
+        `;
+        selectionSection.appendChild(selectionHeader);
+
+        const selectionCounter = document.createElement('span');
+        selectionCounter.className = 'inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300';
+        selectionHeader.appendChild(selectionCounter);
+
         if (!people.length) {
           const empty = document.createElement('div');
           empty.className = 'rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300';
           empty.textContent = 'Nenhuma pessoa visível neste mês para aplicar a distribuição.';
-          wrapper.appendChild(empty);
+          selectionSection.appendChild(empty);
         } else {
           const grid = document.createElement('div');
-          grid.className = 'grid gap-3 sm:grid-cols-2';
+          grid.className = 'grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5';
           people.forEach(person => {
             grid.appendChild(buildPersonCard(person, initialSelectedIds.includes(Number(person.id))));
           });
-          wrapper.appendChild(grid);
+          selectionSection.appendChild(grid);
         }
 
-        openMonthSheet({
+        const splitModeSection = document.createElement('section');
+        splitModeSection.className = 'space-y-3 hidden';
+        splitModeSection.hidden = true;
+
+        const splitModeHeader = document.createElement('div');
+        splitModeHeader.innerHTML = `
+          <div class="text-sm font-black text-slate-900 dark:text-slate-100">Como você quer dividir essa compra?</div>
+          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Quando entram 2 ou mais pessoas, escolha o estilo da divisão antes de salvar.</p>
+        `;
+        splitModeSection.appendChild(splitModeHeader);
+
+        const splitModeBody = document.createElement('div');
+        splitModeBody.className = 'space-y-3';
+
+        const splitModeGrid = document.createElement('div');
+        splitModeGrid.className = 'grid gap-2 sm:grid-cols-2 lg:max-w-[30rem]';
+
+        const equalOption = buildSplitModeOption({
+          title: 'Partes iguais',
+          description: 'O app reparte sozinho entre as pessoas marcadas.',
+          value: 'equal',
+          checked: false,
+          accentClass: 'peer-checked:border-emerald-400 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 dark:peer-checked:border-emerald-500 dark:peer-checked:bg-emerald-950/25'
+        });
+        const exactOption = buildSplitModeOption({
+          title: 'Valor definido',
+          description: 'Você dita o valor de cada pessoa, sem chute e sem susto.',
+          value: 'exact',
+          checked: false,
+          accentClass: 'peer-checked:border-violet-400 peer-checked:bg-violet-50 peer-checked:text-violet-700 dark:peer-checked:border-violet-500 dark:peer-checked:bg-violet-950/25'
+        });
+        splitModeGrid.appendChild(equalOption);
+        splitModeGrid.appendChild(exactOption);
+        splitModeBody.appendChild(splitModeGrid);
+
+        const exactPanel = document.createElement('div');
+        exactPanel.className = 'space-y-4 rounded-[24px] border border-violet-200 bg-violet-50/80 p-4 dark:border-violet-900/70 dark:bg-violet-950/20 hidden';
+        exactPanel.hidden = true;
+
+        const exactIntro = document.createElement('div');
+        exactIntro.className = 'text-sm font-semibold text-violet-900 dark:text-violet-200';
+        exactIntro.textContent = singleItem
+          ? `Total da compra: ${formatMoney(singleItem.amount_cents)}. Preencha até fechar certinho.`
+          : 'Valor definido fica disponível quando você abre uma compra por vez.';
+        exactPanel.appendChild(exactIntro);
+
+        const exactFields = document.createElement('div');
+        exactFields.className = 'grid gap-3 lg:grid-cols-2';
+        exactPanel.appendChild(exactFields);
+
+        const exactTotals = document.createElement('div');
+        exactTotals.className = 'rounded-[18px] border border-white/70 bg-white/85 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900/60';
+        exactPanel.appendChild(exactTotals);
+
+        splitModeBody.appendChild(exactPanel);
+        splitModeSection.appendChild(splitModeBody);
+        wrapper.appendChild(splitModeSection);
+
+        const multiExactNote = document.createElement('div');
+        multiExactNote.className = 'rounded-[22px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200';
+        multiExactNote.textContent = 'Quer usar valores definidos? Abra uma compra por vez. Em seleção múltipla, o app mantém só a divisão em partes iguais para não misturar os totais.';
+        multiExactNote.hidden = items.length === 1;
+        multiExactNote.classList.toggle('hidden', items.length === 1);
+        wrapper.appendChild(multiExactNote);
+
+        const modeInputs = () => Array.from(splitModeGrid.querySelectorAll('input[name="split_mode_choice"]'));
+        const getSelectedIds = () => Array.from(wrapper.querySelectorAll('input[name="person_ids"]:checked'))
+          .map(input => Number(input.value))
+          .filter(Number.isInteger);
+        let saveActionButton = null;
+
+        function clearSplitModeChoice() {
+          modeInputs().forEach((input) => {
+            input.checked = false;
+          });
+        }
+
+        function syncSelectionCounter() {
+          const count = getSelectedIds().length;
+          selectionCounter.textContent = count === 0
+            ? 'Ninguém marcado'
+            : (count === 1 ? '1 participante marcado' : `${count} participantes marcados`);
+        }
+
+        function getSplitMode() {
+          const active = splitModeGrid.querySelector('input[name="split_mode_choice"]:checked');
+          return active ? String(active.value || '') : '';
+        }
+
+        function renderExactFields() {
+          exactFields.innerHTML = '';
+          if (!singleItem) return;
+          const selectedIds = getSelectedIds();
+          const defaultMap = buildEqualShareMapLocal(Number(singleItem.amount_cents || 0), selectedIds);
+
+          selectedIds.forEach((personId) => {
+            const person = people.find(entry => Number(entry.id) === Number(personId));
+            if (!person) return;
+            if (draftShares[personId] === undefined) draftShares[personId] = defaultMap[personId] || 0;
+
+            const row = document.createElement('label');
+            row.className = 'rounded-[20px] border border-white/80 bg-white/90 px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/70';
+
+            const header = document.createElement('div');
+            header.className = 'mb-2 flex items-center justify-between gap-3';
+            header.innerHTML = `<span class="text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(person.name)}</span><span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Digite a parte dessa pessoa</span>`;
+            row.appendChild(header);
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.name = `share_amounts[${personId}]`;
+            input.placeholder = '0,00';
+            input.value = window.OPMoneyMask && typeof window.OPMoneyMask.formatFromCents === 'function'
+              ? window.OPMoneyMask.formatFromCents(draftShares[personId])
+              : formatMoney(draftShares[personId]);
+            input.className = 'w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900/70 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20';
+            input.setAttribute('data-money-mask', '1');
+            bindDynamicMoneyMask(input);
+            input.addEventListener('input', () => {
+              draftShares[personId] = window.OPMoneyMask && typeof window.OPMoneyMask.toCents === 'function'
+                ? window.OPMoneyMask.toCents(input.value)
+                : Number(String(input.value || '').replace(/\D/g, '')) || 0;
+              syncExactTotals();
+            });
+            row.appendChild(input);
+            exactFields.appendChild(row);
+          });
+        }
+
+        function syncExactTotals() {
+          if (!singleItem) {
+            exactTotals.innerHTML = '';
+            return;
+          }
+          const selectedIds = getSelectedIds();
+          const typedTotal = selectedIds.reduce((sum, personId) => sum + Number(draftShares[personId] || 0), 0);
+          const targetTotal = Number(singleItem.amount_cents || 0);
+          const diff = targetTotal - typedTotal;
+          let toneClass = 'text-emerald-700 dark:text-emerald-300';
+          let helperText = 'Fechou certinho. Agora é só salvar.';
+          if (diff > 0) {
+            toneClass = 'text-amber-700 dark:text-amber-300';
+            helperText = `Ainda falta ${formatMoney(diff)} para bater com o total.`;
+          } else if (diff < 0) {
+            toneClass = 'text-red-700 dark:text-red-300';
+            helperText = `Passou ${formatMoney(Math.abs(diff))}. Dá uma aparada e segue o baile.`;
+          }
+          exactTotals.innerHTML = `
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">Resumo da divisão</div>
+                <div class="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-300">Compra: ${escapeHtml(formatMoney(targetTotal))}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">Somando agora</div>
+                <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">${escapeHtml(formatMoney(typedTotal))}</div>
+              </div>
+            </div>
+            <div class="mt-3 text-sm font-bold ${toneClass}">${escapeHtml(helperText)}</div>
+          `;
+        }
+
+        function syncSaveButtonState() {
+          if (!saveActionButton) return;
+          const selectedIds = getSelectedIds();
+          const needsExplicitChoice = exactModeAvailable && selectedIds.length > 1;
+          saveActionButton.disabled = !people.length || (needsExplicitChoice && !getSplitMode());
+        }
+
+        function syncSplitUi() {
+          const selectedIds = getSelectedIds();
+          const canPickMode = exactModeAvailable && selectedIds.length > 1;
+          if (!canPickMode) {
+            clearSplitModeChoice();
+          }
+
+          splitModeSection.hidden = !canPickMode;
+          splitModeSection.classList.toggle('hidden', !canPickMode);
+          multiExactNote.hidden = items.length === 1;
+          multiExactNote.classList.toggle('hidden', items.length === 1);
+
+          const wantsExact = canPickMode && getSplitMode() === 'exact';
+          exactPanel.hidden = !wantsExact;
+          exactPanel.classList.toggle('hidden', !wantsExact);
+
+          if (wantsExact) {
+            renderExactFields();
+            syncExactTotals();
+          } else {
+            exactFields.innerHTML = '';
+            exactTotals.innerHTML = '';
+          }
+
+          syncSelectionCounter();
+          syncSaveButtonState();
+        }
+
+        wrapper.querySelectorAll('input[name="person_ids"]').forEach((input) => {
+          input.addEventListener('change', () => {
+            syncSplitUi();
+          });
+        });
+        modeInputs().forEach((input) => {
+          input.addEventListener('change', () => {
+            syncSplitUi();
+          });
+        });
+        const sheetState = openMonthSheet({
           title: items.length > 1 ? 'Aplicar participantes' : 'Selecionar participantes',
-          subtitle: items.length > 1 ? 'A distribuição será substituída em todos os itens selecionados.' : 'Escolha quem participa desta compra.',
+          subtitle: items.length > 1
+            ? 'A distribuição será substituída em todos os itens selecionados.'
+            : 'Escolha quem participa e, se quiser, dite o valor de cada um.',
           body: wrapper,
+          size: 'people',
           actions: [
             { label: 'Fechar', tone: 'secondary' },
             {
-              label: 'Salvar distribuição',
+              label: 'Salvar divisão',
               tone: 'primary',
               closeOnClick: false,
               disabled: !people.length,
               onClick: async () => {
-                const checkedIds = Array.from(wrapper.querySelectorAll('input[name="person_ids"]:checked'))
-                  .map(input => Number(input.value))
-                  .filter(Number.isInteger);
-                const scope = await resolveSelectionScope(items, { actionLabel: 'alterar a distribuição' });
-                if (!scope) return false;
-                const ok = await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/alloc`, {
+                const checkedIds = getSelectedIds();
+                const payload = {
                   txn_ids: txnIds,
                   person_ids: checkedIds,
-                  apply_scope: scope
-                });
+                  apply_scope: 'single'
+                };
+
+                if (checkedIds.length > 1) {
+                  const selectedMode = exactModeAvailable ? getSplitMode() : 'equal';
+                  if (exactModeAvailable && !selectedMode) {
+                    showAllocMessage('Escolha o tipo de divisão antes de salvar.', 'warning');
+                    syncSplitUi();
+                    return false;
+                  }
+                  payload.split_mode = selectedMode;
+                }
+
+                if (singleItem && checkedIds.length > 1 && getSplitMode() === 'exact') {
+                  const targetTotal = Number(singleItem.amount_cents || 0);
+                  const typedTotal = checkedIds.reduce((sum, personId) => sum + Number(draftShares[personId] || 0), 0);
+                  if (typedTotal !== targetTotal) {
+                    syncExactTotals();
+                    showAllocMessage('Os valores definidos ainda não fecharam com o total da compra.', 'warning');
+                    return false;
+                  }
+                  payload.share_amounts = checkedIds.reduce((acc, personId) => {
+                    acc[personId] = Number(draftShares[personId] || 0);
+                    return acc;
+                  }, {});
+                }
+
+                const scope = await resolveSelectionScope(items, { actionLabel: 'alterar a distribuição' });
+                if (!scope) return false;
+                payload.apply_scope = scope;
+                const ok = await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/alloc`, payload);
                 if (ok) ensureMonthSheet().close();
                 return false;
               }
             }
           ]
         });
+        saveActionButton = sheetState.actions.querySelectorAll('button')[1] || null;
+        syncSelectionCounter();
+        syncSplitUi();
       }
 
       function openMoveSheet(txnIds) {

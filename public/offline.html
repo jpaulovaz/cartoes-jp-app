@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OrganizaPay | Sem internet</title>
+  <meta name="theme-color" content="#020617">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg-1: #020617;
+      --bg-2: #0f172a;
+      --card: rgba(15, 23, 42, 0.84);
+      --line: rgba(148, 163, 184, 0.16);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #22c55e;
+      --warning: #f59e0b;
+      --shadow: 0 30px 80px rgba(2, 6, 23, 0.48);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top, rgba(56, 189, 248, 0.22), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.18), transparent 22%),
+        linear-gradient(160deg, var(--bg-1), var(--bg-2));
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .shell {
+      width: min(100%, 980px);
+      display: grid;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(16px);
+    }
+
+    .hero {
+      display: grid;
+      gap: 24px;
+      padding: clamp(24px, 5vw, 42px);
+    }
+
+    @media (min-width: 860px) {
+      .hero {
+        grid-template-columns: minmax(0, 1.1fr) minmax(280px, 360px);
+        align-items: center;
+      }
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.56);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      color: #f8fafc;
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+
+    .eyebrow__dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--warning);
+      box-shadow: 0 0 0 8px rgba(245, 158, 11, 0.14);
+    }
+
+    h1 {
+      margin: 16px 0 12px;
+      font-size: clamp(2rem, 4vw, 3.4rem);
+      line-height: 1.02;
+      letter-spacing: -0.04em;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1.72;
+    }
+
+    .hero p + p {
+      margin-top: 14px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 26px;
+    }
+
+    .btn {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      padding: 14px 20px;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 160ms ease, opacity 160ms ease, background 160ms ease, border-color 160ms ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .btn:hover { transform: translateY(-1px); }
+
+    .btn--primary {
+      background: linear-gradient(135deg, var(--accent), #2563eb);
+      color: white;
+      box-shadow: 0 18px 36px rgba(37, 99, 235, 0.28);
+    }
+
+    .btn--secondary {
+      background: rgba(15, 23, 42, 0.56);
+      color: var(--text);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .btn[disabled],
+    .btn[aria-disabled="true"] {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+      pointer-events: none;
+    }
+
+    .side-panel {
+      border-radius: 24px;
+      padding: 22px;
+      background: rgba(2, 6, 23, 0.54);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      display: grid;
+      gap: 18px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand img {
+      width: 64px;
+      height: 64px;
+      border-radius: 20px;
+      box-shadow: 0 20px 32px rgba(37, 99, 235, 0.24);
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 1.1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .brand span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .meta-list {
+      display: grid;
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .meta-item {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(15, 23, 42, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+
+    .meta-item small {
+      display: block;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.73rem;
+      font-weight: 800;
+    }
+
+    .meta-item strong {
+      display: block;
+      font-size: 0.98rem;
+      line-height: 1.45;
+    }
+
+    .tips {
+      display: grid;
+      gap: 12px;
+      padding: clamp(22px, 4vw, 32px);
+    }
+
+    .tips__grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    @media (min-width: 680px) {
+      .tips__grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    .tip {
+      border-radius: 22px;
+      padding: 18px;
+      background: rgba(15, 23, 42, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+
+    .tip strong {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 1rem;
+    }
+
+    .tip p {
+      font-size: 0.94rem;
+    }
+
+    .status-note {
+      font-weight: 700;
+      color: #f8fafc;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="card hero">
+      <div>
+        <span class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>Modo sobrevivência ativado</span>
+        <h1>Sem internet, mas o OrganizaPay não te abandona.</h1>
+        <p>
+          A conexão caiu e a gente segurou as pontas com uma tela offline própria. Assim você não toma aquele susto com a página quebrada nem acha que o app saiu correndo com suas contas.
+        </p>
+        <p>
+          Assim que a rede voltar, é só tentar novamente para retomar o fluxo normal. Enquanto isso, deixamos logo abaixo um lembrete da sua última visita bem-sucedida.
+        </p>
+        <div class="actions">
+          <button type="button" class="btn btn--primary" id="retryButton">Tentar novamente</button>
+          <a class="btn btn--secondary" id="lastPageButton" href="/geral">Abrir última página</a>
+        </div>
+      </div>
+
+      <aside class="side-panel" aria-label="Resumo do modo offline">
+        <div class="brand">
+          <img src="/icon-192.png" alt="OrganizaPay">
+          <div>
+            <strong>OrganizaPay</strong>
+            <span>Seu cantinho financeiro, até quando a internet resolve tirar folga.</span>
+          </div>
+        </div>
+
+        <ul class="meta-list">
+          <li class="meta-item">
+            <small>Status agora</small>
+            <strong id="networkStatus" class="status-note">Sem conexão com a internet.</strong>
+          </li>
+          <li class="meta-item">
+            <small>Última página vista</small>
+            <strong id="lastPageLabel">Ainda não deu tempo de guardar esse mimo.</strong>
+          </li>
+          <li class="meta-item">
+            <small>Última visita registrada</small>
+            <strong id="lastVisitLabel">Sem registro salvo por enquanto.</strong>
+          </li>
+        </ul>
+      </aside>
+    </section>
+
+    <section class="card tips">
+      <div>
+        <h2 style="margin:0 0 10px;font-size:1.35rem;letter-spacing:-0.02em;">O que dá para esperar deste modo offline?</h2>
+        <p>Honestidade em primeiro lugar: o app não vai fingir que consegue salvar alterações sem rede. A ideia aqui é proteger a experiência e te orientar bem até a conexão voltar.</p>
+      </div>
+      <div class="tips__grid">
+        <article class="tip">
+          <strong>Sem susto visual</strong>
+          <p>A tela offline entra no lugar do erro cru do navegador, mantendo o clima do app e explicando o que aconteceu.</p>
+        </article>
+        <article class="tip">
+          <strong>Botão de recuperação</strong>
+          <p>O botão tentar novamente fica pronto para recarregar a navegação assim que a internet der as caras.</p>
+        </article>
+        <article class="tip">
+          <strong>Lembrete da última visita</strong>
+          <p>Guardamos a última rota aberta com sucesso para te ajudar a se reencontrar rapidinho depois.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = 'organizapay:last-visit';
+      const retryButton = document.getElementById('retryButton');
+      const lastPageButton = document.getElementById('lastPageButton');
+      const networkStatus = document.getElementById('networkStatus');
+      const lastPageLabel = document.getElementById('lastPageLabel');
+      const lastVisitLabel = document.getElementById('lastVisitLabel');
+
+      function formatVisit(isoDate) {
+        if (!isoDate) return 'Sem registro salvo por enquanto.';
+        const date = new Date(isoDate);
+        if (Number.isNaN(date.getTime())) return 'Sem registro salvo por enquanto.';
+        return new Intl.DateTimeFormat('pt-BR', {
+          dateStyle: 'short',
+          timeStyle: 'short'
+        }).format(date);
+      }
+
+      function prettifyPath(path) {
+        if (!path) return 'Ainda não deu tempo de guardar esse mimo.';
+        if (path === '/') return 'Página inicial';
+        return path;
+      }
+
+      function updateConnectionStatus() {
+        const isOnline = navigator.onLine;
+        networkStatus.textContent = isOnline
+          ? 'Conexão restabelecida. Agora você já pode tentar novamente.'
+          : 'Sem conexão com a internet.';
+        lastPageButton.setAttribute('aria-disabled', isOnline ? 'false' : 'true');
+        lastPageButton.tabIndex = isOnline ? 0 : -1;
+      }
+
+      function hydrateLastVisit() {
+        let raw = null;
+        try {
+          raw = localStorage.getItem(STORAGE_KEY);
+        } catch (error) {
+          raw = null;
+        }
+
+        if (!raw) {
+          updateConnectionStatus();
+          return;
+        }
+
+        try {
+          const data = JSON.parse(raw);
+          const safePath = typeof data.path === 'string' && data.path.trim() ? data.path : '/geral';
+          lastPageButton.href = safePath;
+          lastPageLabel.textContent = prettifyPath(safePath);
+          lastVisitLabel.textContent = formatVisit(data.timestamp);
+        } catch (error) {
+          lastPageButton.href = '/geral';
+        }
+
+        updateConnectionStatus();
+      }
+
+      retryButton.addEventListener('click', function () {
+        window.location.reload();
+      });
+
+      lastPageButton.addEventListener('click', function (event) {
+        if (!navigator.onLine) {
+          event.preventDefault();
+        }
+      });
+
+      window.addEventListener('online', updateConnectionStatus);
+      window.addEventListener('offline', updateConnectionStatus);
+      hydrateLastVisit();
+    })();
+  </script>
+</body>
+</html>

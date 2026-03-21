@@ -1,3 +1,62 @@
-</main>
+  </main>
+
+  <% const dFoot = new Date();
+     const mFoot = dFoot.getMonth() + 1;
+     const yFoot = dFoot.getFullYear();
+     const bottomDashboardHref = (typeof dashboardHref !== 'undefined' && dashboardHref) ? dashboardHref : `/detalhamento/${yFoot}/${mFoot}`;
+     const bottomCanImportData = Number((user && user.can_import) ?? (typeof canImport !== 'undefined' ? canImport : 1)) !== 0;
+     const bottomIsAdmin = !!(user && user.role === 'admin');
+  %>
+
+  <nav class="op-bottom-nav md:hidden" aria-label="Navegação principal">
+    <div class="op-bottom-nav__inner">
+      <a href="<%= bottomDashboardHref %>" data-nav-key="painel" class="op-bottom-nav__link">
+        <span class="op-bottom-nav__icon">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h4a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h4a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2"></path></svg>
+        </span>
+        <span>Painel</span>
+      </a>
+      <a href="/geral" data-nav-key="geral" class="op-bottom-nav__link">
+        <span class="op-bottom-nav__icon">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+        </span>
+        <span>Geral</span>
+      </a>
+      <a href="/people" data-nav-key="people" class="op-bottom-nav__link">
+        <span class="op-bottom-nav__icon">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-1a4 4 0 00-5.356-3.772M17 20H7m10 0v-1c0-.653-.084-1.287-.24-1.892M7 20H2v-1a4 4 0 015.356-3.772M7 20v-1c0-.653.084-1.287.24-1.892m0 0a5.002 5.002 0 019.52 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+        </span>
+        <span>Amigos</span>
+      </a>
+      <a href="/shared-debts" data-nav-key="shared" class="op-bottom-nav__link">
+        <span class="op-bottom-nav__icon">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12m-3-9h6a2 2 0 012 2 2 2 0 01-2 2H9a2 2 0 00-2 2 2 2 0 002 2h6"></path></svg>
+        </span>
+        <span>Cobranças</span>
+      </a>
+      <a href="/cards" data-nav-key="cards" class="op-bottom-nav__link">
+        <span class="op-bottom-nav__icon">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M5 11h14M6 15h3m3 0h2m-9 4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+        </span>
+        <span>Cartões</span>
+      </a>
+      <% if (bottomCanImportData) { %>
+        <a href="/import" data-nav-key="import" class="op-bottom-nav__link">
+          <span class="op-bottom-nav__icon">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+          </span>
+          <span>Importar</span>
+        </a>
+      <% } %>
+      <% if (bottomIsAdmin) { %>
+        <a href="/admin" data-nav-key="admin" class="op-bottom-nav__link">
+          <span class="op-bottom-nav__icon">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622C17.176 19.29 21 14.591 21 9c0-1.042-.133-2.052-.382-3.016z"></path></svg>
+          </span>
+          <span>Admin</span>
+        </a>
+      <% } %>
+    </div>
+  </nav>
 </body>
 </html>

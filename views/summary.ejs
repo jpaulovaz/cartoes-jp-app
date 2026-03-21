@@ -1,23 +1,33 @@
-<%- include("partials/header", { title: `Cartões JP | Resumo ${String(month).padStart(2,'0')}/${year}` }) %>
+<%- include("partials/header", { title: `OrganizaPay | Resumo ${String(month).padStart(2,'0')}/${year}` }) %>
 
-  <div class="w-full">
+  <div class="w-full" data-summary-autosave-root data-year="<%= year %>" data-month="<%= month %>">
 
-    <div class="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <section class="op-page-hero op-fade-up mb-8">
       <div>
-        <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Resumo — <%= String(month).padStart(2,'0') %>/
-            <%= year %>
-        </h1>
-        <p class="text-slate-500 mt-1 font-medium">Fechamento de faturas e divisões por pessoa.</p>
+        <span class="op-page-hero__eyebrow">Fechamento inteligente</span>
+        <h1 class="op-page-hero__title mt-4">Resumo — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
+        <p class="op-page-hero__subtitle mt-3">Veja cartões, pessoas e pagamentos do mês sem precisar caçar informação em várias telas.</p>
       </div>
-      <a href="/month/<%= year %>/<%= month %>"
-        class="inline-flex items-center justify-center px-5 py-2.5 text-sm font-bold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 hover:text-blue-600 transition-all shadow-sm">
-        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16">
-          </path>
-        </svg>
-        Ver Itens (Lançamentos)
-      </a>
+      <div class="op-page-hero__actions">
+        <a href="/month/<%= year %>/<%= month %>"
+          class="inline-flex items-center justify-center rounded-2xl bg-rose-500 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-rose-500/20 transition-all hover:-translate-y-0.5 hover:bg-rose-600">
+          <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+          </svg>
+          Ver compras
+        </a>
+      </div>
+    </section>
+
+    <div class="mb-6 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold leading-6 text-sky-900 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100 lg:hidden">
+      💡 Dica amiga: no celular, esse resumo respira melhor na horizontal. Na vertical também funciona, mas de lado os números ficam bem mais confortáveis.
     </div>
+
+    <% if (isClosed) { %>
+      <div class="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+        🔒 Este mês já foi fechado. As compras continuam visíveis, mas os campos de pagamento e vencimento ficam só para consulta.
+      </div>
+    <% } %>
 
     <% if (unassigned && unassigned.length> 0) { %>
       <div class="mb-8 p-5 rounded-2xl bg-amber-50 border border-amber-200 shadow-sm flex items-start gap-4">
@@ -30,11 +40,11 @@
           </svg>
         </div>
         <div>
-          <h3 class="text-lg font-bold text-amber-900 mb-2">Atenção: Existem itens não atribuídos a pessoas!</h3>
+          <h3 class="text-lg font-bold text-amber-900 mb-2">Ops: ainda tem compra sem dono</h3>
           <div class="flex flex-wrap gap-3">
             <% unassigned.forEach(u=> { %>
               <div
-                class="bg-white border border-amber-200 px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 shadow-sm">
+                class="bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800 px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 shadow-sm">
                 <span class="font-bold text-amber-800">
                   <%= u.card_name %>
                 </span>
@@ -51,84 +61,101 @@
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8 mb-8">
 
           <div>
-            <h2 class="text-xl font-extrabold text-slate-800 mb-4 flex items-center">
+            <h2 class="text-xl font-extrabold text-slate-800 dark:text-white mb-4 flex items-center">
               <svg class="w-6 h-6 mr-2 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
               </svg>
-              Fechamento de Cartões
+              Como estão os cartões
             </h2>
-            <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-              <form method="post" action="/summary/<%= year %>/<%= month %>/cards">
-                <div class="overflow-x-auto">
+            <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <% const cardsPanelTotals = cardsPanel.reduce((acc, cp) => {
+                   acc.total_cents += cp.total_cents || 0;
+                   acc.paid_cents += cp.paid_cents || 0;
+                   acc.remaining_cents += (cp.total_cents || 0) - (cp.paid_cents || 0);
+                   return acc;
+                 }, { total_cents: 0, paid_cents: 0, remaining_cents: 0 }); %>
+              <div data-summary-cards-panel>
+                <div class="overflow-x-auto op-summary-scroll-shell">
                   <table class="w-full text-sm text-left">
                     <thead
-                      class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold text-xs tracking-wider">
+                      class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-xs tracking-wider">
                       <tr>
                         <th class="px-3 py-4">Cartão</th>
-                        <th class="px-2 py-4">Vencimento</th>
+                        <th class="px-2 py-4 text-center">Vencimento</th>
                         <th class="px-3 py-4 text-right">Fatura</th>
                         <th class="px-3 py-4 text-right">Valor Pago</th>
                         <th class="px-3 py-4 text-right">Falta</th>
                       </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                       <% cardsPanel.forEach(cp=> {
                         const falta = (cp.total_cents || 0) - (cp.paid_cents || 0);
                         %>
-                        <tr class="hover:bg-slate-50 transition-colors">
-                          <td class="px-3 py-3 font-bold text-slate-800">
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors" data-summary-card-row data-card-id="<%= cp.card_id %>" data-total-cents="<%= cp.total_cents || 0 %>">
+                          <td class="px-3 py-3 font-bold text-slate-800 dark:text-white">
                             <%= cp.card_name %>
-                              <input type="hidden" name="card_id" value="<%= cp.card_id %>" />
                           </td>
-                          <td class="px-2 py-3">
-                            <div class="text-[10px] font-bold text-slate-400 uppercase mb-1">Calc: <%=
-                                cp.computed_due_date || "-" %>
+                          <td class="px-2 py-3 text-center">
+                            <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1">Calculado: <%=
+                                formatDateBR(cp.computed_due_date) %>
                             </div>
-                            <input name="override_due" type="date" value="<%= (cp.due_date || '') %>"
-                              class="border border-slate-300 rounded-lg px-2 py-1 bg-white text-sm font-medium focus:ring-2 focus:ring-emerald-500 outline-none w-full min-w-[110px]" />
+                            <input name="override_due" type="date" value="<%= (cp.due_date || '') %>" <%= isClosed ? 'disabled' : '' %>
+                              data-summary-card-due data-card-id="<%= cp.card_id %>"
+                              class="border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none w-full min-w-[110px] text-center" />
                           </td>
-                          <td class="px-3 py-3 text-right font-bold text-slate-700 whitespace-nowrap">
+                          <td class="px-3 py-3 text-right font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap op-summary-amount-cell">
                             <%= formatBRLFromCents(cp.total_cents) %>
                           </td>
                           <td class="px-3 py-3 text-right">
-                            <input name="paid" inputmode="decimal" type="text"
-                              value="<%= cp.paid_cents ? formatBRLFromCents(cp.paid_cents) : '' %>"
-                              class="w-24 lg:w-28 text-right border border-slate-300 rounded-lg px-2 py-1 bg-white font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500 outline-none paid-input" />
+                            <input name="paid" inputmode="numeric" type="text"
+                              value="<%= formatBRLFromCents(cp.paid_cents || 0) %>" <%= isClosed ? 'disabled' : '' %>
+                              data-money-mask data-summary-card-paid data-card-id="<%= cp.card_id %>"
+                              class="op-summary-money-input text-right border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none" />
                           </td>
-                          <td
-                            class="px-3 py-3 text-right font-black whitespace-nowrap <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">
+                          <td data-summary-card-remaining data-card-id="<%= cp.card_id %>"
+                            class="px-3 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">
                             <%= formatBRLFromCents(falta) %>
                           </td>
                         </tr>
                         <% }) %>
                     </tbody>
+                    <tfoot class="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                      <tr>
+                        <td class="px-3 py-3 font-black text-slate-800 dark:text-white">Total</td>
+                        <td class="px-2 py-3 text-center text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Ordenado por vencimento</td>
+                        <td class="px-3 py-3 text-right font-black text-slate-900 dark:text-white whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(cardsPanelTotals.total_cents) %></td>
+                        <td data-summary-cards-total-paid class="px-3 py-3 text-right font-black text-emerald-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(cardsPanelTotals.paid_cents) %></td>
+                        <td data-summary-cards-total-remaining class="px-3 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= cardsPanelTotals.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(cardsPanelTotals.remaining_cents) %></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
-                <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
-                  <button
-                    class="px-6 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all hover:-translate-y-0.5">Salvar
-                    (Cartões)</button>
-                </div>
-              </form>
+              </div>
             </div>
           </div>
 
           <div>
-            <h2 class="text-xl font-extrabold text-slate-800 mb-4 flex items-center">
+            <h2 class="text-xl font-extrabold text-slate-800 dark:text-white mb-4 flex items-center">
               <svg class="w-6 h-6 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z">
                 </path>
               </svg>
-              Controle de Pessoas
+              Como está cada pessoa
             </h2>
-            <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-              <form method="post" action="/summary/<%= year %>/<%= month %>/people">
-                <div class="overflow-x-auto">
+            <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <% const personPanelTotals = personPanel.reduce((acc, pp) => {
+                   acc.total_cents += pp.total_cents || 0;
+                   acc.paid_cents += pp.paid_cents || 0;
+                   acc.remaining_cents += (pp.total_cents || 0) - (pp.paid_cents || 0);
+                   return acc;
+                 }, { total_cents: 0, paid_cents: 0, remaining_cents: 0 }); %>
+              <div data-summary-people-panel>
+                <div class="overflow-x-auto op-summary-scroll-shell">
                   <table class="w-full text-sm text-left">
                     <thead
-                      class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold text-xs tracking-wider">
+                      class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-xs tracking-wider">
                       <tr>
                         <th class="px-4 py-4">Pessoa</th>
                         <th class="px-4 py-4 text-right">Total (Deve)</th>
@@ -136,43 +163,46 @@
                         <th class="px-4 py-4 text-right">Falta</th>
                       </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                       <% personPanel.forEach(pp=> {
                         const falta = (pp.total_cents || 0) - (pp.paid_cents || 0);
                         %>
-                        <tr class="hover:bg-slate-50 transition-colors">
-                          <td class="px-4 py-3 font-bold text-slate-800">
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors" data-summary-person-row data-person-id="<%= pp.person_id %>" data-total-cents="<%= pp.total_cents || 0 %>">
+                          <td class="px-4 py-3 font-bold text-slate-800 dark:text-white">
                             <%= pp.person_name %>
-                              <input type="hidden" name="person_id" value="<%= pp.person_id %>" />
                           </td>
-                          <td class="px-4 py-3 text-right font-bold text-slate-700 whitespace-nowrap">
+                          <td class="px-4 py-3 text-right font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap op-summary-amount-cell">
                             <%= formatBRLFromCents(pp.total_cents) %>
                           </td>
                           <td class="px-4 py-3 text-right">
-                            <input name="paid" inputmode="decimal" type="text"
-                              value="<%= pp.paid_cents ? formatBRLFromCents(pp.paid_cents) : '' %>"
-                              class="w-24 lg:w-28 text-right border border-slate-300 rounded-lg px-2 py-1 bg-white font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none paid-input" />
+                            <input name="paid" inputmode="numeric" type="text"
+                              value="<%= formatBRLFromCents(pp.paid_cents || 0) %>" <%= isClosed ? 'disabled' : '' %>
+                              data-money-mask data-summary-person-paid data-person-id="<%= pp.person_id %>"
+                              class="op-summary-money-input text-right border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" />
                           </td>
-                          <td
-                            class="px-4 py-3 text-right font-black whitespace-nowrap <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">
+                          <td data-summary-person-remaining data-person-id="<%= pp.person_id %>"
+                            class="px-4 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">
                             <%= formatBRLFromCents(falta) %>
                           </td>
                         </tr>
                         <% }) %>
                     </tbody>
+                    <tfoot class="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                      <tr>
+                        <td class="px-4 py-3 font-black text-slate-800 dark:text-white">Total</td>
+                        <td class="px-4 py-3 text-right font-black text-slate-900 dark:text-white whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(personPanelTotals.total_cents) %></td>
+                        <td data-summary-people-total-paid class="px-4 py-3 text-right font-black text-indigo-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(personPanelTotals.paid_cents) %></td>
+                        <td data-summary-people-total-remaining class="px-4 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= personPanelTotals.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(personPanelTotals.remaining_cents) %></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
-                <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
-                  <button
-                    class="px-6 py-2.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-all hover:-translate-y-0.5">Salvar
-                    (Pessoas)</button>
-                </div>
-              </form>
+              </div>
             </div>
           </div>
         </div>
 
-        <h2 class="text-xl font-extrabold text-slate-800 mb-4 flex items-center">
+        <h2 class="text-xl font-extrabold text-slate-800 dark:text-white mb-4 flex items-center">
           <svg class="w-6 h-6 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z">
@@ -180,8 +210,8 @@
           </svg>
           Resumo Detalhado (Pessoa x Cartão)
         </h2>
-        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden mb-8">
-          <div class="overflow-x-auto">
+        <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-8">
+          <div class="overflow-x-auto op-summary-scroll-shell">
             <table class="w-full text-sm text-left">
               <thead class="bg-slate-900 text-white font-bold text-xs uppercase tracking-wider">
                 <tr>
@@ -191,39 +221,49 @@
                       <%= c.name %>
                     </th>
                     <% }) %>
-                      <th class="px-5 py-4 text-right border-l border-slate-700">Total Geral</th>
+                      <th class="px-5 py-4 text-right border-l border-slate-700 dark:border-slate-600">Total Geral</th>
                       <th class="px-5 py-4 text-center rounded-tr-3xl">Ações</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-slate-100">
+              <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                 <% people.forEach(p=> {
                   const perRow = rows.filter(r => r.person_id === p.id);
                   const byCard = {};
                   perRow.forEach(r => byCard[r.card_id] = r.total_cents);
                   const total = Object.values(byCard).reduce((a,b)=>a+b,0);
                   %>
-                  <tr class="hover:bg-blue-50/50 transition-colors group">
-                    <td class="px-5 py-4 font-extrabold text-slate-800 text-base whitespace-nowrap">
+                  <tr class="hover:bg-blue-50/50 dark:hover:bg-slate-700/40 transition-colors group">
+                    <td class="px-5 py-4 font-extrabold text-slate-800 dark:text-white text-base whitespace-nowrap">
                       <%= p.name %>
                     </td>
                     <% cards.forEach(c=> { %>
-                      <td class="px-5 py-4 text-right font-medium text-slate-600 whitespace-nowrap">
+                      <td class="px-5 py-4 text-right font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap op-summary-amount-cell">
                         <%= formatBRLFromCents(byCard[c.id] || 0) %>
                       </td>
                       <% }) %>
                         <td
-                          class="px-5 py-4 text-right font-black text-slate-900 border-l border-slate-100 text-base whitespace-nowrap">
+                          class="px-5 py-4 text-right font-black text-slate-900 dark:text-white border-l border-slate-100 dark:border-slate-700 text-base whitespace-nowrap op-summary-amount-cell">
                           <%= formatBRLFromCents(total) %>
                         </td>
                         <td class="px-5 py-4 text-center">
-                          <a class="inline-flex items-center px-4 py-2 text-xs font-bold rounded-xl text-emerald-700 bg-emerald-100 hover:bg-emerald-200 transition-colors shadow-sm"
-                            href="/whatsapp/<%= year %>/<%= month %>/<%= p.id %>">
-                            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
-                              <path
-                                d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 00-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                            </svg>
-                            WhatsApp
-                          </a>
+                          <% if (isAdmin) { %>
+                            <a class="inline-flex items-center px-4 py-2 text-xs font-bold rounded-xl text-emerald-700 bg-emerald-100 hover:bg-emerald-200 transition-colors shadow-sm"
+                              href="/whatsapp/<%= year %>/<%= month %>/<%= p.id %>">
+                              <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                <path
+                                  d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 00-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                              </svg>
+                              WhatsApp
+                            </a>
+                          <% } else { %>
+                            <a class="inline-flex items-center px-4 py-2 text-xs font-bold rounded-xl text-sky-700 bg-sky-100 hover:bg-sky-200 transition-colors shadow-sm"
+                              href="/share/<%= year %>/<%= month %>/<%= p.id %>">
+                              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C9.886 12.64 11.278 12.25 12.75 12.25c1.472 0 2.864.39 4.066 1.092M8.684 13.342 5.5 15.25m3.184-1.908a3 3 0 10-1.368-2.53m9.5 2.53L19.5 15.25m-2.684-1.908a3 3 0 11 1.368-2.53M12 6v7" />
+                              </svg>
+                              Compartilhar
+                            </a>
+                          <% } %>
                         </td>
                   </tr>
                   <% }) %>
@@ -234,44 +274,6 @@
 
   </div>
 
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const paidInputs = document.querySelectorAll(".paid-input");
-
-      paidInputs.forEach(input => {
-        // Ao focar para digitar, retira o R$ e o ponto de milhar para facilitar a edição
-        input.addEventListener("focus", function () {
-          if (this.value) {
-            this.value = this.value.replace(/\./g, "").replace(/[^\d,-]/g, "").trim();
-          }
-        });
-
-        // Ao tirar o foco, formata bonitinho como R$ XX.XXX,XX
-        input.addEventListener("blur", function () {
-          if (!this.value) return;
-          // Pega o valor, tira pontos de milhar, troca vírgula por ponto e converte pra Float
-          const limpo = this.value.replace(/\./g, "").replace(/[^\d,-]/g, "").replace(",", ".");
-          const val = parseFloat(limpo);
-          if (!isNaN(val)) {
-            this.value = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
-          }
-        });
-      });
-
-      // MÁGICA DA CORREÇÃO: Limpa a formatação de moeda um milissegundo antes de enviar pro servidor
-      document.querySelectorAll("form").forEach(form => {
-        form.addEventListener("submit", function () {
-          const inputsParaLimpar = this.querySelectorAll(".paid-input");
-          inputsParaLimpar.forEach(input => {
-            if (input.value) {
-              // Transforma "R$ 1.500,00" de volta para "1500,00" para o servidor não se assustar
-              input.value = input.value.replace(/\./g, '').replace(/[^\d,]/g, '');
-            }
-          });
-        });
-      });
-
-    });
-  </script>
+  
 
   <%- include("partials/footer") %>

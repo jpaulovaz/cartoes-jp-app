@@ -1,5 +1,5 @@
 {
-  "name": "cartoes-jp-app",
+  "name": "organizapay-app",
   "version": "2.0.0",
   "main": "server.js",
   "scripts": {
@@ -18,9 +18,11 @@
     "dotenv": "^16.4.5",
     "ejs": "^3.1.10",
     "express": "^4.21.1",
+    "html2canvas": "^1.4.1",
     "express-session": "^1.18.1",
     "multer": "^1.4.5-lts.1",
     "passport": "^0.7.0",
-    "passport-google-oauth20": "^2.0.0"
+    "passport-google-oauth20": "^2.0.0",
+    "web-push": "^3.6.7"
   }
 }

@@ -40,7 +40,7 @@
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= person.name %></span>
         <span class="badge">Ref. <%= periodLabel %></span>
-        <span class="badge"><%= items.length %> <%= items.length === 1 ? "item" : "itens" %></span>
+        <span class="badge"><%= items.length %> item(ns)</span>
       </div>
     </div>
     <div class="op-page-hero__actions">
@@ -52,17 +52,15 @@
         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
         Baixar imagem
       </button>
-      <% if (person.phone) { %>
-        <button id="btnEvolution" type="button" data-loading-label="Enviando no WhatsApp..." class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700">
-          <svg class="mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" /></svg>
-          Enviar no WhatsApp
-        </button>
-      <% } %>
+      <button id="btnShare" type="button" data-loading-label="Preparando compartilhamento..." class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700">
+        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C9.886 12.64 11.278 12.25 12.75 12.25c1.472 0 2.864.39 4.066 1.092M8.684 13.342 5.5 15.25m3.184-1.908a3 3 0 10-1.368-2.53m9.5 2.53L19.5 15.25m-2.684-1.908a3 3 0 11 1.368-2.53M12 6v7" /></svg>
+        Abrir compartilhamento
+      </button>
     </div>
   </section>
 
   <div class="op-surface-card op-fade-up rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 mb-6">
-    <form method="get" action="/whatsapp/<%= year %>/<%= month %>/<%= person.id %>" class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <form method="get" action="/share/<%= year %>/<%= month %>/<%= person.id %>" class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
       <div class="w-full md:max-w-sm">
         <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Como ordenar os itens</label>
         <select name="order" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950">
@@ -75,18 +73,6 @@
       </button>
     </form>
   </div>
-
-  <% if (!person.phone) { %>
-    <div class="op-inline-alert op-inline-alert--warning op-fade-up">
-      <div class="op-inline-alert__icon">
-        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M10.29 3.86l-8 14A1 1 0 003.17 19h17.66a1 1 0 00.88-1.5l-8-14a1 1 0 00-1.74 0z"></path></svg>
-      </div>
-      <div>
-        <div class="op-inline-alert__title">Faltou um telefone</div>
-        <div class="op-inline-alert__text">O download da imagem continua disponível. Para liberar o envio pelo WhatsApp, preencha um telefone válido em Amigos.</div>
-      </div>
-    </div>
-  <% } %>
 
   <div class="op-preview-shell op-fade-up">
     <div class="op-preview-shell__label">Prévia da imagem</div>
@@ -140,9 +126,10 @@
 
 <script src="/vendor/html2canvas/html2canvas.min.js"></script>
 <script>
-  const whatsappCaptureState = {
-    blobPromise: null,
-    objectUrl: null
+  const shareState = {
+    file: null,
+    objectUrl: null,
+    promise: null
   };
 
   const CAPTURE_MAX_PIXELS = 24000000;
@@ -233,7 +220,7 @@
     });
 
     const clone = sourceNode.cloneNode(true);
-    clone.id = `${sourceNode.id || 'whatsapp-card'}-capture`;
+    clone.id = `${sourceNode.id || 'share-card'}-capture`;
     Object.assign(clone.style, {
       width: `${baseWidth}px`,
       minWidth: `${baseWidth}px`,
@@ -424,14 +411,14 @@
       const width = Math.max(baseWidth, Math.ceil(cloneRect.width || clone.scrollWidth || clone.offsetWidth || baseWidth));
       const height = Math.max(600, Math.ceil(cloneRect.height || clone.scrollHeight || clone.offsetHeight || 0));
 
-      console.info('[whatsapp] capture dimensions', { width, height, baseWidth, requestedScale });
+      console.info('[share] capture dimensions', { width, height, baseWidth, requestedScale });
 
       if (!width || !height) {
         throw new Error(`Não foi possível medir a área do resumo para captura (${width}x${height}).`);
       }
 
-      const rawCanvas = await renderReceiptCanvas(clone, width, height, requestedScale, 'whatsapp');
-      const canvas = trimTrailingBlankRows(rawCanvas, 'whatsapp');
+      const rawCanvas = await renderReceiptCanvas(clone, width, height, requestedScale, 'share');
+      const canvas = trimTrailingBlankRows(rawCanvas, 'share');
       if (!canvas || canvas.width < 50 || canvas.height < 50) {
         throw new Error('A imagem foi gerada sem conteúdo útil.');
       }
@@ -442,35 +429,45 @@
     }
   }
 
-  function dataUrlToBlob(dataUrl) {
+  function blobToFile(blob, filename) {
+    if (!blob || !blob.size) {
+      throw new Error('A imagem foi gerada vazia.');
+    }
+    return new File([blob], filename, { type: blob.type || 'image/png' });
+  }
+
+  function dataUrlToFile(dataUrl, filename) {
     const parts = String(dataUrl || '').split(',');
     if (parts.length < 2) {
-      throw new Error('Não foi possível gerar a imagem do resumo.');
+      throw new Error('Não foi possível gerar a imagem para compartilhamento.');
     }
-
     const mimeMatch = parts[0].match(/data:(.*?);base64/);
     const mime = mimeMatch ? mimeMatch[1] : 'image/png';
     const binary = atob(parts[1]);
     const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) {
-      bytes[index] = binary.charCodeAt(index);
-    }
-
-    return new Blob([bytes], { type: mime });
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return new File([bytes], filename, { type: mime });
   }
 
-  function canvasToBlob(canvas) {
+  function canvasToFile(canvas, filename) {
     return new Promise((resolve, reject) => {
       if (canvas.toBlob) {
         canvas.toBlob((blob) => {
           if (blob && blob.size > 0) {
-            console.info('[whatsapp] blob generated', { size: blob.size, type: blob.type || 'image/png' });
-            resolve(blob);
+            console.info('[share] blob generated', { size: blob.size, type: blob.type || 'image/png' });
+            try {
+              resolve(blobToFile(blob, filename));
+            } catch (error) {
+              reject(error);
+            }
             return;
           }
 
           try {
-            resolve(dataUrlToBlob(canvas.toDataURL('image/png')));
+            const dataUrl = canvas.toDataURL('image/png');
+            const file = dataUrlToFile(dataUrl, filename);
+            console.info('[share] dataUrl generated without toBlob', { bytes: file.size });
+            resolve(file);
           } catch (error) {
             reject(error);
           }
@@ -479,115 +476,124 @@
       }
 
       try {
-        resolve(dataUrlToBlob(canvas.toDataURL('image/png')));
+        const dataUrl = canvas.toDataURL('image/png');
+        const file = dataUrlToFile(dataUrl, filename);
+        console.info('[share] dataUrl generated without toBlob', { bytes: file.size });
+        resolve(file);
       } catch (error) {
         reject(error);
       }
     });
   }
 
-  async function getReceiptBlob(forceRefresh = false) {
-    if (!whatsappCaptureState.blobPromise || forceRefresh) {
-      whatsappCaptureState.blobPromise = (async () => {
-        const canvas = await buildReceiptCanvas();
-        return canvasToBlob(canvas);
-      })().catch((error) => {
-        whatsappCaptureState.blobPromise = null;
-        throw error;
-      });
+  async function prepareShareFile(force) {
+    if (!force && shareState.file) return shareState.file;
+    if (!force && shareState.promise) return shareState.promise;
+
+    const filename = `Fatura_<%= person.name.replace(/\s+/g,'_') %>_<%= String(month).padStart(2,'0') %>_<%= year %>.png`;
+    shareState.promise = (async () => {
+      const canvas = await buildReceiptCanvas();
+      const file = await canvasToFile(canvas, filename);
+      shareState.file = file;
+      return file;
+    })();
+
+    try {
+      return await shareState.promise;
+    } finally {
+      shareState.promise = null;
     }
-    return whatsappCaptureState.blobPromise;
+  }
+
+  function scheduleShareWarmup() {
+    if (shareState.file || shareState.promise) return;
+    const run = () => prepareShareFile(false).catch((error) => console.warn('[share] Pré-geração da imagem falhou', error));
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(run, { timeout: 1800 });
+    } else {
+      window.setTimeout(run, 350);
+    }
   }
 
   function cleanupObjectUrl() {
-    if (whatsappCaptureState.objectUrl) {
-      URL.revokeObjectURL(whatsappCaptureState.objectUrl);
-      whatsappCaptureState.objectUrl = null;
+    if (shareState.objectUrl) {
+      URL.revokeObjectURL(shareState.objectUrl);
+      shareState.objectUrl = null;
     }
   }
 
-  function blobToDataUrl(blob) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ''));
-      reader.onerror = () => reject(reader.error || new Error('Não foi possível ler a imagem gerada.'));
-      reader.readAsDataURL(blob);
-    });
+  function triggerDownloadFromFile(file) {
+    cleanupObjectUrl();
+    shareState.objectUrl = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.download = file.name;
+    link.href = shareState.objectUrl;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(cleanupObjectUrl, 1500);
+  }
+
+  function canShareFiles(file) {
+    if (!navigator.share) return false;
+    try {
+      return !navigator.canShare || navigator.canShare({ files: [file] });
+    } catch (error) {
+      console.warn('[share] navigator.canShare falhou', error);
+      return false;
+    }
   }
 
   async function downloadReceipt() {
     const restore = setBusy(document.getElementById('btnPng'), 'Gerando imagem...');
     try {
-      cleanupObjectUrl();
-      const blob = await getReceiptBlob(true);
-      const link = document.createElement('a');
-      link.download = `Fatura_<%= person.name.replace(/\s+/g,'_') %>_<%= String(month).padStart(2,'0') %>_<%= year %>.png`;
-      whatsappCaptureState.objectUrl = URL.createObjectURL(blob);
-      link.href = whatsappCaptureState.objectUrl;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(cleanupObjectUrl, 1500);
+      const file = await prepareShareFile(true);
+      triggerDownloadFromFile(file);
     } finally {
       restore();
     }
   }
 
-  async function sendViaEvolution() {
-    const button = document.getElementById('btnEvolution');
-    const restore = setBusy(button, 'Enviando no WhatsApp...');
+  async function shareReceipt() {
+    const restore = setBusy(document.getElementById('btnShare'), 'Preparando compartilhamento...');
     try {
-      const blob = await getReceiptBlob(true);
-      const imageBase64 = await blobToDataUrl(blob);
+      const file = await prepareShareFile(false);
       const totalLabel = '<%= formatBRL(totalCents) %>';
-      const remainingLabel = '<%= formatBRL(remainingCents) %>';
-      const paidLabel = '<%= formatBRL(paidCents) %>';
-      const messageLines = [
-        `*Oi, <%= person.name %>!* 💳`,
-        '',
-        `Separei aqui o fechamento de *<%= periodLabel %>* para ficar fácil de conferir.`,
-        `Total do período: *${totalLabel}*.`
-      ];
+      const periodLabel = '<%= periodLabel %>';
 
-      <% if (paidCents > 0 && remainingCents > 0) { %>
-        messageLines.push(`Já entrou: *${paidLabel}*.`);
-        messageLines.push(`Ainda falta: *${remainingLabel}*.`);
-      <% } else if (paidCents > 0 && remainingCents <= 0) { %>
-        messageLines.push(`Tá tudo quitado: *${paidLabel}*.`);
-      <% } else { %>
-        messageLines.push(`Ainda ficou em aberto: *${remainingLabel}*.`);
-      <% } %>
-
-      messageLines.push('');
-      messageLines.push('Te mandei a imagem com os detalhes logo abaixo 👇');
-      const message = messageLines.join('\n');
-
-      const response = await fetch('/whatsapp/send-automation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          personPhone: '<%= person.phone || "" %>',
-          message,
-          imageBase64
-        })
-      });
-
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Falha na API de envio.');
+      if (canShareFiles(file)) {
+        await navigator.share({
+          title: `Resumo ${periodLabel} — <%= person.name %>`,
+          text: `Resumo do período ${periodLabel} para <%= person.name %>. Total: ${totalLabel}.`,
+          files: [file]
+        });
+        return;
       }
 
-      alert('Prontinho! O resumo foi enviado no WhatsApp com a imagem.');
+      triggerDownloadFromFile(file);
+      alert('O compartilhamento direto não está disponível neste aparelho. A imagem foi baixada para compartilhamento manual.');
     } catch (error) {
-      console.error('[whatsapp] send failure', error);
-      alert(error && error.message ? error.message : 'Não consegui enviar a imagem pelo WhatsApp agora.');
+      if (error && error.name === 'AbortError') return;
+      console.error('[share] share failure', error);
+      try {
+        const fallbackFile = shareState.file || await prepareShareFile(true);
+        triggerDownloadFromFile(fallbackFile);
+        alert('Não foi possível abrir o menu de compartilhamento agora. A imagem foi baixada para compartilhamento manual.');
+      } catch (downloadError) {
+        console.error('[share] fallback failure', downloadError);
+        alert('Não foi possível gerar ou compartilhar a imagem agora.');
+      }
     } finally {
       restore();
     }
   }
 
   document.getElementById('btnPng')?.addEventListener('click', downloadReceipt);
-  document.getElementById('btnEvolution')?.addEventListener('click', sendViaEvolution);
+  document.getElementById('btnShare')?.addEventListener('click', shareReceipt);
+  document.getElementById('btnShare')?.addEventListener('touchstart', scheduleShareWarmup, { passive: true, once: true });
+  document.getElementById('btnShare')?.addEventListener('mouseenter', scheduleShareWarmup, { once: true });
+  document.getElementById('btnShare')?.addEventListener('focus', scheduleShareWarmup, { once: true });
+  window.addEventListener('load', scheduleShareWarmup, { once: true });
   window.addEventListener('beforeunload', cleanupObjectUrl);
 </script>
 

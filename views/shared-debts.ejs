@@ -1,0 +1,1792 @@
+<%- include("partials/header", { title: "OrganizaPay | Cobranças" }) %>
+
+<%
+  function statusMeta(itemOrStatus) {
+    const item = (itemOrStatus && typeof itemOrStatus === 'object') ? itemOrStatus : null;
+    const status = item ? item.status : itemOrStatus;
+
+    if (status === 'accepted' && item?.payment_marked_at) {
+      return {
+        label: 'Pagamento informado',
+        classes: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-900/20 dark:text-sky-300 dark:border-sky-800'
+      };
+    }
+
+    switch (status) {
+      case 'accepted':
+        return { label: 'Aceita', classes: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800' };
+      case 'rejected_by_receiver':
+        return { label: 'Recusada', classes: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/20 dark:text-rose-300 dark:border-rose-800' };
+      case 'rejection_contested_by_sender':
+        return { label: 'Em disputa', classes: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800' };
+      case 'rejection_accepted_by_sender':
+        return { label: 'Rejeição aceita', classes: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' };
+      case 'cancelled':
+        return { label: 'Cancelada', classes: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' };
+      case 'settled':
+        return { label: 'Liquidada', classes: 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-300 dark:border-cyan-800' };
+      default:
+        return { label: 'Pendente', classes: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800' };
+    }
+  }
+
+  function eventMeta(eventType) {
+    switch (eventType) {
+      case 'created':
+        return { label: 'Solicitação criada', dot: 'bg-blue-500' };
+      case 'updated':
+        return { label: 'Solicitação atualizada', dot: 'bg-amber-500' };
+      case 'accepted':
+        return { label: 'Solicitação aceita', dot: 'bg-emerald-500' };
+      case 'rejected_by_receiver':
+        return { label: 'Solicitação recusada', dot: 'bg-rose-500' };
+      case 'cancelled':
+        return { label: 'Solicitação cancelada', dot: 'bg-slate-400' };
+      case 'rejection_contested_by_sender':
+        return { label: 'Rejeição contestada', dot: 'bg-amber-500' };
+      case 'rejection_accepted_by_sender':
+        return { label: 'Rejeição aceita', dot: 'bg-slate-500' };
+      case 'payment_marked_by_receiver':
+        return { label: 'Pagamento informado', dot: 'bg-sky-500' };
+      case 'settled':
+        return { label: 'Recebimento confirmado', dot: 'bg-cyan-500' };
+      default:
+        return { label: eventType || 'Atualização', dot: 'bg-slate-400' };
+    }
+  }
+
+  function actorLabel(event) {
+    return event?.actor_name || event?.actor_email || 'Usuário';
+  }
+
+  function timelineFor(requestId) {
+    if (!eventsByRequest || typeof eventsByRequest.get !== 'function') return [];
+    const rows = eventsByRequest.get(Number(requestId)) || eventsByRequest.get(requestId) || [];
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  function formatTimeBR(dateStr) {
+    if (!dateStr) return '--:--';
+    try {
+      return new Date(dateStr).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } catch (err) {
+      return '--:--';
+    }
+  }
+
+  function pluralizePt(count, singular, plural) {
+    return Number(count) === 1 ? singular : plural;
+  }
+
+  function countLabel(count, singular, plural) {
+    const safeCount = Number(count || 0);
+    return `${safeCount} ${pluralizePt(safeCount, singular, plural)}`;
+  }
+
+  function statusWeight(status) {
+    switch (status) {
+      case 'pending': return 0;
+      case 'accepted': return 1;
+      case 'rejected_by_receiver': return 2;
+      case 'rejection_contested_by_sender': return 3;
+      case 'rejection_accepted_by_sender': return 4;
+      case 'cancelled': return 5;
+      case 'settled': return 6;
+      default: return 7;
+    }
+  }
+
+  function monthRank(item) {
+    const year = Number(item?.source_due_year || 0);
+    const month = Number(item?.source_due_month || 0);
+    if (!year || !month) return 0;
+    return (year * 100) + month;
+  }
+
+  function buildMonthGroups(items) {
+    const sorted = (items || []).slice().sort((a, b) => {
+      const rankDiff = monthRank(b) - monthRank(a);
+      if (rankDiff !== 0) return rankDiff;
+      const statusDiff = statusWeight(a?.status) - statusWeight(b?.status);
+      if (statusDiff !== 0) return statusDiff;
+      return String(b?.created_at || '').localeCompare(String(a?.created_at || ''));
+    });
+
+    const groups = new Map();
+    sorted.forEach(item => {
+      const month = Number(item?.source_due_month || 0);
+      const year = Number(item?.source_due_year || 0);
+      const key = (month && year) ? `${year}-${String(month).padStart(2, '0')}` : 'sem-competencia';
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          month,
+          year,
+          rank: month && year ? ((year * 100) + month) : 0,
+          label: month && year ? monthLabel(month, year) : 'Sem competência informada',
+          items: [],
+          totalCents: 0
+        });
+      }
+      const group = groups.get(key);
+      group.items.push(item);
+      group.totalCents += Number(item?.amount_cents || 0);
+    });
+
+    return Array.from(groups.values()).sort((a, b) => {
+      if (b.rank !== a.rank) return b.rank - a.rank;
+      return a.label.localeCompare(b.label);
+    });
+  }
+
+  function countItems(items, predicate) {
+    return (items || []).filter(predicate).length;
+  }
+
+  function isReceivedActionable(item) {
+    return item?.status === 'pending' || (item?.status === 'accepted' && !item?.payment_marked_at);
+  }
+
+  function isSentActionable(item) {
+    return item?.status === 'rejected_by_receiver' || (item?.status === 'accepted' && !!item?.payment_marked_at);
+  }
+
+  function groupContainsRequest(group, requestId) {
+    if (!group || !requestId) return false;
+    return (group.items || []).some(item => Number(item.id) === Number(requestId));
+  }
+
+  function countGroupActions(group, scope) {
+    if (!group) return 0;
+    return (group.items || []).filter(item => scope === 'received' ? isReceivedActionable(item) : isSentActionable(item)).length;
+  }
+
+  function getReceivedMonthPayableItems(group) {
+    return (group?.items || []).filter(item => item?.status === 'accepted' && !item?.payment_marked_at);
+  }
+
+  function getSentMonthConfirmableItems(group) {
+    return (group?.items || []).filter(item => item?.status === 'accepted' && !!item?.payment_marked_at);
+  }
+
+  function sumAmountCents(items) {
+    return (items || []).reduce((sum, item) => sum + Number(item?.amount_cents || 0), 0);
+  }
+
+  function countDistinctCounterparts(items, scope) {
+    return new Set((items || []).map(item => {
+      if (scope === 'received') return Number(item?.requester_user_id || 0) || String(item?.requester_email || '');
+      return Number(item?.receiver_user_id || 0) || String(item?.receiver_email || '');
+    }).filter(Boolean)).size;
+  }
+
+  function batchOriginLabel(kind, count) {
+    switch (kind) {
+      case 'manual':
+        return count > 1 ? 'Lembretes avulsos' : 'Lembrete avulso';
+      case 'installment':
+        return count > 1 ? 'Envio parcelado' : 'Parcela enviada';
+      case 'multiple':
+        return 'Envio múltiplo';
+      case 'mixed':
+        return 'Envio misto';
+      default:
+        return count > 1 ? 'Envio agrupado' : 'Envio individual';
+    }
+  }
+
+  function batchRangeLabel(batch) {
+    if (batch?.originKind === 'manual') return 'Sem mês fixo';
+    if (!batch?.minMonth || !batch?.minYear) return 'Sem competência definida';
+    if (batch.minMonth === batch.maxMonth && batch.minYear === batch.maxYear) {
+      return monthLabel(batch.minMonth, batch.minYear);
+    }
+    return `${monthLabel(batch.minMonth, batch.minYear)} até ${monthLabel(batch.maxMonth, batch.maxYear)}`;
+  }
+
+  function batchPendingSummary(batch) {
+    if (!batch) return 'Sem itens pendentes';
+    if (batch.pendingCount === batch.totalCount) {
+      return `${countLabel(batch.pendingCount, 'cobrança pendente', 'cobranças pendentes')}`;
+    }
+    return `${countLabel(batch.pendingCount, 'pendência', 'pendências')} de ${countLabel(batch.totalCount, 'cobrança', 'cobranças')}`;
+  }
+
+  function batchStatusMeta(batch) {
+    const status = String(batch?.statusSummary || 'pending');
+    switch (status) {
+      case 'accepted':
+        return { label: 'Aceito', classes: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200' };
+      case 'rejected':
+        return { label: 'Recusado', classes: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-200' };
+      case 'settled':
+        return { label: 'Liquidado', classes: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200' };
+      case 'partial':
+        return { label: 'Parcial', classes: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200' };
+      default:
+        return { label: 'Pendente', classes: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200' };
+    }
+  }
+
+  function batchStatusText(batch) {
+    const meta = batchStatusMeta(batch);
+    if (!batch) return meta.label;
+    if (batch.statusSummary === 'partial' && batch.pendingCount > 0) {
+      return `${meta.label} · ${countLabel(batch.pendingCount, 'pendência', 'pendências')}`;
+    }
+    return meta.label;
+  }
+
+  function batchUpdateText(batch) {
+    if (!batch?.hasUpdates || !batch?.updatedAt || !batch?.createdAt) return null;
+    if (String(batch.updatedAt) === String(batch.createdAt)) return null;
+    return `Atualizado em ${formatDateBR(batch.updatedAt)} às ${formatTimeBR(batch.updatedAt)}.`;
+  }
+
+  function batchPreviewText(batch) {
+    const previews = (batch?.previewDescriptions || []).filter(Boolean).slice(0, 2);
+    if (!previews.length) return 'Abra os itens para revisar o envio completo.';
+    return previews.join(' · ');
+  }
+
+  function isManualItem(item) {
+    return String(item?.request_kind || item?.batch_origin_kind || '').trim().toLowerCase() === 'manual';
+  }
+
+  function itemPillMeta(item) {
+    if (!isManualItem(item)) return null;
+    return {
+      label: 'Avulsa',
+      classes: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200'
+    };
+  }
+
+  function itemDateLead(item) {
+    return isManualItem(item) ? 'Lembrete criado em' : 'Compra em';
+  }
+
+  function itemDateBlockLabel(item) {
+    return isManualItem(item) ? 'Data do lembrete' : 'Data da compra';
+  }
+
+  function itemDateValue(item) {
+    return item?.source_txn_date ? formatDateBR(item.source_txn_date) : '—';
+  }
+
+  function itemContextLabel(item) {
+    return isManualItem(item) ? 'Tipo' : 'Cartão';
+  }
+
+  function itemContextValue(item) {
+    return isManualItem(item) ? 'Cobrança avulsa' : (item?.card_name_snapshot || 'Não informado');
+  }
+
+  function itemPeriodLabel(item) {
+    return isManualItem(item) ? 'Fluxo' : 'Competência';
+  }
+
+  function itemPeriodValue(item) {
+    if (isManualItem(item)) return 'Sem mês fixo';
+    return item?.source_due_month && item?.source_due_year ? monthLabel(item.source_due_month, item.source_due_year) : '—';
+  }
+
+  function itemObservacaoLabel(item) {
+    return isManualItem(item) ? 'Recado do lembrete' : 'Observação do envio';
+  }
+
+  function manualSectionHint(scope) {
+    return scope === 'received'
+      ? 'Lembretes sem fatura nem competência. Quando você aceitar, eles passam a aparecer no seu controle até a quitação.'
+      : 'Lembretes sem fatura nem competência. Depois de aceitos, continuam no seu controle até o pagamento ser confirmado.';
+  }
+
+  function hasManualActionableItem(items, scope) {
+    return (items || []).some(item => scope === 'received' ? isReceivedActionable(item) : isSentActionable(item));
+  }
+
+  function shouldOpenManualSection(items, scope, regularGroupCount) {
+    if (!(items || []).length) return false;
+    if ((items || []).some(item => Number(item?.id || 0) === Number(requestIdToHighlight || 0))) return true;
+    if (hasManualActionableItem(items, scope)) return true;
+    return Number(regularGroupCount || 0) === 0;
+  }
+
+  const trackingFilters = sharedDebtFilters || { envio: 'all', origin: 'all', installment: 'all' };
+  const trackingFiltersActive = !!sharedDebtFiltersActive;
+  const receivedBaseItems = Array.isArray(receivedTracking) ? receivedTracking : (received || []);
+  const sentBaseItems = Array.isArray(sentTracking) ? sentTracking : (sent || []);
+  const receivedManualItems = receivedBaseItems.filter(isManualItem);
+  const sentManualItems = sentBaseItems.filter(isManualItem);
+  const receivedTrackingItems = receivedBaseItems.filter(item => !isManualItem(item));
+  const sentTrackingItems = sentBaseItems.filter(item => !isManualItem(item));
+  const rawReceivedGroups = buildMonthGroups((received || []).filter(item => !isManualItem(item)));
+  const rawSentGroups = buildMonthGroups((sent || []).filter(item => !isManualItem(item)));
+  const receivedGroups = buildMonthGroups(receivedTrackingItems);
+  const sentGroups = buildMonthGroups(sentTrackingItems);
+  const receivedBatchCards = Array.isArray(receivedPendingBatches) ? receivedPendingBatches : [];
+  const sentBatchCards = Array.isArray(sentPendingBatches) ? sentPendingBatches : [];
+  const receivedManualSectionOpen = shouldOpenManualSection(receivedManualItems, 'received', receivedGroups.length);
+  const sentManualSectionOpen = shouldOpenManualSection(sentManualItems, 'sent', sentGroups.length);
+  const receivedPendingCount = countItems(received, item => item.status === 'pending');
+  const sentDecisionCount = countItems(sent, item => item.status === 'rejected_by_receiver');
+  const sentReceiptCount = countItems(sent, item => item.status === 'accepted' && item.payment_marked_at);
+  const actionCount = receivedBatchCards.length + sentDecisionCount + sentReceiptCount;
+  const receivedHasActionableGroup = receivedGroups.some(group => countGroupActions(group, 'received') > 0);
+  const sentHasActionableGroup = sentGroups.some(group => countGroupActions(group, 'sent') > 0);
+
+  function shouldOpenGroup(group, index, scope) {
+    if (groupContainsRequest(group, requestIdToHighlight)) return true;
+    const actionCountForGroup = countGroupActions(group, scope);
+    if (actionCountForGroup > 0) return true;
+    if (scope === 'received' && !receivedHasActionableGroup && index === 0) return true;
+    if (scope === 'sent' && !sentHasActionableGroup && index === 0) return true;
+    return false;
+  }
+
+  function groupsContainRequest(groups, requestId) {
+    if (!requestId) return false;
+    return (groups || []).some(group => groupContainsRequest(group, requestId));
+  }
+
+  const receivedActionCount = receivedBatchCards.length;
+  const sentActionCount = sentDecisionCount + sentReceiptCount;
+  const receivedScopeOpen = groupsContainRequest(receivedGroups, requestIdToHighlight) || receivedHasActionableGroup || receivedManualSectionOpen;
+  const sentScopeOpen = groupsContainRequest(sentGroups, requestIdToHighlight) || sentHasActionableGroup || sentManualSectionOpen;
+
+  function buildQuickActions() {
+    const actions = [];
+
+    receivedBatchCards.forEach((batch) => {
+      actions.push({
+        requestId: batch.reviewRequestId,
+        title: `Responder envio de ${batch.counterpartName || batch.counterpartEmail || 'quem enviou'}`,
+        helper: batch.statusSummary === 'partial'
+          ? `${countLabel(batch.pendingCount, 'cobrança ainda aguarda', 'cobranças ainda aguardam')} sua decisão neste envio.`
+          : `${countLabel(batch.pendingCount, 'cobrança está aguardando', 'cobranças estão aguardando')} sua decisão neste envio.`,
+        meta: `${batchRangeLabel(batch)} · ${formatBRLFromCents(batch.pendingCents || batch.totalCents)}`,
+        buttonLabel: batch.statusSummary === 'partial' ? 'Responder restante' : 'Abrir envio'
+      });
+    });
+
+    rawSentGroups.forEach((group) => {
+      (group.items || []).forEach((item) => {
+        if (item.status === 'rejected_by_receiver') {
+          actions.push({
+            requestId: item.id,
+            title: `Decidir sobre a recusa de ${item.receiver_name || item.receiver_email || 'quem recebeu'}`,
+            helper: 'Escolha se aceita a recusa ou se contesta a cobrança.',
+            meta: `${group.label} · ${formatBRLFromCents(item.amount_cents)}`,
+            buttonLabel: 'Tomar decisão'
+          });
+          return;
+        }
+
+        if (item.status === 'accepted' && item.payment_marked_at) {
+          actions.push({
+            requestId: item.id,
+            title: `Confirmar recebimento de ${item.receiver_name || item.receiver_email || 'quem recebeu'}`,
+            helper: `Pagamento informado em ${formatDateBR(item.payment_marked_at)} às ${formatTimeBR(item.payment_marked_at)}.`,
+            meta: `${group.label} · ${formatBRLFromCents(item.amount_cents)}`,
+            buttonLabel: 'Confirmar agora'
+          });
+        }
+      });
+    });
+
+    sentManualItems.forEach((item) => {
+      if (item.status === 'rejected_by_receiver') {
+        actions.push({
+          requestId: item.id,
+          title: `Decidir sobre a recusa de ${item.receiver_name || item.receiver_email || 'quem recebeu'}`,
+          helper: 'Esse lembrete avulso foi recusado. Dá para encerrar com carinho ou contestar.',
+          meta: `Avulsa · ${formatBRLFromCents(item.amount_cents)}`,
+          buttonLabel: 'Tomar decisão'
+        });
+        return;
+      }
+
+      if (item.status === 'accepted' && item.payment_marked_at) {
+        actions.push({
+          requestId: item.id,
+          title: `Confirmar recebimento de ${item.receiver_name || item.receiver_email || 'quem recebeu'}`,
+          helper: `Pagamento informado em ${formatDateBR(item.payment_marked_at)} às ${formatTimeBR(item.payment_marked_at)}.`,
+          meta: `Avulsa · ${formatBRLFromCents(item.amount_cents)}`,
+          buttonLabel: 'Confirmar agora'
+        });
+      }
+    });
+
+    return actions.slice(0, 3);
+  }
+
+  const quickActions = buildQuickActions();
+  const firstQuickAction = quickActions[0] || null;
+%>
+
+<div class="max-w-7xl mx-auto space-y-8">
+  <section class="op-page-hero op-fade-up">
+    <div>
+      <span class="op-page-hero__eyebrow">Pedidos, acertos e lembretes</span>
+      <h1 class="op-page-hero__title mt-4">Cobranças</h1>
+      <p class="op-page-hero__subtitle mt-3">Tudo o que você enviou ou recebeu dos amigos fica aqui — tanto o que nasceu no cartão quanto os lembretes avulsos do dia a dia.</p>
+      <div class="op-page-hero__meta mt-4">
+        <span class="badge">Receber, pagar e confirmar em uma só central</span>
+        <span class="badge">O sininho lá em cima cuida dos avisos do app inteiro</span>
+      </div>
+    </div>
+
+    <div class="op-kpi-strip xl:max-w-[30rem]">
+      <div class="op-kpi-card text-center">
+        <div class="op-kpi-card__label">Recebidas</div>
+        <div class="op-kpi-card__value"><%= received.length %></div>
+        <div class="op-kpi-card__hint"><span class="md:hidden"><%= countLabel(rawReceivedGroups.length, 'mês', 'meses') %></span><span class="hidden md:inline"><%= countLabel(rawReceivedGroups.length, 'período', 'períodos') %></span></div>
+      </div>
+      <div class="op-kpi-card text-center">
+        <div class="op-kpi-card__label">Enviadas</div>
+        <div class="op-kpi-card__value"><%= sent.length %></div>
+        <div class="op-kpi-card__hint"><span class="md:hidden"><%= countLabel(rawSentGroups.length, 'mês', 'meses') %></span><span class="hidden md:inline"><%= countLabel(rawSentGroups.length, 'período', 'períodos') %></span></div>
+      </div>
+      <div class="op-kpi-card text-center">
+        <div class="op-kpi-card__label text-amber-600 dark:text-amber-300">Sua vez</div>
+        <div class="op-kpi-card__value text-amber-700 dark:text-amber-200"><%= actionCount %></div>
+        <div class="op-kpi-card__hint text-amber-700/80 dark:text-amber-200/80">Ações pendentes</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="op-fade-up">
+    <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div class="max-w-2xl">
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Acerto fora do cartão</div>
+          <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Cobrança avulsa</h2>
+          <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">Perfeita para aquele “depois você me manda” do almoço, do ingresso ou do Pix salvador. Sai com a data de hoje e continua aparecendo até a quitação.</p>
+        </div>
+
+        <div class="flex w-full flex-col gap-3 lg:max-w-sm lg:items-end">
+          <button
+            type="button"
+            data-open-sheet="manual-shared-debt-sheet"
+            <%= manualDebtEligiblePeople && manualDebtEligiblePeople.length ? '' : 'disabled' %>
+            class="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition-all lg:w-auto <%= manualDebtEligiblePeople && manualDebtEligiblePeople.length ? 'hover:-translate-y-0.5 hover:bg-violet-700' : 'cursor-not-allowed opacity-60' %>">
+            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Enviar valor avulso
+          </button>
+          <p class="text-xs font-medium text-slate-500 dark:text-slate-400 lg:text-right">Poucos campos, sem data manual e sem misturar esse combinado com a fatura do cartão.</p>
+        </div>
+      </div>
+
+      <% if (!(manualDebtEligiblePeople && manualDebtEligiblePeople.length)) { %>
+        <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+          Para enviar um valor avulso, você precisa ter pelo menos uma amizade ativa em <strong>Amigos</strong>. Assim o lembrete só vai para quem topou esse vínculo de verdade.
+        </div>
+      <% } else { %>
+        <div class="mt-4 flex flex-wrap gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+          <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200"><%= countLabel(manualDebtEligiblePeople.length, 'amizade pronta', 'amizades prontas') %> para receber</span>
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70">Data de hoje automática</span>
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70">Acompanha até quitar</span>
+        </div>
+      <% } %>
+    </div>
+  </section>
+
+  <div id="manual-shared-debt-sheet" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
+    <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
+    <div class="absolute inset-x-0 bottom-0 max-h-[90vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[84vh] sm:max-w-2xl sm:rounded-[32px]">
+      <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+        <div>
+          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Cobrança avulsa</div>
+          <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Mandar um lembrete sem cartão</h3>
+          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Vai com a data de hoje e segue visível até o pagamento ser confirmado.</p>
+        </div>
+        <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar envio avulso">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <form method="POST" action="/shared-debts/manual" class="max-h-[calc(90vh-92px)] overflow-y-auto space-y-4 px-5 py-4 sm:max-h-[calc(84vh-92px)]">
+        <div class="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-medium text-violet-800 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">
+          É um lembrete entre amizades do OrganizaPay: sem competência fixa, sem cartão no meio e com um recado opcional para deixar tudo claro.
+        </div>
+
+        <label class="block">
+          <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Quem vai receber esse lembrete?</span>
+          <select name="person_id" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" <%= manualDebtEligiblePeople && manualDebtEligiblePeople.length ? '' : 'disabled' %>>
+            <% (manualDebtEligiblePeople || []).forEach((person, index) => { %>
+              <option value="<%= person.id %>" <%= index === 0 ? 'selected' : '' %>><%= person.name %><%= person.linked_user_email ? ` · ${person.linked_user_email}` : '' %></option>
+            <% }) %>
+          </select>
+        </label>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block">
+            <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor (R$)</span>
+            <input type="text" name="amount" placeholder="0,00" required data-money-mask data-shared-debt-manual-focus inputmode="decimal" enterkeyhint="next" autocapitalize="off" autocomplete="off" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
+          </label>
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/80">
+            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Data do envio</div>
+            <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white">Hoje</div>
+            <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Vai assim automaticamente para você não perder tempo.</div>
+          </div>
+        </div>
+
+        <label class="block">
+          <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Do que se trata?</span>
+          <input type="text" name="description" maxlength="120" required placeholder="Ex.: Almoço da sexta, ingresso do show, Pix salvador" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
+        </label>
+
+        <label class="block">
+          <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Recado opcional</span>
+          <textarea name="note" rows="3" placeholder="Ex.: Te emprestei na correria, sem pressa, só para não fugir do radar." class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20"></textarea>
+        </label>
+
+        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+          <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600">Enviar lembrete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <% if (receivedBatchCards.length || sentBatchCards.length) { %>
+    <section class="space-y-6 op-fade-up">
+      <% if (receivedBatchCards.length) { %>
+        <div class="space-y-4">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500 dark:text-blue-300">Envios pendentes</div>
+              <h2 class="mt-1 text-2xl font-black text-slate-900 dark:text-white">Responder tudo de uma vez</h2>
+              <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Quando várias cobranças chegam juntas, você decide por envio e evita repetir a mesma aprovação item por item.</p>
+            </div>
+            <div class="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"><%= countLabel(receivedBatchCards.length, 'envio aguardando sua decisão', 'envios aguardando sua decisão') %></div>
+          </div>
+
+          <div class="grid gap-4 xl:grid-cols-2">
+            <% receivedBatchCards.forEach((batch) => { const batchHighlighted = batchIdToHighlight && Number(batchIdToHighlight) === Number(batch.id); const batchStatus = batchStatusMeta(batch); const batchUpdatedText = batchUpdateText(batch); %>
+              <article id="batch-<%= batch.id %>" class="rounded-[28px] border <%= batchHighlighted ? 'border-blue-300 bg-blue-50/70 shadow-blue-200/60 dark:border-blue-700 dark:bg-blue-900/20 dark:shadow-blue-950/40' : 'border-slate-200 bg-white shadow-slate-200/60 dark:border-slate-700 dark:bg-slate-800/80 dark:shadow-slate-950/40' %> p-5 shadow-sm transition-colors">
+                <div class="flex flex-col gap-4">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-bold text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200"><%= batchOriginLabel(batch.originKind, batch.totalCount) %></span>
+                        <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= batchStatus.classes %>"><%= batchStatus.label %></span>
+                        <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"><%= batchPendingSummary(batch) %></span>
+                        <% if (batchUpdatedText) { %><span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Atualizado</span><% } %>
+                      </div>
+                      <h3 class="mt-3 text-lg font-black text-slate-900 dark:text-white">Envio de <%= batch.counterpartName %></h3>
+                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= batchPreviewText(batch) %></p>
+                      <% if (batchUpdatedText) { %><p class="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-200"><%= batchUpdatedText %></p><% } %>
+                    </div>
+                    <div class="sm:text-right">
+                      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Total pendente</div>
+                      <div class="mt-1 text-xl font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(batch.pendingCents || batch.totalCents) %></div>
+                    </div>
+                  </div>
+
+                  <div class="grid gap-3 sm:grid-cols-3">
+                    <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><span class="md:hidden">Mês</span><span class="hidden md:inline">Competência</span></div>
+                      <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= batchRangeLabel(batch) %></div>
+                    </div>
+                    <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Itens no envio</div>
+                      <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= countLabel(batch.totalCount, 'cobrança', 'cobranças') %></div>
+                    </div>
+                    <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Ação sugerida</div>
+                      <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= batchStatusText(batch) %></div>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <% if (batch.reviewRequestId) { %>
+                      <button type="button" data-jump-request="request-<%= batch.reviewRequestId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Revisar itens</button>
+                    <% } %>
+                    <form method="POST" action="/shared-debts/batches/<%= batch.id %>/respond" class="contents">
+                      <input type="hidden" name="action" value="reject">
+                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-bold text-rose-700 shadow-sm transition-colors hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-950/30">Recusar tudo</button>
+                    </form>
+                    <form method="POST" action="/shared-debts/batches/<%= batch.id %>/respond" class="contents">
+                      <input type="hidden" name="action" value="accept">
+                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"><%= batch.pendingCount > 1 ? 'Aceitar tudo' : 'Aceitar cobrança' %></button>
+                    </form>
+                  </div>
+                </div>
+              </article>
+            <% }) %>
+          </div>
+        </div>
+      <% } %>
+
+      <% if (sentBatchCards.length) { %>
+        <div class="space-y-4">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Envios acompanhados</div>
+              <h2 class="mt-1 text-2xl font-black text-slate-900 dark:text-white">Aguardando resposta</h2>
+              <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Cada envio acompanha várias cobranças. Abra os itens só quando precisar entrar no detalhe.</p>
+            </div>
+            <div class="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"><%= countLabel(sentBatchCards.length, 'envio aguardando resposta', 'envios aguardando resposta') %></div>
+          </div>
+
+          <div class="grid gap-4 xl:grid-cols-2">
+            <% sentBatchCards.forEach((batch) => { const batchHighlighted = batchIdToHighlight && Number(batchIdToHighlight) === Number(batch.id); const batchStatus = batchStatusMeta(batch); const batchUpdatedText = batchUpdateText(batch); %>
+              <article id="batch-<%= batch.id %>" class="rounded-[28px] border <%= batchHighlighted ? 'border-slate-300 bg-slate-50 shadow-slate-200/60 dark:border-slate-600 dark:bg-slate-800/90 dark:shadow-slate-950/40' : 'border-slate-200 bg-white shadow-slate-200/60 dark:border-slate-700 dark:bg-slate-800/80 dark:shadow-slate-950/40' %> p-5 shadow-sm transition-colors">
+                <div class="flex flex-col gap-4">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"><%= batchOriginLabel(batch.originKind, batch.totalCount) %></span>
+                        <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= batchStatus.classes %>"><%= batchStatus.label %></span>
+                        <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"><%= batchPendingSummary(batch) %></span>
+                        <% if (batchUpdatedText) { %><span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Atualizado</span><% } %>
+                      </div>
+                      <h3 class="mt-3 text-lg font-black text-slate-900 dark:text-white">Envio para <%= batch.counterpartName %></h3>
+                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= batchPreviewText(batch) %></p>
+                      <% if (batchUpdatedText) { %><p class="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-200"><%= batchUpdatedText %></p><% } %>
+                    </div>
+                    <div class="sm:text-right">
+                      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Total do envio</div>
+                      <div class="mt-1 text-xl font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(batch.totalCents) %></div>
+                    </div>
+                  </div>
+
+                  <div class="grid gap-3 sm:grid-cols-3">
+                    <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><span class="md:hidden">Mês</span><span class="hidden md:inline">Competência</span></div>
+                      <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= batchRangeLabel(batch) %></div>
+                    </div>
+                    <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Itens no envio</div>
+                      <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= countLabel(batch.totalCount, 'cobrança', 'cobranças') %></div>
+                    </div>
+                    <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Status atual</div>
+                      <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= batchStatusText(batch) %></div>
+                    </div>
+                  </div>
+
+                  <div class="flex justify-end">
+                    <% if (batch.reviewRequestId) { %>
+                      <button type="button" data-jump-request="request-<%= batch.reviewRequestId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Abrir itens do envio</button>
+                    <% } %>
+                  </div>
+                </div>
+              </article>
+            <% }) %>
+          </div>
+        </div>
+      <% } %>
+    </section>
+  <% } %>
+
+  <% if (actionCount > 0) { %>
+    <section class="md:hidden op-fade-up">
+      <div class="op-surface-card rounded-3xl border border-amber-200/80 bg-amber-50/90 p-4 shadow-sm dark:border-amber-800 dark:bg-amber-900/20">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-200">Sua vez</div>
+            <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white"><%= countLabel(actionCount, 'pendência', 'pendências') %></h2>
+            <p class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">As próximas ações que dependem de você aparecem aqui para abrir direto no ponto certo.</p>
+          </div>
+          <% if (firstQuickAction) { %>
+            <button type="button" data-jump-request="request-<%= firstQuickAction.requestId %>" class="inline-flex shrink-0 items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-600">Abrir 1ª ação</button>
+          <% } %>
+        </div>
+        <% if (quickActions.length) { %>
+          <div class="mt-4 space-y-3">
+            <% quickActions.forEach((action) => { %>
+              <div class="rounded-2xl border border-white/70 bg-white/80 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0 flex-1">
+                    <div class="text-sm font-black text-slate-900 dark:text-white"><%= action.title %></div>
+                    <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= action.helper %></div>
+                    <div class="mt-2 inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><%= action.meta %></div>
+                  </div>
+                  <button type="button" data-jump-request="request-<%= action.requestId %>" class="inline-flex shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= action.buttonLabel %></button>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    </section>
+  <% } %>
+
+  <section class="op-fade-up">
+    <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
+      <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Acompanhamento detalhado</div>
+          <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Filtrar acompanhamento</h2>
+          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Os filtros abaixo mexem na visão detalhada da central: por mês quando houver competência, e em bloco próprio quando o combinado for avulso.</p>
+        </div>
+        <% if (trackingFiltersActive) { %>
+          <div class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 shadow-sm dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">Filtros ativos no acompanhamento</div>
+        <% } %>
+      </div>
+
+      <form method="GET" action="/shared-debts" class="mt-4 grid gap-3 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
+        <label class="block">
+          <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Tipo de envio</span>
+          <select name="envio" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500/20">
+            <option value="all" <%= trackingFilters.envio === 'all' ? 'selected' : '' %>>Todos os envios</option>
+            <option value="single" <%= trackingFilters.envio === 'single' ? 'selected' : '' %>>Apenas individuais</option>
+            <option value="grouped" <%= trackingFilters.envio === 'grouped' ? 'selected' : '' %>>Apenas agrupados</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Origem do envio</span>
+          <select name="origin" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500/20">
+            <option value="all" <%= trackingFilters.origin === 'all' ? 'selected' : '' %>>Todas as origens</option>
+            <option value="single" <%= trackingFilters.origin === 'single' ? 'selected' : '' %>>Uma compra</option>
+            <option value="multiple" <%= trackingFilters.origin === 'multiple' ? 'selected' : '' %>>Múltiplo</option>
+            <option value="installment" <%= trackingFilters.origin === 'installment' ? 'selected' : '' %>>Parcelado</option>
+            <option value="mixed" <%= trackingFilters.origin === 'mixed' ? 'selected' : '' %>>Misto</option>
+            <option value="manual" <%= trackingFilters.origin === 'manual' ? 'selected' : '' %>>Lembrete avulso</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Parcelamento</span>
+          <select name="installment" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500/20">
+            <option value="all" <%= trackingFilters.installment === 'all' ? 'selected' : '' %>>Todos os itens</option>
+            <option value="yes" <%= trackingFilters.installment === 'yes' ? 'selected' : '' %>>Apenas parceladas</option>
+            <option value="no" <%= trackingFilters.installment === 'no' ? 'selected' : '' %>>Apenas não parceladas</option>
+          </select>
+        </label>
+        <div class="flex flex-col gap-2 sm:flex-row xl:justify-end">
+          <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Aplicar filtros</button>
+          <% if (trackingFiltersActive) { %>
+            <a href="/shared-debts" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Limpar</a>
+          <% } %>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="space-y-6">
+    <details id="received" class="op-dual-accordion w-full self-start rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden" <%= receivedScopeOpen ? 'open' : '' %>>
+      <summary class="list-none cursor-pointer px-6 py-5 bg-slate-50 dark:bg-slate-900/70">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 class="text-lg font-extrabold text-slate-900 dark:text-white">Recebidas</h2>
+              <% if (receivedActionCount > 0) { %>
+                <span class="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-200"><%= receivedActionCount %> ação(ões)</span>
+              <% } %>
+            </div>
+            <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none">Cobranças que chegaram para sua aprovação, baixa e lembretes avulsos que podem seguir te acompanhando até a quitação.</p>
+          </div>
+          <div class="flex flex-wrap gap-2 sm:justify-end">
+            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= trackingFiltersActive ? `${countLabel(receivedBaseItems.length, 'cobrança', 'cobranças')} de ${countLabel(received.length, 'cobrança', 'cobranças')}` : countLabel(received.length, 'cobrança', 'cobranças') %></span>
+            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><span class="md:hidden"><%= trackingFiltersActive ? `${countLabel(receivedGroups.length, 'mês', 'meses')} de ${countLabel(rawReceivedGroups.length, 'mês', 'meses')}` : countLabel(receivedGroups.length, 'mês', 'meses') %></span><span class="hidden md:inline"><%= trackingFiltersActive ? `${countLabel(receivedGroups.length, 'período', 'períodos')} de ${countLabel(rawReceivedGroups.length, 'período', 'períodos')}` : countLabel(receivedGroups.length, 'período', 'períodos') %></span></span>
+            <% if (receivedManualItems.length) { %>
+              <span class="inline-flex items-center rounded-full border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20 px-3 py-1 text-xs font-bold text-violet-700 dark:text-violet-200"><%= countLabel(receivedManualItems.length, 'avulsa', 'avulsas') %></span>
+            <% } %>
+          </div>
+        </div>
+      </summary>
+
+      <div class="border-t border-slate-200 dark:border-slate-700">
+      <% if (!receivedGroups.length && !receivedManualItems.length) { %>
+        <div class="px-5 py-5">
+          <div class="op-empty-state op-empty-state--compact">
+            <div class="op-empty-state__icon">📭</div>
+            <div class="op-empty-state__title"><%= trackingFiltersActive ? "Nenhuma cobrança recebida combina com os filtros" : "Nenhuma solicitação recebida ainda" %></div>
+            <p class="op-empty-state__text"><%= trackingFiltersActive ? "Limpe ou ajuste os filtros para voltar a enxergar o acompanhamento completo da central." : "Quando outro usuário compartilhar uma dívida ou te mandar um lembrete avulso, tudo aparece aqui." %></p>
+          </div>
+        </div>
+      <% } else { %>
+        <div class="p-4 md:p-5 space-y-4">
+          <% if (receivedManualItems.length) { %>
+            <details class="rounded-3xl border border-violet-200 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/10 overflow-hidden" <%= receivedManualSectionOpen ? 'open' : '' %>>
+              <summary class="list-none cursor-pointer px-5 py-4 bg-white/70 dark:bg-slate-950/30">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div class="text-xs font-bold uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Sem competência fixa</div>
+                    <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white">Acertos avulsos</div>
+                    <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= manualSectionHint('received') %></p>
+                  </div>
+                  <div class="flex flex-wrap gap-2 sm:justify-end">
+                    <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200"><%= countLabel(receivedManualItems.length, 'cobrança avulsa', 'cobranças avulsas') %></span>
+                    <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= formatBRLFromCents(sumAmountCents(receivedManualItems)) %></span>
+                  </div>
+                </div>
+              </summary>
+
+              <div class="divide-y divide-violet-200/70 dark:divide-violet-900/40 border-t border-violet-200/70 dark:border-violet-900/40">
+                <% receivedManualItems.forEach(item => {
+                  const meta = statusMeta(item);
+                  const pillMeta = itemPillMeta(item);
+                  const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
+                  const timeline = timelineFor(item.id);
+                %>
+                  <details id="request-<%= item.id %>" class="<%= isHighlighted ? 'bg-violet-50/90 dark:bg-violet-900/20' : 'bg-white/80 dark:bg-slate-900/20' %>" <%= isHighlighted ? 'open' : '' %>>
+                    <summary class="list-none cursor-pointer px-5 py-4">
+                      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="min-w-0 flex-1">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <h3 class="text-base font-bold text-slate-900 dark:text-white truncate"><%= item.description_snapshot %></h3>
+                            <% if (pillMeta) { %><span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= pillMeta.classes %>"><%= pillMeta.label %></span><% } %>
+                            <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= meta.classes %>"><%= meta.label %></span>
+                          </div>
+                          <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium text-slate-500 dark:text-slate-400">
+                            <span>Enviado por <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.requester_name || item.requester_email || 'Usuário' %></span></span>
+                            <span><%= itemDateLead(item) %> <span class="font-semibold text-slate-700 dark:text-slate-200"><%= itemDateValue(item) %></span></span>
+                            <span><%= itemContextLabel(item) %> <span class="font-semibold text-slate-700 dark:text-slate-200"><%= itemContextValue(item) %></span></span>
+                          </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 lg:block lg:text-right">
+                          <div>
+                            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor</div>
+                            <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
+                          </div>
+                          <div class="text-sm font-bold text-violet-600 dark:text-violet-300">Ver detalhes</div>
+                        </div>
+                      </div>
+                    </summary>
+
+                    <div class="px-5 pb-5 pt-1 space-y-4 border-t border-violet-200/70 dark:border-violet-900/40">
+                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemPeriodLabel(item) %></div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= itemPeriodValue(item) %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemDateBlockLabel(item) %></div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= itemDateValue(item) %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemContextLabel(item) %></div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= itemContextValue(item) %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemObservacaoLabel(item) %></div>
+                          <div class="mt-1 text-sm font-medium text-slate-700 dark:text-slate-200"><%= item.request_note || '—' %></div>
+                        </div>
+                      </div>
+
+                      <% if (item.response_note) { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação da resposta</div>
+                          <div class="mt-1 text-sm font-medium text-slate-700 dark:text-slate-200"><%= item.response_note %></div>
+                        </div>
+                      <% } %>
+
+                      <% if (item.status === 'pending') { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-4">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Responder lembrete</div>
+                          <p class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Você pode aceitar ou recusar esse lembrete avulso e, se quiser, mandar um recado de volta.</p>
+                          <form method="POST" action="/shared-debts/<%= item.id %>/respond" class="mt-3 space-y-3">
+                            <label class="block">
+                              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação para <%= item.requester_name || item.requester_email || 'quem enviou' %> (opcional)</span>
+                              <textarea name="note" rows="2" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: Fechado, vou me organizar para te devolver."></textarea>
+                            </label>
+                            <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                              <button type="submit" name="action" value="reject" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Recusar</button>
+                              <button type="submit" name="action" value="accept" class="inline-flex items-center justify-center rounded-2xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-violet-700 transition-colors dark:bg-violet-500 dark:hover:bg-violet-600">Aceitar</button>
+                            </div>
+                          </form>
+                        </div>
+                      <% } else if (item.status === 'accepted' && !item.payment_marked_at) { %>
+                        <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-4">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Lembrete aceito e em aberto</div>
+                          <p class="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">Quando o pagamento acontecer, marque aqui para avisar quem enviou e começar a fechar esse combinado.</p>
+                          <form method="POST" action="/shared-debts/<%= item.id %>/mark-paid" class="mt-3 space-y-3">
+                            <label class="block">
+                              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação sobre o pagamento (opcional)</span>
+                              <textarea name="note" rows="2" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20" placeholder="Ex.: Já mandei o Pix e te encaminhei o comprovante."></textarea>
+                            </label>
+                            <div class="flex justify-end">
+                              <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-600 transition-colors">Marcar como paga</button>
+                            </div>
+                          </form>
+                        </div>
+                      <% } else if (item.status === 'accepted' && item.payment_marked_at) { %>
+                        <div class="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Pagamento informado</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Você informou o pagamento em <strong><%= formatDateBR(item.payment_marked_at) %></strong> às <strong><%= formatTimeBR(item.payment_marked_at) %></strong>. Agora é só aguardar quem enviou confirmar o recebimento.</div>
+                          <% if (item.payment_note) { %>
+                            <div class="mt-2 text-sm text-slate-600 dark:text-slate-300">Observação do pagamento: <span class="font-medium"><%= item.payment_note %></span></div>
+                          <% } %>
+                        </div>
+                      <% } else if (item.status === 'rejection_contested_by_sender') { %>
+                        <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Lembrete em disputa</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Quem enviou contestou a sua recusa. O combinado segue só no histórico, sem entrar no seu quadro financeiro.</div>
+                        </div>
+                      <% } else if (item.status === 'rejection_accepted_by_sender') { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Recusa encerrada</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Sua recusa foi aceita por quem enviou. O lembrete avulso fica apenas no histórico.</div>
+                        </div>
+                      <% } else if (item.status === 'settled') { %>
+                        <div class="rounded-2xl border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Lembrete quitado</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">O recebimento foi confirmado em <strong><%= item.resolved_at ? formatDateBR(item.resolved_at) : 'data não informada' %></strong><% if (item.resolved_at) { %> às <strong><%= formatTimeBR(item.resolved_at) %></strong><% } %>.</div>
+                        </div>
+                      <% } %>
+
+                      <% if (timeline.length) { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 px-4 py-4">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Histórico</div>
+                          <div class="mt-3 space-y-3">
+                            <% timeline.forEach(event => { const eMeta = eventMeta(event.event_type); %>
+                              <div class="flex gap-3">
+                                <div class="pt-1.5"><span class="block h-2.5 w-2.5 rounded-full <%= eMeta.dot %>"></span></div>
+                                <div class="min-w-0 flex-1">
+                                  <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                    <div class="text-sm font-semibold text-slate-800 dark:text-slate-100"><%= eMeta.label %></div>
+                                    <div class="text-xs font-medium text-slate-400 dark:text-slate-500"><%= formatDateBR(event.created_at) %> • <%= formatTimeBR(event.created_at) %></div>
+                                  </div>
+                                  <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Por <%= actorLabel(event) %></div>
+                                  <% if (event.note) { %>
+                                    <div class="mt-1 text-sm text-slate-600 dark:text-slate-300"><%= event.note %></div>
+                                  <% } %>
+                                </div>
+                              </div>
+                            <% }) %>
+                          </div>
+                        </div>
+                      <% } %>
+                    </div>
+                  </details>
+                <% }) %>
+              </div>
+            </details>
+          <% } %>
+
+          <% receivedGroups.forEach((group, groupIndex) => {
+            const monthActionCount = countGroupActions(group, 'received');
+            const groupOpen = shouldOpenGroup(group, groupIndex, 'received');
+          %>
+            <details class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 overflow-hidden" <%= groupOpen ? 'open' : '' %>>
+              <summary class="list-none cursor-pointer px-5 py-4 bg-white/70 dark:bg-slate-950/30">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><span class="md:hidden">Mês</span><span class="hidden md:inline">Competência</span></div>
+                    <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= group.label %></div>
+                  </div>
+                  <div class="flex flex-wrap gap-2 sm:justify-end">
+                    <% if (monthActionCount > 0) { %>
+                      <span class="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-200"><%= monthActionCount %> ação(ões)</span>
+                    <% } %>
+                    <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= countLabel(group.items.length, 'cobrança', 'cobranças') %></span>
+                    <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= formatBRLFromCents(group.totalCents) %></span>
+                  </div>
+                </div>
+              </summary>
+
+              <% const receivedMonthSheetId = `received-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const receivedMonthBulkPaySheetId = `received-month-pay-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const receivedMonthPayableItems = getReceivedMonthPayableItems(group); const receivedMonthPayableTotal = sumAmountCents(receivedMonthPayableItems); const receivedMonthCounterparts = countDistinctCounterparts(receivedMonthPayableItems, 'received'); %>
+              <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><span class="md:hidden">Visão do mês</span><span class="hidden md:inline">Visão do período</span></div>
+                    <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Abra a lista completa do mês para revisar todas as cobranças recebidas de uma vez e depois entrar só na que precisar.</div>
+                  </div>
+                  <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <button type="button" data-open-sheet="<%= receivedMonthSheetId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-100 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700">
+                      <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
+                      Ver lista do mês
+                    </button>
+                    <% if (receivedMonthPayableItems.length) { %>
+                      <button type="button" data-open-sheet="<%= receivedMonthBulkPaySheetId %>" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">
+                        Marcar mês como pago
+                      </button>
+                    <% } %>
+                  </div>
+                </div>
+              </div>
+              <% if (receivedMonthPayableItems.length) { %>
+              <div id="<%= receivedMonthBulkPaySheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
+                <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
+                <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-w-xl sm:rounded-[32px]">
+                  <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                    <div>
+                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Recebidas · <%= group.label %></div>
+                      <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Marcar mês como pago</h3>
+                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= countLabel(receivedMonthPayableItems.length, 'cobrança aceita', 'cobranças aceitas') %> · <%= formatBRLFromCents(receivedMonthPayableTotal) %></p>
+                    </div>
+                    <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar atalho do mês">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                  </div>
+                  <form method="POST" action="/shared-debts/bulk/mark-paid" class="space-y-4 px-5 py-4">
+                    <% receivedMonthPayableItems.forEach((item) => { %>
+                      <input type="hidden" name="request_ids" value="<%= item.id %>">
+                    <% }) %>
+                    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
+                      Este atalho marca como pagas todas as cobranças já aceitas em <strong><%= group.label %></strong>. As pendências de aprovação continuam separadas. <% if (receivedMonthCounterparts > 1) { %>O aviso será resumido para <strong><%= receivedMonthCounterparts %> pessoas</strong> conforme os envios impactados.<% } %>
+                    </div>
+                    <label class="block">
+                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação do pagamento (opcional)</span>
+                      <textarea name="note" rows="3" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20" placeholder="Ex.: Pix realizado e comprovante já enviado."></textarea>
+                    </label>
+                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                      <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Marcar <%= countLabel(receivedMonthPayableItems.length, 'cobrança como paga', 'cobranças como pagas') %></button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+              <% } %>
+              <div id="<%= receivedMonthSheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
+                <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
+                <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[82vh] sm:max-w-3xl sm:rounded-[32px]">
+                  <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                    <div>
+                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Recebidas · <%= group.label %></div>
+                      <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Lista completa do mês</h3>
+                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= countLabel(group.items.length, 'cobrança', 'cobranças') %> · <%= formatBRLFromCents(group.totalCents) %></p>
+                    </div>
+                    <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar lista do mês">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                  </div>
+                  <div class="max-h-[calc(88vh-92px)] overflow-y-auto px-5 py-4 sm:max-h-[calc(82vh-92px)]">
+                    <div class="space-y-3">
+                      <% group.items.forEach(item => { const sheetMeta = statusMeta(item); %>
+                        <div class="rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-800/80">
+                          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div class="min-w-0 flex-1">
+                              <div class="text-sm font-black text-slate-900 dark:text-white"><%= item.description_snapshot %></div>
+                              <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                                <span>Enviado por <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.requester_name || item.requester_email || 'Usuário' %></span></span>
+                                <span>Compra <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.source_txn_date ? formatDateBR(item.source_txn_date) : '—' %></span></span>
+                                <span>Cartão <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.card_name_snapshot || 'Não informado' %></span></span>
+                              </div>
+                            </div>
+                            <div class="sm:text-right">
+                              <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= sheetMeta.classes %>"><%= sheetMeta.label %></span>
+                              <div class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
+                            </div>
+                          </div>
+                          <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="text-xs font-medium text-slate-500 dark:text-slate-400">
+                              <span class="font-semibold text-slate-700 dark:text-slate-200"><span class="md:hidden">Mês:</span><span class="hidden md:inline">Competência:</span></span>
+                              <%= item.source_due_month && item.source_due_year ? monthLabel(item.source_due_month, item.source_due_year) : '—' %>
+                            </div>
+                            <button type="button" data-jump-request="request-<%= item.id %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
+                              Abrir cobrança
+                            </button>
+                          </div>
+                        </div>
+                      <% }) %>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="divide-y divide-slate-200 dark:divide-slate-700">
+                <% group.items.forEach(item => {
+                  const meta = statusMeta(item);
+                  const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
+                  const timeline = timelineFor(item.id);
+                %>
+                  <details id="request-<%= item.id %>" class="<%= isHighlighted ? 'bg-blue-50/70 dark:bg-blue-900/10' : 'bg-white/80 dark:bg-slate-900/20' %>" <%= isHighlighted ? 'open' : '' %>>
+                    <summary class="list-none cursor-pointer px-5 py-4">
+                      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="min-w-0 flex-1">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <h3 class="text-base font-bold text-slate-900 dark:text-white truncate"><%= item.description_snapshot %></h3>
+                            <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= meta.classes %>"><%= meta.label %></span>
+                          </div>
+                          <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium text-slate-500 dark:text-slate-400">
+                            <span>Enviado por <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.requester_name || item.requester_email || 'Usuário' %></span></span>
+                            <span>Compra em <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.source_txn_date ? formatDateBR(item.source_txn_date) : '—' %></span></span>
+                            <span>Cartão <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.card_name_snapshot || 'Não informado' %></span></span>
+                          </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 lg:block lg:text-right">
+                          <div>
+                            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor</div>
+                            <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
+                          </div>
+                          <div class="text-sm font-bold text-blue-600 dark:text-blue-300">Ver detalhes</div>
+                        </div>
+                      </div>
+                    </summary>
+
+                    <div class="px-5 pb-5 pt-1 space-y-4 border-t border-slate-200 dark:border-slate-700">
+                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><span class="md:hidden">Mês</span><span class="hidden md:inline">Competência</span></div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= item.source_due_month && item.source_due_year ? monthLabel(item.source_due_month, item.source_due_year) : '—' %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Data da compra</div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= item.source_txn_date ? formatDateBR(item.source_txn_date) : '—' %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Cartão</div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= item.card_name_snapshot || 'Não informado' %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação do envio</div>
+                          <div class="mt-1 text-sm font-medium text-slate-700 dark:text-slate-200"><%= item.request_note || '—' %></div>
+                        </div>
+                      </div>
+
+                      <% if (item.response_note) { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação da resposta</div>
+                          <div class="mt-1 text-sm font-medium text-slate-700 dark:text-slate-200"><%= item.response_note %></div>
+                        </div>
+                      <% } %>
+
+                      <% if (item.status === 'pending') { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-4">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Responder solicitação</div>
+                          <p class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Você pode aceitar ou recusar esta cobrança e, se quiser, enviar uma observação de volta.</p>
+                          <form method="POST" action="/shared-debts/<%= item.id %>/respond" class="mt-3 space-y-3">
+                            <label class="block">
+                              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação para <%= item.requester_name || item.requester_email || 'o remetente' %> (opcional)</span>
+                              <textarea name="note" rows="2" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:border-blue-500 dark:focus:ring-blue-500/20" placeholder="Ex.: Confirmo este valor."></textarea>
+                            </label>
+                            <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                              <button type="submit" name="action" value="reject" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Recusar</button>
+                              <button type="submit" name="action" value="accept" class="inline-flex items-center justify-center rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-600 transition-colors">Aceitar</button>
+                            </div>
+                          </form>
+                        </div>
+                      <% } else if (item.status === 'accepted' && !item.payment_marked_at) { %>
+                        <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-4">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Dívida aceita e em aberto</div>
+                          <p class="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">Quando o pagamento for realizado, marque aqui para avisar o remetente e iniciar a liquidação.</p>
+                          <form method="POST" action="/shared-debts/<%= item.id %>/mark-paid" class="mt-3 space-y-3">
+                            <label class="block">
+                              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação sobre o pagamento (opcional)</span>
+                              <textarea name="note" rows="2" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20" placeholder="Ex.: Já fiz o Pix agora há pouco."></textarea>
+                            </label>
+                            <div class="flex justify-end">
+                              <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-600 transition-colors">Marcar como paga</button>
+                            </div>
+                          </form>
+                        </div>
+                      <% } else if (item.status === 'accepted' && item.payment_marked_at) { %>
+                        <div class="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Pagamento informado</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Você informou o pagamento em <strong><%= formatDateBR(item.payment_marked_at) %></strong> às <strong><%= formatTimeBR(item.payment_marked_at) %></strong>. Agora é só aguardar o remetente confirmar o recebimento.</div>
+                          <% if (item.payment_note) { %>
+                            <div class="mt-2 text-sm text-slate-600 dark:text-slate-300">Observação do pagamento: <span class="font-medium"><%= item.payment_note %></span></div>
+                          <% } %>
+                        </div>
+                      <% } else if (item.status === 'rejection_contested_by_sender') { %>
+                        <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Cobrança em disputa</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">O remetente contestou a sua recusa. A solicitação permanece apenas para acompanhamento e não entra no seu quadro financeiro.</div>
+                        </div>
+                      <% } else if (item.status === 'rejection_accepted_by_sender') { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Rejeição encerrada</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Sua recusa foi aceita pelo remetente. A solicitação permanece apenas no histórico.</div>
+                        </div>
+                      <% } else if (item.status === 'settled') { %>
+                        <div class="rounded-2xl border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Dívida liquidada</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">O recebimento foi confirmado em <strong><%= item.resolved_at ? formatDateBR(item.resolved_at) : 'data não informada' %></strong><% if (item.resolved_at) { %> às <strong><%= formatTimeBR(item.resolved_at) %></strong><% } %>.</div>
+                        </div>
+                      <% } %>
+
+                      <% if (timeline.length) { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 px-4 py-4">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Histórico</div>
+                          <div class="mt-3 space-y-3">
+                            <% timeline.forEach(event => { const eMeta = eventMeta(event.event_type); %>
+                              <div class="flex gap-3">
+                                <div class="pt-1.5"><span class="block h-2.5 w-2.5 rounded-full <%= eMeta.dot %>"></span></div>
+                                <div class="min-w-0 flex-1">
+                                  <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                    <div class="text-sm font-semibold text-slate-800 dark:text-slate-100"><%= eMeta.label %></div>
+                                    <div class="text-xs font-medium text-slate-400 dark:text-slate-500"><%= formatDateBR(event.created_at) %> • <%= formatTimeBR(event.created_at) %></div>
+                                  </div>
+                                  <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Por <%= actorLabel(event) %></div>
+                                  <% if (event.note) { %>
+                                    <div class="mt-1 text-sm text-slate-600 dark:text-slate-300"><%= event.note %></div>
+                                  <% } %>
+                                </div>
+                              </div>
+                            <% }) %>
+                          </div>
+                        </div>
+                      <% } %>
+                    </div>
+                  </details>
+                <% }) %>
+              </div>
+            </details>
+          <% }) %>
+        </div>
+      <% } %>
+      </div>
+    </details>
+
+    <details id="sent" class="op-dual-accordion w-full self-start rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden" <%= sentScopeOpen ? 'open' : '' %>>
+      <summary class="list-none cursor-pointer px-6 py-5 bg-slate-50 dark:bg-slate-900/70">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 class="text-lg font-extrabold text-slate-900 dark:text-white">Enviadas</h2>
+              <% if (sentActionCount > 0) { %>
+                <span class="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-200"><%= sentActionCount %> ação(ões)</span>
+              <% } %>
+            </div>
+            <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none">Cobranças que você enviou para aprovação, baixa e lembretes avulsos que continuam no radar até a quitação.</p>
+          </div>
+          <div class="flex flex-wrap gap-2 sm:justify-end">
+            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= trackingFiltersActive ? `${countLabel(sentBaseItems.length, 'cobrança', 'cobranças')} de ${countLabel(sent.length, 'cobrança', 'cobranças')}` : countLabel(sent.length, 'cobrança', 'cobranças') %></span>
+            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><span class="md:hidden"><%= trackingFiltersActive ? `${countLabel(sentGroups.length, 'mês', 'meses')} de ${countLabel(rawSentGroups.length, 'mês', 'meses')}` : countLabel(sentGroups.length, 'mês', 'meses') %></span><span class="hidden md:inline"><%= trackingFiltersActive ? `${countLabel(sentGroups.length, 'período', 'períodos')} de ${countLabel(rawSentGroups.length, 'período', 'períodos')}` : countLabel(sentGroups.length, 'período', 'períodos') %></span></span>
+            <% if (sentManualItems.length) { %>
+              <span class="inline-flex items-center rounded-full border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20 px-3 py-1 text-xs font-bold text-violet-700 dark:text-violet-200"><%= countLabel(sentManualItems.length, 'avulsa', 'avulsas') %></span>
+            <% } %>
+          </div>
+        </div>
+      </summary>
+
+      <div class="border-t border-slate-200 dark:border-slate-700">
+      <% if (!sentGroups.length && !sentManualItems.length) { %>
+        <div class="px-5 py-5">
+          <div class="op-empty-state op-empty-state--compact">
+            <div class="op-empty-state__icon">📤</div>
+            <div class="op-empty-state__title"><%= trackingFiltersActive ? "Nenhuma cobrança enviada combina com os filtros" : "Nenhuma solicitação enviada ainda" %></div>
+            <p class="op-empty-state__text"><%= trackingFiltersActive ? "Limpe ou ajuste os filtros para voltar a enxergar o acompanhamento enviado inteiro." : "Quando você dividir uma compra ou mandar um lembrete avulso para alguém elegível, tudo aparece aqui." %></p>
+          </div>
+        </div>
+      <% } else { %>
+        <div class="p-4 md:p-5 space-y-4">
+          <% if (sentManualItems.length) { %>
+            <details class="rounded-3xl border border-violet-200 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/10 overflow-hidden" <%= sentManualSectionOpen ? 'open' : '' %>>
+              <summary class="list-none cursor-pointer px-5 py-4 bg-white/70 dark:bg-slate-950/30">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div class="text-xs font-bold uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Sem competência fixa</div>
+                    <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white">Acertos avulsos</div>
+                    <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= manualSectionHint('sent') %></p>
+                  </div>
+                  <div class="flex flex-wrap gap-2 sm:justify-end">
+                    <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200"><%= countLabel(sentManualItems.length, 'cobrança avulsa', 'cobranças avulsas') %></span>
+                    <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= formatBRLFromCents(sumAmountCents(sentManualItems)) %></span>
+                  </div>
+                </div>
+              </summary>
+
+              <div class="divide-y divide-violet-200/70 dark:divide-violet-900/40 border-t border-violet-200/70 dark:border-violet-900/40">
+                <% sentManualItems.forEach(item => {
+                  const meta = statusMeta(item);
+                  const pillMeta = itemPillMeta(item);
+                  const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
+                  const timeline = timelineFor(item.id);
+                %>
+                  <details id="request-<%= item.id %>" class="<%= isHighlighted ? 'bg-violet-50/90 dark:bg-violet-900/20' : 'bg-white/80 dark:bg-slate-900/20' %>" <%= isHighlighted ? 'open' : '' %>>
+                    <summary class="list-none cursor-pointer px-5 py-4">
+                      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="min-w-0 flex-1">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <h3 class="text-base font-bold text-slate-900 dark:text-white truncate"><%= item.description_snapshot %></h3>
+                            <% if (pillMeta) { %><span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= pillMeta.classes %>"><%= pillMeta.label %></span><% } %>
+                            <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= meta.classes %>"><%= meta.label %></span>
+                          </div>
+                          <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium text-slate-500 dark:text-slate-400">
+                            <span>Enviado para <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.receiver_name || item.receiver_email || item.receiver_email_snapshot || 'Usuário' %></span></span>
+                            <span><%= itemDateLead(item) %> <span class="font-semibold text-slate-700 dark:text-slate-200"><%= itemDateValue(item) %></span></span>
+                            <span><%= itemContextLabel(item) %> <span class="font-semibold text-slate-700 dark:text-slate-200"><%= itemContextValue(item) %></span></span>
+                          </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 lg:block lg:text-right">
+                          <div>
+                            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor</div>
+                            <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
+                          </div>
+                          <div class="text-sm font-bold text-violet-600 dark:text-violet-300">Ver detalhes</div>
+                        </div>
+                      </div>
+                    </summary>
+
+                    <div class="px-5 pb-5 pt-1 space-y-4 border-t border-violet-200/70 dark:border-violet-900/40">
+                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemPeriodLabel(item) %></div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= itemPeriodValue(item) %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemDateBlockLabel(item) %></div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= itemDateValue(item) %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemContextLabel(item) %></div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= itemContextValue(item) %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemObservacaoLabel(item) %></div>
+                          <div class="mt-1 text-sm font-medium text-slate-700 dark:text-slate-200"><%= item.request_note || '—' %></div>
+                        </div>
+                      </div>
+
+                      <% if (item.response_note) { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação da resposta</div>
+                          <div class="mt-1 text-sm font-medium text-slate-700 dark:text-slate-200"><%= item.response_note %></div>
+                        </div>
+                      <% } %>
+
+                      <% if (item.status === 'rejected_by_receiver') { %>
+                        <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-4">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Decidir sobre a recusa</div>
+                          <p class="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">Você pode aceitar a recusa e encerrar esse lembrete avulso ou contestá-lo. Enquanto houver disputa, ele não entra no quadro financeiro da outra pessoa.</p>
+                          <form method="POST" action="/shared-debts/<%= item.id %>/sender-action" class="mt-3 space-y-3">
+                            <label class="block">
+                              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação para <%= item.receiver_name || item.receiver_email || item.receiver_email_snapshot || 'quem recebeu' %> (opcional)</span>
+                              <textarea name="note" rows="2" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: Entendi, vou encerrar por aqui."></textarea>
+                            </label>
+                            <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                              <button type="submit" name="action" value="accept_rejection" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Aceitar recusa</button>
+                              <button type="submit" name="action" value="contest_rejection" class="inline-flex items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-amber-600 transition-colors">Contestar recusa</button>
+                            </div>
+                          </form>
+                        </div>
+                      <% } else if (item.status === 'accepted' && !item.payment_marked_at) { %>
+                        <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Lembrete aceito e aguardando pagamento</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Quem recebeu já aceitou esse valor. Assim que marcar o pagamento, você poderá confirmar o recebimento e encerrar o combinado.</div>
+                        </div>
+                      <% } else if (item.status === 'accepted' && item.payment_marked_at) { %>
+                        <div class="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 px-4 py-4">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Pagamento aguardando sua confirmação</div>
+                          <p class="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">Quem recebeu informou o pagamento em <strong><%= formatDateBR(item.payment_marked_at) %></strong> às <strong><%= formatTimeBR(item.payment_marked_at) %></strong>. Confirme abaixo quando o valor tiver realmente entrado.</p>
+                          <% if (item.payment_note) { %>
+                            <div class="mt-2 text-sm text-slate-600 dark:text-slate-300">Observação do pagamento: <span class="font-medium"><%= item.payment_note %></span></div>
+                          <% } %>
+                          <form method="POST" action="/shared-debts/<%= item.id %>/confirm-receipt" class="mt-3 space-y-3">
+                            <label class="block">
+                              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação da liquidação (opcional)</span>
+                              <textarea name="note" rows="2" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20" placeholder="Ex.: Caiu na conta e já conferi por aqui."></textarea>
+                            </label>
+                            <div class="flex justify-end">
+                              <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-sky-700 transition-colors">Confirmar recebimento</button>
+                            </div>
+                          </form>
+                        </div>
+                      <% } else if (item.status === 'rejection_contested_by_sender') { %>
+                        <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Lembrete em disputa</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Esse lembrete foi contestado por você e permanece só para acompanhamento, sem entrar no quadro financeiro de quem recebeu.</div>
+                        </div>
+                      <% } else if (item.status === 'rejection_accepted_by_sender') { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Lembrete encerrado</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Você aceitou a recusa desse lembrete avulso. Ele fica apenas no histórico para consulta futura.</div>
+                        </div>
+                      <% } else if (item.status === 'settled') { %>
+                        <div class="rounded-2xl border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Lembrete quitado</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">O recebimento foi confirmado em <strong><%= item.resolved_at ? formatDateBR(item.resolved_at) : 'data não informada' %></strong><% if (item.resolved_at) { %> às <strong><%= formatTimeBR(item.resolved_at) %></strong><% } %>.</div>
+                        </div>
+                      <% } %>
+
+                      <% if (timeline.length) { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 px-4 py-4">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Histórico</div>
+                          <div class="mt-3 space-y-3">
+                            <% timeline.forEach(event => { const eMeta = eventMeta(event.event_type); %>
+                              <div class="flex gap-3">
+                                <div class="pt-1.5"><span class="block h-2.5 w-2.5 rounded-full <%= eMeta.dot %>"></span></div>
+                                <div class="min-w-0 flex-1">
+                                  <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                    <div class="text-sm font-semibold text-slate-800 dark:text-slate-100"><%= eMeta.label %></div>
+                                    <div class="text-xs font-medium text-slate-400 dark:text-slate-500"><%= formatDateBR(event.created_at) %> • <%= formatTimeBR(event.created_at) %></div>
+                                  </div>
+                                  <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Por <%= actorLabel(event) %></div>
+                                  <% if (event.note) { %>
+                                    <div class="mt-1 text-sm text-slate-600 dark:text-slate-300"><%= event.note %></div>
+                                  <% } %>
+                                </div>
+                              </div>
+                            <% }) %>
+                          </div>
+                        </div>
+                      <% } %>
+                    </div>
+                  </details>
+                <% }) %>
+              </div>
+            </details>
+          <% } %>
+
+          <% sentGroups.forEach((group, groupIndex) => {
+            const monthActionCount = countGroupActions(group, 'sent');
+            const groupOpen = shouldOpenGroup(group, groupIndex, 'sent');
+          %>
+            <details class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 overflow-hidden" <%= groupOpen ? 'open' : '' %>>
+              <summary class="list-none cursor-pointer px-5 py-4 bg-white/70 dark:bg-slate-950/30">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><span class="md:hidden">Mês</span><span class="hidden md:inline">Competência</span></div>
+                    <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= group.label %></div>
+                  </div>
+                  <div class="flex flex-wrap gap-2 sm:justify-end">
+                    <% if (monthActionCount > 0) { %>
+                      <span class="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-200"><%= monthActionCount %> ação(ões)</span>
+                    <% } %>
+                    <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= countLabel(group.items.length, 'cobrança', 'cobranças') %></span>
+                    <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= formatBRLFromCents(group.totalCents) %></span>
+                  </div>
+                </div>
+              </summary>
+
+              <% const sentMonthSheetId = `sent-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmSheetId = `sent-month-confirm-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmableItems = getSentMonthConfirmableItems(group); const sentMonthConfirmableTotal = sumAmountCents(sentMonthConfirmableItems); const sentMonthCounterparts = countDistinctCounterparts(sentMonthConfirmableItems, 'sent'); %>
+              <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><span class="md:hidden">Visão do mês</span><span class="hidden md:inline">Visão do período</span></div>
+                    <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Abra a lista completa do mês para ver todas as cobranças enviadas de uma vez e acompanhar o panorama do <span class="md:hidden">mês</span><span class="hidden md:inline">período</span>.</div>
+                  </div>
+                  <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <button type="button" data-open-sheet="<%= sentMonthSheetId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-100 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700">
+                      <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
+                      Ver lista do mês
+                    </button>
+                    <% if (sentMonthConfirmableItems.length) { %>
+                      <button type="button" data-open-sheet="<%= sentMonthConfirmSheetId %>" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">
+                        Confirmar recebimento do mês
+                      </button>
+                    <% } %>
+                  </div>
+                </div>
+              </div>
+              <% if (sentMonthConfirmableItems.length) { %>
+              <div id="<%= sentMonthConfirmSheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
+                <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
+                <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-w-xl sm:rounded-[32px]">
+                  <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                    <div>
+                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Enviadas · <%= group.label %></div>
+                      <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Confirmar recebimento do mês</h3>
+                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= countLabel(sentMonthConfirmableItems.length, 'cobrança com pagamento avisado', 'cobranças com pagamento avisado') %> · <%= formatBRLFromCents(sentMonthConfirmableTotal) %></p>
+                    </div>
+                    <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar confirmação do mês">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                  </div>
+                  <form method="POST" action="/shared-debts/bulk/confirm-receipt" class="space-y-4 px-5 py-4">
+                    <% sentMonthConfirmableItems.forEach((item) => { %>
+                      <input type="hidden" name="request_ids" value="<%= item.id %>">
+                    <% }) %>
+                    <div class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-800 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200">
+                      Este atalho liquida de uma vez todas as cobranças de <strong><%= group.label %></strong> cujo pagamento já foi informado. <% if (sentMonthCounterparts > 1) { %>Os avisos serão resumidos por envio para <strong><%= sentMonthCounterparts %> pessoas</strong>.<% } %>
+                    </div>
+                    <label class="block">
+                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação da liquidação (opcional)</span>
+                      <textarea name="note" rows="3" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20" placeholder="Ex.: Recebimento conferido no extrato deste mês."></textarea>
+                    </label>
+                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                      <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">Confirmar <%= countLabel(sentMonthConfirmableItems.length, 'recebimento', 'recebimentos') %></button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+              <% } %>
+              <div id="<%= sentMonthSheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
+                <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
+                <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[82vh] sm:max-w-3xl sm:rounded-[32px]">
+                  <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                    <div>
+                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Enviadas · <%= group.label %></div>
+                      <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Lista completa do mês</h3>
+                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= countLabel(group.items.length, 'cobrança', 'cobranças') %> · <%= formatBRLFromCents(group.totalCents) %></p>
+                    </div>
+                    <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar lista do mês">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                  </div>
+                  <div class="max-h-[calc(88vh-92px)] overflow-y-auto px-5 py-4 sm:max-h-[calc(82vh-92px)]">
+                    <div class="space-y-3">
+                      <% group.items.forEach(item => { const sheetMeta = statusMeta(item); %>
+                        <div class="rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-800/80">
+                          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div class="min-w-0 flex-1">
+                              <div class="text-sm font-black text-slate-900 dark:text-white"><%= item.description_snapshot %></div>
+                              <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                                <span>Para <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.receiver_name || item.receiver_email || item.receiver_email_snapshot || 'Usuário' %></span></span>
+                                <span>Compra <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.source_txn_date ? formatDateBR(item.source_txn_date) : '—' %></span></span>
+                                <span>Cartão <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.card_name_snapshot || 'Não informado' %></span></span>
+                              </div>
+                            </div>
+                            <div class="sm:text-right">
+                              <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= sheetMeta.classes %>"><%= sheetMeta.label %></span>
+                              <div class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
+                            </div>
+                          </div>
+                          <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="text-xs font-medium text-slate-500 dark:text-slate-400">
+                              <span class="font-semibold text-slate-700 dark:text-slate-200"><span class="md:hidden">Mês:</span><span class="hidden md:inline">Competência:</span></span>
+                              <%= item.source_due_month && item.source_due_year ? monthLabel(item.source_due_month, item.source_due_year) : '—' %>
+                            </div>
+                            <button type="button" data-jump-request="request-<%= item.id %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
+                              Abrir cobrança
+                            </button>
+                          </div>
+                        </div>
+                      <% }) %>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="divide-y divide-slate-200 dark:divide-slate-700">
+                <% group.items.forEach(item => {
+                  const meta = statusMeta(item);
+                  const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
+                  const timeline = timelineFor(item.id);
+                %>
+                  <details id="request-<%= item.id %>" class="<%= isHighlighted ? 'bg-blue-50/70 dark:bg-blue-900/10' : 'bg-white/80 dark:bg-slate-900/20' %>" <%= isHighlighted ? 'open' : '' %>>
+                    <summary class="list-none cursor-pointer px-5 py-4">
+                      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="min-w-0 flex-1">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <h3 class="text-base font-bold text-slate-900 dark:text-white truncate"><%= item.description_snapshot %></h3>
+                            <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= meta.classes %>"><%= meta.label %></span>
+                          </div>
+                          <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium text-slate-500 dark:text-slate-400">
+                            <span>Enviado para <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.receiver_name || item.receiver_email || item.receiver_email_snapshot || 'Usuário' %></span></span>
+                            <span>Compra em <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.source_txn_date ? formatDateBR(item.source_txn_date) : '—' %></span></span>
+                            <span>Cartão <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.card_name_snapshot || 'Não informado' %></span></span>
+                          </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 lg:block lg:text-right">
+                          <div>
+                            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor</div>
+                            <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
+                          </div>
+                          <div class="text-sm font-bold text-blue-600 dark:text-blue-300">Ver detalhes</div>
+                        </div>
+                      </div>
+                    </summary>
+
+                    <div class="px-5 pb-5 pt-1 space-y-4 border-t border-slate-200 dark:border-slate-700">
+                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><span class="md:hidden">Mês</span><span class="hidden md:inline">Competência</span></div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= item.source_due_month && item.source_due_year ? monthLabel(item.source_due_month, item.source_due_year) : '—' %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Data da compra</div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= item.source_txn_date ? formatDateBR(item.source_txn_date) : '—' %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Cartão</div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= item.card_name_snapshot || 'Não informado' %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação do envio</div>
+                          <div class="mt-1 text-sm font-medium text-slate-700 dark:text-slate-200"><%= item.request_note || '—' %></div>
+                        </div>
+                      </div>
+
+                      <% if (item.response_note) { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação da resposta</div>
+                          <div class="mt-1 text-sm font-medium text-slate-700 dark:text-slate-200"><%= item.response_note %></div>
+                        </div>
+                      <% } %>
+
+                      <% if (item.status === 'rejected_by_receiver') { %>
+                        <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-4">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Decidir sobre a rejeição</div>
+                          <p class="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">Você pode aceitar a rejeição e encerrar esta cobrança ou contestá-la. Enquanto estiver em disputa, ela não entra no quadro financeiro da outra pessoa.</p>
+                          <form method="POST" action="/shared-debts/<%= item.id %>/sender-action" class="mt-3 space-y-3">
+                            <label class="block">
+                              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação para <%= item.receiver_name || item.receiver_email || item.receiver_email_snapshot || 'o destinatário' %> (opcional)</span>
+                              <textarea name="note" rows="2" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:border-blue-500 dark:focus:ring-blue-500/20" placeholder="Ex.: Entendi sua posição, vou encerrar por aqui."></textarea>
+                            </label>
+                            <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                              <button type="submit" name="action" value="accept_rejection" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Aceitar rejeição</button>
+                              <button type="submit" name="action" value="contest_rejection" class="inline-flex items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-amber-600 transition-colors">Contestar rejeição</button>
+                            </div>
+                          </form>
+                        </div>
+                      <% } else if (item.status === 'accepted' && !item.payment_marked_at) { %>
+                        <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Cobrança aceita e aguardando pagamento</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">O destinatário já aceitou esta dívida. Assim que ele marcar o pagamento, você poderá confirmar o recebimento e liquidar a solicitação.</div>
+                        </div>
+                      <% } else if (item.status === 'accepted' && item.payment_marked_at) { %>
+                        <div class="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 px-4 py-4">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Pagamento aguardando sua confirmação</div>
+                          <p class="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">O destinatário informou o pagamento em <strong><%= formatDateBR(item.payment_marked_at) %></strong> às <strong><%= formatTimeBR(item.payment_marked_at) %></strong>. Confirme abaixo quando o valor tiver realmente entrado.</p>
+                          <% if (item.payment_note) { %>
+                            <div class="mt-2 text-sm text-slate-600 dark:text-slate-300">Observação do pagamento: <span class="font-medium"><%= item.payment_note %></span></div>
+                          <% } %>
+                          <form method="POST" action="/shared-debts/<%= item.id %>/confirm-receipt" class="mt-3 space-y-3">
+                            <label class="block">
+                              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação da liquidação (opcional)</span>
+                              <textarea name="note" rows="2" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20" placeholder="Ex.: Recebido e conferido no extrato."></textarea>
+                            </label>
+                            <div class="flex justify-end">
+                              <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-sky-700 transition-colors">Confirmar recebimento</button>
+                            </div>
+                          </form>
+                        </div>
+                      <% } else if (item.status === 'rejection_contested_by_sender') { %>
+                        <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Cobrança em disputa</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Esta solicitação foi contestada por você e permanece apenas para acompanhamento, sem entrar no quadro financeiro do destinatário.</div>
+                        </div>
+                      <% } else if (item.status === 'rejection_accepted_by_sender') { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Cobrança encerrada</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Você aceitou a rejeição desta cobrança. Ela permanece apenas no histórico para consulta futura.</div>
+                        </div>
+                      <% } else if (item.status === 'settled') { %>
+                        <div class="rounded-2xl border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Dívida liquidada</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">O recebimento foi confirmado em <strong><%= item.resolved_at ? formatDateBR(item.resolved_at) : 'data não informada' %></strong><% if (item.resolved_at) { %> às <strong><%= formatTimeBR(item.resolved_at) %></strong><% } %>.</div>
+                        </div>
+                      <% } %>
+
+                      <% if (timeline.length) { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 px-4 py-4">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Histórico</div>
+                          <div class="mt-3 space-y-3">
+                            <% timeline.forEach(event => { const eMeta = eventMeta(event.event_type); %>
+                              <div class="flex gap-3">
+                                <div class="pt-1.5"><span class="block h-2.5 w-2.5 rounded-full <%= eMeta.dot %>"></span></div>
+                                <div class="min-w-0 flex-1">
+                                  <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                    <div class="text-sm font-semibold text-slate-800 dark:text-slate-100"><%= eMeta.label %></div>
+                                    <div class="text-xs font-medium text-slate-400 dark:text-slate-500"><%= formatDateBR(event.created_at) %> • <%= formatTimeBR(event.created_at) %></div>
+                                  </div>
+                                  <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Por <%= actorLabel(event) %></div>
+                                  <% if (event.note) { %>
+                                    <div class="mt-1 text-sm text-slate-600 dark:text-slate-300"><%= event.note %></div>
+                                  <% } %>
+                                </div>
+                              </div>
+                            <% }) %>
+                          </div>
+                        </div>
+                      <% } %>
+                    </div>
+                  </details>
+                <% }) %>
+              </div>
+            </details>
+          <% }) %>
+        </div>
+      <% } %>
+      </div>
+    </details>
+  </section>
+</div>
+
+<script>
+  function openSharedDebtScopeFromHash() {
+    const hash = window.location.hash;
+    if (!hash) return;
+
+    const scope = document.querySelector(hash);
+    if (scope instanceof HTMLDetailsElement) {
+      scope.open = true;
+    }
+  }
+
+  function openRequestChain(target) {
+    if (!target) return;
+
+    let current = target;
+    while (current) {
+      if (current instanceof HTMLDetailsElement) current.open = true;
+      current = current.parentElement ? current.parentElement.closest('details') : null;
+    }
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function closeSharedDebtSheets() {
+    document.querySelectorAll('[data-shared-debts-sheet]').forEach((sheet) => {
+      sheet.classList.add('hidden');
+    });
+    document.body.classList.remove('overflow-hidden');
+  }
+
+  function openSharedDebtSheet(sheetId) {
+    const sheet = document.getElementById(sheetId);
+    if (!sheet) return;
+    closeSharedDebtSheets();
+    sheet.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+
+    const preferredInput = sheet.querySelector('[data-shared-debt-manual-focus]');
+    if (preferredInput instanceof HTMLInputElement && !preferredInput.disabled) {
+      const focusNow = () => {
+        try {
+          preferredInput.focus({ preventScroll: true });
+        } catch (error) {
+          preferredInput.focus();
+        }
+        try {
+          preferredInput.select();
+        } catch (error) {
+          // noop
+        }
+      };
+
+      requestAnimationFrame(focusNow);
+      window.setTimeout(focusNow, 120);
+    }
+  }
+
+  document.addEventListener('click', (event) => {
+    const openBtn = event.target.closest('[data-open-sheet]');
+    if (openBtn) {
+      event.preventDefault();
+      openSharedDebtSheet(openBtn.getAttribute('data-open-sheet'));
+      return;
+    }
+
+    const closeBtn = event.target.closest('[data-close-sheet]');
+    if (closeBtn) {
+      event.preventDefault();
+      closeSharedDebtSheets();
+      return;
+    }
+
+    const jumpBtn = event.target.closest('[data-jump-request]');
+    if (jumpBtn) {
+      event.preventDefault();
+      const target = document.getElementById(jumpBtn.getAttribute('data-jump-request'));
+      closeSharedDebtSheets();
+      if (target) {
+        setTimeout(() => openRequestChain(target), 40);
+      }
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeSharedDebtSheets();
+    }
+  });
+
+  window.addEventListener('load', () => {
+    openSharedDebtScopeFromHash();
+
+    <% if (batchIdToHighlight) { %>
+      const batchEl = document.getElementById('batch-<%= batchIdToHighlight %>');
+      if (batchEl) {
+        batchEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    <% } %>
+
+    <% if (requestIdToHighlight) { %>
+      const el = document.getElementById('request-<%= requestIdToHighlight %>');
+      if (el) openRequestChain(el);
+    <% } %>
+  });
+
+  window.addEventListener('hashchange', openSharedDebtScopeFromHash);
+</script>
+
+<%- include("partials/footer") %>

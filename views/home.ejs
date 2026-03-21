@@ -1,89 +1,125 @@
-<%- include("partials/header", { title: "Cartões JP | Início" }) %>
+<%- include("partials/header", { title: "OrganizaPay | Visão Geral" }) %>
 
-  <div
-    class="mb-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
+  <div class="max-w-6xl mx-auto space-y-6">
+
+  <section class="op-page-hero op-fade-up">
     <div>
-      <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Visão Geral</h1>
-      <p class="text-slate-500 mt-2 font-medium">Suas faturas agrupadas por mês de vencimento.</p>
+      <span class="op-page-hero__eyebrow">Visão consolidada</span>
+      <h1 class="op-page-hero__title mt-4">Visão Geral</h1>
+      <p class="op-page-hero__subtitle mt-3">Seu mês financeiro, sem bagunça e sem caça ao número perdido.</p>
+      <div class="op-page-hero__meta mt-4">
+        <span class="badge"><span class="md:hidden"><%= groupedRecent ? groupedRecent.filter(group => !group.__section).length : 0 %> mês(es) disponível(eis)</span><span class="hidden md:inline"><%= groupedRecent ? groupedRecent.filter(group => !group.__section).length : 0 %> período(s) disponível(eis)</span></span>
+      </div>
     </div>
 
-    <div class="flex flex-wrap gap-3">
-      <button onclick="document.getElementById('modalManual').classList.remove('hidden')"
-        class="inline-flex items-center justify-center px-6 py-3 text-sm font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 shadow-sm transition-all hover:-translate-y-0.5">
-        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-        </svg>
-        + Novo Item
-      </button>
+    <div class="space-y-3 lg:ml-auto lg:flex lg:max-w-[32rem] lg:flex-col lg:items-end">
+      <div class="op-page-hero__actions op-page-hero__actions--geral">
+        <button type="button" data-manual-modal-open
+          class="op-btn op-btn-success">
+          <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+          </svg>
+          Nova compra
+        </button>
 
-      <a href="/import"
-        class="inline-flex items-center justify-center px-6 py-3 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5">
-        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-        </svg>
-        Nova Importação
-      </a>
+        <button type="button" class="op-btn op-btn--alert-entry" data-push-center-open data-push-center-open-variant="cta" data-push-visual-state="loading" data-push-copy-target="#geral-alertas-status" aria-haspopup="dialog" aria-controls="notification-center">
+          <span data-push-center-label>
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.389 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>
+            <span>Alertas do app</span>
+          </span>
+        </button>
+
+        <% if (canImport) { %>
+          <a href="/import"
+            class="op-btn op-btn-primary">
+            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Importar fatura
+          </a>
+        <% } %>
+      </div>
+      <p id="geral-alertas-status" class="text-xs font-semibold leading-6 text-slate-500 dark:text-slate-400 lg:max-w-[30rem] lg:text-right">Receba avisos de vencimento, respostas e confirmações neste aparelho — sem precisar caçar novidade no app.</p>
     </div>
-  </div>
+  </section>
 
-  <div id="modalManual"
+
+  <div id="modalManual" data-manual-modal aria-hidden="true"
     class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl">
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
       <div class="flex justify-between items-center mb-6">
-        <h2 class="text-xl font-black text-slate-800">Novo Gasto Manual</h2>
-        <button type="button" onclick="document.getElementById('modalManual').classList.add('hidden')"
-          class="text-slate-400 hover:text-slate-600 text-2xl">✕</button>
+        <h2 class="text-xl font-black text-slate-800 dark:text-white">Adicionar compra</h2>
+        <button type="button" data-manual-modal-close
+          class="op-icon-btn" aria-label="Fechar janela">✕</button>
       </div>
 
-      <form action="/txn/manual" method="POST" class="space-y-4">
+      <form action="/txn/manual" method="POST" class="space-y-4" data-auto-first-due-form>
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Data da Compra</label>
-            <input type="date" name="date" required
-              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data da Compra</label>
+            <input type="date" name="date" required data-manual-date-input
+              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
           <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Valor Total (R$)</label>
-            <input type="text" name="amount" placeholder="0,00" required
-              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cartão</label>
+            <select name="card_id" data-manual-card-select
+              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
+              <% cards.forEach(c=> { %>
+                <option value="<%= c.id %>" data-close-day="<%= c.close_day || '' %>" data-due-day="<%= c.due_day || '' %>">
+                  <%= c.name %>
+                </option>
+                <% }) %>
+            </select>
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1º Vencimento</label>
-            <input type="month" name="first_due" required
-              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
+            <input type="text" name="amount" placeholder="0,00" required data-money-mask data-manual-amount-input inputmode="decimal" enterkeyhint="next" autocapitalize="off" autocomplete="off"
+              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
           <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Parcelas</label>
-            <input type="number" name="installments" value="1" min="1" max="99" required
-              class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Parcelas</label>
+            <input type="number" name="installments" value="1" min="1" max="99" required data-installments-input
+              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
         </div>
 
         <div>
-          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição</label>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Vai cair em qual fatura?</label>
+          <input type="month" name="first_due" value="<%= featuredOpenGroup ? `${featuredOpenGroup.year}-${String(featuredOpenGroup.month).padStart(2, '0')}` : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}` %>" required data-manual-first-due
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
+          <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">A gente sugere isso pela data da compra e pelo fechamento do cartão. Se precisar, pode ajustar sem cerimônia.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Descrição</label>
           <input type="text" name="description" placeholder="Ex: Monitor Dell" required
-            class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
         </div>
 
-        <div>
-          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cartão Utilizado</label>
-          <select name="card_id"
-            class="w-full border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
-            <% cards.forEach(c=> { %>
-              <option value="<%= c.id %>">
-                <%= c.name %>
-              </option>
-              <% }) %>
-          </select>
-        </div>
+        <label class="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3">
+          <input type="checkbox" name="assign_to_owner" value="1"
+            class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
+          <span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Essa compra é minha</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque para jogar esta compra direto no seu nome — e isso também vale para próximas parcelas ou repetições.</span>
+          </span>
+        </label>
+
+        <label class="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3">
+          <input type="checkbox" name="is_recurring" value="1" data-recurring-toggle
+            class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
+          <span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Repetir todo mês</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Perfeito para academia, streaming, escola, internet e afins. Só funciona com 1 parcela.</span>
+          </span>
+        </label>
 
         <button type="submit"
-          class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all">
-          Criar Lançamento
+          class="op-btn op-btn-success op-btn--block">
+          Salvar compra
         </button>
       </form>
     </div>
@@ -91,29 +127,44 @@
 
   <div>
     <% if (!groupedRecent || groupedRecent.length===0) { %>
-      <div class="text-center py-20 bg-white rounded-3xl shadow-sm border border-slate-200">
-        <div class="w-20 h-20 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-6">
-          <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
-            </path>
+      <div class="op-empty-state op-fade-up">
+        <div class="op-empty-state__icon">
+          <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
           </svg>
         </div>
-        <h3 class="text-xl font-bold text-slate-800 mb-2">Nenhuma fatura encontrada</h3>
-        <p class="text-slate-500 mb-6 max-w-sm mx-auto">Comece importando o primeiro arquivo CSV gerado pelos seus
-          cartões.</p>
-        <a class="text-blue-600 font-bold hover:text-blue-800 transition-colors" href="/import">Fazer primeira
-          importação &rarr;</a>
+        <div class="op-empty-state__title">Nada por aqui ainda</div>
+        <% if (canImport) { %>
+          <p class="op-empty-state__text max-w-sm mx-auto">Comece trazendo o primeiro CSV do cartão ou crie uma compra manual para colocar <span class="md:hidden">o mês</span><span class="hidden md:inline">o período</span> pra rodar.</p>
+          <div class="op-empty-state__actions">
+            <a class="op-btn op-btn-info" href="/import">
+              <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              Trazer primeira fatura
+            </a>
+          </div>
+        <% } else { %>
+          <p class="op-empty-state__text max-w-sm mx-auto">Ainda não há compras para mostrar <span class="md:hidden">neste mês</span><span class="hidden md:inline">neste período</span>. Seu acesso não permite importar faturas, mas as compras manuais seguem liberadas.</p>
+        <% } %>
       </div>
       <% } else { %>
 
         <div class="space-y-5">
           <% groupedRecent.forEach((group)=> { %>
+            <% if (group.__section) { %>
+              <div class="pt-2">
+                <div class="flex items-center gap-3 mb-2">
+                  <div class="h-px flex-1 <%= group.kind === 'closed' ? 'bg-amber-200 dark:bg-amber-800' : 'bg-emerald-200 dark:bg-emerald-800' %>"></div>
+                  <div class="px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-[0.2em] <%= group.kind === 'closed' ? 'bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-800' : 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-200 dark:border-emerald-800' %>"><%= group.label %></div>
+                  <div class="h-px flex-1 <%= group.kind === 'closed' ? 'bg-amber-200 dark:bg-amber-800' : 'bg-emerald-200 dark:bg-emerald-800' %>"></div>
+                </div>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400 px-1"><%= group.description %></p>
+              </div>
+            <% } else { %>
             <details
-              class="group bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden transition-all">
+              class="group op-surface-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-all">
 
               <summary
-                class="cursor-pointer select-none p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between hover:bg-slate-50 transition-colors border-b border-transparent group-open:border-slate-100 relative">
+                class="cursor-pointer select-none p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors border-b border-transparent group-open:border-slate-100 dark:group-open:border-slate-700 relative">
 
                 <div class="flex-1">
                   <div class="flex items-center gap-4 mb-3">
@@ -126,10 +177,13 @@
                       </svg>
                     </div>
                     <div>
-                      <h2 class="text-2xl font-extrabold text-slate-800">
-                        <%= group.label %>
+                      <h2 class="text-2xl font-extrabold text-slate-800 dark:text-white flex items-center gap-2 flex-wrap">
+                        <span><%= group.label %></span>
+                        <% if (group.isClosed) { %>
+                          <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Mês fechado</span>
+                        <% } %>
                       </h2>
-                      <p class="text-sm font-medium text-slate-500">
+                      <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
                         <%= group.cards.length %>
                           <%= group.cards.length===1 ? 'cartão importado' : 'cartões importados' %>
                       </p>
@@ -137,11 +191,11 @@
                   </div>
 
                   <div
-                    class="flex flex-wrap gap-6 lg:gap-10 mt-4 lg:mt-2 ml-0 lg:ml-16 bg-white border border-slate-100 p-3 rounded-xl lg:border-none lg:bg-transparent lg:p-0">
+                    class="flex flex-wrap gap-6 lg:gap-10 mt-4 lg:mt-2 ml-0 lg:ml-16 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 rounded-xl lg:border-none lg:bg-transparent lg:dark:bg-transparent lg:p-0">
                     <div class="flex flex-col">
-                      <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total do
+                      <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-0.5">Total do
                         Mês</span>
-                      <span class="text-base font-bold text-slate-800">
+                      <span class="text-base font-bold text-slate-800 dark:text-white">
                         <%= formatBRLFromCents(group.total_cents) %>
                       </span>
                     </div>
@@ -162,21 +216,27 @@
                   </div>
                 </div>
 
-                <div class="flex items-center gap-3 mt-5 lg:mt-0 pt-5 lg:pt-0 border-t border-slate-100 lg:border-none">
+                <div class="flex items-center gap-3 mt-5 lg:mt-0 pt-5 lg:pt-0 border-t border-slate-100 dark:border-slate-700 lg:border-none">
                   <a href="/month/<%= group.year %>/<%= group.month %>"
-                    class="flex-1 lg:flex-none text-center px-5 py-2.5 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5"
+                    class="flex-1 lg:w-[10.5rem] inline-flex items-center justify-center text-center px-5 py-2.5 text-sm font-bold text-white bg-slate-900 border border-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-200 dark:hover:bg-white"
                     onclick="event.stopPropagation()">
                     Abrir Mês
                   </a>
 
                   <a href="/summary/<%= group.year %>/<%= group.month %>"
-                    class="flex-1 lg:flex-none text-center px-5 py-2.5 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5"
+                    class="flex-1 lg:w-[10.5rem] inline-flex items-center justify-center text-center px-5 py-2.5 text-sm font-bold text-white bg-slate-900 border border-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-200 dark:hover:bg-white"
                     onclick="event.stopPropagation()">
-                    Resumo
+                    Resumo do Mês
+                  </a>
+
+                  <a href="/geral/<%= group.year %>/<%= group.month %>/export.csv"
+                    class="flex-1 lg:w-[10.5rem] inline-flex items-center justify-center text-center px-5 py-2.5 text-sm font-bold text-white bg-slate-900 border border-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-200 dark:hover:bg-white"
+                    onclick="event.stopPropagation()">
+                    Exportar CSV
                   </a>
 
                   <div
-                    class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-open:rotate-180 transition-transform duration-300 ml-2">
+                    class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-300 group-open:rotate-180 transition-transform duration-300 ml-2">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                     </svg>
@@ -185,33 +245,58 @@
 
               </summary>
 
-              <div class="p-5 sm:p-6 bg-slate-50/50">
-                <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Cartões Importados neste mês
+              <div class="p-5 sm:p-6 bg-slate-50/50 dark:bg-slate-900/50">
+                <h3 class="text-sm font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4">Cartões Importados neste mês
                 </h3>
 
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <% group.cards.forEach(card=> { %>
                     <div
-                      class="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-300 hover:shadow-md transition-all flex flex-col relative">
+                      class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-md transition-all flex flex-col relative">
 
-                      <div class="flex justify-between items-start mb-3">
-                        <div class="font-extrabold text-slate-800 text-lg truncate">
+                      <div class="flex justify-between items-start gap-3 mb-3">
+                        <div class="font-extrabold text-slate-800 dark:text-white text-lg break-words leading-tight">
                           <%= card.card_name %>
                         </div>
-                        <span class="bg-slate-100 text-slate-600 text-xs font-bold px-2 py-1 rounded-md">
+                        <span class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold px-2 py-1 rounded-md whitespace-nowrap">
                           <%= card.txn_count %> itens
                         </span>
                       </div>
 
-                      <div class="text-xs font-medium text-slate-400 mb-5 truncate">
+                      <div class="text-xs font-medium text-slate-400 dark:text-slate-500 mb-4 break-all">
                         Arquivo: <%= card.original_filename || "N/A" %>
                       </div>
 
-                      <div class="mt-auto">
+                      <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2">
+                          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Total de Itens</div>
+                          <div class="text-lg font-black text-slate-800 dark:text-white"><%= card.txn_count %></div>
+                        </div>
+                        <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2">
+                          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Valor do Cartão</div>
+                          <div class="text-sm font-black text-slate-800 dark:text-white"><%= formatBRLFromCents(card.import_total) %></div>
+                        </div>
+                      </div>
+
+                      <div class="mt-auto space-y-2">
                         <a href="/month/<%= card.year %>/<%= card.month %>?f_card=<%= card.card_name %>"
-                          class="block w-full text-center px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-semibold text-sm rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors">
-                          Ver transações deste cartão
+                          class="op-btn op-btn-ghost op-btn--block">
+                          Ver compras deste cartão
                         </a>
+                        <% if (group.isClosed) { %>
+                          <div class="block w-full text-center px-4 py-2.5 bg-amber-50 border border-amber-200 text-amber-800 font-semibold text-sm rounded-lg dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200">
+                            Mês fechado — exclusão bloqueada
+                          </div>
+                        <% } else { %>
+                          <form method="post" action="/geral/<%= card.year %>/<%= card.month %>/card/<%= card.card_id %>/delete"
+                            data-confirm-prompt="Excluir todas as compras do cartão <%= card.card_name %> em <%= group.label %>? Isso apaga os itens e as divisões associadas."
+                            data-confirm-phrase="Eu confirmo">
+                            <button
+                              class="op-btn op-btn-danger-soft op-btn--block">
+                              Excluir compras
+                            </button>
+                          </form>
+                        <% } %>
                       </div>
                     </div>
                     <% }) %>
@@ -220,6 +305,7 @@
               </div>
 
             </details>
+            <% } %>
             <% }) %>
         </div>
         <% } %>

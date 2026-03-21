@@ -1,34 +1,172 @@
-<%- include("partials/header", { title: "Cartões JP | Pessoas" }) %>
+<%- include("partials/header", { title: "OrganizaPay | Amigos" }) %>
 
-  <div class="max-w-4xl mx-auto">
-    <div class="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+<%
+  const pendingRequests = Array.isArray(pendingFriendRequests) ? pendingFriendRequests : [];
+  const activeFriendCount = Array.isArray(people) ? people.filter(p => p && p.friendship_active).length : 0;
+  const discoverableCount = Array.isArray(people) ? people.filter(p => p && p.has_app_user && !p.friendship_active).length : 0;
+  const renderPersonStatusChips = (person) => {
+    const chips = [];
+    const addChip = (classes, label) => {
+      chips.push(`<span class="inline-flex items-center whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-bold ${classes}">${label}</span>`);
+    };
+
+    if (person.is_owner) {
+      addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Titular');
+    }
+
+    if (person.active) {
+      addChip('border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200', 'Ativo');
+    } else {
+      addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Inativo');
+    }
+
+    if (person.has_app_user) {
+      addChip('border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200', 'Também usa o app');
+    }
+
+    if (!person.email) {
+      addChip('border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-200', 'Sem e-mail');
+    }
+
+    if (person.friendship_active) {
+      addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Amizade ativa');
+      if (person.can_share_charge) {
+        addChip('border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200', 'Cobrança automática liberada');
+      } else if (!person.active) {
+        addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Cobrança pausada');
+      }
+    } else if (person.friendship_state === 'pending_sent') {
+      addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pedido enviado');
+    } else if (person.friendship_state === 'pending_received') {
+      addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Pedido recebido');
+    }
+
+    return chips.join('');
+  };
+%>
+
+  <div class="max-w-5xl mx-auto">
+    <section class="op-page-hero op-fade-up mb-8">
       <div>
-        <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Pessoas</h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-2 font-medium">Gerencie quem participa das divisões de gastos
-          das faturas.</p>
+        <span class="op-page-hero__eyebrow">Sua rede no OrganizaPay</span>
+        <h1 class="op-page-hero__title mt-4">Amigos</h1>
+        <p class="op-page-hero__subtitle mt-3">Aqui mora seu círculo de confiança: quem entra nas divisões, quem já usa o app e quem topou abrir a porta para cobranças automáticas com um ok dos dois lados.</p>
+        <div class="op-page-hero__meta mt-4">
+          <span class="badge">Rede, convites e vínculo em um só lugar</span>
+          <span class="badge">Cobranças automáticas só com amizade ativa</span>
+        </div>
       </div>
-    </div>
 
-    <div
-      class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
+      <div class="op-kpi-strip xl:max-w-[30rem]">
+        <div class="op-kpi-card text-center">
+          <div class="op-kpi-card__label">Na sua rede</div>
+          <div class="op-kpi-card__value"><%= people ? people.length : 0 %></div>
+          <div class="op-kpi-card__hint">contato(s) salvos</div>
+        </div>
+        <div class="op-kpi-card text-center">
+          <div class="op-kpi-card__label text-emerald-600 dark:text-emerald-300">Amizades</div>
+          <div class="op-kpi-card__value text-emerald-700 dark:text-emerald-200"><%= activeFriendCount %></div>
+          <div class="op-kpi-card__hint text-emerald-700/80 dark:text-emerald-200/80">vínculo(s) ativo(s)</div>
+        </div>
+        <div class="op-kpi-card text-center">
+          <div class="op-kpi-card__label text-sky-600 dark:text-sky-300"><%= pendingRequests.length ? 'Convites' : 'Também usam' %></div>
+          <div class="op-kpi-card__value text-sky-700 dark:text-sky-200"><%= pendingRequests.length ? pendingRequests.length : discoverableCount %></div>
+          <div class="op-kpi-card__hint text-sky-700/80 dark:text-sky-200/80"><%= pendingRequests.length ? 'te esperando' : 'já estão no app' %></div>
+        </div>
+      </div>
+    </section>
+
+    <% if (pendingRequests.length) { %>
+      <section id="friend-requests" class="mb-8 op-surface-card rounded-3xl border border-emerald-200 bg-emerald-50/80 p-6 shadow-sm dark:border-emerald-900/60 dark:bg-emerald-950/20 sm:p-7">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Convites que chegaram</div>
+            <h2 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Tem amizade batendo na porta</h2>
+            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Aceitando, vocês passam a poder trocar cobranças automáticas entre si. Recusando, fica tudo como está — sem climão e sem bagunça.</p>
+          </div>
+          <div class="rounded-2xl border border-emerald-200 bg-white/90 px-4 py-3 text-sm font-semibold text-emerald-700 shadow-sm dark:border-emerald-900/70 dark:bg-slate-900/60 dark:text-emerald-200">
+            <%= pendingRequests.length === 1 ? '1 pedido pendente' : `${pendingRequests.length} pedidos pendentes` %>
+          </div>
+        </div>
+
+        <div class="mt-6 grid gap-4">
+          <% pendingRequests.forEach((request) => {
+               const isHighlighted = highlightedFriendRequestId && Number(highlightedFriendRequestId) === Number(request.id);
+          %>
+            <div id="friend-request-<%= request.id %>" class="rounded-[26px] border px-4 py-4 shadow-sm transition-all sm:px-5 <%= isHighlighted ? 'border-emerald-400 bg-white dark:border-emerald-500 dark:bg-slate-900 ring-2 ring-emerald-200 dark:ring-emerald-900/70' : 'border-emerald-200 bg-white/90 dark:border-slate-700 dark:bg-slate-900/70' %>">
+              <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-lg font-black text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
+                      <%= (request.requester_name || 'A').charAt(0).toUpperCase() %>
+                    </span>
+                    <div class="min-w-0">
+                      <div class="text-lg font-black text-slate-900 dark:text-white"><%= request.requester_name || 'Usuário OrganizaPay' %></div>
+                      <div class="text-sm font-medium text-slate-500 dark:text-slate-400">Quer virar seu contato de confiança no app.</div>
+                    </div>
+                  </div>
+                  <div class="mt-3 flex flex-wrap gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                    <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200">Também usa o app</span>
+                    <% if (request.linked_person_name) { %>
+                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Já apareceu como <%= request.linked_person_name %></span>
+                    <% } %>
+                    <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pedido pendente</span>
+                  </div>
+                </div>
+                <div class="grid gap-2 sm:min-w-[17rem] sm:grid-cols-2 lg:w-auto">
+                  <form method="post" action="/friend-requests/<%= request.id %>/respond">
+                    <input type="hidden" name="action" value="accept">
+                    <button type="submit" class="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+                      Aceitar amizade
+                    </button>
+                  </form>
+                  <form method="post" action="/friend-requests/<%= request.id %>/respond">
+                    <input type="hidden" name="action" value="reject">
+                    <button type="submit" class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">
+                      Recusar
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      </section>
+    <% } %>
+
+    <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
+      <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Monte sua rede</div>
+          <h2 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Cadastre alguém novo</h2>
+          <p class="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Começa pelo básico. Se a pessoa também usar o OrganizaPay, a amizade pode nascer daqui com um convite.</p>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+          Seu titular também mora aqui na rede.
+        </div>
+      </div>
 
       <form method="post" action="/people" id="personForm"
         class="flex flex-col gap-4 mb-8 pb-8 border-b border-slate-100 dark:border-slate-700">
+        <div class="text-sm font-medium text-slate-500 dark:text-slate-400 -mb-1">
+          O e-mail é opcional, mas ajuda o app a descobrir se esse contato também usa o OrganizaPay.
+        </div>
         <input type="hidden" name="id" id="personId">
-        <div class="flex flex-col md:flex-row gap-3">
-          <div class="flex-1 relative">
-            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-              </svg>
-            </div>
-            <input name="name" id="inputName"
-              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
-              placeholder="Nome do participante" required />
-          </div>
 
-          <div class="md:w-64 relative">
+        <div class="w-full relative">
+          <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+            </svg>
+          </div>
+          <input name="name" id="inputName"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+            placeholder="Nome do amigo ou contato" required />
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] items-start">
+          <div class="relative min-w-0">
             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
               <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -40,80 +178,194 @@
               placeholder="5511999999999" />
           </div>
 
+          <div class="relative min-w-0">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12H8m8-4H8m12 8H4a2 2 0 01-2-2V6a2 2 0 012-2h16a2 2 0 012 2v8a2 2 0 01-2 2z"></path>
+              </svg>
+            </div>
+            <input name="email" id="inputEmail" type="email"
+              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+              placeholder="email@exemplo.com" />
+          </div>
+
           <button type="submit" id="btnSubmit"
-            class="px-6 py-3 rounded-xl font-bold text-white bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 dark:hover:bg-blue-700 shadow-sm transition-all hover:-translate-y-0.5 whitespace-nowrap">
-            + Adicionar
+            class="w-full md:w-auto inline-flex items-center justify-center px-6 py-3 rounded-xl font-bold text-white bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 dark:hover:bg-blue-700 shadow-sm transition-all hover:-translate-y-0.5 whitespace-nowrap">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Salvar pessoa
           </button>
           <button type="button" id="btnCancel" onclick="resetForm()"
-            class="hidden px-4 py-3 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-all">Cancelar</button>
+            class="hidden w-full md:w-auto px-4 py-3 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-all whitespace-nowrap">Cancelar</button>
         </div>
       </form>
 
-      <div class="grid gap-4 sm:grid-cols-2">
-        <% people.forEach(p=> { %>
-          <div
-            class="group border border-slate-200 dark:border-slate-700 rounded-2xl p-4 flex items-center justify-between hover:border-blue-300 dark:hover:border-blue-500 hover:shadow-md transition-all bg-white dark:bg-slate-800">
-            <div class="flex items-center gap-4">
-              <div
-                class="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold text-lg group-hover:bg-blue-50 dark:group-hover:bg-blue-900 group-hover:text-blue-600 transition-colors relative">
-                <%= p.name.charAt(0).toUpperCase() %>
-                  <% if (p.is_owner) { %><span class="absolute -top-2 -right-2 text-xl drop-shadow-sm"
-                      title="Titular">👑</span>
-                    <% } %>
-              </div>
-              <div>
-                <div class="font-extrabold text-slate-800 dark:text-white text-lg flex items-center gap-2">
-                  <%= p.name %>
-                    <button onclick="editPerson('<%= p.id %>', '<%= p.name %>', '<%= p.phone || '' %>')"
-                      class="text-slate-400 hover:text-blue-500 transition-colors">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z">
-                        </path>
-                      </svg>
-                    </button>
-                </div>
-                <div class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
-                  <%= p.phone ? '📱 ' + p.phone : '⚠️ Sem telefone' %>
-                </div>
-                <div class="flex gap-2 items-center">
-                  <% if (p.active) { %>
-                    <span
-                      class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800">Ativo</span>
-                    <% } else { %>
-                      <span
-                        class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400 border border-slate-200 dark:border-slate-600">Inativo</span>
+      <div class="grid gap-4 lg:grid-cols-2">
+        <% if (people && people.length) { %>
+          <% people.forEach((p) => {
+               const isHighlighted = highlightedFriendRequestId && Number(p.incoming_friend_request_id || 0) === Number(highlightedFriendRequestId);
+               let personHintText = '';
+               if (p.is_owner) {
+                 personHintText = 'Você é o titular desta conta. Aqui o crachá já vem no bolso.';
+               } else if (!p.email) {
+                 personHintText = 'Quer descobrir se essa pessoa também usa o app? Um e-mail aqui já ajuda a abrir essa porta.';
+               } else if (!p.has_app_user) {
+                 personHintText = 'Por enquanto o app não achou uma conta OrganizaPay com esse e-mail. Se a pessoa entrar depois, o convite aparece.';
+               } else if (p.friendship_active && !p.active) {
+                 personHintText = 'A amizade segue ativa, mas este contato está inativo na sua lista. Novos envios automáticos ficam pausados até você reativar.';
+               } else if (p.friendship_active) {
+                 personHintText = 'Vocês já estão conectados. Daqui pra frente, cobranças automáticas podem circular entre vocês com o ok dos dois lados.';
+               } else if (p.friendship_state === 'pending_sent') {
+                 personHintText = 'O convite já foi enviado. Agora é aquele momento clássico de esperar o joinha chegar.';
+               } else if (p.friendship_state === 'pending_received') {
+                 personHintText = 'Essa pessoa já te chamou. É só aceitar aqui e pronto: amizade ativa, com autorização dos dois lados.';
+               } else if (!p.active) {
+                 personHintText = 'Esse contato usa o app, mas está desativado na sua lista. Reative quando quiser colocar em jogo de novo.';
+               } else {
+                 personHintText = 'O app já reconheceu essa pessoa. Se fizer sentido, mande um pedido de amizade para liberar cobranças automáticas com o ok dos dois lados.';
+               }
+          %>
+            <div class="group rounded-[28px] border p-5 transition-all bg-white dark:bg-slate-800 shadow-sm <%= isHighlighted ? 'border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-900/70' : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500 hover:shadow-md' %>">
+              <div class="flex flex-col gap-5">
+                <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                  <div class="flex min-w-0 flex-1 gap-4 xl:pr-4">
+                    <div class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-600 transition-colors group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:bg-blue-900/40">
+                      <%= p.name.charAt(0).toUpperCase() %>
+                      <% if (p.is_owner) { %>
+                        <span class="absolute -top-2 -right-2 text-xl drop-shadow-sm" title="Titular">👑</span>
+                      <% } else if (p.friendship_active) { %>
+                        <span class="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-200 bg-emerald-500 text-[13px] text-white shadow-sm dark:border-emerald-700" title="Amizade ativa">🔗</span>
                       <% } %>
+                    </div>
+
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <div class="text-lg font-extrabold text-slate-800 dark:text-white"><%= p.name %></div>
+                        <button type="button" data-id="<%= p.id %>" data-name="<%= p.name %>" data-phone="<%= p.phone || '' %>" data-email="<%= p.email || '' %>" onclick="editPersonFromButton(this)"
+                          class="text-slate-400 hover:text-blue-500 transition-colors" aria-label="Editar pessoa" title="Editar pessoa">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                          </svg>
+                        </button>
+                      </div>
+
+                      <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                        <%= p.phone ? '📱 ' + p.phone : '📱 Telefone não informado' %>
+                      </div>
+                      <div class="mt-1 break-all text-xs font-medium text-slate-500 dark:text-slate-400">
+                        <%= p.email ? '✉️ ' + p.email : '— E-mail não informado' %>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="flex w-full flex-col gap-2 xl:w-[15rem] xl:shrink-0">
+                    <% if (!p.is_owner) { %>
+                      <% if (p.friendship_state === 'active') { %>
+                        <form method="post" action="/people/<%= p.id %>/unfriend" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novos envios automáticos entre vocês param na hora.">
+                          <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">
+                            Desfazer amizade
+                          </button>
+                        </form>
+                      <% } else if (p.friendship_state === 'pending_sent') { %>
+                        <form method="post" action="/friend-requests/<%= p.outgoing_friend_request_id %>/cancel">
+                          <button class="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-700 transition-all hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">
+                            Cancelar pedido
+                          </button>
+                        </form>
+                      <% } else if (p.friendship_state === 'pending_received') { %>
+                        <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
+                          <input type="hidden" name="action" value="accept">
+                          <button class="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+                            Aceitar amizade
+                          </button>
+                        </form>
+                        <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
+                          <input type="hidden" name="action" value="reject">
+                          <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">
+                            Recusar
+                          </button>
+                        </form>
+                      <% } else if (p.has_app_user && p.active) { %>
+                        <form method="post" action="/people/<%= p.id %>/send-friend-request">
+                          <button class="w-full rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">
+                            Enviar pedido de amizade
+                          </button>
+                        </form>
+                      <% } else { %>
+                        <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">
+                          Convite indisponível
+                        </div>
+                      <% } %>
+                    <% } %>
+
+                    <div class="grid gap-2 pt-1">
+                      <% if (!p.is_owner) { %>
+                        <form method="post" action="/people/<%= p.id %>/set-owner">
+                          <button class="w-full px-3 py-2.5 text-xs font-bold rounded-xl border bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 shadow-sm transition-colors">
+                            Marcar como você
+                          </button>
+                        </form>
+                      <% } %>
+                      <form method="post" action="/people/<%= p.id %>/toggle">
+                        <button class="w-full px-3 py-2.5 text-xs font-bold rounded-xl border <%= p.active ? 'border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20' : 'border-green-200 dark:border-green-900 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20' %> transition-colors bg-white dark:bg-slate-700 shadow-sm">
+                          <%= p.active ? "Desativar" : "Reativar" %>
+                        </button>
+                      </form>
+                      <form method="post" action="/people/<%= p.id %>/delete"
+                        data-confirm-prompt="Excluir <%= p.name %>? A exclusão só acontece se não houver histórico nem vínculo ligado a essa pessoa."
+                        data-confirm-phrase="Eu confirmo">
+                        <button class="w-full px-3 py-2.5 text-xs font-bold rounded-xl border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors bg-white dark:bg-slate-700 shadow-sm">
+                          Excluir
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex flex-col gap-3">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <%- renderPersonStatusChips(p) %>
+                  </div>
+
+                  <div class="w-full rounded-[24px] border border-sky-100/70 bg-slate-50/90 px-4 py-4 shadow-sm shadow-sky-100/10 dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+                    <div class="flex items-start gap-3">
+                      <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-sky-600 shadow-sm ring-1 ring-sky-100 dark:bg-slate-800 dark:text-sky-300 dark:ring-slate-700" aria-hidden="true">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                      </span>
+                      <div class="min-w-0 flex-1">
+                        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/70 dark:text-sky-300/80">Recadinho do app</div>
+                        <p class="mt-1 max-w-none text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= personHintText %></p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-
-            <div class="flex flex-col gap-2">
-              <form method="post" action="/people/<%= p.id %>/set-owner">
-                <button
-                  class="w-full px-3 py-1.5 text-xs font-bold rounded-lg border <%= p.is_owner ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400' : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600' %> shadow-sm transition-colors">
-                  <%= p.is_owner ? "É o Titular" : "Tornar Titular" %>
-                </button>
-              </form>
-              <form method="post" action="/people/<%= p.id %>/toggle">
-                <button
-                  class="w-full px-3 py-1.5 text-xs font-bold rounded-lg border <%= p.active ? 'border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20' : 'border-green-200 dark:border-green-900 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20' %> transition-colors bg-white dark:bg-slate-700 shadow-sm">
-                  <%= p.active ? "Desativar" : "Reativar" %>
-                </button>
-              </form>
-            </div>
-          </div>
           <% }) %>
+        <% } else { %>
+          <div class="rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 px-6 py-10 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">
+            Ainda não tem ninguém na sua rede por aqui. Comece pelo titular e depois vá adicionando quem entra nas divisões e nas amizades.
+          </div>
+        <% } %>
       </div>
     </div>
   </div>
 
   <script>
-    function editPerson(id, name, phone) {
+    function editPersonFromButton(button) {
+      editPerson(button.dataset.id, button.dataset.name || "", button.dataset.phone || "", button.dataset.email || "");
+    }
+
+    function editPerson(id, name, phone, email) {
       document.getElementById('personId').value = id;
       document.getElementById('inputName').value = name;
       document.getElementById('inputPhone').value = phone;
-      document.getElementById('btnSubmit').innerText = 'Salvar Alterações';
+      document.getElementById('inputEmail').value = email;
+      document.getElementById('btnSubmit').innerHTML = 'Salvar mudanças';
       document.getElementById('btnSubmit').classList.replace('bg-slate-900', 'bg-blue-600');
       document.getElementById('btnCancel').classList.remove('hidden');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -123,10 +375,19 @@
       document.getElementById('personId').value = '';
       document.getElementById('inputName').value = '';
       document.getElementById('inputPhone').value = '';
-      document.getElementById('btnSubmit').innerText = '+ Adicionar';
+      document.getElementById('inputEmail').value = '';
+      document.getElementById('btnSubmit').innerHTML = `<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>Salvar pessoa`;
+      document.getElementById('btnSubmit').classList.remove('bg-blue-600');
       document.getElementById('btnSubmit').classList.add('bg-slate-900');
       document.getElementById('btnCancel').classList.add('hidden');
     }
+
+    window.addEventListener('load', () => {
+      const highlighted = document.querySelector('[id^="friend-request-"][class*="ring-2"]');
+      if (highlighted) {
+        highlighted.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
   </script>
 
   <%- include("partials/footer") %>

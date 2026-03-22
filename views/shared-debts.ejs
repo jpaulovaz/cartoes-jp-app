@@ -737,6 +737,7 @@
       <% } %>
     </section>
   <% } %>
+  <% } %>
 
   <% if (!isArchiveMode && actionCount > 0) { %>
     <section class="md:hidden op-fade-up">
@@ -780,11 +781,15 @@
           <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= isArchiveMode ? "Os filtros abaixo ajudam a garimpar o histórico arquivado por mês, tipo de envio e itens avulsos sem mexer na fila principal." : "Os filtros abaixo mexem na visão detalhada da central: por mês quando houver competência, e em bloco próprio quando o combinado for avulso." %></p>
         </div>
         <% if (trackingFiltersActive) { %>
-          <div class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 shadow-sm dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">Filtros ativos no acompanhamento</div>
+          <div class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 shadow-sm dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">Busca e filtros ativos no acompanhamento</div>
         <% } %>
       </div>
 
-      <form method="GET" action="<%= currentPath %>" class="mt-4 grid gap-3 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
+      <form method="GET" action="<%= currentPath %>" class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_1fr_1fr_1fr_auto] xl:items-end">
+        <label class="block xl:min-w-[17rem]">
+          <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Buscar no detalhamento</span>
+          <input type="search" name="q" value="<%= trackingFilters.q || '' %>" placeholder="Nome, descrição, cartão ou mês" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-500 dark:focus:ring-blue-500/20">
+        </label>
         <label class="block">
           <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Tipo de envio</span>
           <select name="envio" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500/20">

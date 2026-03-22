@@ -4937,21 +4937,31 @@ function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
 }
 
 
+function normalizeSharedDebtSearchTerm(value = '') {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 function normalizeSharedDebtTrackingFilters(query = {}) {
   const envio = String(query?.envio || 'all').trim().toLowerCase();
   const origin = String(query?.origin || 'all').trim().toLowerCase();
   const installment = String(query?.installment || 'all').trim().toLowerCase();
+  const q = String(query?.q || '').trim().slice(0, 120);
 
   return {
     envio: ['all', 'single', 'grouped'].includes(envio) ? envio : 'all',
     origin: ['all', 'single', 'multiple', 'installment', 'mixed', 'manual'].includes(origin) ? origin : 'all',
-    installment: ['all', 'yes', 'no'].includes(installment) ? installment : 'all'
+    installment: ['all', 'yes', 'no'].includes(installment) ? installment : 'all',
+    q
   };
 }
 
 function hasActiveSharedDebtTrackingFilters(filters = {}) {
   const normalized = normalizeSharedDebtTrackingFilters(filters);
-  return normalized.envio !== 'all' || normalized.origin !== 'all' || normalized.installment !== 'all';
+  return normalized.envio !== 'all' || normalized.origin !== 'all' || normalized.installment !== 'all' || !!normalized.q;
 }
 
 function isGroupedSharedDebtItem(item) {
@@ -4960,8 +4970,34 @@ function isGroupedSharedDebtItem(item) {
   return batchCount > 1 || !['single', 'manual'].includes(originKind);
 }
 
+function buildSharedDebtTrackingSearchText(item = {}) {
+  const monthText = item?.source_due_month && item?.source_due_year
+    ? monthLabel(item.source_due_month, item.source_due_year)
+    : '';
+  const txnDateText = item?.source_txn_date ? formatDateBR(item.source_txn_date) : '';
+
+  return normalizeSharedDebtSearchTerm([
+    item?.description_snapshot,
+    item?.card_name_snapshot,
+    item?.request_note,
+    item?.response_note,
+    item?.payment_note,
+    item?.requester_name,
+    item?.requester_email,
+    item?.receiver_name,
+    item?.receiver_email,
+    item?.receiver_email_snapshot,
+    item?.batch_origin_kind,
+    item?.status,
+    monthText,
+    txnDateText
+  ].filter(Boolean).join(' '));
+}
+
 function filterSharedDebtTrackingItems(items = [], filters = {}) {
   const normalized = normalizeSharedDebtTrackingFilters(filters);
+  const searchTerm = normalizeSharedDebtSearchTerm(normalized.q || '');
+
   return (Array.isArray(items) ? items : []).filter((item) => {
     const originKind = normalizeSharedDebtOriginKind(item?.batch_origin_kind);
     const isGrouped = isGroupedSharedDebtItem(item);
@@ -4972,6 +5008,7 @@ function filterSharedDebtTrackingItems(items = [], filters = {}) {
     if (normalized.origin !== 'all' && originKind !== normalized.origin) return false;
     if (normalized.installment === 'yes' && !isInstallment) return false;
     if (normalized.installment === 'no' && isInstallment) return false;
+    if (searchTerm && !buildSharedDebtTrackingSearchText(item).includes(searchTerm)) return false;
     return true;
   });
 }

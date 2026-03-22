@@ -3866,13 +3866,20 @@ function getPeopleAll(userId) {
     const canShareCharge = isFriendshipGateEnabled()
       ? friendshipActive && isActive && !isOwner
       : hasAppUser && !!normalizeEmail(person.email) && isActive && !isOwner;
+    const storedPixProfile = {
+      keyType: normalizePixKeyType(person.pix_key_type),
+      keyValue: normalizePixKeyValue(person.pix_key_type, person.pix_key_value),
+      city: sanitizePixText(person.pix_city, { max: 15 }) || null,
+      state: normalizePixState(person.pix_state) || guessPixStateByCity(person.pix_city) || null,
+      label: sanitizePixText(person.pix_label, { max: 25 }) || null
+    };
     const pixProfile = validatePixProfile({
       enabled: person.pix_enabled,
-      keyType: person.pix_key_type,
-      keyValue: person.pix_key_value,
-      city: person.pix_city,
-      state: person.pix_state,
-      label: person.pix_label,
+      keyType: storedPixProfile.keyType,
+      keyValue: storedPixProfile.keyValue,
+      city: storedPixProfile.city,
+      state: storedPixProfile.state,
+      label: storedPixProfile.label,
       name: person.name || person.email || 'ORGANIZAPAY'
     });
 

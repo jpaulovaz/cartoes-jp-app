@@ -320,6 +320,7 @@ const {
   formatPixKeyValueForInput,
   validatePixProfile,
   sanitizePixText,
+  sanitizeTxid,
   buildPixPayload,
   buildSharedDebtPixTxid
 } = require("./src/pix");
@@ -8611,8 +8612,215 @@ function getPersonStatementExportData(userId, month, year, personId, itemOrder =
   return { person, items, totalsByCard, total, paid_cents, remaining_cents };
 }
 
+function resolveStatementShareState({ paidCents = 0, remainingCents = 0 } = {}) {
+  const safePaid = Math.max(0, Number(paidCents || 0));
+  const safeRemaining = Math.max(0, Number(remainingCents || 0));
+
+  if (safeRemaining <= 0) return 'settled';
+  if (safePaid > 0) return 'partial_due';
+  return 'full_due';
+}
+
+function buildStatementSharePixTxid(userId, personId, month, year, remainingCents = 0) {
+  const safeUserId = Math.max(0, Number(userId || 0)).toString(36).toUpperCase();
+  const safePersonId = Math.max(0, Number(personId || 0)).toString(36).toUpperCase();
+  const safeYear = Math.max(0, Number(year || 0)).toString(36).toUpperCase();
+  const safeMonth = Math.max(0, Number(month || 0)).toString(36).toUpperCase();
+  const safeAmount = Math.max(0, Math.round(Number(remainingCents || 0) / 100)).toString(36).toUpperCase();
+  return sanitizeTxid(`OPSH${safeUserId}${safePersonId}${safeYear}${safeMonth}${safeAmount}`);
+}
+
+function buildStatementShareMessageContext({ state, personName, periodLabel, totalCents, paidCents, remainingCents, pixPayload } = {}) {
+  const safeState = String(state || 'full_due').trim().toLowerCase();
+  const safePersonName = String(personName || 'por aí').trim() || 'por aí';
+  const totalLabel = formatBRLFromCents(totalCents);
+  const paidLabel = formatBRLFromCents(paidCents);
+  const remainingLabel = formatBRLFromCents(remainingCents);
+  const hasPix = !!String(pixPayload || '').trim();
+
+  let nativeShareText = '';
+  let whatsappCaption = '';
+  let whatsappFollowUpMessage = '';
+
+  if (safeState === 'settled') {
+    nativeShareText = [
+      `Separei o resumo de ${periodLabel} só para registro.`,
+      'Já ficou tudo certinho por aqui. Obrigado por fechar essa com a gente.',
+      '',
+      `Total do período: ${totalLabel}.`,
+      `Valor pago: ${paidLabel}.`
+    ].join('\n');
+
+    whatsappCaption = [
+      `*Oi, ${safePersonName}!* ✨`,
+      '',
+      `Separei o resumo de *${periodLabel}* só para registro.`,
+      'Já ficou tudo certinho por aqui.',
+      '',
+      'A imagem com os detalhes foi logo abaixo 👇'
+    ].join('\n');
+  } else if (safeState === 'partial_due') {
+    nativeShareText = [
+      `Separei o resumo de ${periodLabel}. Já entrou ${paidLabel} e ainda falta ${remainingLabel} para fechar tudo.`,
+      'A imagem vai junto com os detalhes.'
+    ].join('\n\n');
+
+    whatsappCaption = [
+      `*Oi, ${safePersonName}!* 💳`,
+      '',
+      `Separei o resumo de *${periodLabel}*. Já entrou *${paidLabel}* e ainda falta *${remainingLabel}* para fechar tudo.`,
+      '',
+      'A imagem com os detalhes foi logo abaixo 👇'
+    ].join('\n');
+
+    if (hasPix) {
+      nativeShareText = [
+        nativeShareText,
+        'Pix copia e cola do saldo restante:',
+        String(pixPayload || '').trim()
+      ].join('\n\n');
+
+      whatsappFollowUpMessage = [
+        `Pix copia e cola do saldo restante (${remainingLabel}):`,
+        '',
+        String(pixPayload || '').trim(),
+        '',
+        'Quando pagar, me manda o comprovante por aqui 💸'
+      ].join('\n');
+    }
+  } else {
+    nativeShareText = [
+      `Separei o resumo de ${periodLabel}. O total em aberto ficou em ${remainingLabel}.`,
+      'A imagem vai junto com os detalhes.'
+    ].join('\n\n');
+
+    whatsappCaption = [
+      `*Oi, ${safePersonName}!* 💳`,
+      '',
+      `Separei o resumo de *${periodLabel}*. O total em aberto ficou em *${remainingLabel}*.`,
+      '',
+      'A imagem com os detalhes foi logo abaixo 👇'
+    ].join('\n');
+
+    if (hasPix) {
+      nativeShareText = [
+        nativeShareText,
+        'Pix copia e cola para facilitar o acerto:',
+        String(pixPayload || '').trim()
+      ].join('\n\n');
+
+      whatsappFollowUpMessage = [
+        `Pix copia e cola para fechar esse resumo (${remainingLabel}):`,
+        '',
+        String(pixPayload || '').trim(),
+        '',
+        'Quando pagar, me manda o comprovante por aqui 💸'
+      ].join('\n');
+    }
+  }
+
+  return {
+    nativeShareText,
+    whatsappCaption,
+    whatsappFollowUpMessage
+  };
+}
+
+async function buildSharePixContext({ userId, month, year, person, totalCents, paidCents, remainingCents } = {}) {
+  const safeRemainingCents = Math.max(0, Number(remainingCents || 0));
+  const safePaidCents = Math.max(0, Number(paidCents || 0));
+  const safeTotalCents = Math.max(0, Number(totalCents || 0));
+  const periodLabel = `${String(month).padStart(2, '0')}/${year}`;
+  const state = resolveStatementShareState({ paidCents: safePaidCents, remainingCents: safeRemainingCents });
+  const ownerPixProfile = getUserPixProfile(userId);
+
+  const pix = {
+    available: false,
+    qrSupported: !!QRCode,
+    reason: null,
+    amountCents: safeRemainingCents,
+    payload: '',
+    qrDataUrl: null,
+    keyTypeLabel: ownerPixProfile?.pixKeyTypeLabel || null,
+    maskedKey: ownerPixProfile?.pixMaskedKey || null,
+    ownerName: ownerPixProfile?.ownerName || 'quem vai receber',
+    city: ownerPixProfile?.pixCity || null,
+    helperText: safePaidCents > 0
+      ? 'O QR já vai no saldo restante, e o código completo segue no texto para copiar sem aperto.'
+      : 'No banco, é só escanear ou usar o código que segue no texto.'
+  };
+
+  if (safeRemainingCents > 0) {
+    if (!ownerPixProfile || !ownerPixProfile.pixEnabled) {
+      pix.reason = 'Salve o Pix do titular em Amigos para este resumo já sair com copia e cola.';
+    } else if (!ownerPixProfile.pixValid) {
+      pix.reason = ownerPixProfile.pixReason || 'Seu Pix ainda precisa de um ajuste em Amigos.';
+    } else {
+      try {
+        const txid = buildStatementSharePixTxid(userId, person?.id, month, year, safeRemainingCents);
+        const description = sanitizePixText(`RESUMO ${periodLabel} ${person?.name || ''}`, { max: 72 })
+          || sanitizePixText(`RESUMO ${periodLabel}`, { max: 72 });
+        const payload = buildPixPayload({
+          keyType: ownerPixProfile.pixKeyType,
+          keyValue: ownerPixProfile.pixKeyValue,
+          merchantName: ownerPixProfile.pixMerchantName || ownerPixProfile.ownerName || 'ORGANIZAPAY',
+          merchantCity: ownerPixProfile.pixCity || PIX_DEFAULT_CITY,
+          amountCents: safeRemainingCents,
+          txid,
+          description
+        });
+
+        let qrDataUrl = null;
+        if (QRCode) {
+          try {
+            qrDataUrl = await QRCode.toDataURL(payload, {
+              errorCorrectionLevel: 'M',
+              margin: 1,
+              width: 220,
+              color: { dark: '#0f172a', light: '#FFFFFF' }
+            });
+          } catch (_) {
+            qrDataUrl = null;
+          }
+        }
+
+        pix.available = true;
+        pix.payload = payload;
+        pix.qrDataUrl = qrDataUrl;
+        pix.keyTypeLabel = ownerPixProfile.pixKeyTypeLabel || null;
+        pix.maskedKey = ownerPixProfile.pixMaskedKey || null;
+        pix.ownerName = ownerPixProfile.ownerName || pix.ownerName;
+        pix.city = ownerPixProfile.pixCity || pix.city;
+        pix.reason = null;
+      } catch (error) {
+        pix.reason = error.message || 'Não consegui montar o Pix deste resumo agora.';
+      }
+    }
+  }
+
+  const messages = buildStatementShareMessageContext({
+    state,
+    personName: person?.name,
+    periodLabel,
+    totalCents: safeTotalCents,
+    paidCents: safePaidCents,
+    remainingCents: safeRemainingCents,
+    pixPayload: pix.available ? pix.payload : ''
+  });
+
+  return {
+    state,
+    periodLabel,
+    shareTitle: `Resumo ${periodLabel} — ${person?.name || 'OrganizaPay'}`,
+    nativeShareText: messages.nativeShareText,
+    whatsappCaption: messages.whatsappCaption,
+    whatsappFollowUpMessage: messages.whatsappFollowUpMessage,
+    pix
+  };
+}
+
 // WhatsApp e compartilhamento
-app.get("/share/:year/:month/:personId", ensureAuthenticated, (req, res) => {
+app.get("/share/:year/:month/:personId", ensureAuthenticated, async (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
   const personId = Number(req.params.personId);
@@ -8623,10 +8831,20 @@ app.get("/share/:year/:month/:personId", ensureAuthenticated, (req, res) => {
   const exportData = getPersonStatementExportData(userId, month, year, personId, itemOrder);
   if (!exportData) return res.status(400).send("Pessoa inválida.");
 
-  res.render("share", { month, year, itemOrder, ...exportData, formatBRLFromCents });
+  const shareContext = await buildSharePixContext({
+    userId,
+    month,
+    year,
+    person: exportData.person,
+    totalCents: exportData.total,
+    paidCents: exportData.paid_cents,
+    remainingCents: exportData.remaining_cents
+  });
+
+  res.render("share", { month, year, itemOrder, shareContext, ...exportData, formatBRLFromCents });
 });
 
-app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
+app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, async (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
   const personId = Number(req.params.personId);
@@ -8644,7 +8862,17 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
   const exportData = getPersonStatementExportData(userId, month, year, personId, itemOrder);
   if (!exportData) return res.status(400).send("Pessoa inválida.");
 
-  res.render("whatsapp", { month, year, itemOrder, ...exportData, formatBRLFromCents });
+  const shareContext = await buildSharePixContext({
+    userId,
+    month,
+    year,
+    person: exportData.person,
+    totalCents: exportData.total,
+    paidCents: exportData.paid_cents,
+    remainingCents: exportData.remaining_cents
+  });
+
+  res.render("whatsapp", { month, year, itemOrder, shareContext, ...exportData, formatBRLFromCents });
 });
 
 function maskPhoneForLog(rawPhone) {
@@ -8719,13 +8947,52 @@ async function sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNum
   }
 }
 
+async function sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, message) {
+  const safeMessage = String(message || '').trim();
+  if (!safeMessage) return null;
+
+  const endpoint = `${apiUrl.replace(/\/$/, '')}/message/sendText/${instance}`;
+  const headers = { apikey: apiKey };
+
+  const v2Payload = {
+    number: cleanNumber,
+    text: safeMessage,
+    delay: 2200,
+    linkPreview: false
+  };
+
+  try {
+    return await axios.post(endpoint, v2Payload, { headers, timeout: 30000 });
+  } catch (v2Error) {
+    const status = v2Error.response && v2Error.response.status;
+    const canRetryAsV1 = Boolean(v2Error.response) && [400, 404, 415, 422].includes(status);
+    if (!canRetryAsV1) {
+      throw v2Error;
+    }
+
+    const v1Payload = {
+      number: cleanNumber,
+      textMessage: {
+        text: safeMessage
+      },
+      options: {
+        delay: 2200,
+        presence: 'composing',
+        linkPreview: false
+      }
+    };
+
+    return axios.post(endpoint, v1Payload, { headers, timeout: 30000 });
+  }
+}
+
 app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit: '25mb' }), async (req, res) => {
   if (!isAdminUser(req.user.id)) {
     return res.status(403).json({ error: "Esse atalho de envio no WhatsApp é só para administradores." });
   }
 
   try {
-    const { personPhone, message, imageBase64 } = req.body;
+    const { personPhone, message, followUpMessage, imageBase64 } = req.body;
 
     const apiUrl = getSettingText('EVOLUTION_API_URL');
     const apiKey = getSettingText('EVOLUTION_API_KEY');
@@ -8746,6 +9013,11 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
     }
 
     await sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNumber, message, base64Data);
+
+    if (String(followUpMessage || '').trim()) {
+      await sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, followUpMessage);
+    }
+
     res.json({ success: true });
   } catch (e) {
     const summarized = summarizeAxiosError(e);

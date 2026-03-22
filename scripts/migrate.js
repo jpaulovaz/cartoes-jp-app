@@ -249,6 +249,21 @@ CREATE TABLE IF NOT EXISTS shared_debt_batches (
   FOREIGN KEY (receiver_user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS shared_debt_archives (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  request_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  is_archived INTEGER NOT NULL DEFAULT 1,
+  archived_at TEXT,
+  restored_at TEXT,
+  archived_from_status TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(request_id, user_id),
+  FOREIGN KEY (request_id) REFERENCES shared_debt_requests(id),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS shared_debt_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   request_id INTEGER NOT NULL,
@@ -436,6 +451,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_debts_source_allocation ON shared_debt_req
 CREATE INDEX IF NOT EXISTS idx_shared_debts_source_person ON shared_debt_requests(requester_user_id, source_transaction_id, source_person_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_receiver ON shared_debt_batches(receiver_user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batches(requester_user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_user_archived ON shared_debt_archives(user_id, is_archived, updated_at);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_request_user ON shared_debt_archives(request_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_events_request ON shared_debt_events(request_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_status ON friend_requests(requester_user_id, status, created_at);

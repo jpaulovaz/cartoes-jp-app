@@ -117,6 +117,23 @@ db.prepare(`
     FOREIGN KEY (receiver_user_id) REFERENCES users(id)
   )
 `).run();
+
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS shared_debt_archives (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    is_archived INTEGER NOT NULL DEFAULT 1,
+    archived_at TEXT,
+    restored_at TEXT,
+    archived_from_status TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(request_id, user_id),
+    FOREIGN KEY (request_id) REFERENCES shared_debt_requests(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
 db.prepare(`
   CREATE TABLE IF NOT EXISTS push_subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -201,6 +218,8 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_scheduled_push_logs_event_date 
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_requests_batch_id ON shared_debt_requests(batch_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_receiver ON shared_debt_batches(receiver_user_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batches(requester_user_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_user_archived ON shared_debt_archives(user_id, is_archived, updated_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_request_user ON shared_debt_archives(request_id, user_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_status ON friend_requests(requester_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_target_status ON friend_requests(target_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_pair_status ON friend_requests(requester_user_id, target_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
@@ -1439,7 +1458,7 @@ function buildBackupAdminState() {
     recentRestores,
     running: backupJobRunning,
     restoring: backupRestoreRunning,
-    guideUrl: '/admin/guide'
+    guideUrl: '/admin/backup/guide'
   };
 }
 
@@ -2108,10 +2127,161 @@ function detectSharedDebtOriginKindFromRows(rows) {
   return 'multiple';
 }
 
+const SHARED_DEBT_ARCHIVABLE_STATUSES = new Set(['settled', 'cancelled', 'rejection_accepted_by_sender', 'rejection_contested_by_sender']);
+
 function normalizeSharedDebtBatchStatus(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (['pending', 'partial', 'accepted', 'rejected', 'settled'].includes(normalized)) return normalized;
   return 'pending';
+}
+
+function canArchiveSharedDebtStatus(value) {
+  return SHARED_DEBT_ARCHIVABLE_STATUSES.has(String(value || '').trim().toLowerCase());
+}
+
+function resolveSharedDebtViewPath(rawPath, fallback = '/shared-debts') {
+  const normalized = String(rawPath || '').trim();
+  if (normalized === '/shared-debts' || normalized === '/shared-debts/archive') return normalized;
+  return fallback;
+}
+
+function getSharedDebtArchivedRequestIdSet(userId) {
+  const rows = db.prepare(`
+    SELECT request_id
+    FROM shared_debt_archives
+    WHERE user_id = ? AND is_archived = 1
+  `).all(userId);
+  return new Set(rows.map((row) => Number(row.request_id)).filter(Boolean));
+}
+
+function filterSharedDebtItemsByArchiveMode(items = [], archivedRequestIds = new Set(), archiveMode = false) {
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    const requestId = Number(item?.id || 0);
+    if (!requestId) return false;
+    const isArchived = archivedRequestIds.has(requestId);
+    return archiveMode ? isArchived : !isArchived;
+  });
+}
+
+function upsertSharedDebtArchiveState({ requestId, userId, isArchived, archivedFromStatus = null, timestamp = null }) {
+  const cleanRequestId = Number(requestId || 0);
+  const cleanUserId = Number(userId || 0);
+  if (!cleanRequestId || !cleanUserId) return false;
+
+  const now = timestamp || nowIso();
+  const existing = db.prepare(`
+    SELECT id, archived_at, created_at
+    FROM shared_debt_archives
+    WHERE request_id = ? AND user_id = ?
+    LIMIT 1
+  `).get(cleanRequestId, cleanUserId);
+
+  if (existing) {
+    db.prepare(`
+      UPDATE shared_debt_archives
+      SET is_archived = ?,
+          archived_at = ?,
+          restored_at = ?,
+          archived_from_status = ?,
+          updated_at = ?
+      WHERE id = ?
+    `).run(
+      isArchived ? 1 : 0,
+      isArchived ? now : existing.archived_at,
+      isArchived ? null : now,
+      archivedFromStatus,
+      now,
+      existing.id
+    );
+    return true;
+  }
+
+  db.prepare(`
+    INSERT INTO shared_debt_archives (
+      request_id, user_id, is_archived, archived_at, restored_at,
+      archived_from_status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    cleanRequestId,
+    cleanUserId,
+    isArchived ? 1 : 0,
+    isArchived ? now : null,
+    isArchived ? null : now,
+    archivedFromStatus,
+    now,
+    now
+  );
+  return true;
+}
+
+function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
+  const requestIdToHighlight = Number(query?.request) || null;
+  const batchIdToHighlight = Number(query?.batch) || null;
+  const archivedRequestIds = getSharedDebtArchivedRequestIdSet(userId);
+  const rawReceived = getSharedDebtRequestsReceived(userId);
+  const rawSent = getSharedDebtRequestsSent(userId);
+  const received = filterSharedDebtItemsByArchiveMode(rawReceived, archivedRequestIds, archiveMode);
+  const sent = filterSharedDebtItemsByArchiveMode(rawSent, archivedRequestIds, archiveMode);
+  const archivedReceivedCount = filterSharedDebtItemsByArchiveMode(rawReceived, archivedRequestIds, true).length;
+  const archivedSentCount = filterSharedDebtItemsByArchiveMode(rawSent, archivedRequestIds, true).length;
+  const sharedDebtFilters = normalizeSharedDebtTrackingFilters(query);
+  const sharedDebtFiltersActive = hasActiveSharedDebtTrackingFilters(sharedDebtFilters);
+  const receivedTracking = filterSharedDebtTrackingItems(received, sharedDebtFilters);
+  const sentTracking = filterSharedDebtTrackingItems(sent, sharedDebtFilters);
+  const receivedPendingBatches = archiveMode ? [] : buildSharedDebtBatchCards(received, 'received').filter(batch => batch.pendingCount > 0);
+  const sentPendingBatches = archiveMode ? [] : buildSharedDebtBatchCards(sent, 'sent').filter(batch => batch.pendingCount > 0);
+  const eventsByRequest = getSharedDebtEventsByRequestIds([
+    ...received.map(item => item.id),
+    ...sent.map(item => item.id)
+  ]);
+
+  return {
+    requestIdToHighlight,
+    batchIdToHighlight,
+    received,
+    sent,
+    receivedPendingBatches,
+    sentPendingBatches,
+    receivedTracking,
+    sentTracking,
+    sharedDebtFilters,
+    sharedDebtFiltersActive,
+    manualDebtEligiblePeople: archiveMode ? [] : getManualSharedDebtEligiblePeople(userId),
+    eventsByRequest,
+    archiveMode,
+    pagePath: archiveMode ? '/shared-debts/archive' : '/shared-debts',
+    counterpartPath: archiveMode ? '/shared-debts' : '/shared-debts/archive',
+    archiveTotalCount: archivedReceivedCount + archivedSentCount,
+    archivedReceivedCount,
+    archivedSentCount,
+    archiveEligibleStatuses: Array.from(SHARED_DEBT_ARCHIVABLE_STATUSES)
+  };
+}
+
+function renderSharedDebtsPage(req, res, { archiveMode = false } = {}) {
+  const userId = req.user.id;
+
+  if (!archiveMode) {
+    db.prepare(`
+      UPDATE notifications
+      SET is_read = 1, read_at = COALESCE(read_at, ?)
+      WHERE user_id = ?
+        AND (
+          related_type IN ('shared_debt_request', 'shared_debt_batch') OR
+          type IN ('shared_debt_request', 'shared_debt_batch')
+        )
+        AND is_read = 0
+    `).run(nowIso(), userId);
+  }
+
+  const payload = buildSharedDebtsPagePayload(userId, req.query, archiveMode);
+  return res.render('shared-debts', {
+    title: archiveMode ? 'OrganizaPay | Arquivo de cobranças' : 'OrganizaPay | Cobranças',
+    ...payload,
+    formatBRLFromCents,
+    monthLabel,
+    formatDateBR
+  });
 }
 
 function computeSharedDebtBatchSummary(rows = []) {
@@ -4862,54 +5032,166 @@ function groupSharedDebtRowsByBatch(rows = []) {
   return Array.from(groups.values());
 }
 
-app.get("/shared-debts", ensureAuthenticated, (req, res) => {
+app.get('/shared-debts', ensureAuthenticated, (req, res) => {
+  return renderSharedDebtsPage(req, res, { archiveMode: false });
+});
+
+app.get('/shared-debts/archive', ensureAuthenticated, (req, res) => {
+  return renderSharedDebtsPage(req, res, { archiveMode: true });
+});
+
+app.post('/shared-debts/:id/archive', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const requestIdToHighlight = Number(req.query.request) || null;
-  const batchIdToHighlight = Number(req.query.batch) || null;
-  const manualDebtEligiblePeople = getManualSharedDebtEligiblePeople(userId);
+  const requestId = Number(req.params.id);
+  const fallbackRedirect = resolveSharedDebtViewPath(req.body.return_to, redirectBackOr(req, '/shared-debts'));
 
-  db.prepare(`
-    UPDATE notifications
-    SET is_read = 1, read_at = COALESCE(read_at, ?)
-    WHERE user_id = ?
-      AND (
-        related_type IN ('shared_debt_request', 'shared_debt_batch') OR
-        type IN ('shared_debt_request', 'shared_debt_batch')
-      )
-      AND is_read = 0
-  `).run(nowIso(), userId);
+  if (!requestId) {
+    setFlash(req, 'error', 'Ops, essa cobrança não parece válida.');
+    return res.redirect(fallbackRedirect);
+  }
 
-  const received = getSharedDebtRequestsReceived(userId);
-  const sent = getSharedDebtRequestsSent(userId);
-  const sharedDebtFilters = normalizeSharedDebtTrackingFilters(req.query);
-  const sharedDebtFiltersActive = hasActiveSharedDebtTrackingFilters(sharedDebtFilters);
-  const receivedTracking = filterSharedDebtTrackingItems(received, sharedDebtFilters);
-  const sentTracking = filterSharedDebtTrackingItems(sent, sharedDebtFilters);
-  const receivedPendingBatches = buildSharedDebtBatchCards(received, 'received').filter(batch => batch.pendingCount > 0);
-  const sentPendingBatches = buildSharedDebtBatchCards(sent, 'sent').filter(batch => batch.pendingCount > 0);
-  const eventsByRequest = getSharedDebtEventsByRequestIds([
-    ...received.map(item => item.id),
-    ...sent.map(item => item.id)
-  ]);
+  const requestRow = db.prepare(`
+    SELECT id, status
+    FROM shared_debt_requests
+    WHERE id = ? AND (requester_user_id = ? OR receiver_user_id = ?)
+    LIMIT 1
+  `).get(requestId, userId, userId);
 
-  return res.render("shared-debts", {
-    title: "OrganizaPay | Cobranças",
-    received,
-    sent,
-    receivedPendingBatches,
-    sentPendingBatches,
-    receivedTracking,
-    sentTracking,
-    sharedDebtFilters,
-    sharedDebtFiltersActive,
-    manualDebtEligiblePeople,
-    eventsByRequest,
-    requestIdToHighlight,
-    batchIdToHighlight,
-    formatBRLFromCents,
-    monthLabel,
-    formatDateBR
+  if (!requestRow) {
+    setFlash(req, 'error', 'Cobrança não encontrada.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (!canArchiveSharedDebtStatus(requestRow.status)) {
+    setFlash(req, 'info', 'Essa cobrança ainda tem história para acontecer por aqui, então ela fica nas ativas por enquanto.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  upsertSharedDebtArchiveState({
+    requestId,
+    userId,
+    isArchived: true,
+    archivedFromStatus: requestRow.status,
+    timestamp: nowIso()
   });
+
+  setFlash(req, 'success', 'Cobrança arquivada. A fila principal agradeceu o respiro.');
+  return res.redirect(fallbackRedirect);
+});
+
+app.post('/shared-debts/:id/unarchive', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const requestId = Number(req.params.id);
+  const fallbackRedirect = resolveSharedDebtViewPath(req.body.return_to, redirectBackOr(req, '/shared-debts/archive'));
+
+  if (!requestId) {
+    setFlash(req, 'error', 'Ops, essa cobrança não parece válida.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const requestRow = db.prepare(`
+    SELECT id, status
+    FROM shared_debt_requests
+    WHERE id = ? AND (requester_user_id = ? OR receiver_user_id = ?)
+    LIMIT 1
+  `).get(requestId, userId, userId);
+
+  if (!requestRow) {
+    setFlash(req, 'error', 'Cobrança não encontrada.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  upsertSharedDebtArchiveState({
+    requestId,
+    userId,
+    isArchived: false,
+    archivedFromStatus: requestRow.status,
+    timestamp: nowIso()
+  });
+
+  setFlash(req, 'success', 'Cobrança restaurada. Ela voltou para as ativas sem perder nadinha do histórico.');
+  return res.redirect(fallbackRedirect);
+});
+
+app.post('/shared-debts/bulk/archive', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const requestIds = parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id);
+  const fallbackRedirect = resolveSharedDebtViewPath(req.body.return_to, redirectBackOr(req, '/shared-debts'));
+
+  if (!requestIds.length) {
+    setFlash(req, 'error', 'Nenhuma cobrança válida foi escolhida para ir ao arquivo.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const placeholders = requestIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT id, status
+    FROM shared_debt_requests
+    WHERE id IN (${placeholders})
+      AND (requester_user_id = ? OR receiver_user_id = ?)
+  `).all(...requestIds, userId, userId).filter((row) => canArchiveSharedDebtStatus(row.status));
+
+  if (!rows.length) {
+    setFlash(req, 'info', 'Essas cobranças ainda não estão naquele ponto zen de irem para o arquivo.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const now = nowIso();
+  db.transaction(() => {
+    rows.forEach((row) => {
+      upsertSharedDebtArchiveState({
+        requestId: row.id,
+        userId,
+        isArchived: true,
+        archivedFromStatus: row.status,
+        timestamp: now
+      });
+    });
+  })();
+
+  setFlash(req, 'success', `Pronto! ${formatCountLabel(rows.length, 'cobrança foi arquivada', 'cobranças foram arquivadas')} sem apagar o histórico.`);
+  return res.redirect(fallbackRedirect);
+});
+
+app.post('/shared-debts/bulk/unarchive', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const requestIds = parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id);
+  const fallbackRedirect = resolveSharedDebtViewPath(req.body.return_to, redirectBackOr(req, '/shared-debts/archive'));
+
+  if (!requestIds.length) {
+    setFlash(req, 'error', 'Nenhuma cobrança válida foi escolhida para sair do arquivo.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const placeholders = requestIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT r.id, r.status
+    FROM shared_debt_requests r
+    JOIN shared_debt_archives a ON a.request_id = r.id AND a.user_id = ? AND a.is_archived = 1
+    WHERE r.id IN (${placeholders})
+      AND (r.requester_user_id = ? OR r.receiver_user_id = ?)
+  `).all(userId, ...requestIds, userId, userId)
+
+  if (!rows.length) {
+    setFlash(req, 'info', 'Não achei cobranças arquivadas válidas nessa seleção.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const now = nowIso();
+  db.transaction(() => {
+    rows.forEach((row) => {
+      upsertSharedDebtArchiveState({
+        requestId: row.id,
+        userId,
+        isArchived: false,
+        archivedFromStatus: row.status,
+        timestamp: now
+      });
+    });
+  })();
+
+  setFlash(req, 'success', `Pronto! ${formatCountLabel(rows.length, 'cobrança voltou para as ativas', 'cobranças voltaram para as ativas')}.`);
+  return res.redirect(fallbackRedirect);
 });
 
 app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
@@ -8012,31 +8294,18 @@ app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
   }
 });
 
-function downloadAdminGuide(res, activeSection = 'access') {
-  const guidePath = path.join(__dirname, 'public', 'docs', 'guia-central-admin-organizapay.pdf');
-  if (!fs.existsSync(guidePath)) {
-    return renderAdmin(res, { error: 'O guia em PDF ainda não está disponível neste servidor.', activeSection });
-  }
-
-  return res.download(guidePath, 'guia-central-admin-organizapay.pdf');
-}
-
-app.get('/admin/guide', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  return downloadAdminGuide(res, 'access');
-});
-
 app.get('/admin/backup/guide', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   if (!isAdminUser(userId)) {
     return res.status(403).send('Acesso negado.');
   }
 
-  return downloadAdminGuide(res, 'backup');
+  const guidePath = path.join(__dirname, 'public', 'docs', 'guia-backup-organizapay.pdf');
+  if (!fs.existsSync(guidePath)) {
+    return renderAdmin(res, { error: 'O guia em PDF ainda não está disponível neste servidor.', activeSection: 'backup' });
+  }
+
+  return res.download(guidePath, 'guia-backup-organizapay.pdf');
 });
 
 app.get('/admin/backup/google/connect', ensureAuthenticated, (req, res) => {

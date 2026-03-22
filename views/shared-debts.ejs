@@ -1,4 +1,4 @@
-<%- include("partials/header", { title: "OrganizaPay | Cobranças" }) %>
+<%- include("partials/header", { title: title || "OrganizaPay | Cobranças" }) %>
 
 <%
   function statusMeta(itemOrStatus) {
@@ -295,9 +295,34 @@
   }
 
   function manualSectionHint(scope) {
+    if (isArchiveMode) {
+      return scope === 'received'
+        ? 'Lembretes sem fatura nem competência que já saíram da fila principal e agora moram aqui no arquivo.'
+        : 'Lembretes sem fatura nem competência guardados no arquivo para consulta futura, sem bagunçar as ativas.';
+    }
+
     return scope === 'received'
       ? 'Lembretes sem fatura nem competência. Quando você aceitar, eles passam a aparecer no seu controle até a quitação.'
       : 'Lembretes sem fatura nem competência. Depois de aceitos, continuam no seu controle até o pagamento ser confirmado.';
+  }
+
+  function canArchiveItem(item) {
+    return archiveEligibleStatusSet.has(String(item?.status || '').trim());
+  }
+
+  function archiveToggleAction(item) {
+    return isArchiveMode ? `/shared-debts/${item.id}/unarchive` : `/shared-debts/${item.id}/archive`;
+  }
+
+  function archiveToggleLabel(item) {
+    return isArchiveMode ? 'Restaurar cobrança' : 'Arquivar cobrança';
+  }
+
+  function archiveToggleGroupLabel(items) {
+    const count = (items || []).length;
+    return isArchiveMode
+      ? `Restaurar ${countLabel(count, 'cobrança', 'cobranças')}`
+      : `Arquivar ${countLabel(count, 'cobrança', 'cobranças')}`;
   }
 
   function hasManualActionableItem(items, scope) {
@@ -311,6 +336,11 @@
     return Number(regularGroupCount || 0) === 0;
   }
 
+  const isArchiveMode = !!archiveMode;
+  const currentPath = pagePath || (isArchiveMode ? '/shared-debts/archive' : '/shared-debts');
+  const otherPath = counterpartPath || (isArchiveMode ? '/shared-debts' : '/shared-debts/archive');
+  const archiveEligibleStatusSet = new Set(Array.isArray(archiveEligibleStatuses) ? archiveEligibleStatuses : []);
+  const archivedTotalVisible = (received || []).length + (sent || []).length;
   const trackingFilters = sharedDebtFilters || { envio: 'all', origin: 'all', installment: 'all' };
   const trackingFiltersActive = !!sharedDebtFiltersActive;
   const receivedBaseItems = Array.isArray(receivedTracking) ? receivedTracking : (received || []);
@@ -426,12 +456,31 @@
 <div class="max-w-7xl mx-auto space-y-8">
   <section class="op-page-hero op-fade-up">
     <div>
-      <span class="op-page-hero__eyebrow">Pedidos, acertos e lembretes</span>
-      <h1 class="op-page-hero__title mt-4">Cobranças</h1>
-      <p class="op-page-hero__subtitle mt-3">Tudo o que você enviou ou recebeu dos amigos fica aqui — tanto o que nasceu no cartão quanto os lembretes avulsos do dia a dia.</p>
+      <span class="op-page-hero__eyebrow"><%= isArchiveMode ? 'Histórico guardado com carinho' : 'Pedidos, acertos e lembretes' %></span>
+      <h1 class="op-page-hero__title mt-4"><%= isArchiveMode ? 'Arquivo de cobranças' : 'Cobranças' %></h1>
+      <p class="op-page-hero__subtitle mt-3"><%= isArchiveMode
+        ? 'Aqui ficam as cobranças que já não pedem nenhuma ação futura dentro do app. Sai da fila principal, mas continua facinho de achar e restaurar quando você quiser.'
+        : 'Tudo o que você enviou ou recebeu dos amigos fica aqui - tanto o que nasceu no cartão quanto os lembretes avulsos do dia a dia.' %></p>
       <div class="op-page-hero__meta mt-4">
-        <span class="badge">Receber, pagar e confirmar em uma só central</span>
-        <span class="badge">O sininho lá em cima cuida dos avisos do app inteiro</span>
+        <% if (isArchiveMode) { %>
+          <span class="badge">Mesmo visual da central principal, sem reaprendizado</span>
+          <span class="badge">Restaurar traz a cobrança de volta para as ativas</span>
+        <% } else { %>
+          <span class="badge">Receber, pagar e confirmar em uma só central</span>
+          <span class="badge">O sininho lá em cima cuida dos avisos do app inteiro</span>
+        <% } %>
+      </div>
+      <div class="mt-5 flex flex-wrap gap-3">
+        <% if (isArchiveMode) { %>
+          <a href="<%= otherPath %>" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Voltar para ativas</a>
+        <% } else { %>
+          <a href="<%= otherPath %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
+            Arquivo
+            <% if (archiveTotalCount) { %>
+              <span class="ml-2 inline-flex min-w-[1.8rem] items-center justify-center rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-black text-white dark:bg-slate-100 dark:text-slate-900"><%= archiveTotalCount %></span>
+            <% } %>
+          </a>
+        <% } %>
       </div>
     </div>
 
@@ -447,13 +496,20 @@
         <div class="op-kpi-card__hint"><span class="md:hidden"><%= countLabel(rawSentGroups.length, 'mês', 'meses') %></span><span class="hidden md:inline"><%= countLabel(rawSentGroups.length, 'período', 'períodos') %></span></div>
       </div>
       <div class="op-kpi-card text-center">
-        <div class="op-kpi-card__label text-amber-600 dark:text-amber-300">Sua vez</div>
-        <div class="op-kpi-card__value text-amber-700 dark:text-amber-200"><%= actionCount %></div>
-        <div class="op-kpi-card__hint text-amber-700/80 dark:text-amber-200/80">Ações pendentes</div>
+        <% if (isArchiveMode) { %>
+          <div class="op-kpi-card__label text-violet-600 dark:text-violet-300">No arquivo</div>
+          <div class="op-kpi-card__value text-violet-700 dark:text-violet-200"><%= archivedTotalVisible %></div>
+          <div class="op-kpi-card__hint text-violet-700/80 dark:text-violet-200/80">Prontas para restaurar</div>
+        <% } else { %>
+          <div class="op-kpi-card__label text-amber-600 dark:text-amber-300">Sua vez</div>
+          <div class="op-kpi-card__value text-amber-700 dark:text-amber-200"><%= actionCount %></div>
+          <div class="op-kpi-card__hint text-amber-700/80 dark:text-amber-200/80">Ações pendentes</div>
+        <% } %>
       </div>
     </div>
   </section>
 
+  <% if (!isArchiveMode) { %>
   <section class="op-fade-up">
     <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -682,7 +738,7 @@
     </section>
   <% } %>
 
-  <% if (actionCount > 0) { %>
+  <% if (!isArchiveMode && actionCount > 0) { %>
     <section class="md:hidden op-fade-up">
       <div class="op-surface-card rounded-3xl border border-amber-200/80 bg-amber-50/90 p-4 shadow-sm dark:border-amber-800 dark:bg-amber-900/20">
         <div class="flex items-start justify-between gap-4">
@@ -719,16 +775,16 @@
     <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
       <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Acompanhamento detalhado</div>
-          <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Filtrar acompanhamento</h2>
-          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Os filtros abaixo mexem na visão detalhada da central: por mês quando houver competência, e em bloco próprio quando o combinado for avulso.</p>
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= isArchiveMode ? "Arquivo detalhado" : "Acompanhamento detalhado" %></div>
+          <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white"><%= isArchiveMode ? "Filtrar arquivo" : "Filtrar acompanhamento" %></h2>
+          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= isArchiveMode ? "Os filtros abaixo ajudam a garimpar o histórico arquivado por mês, tipo de envio e itens avulsos sem mexer na fila principal." : "Os filtros abaixo mexem na visão detalhada da central: por mês quando houver competência, e em bloco próprio quando o combinado for avulso." %></p>
         </div>
         <% if (trackingFiltersActive) { %>
           <div class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 shadow-sm dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">Filtros ativos no acompanhamento</div>
         <% } %>
       </div>
 
-      <form method="GET" action="/shared-debts" class="mt-4 grid gap-3 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
+      <form method="GET" action="<%= currentPath %>" class="mt-4 grid gap-3 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
         <label class="block">
           <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Tipo de envio</span>
           <select name="envio" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500/20">
@@ -759,7 +815,7 @@
         <div class="flex flex-col gap-2 sm:flex-row xl:justify-end">
           <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Aplicar filtros</button>
           <% if (trackingFiltersActive) { %>
-            <a href="/shared-debts" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Limpar</a>
+            <a href="<%= currentPath %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Limpar</a>
           <% } %>
         </div>
       </form>
@@ -777,7 +833,7 @@
                 <span class="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-200"><%= receivedActionCount %> ação(ões)</span>
               <% } %>
             </div>
-            <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none">Cobranças que chegaram para sua aprovação, baixa e lembretes avulsos que podem seguir te acompanhando até a quitação.</p>
+            <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none"><%= isArchiveMode ? "Histórico arquivado do lado de quem recebeu. Tudo o que não pede mais ação futura continua aqui para consulta ou restauração." : "Cobranças que chegaram para sua aprovação, baixa e lembretes avulsos que podem seguir te acompanhando até a quitação." %></p>
           </div>
           <div class="flex flex-wrap gap-2 sm:justify-end">
             <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= trackingFiltersActive ? `${countLabel(receivedBaseItems.length, 'cobrança', 'cobranças')} de ${countLabel(received.length, 'cobrança', 'cobranças')}` : countLabel(received.length, 'cobrança', 'cobranças') %></span>
@@ -794,13 +850,13 @@
         <div class="px-5 py-5">
           <div class="op-empty-state op-empty-state--compact">
             <div class="op-empty-state__icon">📭</div>
-            <div class="op-empty-state__title"><%= trackingFiltersActive ? "Nenhuma cobrança recebida combina com os filtros" : "Nenhuma solicitação recebida ainda" %></div>
-            <p class="op-empty-state__text"><%= trackingFiltersActive ? "Limpe ou ajuste os filtros para voltar a enxergar o acompanhamento completo da central." : "Quando outro usuário compartilhar uma dívida ou te mandar um lembrete avulso, tudo aparece aqui." %></p>
+            <div class="op-empty-state__title"><%= trackingFiltersActive ? "Nenhuma cobrança recebida combina com os filtros" : (isArchiveMode ? "Nenhuma cobrança recebida foi arquivada" : "Nenhuma solicitação recebida ainda") %></div>
+            <p class="op-empty-state__text"><%= trackingFiltersActive ? "Limpe ou ajuste os filtros para voltar a enxergar o acompanhamento completo da central." : (isArchiveMode ? "Quando você arquivar cobranças recebidas encerradas, elas passam a morar aqui. Enquanto isso, a área está só curtindo o silêncio." : "Quando outro usuário compartilhar uma dívida ou te mandar um lembrete avulso, tudo aparece aqui.") %></p>
           </div>
         </div>
       <% } else { %>
         <div class="p-4 md:p-5 space-y-4">
-          <% if (receivedManualItems.length) { %>
+          <% if (receivedManualItems.length) { const receivedManualArchiveItems = receivedManualItems.filter(canArchiveItem); %>
             <details class="rounded-3xl border border-violet-200 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/10 overflow-hidden" <%= receivedManualSectionOpen ? 'open' : '' %>>
               <summary class="list-none cursor-pointer px-5 py-4 bg-white/70 dark:bg-slate-950/30">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -812,6 +868,13 @@
                   <div class="flex flex-wrap gap-2 sm:justify-end">
                     <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200"><%= countLabel(receivedManualItems.length, 'cobrança avulsa', 'cobranças avulsas') %></span>
                     <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= formatBRLFromCents(sumAmountCents(receivedManualItems)) %></span>
+                    <% if (receivedManualArchiveItems.length) { %>
+                      <form method="POST" action="<%= isArchiveMode ? '/shared-debts/bulk/unarchive' : '/shared-debts/bulk/archive' %>" class="contents">
+                        <% receivedManualArchiveItems.forEach((archiveItem) => { %><input type="hidden" name="request_ids" value="<%= archiveItem.id %>"><% }) %>
+                        <input type="hidden" name="return_to" value="<%= currentPath %>">
+                        <button type="submit" class="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleGroupLabel(receivedManualArchiveItems) %></button>
+                      </form>
+                    <% } %>
                   </div>
                 </div>
               </summary>
@@ -929,6 +992,16 @@
                         </div>
                       <% } %>
 
+
+                      <% if (canArchiveItem(item)) { %>
+                        <div class="flex justify-end">
+                          <form method="POST" action="<%= archiveToggleAction(item) %>" class="contents">
+                            <input type="hidden" name="return_to" value="<%= currentPath %>">
+                            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
+                          </form>
+                        </div>
+                      <% } %>
+
                       <% if (timeline.length) { %>
                         <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 px-4 py-4">
                           <div class="text-sm font-bold text-slate-900 dark:text-white">Histórico</div>
@@ -979,7 +1052,7 @@
                 </div>
               </summary>
 
-              <% const receivedMonthSheetId = `received-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const receivedMonthBulkPaySheetId = `received-month-pay-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const receivedMonthPayableItems = getReceivedMonthPayableItems(group); const receivedMonthPayableTotal = sumAmountCents(receivedMonthPayableItems); const receivedMonthCounterparts = countDistinctCounterparts(receivedMonthPayableItems, 'received'); %>
+              <% const receivedMonthSheetId = `received-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const receivedMonthBulkPaySheetId = `received-month-pay-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const receivedMonthPayableItems = getReceivedMonthPayableItems(group); const receivedMonthPayableTotal = sumAmountCents(receivedMonthPayableItems); const receivedMonthCounterparts = countDistinctCounterparts(receivedMonthPayableItems, 'received'); const receivedMonthArchiveItems = (group.items || []).filter(canArchiveItem); %>
               <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -991,7 +1064,14 @@
                       <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
                       Ver lista do mês
                     </button>
-                    <% if (receivedMonthPayableItems.length) { %>
+                    <% if (receivedMonthArchiveItems.length) { %>
+                      <form method="POST" action="<%= isArchiveMode ? '/shared-debts/bulk/unarchive' : '/shared-debts/bulk/archive' %>" class="contents">
+                        <% receivedMonthArchiveItems.forEach((archiveItem) => { %><input type="hidden" name="request_ids" value="<%= archiveItem.id %>"><% }) %>
+                        <input type="hidden" name="return_to" value="<%= currentPath %>">
+                        <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleGroupLabel(receivedMonthArchiveItems) %></button>
+                      </form>
+                    <% } %>
+                    <% if (!isArchiveMode && receivedMonthPayableItems.length) { %>
                       <button type="button" data-open-sheet="<%= receivedMonthBulkPaySheetId %>" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">
                         Marcar mês como pago
                       </button>
@@ -1190,6 +1270,16 @@
                         </div>
                       <% } %>
 
+
+                      <% if (canArchiveItem(item)) { %>
+                        <div class="flex justify-end">
+                          <form method="POST" action="<%= archiveToggleAction(item) %>" class="contents">
+                            <input type="hidden" name="return_to" value="<%= currentPath %>">
+                            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
+                          </form>
+                        </div>
+                      <% } %>
+
                       <% if (timeline.length) { %>
                         <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 px-4 py-4">
                           <div class="text-sm font-bold text-slate-900 dark:text-white">Histórico</div>
@@ -1233,7 +1323,7 @@
                 <span class="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-200"><%= sentActionCount %> ação(ões)</span>
               <% } %>
             </div>
-            <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none">Cobranças que você enviou para aprovação, baixa e lembretes avulsos que continuam no radar até a quitação.</p>
+            <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none"><%= isArchiveMode ? "Histórico arquivado do lado de quem enviou. Tudo o que já encerrou o papo dentro do app continua guardado aqui para consulta ou restauração." : "Cobranças que você enviou para aprovação, baixa e lembretes avulsos que continuam no radar até a quitação." %></p>
           </div>
           <div class="flex flex-wrap gap-2 sm:justify-end">
             <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= trackingFiltersActive ? `${countLabel(sentBaseItems.length, 'cobrança', 'cobranças')} de ${countLabel(sent.length, 'cobrança', 'cobranças')}` : countLabel(sent.length, 'cobrança', 'cobranças') %></span>
@@ -1250,13 +1340,13 @@
         <div class="px-5 py-5">
           <div class="op-empty-state op-empty-state--compact">
             <div class="op-empty-state__icon">📤</div>
-            <div class="op-empty-state__title"><%= trackingFiltersActive ? "Nenhuma cobrança enviada combina com os filtros" : "Nenhuma solicitação enviada ainda" %></div>
-            <p class="op-empty-state__text"><%= trackingFiltersActive ? "Limpe ou ajuste os filtros para voltar a enxergar o acompanhamento enviado inteiro." : "Quando você dividir uma compra ou mandar um lembrete avulso para alguém elegível, tudo aparece aqui." %></p>
+            <div class="op-empty-state__title"><%= trackingFiltersActive ? "Nenhuma cobrança enviada combina com os filtros" : (isArchiveMode ? "Nenhuma cobrança enviada foi arquivada" : "Nenhuma solicitação enviada ainda") %></div>
+            <p class="op-empty-state__text"><%= trackingFiltersActive ? "Limpe ou ajuste os filtros para voltar a enxergar o acompanhamento enviado inteiro." : (isArchiveMode ? "Quando você arquivar cobranças enviadas encerradas, elas passam a morar aqui. Enquanto isso, a área está em paz de espírito." : "Quando você dividir uma compra ou mandar um lembrete avulso para alguém elegível, tudo aparece aqui.") %></p>
           </div>
         </div>
       <% } else { %>
         <div class="p-4 md:p-5 space-y-4">
-          <% if (sentManualItems.length) { %>
+          <% if (sentManualItems.length) { const sentManualArchiveItems = sentManualItems.filter(canArchiveItem); %>
             <details class="rounded-3xl border border-violet-200 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/10 overflow-hidden" <%= sentManualSectionOpen ? 'open' : '' %>>
               <summary class="list-none cursor-pointer px-5 py-4 bg-white/70 dark:bg-slate-950/30">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1268,6 +1358,13 @@
                   <div class="flex flex-wrap gap-2 sm:justify-end">
                     <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200"><%= countLabel(sentManualItems.length, 'cobrança avulsa', 'cobranças avulsas') %></span>
                     <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= formatBRLFromCents(sumAmountCents(sentManualItems)) %></span>
+                    <% if (sentManualArchiveItems.length) { %>
+                      <form method="POST" action="<%= isArchiveMode ? '/shared-debts/bulk/unarchive' : '/shared-debts/bulk/archive' %>" class="contents">
+                        <% sentManualArchiveItems.forEach((archiveItem) => { %><input type="hidden" name="request_ids" value="<%= archiveItem.id %>"><% }) %>
+                        <input type="hidden" name="return_to" value="<%= currentPath %>">
+                        <button type="submit" class="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleGroupLabel(sentManualArchiveItems) %></button>
+                      </form>
+                    <% } %>
                   </div>
                 </div>
               </summary>
@@ -1385,6 +1482,16 @@
                         </div>
                       <% } %>
 
+
+                      <% if (canArchiveItem(item)) { %>
+                        <div class="flex justify-end">
+                          <form method="POST" action="<%= archiveToggleAction(item) %>" class="contents">
+                            <input type="hidden" name="return_to" value="<%= currentPath %>">
+                            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
+                          </form>
+                        </div>
+                      <% } %>
+
                       <% if (timeline.length) { %>
                         <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 px-4 py-4">
                           <div class="text-sm font-bold text-slate-900 dark:text-white">Histórico</div>
@@ -1435,7 +1542,7 @@
                 </div>
               </summary>
 
-              <% const sentMonthSheetId = `sent-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmSheetId = `sent-month-confirm-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmableItems = getSentMonthConfirmableItems(group); const sentMonthConfirmableTotal = sumAmountCents(sentMonthConfirmableItems); const sentMonthCounterparts = countDistinctCounterparts(sentMonthConfirmableItems, 'sent'); %>
+              <% const sentMonthSheetId = `sent-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmSheetId = `sent-month-confirm-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmableItems = getSentMonthConfirmableItems(group); const sentMonthConfirmableTotal = sumAmountCents(sentMonthConfirmableItems); const sentMonthCounterparts = countDistinctCounterparts(sentMonthConfirmableItems, 'sent'); const sentMonthArchiveItems = (group.items || []).filter(canArchiveItem); %>
               <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -1447,7 +1554,14 @@
                       <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
                       Ver lista do mês
                     </button>
-                    <% if (sentMonthConfirmableItems.length) { %>
+                    <% if (sentMonthArchiveItems.length) { %>
+                      <form method="POST" action="<%= isArchiveMode ? '/shared-debts/bulk/unarchive' : '/shared-debts/bulk/archive' %>" class="contents">
+                        <% sentMonthArchiveItems.forEach((archiveItem) => { %><input type="hidden" name="request_ids" value="<%= archiveItem.id %>"><% }) %>
+                        <input type="hidden" name="return_to" value="<%= currentPath %>">
+                        <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleGroupLabel(sentMonthArchiveItems) %></button>
+                      </form>
+                    <% } %>
+                    <% if (!isArchiveMode && sentMonthConfirmableItems.length) { %>
                       <button type="button" data-open-sheet="<%= sentMonthConfirmSheetId %>" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">
                         Confirmar recebimento do mês
                       </button>
@@ -1643,6 +1757,16 @@
                         <div class="rounded-2xl border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20 px-4 py-3">
                           <div class="text-sm font-bold text-slate-900 dark:text-white">Dívida liquidada</div>
                           <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">O recebimento foi confirmado em <strong><%= item.resolved_at ? formatDateBR(item.resolved_at) : 'data não informada' %></strong><% if (item.resolved_at) { %> às <strong><%= formatTimeBR(item.resolved_at) %></strong><% } %>.</div>
+                        </div>
+                      <% } %>
+
+
+                      <% if (canArchiveItem(item)) { %>
+                        <div class="flex justify-end">
+                          <form method="POST" action="<%= archiveToggleAction(item) %>" class="contents">
+                            <input type="hidden" name="return_to" value="<%= currentPath %>">
+                            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
+                          </form>
                         </div>
                       <% } %>
 

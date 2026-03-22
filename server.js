@@ -1771,12 +1771,202 @@ function setImportFormSeed(req, seed) {
   req.session.importFormSeed = seed || null;
 }
 
+function normalizeErrorStatus(error, fallback = 500) {
+  const candidate = Number(error?.status || error?.statusCode || fallback);
+  return Number.isInteger(candidate) && candidate >= 400 && candidate <= 599 ? candidate : fallback;
+}
+
+function getSqliteConstraintSignature(error) {
+  const raw = String(error?.message || '').trim();
+  const match = raw.match(/constraint failed:\s*(.+)$/i);
+  return match ? match[1].trim() : null;
+}
+
+const SQLITE_UNIQUE_MESSAGE_MAP = {
+  'people.user_id, people.name': 'Já existe alguém com esse nome na sua lista. Se forem xará, vale colocar um apelido para não virar bagunça.',
+  'cards.user_id, cards.name': 'Esse cartão já está na carteira. Se quiser diferenciar, dá para usar um apelido.',
+  'users.email': 'Esse e-mail já está autorizado por aqui. Dá uma conferida antes de salvar de novo.',
+  'users.google_id': 'Essa conta do Google já está ligada a outro acesso por aqui.',
+  'allocations.transaction_id, allocations.person_id': 'Essa pessoa já entrou nessa divisão. Não precisa chamar duas vezes para a mesma compra.',
+  'card_statements.card_id, card_statements.month, card_statements.year': 'Esse resumo do cartão já estava guardado por aqui.',
+  'person_payments.person_id, person_payments.month, person_payments.year': 'Esse pagamento dessa pessoa já foi lançado neste mês.',
+  'closed_months.user_id, closed_months.month, closed_months.year': 'Esse mês já estava fechado por aqui.',
+  'person_app_links.owner_user_id, person_app_links.person_id': 'Esse vínculo com o app já estava amarrado por aqui.',
+  'shared_debt_archives.request_id, shared_debt_archives.user_id': 'Esse lembrete já estava arquivado para essa pessoa.'
+};
+
+function wantsJsonErrorResponse(req) {
+  if (!req) return false;
+  if (isAjaxLikeRequest(req)) return true;
+
+  const accept = String(req.get('accept') || '').toLowerCase();
+  const contentType = String(req.get('content-type') || '').toLowerCase();
+
+  return contentType.includes('application/json')
+    || (accept.includes('application/json') && !accept.includes('text/html'));
+}
+
+function getFriendlyErrorDetails(error, { defaultMessage = null } = {}) {
+  const rawMessage = String(error?.userMessage || error?.message || '').trim();
+  const constraintSignature = getSqliteConstraintSignature(error);
+  const details = {
+    status: normalizeErrorStatus(error, 500),
+    message: '',
+    rawMessage,
+    code: String(error?.code || '').trim() || null,
+    constraintSignature
+  };
+
+  if (String(error?.name || '') === 'MulterError') {
+    details.status = 400;
+    details.message = error?.code === 'LIMIT_FILE_SIZE'
+      ? 'Esse arquivo veio grandão demais para subir de uma vez. Dá uma enxugada e tenta de novo.'
+      : 'Não consegui ler o arquivo enviado agora. Confere o arquivo e tenta mais uma vez.';
+    return details;
+  }
+
+  if (details.code === 'SQLITE_BUSY' || details.code === 'SQLITE_LOCKED' || /database is locked/i.test(rawMessage)) {
+    details.status = 503;
+    details.message = 'Tem outra gravação correndo por aqui agora. Dá só um segundinho e tenta de novo.';
+    return details;
+  }
+
+  if (constraintSignature && SQLITE_UNIQUE_MESSAGE_MAP[constraintSignature]) {
+    details.status = 409;
+    details.message = SQLITE_UNIQUE_MESSAGE_MAP[constraintSignature];
+    return details;
+  }
+
+  if (/UNIQUE constraint failed/i.test(rawMessage)) {
+    details.status = 409;
+    details.message = 'Isso já existe por aqui. Dá uma conferida no que foi digitado e tenta de novo.';
+    return details;
+  }
+
+  if (/FOREIGN KEY constraint failed/i.test(rawMessage)) {
+    details.status = 409;
+    details.message = 'Esse item ainda está ligado a outras partes do app. Se a ideia for só tirar de cena, tenta desativar em vez de excluir.';
+    return details;
+  }
+
+  if (/NOT NULL constraint failed/i.test(rawMessage)) {
+    details.status = 422;
+    details.message = 'Faltou preencher um pedacinho obrigatório antes de salvar.';
+    return details;
+  }
+
+  if (/CHECK constraint failed/i.test(rawMessage)) {
+    details.status = 422;
+    details.message = 'Tem um detalhe fora do formato esperado. Dá uma revisada e tenta de novo.';
+    return details;
+  }
+
+  if (/too many SQL variables/i.test(rawMessage)) {
+    details.status = 422;
+    details.message = 'Essa seleção ficou grande demais para processar de uma vez. Tenta dividir em partes.';
+    return details;
+  }
+
+  if (details.status == 401) {
+    details.message = rawMessage || 'Sua sessão saiu para respirar. Faz login de novo e seguimos.';
+    return details;
+  }
+
+  if (details.status == 403) {
+    details.message = rawMessage || 'Essa ação não está liberada para o seu perfil agora.';
+    return details;
+  }
+
+  if (details.status == 404) {
+    details.message = rawMessage || 'Não encontrei esse pedaço por aqui.';
+    return details;
+  }
+
+  if (details.status == 409) {
+    details.message = rawMessage || 'Isso entrou em conflito com o que já existe por aqui.';
+    return details;
+  }
+
+  if (details.status == 423) {
+    details.message = rawMessage || 'Esse pedaço está bloqueado no momento.';
+    return details;
+  }
+
+  if (details.status >= 400 && details.status < 500) {
+    details.message = rawMessage || defaultMessage || 'Tem um ajuste pedindo atenção antes de continuar.';
+    return details;
+  }
+
+  details.message = defaultMessage || 'Algo tropeçou por aqui. Tenta de novo que eu seguro as pontas deste lado.';
+  return details;
+}
+
+function getFriendlyErrorMessage(error, options = {}) {
+  return getFriendlyErrorDetails(error, options).message;
+}
+
+function logFriendlyRouteError(req, error, details) {
+  const requestId = req?.requestId || 'sem-id';
+  const payload = {
+    requestId,
+    method: req?.method,
+    path: req?.originalUrl || req?.path,
+    userId: req?.user?.id || null,
+    status: details?.status,
+    code: details?.code || null,
+    constraint: details?.constraintSignature || null,
+    message: error?.message || details?.message
+  };
+
+  if ((details?.status || 500) >= 500) {
+    console.error('[app-error]', payload, error?.stack || error);
+  } else {
+    console.warn('[app-error]', payload);
+  }
+}
+
+function renderFriendlyErrorPage(res, { status = 500, message, actionHref = '/', actionLabel = 'Voltar para o app' } = {}) {
+  return res.status(status).render('error', {
+    title: 'OrganizaPay | Opa',
+    errorTitle: status >= 500 ? 'Deu uma tropeçada por aqui' : 'Tem um ajuste pedindo atenção',
+    errorMessage: message,
+    actionHref,
+    actionLabel
+  });
+}
+
+function handleFriendlyErrorResponse(req, res, error, { defaultMessage = null, fallbackRedirect = null } = {}) {
+  const details = getFriendlyErrorDetails(error, { defaultMessage });
+  logFriendlyRouteError(req, error, details);
+
+  if (res.headersSent) {
+    return;
+  }
+
+  if (wantsJsonErrorResponse(req)) {
+    return res.status(details.status).json({ ok: false, error: details.message, message: details.message });
+  }
+
+  if (String(req.method || 'GET').toUpperCase() !== 'GET') {
+    setFlash(req, 'error', details.message);
+    return res.redirect(redirectBackOr(req, fallbackRedirect || '/'));
+  }
+
+  return renderFriendlyErrorPage(res, {
+    status: details.status,
+    message: details.message,
+    actionHref: fallbackRedirect || res.locals.dashboardHref || '/'
+  });
+}
+
 // --- MIDDLEWARES DE BODY PARSER (DEVE VIR ANTES DAS ROTAS) ---
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // --- MIDDLEWARE DE LOGGING GLOBAL ---
 app.use((req, res, next) => {
+  req.requestId = crypto.randomBytes(6).toString('hex');
+  res.set('X-Request-Id', req.requestId);
   if (req.method === 'POST' && req.path === '/txn/manual') {
   }
   next();
@@ -1965,7 +2155,7 @@ app.post('/setup', (req, res) => {
     return res.redirect('/login?setup=done');
   } catch (err) {
     return renderSetup(res, {
-      error: err.message || 'A primeira configuração tropeçou aqui. Tenta de novo que eu arrumo a passarela.',
+      error: getFriendlyErrorMessage(err, { defaultMessage: 'A primeira configuração tropeçou aqui. Tenta de novo que eu arrumo a passarela.' }),
       form: rawForm
     });
   }
@@ -3387,6 +3577,48 @@ function getCardsByIds(userId, ids) {
 
 function getPeopleActive(userId) {
   return db.prepare("SELECT id, name, active, email FROM people WHERE user_id = ? AND active = 1 ORDER BY name").all(userId);
+}
+
+function findPersonByNameForUser(userId, name, excludePersonId = null) {
+  const safeName = String(name || '').trim();
+  if (!safeName) return null;
+
+  if (excludePersonId) {
+    return db.prepare(`
+      SELECT id, name
+      FROM people
+      WHERE user_id = ? AND lower(name) = lower(?) AND id <> ?
+      LIMIT 1
+    `).get(userId, safeName, Number(excludePersonId));
+  }
+
+  return db.prepare(`
+    SELECT id, name
+    FROM people
+    WHERE user_id = ? AND lower(name) = lower(?)
+    LIMIT 1
+  `).get(userId, safeName);
+}
+
+function findCardByNameForUser(userId, name, excludeCardId = null) {
+  const safeName = String(name || '').trim();
+  if (!safeName) return null;
+
+  if (excludeCardId) {
+    return db.prepare(`
+      SELECT id, name
+      FROM cards
+      WHERE user_id = ? AND lower(name) = lower(?) AND id <> ?
+      LIMIT 1
+    `).get(userId, safeName, Number(excludeCardId));
+  }
+
+  return db.prepare(`
+    SELECT id, name
+    FROM cards
+    WHERE user_id = ? AND lower(name) = lower(?)
+    LIMIT 1
+  `).get(userId, safeName);
 }
 
 function getPeopleByIds(userId, ids) {
@@ -6553,6 +6785,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
   const phone = String(req.body.phone || "").trim().replace(/\D/g, "");
   const email = normalizeEmail(req.body.email);
   const id = Number(req.body.id) || null;
+  const duplicatedPerson = findPersonByNameForUser(userId, name, id);
   const pixEnabled = normalizePixToggle(req.body.pix_enabled);
   const pixKeyType = normalizePixKeyType(req.body.pix_key_type);
   const pixKeyValue = normalizePixKeyValue(pixKeyType, req.body.pix_key_value);
@@ -6574,6 +6807,11 @@ app.post("/people", ensureAuthenticated, (req, res) => {
 
   if (!name) {
     setFlash(req, 'error', 'Me dá pelo menos o nome dessa pessoa para eu conseguir salvar direitinho.');
+    return res.redirect('/people');
+  }
+
+  if (duplicatedPerson) {
+    setFlash(req, 'error', 'Já existe alguém com esse nome na sua lista. Se forem xará, vale colocar um apelido para não virar bagunça.');
     return res.redirect('/people');
   }
 
@@ -6614,7 +6852,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
     );
   } else {
     db.prepare(`
-      INSERT OR IGNORE INTO people(
+      INSERT INTO people(
         user_id, name, phone, email, pix_enabled, pix_key_type,
         pix_key_value, pix_city, pix_state, pix_label, pix_updated_at, active
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
@@ -6936,12 +7174,21 @@ app.post("/cards", ensureAuthenticated, (req, res) => {
   const dueDay = normalizeDayNumber(req.body.due_day);
   const closeDay = normalizeDayNumber(req.body.close_day);
 
-  if (name) {
-    db.prepare("INSERT OR IGNORE INTO cards(user_id, name, due_day, close_day, holiday_scope) VALUES (?, ?, ?, ?, ?)")
-      .run(userId, name, dueDay, closeDay, "BR");
+  if (!name) {
+    setFlash(req, 'error', 'Me conta o nome do cartão antes de salvar.');
+    return res.redirect("/cards");
   }
 
-  res.redirect("/cards");
+  if (findCardByNameForUser(userId, name)) {
+    setFlash(req, 'error', 'Esse cartão já está na carteira. Se quiser diferenciar, dá para usar um apelido.');
+    return res.redirect("/cards");
+  }
+
+  db.prepare("INSERT INTO cards(user_id, name, due_day, close_day, holiday_scope) VALUES (?, ?, ?, ?, ?)")
+    .run(userId, name, dueDay, closeDay, "BR");
+
+  setFlash(req, 'success', `${name} entrou na carteira direitinho.`);
+  return res.redirect("/cards");
 });
 
 app.post("/cards/:id/update", ensureAuthenticated, (req, res) => {
@@ -7921,7 +8168,10 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
 
     res.redirect(`/month/${startYear}/${startMonth}`);
   } catch (err) {
-    res.status(500).send("Erro ao processar transacao manual: " + err.message);
+    return handleFriendlyErrorResponse(req, res, err, {
+      defaultMessage: 'Não consegui salvar esse lançamento manual agora.',
+      fallbackRedirect: '/geral'
+    });
   }
 });
 
@@ -9103,7 +9353,7 @@ app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) =>
     return res.json({ success: true, finance: serializeFinanceForApi(userId, financeId) });
   } catch (e) {
     const status = /certinhos|nome para esse item/i.test(String(e.message || '')) ? 400 : 500;
-    return res.status(status).json({ error: e.message });
+    return res.status(status).json({ error: getFriendlyErrorMessage(e, { defaultMessage: 'Não consegui salvar esse item agora.' }) });
   }
 });
 
@@ -9155,7 +9405,7 @@ app.post("/finances/variable/:id", ensureAuthenticated, express.json(), (req, re
     return res.json({ success: true, finance: serializeFinanceForApi(userId, id) });
   } catch (e) {
     const status = /certinhos|nome para esse item/i.test(String(e.message || '')) ? 400 : 500;
-    return res.status(status).json({ error: e.message });
+    return res.status(status).json({ error: getFriendlyErrorMessage(e, { defaultMessage: 'Não consegui salvar esses lançamentos agora.' }) });
   }
 });
 
@@ -9194,7 +9444,7 @@ app.post("/finances/update/:id", ensureAuthenticated, express.json(), (req, res)
     return res.json({ success: true, finance: serializeFinanceForApi(userId, id) });
   } catch (e) {
     const status = /nome para esse item/i.test(String(e.message || '')) ? 400 : 500;
-    return res.status(status).json({ error: e.message });
+    return res.status(status).json({ error: getFriendlyErrorMessage(e, { defaultMessage: 'Não consegui atualizar esse item agora.' }) });
   }
 });
 
@@ -9242,7 +9492,8 @@ app.post("/finances/notes/:year/:month", ensureAuthenticated, express.json(), (r
 
     res.json({ success: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    const details = getFriendlyErrorDetails(e, { defaultMessage: 'Não consegui salvar esse rascunho agora.' });
+    res.status(details.status).json({ error: details.message });
   }
 });
 
@@ -9259,7 +9510,8 @@ app.post("/finances/toggle-close", ensureAuthenticated, express.json(), (req, re
     }
     res.json({ success: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    const details = getFriendlyErrorDetails(e, { defaultMessage: 'Não consegui mexer no cadeado desse mês agora.' });
+    res.status(details.status).json({ error: details.message });
   }
 });
 
@@ -9343,7 +9595,7 @@ app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
 
     return renderAdmin(res, { success, activeSection: sectionKey });
   } catch (err) {
-    return renderAdmin(res, { error: err.message || 'Não consegui salvar essa seção agora.', activeSection: sectionKey });
+    return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui salvar essa seção agora.' }), activeSection: sectionKey });
   }
 });
 
@@ -9371,7 +9623,7 @@ app.get('/admin/backup/google/connect', ensureAuthenticated, (req, res) => {
     const authUrl = buildGoogleBackupAuthUrl(req);
     return res.redirect(authUrl);
   } catch (error) {
-    return renderAdmin(res, { error: error.message || 'Não consegui preparar a conexão com o Google Drive agora.', activeSection: 'backup' });
+    return renderAdmin(res, { error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui preparar a conexão com o Google Drive agora.' }), activeSection: 'backup' });
   }
 });
 
@@ -9470,7 +9722,7 @@ app.post('/admin/backup/run', ensureAuthenticated, async (req, res) => {
     });
   } catch (error) {
     return renderAdmin(res, {
-      error: error.message || 'Não consegui criar o backup manual agora.',
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui criar o backup manual agora.' }),
       activeSection: 'backup'
     });
   }
@@ -9505,7 +9757,7 @@ app.post('/admin/backup/restore', ensureAuthenticated, backupRestoreUpload.singl
     });
   } catch (error) {
     return renderAdmin(res, {
-      error: error.message || 'Não consegui restaurar o backup agora.',
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui restaurar o backup agora.' }),
       activeSection: 'backup'
     });
   } finally {
@@ -9539,28 +9791,35 @@ app.get('/admin/backup/download/:backupId/:slot', ensureAuthenticated, (req, res
 
 app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const { email, name, role } = req.body;
+  const safeEmail = normalizeEmail(req.body.email);
+  const safeName = String(req.body.name || '').trim();
+  const safeRole = String(req.body.role || 'user') === 'admin' ? 'admin' : 'user';
   const canImport = req.body.can_import ? 1 : 0;
 
   if (!isAdminUser(userId)) {
     return res.status(403).send('Acesso negado.');
   }
 
-  if (!email || !email.includes('@')) {
+  if (!safeEmail || !safeEmail.includes('@')) {
     return renderAdmin(res, { error: 'Email inválido' });
+  }
+
+  const duplicatedUser = db.prepare('SELECT id FROM users WHERE email = ?').get(safeEmail);
+  if (duplicatedUser) {
+    return renderAdmin(res, { error: 'Esse e-mail já está autorizado por aqui. Dá uma conferida antes de convidar de novo.' });
   }
 
   try {
     db.prepare("INSERT INTO users (email, name, role, can_import, created_at) VALUES (?, ?, ?, ?, ?)")
-      .run(email, name || email.split('@')[0], role || 'user', canImport, dayjs().toISOString());
+      .run(safeEmail, safeName || safeEmail.split('@')[0], safeRole, canImport, dayjs().toISOString());
 
-    const newUser = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+    const newUser = db.prepare("SELECT id FROM users WHERE email = ?").get(safeEmail);
     const insertCat = db.prepare("INSERT OR IGNORE INTO finance_categories (user_id, name) VALUES (?, ?)");
     DEFAULT_FINANCE_CATEGORIES.forEach(cat => insertCat.run(newUser.id, cat));
 
-    return renderAdmin(res, { success: `Usuário ${email} adicionado com sucesso!` });
+    return renderAdmin(res, { success: `Usuário ${safeEmail} adicionado com sucesso!` });
   } catch (err) {
-    return renderAdmin(res, { error: err.message });
+    return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui adicionar esse usuário agora.' }) });
   }
 });
 
@@ -9619,7 +9878,7 @@ app.post("/admin/update-user/:id", ensureAuthenticated, (req, res) => {
 
     return renderAdmin(res, { success: 'Usuário atualizado com sucesso!' });
   } catch (err) {
-    return renderAdmin(res, { error: err.message });
+    return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui atualizar esse usuário agora.' }) });
   }
 });
 
@@ -9646,8 +9905,19 @@ app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
 
     return renderAdmin(res, { success: 'Usuário removido com sucesso!' });
   } catch (err) {
-    return renderAdmin(res, { error: err.message });
+    return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui remover esse usuário agora.' }) });
   }
+});
+
+app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  return handleFriendlyErrorResponse(req, res, err, {
+    defaultMessage: 'Algo tropeçou por aqui. Tenta de novo que eu seguro as pontas deste lado.',
+    fallbackRedirect: req?.isAuthenticated?.() ? (res.locals.dashboardHref || '/') : '/login'
+  });
 });
 
 const PORT = BOOTSTRAP_PORT || 3001;

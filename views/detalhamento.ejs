@@ -288,7 +288,12 @@
                                     <h5 class="text-white font-bold">✨ Grana que entra</h5>
                                     <p class="text-xs font-medium text-white/70 mt-1">Valor único segue no toque rápido. Vários lançamentos abrem a listinha completinha.</p>
                                 </div>
-                                <button type="button" onclick="openFinanceCreator('income')" <%= isClosed ? 'hidden' : '' %> class="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl transition-colors">+ Nova entrada</button>
+                                <button type="button" onclick="openFinanceCreator('income')" <%= isClosed ? 'hidden' : '' %> class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition-colors hover:bg-white/20 sm:min-w-[10.5rem]">
+                                    <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                    </svg>
+                                    <span>Nova entrada</span>
+                                </button>
                             </div>
                             <div class="p-4 sm:p-6">
                                 <% if (!incomeFinances.length) { %>
@@ -339,7 +344,12 @@
                                     <h5 class="text-white font-bold">🧾 Grana que sai</h5>
                                     <p class="text-xs font-medium text-white/70 mt-1">Vale para rotina, corre do trabalho, combustível e tudo que aperta o mês.</p>
                                 </div>
-                                <button type="button" onclick="openFinanceCreator('expense')" <%= isClosed ? 'hidden' : '' %> class="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl transition-colors">+ Nova saída</button>
+                                <button type="button" onclick="openFinanceCreator('expense')" <%= isClosed ? 'hidden' : '' %> class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition-colors hover:bg-white/20 sm:min-w-[10.5rem]">
+                                    <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                    </svg>
+                                    <span>Nova saída</span>
+                                </button>
                             </div>
                             <div class="p-4 sm:p-6">
                                 <% if (!expenseFinances.length) { %>

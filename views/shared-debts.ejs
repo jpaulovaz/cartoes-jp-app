@@ -143,12 +143,32 @@
     return (items || []).filter(predicate).length;
   }
 
+  function receivedActionState(item) {
+    if (item?.status === 'pending') return 'respond';
+    if (item?.status === 'accepted' && !item?.payment_marked_at) return 'mark_paid';
+    return null;
+  }
+
+  function sentActionState(item) {
+    if (item?.status === 'rejected_by_receiver') return 'sender_decision';
+    if (item?.status === 'accepted' && !!item?.payment_marked_at) return 'confirm_receipt';
+    return null;
+  }
+
+  function actionStateForItem(item, scope) {
+    return scope === 'received' ? receivedActionState(item) : sentActionState(item);
+  }
+
   function isReceivedActionable(item) {
-    return item?.status === 'pending' || (item?.status === 'accepted' && !item?.payment_marked_at);
+    return !!receivedActionState(item);
   }
 
   function isSentActionable(item) {
-    return item?.status === 'rejected_by_receiver' || (item?.status === 'accepted' && !!item?.payment_marked_at);
+    return !!sentActionState(item);
+  }
+
+  function actionableItems(items, scope) {
+    return (items || []).filter(item => !!actionStateForItem(item, scope));
   }
 
   function groupContainsRequest(group, requestId) {
@@ -329,6 +349,66 @@
     return (items || []).some(item => scope === 'received' ? isReceivedActionable(item) : isSentActionable(item));
   }
 
+  function actionMetaForItem(item, scope) {
+    const actionState = actionStateForItem(item, scope);
+    if (!actionState) return null;
+
+    const counterpartName = scope === 'received'
+      ? (item?.requester_name || item?.requester_email || 'quem enviou')
+      : (item?.receiver_name || item?.receiver_email || 'quem recebeu');
+    const amountCents = Math.max(0, Number(item?.amount_pending_cents || item?.amount_cents || 0));
+    const metaPrefix = isManualItem(item) ? 'Avulsa' : itemPeriodValue(item);
+    const baseMeta = `${metaPrefix} · ${formatBRLFromCents(amountCents)}`;
+    const sortDate = String(item?.payment_marked_at || item?.updated_at || item?.created_at || '');
+
+    switch (actionState) {
+      case 'respond':
+        return {
+          requestId: item.id,
+          title: `Responder cobrança de ${counterpartName}`,
+          helper: isManualItem(item)
+            ? 'Esse lembrete ainda espera seu ok ou sua recusa.'
+            : 'Essa cobrança ainda espera seu aceite ou sua recusa.',
+          meta: baseMeta,
+          buttonLabel: 'Responder',
+          priority: 0,
+          sortDate
+        };
+      case 'mark_paid':
+        return {
+          requestId: item.id,
+          title: `Marcar pagamento para ${counterpartName}`,
+          helper: 'Você já aceitou essa cobrança. Agora só falta avisar quando pagar.',
+          meta: baseMeta,
+          buttonLabel: 'Marcar pagamento',
+          priority: 1,
+          sortDate
+        };
+      case 'sender_decision':
+        return {
+          requestId: item.id,
+          title: `Decidir recusa de ${counterpartName}`,
+          helper: 'A pessoa recusou essa cobrança. Agora você escolhe se aceita a recusa ou se contesta.',
+          meta: baseMeta,
+          buttonLabel: 'Tomar decisão',
+          priority: 2,
+          sortDate
+        };
+      case 'confirm_receipt':
+        return {
+          requestId: item.id,
+          title: `Confirmar recebimento de ${counterpartName}`,
+          helper: `Pagamento informado em ${formatDateBR(item.payment_marked_at)} às ${formatTimeBR(item.payment_marked_at)}.`,
+          meta: baseMeta,
+          buttonLabel: 'Confirmar agora',
+          priority: 3,
+          sortDate
+        };
+      default:
+        return null;
+    }
+  }
+
   function shouldOpenManualSection(items, scope, regularGroupCount) {
     if (!(items || []).length) return false;
     if ((items || []).some(item => Number(item?.id || 0) === Number(requestIdToHighlight || 0))) return true;
@@ -360,7 +440,8 @@
   const receivedPendingCount = countItems(received, item => item.status === 'pending');
   const sentDecisionCount = countItems(sent, item => item.status === 'rejected_by_receiver');
   const sentReceiptCount = countItems(sent, item => item.status === 'accepted' && item.payment_marked_at);
-  const actionCount = receivedBatchCards.length + sentDecisionCount + sentReceiptCount;
+  const actionCount = countItems(trackingFiltersActive ? receivedBaseItems : received, item => isReceivedActionable(item))
+    + countItems(trackingFiltersActive ? sentBaseItems : sent, item => isSentActionable(item));
   const receivedHasActionableGroup = receivedGroups.some(group => countGroupActions(group, 'received') > 0);
   const sentHasActionableGroup = sentGroups.some(group => countGroupActions(group, 'sent') > 0);
 
@@ -378,73 +459,27 @@
     return (groups || []).some(group => groupContainsRequest(group, requestId));
   }
 
-  const receivedActionCount = receivedBatchCards.length;
-  const sentActionCount = sentDecisionCount + sentReceiptCount;
+  const receivedAllActionableItems = actionableItems(received, 'received');
+  const sentAllActionableItems = actionableItems(sent, 'sent');
+  const receivedVisibleActionableItems = actionableItems(receivedBaseItems, 'received');
+  const sentVisibleActionableItems = actionableItems(sentBaseItems, 'sent');
+  const receivedActionCount = (trackingFiltersActive ? receivedVisibleActionableItems : receivedAllActionableItems).length;
+  const sentActionCount = (trackingFiltersActive ? sentVisibleActionableItems : sentAllActionableItems).length;
   const receivedScopeOpen = groupsContainRequest(receivedGroups, requestIdToHighlight) || receivedHasActionableGroup || receivedManualSectionOpen;
   const sentScopeOpen = groupsContainRequest(sentGroups, requestIdToHighlight) || sentHasActionableGroup || sentManualSectionOpen;
 
   function buildQuickActions() {
-    const actions = [];
-
-    receivedBatchCards.forEach((batch) => {
-      actions.push({
-        requestId: batch.reviewRequestId,
-        title: `Responder envio de ${batch.counterpartName || batch.counterpartEmail || 'quem enviou'}`,
-        helper: batch.statusSummary === 'partial'
-          ? `${countLabel(batch.pendingCount, 'cobrança ainda aguarda', 'cobranças ainda aguardam')} sua decisão neste envio.`
-          : `${countLabel(batch.pendingCount, 'cobrança está aguardando', 'cobranças estão aguardando')} sua decisão neste envio.`,
-        meta: `${batchRangeLabel(batch)} · ${formatBRLFromCents(batch.pendingCents || batch.totalCents)}`,
-        buttonLabel: batch.statusSummary === 'partial' ? 'Responder restante' : 'Abrir envio'
+    const sourceReceivedItems = trackingFiltersActive ? receivedVisibleActionableItems : receivedAllActionableItems;
+    const sourceSentItems = trackingFiltersActive ? sentVisibleActionableItems : sentAllActionableItems;
+    const actions = [
+      ...sourceReceivedItems.map(item => actionMetaForItem(item, 'received')),
+      ...sourceSentItems.map(item => actionMetaForItem(item, 'sent'))
+    ]
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (a.priority !== b.priority) return a.priority - b.priority;
+        return String(b.sortDate || '').localeCompare(String(a.sortDate || ''));
       });
-    });
-
-    rawSentGroups.forEach((group) => {
-      (group.items || []).forEach((item) => {
-        if (item.status === 'rejected_by_receiver') {
-          actions.push({
-            requestId: item.id,
-            title: `Decidir sobre a recusa de ${item.receiver_name || item.receiver_email || 'quem recebeu'}`,
-            helper: 'Escolha se aceita a recusa ou se contesta a cobrança.',
-            meta: `${group.label} · ${formatBRLFromCents(item.amount_cents)}`,
-            buttonLabel: 'Tomar decisão'
-          });
-          return;
-        }
-
-        if (item.status === 'accepted' && item.payment_marked_at) {
-          actions.push({
-            requestId: item.id,
-            title: `Confirmar recebimento de ${item.receiver_name || item.receiver_email || 'quem recebeu'}`,
-            helper: `Pagamento informado em ${formatDateBR(item.payment_marked_at)} às ${formatTimeBR(item.payment_marked_at)}.`,
-            meta: `${group.label} · ${formatBRLFromCents(item.amount_cents)}`,
-            buttonLabel: 'Confirmar agora'
-          });
-        }
-      });
-    });
-
-    sentManualItems.forEach((item) => {
-      if (item.status === 'rejected_by_receiver') {
-        actions.push({
-          requestId: item.id,
-          title: `Decidir sobre a recusa de ${item.receiver_name || item.receiver_email || 'quem recebeu'}`,
-          helper: 'Esse lembrete avulso foi recusado. Dá para encerrar com carinho ou contestar.',
-          meta: `Avulsa · ${formatBRLFromCents(item.amount_cents)}`,
-          buttonLabel: 'Tomar decisão'
-        });
-        return;
-      }
-
-      if (item.status === 'accepted' && item.payment_marked_at) {
-        actions.push({
-          requestId: item.id,
-          title: `Confirmar recebimento de ${item.receiver_name || item.receiver_email || 'quem recebeu'}`,
-          helper: `Pagamento informado em ${formatDateBR(item.payment_marked_at)} às ${formatTimeBR(item.payment_marked_at)}.`,
-          meta: `Avulsa · ${formatBRLFromCents(item.amount_cents)}`,
-          buttonLabel: 'Confirmar agora'
-        });
-      }
-    });
 
     return actions.slice(0, 3);
   }

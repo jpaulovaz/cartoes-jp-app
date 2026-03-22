@@ -39,6 +39,70 @@
 })();
 
 (function () {
+  function detectIOS() {
+    const ua = navigator.userAgent || '';
+    const platform = navigator.platform || '';
+    const maxTouchPoints = navigator.maxTouchPoints || 0;
+    return /iPad|iPhone|iPod/.test(ua) || (platform === 'MacIntel' && maxTouchPoints > 1);
+  }
+
+  function detectStandalone() {
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  }
+
+  function syncPlatformState() {
+    const root = document.documentElement;
+    const body = document.body;
+    const isIOS = detectIOS();
+    const isStandalone = detectStandalone();
+    const visualViewport = window.visualViewport;
+    const viewportHeight = Math.round((visualViewport && visualViewport.height) || window.innerHeight || document.documentElement.clientHeight || 0);
+    const viewportWidth = Math.round((visualViewport && visualViewport.width) || window.innerWidth || document.documentElement.clientWidth || 0);
+    const offsetTop = Math.round((visualViewport && visualViewport.offsetTop) || 0);
+    const keyboardInset = Math.max(0, Math.round((window.innerHeight || viewportHeight) - viewportHeight - offsetTop));
+    const keyboardOpen = keyboardInset > 120;
+
+    root.classList.toggle('op-ios', isIOS);
+    root.classList.toggle('op-standalone', isStandalone);
+    root.classList.toggle('op-ios-standalone', isIOS && isStandalone);
+    root.dataset.opPlatform = isIOS ? 'ios' : 'default';
+    root.dataset.opDisplayMode = isStandalone ? 'standalone' : 'browser';
+    root.style.setProperty('--op-app-height', `${Math.max(viewportHeight, 1)}px`);
+    root.style.setProperty('--op-visual-viewport-height', `${Math.max(viewportHeight, 1)}px`);
+    root.style.setProperty('--op-visual-viewport-width', `${Math.max(viewportWidth, 1)}px`);
+    root.style.setProperty('--op-keyboard-inset', `${Math.max(keyboardInset, 0)}px`);
+
+    if (body) {
+      body.classList.toggle('op-ios', isIOS);
+      body.classList.toggle('op-standalone', isStandalone);
+      body.classList.toggle('op-ios-standalone', isIOS && isStandalone);
+      body.classList.toggle('op-virtual-keyboard-open', isIOS && keyboardOpen);
+    }
+  }
+
+  syncPlatformState();
+  document.addEventListener('DOMContentLoaded', syncPlatformState);
+  window.addEventListener('load', syncPlatformState);
+  window.addEventListener('pageshow', syncPlatformState);
+  window.addEventListener('resize', syncPlatformState, { passive: true });
+  window.addEventListener('orientationchange', () => window.setTimeout(syncPlatformState, 120), { passive: true });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', syncPlatformState, { passive: true });
+    window.visualViewport.addEventListener('scroll', syncPlatformState, { passive: true });
+  }
+
+  if (window.matchMedia) {
+    const standaloneQuery = window.matchMedia('(display-mode: standalone)');
+    if (typeof standaloneQuery.addEventListener === 'function') {
+      standaloneQuery.addEventListener('change', syncPlatformState);
+    } else if (typeof standaloneQuery.addListener === 'function') {
+      standaloneQuery.addListener(syncPlatformState);
+    }
+  }
+})();
+
+(function () {
   function copyAlloc(btn) {
     // Encontra o widget cinza (o container da distribuição rápida)
     const container = btn.closest('.bg-slate-50\\/50');

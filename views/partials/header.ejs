@@ -2,7 +2,7 @@
 <html lang="pt-BR" class="light">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title><%= typeof title !== 'undefined' ? title : nomeTitular.toUpperCase() %></title>
 
   <link rel="manifest" href="/manifest.json">
@@ -34,6 +34,23 @@
         }
       }
     };
+  </script>
+
+  <script>
+    (function () {
+      const root = document.documentElement;
+      const ua = navigator.userAgent || '';
+      const platform = navigator.platform || '';
+      const maxTouchPoints = navigator.maxTouchPoints || 0;
+      const isIOS = /iPad|iPhone|iPod/.test(ua) || (platform === 'MacIntel' && maxTouchPoints > 1);
+      const isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+
+      root.classList.toggle('op-ios', !!isIOS);
+      root.classList.toggle('op-standalone', !!isStandalone);
+      root.classList.toggle('op-ios-standalone', !!(isIOS && isStandalone));
+      root.dataset.opPlatform = isIOS ? 'ios' : 'default';
+      root.dataset.opDisplayMode = isStandalone ? 'standalone' : 'browser';
+    })();
   </script>
 
   <script>
@@ -101,7 +118,7 @@
     }
   </style>
 </head>
-<body class="text-slate-800 dark:text-slate-200 antialiased selection:bg-blue-300 selection:text-blue-900 flex min-h-screen flex-col font-sans" data-push-public-key="<%= typeof pushPublicKey !== 'undefined' ? pushPublicKey : '' %>" data-push-configured="<%= pushNotificationsEnabled ? '1' : '0' %>">
+<body class="op-shell text-slate-800 dark:text-slate-200 antialiased selection:bg-blue-300 selection:text-blue-900 flex min-h-screen flex-col font-sans" data-push-public-key="<%= typeof pushPublicKey !== 'undefined' ? pushPublicKey : '' %>" data-push-configured="<%= pushNotificationsEnabled ? '1' : '0' %>">
   <div class="mobile-top-chrome-fix" aria-hidden="true"></div>
 
   <% const dNav = new Date();
@@ -188,8 +205,8 @@
       </div>
 
       <div class="md:hidden space-y-3">
-        <div class="flex items-center gap-3">
-          <a href="<%= defaultDashboardHref %>" class="flex min-w-0 flex-1 items-center gap-3 rounded-[24px] border border-white/10 bg-white/6 px-3 py-3">
+        <div class="op-mobile-topbar-row flex items-center gap-3">
+          <a href="<%= defaultDashboardHref %>" class="op-mobile-brand-card flex min-w-0 flex-1 items-center gap-3 rounded-[24px] border border-white/10 bg-white/6 px-3 py-3">
             <img src="/icon-192.png" alt="OrganizaPay" class="h-12 w-12 rounded-[1.1rem] object-cover shadow-[0_10px_24px_rgba(37,99,235,0.3)]">
             <span class="min-w-0">
               <span class="block truncate text-sm font-black text-white"><%= ownerShortName %></span>

@@ -11,14 +11,28 @@
   --op-primary-ink: #0f172a;
   --op-muted: #64748b;
   --op-radius: 28px;
-  --op-mobile-bottom-clearance: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+  --op-top-safe: env(safe-area-inset-top, 0px);
+  --op-right-safe: env(safe-area-inset-right, 0px);
+  --op-bottom-safe: env(safe-area-inset-bottom, 0px);
+  --op-left-safe: env(safe-area-inset-left, 0px);
+  --op-app-height: 100dvh;
+  --op-visual-viewport-height: 100dvh;
+  --op-visual-viewport-width: 100vw;
+  --op-keyboard-inset: 0px;
+  --op-mobile-bottom-clearance: calc(5.75rem + var(--op-bottom-safe));
 }
 
 html {
+  min-height: 100%;
+  min-height: var(--op-app-height);
   background: linear-gradient(180deg, #07101f 0%, #0b1327 100%);
 }
 
 body {
+  min-height: 100%;
+  min-height: var(--op-app-height);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   background:
     radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 34%),
@@ -31,6 +45,26 @@ html.dark body {
     radial-gradient(circle at top left, rgba(37, 99, 235, 0.18), transparent 28%),
     radial-gradient(circle at top right, rgba(14, 165, 233, 0.10), transparent 22%),
     linear-gradient(180deg, var(--op-bg-dark) 0%, #0f172a 100%);
+}
+
+html.op-ios,
+html.op-ios body {
+  min-height: -webkit-fill-available;
+}
+
+body.op-ios {
+  min-height: var(--op-app-height);
+}
+
+body.op-virtual-keyboard-open .op-bottom-nav {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(calc(100% + var(--op-bottom-safe) + 1rem));
+}
+
+body.op-virtual-keyboard-open .op-app-main {
+  padding-bottom: 1.5rem !important;
+  scroll-padding-bottom: 1.5rem;
 }
 
 .badge {
@@ -870,14 +904,14 @@ html.dark .op-surface-card {
   right: 0;
   bottom: 0;
   z-index: 55;
-  padding: 0 1rem calc(env(safe-area-inset-bottom, 0px) + 0.85rem);
+  padding: 0 1rem calc(var(--op-bottom-safe) + 0.85rem);
   transition: transform 0.28s ease, opacity 0.24s ease;
 }
 
 .op-bottom-nav.is-idle-hidden {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(calc(100% + env(safe-area-inset-bottom, 0px) + 1rem));
+  transform: translateY(calc(100% + var(--op-bottom-safe) + 1rem));
 }
 
 .op-bottom-nav__inner {
@@ -2337,5 +2371,121 @@ html.dark .op-notification-item__icon {
     max-height: calc(100dvh - 0.75rem);
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
+  }
+}
+
+
+@media (max-width: 767px) {
+  html.op-ios .mobile-top-chrome-fix {
+    height: calc(var(--op-top-safe) + 6px);
+  }
+
+  html.op-ios header.sticky {
+    top: 0;
+  }
+
+  html.op-ios .op-topbar-shell {
+    margin-top: 0.35rem;
+    padding: 0.75rem;
+    border-radius: 26px;
+  }
+
+  html.op-ios .op-mobile-topbar-row {
+    align-items: stretch;
+    gap: 0.55rem;
+  }
+
+  html.op-ios .op-mobile-brand-card {
+    min-width: 0;
+    padding: 0.72rem 0.8rem;
+    border-radius: 22px;
+  }
+
+  html.op-ios .op-mobile-brand-card img {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  html.op-ios .op-utility-btn {
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 16px;
+  }
+
+  html.op-ios input:not([type="checkbox"]):not([type="radio"]),
+  html.op-ios select,
+  html.op-ios textarea {
+    font-size: 16px !important;
+  }
+
+  html.op-ios button,
+  html.op-ios a,
+  html.op-ios input,
+  html.op-ios select,
+  html.op-ios textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html.op-ios .op-app-main {
+    padding-left: max(0.75rem, var(--op-left-safe));
+    padding-right: max(0.75rem, var(--op-right-safe));
+    padding-bottom: calc(5.35rem + var(--op-bottom-safe)) !important;
+    scroll-padding-bottom: calc(5.35rem + var(--op-bottom-safe));
+  }
+
+  html.op-ios .op-bottom-nav {
+    left: max(0.45rem, var(--op-left-safe));
+    right: max(0.45rem, var(--op-right-safe));
+    padding: 0 0 calc(var(--op-bottom-safe) + 0.55rem);
+  }
+
+  html.op-ios .op-bottom-nav__inner {
+    gap: 0.28rem;
+    padding: 0.45rem;
+    border-radius: 24px;
+    scroll-padding-inline: 0.45rem;
+  }
+
+  html.op-ios .op-bottom-nav__link {
+    min-width: 4.35rem;
+    min-height: 54px;
+    padding: 0 0.58rem;
+    font-size: 0.63rem;
+  }
+
+  html.op-ios .op-bottom-nav__icon {
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 0.78rem;
+  }
+
+  html.op-ios .op-bottom-nav__badge {
+    top: -0.2rem;
+    right: -0.25rem;
+  }
+
+  html.op-ios .op-notification-center {
+    max-height: calc(var(--op-app-height) - 0.65rem);
+  }
+
+  html.op-ios [data-dialog-surface] {
+    max-height: calc(var(--op-app-height) - 1rem);
+  }
+
+  html.op-ios [data-notification-center] > .relative,
+  html.op-ios .fixed.inset-0 > .relative.z-10 {
+    padding-top: calc(var(--op-top-safe) + 0.25rem);
+    padding-bottom: calc(var(--op-bottom-safe) + 0.35rem);
+  }
+}
+
+@media (max-width: 767px) and (display-mode: standalone) {
+  html.op-ios .op-topbar-shell {
+    margin-top: 0.15rem;
+  }
+
+  html.op-ios .op-app-main {
+    padding-bottom: calc(5.6rem + var(--op-bottom-safe)) !important;
+    scroll-padding-bottom: calc(5.6rem + var(--op-bottom-safe));
   }
 }

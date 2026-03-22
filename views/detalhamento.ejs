@@ -476,16 +476,16 @@
                         <section class="w-full max-w-xl overflow-hidden rounded-[30px] border border-slate-200 bg-white/95 shadow-2xl ring-1 ring-slate-200 backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95 dark:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="finance-delete-title">
                             <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 dark:border-slate-800 sm:px-6">
                                 <div>
-                                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-rose-600 dark:text-rose-300">Apagar item variável</div>
+                                    <div id="finance-delete-eyebrow" class="text-[11px] font-black uppercase tracking-[0.18em] text-rose-600 dark:text-rose-300">Apagar item</div>
                                     <h2 id="finance-delete-title" class="mt-1 text-xl font-black text-slate-900 dark:text-white">Tem certeza mesmo?</h2>
-                                    <p id="finance-delete-subtitle" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Se você confirmar, essa listinha vai inteira embora.</p>
+                                    <p id="finance-delete-subtitle" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Se você confirmar, esse item sai da lista sem dar meia-volta.</p>
                                 </div>
                                 <button type="button" class="op-icon-btn shrink-0" data-finance-delete-close aria-label="Fechar janela">✕</button>
                             </div>
 
                             <div class="max-h-[65vh] space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
                                 <div class="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-4 dark:border-rose-900/40 dark:bg-rose-900/20">
-                                    <div class="text-[11px] font-black uppercase tracking-[0.16em] text-rose-700 dark:text-rose-300">Total que sai junto</div>
+                                    <div class="text-[11px] font-black uppercase tracking-[0.16em] text-rose-700 dark:text-rose-300">Total desse item</div>
                                     <div id="finance-delete-total" class="mt-2 text-2xl font-black text-rose-700 dark:text-rose-300">R$ 0,00</div>
                                 </div>
                                 <div id="finance-delete-items" class="space-y-3"></div>
@@ -493,7 +493,7 @@
 
                             <div class="flex flex-col-reverse gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                                 <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800" data-finance-delete-close>Voltar</button>
-                                <button type="button" id="finance-delete-confirm" class="inline-flex items-center justify-center rounded-2xl bg-rose-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-rose-500/20 transition hover:bg-rose-700">Apagar tudo</button>
+                                <button type="button" id="finance-delete-confirm" class="inline-flex items-center justify-center rounded-2xl bg-rose-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-rose-500/20 transition hover:bg-rose-700">Apagar item</button>
                             </div>
                         </section>
                     </div>
@@ -512,7 +512,8 @@
                     readOnly: false
                 };
                 const financeDeleteState = {
-                    financeId: null
+                    financeId: null,
+                    amountMode: 'fixed'
                 };
                 const financeRefs = {
                     modal: document.getElementById('financeModal'),
@@ -534,6 +535,8 @@
                     saveButton: document.getElementById('finance-save-btn'),
                     closeButtons: Array.from(document.querySelectorAll('[data-finance-close]')),
                     deleteModal: document.getElementById('financeDeleteModal'),
+                    deleteEyebrow: document.getElementById('finance-delete-eyebrow'),
+                    deleteTitle: document.getElementById('finance-delete-title'),
                     deleteSubtitle: document.getElementById('finance-delete-subtitle'),
                     deleteItems: document.getElementById('finance-delete-items'),
                     deleteTotal: document.getElementById('finance-delete-total'),
@@ -583,6 +586,43 @@
                         return today.toISOString().slice(0, 10);
                     }
                     return `${detailYear}-${targetMonth}-01`;
+                }
+
+                function getFinanceTypeLabel(type) {
+                    return type === 'expense' ? 'saída' : 'entrada';
+                }
+
+                function formatFinanceItemDate(value) {
+                    if (!value) return 'Sem data';
+                    const parsed = new Date(`${value}T12:00:00`);
+                    return Number.isNaN(parsed.getTime()) ? 'Sem data' : parsed.toLocaleDateString('pt-BR');
+                }
+
+                function createDeletePreviewCard({ title, meta, amountCents }) {
+                    const row = document.createElement('div');
+                    row.className = 'rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-950/60';
+
+                    const top = document.createElement('div');
+                    top.className = 'flex items-start justify-between gap-3';
+
+                    const details = document.createElement('div');
+                    const heading = document.createElement('div');
+                    heading.className = 'text-sm font-bold text-slate-800 dark:text-white';
+                    heading.textContent = title || 'Sem detalhe';
+                    const metaNode = document.createElement('div');
+                    metaNode.className = 'mt-1 text-xs font-medium text-slate-500 dark:text-slate-400';
+                    metaNode.textContent = meta || 'Sem detalhe extra';
+                    details.appendChild(heading);
+                    details.appendChild(metaNode);
+
+                    const amount = document.createElement('div');
+                    amount.className = 'text-sm font-black text-rose-700 dark:text-rose-300';
+                    amount.textContent = formatCurrency(amountCents || 0);
+
+                    top.appendChild(details);
+                    top.appendChild(amount);
+                    row.appendChild(top);
+                    return row;
                 }
 
                 function updateBodyLockState() {
@@ -942,60 +982,70 @@
                 }
 
                 async function deleteRow(id, amountMode) {
-                    if (amountMode !== 'variable') {
-                        if (!confirm('Deseja mesmo apagar esta linha?')) return;
-                        try {
-                            await fetchJson(`/finances/delete/${id}`, { method: 'POST' });
-                            location.reload();
-                        } catch (error) {
-                            alert(error.message || 'Não consegui apagar esse item agora.');
-                        }
-                        return;
-                    }
-
                     try {
                         const data = await fetchJson(`/finances/details/${id}`);
                         const finance = data.finance || {};
-                        financeDeleteState.financeId = finance.id;
-                        financeRefs.deleteSubtitle.textContent = finance.items && finance.items.length
-                            ? `Ao apagar ${finance.description || 'esse item'}, vai tudo isso junto no pacote:`
-                            : `Ao apagar ${finance.description || 'esse item'}, o nome principal também some da lista.`;
-                        financeRefs.deleteTotal.textContent = formatCurrency(finance.amount_cents || 0);
-                        financeRefs.deleteItems.innerHTML = '';
-
+                        const resolvedAmountMode = (finance.amount_mode || amountMode || 'fixed') === 'variable' ? 'variable' : 'fixed';
+                        const financeLabel = getFinanceTypeLabel(finance.type);
                         const items = Array.isArray(finance.items) ? finance.items : [];
-                        if (!items.length) {
-                            const emptyState = document.createElement('div');
-                            emptyState.className = 'rounded-[22px] border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-400';
-                            emptyState.textContent = 'Esse item está zerado agora, mas apagar remove o nome principal da tela também.';
-                            financeRefs.deleteItems.appendChild(emptyState);
+
+                        financeDeleteState.financeId = finance.id;
+                        financeDeleteState.amountMode = resolvedAmountMode;
+
+                        if (financeRefs.deleteEyebrow) {
+                            financeRefs.deleteEyebrow.textContent = resolvedAmountMode === 'variable'
+                                ? `Apagar ${financeLabel} variável`
+                                : `Apagar ${financeLabel} fixa`;
+                        }
+                        if (financeRefs.deleteTitle) {
+                            financeRefs.deleteTitle.textContent = resolvedAmountMode === 'variable'
+                                ? 'Tem certeza mesmo?'
+                                : 'Vai tirar esse item da lista?';
+                        }
+                        if (financeRefs.deleteSubtitle) {
+                            financeRefs.deleteSubtitle.textContent = resolvedAmountMode === 'variable'
+                                ? (items.length
+                                    ? `Ao apagar ${finance.description || 'esse item'}, vai tudo isso junto no pacote:`
+                                    : `Ao apagar ${finance.description || 'esse item'}, o nome principal também some da lista.`)
+                                : `Ao apagar ${finance.description || 'esse item'}, ele sai da lista na hora. Se bater dúvida, ainda dá tempo de voltar.`;
+                        }
+                        if (financeRefs.deleteConfirm) {
+                            financeRefs.deleteConfirm.textContent = resolvedAmountMode === 'variable' ? 'Apagar tudo' : 'Apagar item';
+                        }
+                        if (financeRefs.deleteTotal) {
+                            financeRefs.deleteTotal.textContent = formatCurrency(finance.amount_cents || 0);
+                        }
+                        if (financeRefs.deleteItems) {
+                            financeRefs.deleteItems.innerHTML = '';
+                        }
+
+                        if (!financeRefs.deleteItems) {
+                            showDeleteModal();
+                            return;
+                        }
+
+                        if (resolvedAmountMode === 'variable') {
+                            if (!items.length) {
+                                const emptyState = document.createElement('div');
+                                emptyState.className = 'rounded-[22px] border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-400';
+                                emptyState.textContent = 'Esse item está zerado agora, mas apagar remove o nome principal da tela também.';
+                                financeRefs.deleteItems.appendChild(emptyState);
+                            } else {
+                                items.forEach((item) => {
+                                    financeRefs.deleteItems.appendChild(createDeletePreviewCard({
+                                        title: item.item_source || 'Sem detalhe',
+                                        meta: formatFinanceItemDate(item.item_date),
+                                        amountCents: item.amount_cents || 0
+                                    }));
+                                });
+                            }
                         } else {
-                            items.forEach((item) => {
-                                const row = document.createElement('div');
-                                row.className = 'rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-950/60';
-
-                                const top = document.createElement('div');
-                                top.className = 'flex items-start justify-between gap-3';
-
-                                const details = document.createElement('div');
-                                const title = document.createElement('div');
-                                title.className = 'text-sm font-bold text-slate-800 dark:text-white';
-                                title.textContent = item.item_source || 'Sem detalhe';
-                                const meta = document.createElement('div');
-                                meta.className = 'mt-1 text-xs font-medium text-slate-500 dark:text-slate-400';
-                                meta.textContent = item.item_date ? new Date(`${item.item_date}T12:00:00`).toLocaleDateString('pt-BR') : 'Sem data';
-                                details.appendChild(title);
-                                details.appendChild(meta);
-
-                                const amount = document.createElement('div');
-                                amount.className = 'text-sm font-black text-rose-700 dark:text-rose-300';
-                                amount.textContent = formatCurrency(item.amount_cents || 0);
-
-                                top.appendChild(details);
-                                top.appendChild(amount);
-                                row.appendChild(top);
-                                financeRefs.deleteItems.appendChild(row);
-                            });
+                            const formulaText = String(finance.formula || '').trim();
+                            financeRefs.deleteItems.appendChild(createDeletePreviewCard({
+                                title: finance.description || `Essa ${financeLabel}`,
+                                meta: formulaText ? `Conta guardada: ${formulaText}` : 'Valor fixo salvo para este mês.',
+                                amountCents: finance.amount_cents || 0
+                            }));
                         }
 
                         showDeleteModal();

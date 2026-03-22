@@ -28,6 +28,12 @@
       addChip('border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-200', 'Sem e-mail');
     }
 
+    if (person.pix_enabled && person.pix_valid) {
+      addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix pronto');
+    } else if (person.pix_enabled && !person.pix_valid) {
+      addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pix pedindo ajuste');
+    }
+
     if (person.friendship_active) {
       addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Amizade ativa');
       if (person.can_share_charge) {
@@ -149,7 +155,7 @@
       <form method="post" action="/people" id="personForm"
         class="flex flex-col gap-4 mb-8 pb-8 border-b border-slate-100 dark:border-slate-700">
         <div class="text-sm font-medium text-slate-500 dark:text-slate-400 -mb-1">
-          O e-mail é opcional, mas ajuda o app a descobrir se esse contato também usa o OrganizaPay.
+          O e-mail continua opcional, e agora você também já pode deixar um Pix prontinho aqui para as cobranças avulsas.
         </div>
         <input type="hidden" name="id" id="personId">
 
@@ -199,6 +205,48 @@
           <button type="button" id="btnCancel" onclick="resetForm()"
             class="hidden w-full md:w-auto px-4 py-3 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-all whitespace-nowrap">Cancelar</button>
         </div>
+
+
+        <div class="rounded-[24px] border border-violet-200 bg-violet-50/70 px-4 py-4 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/20 sm:px-5">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Receber por Pix</div>
+              <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Na fase avulsa, é esse Pix que aparece na cobrança quando essa pessoa for você. Nas outras pessoas, ele já fica guardadinho para as próximas missões.</p>
+            </div>
+            <label class="inline-flex items-center gap-3 rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-bold text-violet-700 shadow-sm dark:border-violet-800 dark:bg-slate-900/70 dark:text-violet-200">
+              <input type="checkbox" name="pix_enabled" id="inputPixEnabled" value="1" class="h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500">
+              <span>Deixar Pix pronto</span>
+            </label>
+          </div>
+
+          <div class="mt-4 grid gap-3 md:grid-cols-2">
+            <label class="block">
+              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Tipo da chave</span>
+              <select name="pix_key_type" id="inputPixKeyType" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
+                <option value="">Escolha um tipo</option>
+                <option value="cpf">CPF</option>
+                <option value="cnpj">CNPJ</option>
+                <option value="email">E-mail</option>
+                <option value="phone">Celular</option>
+                <option value="evp">Chave aleatória</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Chave Pix</span>
+              <input name="pix_key_value" id="inputPixKeyValue" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: +5511999999999 ou sua chave aleatória" />
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Cidade do Pix</span>
+              <input name="pix_city" id="inputPixCity" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: São Paulo" />
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nome curto no payload</span>
+              <input name="pix_label" id="inputPixLabel" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: João Paulo" />
+            </label>
+          </div>
+
+          <p class="mt-3 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">A chave fica mascaradinha na lista e só aparece inteira quando alguém for copiar o Pix.</p>
+        </div>
       </form>
 
       <div class="grid gap-4 lg:grid-cols-2">
@@ -242,7 +290,7 @@
                     <div class="min-w-0 flex-1">
                       <div class="flex flex-wrap items-center gap-2">
                         <div class="text-lg font-extrabold text-slate-800 dark:text-white"><%= p.name %></div>
-                        <button type="button" data-id="<%= p.id %>" data-name="<%= p.name %>" data-phone="<%= p.phone || '' %>" data-email="<%= p.email || '' %>" onclick="editPersonFromButton(this)"
+                        <button type="button" data-id="<%= p.id %>" data-name="<%= p.name %>" data-phone="<%= p.phone || '' %>" data-email="<%= p.email || '' %>" data-pix-enabled="<%= p.pix_enabled ? '1' : '0' %>" data-pix-key-type="<%= p.pix_key_type || '' %>" data-pix-key-value="<%= p.pix_key_value || '' %>" data-pix-city="<%= p.pix_city || '' %>" data-pix-label="<%= p.pix_label || '' %>" onclick="editPersonFromButton(this)"
                           class="text-slate-400 hover:text-blue-500 transition-colors" aria-label="Editar pessoa" title="Editar pessoa">
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -256,6 +304,32 @@
                       </div>
                       <div class="mt-1 break-all text-xs font-medium text-slate-500 dark:text-slate-400">
                         <%= p.email ? '✉️ ' + p.email : '— E-mail não informado' %>
+                      </div>
+
+                      <div class="mt-3 rounded-2xl border border-violet-200/70 bg-violet-50/80 px-3 py-3 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span class="inline-flex items-center rounded-full border border-violet-200 bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-violet-700 dark:border-violet-800 dark:bg-slate-900/70 dark:text-violet-200">Pix</span>
+                          <% if (p.pix_enabled && p.pix_valid) { %>
+                            <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pronto para uso</span>
+                          <% } else if (p.pix_enabled) { %>
+                            <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Falta um ajuste</span>
+                          <% } else { %>
+                            <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">Ainda desligado</span>
+                          <% } %>
+                        </div>
+                        <div class="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                          <%= p.pix_enabled ? ((p.pix_key_type_label || 'Chave Pix') + ' · ' + (p.pix_masked_key || 'aguardando preenchimento')) : 'Nenhuma chave salva por aqui ainda.' %>
+                        </div>
+                        <div class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
+                          <% if (p.pix_enabled && p.pix_city) { %>
+                            Cidade do payload: <strong class="text-slate-700 dark:text-slate-200"><%= p.pix_city %></strong>.
+                          <% } %>
+                          <% if (p.is_owner) { %>
+                            Esse é o Pix que entra em cena nas cobranças avulsas enviadas do seu nome.
+                          <% } else { %>
+                            Deixando salvo agora, a casa já fica preparada para as próximas fases.
+                          <% } %>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -357,14 +431,29 @@
 
   <script>
     function editPersonFromButton(button) {
-      editPerson(button.dataset.id, button.dataset.name || "", button.dataset.phone || "", button.dataset.email || "");
+      editPerson({
+        id: button.dataset.id,
+        name: button.dataset.name || '',
+        phone: button.dataset.phone || '',
+        email: button.dataset.email || '',
+        pixEnabled: button.dataset.pixEnabled === '1',
+        pixKeyType: button.dataset.pixKeyType || '',
+        pixKeyValue: button.dataset.pixKeyValue || '',
+        pixCity: button.dataset.pixCity || '',
+        pixLabel: button.dataset.pixLabel || ''
+      });
     }
 
-    function editPerson(id, name, phone, email) {
-      document.getElementById('personId').value = id;
-      document.getElementById('inputName').value = name;
-      document.getElementById('inputPhone').value = phone;
-      document.getElementById('inputEmail').value = email;
+    function editPerson(person) {
+      document.getElementById('personId').value = person.id || '';
+      document.getElementById('inputName').value = person.name || '';
+      document.getElementById('inputPhone').value = person.phone || '';
+      document.getElementById('inputEmail').value = person.email || '';
+      document.getElementById('inputPixEnabled').checked = !!person.pixEnabled;
+      document.getElementById('inputPixKeyType').value = person.pixKeyType || '';
+      document.getElementById('inputPixKeyValue').value = person.pixKeyValue || '';
+      document.getElementById('inputPixCity').value = person.pixCity || '';
+      document.getElementById('inputPixLabel').value = person.pixLabel || '';
       document.getElementById('btnSubmit').innerHTML = 'Salvar mudanças';
       document.getElementById('btnSubmit').classList.replace('bg-slate-900', 'bg-blue-600');
       document.getElementById('btnCancel').classList.remove('hidden');
@@ -376,6 +465,11 @@
       document.getElementById('inputName').value = '';
       document.getElementById('inputPhone').value = '';
       document.getElementById('inputEmail').value = '';
+      document.getElementById('inputPixEnabled').checked = false;
+      document.getElementById('inputPixKeyType').value = '';
+      document.getElementById('inputPixKeyValue').value = '';
+      document.getElementById('inputPixCity').value = '';
+      document.getElementById('inputPixLabel').value = '';
       document.getElementById('btnSubmit').innerHTML = `<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>Salvar pessoa`;
       document.getElementById('btnSubmit').classList.remove('bg-blue-600');
       document.getElementById('btnSubmit').classList.add('bg-slate-900');

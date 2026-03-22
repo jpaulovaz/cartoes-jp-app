@@ -19,6 +19,13 @@ try {
   webPush = null;
 }
 
+let QRCode = null;
+try {
+  QRCode = require('qrcode');
+} catch (err) {
+  QRCode = null;
+}
+
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
@@ -78,6 +85,12 @@ try { db.prepare("ALTER TABLE transactions ADD COLUMN recurring_rule_id INTEGER"
 // Adiciona a coluna de telefone na tabela people se ela não existir
 try { db.prepare("ALTER TABLE people ADD COLUMN phone TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE people ADD COLUMN email TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN pix_enabled INTEGER NOT NULL DEFAULT 0").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN pix_key_type TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN pix_key_value TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN pix_city TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN pix_label TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN pix_updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN close_day INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN can_import INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
@@ -87,6 +100,13 @@ try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_marked_at 
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_note TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN batch_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN request_kind TEXT NOT NULL DEFAULT 'card'").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN amount_paid_cents INTEGER NOT NULL DEFAULT 0").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN settlement_mode TEXT NOT NULL DEFAULT 'manual'").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_payload TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_txid TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_generated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_amount_cents INTEGER NOT NULL DEFAULT 0").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN pix_version INTEGER NOT NULL DEFAULT 0").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN status_summary TEXT NOT NULL DEFAULT 'pending'").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN first_responded_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN resolved_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -283,6 +303,15 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_recurring_exceptions_user_rule_
 
 const { parseCsvByCardName } = require("./src/importers");
 const { formatBRLFromCents, parseMonthYear, toISOFromBRDate, centsFromPtBrMoney } = require("./src/utils");
+const {
+  PIX_KEY_TYPE_LABELS,
+  normalizePixKeyType,
+  normalizePixKeyValue,
+  validatePixProfile,
+  sanitizePixText,
+  buildPixPayload,
+  buildSharedDebtPixTxid
+} = require("./src/pix");
 const formatDateBR = (dateStr) => { if (!dateStr) return "-"; return dayjs(dateStr).format("DD/MM/YYYY"); };
 const { computeDueDate } = require("./src/dueDate");
 
@@ -2105,6 +2134,140 @@ function buildNoteSuffix(note, label = 'Recado') {
   return safeNote ? ` ${label}: ${safeNote}` : '';
 }
 
+function normalizePixToggle(value) {
+  return value === true || value === 1 || value === '1' || value === 'true' || value === 'on';
+}
+
+function getUserPixProfilesByUserIds(userIds = []) {
+  const cleanIds = Array.from(new Set((userIds || []).map(Number).filter(Boolean)));
+  if (!cleanIds.length) return new Map();
+
+  const placeholders = cleanIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT
+      user_id,
+      id AS person_id,
+      name,
+      email,
+      pix_enabled,
+      pix_key_type,
+      pix_key_value,
+      pix_city,
+      pix_label,
+      pix_updated_at
+    FROM people
+    WHERE COALESCE(is_owner, 0) = 1
+      AND user_id IN (${placeholders})
+    ORDER BY id ASC
+  `).all(...cleanIds);
+
+  const map = new Map();
+  rows.forEach((row) => {
+    const validation = validatePixProfile({
+      enabled: row.pix_enabled,
+      keyType: row.pix_key_type,
+      keyValue: row.pix_key_value,
+      city: row.pix_city,
+      label: row.pix_label,
+      name: row.name || row.email || 'ORGANIZAPAY'
+    });
+
+    map.set(Number(row.user_id || 0), {
+      userId: Number(row.user_id || 0),
+      personId: Number(row.person_id || 0) || null,
+      ownerName: row.name || null,
+      ownerEmail: normalizeEmail(row.email),
+      pixEnabled: !!validation.enabled,
+      pixValid: !!validation.valid,
+      pixReason: validation.reason || null,
+      pixErrors: Array.isArray(validation.errors) ? validation.errors : [],
+      pixKeyType: validation.keyType,
+      pixKeyTypeLabel: validation.keyTypeLabel,
+      pixKeyValue: validation.keyValue,
+      pixMaskedKey: validation.keyMasked,
+      pixCity: validation.city,
+      pixMerchantName: validation.merchantName,
+      pixLabel: validation.label,
+      pixUpdatedAt: row.pix_updated_at || null
+    });
+  });
+
+  return map;
+}
+
+function getUserPixProfile(userId) {
+  return getUserPixProfilesByUserIds([userId]).get(Number(userId || 0)) || null;
+}
+
+function buildManualSharedDebtPixShareText({ creditorName, amountCents, description, payload } = {}) {
+  const safeCreditorName = String(creditorName || 'quem vai receber').trim() || 'quem vai receber';
+  const safeDescription = String(description || 'o combinado').trim() || 'o combinado';
+  return [
+    `Oi! Ficou pendente ${formatBRLFromCents(amountCents)} referente a ${safeDescription}.`,
+    `Para facilitar, já deixei o Pix copia e cola de ${safeCreditorName} aqui embaixo:`,
+    String(payload || '').trim(),
+    'Depois me avisa por aqui quando pagar 💸'
+  ].filter(Boolean).join('\n\n');
+}
+
+function attachSharedDebtPixMeta(items = [], currentUserId = null) {
+  const rows = Array.isArray(items) ? items : [];
+  const requesterIds = rows.map((item) => Number(item?.requester_user_id || 0)).filter(Boolean);
+  const pixProfiles = getUserPixProfilesByUserIds(requesterIds);
+
+  return rows.map((item) => {
+    const requestKind = normalizeSharedDebtRequestKind(item?.request_kind);
+    const status = String(item?.status || 'pending').trim().toLowerCase();
+    const totalCents = Math.max(0, Number(item?.amount_cents || 0));
+    let paidCents = Math.max(0, Number(item?.amount_paid_cents || 0));
+    if (status === 'settled' && paidCents < totalCents) paidCents = totalCents;
+    if (paidCents > totalCents) paidCents = totalCents;
+    const pendingCents = Math.max(0, totalCents - paidCents);
+    const creditorProfile = pixProfiles.get(Number(item?.requester_user_id || 0)) || null;
+    const currentUserIsCreditor = Number(item?.requester_user_id || 0) === Number(currentUserId || 0);
+    const paymentWaitingConfirmation = status === 'accepted' && !!item?.payment_marked_at;
+
+    let pixAvailable = false;
+    let pixUnavailableReason = null;
+
+    if (requestKind !== 'manual') {
+      pixUnavailableReason = 'Nesta fase, o Pix mora só nos lembretes avulsos.';
+    } else if (!['pending', 'accepted'].includes(status)) {
+      pixUnavailableReason = 'Esse lembrete já saiu da fase de pagamento.';
+    } else if (paymentWaitingConfirmation) {
+      pixUnavailableReason = 'O pagamento já foi marcado como feito e agora só falta a confirmação final.';
+    } else if (!pendingCents) {
+      pixUnavailableReason = 'Esse lembrete já está com o valor fechado por aqui.';
+    } else if (!creditorProfile || !creditorProfile.pixEnabled) {
+      pixUnavailableReason = currentUserIsCreditor
+        ? 'Configure seu Pix em Amigos para liberar o copia e cola deste lembrete.'
+        : 'Quem enviou ainda não deixou um Pix prontinho por aqui.';
+    } else if (!creditorProfile.pixValid) {
+      pixUnavailableReason = currentUserIsCreditor
+        ? (creditorProfile.pixReason || 'Seu Pix ainda precisa de um ajuste em Amigos.')
+        : 'Quem enviou começou a configurar o Pix, mas ainda falta acertar um detalhe.';
+    } else {
+      pixAvailable = true;
+    }
+
+    return {
+      ...item,
+      amount_paid_cents: paidCents,
+      amount_pending_cents: pendingCents,
+      pix_available: pixAvailable,
+      pix_unavailable_reason: pixUnavailableReason,
+      pix_masked_key: creditorProfile?.pixMaskedKey || null,
+      pix_key_type_label: creditorProfile?.pixKeyTypeLabel || null,
+      pix_creditor_name: creditorProfile?.ownerName || item?.requester_name || item?.requester_email || 'Quem vai receber',
+      pix_creditor_city: creditorProfile?.pixCity || null,
+      pix_creditor_profile_ready: !!creditorProfile?.pixValid,
+      pix_creditor_has_profile: !!creditorProfile?.pixEnabled,
+      pix_is_current_user_creditor: currentUserIsCreditor,
+      pix_qr_supported: !!QRCode
+    };
+  });
+}
+
 function normalizeSharedDebtRequestKind(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (['card', 'manual'].includes(normalized)) return normalized;
@@ -2235,8 +2398,8 @@ function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
   const requestIdToHighlight = Number(query?.request) || null;
   const batchIdToHighlight = Number(query?.batch) || null;
   const archivedRequestIds = getSharedDebtArchivedRequestIdSet(userId);
-  const rawReceived = getSharedDebtRequestsReceived(userId);
-  const rawSent = getSharedDebtRequestsSent(userId);
+  const rawReceived = attachSharedDebtPixMeta(getSharedDebtRequestsReceived(userId), userId);
+  const rawSent = attachSharedDebtPixMeta(getSharedDebtRequestsSent(userId), userId);
   const received = filterSharedDebtItemsByArchiveMode(rawReceived, archivedRequestIds, archiveMode);
   const sent = filterSharedDebtItemsByArchiveMode(rawSent, archivedRequestIds, archiveMode);
   const archivedReceivedCount = filterSharedDebtItemsByArchiveMode(rawReceived, archivedRequestIds, true).length;
@@ -3295,7 +3458,7 @@ function getVisibleCardsForMonth(userId, month, year) {
 }
 
 function getOwnerPerson(userId) {
-  return db.prepare("SELECT id, name FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
+  return db.prepare("SELECT id, name, email, pix_enabled, pix_key_type, pix_key_value, pix_city, pix_label, pix_updated_at FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
 }
 
 function normalizeFriendRequestStatus(value) {
@@ -3643,6 +3806,12 @@ function getPeopleAll(userId) {
       COALESCE(p.is_owner, 0) AS is_owner,
       p.phone,
       p.email,
+      COALESCE(p.pix_enabled, 0) AS pix_enabled,
+      p.pix_key_type,
+      p.pix_key_value,
+      p.pix_city,
+      p.pix_label,
+      p.pix_updated_at,
       pal.linked_user_id AS stable_linked_user_id,
       stable_u.name AS stable_linked_user_name,
       stable_u.email AS stable_linked_user_email,
@@ -3682,6 +3851,14 @@ function getPeopleAll(userId) {
     const canShareCharge = isFriendshipGateEnabled()
       ? friendshipActive && isActive && !isOwner
       : hasAppUser && !!normalizeEmail(person.email) && isActive && !isOwner;
+    const pixProfile = validatePixProfile({
+      enabled: person.pix_enabled,
+      keyType: person.pix_key_type,
+      keyValue: person.pix_key_value,
+      city: person.pix_city,
+      label: person.pix_label,
+      name: person.name || person.email || 'ORGANIZAPAY'
+    });
 
     let friendshipState = 'none';
     if (friendshipActive) friendshipState = 'active';
@@ -3704,7 +3881,17 @@ function getPeopleAll(userId) {
       friendship_id: friendship ? Number(friendship.id || 0) : null,
       friendship: friendship || null,
       outgoing_friend_request: outgoingRequest,
-      incoming_friend_request: incomingRequest
+      incoming_friend_request: incomingRequest,
+      pix_enabled: !!pixProfile.enabled,
+      pix_valid: !!pixProfile.valid,
+      pix_reason: pixProfile.reason || null,
+      pix_key_type: pixProfile.keyType,
+      pix_key_type_label: pixProfile.keyTypeLabel,
+      pix_key_value: pixProfile.keyValue,
+      pix_masked_key: pixProfile.keyMasked,
+      pix_city: pixProfile.city,
+      pix_label: pixProfile.label,
+      pix_updated_at: person.pix_updated_at || null
     };
   });
 }
@@ -5142,23 +5329,10 @@ function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE r.receiver_user_id = ?
       AND r.status = 'accepted'
-      AND (
-        (
-          COALESCE(r.request_kind, 'card') = 'manual'
-          AND (
-            CAST(strftime('%Y', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) < ?
-            OR (
-              CAST(strftime('%Y', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) = ?
-              AND CAST(strftime('%m', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) <= ?
-            )
-          )
-        ) OR
-        (
-          COALESCE(r.source_due_month, i.month, t.due_month) = ?
-          AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
-        )
-      )
-  `).get(userId, year, year, month, month, year) || { total_requests: 0, total_cents: 0 };
+      AND COALESCE(r.request_kind, 'card') <> 'manual'
+      AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
+      AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
+  `).get(userId, month, year) || { total_requests: 0, total_cents: 0 };
 
   const receivable = db.prepare(`
     SELECT COUNT(*) AS total_requests, COALESCE(SUM(r.amount_cents), 0) AS total_cents
@@ -5167,23 +5341,10 @@ function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE r.requester_user_id = ?
       AND r.status = 'accepted'
-      AND (
-        (
-          COALESCE(r.request_kind, 'card') = 'manual'
-          AND (
-            CAST(strftime('%Y', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) < ?
-            OR (
-              CAST(strftime('%Y', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) = ?
-              AND CAST(strftime('%m', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) <= ?
-            )
-          )
-        ) OR
-        (
-          COALESCE(r.source_due_month, i.month, t.due_month) = ?
-          AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
-        )
-      )
-  `).get(userId, year, year, month, month, year) || { total_requests: 0, total_cents: 0 };
+      AND COALESCE(r.request_kind, 'card') <> 'manual'
+      AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
+      AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
+  `).get(userId, month, year) || { total_requests: 0, total_cents: 0 };
 
   return {
     owedCents: Number(owed.total_cents || 0),
@@ -5830,6 +5991,117 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
   return res.redirect(`/shared-debts?request=${requestId}`);
 });
 
+app.get('/shared-debts/:id/pix', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  const requestId = Number(req.params.id);
+
+  if (!requestId) {
+    return res.status(400).json({ ok: false, message: 'Não consegui descobrir qual cobrança avulsa você quer abrir no Pix.' });
+  }
+
+  const requestRow = db.prepare(`
+    SELECT
+      r.*,
+      ru.name AS requester_name,
+      ru.email AS requester_email,
+      uu.name AS receiver_name,
+      uu.email AS receiver_email
+    FROM shared_debt_requests r
+    JOIN users ru ON ru.id = r.requester_user_id
+    JOIN users uu ON uu.id = r.receiver_user_id
+    WHERE r.id = ?
+      AND (r.requester_user_id = ? OR r.receiver_user_id = ?)
+    LIMIT 1
+  `).get(requestId, userId, userId);
+
+  if (!requestRow) {
+    return res.status(404).json({ ok: false, message: 'Essa cobrança avulsa não apareceu por aqui.' });
+  }
+
+  if (normalizeSharedDebtRequestKind(requestRow.request_kind) !== 'manual') {
+    return res.status(400).json({ ok: false, message: 'Nesta fase, o Pix vive só nas cobranças avulsas.' });
+  }
+
+  const status = String(requestRow.status || 'pending').trim().toLowerCase();
+  const totalCents = Math.max(0, Number(requestRow.amount_cents || 0));
+  const alreadyPaidCents = Math.min(totalCents, Math.max(0, Number(requestRow.amount_paid_cents || (status === 'settled' ? totalCents : 0))));
+  const pendingCents = Math.max(0, totalCents - alreadyPaidCents);
+
+  if (!['pending', 'accepted'].includes(status)) {
+    return res.status(409).json({ ok: false, message: 'Esse lembrete já saiu da fase de pagamento.' });
+  }
+
+  if (requestRow.payment_marked_at) {
+    return res.status(409).json({ ok: false, message: 'Esse pagamento já foi marcado como feito e agora só está esperando a confirmação final.' });
+  }
+
+  if (!pendingCents) {
+    return res.status(409).json({ ok: false, message: 'Esse lembrete já está com o valor fechado por aqui.' });
+  }
+
+  const creditorProfile = getUserPixProfile(requestRow.requester_user_id);
+  if (!creditorProfile || !creditorProfile.pixEnabled) {
+    return res.status(409).json({ ok: false, message: 'Quem vai receber ainda não deixou um Pix prontinho aqui.' });
+  }
+
+  if (!creditorProfile.pixValid) {
+    return res.status(409).json({ ok: false, message: creditorProfile.pixReason || 'Ainda falta um ajuste no Pix de quem vai receber.' });
+  }
+
+  try {
+    const txid = buildSharedDebtPixTxid(requestRow.id, Number(requestRow.pix_version || 0));
+    const payload = buildPixPayload({
+      keyType: creditorProfile.pixKeyType,
+      keyValue: creditorProfile.pixKeyValue,
+      merchantName: creditorProfile.pixMerchantName || creditorProfile.ownerName || requestRow.requester_name,
+      merchantCity: creditorProfile.pixCity,
+      amountCents: pendingCents,
+      txid,
+      description: sanitizePixText(requestRow.description_snapshot, { max: 72 })
+    });
+    const qrDataUrl = QRCode
+      ? await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', margin: 1, width: 320 })
+      : null;
+    const shareText = buildManualSharedDebtPixShareText({
+      creditorName: creditorProfile.ownerName || requestRow.requester_name || requestRow.requester_email || 'quem vai receber',
+      amountCents: pendingCents,
+      description: requestRow.description_snapshot,
+      payload
+    });
+
+    db.prepare(`
+      UPDATE shared_debt_requests
+      SET last_pix_payload = ?,
+          last_pix_txid = ?,
+          last_pix_generated_at = ?,
+          last_pix_amount_cents = ?
+      WHERE id = ?
+    `).run(payload, txid, nowIso(), pendingCents, requestId);
+
+    return res.json({
+      ok: true,
+      requestId,
+      payload,
+      txid,
+      qrDataUrl,
+      qrSupported: !!QRCode,
+      amountCents: pendingCents,
+      amountFormatted: formatBRLFromCents(pendingCents),
+      creditorName: creditorProfile.ownerName || requestRow.requester_name || requestRow.requester_email || 'Quem vai receber',
+      maskedKey: creditorProfile.pixMaskedKey,
+      keyType: creditorProfile.pixKeyType,
+      keyTypeLabel: creditorProfile.pixKeyTypeLabel,
+      city: creditorProfile.pixCity,
+      shareText,
+      keyValue: creditorProfile.pixKeyValue,
+      description: requestRow.description_snapshot,
+      isCreditor: Number(requestRow.requester_user_id || 0) === Number(userId || 0)
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, message: error?.message || 'O Pix quase saiu, mas ainda tropeçou num detalhe aqui.' });
+  }
+});
+
 app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const requestId = Number(req.params.id);
@@ -5950,7 +6222,10 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
   db.transaction(() => {
     db.prepare(`
       UPDATE shared_debt_requests
-      SET status = 'settled', updated_at = ?, resolved_at = ?
+      SET status = 'settled',
+          amount_paid_cents = amount_cents,
+          updated_at = ?,
+          resolved_at = ?
       WHERE id = ? AND requester_user_id = ? AND status = 'accepted' AND payment_marked_at IS NOT NULL
     `).run(now, now, requestId, userId);
 
@@ -6231,18 +6506,88 @@ app.get("/people", ensureAuthenticated, (req, res) => {
 
 app.post("/people", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const name = (req.body.name || "").trim();
-  const phone = (req.body.phone || "").trim().replace(/\D/g, "");
+  const name = String(req.body.name || "").trim();
+  const phone = String(req.body.phone || "").trim().replace(/\D/g, "");
   const email = normalizeEmail(req.body.email);
   const id = Number(req.body.id) || null;
+  const pixEnabled = normalizePixToggle(req.body.pix_enabled);
+  const pixKeyType = normalizePixKeyType(req.body.pix_key_type);
+  const pixKeyValue = normalizePixKeyValue(pixKeyType, req.body.pix_key_value);
+  const pixCityRaw = String(req.body.pix_city || '').trim();
+  const pixLabelRaw = String(req.body.pix_label || '').trim();
+  const pixProfile = validatePixProfile({
+    enabled: pixEnabled,
+    keyType: pixKeyType,
+    keyValue: pixKeyValue,
+    city: pixCityRaw,
+    label: pixLabelRaw,
+    name: name || email || 'ORGANIZAPAY'
+  });
 
-  if (id) {
-    db.prepare("UPDATE people SET name = ?, phone = ?, email = ? WHERE id = ? AND user_id = ?").run(name, phone, email, id, userId);
-  } else if (name) {
-    db.prepare("INSERT OR IGNORE INTO people(user_id, name, phone, email, active) VALUES (?, ?, ?, ?, 1)").run(userId, name, phone, email);
+  if (!name) {
+    setFlash(req, 'error', 'Me dá pelo menos o nome dessa pessoa para eu conseguir salvar direitinho.');
+    return res.redirect('/people');
   }
 
-  res.redirect("/people");
+  if (pixEnabled && !pixProfile.valid) {
+    setFlash(req, 'error', pixProfile.reason || 'Faltou acertar um detalhe do Pix antes de salvar.');
+    return res.redirect('/people');
+  }
+
+  const pixUpdatedAt = (pixEnabled || pixProfile.keyValue || pixProfile.city || pixProfile.label)
+    ? nowIso()
+    : null;
+
+  if (id) {
+    db.prepare(`
+      UPDATE people
+      SET name = ?,
+          phone = ?,
+          email = ?,
+          pix_enabled = ?,
+          pix_key_type = ?,
+          pix_key_value = ?,
+          pix_city = ?,
+          pix_label = ?,
+          pix_updated_at = ?
+      WHERE id = ? AND user_id = ?
+    `).run(
+      name,
+      phone,
+      email,
+      pixEnabled ? 1 : 0,
+      pixProfile.keyType,
+      pixProfile.keyValue || null,
+      pixProfile.city || null,
+      pixProfile.label || null,
+      pixUpdatedAt,
+      id,
+      userId
+    );
+  } else {
+    db.prepare(`
+      INSERT OR IGNORE INTO people(
+        user_id, name, phone, email, pix_enabled, pix_key_type,
+        pix_key_value, pix_city, pix_label, pix_updated_at, active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `).run(
+      userId,
+      name,
+      phone,
+      email,
+      pixEnabled ? 1 : 0,
+      pixProfile.keyType,
+      pixProfile.keyValue || null,
+      pixProfile.city || null,
+      pixProfile.label || null,
+      pixUpdatedAt
+    );
+  }
+
+  setFlash(req, 'success', pixEnabled
+    ? 'Pessoa salva com Pix pronto para entrar em cena quando precisar.'
+    : 'Pessoa salva direitinho por aqui.');
+  return res.redirect('/people');
 });
 
 app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {

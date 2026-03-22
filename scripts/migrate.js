@@ -43,6 +43,13 @@ CREATE TABLE IF NOT EXISTS people (
   user_id INTEGER NOT NULL,
   name TEXT NOT NULL,
   phone TEXT,
+  email TEXT,
+  pix_enabled INTEGER NOT NULL DEFAULT 0,
+  pix_key_type TEXT,
+  pix_key_value TEXT,
+  pix_city TEXT,
+  pix_label TEXT,
+  pix_updated_at TEXT,
   active INTEGER NOT NULL DEFAULT 1,
   is_owner INTEGER DEFAULT 0,
   created_at TEXT,
@@ -231,12 +238,19 @@ CREATE TABLE IF NOT EXISTS shared_debt_requests (
   card_name_snapshot TEXT,
   description_snapshot TEXT NOT NULL,
   amount_cents INTEGER NOT NULL,
+  amount_paid_cents INTEGER NOT NULL DEFAULT 0,
   receiver_email_snapshot TEXT,
   receiver_name_snapshot TEXT,
   request_note TEXT,
   response_note TEXT,
   payment_marked_at TEXT,
   payment_note TEXT,
+  settlement_mode TEXT NOT NULL DEFAULT 'manual',
+  last_pix_payload TEXT,
+  last_pix_txid TEXT,
+  last_pix_generated_at TEXT,
+  last_pix_amount_cents INTEGER NOT NULL DEFAULT 0,
+  pix_version INTEGER NOT NULL DEFAULT 0,
   request_kind TEXT NOT NULL DEFAULT 'card',
   status TEXT NOT NULL DEFAULT 'pending',
   created_at TEXT NOT NULL,
@@ -405,6 +419,30 @@ if (!columnExists("people", "email")) {
   db.exec("ALTER TABLE people ADD COLUMN email TEXT;");
 }
 
+if (!columnExists("people", "pix_enabled")) {
+  db.exec("ALTER TABLE people ADD COLUMN pix_enabled INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("people", "pix_key_type")) {
+  db.exec("ALTER TABLE people ADD COLUMN pix_key_type TEXT;");
+}
+
+if (!columnExists("people", "pix_key_value")) {
+  db.exec("ALTER TABLE people ADD COLUMN pix_key_value TEXT;");
+}
+
+if (!columnExists("people", "pix_city")) {
+  db.exec("ALTER TABLE people ADD COLUMN pix_city TEXT;");
+}
+
+if (!columnExists("people", "pix_label")) {
+  db.exec("ALTER TABLE people ADD COLUMN pix_label TEXT;");
+}
+
+if (!columnExists("people", "pix_updated_at")) {
+  db.exec("ALTER TABLE people ADD COLUMN pix_updated_at TEXT;");
+}
+
 if (!columnExists("transactions", "recurring_rule_id")) {
   db.exec("ALTER TABLE transactions ADD COLUMN recurring_rule_id INTEGER;");
 }
@@ -431,6 +469,34 @@ if (!columnExists("shared_debt_requests", "batch_id")) {
 
 if (!columnExists("shared_debt_requests", "request_kind")) {
   db.exec("ALTER TABLE shared_debt_requests ADD COLUMN request_kind TEXT NOT NULL DEFAULT 'card';");
+}
+
+if (!columnExists("shared_debt_requests", "amount_paid_cents")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN amount_paid_cents INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("shared_debt_requests", "settlement_mode")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN settlement_mode TEXT NOT NULL DEFAULT 'manual';");
+}
+
+if (!columnExists("shared_debt_requests", "last_pix_payload")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_payload TEXT;");
+}
+
+if (!columnExists("shared_debt_requests", "last_pix_txid")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_txid TEXT;");
+}
+
+if (!columnExists("shared_debt_requests", "last_pix_generated_at")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_generated_at TEXT;");
+}
+
+if (!columnExists("shared_debt_requests", "last_pix_amount_cents")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_amount_cents INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("shared_debt_requests", "pix_version")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN pix_version INTEGER NOT NULL DEFAULT 0;");
 }
 
 if (!columnExists("shared_debt_batches", "status_summary")) {

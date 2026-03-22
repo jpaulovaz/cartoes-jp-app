@@ -606,6 +606,76 @@
     </div>
   </div>
 
+  <div id="shared-debt-pix-sheet" data-shared-debts-sheet class="fixed inset-0 z-[82] hidden">
+    <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
+    <div class="absolute inset-x-0 bottom-0 max-h-[92vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[84vh] sm:max-w-3xl sm:rounded-[32px]">
+      <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+        <div>
+          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-500 dark:text-emerald-300">Pix da cobrança avulsa</div>
+          <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white" data-pix-sheet-title>Preparando o Pix...</h3>
+          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400" data-pix-sheet-subtitle>Deixa comigo que eu monto o copia e cola certinho.</p>
+        </div>
+        <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar Pix da cobrança">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <div class="max-h-[calc(92vh-92px)] overflow-y-auto px-5 py-4 sm:max-h-[calc(84vh-92px)]">
+        <div data-pix-sheet-loading class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
+          Montando o Pix copia e cola com o valor pendente certinho...
+        </div>
+
+        <div data-pix-sheet-error class="hidden rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm font-medium text-rose-700 dark:border-rose-900 dark:bg-rose-900/20 dark:text-rose-200"></div>
+
+        <div data-pix-sheet-content class="hidden space-y-4">
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-800/80">
+            <div class="grid gap-3 sm:grid-cols-3">
+              <div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor pendente</div>
+                <div class="mt-1 text-lg font-black text-slate-900 dark:text-white" data-pix-sheet-amount>—</div>
+              </div>
+              <div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Chave</div>
+                <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white" data-pix-sheet-key-meta>—</div>
+              </div>
+              <div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Cidade</div>
+                <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white" data-pix-sheet-city>—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid gap-4 lg:grid-cols-[minmax(0,240px)_minmax(0,1fr)] lg:items-start">
+            <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/50">
+              <div class="aspect-square overflow-hidden rounded-[24px] bg-white p-3 ring-1 ring-slate-200 dark:bg-slate-50 dark:ring-slate-700">
+                <img data-pix-sheet-qr class="h-full w-full object-contain" alt="QR Code Pix" />
+              </div>
+              <p class="mt-3 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400" data-pix-sheet-qr-hint>Se preferir, é só apontar a câmera do banco para esse QR.</p>
+            </div>
+
+            <div class="space-y-3">
+              <label class="block">
+                <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pix copia e cola</span>
+                <textarea readonly data-pix-sheet-payload rows="6" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 shadow-sm focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"></textarea>
+              </label>
+
+              <div class="flex flex-wrap gap-2">
+                <button type="button" data-pix-sheet-action="copy" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Copiar Pix</button>
+                <button type="button" data-pix-sheet-action="share" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Compartilhar</button>
+                <button type="button" data-pix-sheet-action="copy-key" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Copiar chave</button>
+              </div>
+
+              <div class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-800 dark:border-sky-900 dark:bg-sky-900/20 dark:text-sky-200">
+                O pagamento continua manual por aqui: paga no banco e depois avisa/confirmam no app.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
   <% if (receivedBatchCards.length || sentBatchCards.length) { %>
     <section class="space-y-6 op-fade-up">
       <% if (receivedBatchCards.length) { %>
@@ -943,6 +1013,46 @@
                         </div>
                       <% } %>
 
+
+                      <% if (item.pix_available) { %>
+                        <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/80 dark:bg-emerald-900/20 px-4 py-4">
+                          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div class="min-w-0 flex-1">
+                              <div class="text-sm font-bold text-slate-900 dark:text-white"><%= item.pix_is_current_user_creditor ? 'Seu Pix já está pronto' : 'Pix prontinho para pagar' %></div>
+                              <p class="mt-1 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300">
+                                <% if (item.pix_is_current_user_creditor) { %>
+                                  Esse é o código que a outra pessoa pode copiar daqui sem malabarismo. Ele sempre sai com o valor pendente atual.
+                                <% } else if (item.status === 'pending') { %>
+                                  Se quiser, você já pode copiar o Pix agora mesmo. A decisão sobre o lembrete continua aqui do lado, sem drama.
+                                <% } else { %>
+                                  O valor ainda está em aberto, então o Pix já sai com o total certinho para facilitar a quitação.
+                                <% } %>
+                              </p>
+                              <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                <span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-3 py-1 dark:border-emerald-800 dark:bg-slate-900/60"><%= formatBRLFromCents(item.amount_pending_cents || item.amount_cents) %> pendente</span>
+                                <% if (item.pix_key_type_label) { %><span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 dark:border-slate-700 dark:bg-slate-900/60"><%= item.pix_key_type_label %></span><% } %>
+                                <% if (item.pix_masked_key) { %><span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 dark:border-slate-700 dark:bg-slate-900/60"><%= item.pix_masked_key %></span><% } %>
+                                <% if (item.pix_creditor_city) { %><span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 dark:border-slate-700 dark:bg-slate-900/60"><%= item.pix_creditor_city %></span><% } %>
+                              </div>
+                            </div>
+                            <div class="flex flex-wrap gap-2 lg:justify-end">
+                              <button type="button" data-pix-action="copy" data-request-id="<%= item.id %>" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Copiar Pix</button>
+                              <button type="button" data-pix-action="show" data-request-id="<%= item.id %>" class="inline-flex items-center justify-center rounded-2xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition-colors hover:bg-emerald-100/70 dark:border-emerald-800 dark:bg-slate-900 dark:text-emerald-200 dark:hover:bg-emerald-900/20">Mostrar QR</button>
+                              <button type="button" data-pix-action="share" data-request-id="<%= item.id %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Compartilhar</button>
+                            </div>
+                          </div>
+                        </div>
+                      <% } else if (item.pix_unavailable_reason) { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white"><%= item.pix_is_current_user_creditor ? 'Seu Pix ainda não entrou em cena' : 'Pix ainda indisponível' %></div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= item.pix_unavailable_reason %></div>
+                          <% if (item.pix_is_current_user_creditor) { %>
+                            <div class="mt-3">
+                              <a href="/people" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir Amigos para ajustar</a>
+                            </div>
+                          <% } %>
+                        </div>
+                      <% } %>
                       <% if (item.status === 'pending') { %>
                         <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-4">
                           <div class="text-sm font-bold text-slate-900 dark:text-white">Responder lembrete</div>
@@ -1433,6 +1543,46 @@
                         </div>
                       <% } %>
 
+
+                      <% if (item.pix_available) { %>
+                        <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/80 dark:bg-emerald-900/20 px-4 py-4">
+                          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div class="min-w-0 flex-1">
+                              <div class="text-sm font-bold text-slate-900 dark:text-white"><%= item.pix_is_current_user_creditor ? 'Seu Pix já está pronto' : 'Pix prontinho para pagar' %></div>
+                              <p class="mt-1 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300">
+                                <% if (item.pix_is_current_user_creditor) { %>
+                                  Esse é o código que a outra pessoa pode copiar daqui sem malabarismo. Ele sempre sai com o valor pendente atual.
+                                <% } else if (item.status === 'pending') { %>
+                                  Se quiser, você já pode copiar o Pix agora mesmo. A decisão sobre o lembrete continua aqui do lado, sem drama.
+                                <% } else { %>
+                                  O valor ainda está em aberto, então o Pix já sai com o total certinho para facilitar a quitação.
+                                <% } %>
+                              </p>
+                              <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                <span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-3 py-1 dark:border-emerald-800 dark:bg-slate-900/60"><%= formatBRLFromCents(item.amount_pending_cents || item.amount_cents) %> pendente</span>
+                                <% if (item.pix_key_type_label) { %><span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 dark:border-slate-700 dark:bg-slate-900/60"><%= item.pix_key_type_label %></span><% } %>
+                                <% if (item.pix_masked_key) { %><span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 dark:border-slate-700 dark:bg-slate-900/60"><%= item.pix_masked_key %></span><% } %>
+                                <% if (item.pix_creditor_city) { %><span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 dark:border-slate-700 dark:bg-slate-900/60"><%= item.pix_creditor_city %></span><% } %>
+                              </div>
+                            </div>
+                            <div class="flex flex-wrap gap-2 lg:justify-end">
+                              <button type="button" data-pix-action="copy" data-request-id="<%= item.id %>" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Copiar Pix</button>
+                              <button type="button" data-pix-action="show" data-request-id="<%= item.id %>" class="inline-flex items-center justify-center rounded-2xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition-colors hover:bg-emerald-100/70 dark:border-emerald-800 dark:bg-slate-900 dark:text-emerald-200 dark:hover:bg-emerald-900/20">Mostrar QR</button>
+                              <button type="button" data-pix-action="share" data-request-id="<%= item.id %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Compartilhar</button>
+                            </div>
+                          </div>
+                        </div>
+                      <% } else if (item.pix_unavailable_reason) { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white"><%= item.pix_is_current_user_creditor ? 'Seu Pix ainda não entrou em cena' : 'Pix ainda indisponível' %></div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= item.pix_unavailable_reason %></div>
+                          <% if (item.pix_is_current_user_creditor) { %>
+                            <div class="mt-3">
+                              <a href="/people" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir Amigos para ajustar</a>
+                            </div>
+                          <% } %>
+                        </div>
+                      <% } %>
                       <% if (item.status === 'rejected_by_receiver') { %>
                         <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-4">
                           <div class="text-sm font-bold text-slate-900 dark:text-white">Decidir sobre a recusa</div>
@@ -1833,6 +1983,46 @@
     target.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
+  const pixSheetState = { requestId: null, data: null };
+
+  function showPixToast(message, tone = 'info') {
+    if (!message) return;
+    const toast = document.createElement('div');
+    const toneClass = tone === 'success'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200'
+      : (tone === 'error'
+        ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-900/30 dark:text-rose-200'
+        : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100');
+    toast.className = `fixed bottom-24 left-1/2 z-[95] -translate-x-1/2 rounded-2xl border px-4 py-3 text-sm font-bold shadow-xl ${toneClass}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    window.setTimeout(() => {
+      toast.remove();
+    }, 2600);
+  }
+
+  async function copyTextToClipboard(text) {
+    const safeText = String(text || '');
+    if (!safeText) throw new Error('Nada para copiar por enquanto.');
+
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(safeText);
+      return true;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = safeText;
+    textarea.setAttribute('readonly', 'readonly');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand('copy');
+    textarea.remove();
+    if (!copied) throw new Error('Não consegui copiar agora.');
+    return true;
+  }
+
   function closeSharedDebtSheets() {
     document.querySelectorAll('[data-shared-debts-sheet]').forEach((sheet) => {
       sheet.classList.add('hidden');
@@ -1867,7 +2057,167 @@
     }
   }
 
+  function setPixSheetState(mode, message = '') {
+    const loading = document.querySelector('[data-pix-sheet-loading]');
+    const errorBox = document.querySelector('[data-pix-sheet-error]');
+    const content = document.querySelector('[data-pix-sheet-content]');
+    if (!loading || !errorBox || !content) return;
+
+    loading.classList.toggle('hidden', mode !== 'loading');
+    errorBox.classList.toggle('hidden', mode !== 'error');
+    content.classList.toggle('hidden', mode !== 'ready');
+
+    if (mode === 'error') {
+      errorBox.textContent = message || 'O Pix quase saiu, mas ainda tropeçou num detalhe.';
+    }
+  }
+
+  function renderPixSheet(data) {
+    const title = document.querySelector('[data-pix-sheet-title]');
+    const subtitle = document.querySelector('[data-pix-sheet-subtitle]');
+    const amount = document.querySelector('[data-pix-sheet-amount]');
+    const keyMeta = document.querySelector('[data-pix-sheet-key-meta]');
+    const city = document.querySelector('[data-pix-sheet-city]');
+    const payload = document.querySelector('[data-pix-sheet-payload]');
+    const qrImg = document.querySelector('[data-pix-sheet-qr]');
+    const qrHint = document.querySelector('[data-pix-sheet-qr-hint]');
+
+    if (title) title.textContent = data?.creditorName ? `Pix de ${data.creditorName}` : 'Pix da cobrança avulsa';
+    if (subtitle) subtitle.textContent = data?.description ? `${data.description} · confirmação continua manual por aqui.` : 'Confirmação manual por aqui, pagamento no banco da pessoa.';
+    if (amount) amount.textContent = data?.amountFormatted || '—';
+    if (keyMeta) keyMeta.textContent = data?.maskedKey ? `${data.keyTypeLabel || 'Chave Pix'} · ${data.maskedKey}` : (data?.keyTypeLabel || '—');
+    if (city) city.textContent = data?.city || '—';
+    if (payload) payload.value = data?.payload || '';
+    if (qrImg) {
+      if (data?.qrDataUrl) {
+        qrImg.src = data.qrDataUrl;
+        qrImg.classList.remove('hidden');
+      } else {
+        qrImg.removeAttribute('src');
+        qrImg.classList.add('hidden');
+      }
+    }
+    if (qrHint) {
+      qrHint.textContent = data?.qrDataUrl
+        ? 'Se preferir, é só apontar a câmera do banco para esse QR.'
+        : 'O copia e cola está prontinho. Quando a dependência do QR entrar, ele aparece aqui também.';
+    }
+  }
+
+  async function fetchPixData(requestId) {
+    const response = await fetch(`/shared-debts/${requestId}/pix`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin'
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.message || 'O Pix não apareceu por aqui agora.');
+    }
+    return data;
+  }
+
+  async function ensurePixData(requestId) {
+    if (pixSheetState.requestId === Number(requestId) && pixSheetState.data) {
+      return pixSheetState.data;
+    }
+    const data = await fetchPixData(requestId);
+    pixSheetState.requestId = Number(requestId);
+    pixSheetState.data = data;
+    return data;
+  }
+
+  async function openPixSheet(requestId) {
+    openSharedDebtSheet('shared-debt-pix-sheet');
+    setPixSheetState('loading');
+    try {
+      const data = await ensurePixData(requestId);
+      renderPixSheet(data);
+      setPixSheetState('ready');
+    } catch (error) {
+      setPixSheetState('error', error?.message || 'O Pix quase saiu, mas ainda tropeçou num detalhe.');
+    }
+  }
+
+  async function sharePixData(data) {
+    const shareText = data?.shareText || data?.payload || '';
+    if (!shareText) throw new Error('Ainda não apareceu nada para compartilhar.');
+
+    if (navigator.share) {
+      await navigator.share({
+        title: data?.creditorName ? `Cobrança com Pix de ${data.creditorName}` : 'Cobrança com Pix',
+        text: shareText
+      });
+      showPixToast('Cobrança compartilhada. Agora é só aguardar o combinado andar.','success');
+      return;
+    }
+
+    await copyTextToClipboard(shareText);
+    showPixToast('Texto da cobrança copiado. É só colar onde quiser.','success');
+  }
+
+  async function handlePixAction(action, requestId) {
+    const cleanRequestId = Number(requestId || 0);
+    if (!cleanRequestId) return;
+
+    if (action === 'show') {
+      await openPixSheet(cleanRequestId);
+      return;
+    }
+
+    try {
+      const data = await ensurePixData(cleanRequestId);
+      if (action === 'copy') {
+        await copyTextToClipboard(data?.payload || '');
+        showPixToast('Pix copiado. Agora é só colar no banco e seguir o baile.','success');
+        return;
+      }
+
+      if (action === 'share') {
+        await sharePixData(data);
+      }
+    } catch (error) {
+      showPixToast(error?.message || 'O Pix não apareceu por aqui agora.', 'error');
+    }
+  }
+
   document.addEventListener('click', (event) => {
+    const pixBtn = event.target.closest('[data-pix-action]');
+    if (pixBtn) {
+      event.preventDefault();
+      handlePixAction(pixBtn.getAttribute('data-pix-action'), pixBtn.getAttribute('data-request-id'));
+      return;
+    }
+
+    const pixSheetBtn = event.target.closest('[data-pix-sheet-action]');
+    if (pixSheetBtn) {
+      event.preventDefault();
+      const action = pixSheetBtn.getAttribute('data-pix-sheet-action');
+      const data = pixSheetState.data;
+      if (!data) {
+        showPixToast('Ainda estou terminando de montar esse Pix por aqui.', 'info');
+        return;
+      }
+
+      if (action === 'copy') {
+        copyTextToClipboard(data?.payload || '')
+          .then(() => showPixToast('Pix copiado. Agora é só colar no banco.','success'))
+          .catch((error) => showPixToast(error?.message || 'Não consegui copiar agora.', 'error'));
+        return;
+      }
+
+      if (action === 'share') {
+        sharePixData(data).catch((error) => showPixToast(error?.message || 'Não consegui compartilhar agora.', 'error'));
+        return;
+      }
+
+      if (action === 'copy-key') {
+        copyTextToClipboard(data?.keyValue || '')
+          .then(() => showPixToast('Chave Pix copiada.','success'))
+          .catch((error) => showPixToast(error?.message || 'Não consegui copiar a chave agora.', 'error'));
+        return;
+      }
+    }
+
     const openBtn = event.target.closest('[data-open-sheet]');
     if (openBtn) {
       event.preventDefault();

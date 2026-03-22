@@ -312,14 +312,14 @@
                                                             </div>
                                                         <% } %>
                                                     </div>
-                                                    <div class="min-w-[120px] max-w-[148px] self-start sm:min-w-0 sm:max-w-none">
+                                                    <div class="w-40 min-w-[10rem] max-w-[10rem] self-start sm:w-48 sm:min-w-[12rem] sm:max-w-[12rem]">
                                                         <% if (variable) { %>
                                                             <button type="button" onclick="openVariableEditor(<%= fin.id %>)" class="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-right transition hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 sm:px-3">
                                                                 <span class="block font-mono text-[13px] font-black text-emerald-700 dark:text-emerald-300 sm:text-sm"><%= formatBRLFromCents(fin.amount_cents) %></span>
                                                                 <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${itemCount} lançamento${itemCount === 1 ? '' : 's'}` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
                                                             </button>
                                                         <% } else { %>
-                                                            <input type="text" data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl bg-emerald-50 px-2.5 py-2 font-mono text-[13px] font-bold text-right text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:bg-emerald-900/30 dark:text-emerald-400 sm:rounded-lg sm:px-2 sm:py-1 sm:text-sm" value="<%= getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>, this.value)">
+                                                            <input type="text" data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-mono text-[13px] font-black text-right text-emerald-700 outline-none transition hover:border-emerald-300 focus:border-emerald-400 focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:border-emerald-900/40 dark:bg-emerald-900/30 dark:text-emerald-400 sm:text-sm" value="<%= getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>, this.value)">
                                                         <% } %>
                                                     </div>
                                                     <div class="self-start pt-0.5 text-right sm:pt-1">
@@ -363,14 +363,14 @@
                                                             </div>
                                                         <% } %>
                                                     </div>
-                                                    <div class="min-w-[120px] max-w-[148px] self-start sm:min-w-0 sm:max-w-none">
+                                                    <div class="w-40 min-w-[10rem] max-w-[10rem] self-start sm:w-48 sm:min-w-[12rem] sm:max-w-[12rem]">
                                                         <% if (variable) { %>
                                                             <button type="button" onclick="openVariableEditor(<%= fin.id %>)" class="w-full rounded-2xl border border-rose-200 bg-rose-50 px-2.5 py-2 text-right transition hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900/40 dark:bg-rose-900/20 dark:hover:bg-rose-900/30 sm:px-3">
                                                                 <span class="block font-mono text-[13px] font-black text-rose-700 dark:text-rose-300 sm:text-sm"><%= formatBRLFromCents(fin.amount_cents) %></span>
                                                                 <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${itemCount} lançamento${itemCount === 1 ? '' : 's'}` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
                                                             </button>
                                                         <% } else { %>
-                                                            <input type="text" data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl bg-rose-50 px-2.5 py-2 font-mono text-[13px] font-bold text-right text-rose-700 outline-none focus:ring-2 focus:ring-rose-500 disabled:opacity-60 dark:bg-rose-900/30 dark:text-rose-400 sm:rounded-lg sm:px-2 sm:py-1 sm:text-sm" value="<%= getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>, this.value)">
+                                                            <input type="text" data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 font-mono text-[13px] font-black text-right text-rose-700 outline-none transition hover:border-rose-300 focus:border-rose-400 focus:ring-2 focus:ring-rose-500 disabled:opacity-60 dark:border-rose-900/40 dark:bg-rose-900/30 dark:text-rose-400 sm:text-sm" value="<%= getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>, this.value)">
                                                         <% } %>
                                                     </div>
                                                     <div class="self-start pt-0.5 text-right sm:pt-1">

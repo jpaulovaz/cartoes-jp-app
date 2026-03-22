@@ -276,6 +276,12 @@ function buildSharedDebtPixTxid(requestId, version = 0) {
   return sanitizeTxid(`OPAYAV${safeRequestId.toString(36)}${safeVersion ? `V${safeVersion.toString(36)}` : ''}`);
 }
 
+function buildSharedDebtCardMonthlyPixTxid(settlementId, intentId = 0) {
+  const safeSettlementId = Math.max(0, Number(settlementId || 0));
+  const safeIntentId = Math.max(0, Number(intentId || 0));
+  return sanitizeTxid(`OPAYCM${safeSettlementId.toString(36)}${safeIntentId ? `I${safeIntentId.toString(36)}` : ''}`);
+}
+
 module.exports = {
   PIX_KEY_TYPE_LABELS,
   normalizePixKeyType,
@@ -286,5 +292,6 @@ module.exports = {
   sanitizePixText,
   sanitizeTxid,
   buildPixPayload,
-  buildSharedDebtPixTxid
+  buildSharedDebtPixTxid,
+  buildSharedDebtCardMonthlyPixTxid
 };

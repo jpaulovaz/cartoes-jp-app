@@ -440,13 +440,165 @@
   const receivedPendingCount = countItems(received, item => item.status === 'pending');
   const sentDecisionCount = countItems(sent, item => item.status === 'rejected_by_receiver');
   const sentReceiptCount = countItems(sent, item => item.status === 'accepted' && item.payment_marked_at);
-  const actionCount = countItems(trackingFiltersActive ? receivedBaseItems : received, item => isReceivedActionable(item))
-    + countItems(trackingFiltersActive ? sentBaseItems : sent, item => isSentActionable(item));
+  const cardMonthlySettlementsList = Array.isArray(cardMonthlySettlements) ? cardMonthlySettlements : [];
+  const cardMonthlySettlementsByKey = new Map(cardMonthlySettlementsList.map((snapshot) => [snapshot?.settlementKey, snapshot]).filter(([key]) => !!key));
+  const cardMonthlySettlementsById = new Map(cardMonthlySettlementsList.map((snapshot) => [Number(snapshot?.id || 0), snapshot]).filter(([id]) => !!id));
+
+  function cardMonthlySnapshotForItem(item) {
+    return cardMonthlySettlementsByKey.get(item?.card_monthly_settlement_key || '') || null;
+  }
+
+  function groupContainsSettlement(group, settlementId) {
+    if (!settlementId) return false;
+    return (group?.items || []).some((item) => Number(item?.card_monthly_settlement_id || 0) === Number(settlementId));
+  }
+
+  function buildGroupSettlementEntries(group, scope) {
+    const grouped = new Map();
+    (group?.items || []).forEach((item) => {
+      const key = item?.card_monthly_settlement_key || '';
+      const snapshot = cardMonthlySnapshotForItem(item);
+      if (!key || !snapshot || !Number(snapshot?.requestCount || 0)) return;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          key,
+          id: Number(snapshot?.id || 0),
+          snapshot,
+          items: [],
+          counterpartName: scope === 'received'
+            ? (item?.requester_name || item?.requester_email || 'quem enviou')
+            : (item?.receiver_name || item?.receiver_email || 'quem recebeu')
+        });
+      }
+      grouped.get(key).items.push(item);
+    });
+
+    return Array.from(grouped.values()).map((entry) => ({
+      ...entry,
+      month: Number(entry.snapshot?.month || group?.month || 0),
+      year: Number(entry.snapshot?.year || group?.year || 0),
+      status: String(entry.snapshot?.status || 'open'),
+      requestCount: Math.max(0, Number(entry.snapshot?.requestCount || entry.items.length || 0)),
+      totalAcceptedCents: Math.max(0, Number(entry.snapshot?.totalAcceptedCents || 0)),
+      confirmedCents: Math.max(0, Number(entry.snapshot?.confirmedCents || 0)),
+      reservedCents: Math.max(0, Number(entry.snapshot?.reservedCents || 0)),
+      openCents: Math.max(0, Number(entry.snapshot?.openCents || 0)),
+      lastActivityAt: entry.snapshot?.lastActivityAt || null
+    })).sort((a, b) => String(a.counterpartName || '').localeCompare(String(b.counterpartName || ''), 'pt-BR', { sensitivity: 'base' }));
+  }
+
+  function settlementStatusMeta(entry, scope) {
+    const openCents = Math.max(0, Number(entry?.openCents || 0));
+    const reservedCents = Math.max(0, Number(entry?.reservedCents || 0));
+    const confirmedCents = Math.max(0, Number(entry?.confirmedCents || 0));
+
+    if (openCents === 0 && reservedCents === 0 && (confirmedCents > 0 || Number(entry?.totalAcceptedCents || 0) > 0)) {
+      return {
+        label: 'Mês redondinho',
+        helper: 'Tudo o que foi aceito nessa carteira já ficou coberto.',
+        classes: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200'
+      };
+    }
+
+    if (reservedCents > 0 && openCents === 0) {
+      return {
+        label: scope === 'received' ? 'Aguardando confirmação' : 'Esperando seu ok',
+        helper: scope === 'received'
+          ? `Você já avisou ${formatBRLFromCents(reservedCents)} e agora só falta a confirmação final.`
+          : `${formatBRLFromCents(reservedCents)} já foi informado pelo outro lado e está esperando sua confirmação.`,
+        classes: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200'
+      };
+    }
+
+    if (reservedCents > 0) {
+      return {
+        label: 'Parte aguardando ok',
+        helper: `${formatBRLFromCents(reservedCents)} já foi informado e ${formatBRLFromCents(openCents)} ainda continua em aberto.`,
+        classes: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200'
+      };
+    }
+
+    if (confirmedCents > 0) {
+      return {
+        label: 'Pago em parte',
+        helper: `${formatBRLFromCents(confirmedCents)} já entrou na conta desse mês e ${formatBRLFromCents(openCents)} ainda falta fechar.`,
+        classes: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
+      };
+    }
+
+    return {
+      label: scope === 'received' ? 'Pronto para pagar' : 'Mês em aberto',
+      helper: scope === 'received'
+        ? `${formatBRLFromCents(openCents)} ainda em aberto nessa carteira.`
+        : `${formatBRLFromCents(openCents)} ainda aguardando pagamento nessa carteira.`,
+      classes: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200'
+    };
+  }
+
+  function buildReceivedActionEntries(items) {
+    const entries = [];
+    const seenSettlements = new Set();
+
+    (items || []).forEach((item) => {
+      if (isManualItem(item)) {
+        const meta = actionMetaForItem(item, 'received');
+        if (meta) entries.push({ kind: 'request', ...meta });
+        return;
+      }
+
+      if (item?.status === 'pending') {
+        const meta = actionMetaForItem(item, 'received');
+        if (meta) entries.push({ kind: 'request', ...meta });
+        return;
+      }
+
+      if (item?.status !== 'accepted') return;
+
+      const key = item?.card_monthly_settlement_key || '';
+      const snapshot = cardMonthlySnapshotForItem(item);
+      if (!key || !snapshot || seenSettlements.has(key) || Math.max(0, Number(snapshot?.openCents || 0)) <= 0) return;
+
+      const counterpartName = item?.requester_name || item?.requester_email || 'quem enviou';
+      const periodLabel = monthLabel(snapshot?.month || item?.source_due_month, snapshot?.year || item?.source_due_year);
+      entries.push({
+        kind: 'settlement',
+        settlementId: Number(snapshot?.id || 0),
+        settlementKey: key,
+        title: `Pagar ${counterpartName} em ${periodLabel}`,
+        helper: Math.max(0, Number(snapshot?.reservedCents || 0)) > 0
+          ? `${formatBRLFromCents(snapshot?.openCents || 0)} ainda em aberto. Já tem ${formatBRLFromCents(snapshot?.reservedCents || 0)} aguardando confirmação.`
+          : `${formatBRLFromCents(snapshot?.openCents || 0)} ainda em aberto nessa carteira do mês.`,
+        meta: `Carteira mensal · ${formatBRLFromCents(snapshot?.openCents || 0)}`,
+        buttonLabel: 'Abrir Pix do mês',
+        priority: 1,
+        sortDate: String(snapshot?.lastActivityAt || item?.updated_at || item?.created_at || '')
+      });
+      seenSettlements.add(key);
+    });
+
+    return entries;
+  }
+
+  function buildSentActionEntries(items) {
+    return (items || []).map((item) => {
+      const meta = actionMetaForItem(item, 'sent');
+      return meta ? { kind: 'request', ...meta } : null;
+    }).filter(Boolean);
+  }
+
+  function countGroupActions(group, scope) {
+    return scope === 'received'
+      ? buildReceivedActionEntries(group?.items || []).length
+      : buildSentActionEntries(group?.items || []).length;
+  }
+
+  const actionCount = (trackingFiltersActive ? buildReceivedActionEntries(receivedBaseItems) : buildReceivedActionEntries(received)).length
+    + (trackingFiltersActive ? buildSentActionEntries(sentBaseItems) : buildSentActionEntries(sent)).length;
   const receivedHasActionableGroup = receivedGroups.some(group => countGroupActions(group, 'received') > 0);
   const sentHasActionableGroup = sentGroups.some(group => countGroupActions(group, 'sent') > 0);
 
   function shouldOpenGroup(group, index, scope) {
-    if (groupContainsRequest(group, requestIdToHighlight)) return true;
+    if (groupContainsRequest(group, requestIdToHighlight) || groupContainsSettlement(group, settlementIdToHighlight)) return true;
     const actionCountForGroup = countGroupActions(group, scope);
     if (actionCountForGroup > 0) return true;
     if (scope === 'received' && !receivedHasActionableGroup && index === 0) return true;
@@ -454,26 +606,26 @@
     return false;
   }
 
-  function groupsContainRequest(groups, requestId) {
-    if (!requestId) return false;
-    return (groups || []).some(group => groupContainsRequest(group, requestId));
+  function groupsContainFocus(groups, requestId, settlementId) {
+    if (!requestId && !settlementId) return false;
+    return (groups || []).some((group) => groupContainsRequest(group, requestId) || groupContainsSettlement(group, settlementId));
   }
 
-  const receivedAllActionableItems = actionableItems(received, 'received');
-  const sentAllActionableItems = actionableItems(sent, 'sent');
-  const receivedVisibleActionableItems = actionableItems(receivedBaseItems, 'received');
-  const sentVisibleActionableItems = actionableItems(sentBaseItems, 'sent');
-  const receivedActionCount = (trackingFiltersActive ? receivedVisibleActionableItems : receivedAllActionableItems).length;
-  const sentActionCount = (trackingFiltersActive ? sentVisibleActionableItems : sentAllActionableItems).length;
-  const receivedScopeOpen = groupsContainRequest(receivedGroups, requestIdToHighlight) || receivedHasActionableGroup || receivedManualSectionOpen;
-  const sentScopeOpen = groupsContainRequest(sentGroups, requestIdToHighlight) || sentHasActionableGroup || sentManualSectionOpen;
+  const receivedAllActionEntries = buildReceivedActionEntries(received);
+  const sentAllActionEntries = buildSentActionEntries(sent);
+  const receivedVisibleActionEntries = buildReceivedActionEntries(receivedBaseItems);
+  const sentVisibleActionEntries = buildSentActionEntries(sentBaseItems);
+  const receivedActionCount = (trackingFiltersActive ? receivedVisibleActionEntries : receivedAllActionEntries).length;
+  const sentActionCount = (trackingFiltersActive ? sentVisibleActionEntries : sentAllActionEntries).length;
+  const receivedScopeOpen = groupsContainFocus(receivedGroups, requestIdToHighlight, settlementIdToHighlight) || receivedHasActionableGroup || receivedManualSectionOpen;
+  const sentScopeOpen = groupsContainFocus(sentGroups, requestIdToHighlight, settlementIdToHighlight) || sentHasActionableGroup || sentManualSectionOpen;
 
   function buildQuickActions() {
-    const sourceReceivedItems = trackingFiltersActive ? receivedVisibleActionableItems : receivedAllActionableItems;
-    const sourceSentItems = trackingFiltersActive ? sentVisibleActionableItems : sentAllActionableItems;
+    const sourceReceivedItems = trackingFiltersActive ? receivedVisibleActionEntries : receivedAllActionEntries;
+    const sourceSentItems = trackingFiltersActive ? sentVisibleActionEntries : sentAllActionEntries;
     const actions = [
-      ...sourceReceivedItems.map(item => actionMetaForItem(item, 'received')),
-      ...sourceSentItems.map(item => actionMetaForItem(item, 'sent'))
+      ...sourceReceivedItems,
+      ...sourceSentItems
     ]
       .filter(Boolean)
       .sort((a, b) => {
@@ -708,10 +860,155 @@
         </div>
       </div>
     </div>
+
+  </div>
+
+  <div id="shared-debt-card-monthly-sheet" data-shared-debts-sheet class="fixed inset-0 z-[83] hidden">
+    <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
+    <div class="absolute inset-x-0 bottom-0 max-h-[94vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[88vh] sm:max-w-3xl sm:rounded-[32px]">
+      <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+        <div>
+          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-500 dark:text-emerald-300">Pix do cartão do mês</div>
+          <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white" data-card-monthly-title>Preparando a carteira do mês...</h3>
+          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400" data-card-monthly-subtitle>Você escolhe quanto vai pagar e eu monto o Pix no valor certinho.</p>
+        </div>
+        <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar Pix do mês">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <div class="max-h-[calc(94vh-92px)] overflow-y-auto px-5 py-4 sm:max-h-[calc(88vh-92px)]">
+        <div data-card-monthly-loading class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
+          Estou abrindo a carteira do mês para te mostrar o valor certinho antes do Pix sair.
+        </div>
+
+        <div data-card-monthly-error class="hidden rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm font-medium text-rose-700 dark:border-rose-900 dark:bg-rose-900/20 dark:text-rose-200"></div>
+
+        <div data-card-monthly-config class="hidden space-y-4">
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-800/80">
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Total aceito</div>
+                <div class="mt-1 text-sm font-black text-slate-900 dark:text-white" data-card-monthly-total>—</div>
+              </div>
+              <div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Já confirmado</div>
+                <div class="mt-1 text-sm font-black text-slate-900 dark:text-white" data-card-monthly-confirmed>—</div>
+              </div>
+              <div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Aguardando ok</div>
+                <div class="mt-1 text-sm font-black text-slate-900 dark:text-white" data-card-monthly-reserved>—</div>
+              </div>
+              <div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Ainda em aberto</div>
+                <div class="mt-1 text-lg font-black text-slate-900 dark:text-white" data-card-monthly-open>—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-3xl border border-emerald-200 bg-emerald-50/80 px-4 py-4 dark:border-emerald-800 dark:bg-emerald-900/20">
+            <div class="text-sm font-bold text-slate-900 dark:text-white">Quanto vai nesse Pix?</div>
+            <p class="mt-1 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300">Se quiser, pode pagar tudo agora. Se preferir, manda só uma parte e o app já te mostra como isso encosta nas compras do mês.</p>
+
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
+              <button type="button" data-card-monthly-choice="full" class="rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:bg-emerald-50 dark:border-emerald-800 dark:bg-slate-900/70 dark:hover:bg-emerald-900/20">
+                <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-300">Pagar tudo</div>
+                <div class="mt-1 text-sm font-black text-slate-900 dark:text-white" data-card-monthly-full-label>—</div>
+                <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Sai com o saldo aberto inteiro dessa carteira.</div>
+              </button>
+              <button type="button" data-card-monthly-choice="custom" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/70 dark:hover:bg-slate-800">
+                <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Escolher valor</div>
+                <div class="mt-1 text-sm font-black text-slate-900 dark:text-white">Você decide quanto vai agora</div>
+                <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Bom para ir baixando aos poucos sem perder o fio da meada.</div>
+              </button>
+            </div>
+
+            <label class="mt-4 hidden block" data-card-monthly-custom-wrap>
+              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor deste Pix</span>
+              <input type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" data-card-monthly-custom-input class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 shadow-sm placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20">
+              <div class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">Máximo disponível agora: <span data-card-monthly-custom-max>—</span>.</div>
+            </label>
+          </div>
+
+          <div class="rounded-3xl border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/50">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div class="text-sm font-bold text-slate-900 dark:text-white">Como esse valor vai ser encaixado</div>
+                <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">A ordem vai do mais antigo para o mais novo. A baixa final só acontece depois da confirmação de quem recebe.</p>
+              </div>
+              <span class="inline-flex items-center self-start rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200" data-card-monthly-preview-amount>—</span>
+            </div>
+            <div class="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200" data-card-monthly-preview-summary>—</div>
+            <div class="mt-3 space-y-2" data-card-monthly-preview-list></div>
+          </div>
+
+          <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+            <button type="button" data-card-monthly-generate class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-500 dark:hover:bg-emerald-600">Gerar Pix</button>
+          </div>
+        </div>
+
+        <div data-card-monthly-pix class="hidden space-y-4">
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-800/80">
+            <div class="grid gap-3 sm:grid-cols-3">
+              <div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor deste Pix</div>
+                <div class="mt-1 text-lg font-black text-slate-900 dark:text-white" data-card-monthly-pix-amount>—</div>
+              </div>
+              <div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Chave</div>
+                <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white" data-card-monthly-pix-key-meta>—</div>
+              </div>
+              <div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Cidade</div>
+                <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white" data-card-monthly-pix-city>—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid gap-4 lg:grid-cols-[minmax(0,240px)_minmax(0,1fr)] lg:items-start">
+            <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/50">
+              <div class="aspect-square overflow-hidden rounded-[24px] bg-white p-3 ring-1 ring-slate-200 dark:bg-slate-50 dark:ring-slate-700">
+                <img data-card-monthly-pix-qr class="h-full w-full object-contain" alt="QR Code Pix do mês" />
+              </div>
+              <p class="mt-3 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400" data-card-monthly-pix-qr-hint>Se preferir, é só apontar a câmera do banco para esse QR.</p>
+            </div>
+
+            <div class="space-y-3">
+              <label class="block">
+                <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pix copia e cola</span>
+                <textarea readonly data-card-monthly-pix-payload rows="6" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 shadow-sm focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"></textarea>
+              </label>
+
+              <label class="block">
+                <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Recado opcional para o aviso do pagamento</span>
+                <textarea rows="2" data-card-monthly-pix-note placeholder="Ex.: Já fiz este Pix agora, depois confere por favor." class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 shadow-sm placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20"></textarea>
+              </label>
+
+              <div class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-800 dark:border-sky-900 dark:bg-sky-900/20 dark:text-sky-200">
+                O valor só entra como confirmado depois do ok de quem vai receber. Até lá, ele fica separado nessa carteira para ninguém se perder.
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                <button type="button" data-card-monthly-pix-action="copy" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Copiar Pix</button>
+                <button type="button" data-card-monthly-pix-action="share" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Compartilhar</button>
+                <button type="button" data-card-monthly-back class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Gerar outro valor</button>
+              </div>
+
+              <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Fechar</button>
+                <button type="button" data-card-monthly-report class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-sky-500 dark:hover:bg-sky-600">Já fiz o Pix</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
 
   <% if (receivedBatchCards.length || sentBatchCards.length) { %>
+
     <section class="space-y-6 op-fade-up">
       <% if (receivedBatchCards.length) { %>
         <div class="space-y-4">
@@ -854,7 +1151,12 @@
             <p class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">As próximas ações que dependem de você aparecem aqui para abrir direto no ponto certo.</p>
           </div>
           <% if (firstQuickAction) { %>
-            <button type="button" data-jump-request="request-<%= firstQuickAction.requestId %>" class="inline-flex shrink-0 items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-600">Abrir 1ª ação</button>
+            <button
+              type="button"
+              <%= firstQuickAction.kind === 'settlement'
+                ? `data-open-card-monthly-settlement="${firstQuickAction.settlementId}"`
+                : `data-jump-request="request-${firstQuickAction.requestId}"` %>
+              class="inline-flex shrink-0 items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-600">Abrir 1ª ação</button>
           <% } %>
         </div>
         <% if (quickActions.length) { %>
@@ -867,7 +1169,12 @@
                     <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= action.helper %></div>
                     <div class="mt-2 inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><%= action.meta %></div>
                   </div>
-                  <button type="button" data-jump-request="request-<%= action.requestId %>" class="inline-flex shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= action.buttonLabel %></button>
+                  <button
+                    type="button"
+                    <%= action.kind === 'settlement'
+                      ? `data-open-card-monthly-settlement="${action.settlementId}"`
+                      : `data-jump-request="request-${action.requestId}"` %>
+                    class="inline-flex shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= action.buttonLabel %></button>
                 </div>
               </div>
             <% }) %>
@@ -1202,12 +1509,12 @@
                 </div>
               </summary>
 
-              <% const receivedMonthSheetId = `received-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const receivedMonthBulkPaySheetId = `received-month-pay-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const receivedMonthPayableItems = getReceivedMonthPayableItems(group); const receivedMonthPayableTotal = sumAmountCents(receivedMonthPayableItems); const receivedMonthCounterparts = countDistinctCounterparts(receivedMonthPayableItems, 'received'); const receivedMonthArchiveItems = (group.items || []).filter(canArchiveItem); %>
-              <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4">
+              <% const receivedMonthSheetId = `received-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const receivedMonthArchiveItems = (group.items || []).filter(canArchiveItem); const receivedSettlementEntries = buildGroupSettlementEntries(group, 'received'); %>
+              <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4 space-y-4">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><span class="md:hidden">Visão do mês</span><span class="hidden md:inline">Visão do período</span></div>
-                    <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Abra a lista completa do mês para revisar todas as cobranças recebidas de uma vez e depois entrar só na que precisar.</div>
+                    <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= receivedSettlementEntries.length ? 'Aqui o pagamento anda por pessoa, dentro do mês. O histórico por envio continua ali embaixo para consulta item a item.' : 'Abra a lista completa do mês para revisar todas as cobranças recebidas de uma vez e depois entrar só na que precisar.' %></div>
                   </div>
                   <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
                     <button type="button" data-open-sheet="<%= receivedMonthSheetId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-100 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700">
@@ -1221,47 +1528,58 @@
                         <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleGroupLabel(receivedMonthArchiveItems) %></button>
                       </form>
                     <% } %>
-                    <% if (!isArchiveMode && receivedMonthPayableItems.length) { %>
-                      <button type="button" data-open-sheet="<%= receivedMonthBulkPaySheetId %>" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">
-                        Marcar mês como pago
-                      </button>
-                    <% } %>
                   </div>
                 </div>
-              </div>
-              <% if (receivedMonthPayableItems.length) { %>
-              <div id="<%= receivedMonthBulkPaySheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
-                <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
-                <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-w-xl sm:rounded-[32px]">
-                  <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-                    <div>
-                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Recebidas · <%= group.label %></div>
-                      <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Marcar mês como pago</h3>
-                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= countLabel(receivedMonthPayableItems.length, 'cobrança aceita', 'cobranças aceitas') %> · <%= formatBRLFromCents(receivedMonthPayableTotal) %></p>
-                    </div>
-                    <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar atalho do mês">
-                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
-                  </div>
-                  <form method="POST" action="/shared-debts/bulk/mark-paid" class="space-y-4 px-5 py-4">
-                    <% receivedMonthPayableItems.forEach((item) => { %>
-                      <input type="hidden" name="request_ids" value="<%= item.id %>">
+
+                <% if (receivedSettlementEntries.length) { %>
+                  <div class="grid gap-3 lg:grid-cols-2">
+                    <% receivedSettlementEntries.forEach((entry) => { const settlementMeta = settlementStatusMeta(entry, 'received'); const highlightedSettlement = settlementIdToHighlight && Number(settlementIdToHighlight) === Number(entry.id); %>
+                      <article id="settlement-<%= entry.id %>" class="rounded-[28px] border <%= highlightedSettlement ? 'border-emerald-300 bg-emerald-50/90 shadow-emerald-200/60 dark:border-emerald-700 dark:bg-emerald-900/20 dark:shadow-emerald-950/30' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/40' %> p-4 shadow-sm">
+                        <div class="flex flex-col gap-4">
+                          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div class="min-w-0 flex-1">
+                              <div class="flex flex-wrap items-center gap-2">
+                                <div class="text-base font-black text-slate-900 dark:text-white">Pix do mês com <%= entry.counterpartName %></div>
+                                <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= settlementMeta.classes %>"><%= settlementMeta.label %></span>
+                              </div>
+                              <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= settlementMeta.helper %></p>
+                            </div>
+                            <div class="sm:text-right">
+                              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Falta pagar</div>
+                              <div class="mt-1 text-xl font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(entry.openCents) %></div>
+                            </div>
+                          </div>
+
+                          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Total aceito</div>
+                              <div class="mt-1 text-sm font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(entry.totalAcceptedCents) %></div>
+                            </div>
+                            <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Já confirmado</div>
+                              <div class="mt-1 text-sm font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(entry.confirmedCents) %></div>
+                            </div>
+                            <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Aguardando ok</div>
+                              <div class="mt-1 text-sm font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(entry.reservedCents) %></div>
+                            </div>
+                            <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Compras do mês</div>
+                              <div class="mt-1 text-sm font-black text-slate-900 dark:text-white"><%= countLabel(entry.requestCount, 'cobrança', 'cobranças') %></div>
+                            </div>
+                          </div>
+
+                          <% if (!isArchiveMode && entry.openCents > 0) { %>
+                            <div class="flex justify-end">
+                              <button type="button" data-open-card-monthly-settlement="<%= entry.id %>" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600"><%= entry.reservedCents > 0 ? 'Pagar o que falta' : 'Pagar este mês' %></button>
+                            </div>
+                          <% } %>
+                        </div>
+                      </article>
                     <% }) %>
-                    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
-                      Este atalho marca como pagas todas as cobranças já aceitas em <strong><%= group.label %></strong>. As pendências de aprovação continuam separadas. <% if (receivedMonthCounterparts > 1) { %>O aviso será resumido para <strong><%= receivedMonthCounterparts %> pessoas</strong> conforme os envios impactados.<% } %>
-                    </div>
-                    <label class="block">
-                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação do pagamento (opcional)</span>
-                      <textarea name="note" rows="3" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20" placeholder="Ex.: Pix realizado e comprovante já enviado."></textarea>
-                    </label>
-                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                      <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
-                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Marcar <%= countLabel(receivedMonthPayableItems.length, 'cobrança como paga', 'cobranças como pagas') %></button>
-                    </div>
-                  </form>
-                </div>
+                  </div>
+                <% } %>
               </div>
-              <% } %>
               <div id="<%= receivedMonthSheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
                 <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
                 <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[82vh] sm:max-w-3xl sm:rounded-[32px]">
@@ -1381,19 +1699,22 @@
                             </div>
                           </form>
                         </div>
-                      <% } else if (item.status === 'accepted' && !item.payment_marked_at) { %>
+                      <% } else if (item.status === 'accepted' && !item.payment_marked_at) { const itemSettlement = cardMonthlySnapshotForItem(item); const canOpenSettlement = itemSettlement && Number(itemSettlement.id || 0) && Math.max(0, Number(itemSettlement.openCents || 0)) > 0; const hasReservedSettlement = itemSettlement && Math.max(0, Number(itemSettlement.reservedCents || 0)) > 0; %>
                         <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-4">
                           <div class="text-sm font-bold text-slate-900 dark:text-white">Dívida aceita e em aberto</div>
-                          <p class="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">Quando o pagamento for realizado, marque aqui para avisar o remetente e iniciar a liquidação.</p>
-                          <form method="POST" action="/shared-debts/<%= item.id %>/mark-paid" class="mt-3 space-y-3">
-                            <label class="block">
-                              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação sobre o pagamento (opcional)</span>
-                              <textarea name="note" rows="2" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20" placeholder="Ex.: Já fiz o Pix agora há pouco."></textarea>
-                            </label>
-                            <div class="flex justify-end">
-                              <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-600 transition-colors">Marcar como paga</button>
+                          <p class="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300"><%= hasReservedSettlement ? 'Já tem um Pix desse mês aguardando confirmação. O restante continua aparecendo na carteira mensal até fechar tudo.' : 'Agora o pagamento do cartão anda pela carteira do mês. Você pode pagar tudo ou escolher só uma parte e deixar o app distribuir do mais antigo para o mais novo.' %></p>
+                          <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                            <% if (itemSettlement) { %>
+                              <span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-3 py-1 dark:border-emerald-800 dark:bg-slate-900/60"><%= formatBRLFromCents(itemSettlement.openCents || 0) %> em aberto</span>
+                              <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 dark:border-slate-700 dark:bg-slate-900/60"><%= monthLabel(itemSettlement.month || item.source_due_month, itemSettlement.year || item.source_due_year) %></span>
+                              <% if (Number(itemSettlement.reservedCents || 0) > 0) { %><span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-3 py-1 text-sky-700 dark:border-sky-800 dark:bg-slate-900/60 dark:text-sky-200"><%= formatBRLFromCents(itemSettlement.reservedCents || 0) %> aguardando ok</span><% } %>
+                            <% } %>
+                          </div>
+                          <% if (canOpenSettlement) { %>
+                            <div class="mt-3 flex justify-end">
+                              <button type="button" data-open-card-monthly-settlement="<%= itemSettlement.id %>" class="inline-flex items-center justify-center rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-600 transition-colors"><%= Number(itemSettlement.reservedCents || 0) > 0 ? 'Pagar o que falta' : 'Abrir Pix do mês' %></button>
                             </div>
-                          </form>
+                          <% } %>
                         </div>
                       <% } else if (item.status === 'accepted' && item.payment_marked_at) { %>
                         <div class="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 px-4 py-3">
@@ -1732,12 +2053,12 @@
                 </div>
               </summary>
 
-              <% const sentMonthSheetId = `sent-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmSheetId = `sent-month-confirm-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmableItems = getSentMonthConfirmableItems(group); const sentMonthConfirmableTotal = sumAmountCents(sentMonthConfirmableItems); const sentMonthCounterparts = countDistinctCounterparts(sentMonthConfirmableItems, 'sent'); const sentMonthArchiveItems = (group.items || []).filter(canArchiveItem); %>
-              <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4">
+              <% const sentMonthSheetId = `sent-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmSheetId = `sent-month-confirm-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmableItems = getSentMonthConfirmableItems(group); const sentMonthConfirmableTotal = sumAmountCents(sentMonthConfirmableItems); const sentMonthCounterparts = countDistinctCounterparts(sentMonthConfirmableItems, 'sent'); const sentMonthArchiveItems = (group.items || []).filter(canArchiveItem); const sentSettlementEntries = buildGroupSettlementEntries(group, 'sent'); %>
+              <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4 space-y-4">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><span class="md:hidden">Visão do mês</span><span class="hidden md:inline">Visão do período</span></div>
-                    <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Abra a lista completa do mês para ver todas as cobranças enviadas de uma vez e acompanhar o panorama do <span class="md:hidden">mês</span><span class="hidden md:inline">período</span>.</div>
+                    <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= sentSettlementEntries.length ? 'Daqui você enxerga o saldo real do mês por pessoa, mesmo quando a cobrança nasceu em vários envios separados.' : 'Abra a lista completa do mês para ver todas as cobranças enviadas de uma vez e acompanhar o panorama do período.' %></div>
                   </div>
                   <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
                     <button type="button" data-open-sheet="<%= sentMonthSheetId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-100 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700">
@@ -1758,6 +2079,49 @@
                     <% } %>
                   </div>
                 </div>
+
+                <% if (sentSettlementEntries.length) { %>
+                  <div class="grid gap-3 lg:grid-cols-2">
+                    <% sentSettlementEntries.forEach((entry) => { const settlementMeta = settlementStatusMeta(entry, 'sent'); const highlightedSettlement = settlementIdToHighlight && Number(settlementIdToHighlight) === Number(entry.id); %>
+                      <article id="settlement-<%= entry.id %>" class="rounded-[28px] border <%= highlightedSettlement ? 'border-sky-300 bg-sky-50/90 shadow-sky-200/60 dark:border-sky-700 dark:bg-sky-900/20 dark:shadow-sky-950/30' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/40' %> p-4 shadow-sm">
+                        <div class="flex flex-col gap-4">
+                          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div class="min-w-0 flex-1">
+                              <div class="flex flex-wrap items-center gap-2">
+                                <div class="text-base font-black text-slate-900 dark:text-white">Carteira do mês com <%= entry.counterpartName %></div>
+                                <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= settlementMeta.classes %>"><%= settlementMeta.label %></span>
+                              </div>
+                              <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= settlementMeta.helper %></p>
+                            </div>
+                            <div class="sm:text-right">
+                              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Ainda em aberto</div>
+                              <div class="mt-1 text-xl font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(entry.openCents) %></div>
+                            </div>
+                          </div>
+
+                          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Total aceito</div>
+                              <div class="mt-1 text-sm font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(entry.totalAcceptedCents) %></div>
+                            </div>
+                            <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Já confirmado</div>
+                              <div class="mt-1 text-sm font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(entry.confirmedCents) %></div>
+                            </div>
+                            <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Aguardando ok</div>
+                              <div class="mt-1 text-sm font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(entry.reservedCents) %></div>
+                            </div>
+                            <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Compras do mês</div>
+                              <div class="mt-1 text-sm font-black text-slate-900 dark:text-white"><%= countLabel(entry.requestCount, 'cobrança', 'cobranças') %></div>
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    <% }) %>
+                  </div>
+                <% } %>
               </div>
               <% if (sentMonthConfirmableItems.length) { %>
               <div id="<%= sentMonthConfirmSheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
@@ -1911,10 +2275,17 @@
                             </div>
                           </form>
                         </div>
-                      <% } else if (item.status === 'accepted' && !item.payment_marked_at) { %>
+                      <% } else if (item.status === 'accepted' && !item.payment_marked_at) { const itemSettlement = cardMonthlySnapshotForItem(item); const settlementHasReserved = itemSettlement && Math.max(0, Number(itemSettlement.reservedCents || 0)) > 0; %>
                         <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3">
                           <div class="text-sm font-bold text-slate-900 dark:text-white">Cobrança aceita e aguardando pagamento</div>
-                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">O destinatário já aceitou esta dívida. Assim que ele marcar o pagamento, você poderá confirmar o recebimento e liquidar a solicitação.</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= settlementHasReserved ? 'Já existe um Pix desse mês esperando seu ok final. Enquanto isso, o restante continua aparecendo na carteira mensal sem bagunçar as compras lá de baixo.' : 'O pagamento deste cartão agora corre pela carteira do mês. Quando a outra pessoa avisar um Pix, você vai confirmar esse recebimento pelo resumo mensal.' %></div>
+                          <% if (itemSettlement) { %>
+                            <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                              <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 dark:border-slate-700 dark:bg-slate-900/60"><%= monthLabel(itemSettlement.month || item.source_due_month, itemSettlement.year || item.source_due_year) %></span>
+                              <span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-3 py-1 dark:border-emerald-800 dark:bg-slate-900/60"><%= formatBRLFromCents(itemSettlement.openCents || 0) %> em aberto</span>
+                              <% if (Number(itemSettlement.reservedCents || 0) > 0) { %><span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-3 py-1 text-sky-700 dark:border-sky-800 dark:bg-slate-900/60 dark:text-sky-200"><%= formatBRLFromCents(itemSettlement.reservedCents || 0) %> aguardando seu ok</span><% } %>
+                            </div>
+                          <% } %>
                         </div>
                       <% } else if (item.status === 'accepted' && item.payment_marked_at) { %>
                         <div class="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 px-4 py-4">
@@ -2215,7 +2586,454 @@
     }
   }
 
+  const cardMonthlySheetState = {
+    settlementId: null,
+    prepare: null,
+    pix: null,
+    mode: 'full',
+    amountCents: 0
+  };
+
+  const brlFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  function formatClientBRL(cents) {
+    return brlFormatter.format((Number(cents || 0) || 0) / 100);
+  }
+
+  function parseMoneyInputToCents(rawValue) {
+    const value = String(rawValue || '').trim();
+    if (!value) return 0;
+    const normalized = value
+      .replace(/\s+/g, '')
+      .replace(/R\$/gi, '')
+      .replace(/[^\d,.-]/g, '')
+      .replace(/\.(?=.*\.)/g, '');
+
+    if (!normalized) return 0;
+
+    let decimalSafe = normalized;
+    if (decimalSafe.includes(',')) {
+      decimalSafe = decimalSafe.replace(/\./g, '').replace(',', '.');
+    }
+
+    const amount = Number(decimalSafe);
+    if (!Number.isFinite(amount) || amount <= 0) return 0;
+    return Math.round(amount * 100);
+  }
+
+  function buildCardMonthlyPreview(rows, rawAmountCents) {
+    const safeRows = Array.isArray(rows) ? rows : [];
+    const requestedAmount = Math.max(0, Number(rawAmountCents || 0));
+    let remaining = requestedAmount;
+    let allocated = 0;
+    let touchedCount = 0;
+    let fullySettledCount = 0;
+    let partialRow = null;
+    const previewRows = [];
+
+    safeRows.forEach((row) => {
+      const pending = Math.max(0, Number(row?.pendingCents || 0));
+      if (!pending || remaining <= 0) return;
+      const used = Math.min(pending, remaining);
+      remaining -= used;
+      allocated += used;
+      touchedCount += 1;
+      if (used >= pending) {
+        fullySettledCount += 1;
+      } else if (!partialRow) {
+        partialRow = {
+          description: row?.description || 'uma cobrança do mês',
+          usedCents: used,
+          pendingCents: pending,
+          remainingCents: pending - used
+        };
+      }
+      previewRows.push({
+        id: row?.id,
+        description: row?.description || 'Compra sem descrição',
+        txnDate: row?.txnDate || null,
+        pendingCents: pending,
+        usedCents: used,
+        remainingCents: Math.max(0, pending - used)
+      });
+    });
+
+    let summary = 'Esse valor ainda não encosta em nenhuma cobrança do mês.';
+    if (allocated > 0 && !partialRow && fullySettledCount > 0) {
+      summary = `${formatClientBRL(allocated)} cobre ${fullySettledCount} ${fullySettledCount === 1 ? 'cobrança' : 'cobranças'} por completo nessa carteira.`;
+    } else if (allocated > 0 && partialRow) {
+      summary = `${formatClientBRL(allocated)} cobre ${fullySettledCount} ${fullySettledCount === 1 ? 'cobrança' : 'cobranças'} por completo e deixa “${partialRow.description}” com ${formatClientBRL(partialRow.remainingCents)} ainda em aberto.`;
+    }
+
+    return {
+      amountCents: requestedAmount,
+      allocatedCents: allocated,
+      remainingToAllocateCents: Math.max(0, remaining),
+      touchedCount,
+      fullySettledCount,
+      partialRow,
+      rows: previewRows,
+      summary
+    };
+  }
+
+  function setCardMonthlySheetState(mode, message = '') {
+    const loading = document.querySelector('[data-card-monthly-loading]');
+    const errorBox = document.querySelector('[data-card-monthly-error]');
+    const config = document.querySelector('[data-card-monthly-config]');
+    const pix = document.querySelector('[data-card-monthly-pix]');
+    if (!loading || !errorBox || !config || !pix) return;
+    loading.classList.toggle('hidden', mode !== 'loading');
+    errorBox.classList.toggle('hidden', mode !== 'error');
+    config.classList.toggle('hidden', mode !== 'config');
+    pix.classList.toggle('hidden', mode !== 'pix');
+    if (mode === 'error') {
+      errorBox.textContent = message || 'O Pix do mês quase saiu, mas ainda tropeçou num detalhe por aqui.';
+    }
+  }
+
+  function setCardMonthlyChoice(mode) {
+    const fullBtn = document.querySelector('[data-card-monthly-choice="full"]');
+    const customBtn = document.querySelector('[data-card-monthly-choice="custom"]');
+    const customWrap = document.querySelector('[data-card-monthly-custom-wrap]');
+    const customInput = document.querySelector('[data-card-monthly-custom-input]');
+    cardMonthlySheetState.mode = mode === 'custom' ? 'custom' : 'full';
+
+    const fullActive = cardMonthlySheetState.mode === 'full';
+    if (fullBtn) fullBtn.className = `rounded-2xl border px-4 py-3 text-left shadow-sm transition-colors ${fullActive ? 'border-emerald-200 bg-white hover:bg-emerald-50 dark:border-emerald-800 dark:bg-slate-900/70 dark:hover:bg-emerald-900/20' : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/70 dark:hover:bg-slate-800'}`;
+    if (customBtn) customBtn.className = `rounded-2xl border px-4 py-3 text-left shadow-sm transition-colors ${!fullActive ? 'border-emerald-200 bg-white hover:bg-emerald-50 dark:border-emerald-800 dark:bg-slate-900/70 dark:hover:bg-emerald-900/20' : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/70 dark:hover:bg-slate-800'}`;
+    if (customWrap) customWrap.classList.toggle('hidden', fullActive);
+    if (!fullActive && customInput) {
+      window.setTimeout(() => customInput.focus(), 60);
+    }
+  }
+
+  function getCardMonthlySelectedAmountCents() {
+    const openCents = Math.max(0, Number(cardMonthlySheetState.prepare?.openCents || 0));
+    if (cardMonthlySheetState.mode === 'custom') {
+      const customInput = document.querySelector('[data-card-monthly-custom-input]');
+      return Math.min(openCents, parseMoneyInputToCents(customInput?.value || ''));
+    }
+    return openCents;
+  }
+
+  function renderCardMonthlyPreview() {
+    const prepare = cardMonthlySheetState.prepare;
+    if (!prepare) return;
+
+    const selectedAmountCents = getCardMonthlySelectedAmountCents();
+    cardMonthlySheetState.amountCents = selectedAmountCents;
+
+    const previewAmount = document.querySelector('[data-card-monthly-preview-amount]');
+    const previewSummary = document.querySelector('[data-card-monthly-preview-summary]');
+    const previewList = document.querySelector('[data-card-monthly-preview-list]');
+    const generateBtn = document.querySelector('[data-card-monthly-generate]');
+    const customInput = document.querySelector('[data-card-monthly-custom-input]');
+
+    if (previewAmount) previewAmount.textContent = selectedAmountCents ? formatClientBRL(selectedAmountCents) : 'Escolha um valor';
+
+    const preview = buildCardMonthlyPreview(prepare?.preview?.rows || [], selectedAmountCents);
+
+    if (previewSummary) {
+      previewSummary.textContent = selectedAmountCents
+        ? preview.summary
+        : 'Escolha o valor do Pix para eu te mostrar como ele vai encostar nas compras desse mês.';
+    }
+
+    if (previewList) {
+      previewList.innerHTML = '';
+      if (selectedAmountCents && preview.rows.length) {
+        preview.rows.slice(0, 4).forEach((row) => {
+          const rowEl = document.createElement('div');
+          rowEl.className = 'rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70';
+          rowEl.innerHTML = `
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div class="min-w-0 flex-1">
+                <div class="text-sm font-bold text-slate-900 dark:text-white truncate">${String(row.description || 'Compra sem descrição')}</div>
+                <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">${row.txnDate ? `Compra de ${row.txnDate}` : 'Compra do mês'}</div>
+              </div>
+              <div class="sm:text-right">
+                <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Vai agora</div>
+                <div class="mt-1 text-sm font-black text-slate-900 dark:text-white">${formatClientBRL(row.usedCents || 0)}</div>
+                ${Number(row.remainingCents || 0) > 0 ? `<div class="mt-1 text-xs font-medium text-amber-600 dark:text-amber-300">Ainda faltam ${formatClientBRL(row.remainingCents || 0)}</div>` : '<div class="mt-1 text-xs font-medium text-emerald-600 dark:text-emerald-300">Fecha essa peça por completo</div>'}
+              </div>
+            </div>`;
+          previewList.appendChild(rowEl);
+        });
+        if (preview.rows.length > 4) {
+          const moreEl = document.createElement('div');
+          moreEl.className = 'text-xs font-medium text-slate-500 dark:text-slate-400';
+          moreEl.textContent = `... e mais ${preview.rows.length - 4} ${preview.rows.length - 4 === 1 ? 'cobrança' : 'cobranças'} nessa mesma ordem.`;
+          previewList.appendChild(moreEl);
+        }
+      }
+    }
+
+    if (generateBtn) {
+      const pixAvailable = !!prepare?.pixAvailable;
+      generateBtn.disabled = !pixAvailable || !selectedAmountCents;
+      generateBtn.textContent = pixAvailable ? 'Gerar Pix' : 'Pix indisponível agora';
+    }
+
+    if (customInput && cardMonthlySheetState.mode === 'custom' && selectedAmountCents) {
+      customInput.dataset.lastValidValue = formatClientBRL(selectedAmountCents);
+    }
+  }
+
+  function renderCardMonthlyPrepare(data) {
+    const title = document.querySelector('[data-card-monthly-title]');
+    const subtitle = document.querySelector('[data-card-monthly-subtitle]');
+    const total = document.querySelector('[data-card-monthly-total]');
+    const confirmed = document.querySelector('[data-card-monthly-confirmed]');
+    const reserved = document.querySelector('[data-card-monthly-reserved]');
+    const open = document.querySelector('[data-card-monthly-open]');
+    const fullLabel = document.querySelector('[data-card-monthly-full-label]');
+    const customMax = document.querySelector('[data-card-monthly-custom-max]');
+    const errorBox = document.querySelector('[data-card-monthly-error]');
+
+    if (title) title.textContent = data?.counterpartName ? `Pix do mês com ${data.counterpartName}` : 'Pix do cartão do mês';
+    if (subtitle) subtitle.textContent = data?.monthLabel ? `Carteira de ${data.monthLabel}. Você pode pagar o valor todo ou só uma parte agora.` : 'Você escolhe quanto vai pagar e eu monto o Pix no valor certinho.';
+    if (total) total.textContent = data?.totalAcceptedFormatted || '—';
+    if (confirmed) confirmed.textContent = data?.confirmedFormatted || '—';
+    if (reserved) reserved.textContent = data?.reservedFormatted || '—';
+    if (open) open.textContent = data?.openFormatted || '—';
+    if (fullLabel) fullLabel.textContent = data?.openFormatted || '—';
+    if (customMax) customMax.textContent = data?.openFormatted || '—';
+
+    if (errorBox && !data?.pixAvailable && data?.pixUnavailableReason) {
+      errorBox.textContent = data.pixUnavailableReason;
+      errorBox.classList.remove('hidden');
+    } else if (errorBox) {
+      errorBox.classList.add('hidden');
+      errorBox.textContent = '';
+    }
+
+    const customInput = document.querySelector('[data-card-monthly-custom-input]');
+    if (customInput) {
+      customInput.value = '';
+      customInput.dataset.lastValidValue = data?.openFormatted || '';
+    }
+
+    setCardMonthlyChoice('full');
+    renderCardMonthlyPreview();
+  }
+
+  function renderCardMonthlyPix(data) {
+    const title = document.querySelector('[data-card-monthly-title]');
+    const subtitle = document.querySelector('[data-card-monthly-subtitle]');
+    const amount = document.querySelector('[data-card-monthly-pix-amount]');
+    const keyMeta = document.querySelector('[data-card-monthly-pix-key-meta]');
+    const city = document.querySelector('[data-card-monthly-pix-city]');
+    const payload = document.querySelector('[data-card-monthly-pix-payload]');
+    const qrImg = document.querySelector('[data-card-monthly-pix-qr]');
+    const qrHint = document.querySelector('[data-card-monthly-pix-qr-hint]');
+    const noteField = document.querySelector('[data-card-monthly-pix-note]');
+
+    if (title) title.textContent = data?.creditorName ? `Pix do mês para ${data.creditorName}` : 'Pix do cartão do mês';
+    if (subtitle) subtitle.textContent = data?.monthLabel ? `${data.monthLabel} · se quiser, já avisa daqui mesmo quando fizer o pagamento.` : 'Paga no banco e depois avisa por aqui para o outro lado confirmar.';
+    if (amount) amount.textContent = data?.amountFormatted || '—';
+    if (keyMeta) keyMeta.textContent = data?.maskedKey ? `${data.keyTypeLabel || 'Chave Pix'} · ${data.maskedKey}` : (data?.keyTypeLabel || '—');
+    if (city) city.textContent = data?.city || '—';
+    if (payload) payload.value = data?.payload || '';
+    if (noteField) noteField.value = '';
+    if (qrImg) {
+      if (data?.qrDataUrl) {
+        qrImg.src = data.qrDataUrl;
+        qrImg.classList.remove('hidden');
+      } else {
+        qrImg.removeAttribute('src');
+        qrImg.classList.add('hidden');
+      }
+    }
+    if (qrHint) {
+      qrHint.textContent = data?.qrDataUrl
+        ? 'Se preferir, é só apontar a câmera do banco para esse QR.'
+        : 'O copia e cola está prontinho. Quando a dependência do QR estiver redonda por aqui, ele aparece também.';
+    }
+  }
+
+  async function fetchCardMonthlyPrepare(settlementId) {
+    const response = await fetch(`/shared-debts/monthly-settlements/${settlementId}/prepare`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin'
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.message || 'Não consegui abrir a carteira do mês agora.');
+    }
+    return data;
+  }
+
+  async function openCardMonthlySheet(settlementId) {
+    const cleanSettlementId = Number(settlementId || 0);
+    if (!cleanSettlementId) return;
+    openSharedDebtSheet('shared-debt-card-monthly-sheet');
+    setCardMonthlySheetState('loading');
+    cardMonthlySheetState.pix = null;
+    try {
+      const data = await fetchCardMonthlyPrepare(cleanSettlementId);
+      cardMonthlySheetState.settlementId = cleanSettlementId;
+      cardMonthlySheetState.prepare = data;
+      cardMonthlySheetState.amountCents = Math.max(0, Number(data?.openCents || 0));
+      renderCardMonthlyPrepare(data);
+      setCardMonthlySheetState('config');
+    } catch (error) {
+      setCardMonthlySheetState('error', error?.message || 'Não consegui abrir a carteira do mês agora.');
+    }
+  }
+
+  async function generateCardMonthlyPix() {
+    const settlementId = Number(cardMonthlySheetState.settlementId || 0);
+    const amountCents = getCardMonthlySelectedAmountCents();
+    if (!settlementId) return;
+    if (!amountCents) {
+      showPixToast('Me conta quanto vai nesse Pix para eu montar o código certinho.', 'info');
+      return;
+    }
+
+    const body = new URLSearchParams();
+    body.set('amount_cents', String(amountCents));
+
+    const button = document.querySelector('[data-card-monthly-generate]');
+    if (button) button.disabled = true;
+    try {
+      const response = await fetch(`/shared-debts/monthly-settlements/${settlementId}/pix`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+        },
+        credentials: 'same-origin',
+        body: body.toString()
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.ok === false) {
+        throw new Error(data?.message || 'O Pix do mês quase saiu, mas ainda tropeçou num detalhe.');
+      }
+      cardMonthlySheetState.pix = data;
+      renderCardMonthlyPix(data);
+      setCardMonthlySheetState('pix');
+    } catch (error) {
+      showPixToast(error?.message || 'O Pix do mês quase saiu, mas ainda tropeçou num detalhe.', 'error');
+      if (button) button.disabled = false;
+    }
+  }
+
+  async function reportCardMonthlyPix() {
+    const settlementId = Number(cardMonthlySheetState.settlementId || 0);
+    const intentId = Number(cardMonthlySheetState.pix?.intentId || 0);
+    if (!settlementId || !intentId) return;
+
+    const noteField = document.querySelector('[data-card-monthly-pix-note]');
+    const body = new URLSearchParams();
+    body.set('intent_id', String(intentId));
+    if (noteField?.value?.trim()) body.set('note', noteField.value.trim());
+
+    const button = document.querySelector('[data-card-monthly-report]');
+    if (button) button.disabled = true;
+    try {
+      const response = await fetch(`/shared-debts/monthly-settlements/${settlementId}/report-payment`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+        },
+        credentials: 'same-origin',
+        body: body.toString()
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.ok === false) {
+        throw new Error(data?.message || 'Não consegui avisar esse pagamento agora.');
+      }
+      showPixToast(data?.message || 'Pronto! Agora é só aguardar a confirmação final.', 'success');
+      window.location.href = data?.redirectTo || `/shared-debts?settlement=${settlementId}`;
+    } catch (error) {
+      showPixToast(error?.message || 'Não consegui avisar esse pagamento agora.', 'error');
+      if (button) button.disabled = false;
+    }
+  }
+
+  async function shareCardMonthlyPixData(data) {
+    const shareText = data?.shareText || data?.payload || '';
+    if (!shareText) throw new Error('Ainda não apareceu nada para compartilhar desse Pix do mês.');
+
+    if (navigator.share) {
+      await navigator.share({
+        title: data?.creditorName ? `Pix do mês para ${data.creditorName}` : 'Pix do mês',
+        text: shareText
+      });
+      showPixToast('Pix do mês compartilhado. Agora é só seguir o combinado.','success');
+      return;
+    }
+
+    await copyTextToClipboard(shareText);
+    showPixToast('Texto do Pix do mês copiado. É só colar onde quiser.','success');
+  }
+
+
   document.addEventListener('click', (event) => {
+    const openCardMonthlyBtn = event.target.closest('[data-open-card-monthly-settlement]');
+    if (openCardMonthlyBtn) {
+      event.preventDefault();
+      openCardMonthlySheet(openCardMonthlyBtn.getAttribute('data-open-card-monthly-settlement'));
+      return;
+    }
+
+    const cardMonthlyChoiceBtn = event.target.closest('[data-card-monthly-choice]');
+    if (cardMonthlyChoiceBtn) {
+      event.preventDefault();
+      setCardMonthlyChoice(cardMonthlyChoiceBtn.getAttribute('data-card-monthly-choice'));
+      renderCardMonthlyPreview();
+      return;
+    }
+
+    const generateCardMonthlyBtn = event.target.closest('[data-card-monthly-generate]');
+    if (generateCardMonthlyBtn) {
+      event.preventDefault();
+      generateCardMonthlyPix();
+      return;
+    }
+
+    const backCardMonthlyBtn = event.target.closest('[data-card-monthly-back]');
+    if (backCardMonthlyBtn) {
+      event.preventDefault();
+      setCardMonthlySheetState('config');
+      const reportBtn = document.querySelector('[data-card-monthly-report]');
+      if (reportBtn) reportBtn.disabled = false;
+      renderCardMonthlyPreview();
+      return;
+    }
+
+    const reportCardMonthlyBtn = event.target.closest('[data-card-monthly-report]');
+    if (reportCardMonthlyBtn) {
+      event.preventDefault();
+      reportCardMonthlyPix();
+      return;
+    }
+
+    const cardMonthlyPixBtn = event.target.closest('[data-card-monthly-pix-action]');
+    if (cardMonthlyPixBtn) {
+      event.preventDefault();
+      const action = cardMonthlyPixBtn.getAttribute('data-card-monthly-pix-action');
+      const data = cardMonthlySheetState.pix;
+      if (!data) {
+        showPixToast('Ainda estou terminando de montar esse Pix do mês por aqui.', 'info');
+        return;
+      }
+
+      if (action === 'copy') {
+        copyTextToClipboard(data?.payload || '')
+          .then(() => showPixToast('Pix do mês copiado. Agora é só colar no banco.','success'))
+          .catch((error) => showPixToast(error?.message || 'Não consegui copiar agora.', 'error'));
+        return;
+      }
+
+      if (action === 'share') {
+        shareCardMonthlyPixData(data).catch((error) => showPixToast(error?.message || 'Não consegui compartilhar agora.', 'error'));
+        return;
+      }
+    }
+
     const pixBtn = event.target.closest('[data-pix-action]');
     if (pixBtn) {
       event.preventDefault();
@@ -2278,6 +3096,23 @@
     }
   });
 
+  document.addEventListener('input', (event) => {
+    const customInput = event.target.closest('[data-card-monthly-custom-input]');
+    if (customInput) {
+      renderCardMonthlyPreview();
+    }
+  });
+
+  document.addEventListener('blur', (event) => {
+    const customInput = event.target.closest('[data-card-monthly-custom-input]');
+    if (customInput) {
+      const cents = parseMoneyInputToCents(customInput.value);
+      customInput.value = cents ? formatClientBRL(cents) : '';
+      renderCardMonthlyPreview();
+    }
+  }, true);
+
+
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       closeSharedDebtSheets();
@@ -2291,6 +3126,13 @@
       const batchEl = document.getElementById('batch-<%= batchIdToHighlight %>');
       if (batchEl) {
         batchEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    <% } %>
+
+    <% if (settlementIdToHighlight) { %>
+      const settlementEl = document.getElementById('settlement-<%= settlementIdToHighlight %>');
+      if (settlementEl) {
+        openRequestChain(settlementEl);
       }
     <% } %>
 

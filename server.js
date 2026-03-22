@@ -396,7 +396,8 @@ const {
   sanitizePixText,
   sanitizeTxid,
   buildPixPayload,
-  buildSharedDebtPixTxid
+  buildSharedDebtPixTxid,
+  buildSharedDebtCardMonthlyPixTxid
 } = require("./src/pix");
 const formatDateBR = (dateStr) => { if (!dateStr) return "-"; return dayjs(dateStr).format("DD/MM/YYYY"); };
 const { computeDueDate } = require("./src/dueDate");
@@ -2489,6 +2490,172 @@ function buildManualSharedDebtPixShareText({ creditorName, amountCents, descript
   ].filter(Boolean).join('\n\n');
 }
 
+
+function buildSharedDebtCardMonthlyPixShareText({ creditorName, amountCents, month, year, payload } = {}) {
+  const safeCreditorName = String(creditorName || 'quem vai receber').trim() || 'quem vai receber';
+  const periodLabel = month && year ? monthLabel(month, year) : 'este mês';
+  return [
+    `Oi! Separei ${formatBRLFromCents(amountCents)} para acertar ${periodLabel} por aqui.`,
+    `Para facilitar, já deixei o Pix copia e cola de ${safeCreditorName} logo abaixo:`,
+    String(payload || '').trim(),
+    'Depois me avisa no app quando fizer o Pix 💸'
+  ].filter(Boolean).join('\n\n');
+}
+
+function coerceMoneyValueToCents(rawValue, fallback = 0) {
+  if (rawValue === null || rawValue === undefined || rawValue === '') {
+    return Math.max(0, Number(fallback || 0));
+  }
+
+  if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
+    return Math.max(0, Math.round(rawValue));
+  }
+
+  const raw = String(rawValue || '').trim();
+  if (!raw) return Math.max(0, Number(fallback || 0));
+
+  if (/^-?\d+$/.test(raw)) {
+    return Math.max(0, Number(raw));
+  }
+
+  const cents = centsFromPtBrMoney(raw);
+  if (Number.isFinite(cents)) return Math.max(0, cents);
+
+  return Math.max(0, Number(fallback || 0));
+}
+
+function getSharedDebtCardMonthlySettlementRowById(settlementId) {
+  const safeSettlementId = Number(settlementId || 0);
+  if (!safeSettlementId) return null;
+  return db.prepare(`
+    SELECT *
+    FROM shared_debt_monthly_settlements
+    WHERE id = ?
+      AND request_kind = 'card'
+    LIMIT 1
+  `).get(safeSettlementId);
+}
+
+function getSharedDebtCardMonthlySettlementSnapshotById(settlementId) {
+  const settlementRow = getSharedDebtCardMonthlySettlementRowById(settlementId);
+  if (!settlementRow) return null;
+  return getSharedDebtCardMonthlySettlementSnapshot({
+    requesterUserId: settlementRow.requester_user_id,
+    receiverUserId: settlementRow.receiver_user_id,
+    month: settlementRow.month,
+    year: settlementRow.year
+  });
+}
+
+function buildSharedDebtCardMonthlyIntentPreview(snapshot, rawAmountCents) {
+  const safeSnapshot = snapshot || null;
+  const openCents = Math.max(0, Number(safeSnapshot?.openCents || 0));
+  const requestedAmount = Math.max(0, Math.min(openCents, Number(rawAmountCents || 0)));
+  const rows = (Array.isArray(safeSnapshot?.requestRows) ? safeSnapshot.requestRows : []).map((row) => {
+    const totalCents = Math.max(0, Number(row?.amount_cents || 0));
+    const paidCents = Math.min(totalCents, Math.max(0, Number(row?.amount_paid_cents || (row?.status === 'settled' ? totalCents : 0))));
+    return {
+      id: Number(row?.id || 0),
+      description: String(row?.description_snapshot || 'Cobrança do mês').trim() || 'Cobrança do mês',
+      pendingCents: Math.max(0, totalCents - paidCents),
+      totalCents,
+      paidCents,
+      txnDate: row?.source_txn_date_snapshot || row?.created_at || null
+    };
+  }).filter((row) => row.pendingCents > 0);
+
+  let remainingToAllocate = requestedAmount;
+  let fullySettledCount = 0;
+  let touchedCount = 0;
+  let partialRow = null;
+  let allocatedCents = 0;
+
+  for (const row of rows) {
+    if (remainingToAllocate <= 0) break;
+    const appliedCents = Math.min(row.pendingCents, remainingToAllocate);
+    if (appliedCents <= 0) continue;
+
+    touchedCount += 1;
+    allocatedCents += appliedCents;
+    remainingToAllocate -= appliedCents;
+
+    if (appliedCents >= row.pendingCents) {
+      fullySettledCount += 1;
+      continue;
+    }
+
+    partialRow = {
+      id: row.id,
+      description: row.description,
+      beforeCents: row.pendingCents,
+      appliedCents,
+      remainingCents: Math.max(0, row.pendingCents - appliedCents),
+      txnDate: row.txnDate
+    };
+    break;
+  }
+
+  let summary = 'Escolha um valor para eu te mostrar como isso vai se espalhar nas compras do mês.';
+  if (requestedAmount > 0 && rows.length === 0) {
+    summary = 'Não encontrei compras aceitas em aberto para esse mês.';
+  } else if (requestedAmount > 0 && fullySettledCount > 0 && !partialRow && requestedAmount >= openCents) {
+    summary = `Esse valor fecha ${formatCountLabel(fullySettledCount, 'cobrança', 'cobranças')} e deixa o mês redondinho.`;
+  } else if (requestedAmount > 0 && fullySettledCount > 0 && !partialRow) {
+    summary = `Esse valor fecha ${formatCountLabel(fullySettledCount, 'cobrança', 'cobranças')} e o restante do mês continua em aberto.`;
+  } else if (requestedAmount > 0 && fullySettledCount > 0 && partialRow) {
+    summary = `Esse valor fecha ${formatCountLabel(fullySettledCount, 'cobrança', 'cobranças')} e deixa 1 com ${formatBRLFromCents(partialRow.remainingCents)} em aberto.`;
+  } else if (requestedAmount > 0 && partialRow) {
+    summary = `Esse valor entra em 1 cobrança e deixa ${formatBRLFromCents(partialRow.remainingCents)} em aberto.`;
+  } else if (requestedAmount > 0) {
+    summary = 'Esse valor começa a andar nas compras mais antigas do mês.';
+  }
+
+  return {
+    amountCents: requestedAmount,
+    openCents,
+    allocatedCents,
+    remainingToAllocateCents: Math.max(0, remainingToAllocate),
+    fullySettledCount,
+    touchedCount,
+    partialRow,
+    summary,
+    rows: rows.map((row) => ({
+      id: row.id,
+      description: row.description,
+      pendingCents: row.pendingCents,
+      totalCents: row.totalCents,
+      paidCents: row.paidCents,
+      txnDate: row.txnDate
+    }))
+  };
+}
+
+function cancelSharedDebtGeneratedMonthlyIntents(settlementId, receiverUserId, keepIntentId = null) {
+  const safeSettlementId = Number(settlementId || 0);
+  const safeReceiverId = Number(receiverUserId || 0);
+  const safeKeepIntentId = Number(keepIntentId || 0) || null;
+  if (!safeSettlementId || !safeReceiverId) return 0;
+
+  const now = nowIso();
+  const params = [now, now, safeSettlementId, safeReceiverId];
+  let sql = `
+    UPDATE shared_debt_payment_intents
+    SET status = 'cancelled',
+        cancelled_at = COALESCE(cancelled_at, ?),
+        updated_at = ?
+    WHERE settlement_id = ?
+      AND receiver_user_id = ?
+      AND status = 'generated'
+  `;
+
+  if (safeKeepIntentId) {
+    sql += ` AND id <> ?`;
+    params.push(safeKeepIntentId);
+  }
+
+  return db.prepare(sql).run(...params).changes || 0;
+}
+
 function attachSharedDebtPixMeta(items = [], currentUserId = null) {
   const rows = Array.isArray(items) ? items : [];
   const requesterIds = rows.map((item) => Number(item?.requester_user_id || 0)).filter(Boolean);
@@ -3103,6 +3270,7 @@ function upsertSharedDebtArchiveState({ requestId, userId, isArchived, archivedF
 function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
   const requestIdToHighlight = Number(query?.request) || null;
   const batchIdToHighlight = Number(query?.batch) || null;
+  const settlementIdToHighlight = Number(query?.settlement) || null;
   const archivedRequestIds = getSharedDebtArchivedRequestIdSet(userId);
   const receivedWithPixMeta = attachSharedDebtPixMeta(getSharedDebtRequestsReceived(userId), userId);
   const sentWithPixMeta = attachSharedDebtPixMeta(getSharedDebtRequestsSent(userId), userId);
@@ -3128,6 +3296,7 @@ function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
   return {
     requestIdToHighlight,
     batchIdToHighlight,
+    settlementIdToHighlight,
     received,
     sent,
     receivedPendingBatches,
@@ -6776,6 +6945,309 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
   return res.redirect(`/shared-debts?request=${requestId}`);
 });
 
+app.get('/shared-debts/monthly-settlements/:id/prepare', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const settlementId = Number(req.params.id);
+
+  if (!settlementId) {
+    return res.status(400).json({ ok: false, message: 'Não consegui descobrir qual mês você quer acertar por Pix.' });
+  }
+
+  const settlementRow = getSharedDebtCardMonthlySettlementRowById(settlementId);
+  if (!settlementRow || (Number(settlementRow.requester_user_id || 0) !== Number(userId || 0) && Number(settlementRow.receiver_user_id || 0) !== Number(userId || 0))) {
+    return res.status(404).json({ ok: false, message: 'Essa carteira mensal não apareceu por aqui.' });
+  }
+
+  if (Number(settlementRow.receiver_user_id || 0) !== Number(userId || 0)) {
+    return res.status(403).json({ ok: false, message: 'Esse Pix mensal fica do lado de quem vai pagar.' });
+  }
+
+  const snapshot = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
+  if (!snapshot || !Number(snapshot.requestCount || 0)) {
+    return res.status(404).json({ ok: false, message: 'Ainda não encontrei cobranças aceitas para montar esse mês por aqui.' });
+  }
+
+  const creditorProfile = getUserPixProfile(settlementRow.requester_user_id);
+  const creditorRecord = getUserRecord(settlementRow.requester_user_id);
+  const preview = buildSharedDebtCardMonthlyIntentPreview(snapshot, snapshot.openCents);
+
+  let pixAvailable = false;
+  let pixUnavailableReason = null;
+
+  if (!creditorProfile || !creditorProfile.pixEnabled) {
+    pixUnavailableReason = 'Quem vai receber ainda não deixou um Pix prontinho por aqui.';
+  } else if (!creditorProfile.pixValid) {
+    pixUnavailableReason = creditorProfile.pixReason || 'O Pix de quem vai receber ainda precisa de um acerto.';
+  } else if (!Number(snapshot.openCents || 0)) {
+    pixUnavailableReason = 'Esse mês já está sem saldo aberto para um novo Pix agora.';
+  } else {
+    pixAvailable = true;
+  }
+
+  return res.json({
+    ok: true,
+    settlementId,
+    month: Number(snapshot.month || settlementRow.month || 0),
+    year: Number(snapshot.year || settlementRow.year || 0),
+    monthLabel: monthLabel(snapshot.month || settlementRow.month, snapshot.year || settlementRow.year),
+    counterpartName: creditorRecord?.name || creditorRecord?.email || 'quem vai receber',
+    totalAcceptedCents: Number(snapshot.totalAcceptedCents || 0),
+    totalAcceptedFormatted: formatBRLFromCents(snapshot.totalAcceptedCents || 0),
+    confirmedCents: Number(snapshot.confirmedCents || 0),
+    confirmedFormatted: formatBRLFromCents(snapshot.confirmedCents || 0),
+    reservedCents: Number(snapshot.reservedCents || 0),
+    reservedFormatted: formatBRLFromCents(snapshot.reservedCents || 0),
+    openCents: Number(snapshot.openCents || 0),
+    openFormatted: formatBRLFromCents(snapshot.openCents || 0),
+    requestCount: Number(snapshot.requestCount || 0),
+    status: snapshot.status || 'open',
+    preview,
+    pixAvailable,
+    pixUnavailableReason,
+    maskedKey: creditorProfile?.pixMaskedKey || null,
+    keyTypeLabel: creditorProfile?.pixKeyTypeLabel || null,
+    city: creditorProfile?.pixCity || null,
+    creditorName: creditorProfile?.ownerName || creditorRecord?.name || creditorRecord?.email || 'quem vai receber',
+    qrSupported: !!QRCode
+  });
+});
+
+app.post('/shared-debts/monthly-settlements/:id/pix', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  const settlementId = Number(req.params.id);
+
+  if (!settlementId) {
+    return res.status(400).json({ ok: false, message: 'Não consegui descobrir qual mês você quer acertar por Pix.' });
+  }
+
+  const settlementRow = getSharedDebtCardMonthlySettlementRowById(settlementId);
+  if (!settlementRow || Number(settlementRow.receiver_user_id || 0) !== Number(userId || 0)) {
+    return res.status(404).json({ ok: false, message: 'Essa carteira mensal não apareceu do seu lado por aqui.' });
+  }
+
+  const snapshot = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
+  if (!snapshot || !Number(snapshot.requestCount || 0)) {
+    return res.status(404).json({ ok: false, message: 'Ainda não encontrei cobranças aceitas para montar esse mês por aqui.' });
+  }
+
+  const openCents = Math.max(0, Number(snapshot.openCents || 0));
+  if (!openCents) {
+    return res.status(409).json({ ok: false, message: 'Esse mês já está sem saldo aberto para um novo Pix agora.' });
+  }
+
+  const requestedAmountCents = coerceMoneyValueToCents(req.body.amount_cents ?? req.body.amount ?? req.body.amountCents, openCents);
+  if (!requestedAmountCents) {
+    return res.status(400).json({ ok: false, message: 'Me conta quanto vai entrar nesse Pix para eu montar o código certinho.' });
+  }
+
+  if (requestedAmountCents > openCents) {
+    return res.status(409).json({ ok: false, message: `Por aqui, o máximo disponível agora é ${formatBRLFromCents(openCents)}.` });
+  }
+
+  const creditorProfile = getUserPixProfile(settlementRow.requester_user_id);
+  const creditorRecord = getUserRecord(settlementRow.requester_user_id);
+  if (!creditorProfile || !creditorProfile.pixEnabled) {
+    return res.status(409).json({ ok: false, message: 'Quem vai receber ainda não deixou um Pix prontinho por aqui.' });
+  }
+
+  if (!creditorProfile.pixValid) {
+    return res.status(409).json({ ok: false, message: creditorProfile.pixReason || 'Ainda falta um ajuste no Pix de quem vai receber.' });
+  }
+
+  try {
+    const now = nowIso();
+    let intentId = null;
+    let txid = null;
+    let payload = null;
+
+    db.transaction(() => {
+      cancelSharedDebtGeneratedMonthlyIntents(settlementId, userId);
+
+      const insert = db.prepare(`
+        INSERT INTO shared_debt_payment_intents (
+          settlement_id, requester_user_id, receiver_user_id, month, year, request_kind,
+          requested_by_user_id, amount_cents, status, created_at, updated_at, generated_at
+        ) VALUES (?, ?, ?, ?, ?, 'card', ?, ?, 'generated', ?, ?, ?)
+      `).run(
+        settlementId,
+        settlementRow.requester_user_id,
+        settlementRow.receiver_user_id,
+        settlementRow.month,
+        settlementRow.year,
+        userId,
+        requestedAmountCents,
+        now,
+        now,
+        now
+      );
+
+      intentId = Number(insert.lastInsertRowid || 0);
+      txid = buildSharedDebtCardMonthlyPixTxid(settlementId, intentId);
+      payload = buildPixPayload({
+        keyType: creditorProfile.pixKeyType,
+        keyValue: creditorProfile.pixKeyValue,
+        merchantName: creditorProfile.pixMerchantName || creditorProfile.ownerName || creditorRecord?.name,
+        merchantCity: creditorProfile.pixCity,
+        amountCents: requestedAmountCents,
+        txid,
+        description: sanitizePixText(`CARTAO ${String(settlementRow.month).padStart(2, '0')}/${settlementRow.year}`, { max: 72 })
+      });
+
+      db.prepare(`
+        UPDATE shared_debt_payment_intents
+        SET pix_payload = ?,
+            pix_txid = ?,
+            updated_at = ?,
+            generated_at = COALESCE(generated_at, ?)
+        WHERE id = ?
+      `).run(payload, txid, now, now, intentId);
+    })();
+
+    const preview = buildSharedDebtCardMonthlyIntentPreview(snapshot, requestedAmountCents);
+    const qrDataUrl = QRCode
+      ? await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', margin: 1, width: 320 })
+      : null;
+    const shareText = buildSharedDebtCardMonthlyPixShareText({
+      creditorName: creditorProfile.ownerName || creditorRecord?.name || creditorRecord?.email || 'quem vai receber',
+      amountCents: requestedAmountCents,
+      month: settlementRow.month,
+      year: settlementRow.year,
+      payload
+    });
+
+    return res.json({
+      ok: true,
+      settlementId,
+      intentId,
+      payload,
+      txid,
+      qrDataUrl,
+      qrSupported: !!QRCode,
+      amountCents: requestedAmountCents,
+      amountFormatted: formatBRLFromCents(requestedAmountCents),
+      creditorName: creditorProfile.ownerName || creditorRecord?.name || creditorRecord?.email || 'Quem vai receber',
+      maskedKey: creditorProfile.pixMaskedKey,
+      keyType: creditorProfile.pixKeyType,
+      keyTypeLabel: creditorProfile.pixKeyTypeLabel,
+      city: creditorProfile.pixCity,
+      shareText,
+      keyValue: creditorProfile.pixKeyValue,
+      monthLabel: monthLabel(settlementRow.month, settlementRow.year),
+      preview,
+      settlement: {
+        totalAcceptedCents: Number(snapshot.totalAcceptedCents || 0),
+        confirmedCents: Number(snapshot.confirmedCents || 0),
+        reservedCents: Number(snapshot.reservedCents || 0),
+        openCents,
+        requestCount: Number(snapshot.requestCount || 0)
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, message: error?.message || 'O Pix do mês quase saiu, mas ainda tropeçou num detalhe aqui.' });
+  }
+});
+
+app.post('/shared-debts/monthly-settlements/:id/report-payment', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const settlementId = Number(req.params.id);
+  const intentId = Number(req.body.intent_id || req.body.intentId || 0);
+  const note = String(req.body.note || '').trim() || null;
+
+  if (!settlementId || !intentId) {
+    return res.status(400).json({ ok: false, message: 'Ainda falta me dizer qual Pix do mês você acabou de informar.' });
+  }
+
+  const settlementRow = getSharedDebtCardMonthlySettlementRowById(settlementId);
+  if (!settlementRow || Number(settlementRow.receiver_user_id || 0) !== Number(userId || 0)) {
+    return res.status(404).json({ ok: false, message: 'Essa carteira mensal não apareceu do seu lado por aqui.' });
+  }
+
+  const intentRow = db.prepare(`
+    SELECT *
+    FROM shared_debt_payment_intents
+    WHERE id = ?
+      AND settlement_id = ?
+      AND receiver_user_id = ?
+      AND request_kind = 'card'
+    LIMIT 1
+  `).get(intentId, settlementId, userId);
+
+  if (!intentRow) {
+    return res.status(404).json({ ok: false, message: 'Não encontrei esse Pix do mês para confirmar o envio agora.' });
+  }
+
+  const intentStatus = normalizeSharedDebtPaymentIntentStatus(intentRow.status);
+  if (intentStatus === 'reported') {
+    return res.status(409).json({ ok: false, message: 'Esse Pix do mês já foi informado e agora só está esperando a confirmação final.' });
+  }
+
+  if (intentStatus !== 'generated') {
+    return res.status(409).json({ ok: false, message: 'Esse Pix do mês já saiu da fase de aviso por aqui.' });
+  }
+
+  const snapshotBefore = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
+  const openCents = Math.max(0, Number(snapshotBefore?.openCents || 0));
+  const intentAmountCents = Math.max(0, Number(intentRow.amount_cents || 0));
+
+  if (!openCents) {
+    return res.status(409).json({ ok: false, message: 'Esse mês já não tem saldo aberto para receber esse Pix agora.' });
+  }
+
+  if (intentAmountCents > openCents) {
+    return res.status(409).json({ ok: false, message: `Enquanto você estava por aqui, o saldo do mês mudou. Agora o máximo disponível é ${formatBRLFromCents(openCents)}.` });
+  }
+
+  const actor = getUserRecord(userId);
+  const actorName = actor?.name || actor?.email || 'Quem vai pagar';
+  const now = nowIso();
+
+  db.transaction(() => {
+    const result = db.prepare(`
+      UPDATE shared_debt_payment_intents
+      SET status = 'reported',
+          payer_note = ?,
+          reported_at = ?,
+          updated_at = ?
+      WHERE id = ?
+        AND settlement_id = ?
+        AND receiver_user_id = ?
+        AND status = 'generated'
+    `).run(note, now, now, intentId, settlementId, userId);
+
+    if (!result.changes) {
+      throw new Error('Esse Pix do mês já mudou de estado enquanto você estava por aqui.');
+    }
+
+    cancelSharedDebtGeneratedMonthlyIntents(settlementId, userId);
+
+    createNotification({
+      userId: settlementRow.requester_user_id,
+      type: 'shared_debt_request',
+      title: 'Pix do mês informado',
+      body: `${actorName} avisou um Pix de ${formatBRLFromCents(intentAmountCents)} para ${monthLabel(settlementRow.month, settlementRow.year)}.${buildNoteSuffix(note)}`,
+      href: `/shared-debts?settlement=${settlementId}`,
+      relatedType: 'shared_debt_payment_intent',
+      relatedId: intentId
+    });
+  })();
+
+  const snapshotAfter = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
+
+  return res.json({
+    ok: true,
+    settlementId,
+    message: 'Pronto! Agora é só aguardar a confirmação de quem vai receber.',
+    redirectTo: `/shared-debts?settlement=${settlementId}`,
+    snapshot: snapshotAfter ? {
+      status: snapshotAfter.status,
+      totalAcceptedCents: Number(snapshotAfter.totalAcceptedCents || 0),
+      confirmedCents: Number(snapshotAfter.confirmedCents || 0),
+      reservedCents: Number(snapshotAfter.reservedCents || 0),
+      openCents: Number(snapshotAfter.openCents || 0)
+    } : null
+  });
+});
+
 app.get('/shared-debts/:id/pix', ensureAuthenticated, async (req, res) => {
   const userId = req.user.id;
   const requestId = Number(req.params.id);
@@ -6910,6 +7382,19 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
     return res.redirect('/shared-debts');
   }
 
+  const requestKind = normalizeSharedDebtRequestKind(requestRow.request_kind);
+  if (requestKind === 'card') {
+    const snapshot = getSharedDebtCardMonthlySettlementSnapshot({
+      requesterUserId: requestRow.requester_user_id,
+      receiverUserId: requestRow.receiver_user_id,
+      month: requestRow.source_due_month,
+      year: requestRow.source_due_year
+    });
+    const redirectHref = snapshot?.id ? `/shared-debts?settlement=${snapshot.id}` : `/shared-debts?request=${requestId}`;
+    setFlash(req, 'info', 'Agora o pagamento do cartão anda pela carteira do mês. Abre a competência e usa “Pagar este mês”.');
+    return res.redirect(redirectHref);
+  }
+
   if (requestRow.status === 'settled') {
     setFlash(req, 'info', 'Essa cobrança já foi encerrada antes.');
     return res.redirect(`/shared-debts?request=${requestId}`);
@@ -6928,7 +7413,6 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
   const actor = getUserRecord(userId);
   const actorName = actor?.name || requestRow.receiver_name_snapshot || actor?.email || 'O destinatário';
   const now = nowIso();
-  const requestKind = normalizeSharedDebtRequestKind(requestRow.request_kind);
   const isManualRequest = requestKind === 'manual';
   const baseBody = `${actorName} avisou que já pagou ${isManualRequest ? 'o lembrete avulso' : 'a cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;

@@ -1,3 +1,5 @@
+const { normalizePixState } = require('./brazil-locations');
+
 function stripDiacritics(value) {
   return String(value || '')
     .normalize('NFD')
@@ -33,6 +35,26 @@ function sanitizePixText(value, { max = 25, fallback = '' } = {}) {
   return sliced || fallback;
 }
 
+function normalizePixPhoneKeyValue(value) {
+  const raw = String(value || '').trim();
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+
+  if ((digits.length === 12 || digits.length === 13) && digits.startsWith('55')) {
+    return `+${digits}`;
+  }
+
+  if (digits.length === 10 || digits.length === 11) {
+    return `+55${digits}`;
+  }
+
+  if (raw.startsWith('+')) {
+    return `+${digits}`;
+  }
+
+  return `+${digits}`;
+}
+
 function normalizePixKeyValue(type, value) {
   const keyType = normalizePixKeyType(type);
   const raw = String(value || '').trim();
@@ -47,8 +69,7 @@ function normalizePixKeyValue(type, value) {
   }
 
   if (keyType === 'phone') {
-    const digits = raw.replace(/\D/g, '');
-    return digits ? `+${digits}` : '';
+    return normalizePixPhoneKeyValue(raw);
   }
 
   if (keyType === 'evp') {
@@ -56,6 +77,22 @@ function normalizePixKeyValue(type, value) {
   }
 
   return raw;
+}
+
+function formatPixKeyValueForInput(keyType, keyValue) {
+  const type = normalizePixKeyType(keyType);
+  const value = String(keyValue || '').trim();
+  if (!type || !value) return '';
+
+  if (type === 'phone') {
+    const digits = value.replace(/\D/g, '');
+    if ((digits.length === 12 || digits.length === 13) && digits.startsWith('55')) {
+      return digits.slice(2);
+    }
+    return digits;
+  }
+
+  return value;
 }
 
 function isValidPixKey(keyType, keyValue) {
@@ -71,7 +108,7 @@ function isValidPixKey(keyType, keyValue) {
     case 'email':
       return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
     case 'phone':
-      return /^\+\d{10,15}$/.test(value);
+      return /^\+55\d{10,11}$/.test(value);
     case 'evp':
       return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
     default:
@@ -103,7 +140,7 @@ function maskPixKey({ keyType, keyValue } = {}) {
 
   if (type === 'phone') {
     const digits = value.replace(/\D/g, '');
-    if (digits.length < 6) return '••••';
+    if (digits.length < 8) return '••••';
     return `+${digits.slice(0, 4)}••••${digits.slice(-3)}`;
   }
 
@@ -115,19 +152,27 @@ function maskPixKey({ keyType, keyValue } = {}) {
   return '••••';
 }
 
-function validatePixProfile({ enabled, keyType, keyValue, city, label, name } = {}) {
+function validatePixProfile({ enabled, keyType, keyValue, city, state, label, name } = {}) {
   const pixEnabled = enabled === true || enabled === '1' || enabled === 1 || enabled === 'true' || enabled === 'on';
   const normalizedType = normalizePixKeyType(keyType);
   const normalizedKeyValue = normalizePixKeyValue(normalizedType, keyValue);
+  const normalizedState = normalizePixState(state);
   const normalizedCity = sanitizePixText(city, { max: 15 });
   const merchantName = sanitizePixText(label || name || 'ORGANIZAPAY', { max: 25, fallback: 'ORGANIZAPAY' });
   const errors = [];
 
   if (pixEnabled) {
     if (!normalizedType) errors.push('Escolha o tipo da chave Pix.');
-    if (!normalizedKeyValue) errors.push('Preencha a chave Pix.');
-    else if (!isValidPixKey(normalizedType, normalizedKeyValue)) errors.push('Essa chave Pix não parece válida.');
-    if (!normalizedCity) errors.push('Informe a cidade para o Pix.');
+    if (!normalizedKeyValue) {
+      errors.push('Preencha a chave Pix.');
+    } else if (!isValidPixKey(normalizedType, normalizedKeyValue)) {
+      if (normalizedType === 'phone') {
+        errors.push('Para celular, use DDD + número. O +55 entra por nossa conta.');
+      } else {
+        errors.push('Essa chave Pix não parece válida.');
+      }
+    }
+    if (!normalizedCity) errors.push('Escolha a cidade para o Pix.');
   }
 
   return {
@@ -138,8 +183,10 @@ function validatePixProfile({ enabled, keyType, keyValue, city, label, name } = 
     keyType: normalizedType,
     keyTypeLabel: normalizedType ? (PIX_KEY_TYPE_LABELS[normalizedType] || normalizedType) : null,
     keyValue: normalizedKeyValue,
+    keyValueInput: formatPixKeyValueForInput(normalizedType, normalizedKeyValue),
     keyMasked: maskPixKey({ keyType: normalizedType, keyValue: normalizedKeyValue }),
     city: normalizedCity,
+    state: normalizedState,
     merchantName,
     label: sanitizePixText(label, { max: 25 }) || null
   };
@@ -233,6 +280,7 @@ module.exports = {
   PIX_KEY_TYPE_LABELS,
   normalizePixKeyType,
   normalizePixKeyValue,
+  formatPixKeyValueForInput,
   validatePixProfile,
   maskPixKey,
   sanitizePixText,

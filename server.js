@@ -89,6 +89,7 @@ try { db.prepare("ALTER TABLE people ADD COLUMN pix_enabled INTEGER NOT NULL DEF
 try { db.prepare("ALTER TABLE people ADD COLUMN pix_key_type TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE people ADD COLUMN pix_key_value TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE people ADD COLUMN pix_city TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN pix_state TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE people ADD COLUMN pix_label TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE people ADD COLUMN pix_updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
@@ -304,9 +305,19 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_recurring_exceptions_user_rule_
 const { parseCsvByCardName } = require("./src/importers");
 const { formatBRLFromCents, parseMonthYear, toISOFromBRDate, centsFromPtBrMoney } = require("./src/utils");
 const {
+  PIX_DEFAULT_STATE,
+  PIX_DEFAULT_CITY,
+  PIX_STATE_OPTIONS,
+  PIX_CITY_SUGGESTIONS_BY_STATE,
+  PIX_ALL_CITY_SUGGESTIONS,
+  normalizePixState,
+  guessPixStateByCity
+} = require("./src/brazil-locations");
+const {
   PIX_KEY_TYPE_LABELS,
   normalizePixKeyType,
   normalizePixKeyValue,
+  formatPixKeyValueForInput,
   validatePixProfile,
   sanitizePixText,
   buildPixPayload,
@@ -2153,6 +2164,7 @@ function getUserPixProfilesByUserIds(userIds = []) {
       pix_key_type,
       pix_key_value,
       pix_city,
+      pix_state,
       pix_label,
       pix_updated_at
     FROM people
@@ -2168,6 +2180,7 @@ function getUserPixProfilesByUserIds(userIds = []) {
       keyType: row.pix_key_type,
       keyValue: row.pix_key_value,
       city: row.pix_city,
+      state: row.pix_state,
       label: row.pix_label,
       name: row.name || row.email || 'ORGANIZAPAY'
     });
@@ -2186,6 +2199,7 @@ function getUserPixProfilesByUserIds(userIds = []) {
       pixKeyValue: validation.keyValue,
       pixMaskedKey: validation.keyMasked,
       pixCity: validation.city,
+      pixState: validation.state || guessPixStateByCity(validation.city) || null,
       pixMerchantName: validation.merchantName,
       pixLabel: validation.label,
       pixUpdatedAt: row.pix_updated_at || null
@@ -3810,6 +3824,7 @@ function getPeopleAll(userId) {
       p.pix_key_type,
       p.pix_key_value,
       p.pix_city,
+      p.pix_state,
       p.pix_label,
       p.pix_updated_at,
       pal.linked_user_id AS stable_linked_user_id,
@@ -3856,6 +3871,7 @@ function getPeopleAll(userId) {
       keyType: person.pix_key_type,
       keyValue: person.pix_key_value,
       city: person.pix_city,
+      state: person.pix_state,
       label: person.pix_label,
       name: person.name || person.email || 'ORGANIZAPAY'
     });
@@ -3885,12 +3901,14 @@ function getPeopleAll(userId) {
       pix_enabled: !!pixProfile.enabled,
       pix_valid: !!pixProfile.valid,
       pix_reason: pixProfile.reason || null,
-      pix_key_type: pixProfile.keyType,
+      pix_key_type: storedPixProfile.keyType,
       pix_key_type_label: pixProfile.keyTypeLabel,
       pix_key_value: pixProfile.keyValue,
       pix_masked_key: pixProfile.keyMasked,
       pix_city: pixProfile.city,
+      pix_state: storedPixProfile.state || guessPixStateByCity(storedPixProfile.city) || null,
       pix_label: pixProfile.label,
+      pix_key_value_input: formatPixKeyValueForInput(storedPixProfile.keyType, pixProfile.keyValue),
       pix_updated_at: person.pix_updated_at || null
     };
   });
@@ -5322,29 +5340,41 @@ function getSharedDebtEventsByRequestIds(requestIds) {
 }
 
 function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
+  const params = [userId, month, year];
+
   const owed = db.prepare(`
-    SELECT COUNT(*) AS total_requests, COALESCE(SUM(r.amount_cents), 0) AS total_cents
+    SELECT
+      COUNT(*) AS total_requests,
+      COALESCE(SUM(r.amount_cents), 0) AS total_cents
     FROM shared_debt_requests r
     LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE r.receiver_user_id = ?
       AND r.status = 'accepted'
-      AND COALESCE(r.request_kind, 'card') <> 'manual'
-      AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
-      AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
-  `).get(userId, month, year) || { total_requests: 0, total_cents: 0 };
+      AND (
+        (COALESCE(r.request_kind, 'card') <> 'manual'
+          AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
+          AND COALESCE(r.source_due_year, i.year, t.due_year) = ?)
+        OR COALESCE(r.request_kind, 'card') = 'manual'
+      )
+  `).get(...params) || { total_requests: 0, total_cents: 0 };
 
   const receivable = db.prepare(`
-    SELECT COUNT(*) AS total_requests, COALESCE(SUM(r.amount_cents), 0) AS total_cents
+    SELECT
+      COUNT(*) AS total_requests,
+      COALESCE(SUM(r.amount_cents), 0) AS total_cents
     FROM shared_debt_requests r
     LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE r.requester_user_id = ?
       AND r.status = 'accepted'
-      AND COALESCE(r.request_kind, 'card') <> 'manual'
-      AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
-      AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
-  `).get(userId, month, year) || { total_requests: 0, total_cents: 0 };
+      AND (
+        (COALESCE(r.request_kind, 'card') <> 'manual'
+          AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
+          AND COALESCE(r.source_due_year, i.year, t.due_year) = ?)
+        OR COALESCE(r.request_kind, 'card') = 'manual'
+      )
+  `).get(...params) || { total_requests: 0, total_cents: 0 };
 
   return {
     owedCents: Number(owed.total_cents || 0),
@@ -6500,6 +6530,11 @@ app.get("/people", ensureAuthenticated, (req, res) => {
     people,
     pendingFriendRequests,
     highlightedFriendRequestId,
+    pixStateOptions: PIX_STATE_OPTIONS,
+    pixCitySuggestionsByState: PIX_CITY_SUGGESTIONS_BY_STATE,
+    pixAllCitySuggestions: PIX_ALL_CITY_SUGGESTIONS,
+    pixDefaultState: PIX_DEFAULT_STATE,
+    pixDefaultCity: PIX_DEFAULT_CITY,
     title: "Amigos"
   });
 });
@@ -6513,6 +6548,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
   const pixEnabled = normalizePixToggle(req.body.pix_enabled);
   const pixKeyType = normalizePixKeyType(req.body.pix_key_type);
   const pixKeyValue = normalizePixKeyValue(pixKeyType, req.body.pix_key_value);
+  const pixStateRaw = normalizePixState(req.body.pix_state) || guessPixStateByCity(req.body.pix_city) || null;
   const pixCityRaw = String(req.body.pix_city || '').trim();
   const pixLabelRaw = String(req.body.pix_label || '').trim();
   const pixProfile = validatePixProfile({
@@ -6520,9 +6556,13 @@ app.post("/people", ensureAuthenticated, (req, res) => {
     keyType: pixKeyType,
     keyValue: pixKeyValue,
     city: pixCityRaw,
+    state: pixStateRaw,
     label: pixLabelRaw,
     name: name || email || 'ORGANIZAPAY'
   });
+  const storedPixProfile = pixEnabled
+    ? pixProfile
+    : { keyType: null, keyValue: null, city: null, state: null, label: null };
 
   if (!name) {
     setFlash(req, 'error', 'Me dá pelo menos o nome dessa pessoa para eu conseguir salvar direitinho.');
@@ -6534,9 +6574,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
     return res.redirect('/people');
   }
 
-  const pixUpdatedAt = (pixEnabled || pixProfile.keyValue || pixProfile.city || pixProfile.label)
-    ? nowIso()
-    : null;
+  const pixUpdatedAt = pixEnabled ? nowIso() : null;
 
   if (id) {
     db.prepare(`
@@ -6548,6 +6586,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
           pix_key_type = ?,
           pix_key_value = ?,
           pix_city = ?,
+          pix_state = ?,
           pix_label = ?,
           pix_updated_at = ?
       WHERE id = ? AND user_id = ?
@@ -6556,10 +6595,11 @@ app.post("/people", ensureAuthenticated, (req, res) => {
       phone,
       email,
       pixEnabled ? 1 : 0,
-      pixProfile.keyType,
-      pixProfile.keyValue || null,
-      pixProfile.city || null,
-      pixProfile.label || null,
+      storedPixProfile.keyType,
+      storedPixProfile.keyValue || null,
+      storedPixProfile.city || null,
+      storedPixProfile.state || guessPixStateByCity(storedPixProfile.city) || null,
+      storedPixProfile.label || null,
       pixUpdatedAt,
       id,
       userId
@@ -6568,18 +6608,19 @@ app.post("/people", ensureAuthenticated, (req, res) => {
     db.prepare(`
       INSERT OR IGNORE INTO people(
         user_id, name, phone, email, pix_enabled, pix_key_type,
-        pix_key_value, pix_city, pix_label, pix_updated_at, active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        pix_key_value, pix_city, pix_state, pix_label, pix_updated_at, active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `).run(
       userId,
       name,
       phone,
       email,
       pixEnabled ? 1 : 0,
-      pixProfile.keyType,
-      pixProfile.keyValue || null,
-      pixProfile.city || null,
-      pixProfile.label || null,
+      storedPixProfile.keyType,
+      storedPixProfile.keyValue || null,
+      storedPixProfile.city || null,
+      storedPixProfile.state || guessPixStateByCity(storedPixProfile.city) || null,
+      storedPixProfile.label || null,
       pixUpdatedAt
     );
   }

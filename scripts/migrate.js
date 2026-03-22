@@ -23,6 +23,10 @@ if (!columnExists("users", "can_import")) {
   db.exec("ALTER TABLE users ADD COLUMN can_import INTEGER NOT NULL DEFAULT 1;");
 }
 
+if (!columnExists("people", "pix_state")) {
+  db.exec("ALTER TABLE people ADD COLUMN pix_state TEXT;");
+}
+
 // ===== TABELAS EXISTENTES COM user_id =====
 db.exec(`
 CREATE TABLE IF NOT EXISTS cards (
@@ -48,6 +52,7 @@ CREATE TABLE IF NOT EXISTS people (
   pix_key_type TEXT,
   pix_key_value TEXT,
   pix_city TEXT,
+  pix_state TEXT,
   pix_label TEXT,
   pix_updated_at TEXT,
   active INTEGER NOT NULL DEFAULT 1,

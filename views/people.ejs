@@ -4,6 +4,9 @@
   const pendingRequests = Array.isArray(pendingFriendRequests) ? pendingFriendRequests : [];
   const activeFriendCount = Array.isArray(people) ? people.filter(p => p && p.friendship_active).length : 0;
   const discoverableCount = Array.isArray(people) ? people.filter(p => p && p.has_app_user && !p.friendship_active).length : 0;
+  const pixStateList = Array.isArray(pixStateOptions) ? pixStateOptions : [];
+  const pixStateDefault = pixDefaultState || 'RJ';
+  const pixCityDefault = pixDefaultCity || 'Rio de Janeiro';
   const renderPersonStatusChips = (person) => {
     const chips = [];
     const addChip = (classes, label) => {
@@ -181,7 +184,7 @@
             </div>
             <input name="phone" id="inputPhone"
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
-              placeholder="5511999999999" />
+              placeholder="(21) 99999-9999" />
           </div>
 
           <div class="relative min-w-0">
@@ -208,15 +211,24 @@
 
 
         <div class="rounded-[24px] border border-violet-200 bg-violet-50/70 px-4 py-4 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/20 sm:px-5">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
+          <div class="flex items-start gap-3">
+            <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-violet-600 shadow-sm ring-1 ring-violet-100 dark:bg-slate-800 dark:text-violet-300 dark:ring-violet-900/50" aria-hidden="true">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1zm7 4h.01"></path>
+              </svg>
+            </span>
+            <div class="min-w-0 flex-1">
               <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Receber por Pix</div>
-              <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Na fase avulsa, é esse Pix que aparece na cobrança quando essa pessoa for você. Nas outras pessoas, ele já fica guardadinho para as próximas missões.</p>
+              <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Na fase avulsa, é esse Pix que entra na cobrança quando essa pessoa for você. Nas outras pessoas, ele fica salvo para as próximas etapas, sem correria depois.</p>
             </div>
+          </div>
+
+          <div class="mt-4 flex flex-wrap items-center gap-3">
             <label class="inline-flex items-center gap-3 rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-bold text-violet-700 shadow-sm dark:border-violet-800 dark:bg-slate-900/70 dark:text-violet-200">
               <input type="checkbox" name="pix_enabled" id="inputPixEnabled" value="1" class="h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500">
               <span>Deixar Pix pronto</span>
             </label>
+            <p class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">A chave fica mascaradinha na lista e só aparece inteira quando alguém realmente for copiar o Pix.</p>
           </div>
 
           <div class="mt-4 grid gap-3 md:grid-cols-2">
@@ -233,19 +245,29 @@
             </label>
             <label class="block">
               <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Chave Pix</span>
-              <input name="pix_key_value" id="inputPixKeyValue" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: +5511999999999 ou sua chave aleatória" />
+              <input name="pix_key_value" id="inputPixKeyValue" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: (21) 99999-9999" inputmode="text" autocomplete="off" />
+              <p id="inputPixKeyHelp" class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Se for celular, pode mandar só DDD + número. O +55 entra por nossa conta.</p>
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estado da cidade</span>
+              <select name="pix_state" id="inputPixState" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
+                <% pixStateList.forEach((state) => { %>
+                  <option value="<%= state.code %>" <%= state.code === pixStateDefault ? 'selected' : '' %>><%= state.name %> (<%= state.code %>)</option>
+                <% }) %>
+              </select>
             </label>
             <label class="block">
               <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Cidade do Pix</span>
-              <input name="pix_city" id="inputPixCity" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: São Paulo" />
+              <input name="pix_city" id="inputPixCity" list="pixCitySuggestions" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="<%= pixCityDefault %>" value="<%= pixCityDefault %>" autocomplete="off" />
+              <datalist id="pixCitySuggestions"></datalist>
+              <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Já deixamos Rio de Janeiro de largada, mas você pode escolher outro estado e pegar uma sugestão certinha.</p>
             </label>
-            <label class="block">
-              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nome curto no payload</span>
+            <label class="block md:col-span-2">
+              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nome para usar no Pix</span>
               <input name="pix_label" id="inputPixLabel" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: João Paulo" />
+              <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Se você deixar em branco, a gente usa o nome dessa pessoa automaticamente.</p>
             </label>
           </div>
-
-          <p class="mt-3 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">A chave fica mascaradinha na lista e só aparece inteira quando alguém for copiar o Pix.</p>
         </div>
       </form>
 
@@ -290,7 +312,7 @@
                     <div class="min-w-0 flex-1">
                       <div class="flex flex-wrap items-center gap-2">
                         <div class="text-lg font-extrabold text-slate-800 dark:text-white"><%= p.name %></div>
-                        <button type="button" data-id="<%= p.id %>" data-name="<%= p.name %>" data-phone="<%= p.phone || '' %>" data-email="<%= p.email || '' %>" data-pix-enabled="<%= p.pix_enabled ? '1' : '0' %>" data-pix-key-type="<%= p.pix_key_type || '' %>" data-pix-key-value="<%= p.pix_key_value || '' %>" data-pix-city="<%= p.pix_city || '' %>" data-pix-label="<%= p.pix_label || '' %>" onclick="editPersonFromButton(this)"
+                        <button type="button" data-id="<%= p.id %>" data-name="<%= p.name %>" data-phone="<%= p.phone || '' %>" data-email="<%= p.email || '' %>" data-pix-enabled="<%= p.pix_enabled ? '1' : '0' %>" data-pix-key-type="<%= p.pix_key_type || '' %>" data-pix-key-value="<%= p.pix_key_value || '' %>" data-pix-key-value-input="<%= p.pix_key_value_input || '' %>" data-pix-city="<%= p.pix_city || '' %>" data-pix-state="<%= p.pix_state || '' %>" data-pix-label="<%= p.pix_label || '' %>" onclick="editPersonFromButton(this)"
                           class="text-slate-400 hover:text-blue-500 transition-colors" aria-label="Editar pessoa" title="Editar pessoa">
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -306,29 +328,36 @@
                         <%= p.email ? '✉️ ' + p.email : '— E-mail não informado' %>
                       </div>
 
-                      <div class="mt-3 rounded-2xl border border-violet-200/70 bg-violet-50/80 px-3 py-3 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20">
-                        <div class="flex flex-wrap items-center gap-2">
-                          <span class="inline-flex items-center rounded-full border border-violet-200 bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-violet-700 dark:border-violet-800 dark:bg-slate-900/70 dark:text-violet-200">Pix</span>
-                          <% if (p.pix_enabled && p.pix_valid) { %>
-                            <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pronto para uso</span>
-                          <% } else if (p.pix_enabled) { %>
-                            <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Falta um ajuste</span>
-                          <% } else { %>
-                            <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">Ainda desligado</span>
-                          <% } %>
-                        </div>
-                        <div class="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-                          <%= p.pix_enabled ? ((p.pix_key_type_label || 'Chave Pix') + ' · ' + (p.pix_masked_key || 'aguardando preenchimento')) : 'Nenhuma chave salva por aqui ainda.' %>
-                        </div>
-                        <div class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
-                          <% if (p.pix_enabled && p.pix_city) { %>
-                            Cidade do payload: <strong class="text-slate-700 dark:text-slate-200"><%= p.pix_city %></strong>.
-                          <% } %>
-                          <% if (p.is_owner) { %>
-                            Esse é o Pix que entra em cena nas cobranças avulsas enviadas do seu nome.
-                          <% } else { %>
-                            Deixando salvo agora, a casa já fica preparada para as próximas fases.
-                          <% } %>
+                      <div class="mt-3 rounded-[24px] border border-violet-200/70 bg-violet-50/80 px-4 py-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20 sm:px-5">
+                        <div class="flex items-start gap-3">
+                          <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-violet-600 shadow-sm ring-1 ring-violet-100 dark:bg-slate-800 dark:text-violet-300 dark:ring-violet-900/50" aria-hidden="true">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1zm7 4h.01"></path>
+                            </svg>
+                          </span>
+                          <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600/80 dark:text-violet-300/80">Pix por aqui</div>
+                              <% if (p.pix_enabled && p.pix_valid) { %>
+                                <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pronto para uso</span>
+                              <% } else if (p.pix_enabled) { %>
+                                <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Falta um ajuste</span>
+                              <% } else { %>
+                                <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">Ainda desligado</span>
+                              <% } %>
+                            </div>
+                            <p class="mt-2 text-sm font-semibold leading-6 text-slate-700 dark:text-slate-100"><%= p.pix_enabled ? ((p.pix_key_type_label || 'Chave Pix') + ' · ' + (p.pix_masked_key || 'aguardando preenchimento')) : 'Nenhuma chave salva por aqui ainda.' %></p>
+                            <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
+                              <% if (p.pix_enabled && p.pix_city) { %>
+                                Cidade do Pix: <strong class="text-slate-700 dark:text-slate-200"><%= p.pix_city %><%= p.pix_state ? ' / ' + p.pix_state : '' %></strong>. 
+                              <% } %>
+                              <% if (p.is_owner) { %>
+                                Esse é o Pix que entra em cena nas cobranças avulsas enviadas do seu nome.
+                              <% } else { %>
+                                Deixando salvo agora, a casa já fica preparada para as próximas fases.
+                              <% } %>
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -430,6 +459,113 @@
   </div>
 
   <script>
+    const PIX_CITY_SUGGESTIONS_BY_STATE = <%- JSON.stringify(pixCitySuggestionsByState || {}) %>;
+    const PIX_ALL_CITY_SUGGESTIONS = <%- JSON.stringify(pixAllCitySuggestions || []) %>;
+    const PIX_DEFAULT_STATE = <%- JSON.stringify(pixStateDefault) %>;
+    const PIX_DEFAULT_CITY = <%- JSON.stringify(pixCityDefault) %>;
+
+    function normalizeText(value) {
+      return String(value || '')
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .toLowerCase()
+        .trim();
+    }
+
+    function findPixStateByCity(city) {
+      const safeCity = normalizeText(city);
+      if (!safeCity) return '';
+      return Object.entries(PIX_CITY_SUGGESTIONS_BY_STATE).find(([, cities]) =>
+        (cities || []).some((entry) => normalizeText(entry) === safeCity)
+      )?.[0] || '';
+    }
+
+    function fillPixCitySuggestions(stateCode) {
+      const datalist = document.getElementById('pixCitySuggestions');
+      if (!datalist) return;
+      const entries = (stateCode && PIX_CITY_SUGGESTIONS_BY_STATE[stateCode])
+        ? PIX_CITY_SUGGESTIONS_BY_STATE[stateCode]
+        : PIX_ALL_CITY_SUGGESTIONS;
+      datalist.innerHTML = (entries || []).map((city) => {
+        const option = document.createElement('option');
+        option.value = city;
+        return option.outerHTML;
+      }).join('');
+    }
+
+    function updatePixKeyUi() {
+      const typeInput = document.getElementById('inputPixKeyType');
+      const keyInput = document.getElementById('inputPixKeyValue');
+      const help = document.getElementById('inputPixKeyHelp');
+      if (!typeInput || !keyInput || !help) return;
+
+      const type = String(typeInput.value || '').trim();
+      keyInput.removeAttribute('maxlength');
+      keyInput.inputMode = 'text';
+      keyInput.autocapitalize = 'off';
+
+      if (type === 'phone') {
+        keyInput.placeholder = 'Ex.: (21) 99999-9999';
+        keyInput.inputMode = 'numeric';
+        keyInput.maxLength = 15;
+        help.textContent = 'Se for celular, pode mandar só DDD + número. O +55 entra por nossa conta.';
+        return;
+      }
+
+      if (type === 'cpf') {
+        keyInput.placeholder = 'Ex.: 123.456.789-00';
+        keyInput.inputMode = 'numeric';
+        keyInput.maxLength = 14;
+        help.textContent = 'Pode colar com pontuação ou só os números. A gente limpa por trás.';
+        return;
+      }
+
+      if (type === 'cnpj') {
+        keyInput.placeholder = 'Ex.: 12.345.678/0001-90';
+        keyInput.inputMode = 'numeric';
+        keyInput.maxLength = 18;
+        help.textContent = 'Pode colar com pontuação ou só os números. A gente limpa por trás.';
+        return;
+      }
+
+      if (type === 'email') {
+        keyInput.placeholder = 'Ex.: joao@email.com';
+        help.textContent = 'Aqui vale o e-mail completinho, do jeitinho que está cadastrado no banco.';
+        return;
+      }
+
+      if (type === 'evp') {
+        keyInput.placeholder = 'Ex.: 123e4567-e89b-12d3-a456-426614174000';
+        help.textContent = 'Se for chave aleatória, cole ela inteira e pronto.';
+        return;
+      }
+
+      keyInput.placeholder = 'Ex.: (21) 99999-9999';
+      help.textContent = 'Se for celular, pode mandar só DDD + número. O +55 entra por nossa conta.';
+    }
+
+    function updatePixCityUi(forceCity = false) {
+      const stateInput = document.getElementById('inputPixState');
+      const cityInput = document.getElementById('inputPixCity');
+      if (!stateInput || !cityInput) return;
+
+      const stateCode = String(stateInput.value || '').trim();
+      fillPixCitySuggestions(stateCode);
+
+      const suggestions = PIX_CITY_SUGGESTIONS_BY_STATE[stateCode] || [];
+      const currentCity = String(cityInput.value || '').trim();
+      if (!currentCity) {
+        if (forceCity) {
+          cityInput.value = suggestions[0] || PIX_DEFAULT_CITY;
+        }
+        return;
+      }
+
+      if (forceCity && suggestions.length && !suggestions.includes(currentCity)) {
+        cityInput.value = suggestions[0] || PIX_DEFAULT_CITY;
+      }
+    }
+
     function editPersonFromButton(button) {
       editPerson({
         id: button.dataset.id,
@@ -438,8 +574,9 @@
         email: button.dataset.email || '',
         pixEnabled: button.dataset.pixEnabled === '1',
         pixKeyType: button.dataset.pixKeyType || '',
-        pixKeyValue: button.dataset.pixKeyValue || '',
+        pixKeyValue: button.dataset.pixKeyValueInput || button.dataset.pixKeyValue || '',
         pixCity: button.dataset.pixCity || '',
+        pixState: button.dataset.pixState || '',
         pixLabel: button.dataset.pixLabel || ''
       });
     }
@@ -452,11 +589,14 @@
       document.getElementById('inputPixEnabled').checked = !!person.pixEnabled;
       document.getElementById('inputPixKeyType').value = person.pixKeyType || '';
       document.getElementById('inputPixKeyValue').value = person.pixKeyValue || '';
-      document.getElementById('inputPixCity').value = person.pixCity || '';
+      document.getElementById('inputPixState').value = person.pixState || findPixStateByCity(person.pixCity) || PIX_DEFAULT_STATE;
+      document.getElementById('inputPixCity').value = person.pixCity || PIX_DEFAULT_CITY;
       document.getElementById('inputPixLabel').value = person.pixLabel || '';
       document.getElementById('btnSubmit').innerHTML = 'Salvar mudanças';
       document.getElementById('btnSubmit').classList.replace('bg-slate-900', 'bg-blue-600');
       document.getElementById('btnCancel').classList.remove('hidden');
+      updatePixKeyUi();
+      updatePixCityUi(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -468,15 +608,42 @@
       document.getElementById('inputPixEnabled').checked = false;
       document.getElementById('inputPixKeyType').value = '';
       document.getElementById('inputPixKeyValue').value = '';
-      document.getElementById('inputPixCity').value = '';
+      document.getElementById('inputPixState').value = PIX_DEFAULT_STATE;
+      document.getElementById('inputPixCity').value = PIX_DEFAULT_CITY;
       document.getElementById('inputPixLabel').value = '';
       document.getElementById('btnSubmit').innerHTML = `<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>Salvar pessoa`;
       document.getElementById('btnSubmit').classList.remove('bg-blue-600');
       document.getElementById('btnSubmit').classList.add('bg-slate-900');
       document.getElementById('btnCancel').classList.add('hidden');
+      updatePixKeyUi();
+      updatePixCityUi(true);
     }
 
     window.addEventListener('load', () => {
+      const stateInput = document.getElementById('inputPixState');
+      const keyTypeInput = document.getElementById('inputPixKeyType');
+      const cityInput = document.getElementById('inputPixCity');
+
+      if (stateInput) {
+        stateInput.addEventListener('change', () => updatePixCityUi(true));
+      }
+
+      if (keyTypeInput) {
+        keyTypeInput.addEventListener('change', updatePixKeyUi);
+      }
+
+      if (cityInput) {
+        cityInput.addEventListener('blur', () => {
+          const guessedState = findPixStateByCity(cityInput.value);
+          if (guessedState && stateInput && !stateInput.value) {
+            stateInput.value = guessedState;
+            updatePixCityUi(false);
+          }
+        });
+      }
+
+      resetForm();
+
       const highlighted = document.querySelector('[id^="friend-request-"][class*="ring-2"]');
       if (highlighted) {
         highlighted.scrollIntoView({ behavior: 'smooth', block: 'center' });

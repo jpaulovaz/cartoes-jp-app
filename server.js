@@ -228,6 +228,23 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_person O
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_linked ON person_app_links(owner_user_id, linked_user_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("ALTER TABLE closed_months ADD COLUMN user_id INTEGER").run(); } catch (e) { /* Coluna já existe ou tabela ainda não precisava de ajuste */ }
 try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_closed_months_user_month_year ON closed_months(user_id, month, year)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN amount_mode TEXT NOT NULL DEFAULT 'fixed'").run(); } catch (e) { /* Coluna já existe */ }
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS monthly_finance_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    finance_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    item_date TEXT,
+    item_source TEXT,
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (finance_id) REFERENCES monthly_finances(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_finance_user ON monthly_finance_items(finance_id, user_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_user_date ON monthly_finance_items(user_id, item_date)").run(); } catch (e) { /* Índice já existe */ }
 
 db.prepare(`
   CREATE TABLE IF NOT EXISTS recurring_rules (
@@ -2642,6 +2659,246 @@ refreshAllSharedDebtBatches();
 function firstTwoNames(value) {
   const parts = String(value || "").trim().split(/\s+/).filter(Boolean);
   return parts.slice(0, 2).join(" ") || "Titular";
+}
+
+const FINANCE_TYPES = ["income", "expense"];
+const FINANCE_TYPE_SET = new Set(FINANCE_TYPES);
+const FINANCE_AMOUNT_MODES = ["fixed", "variable"];
+const FINANCE_AMOUNT_MODE_SET = new Set(FINANCE_AMOUNT_MODES);
+
+function normalizeFinanceType(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return FINANCE_TYPE_SET.has(normalized) ? normalized : null;
+}
+
+function normalizeFinanceAmountMode(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return FINANCE_AMOUNT_MODE_SET.has(normalized) ? normalized : "fixed";
+}
+
+function sanitizeFinanceDescription(value) {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    throw new Error("Dá um nome para esse item antes de salvar.");
+  }
+  return normalized.slice(0, 120);
+}
+
+function normalizeFinanceItemDate(value) {
+  const normalized = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : "";
+}
+
+function sanitizeVariableFinanceItems(items) {
+  if (!Array.isArray(items)) return [];
+
+  const normalizedItems = [];
+  for (const rawItem of items.slice(0, 120)) {
+    const itemDate = normalizeFinanceItemDate(rawItem?.item_date ?? rawItem?.date);
+    const itemSource = String(rawItem?.item_source ?? rawItem?.source ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120);
+    const rawAmount = Number(rawItem?.amount_cents ?? rawItem?.amountCents ?? rawItem?.amount ?? 0);
+    const amountCents = Number.isFinite(rawAmount) ? Math.max(0, Math.round(rawAmount)) : 0;
+
+    if (!itemDate && !itemSource && amountCents === 0) continue;
+
+    if (!itemDate || !itemSource || amountCents <= 0) {
+      throw new Error("Nos lançamentos variáveis, preencha data, origem e valor certinhos.");
+    }
+
+    normalizedItems.push({
+      item_date: itemDate,
+      item_source: itemSource,
+      amount_cents: amountCents
+    });
+  }
+
+  return normalizedItems;
+}
+
+function sumFinanceItemCents(items) {
+  return (Array.isArray(items) ? items : []).reduce((sum, item) => sum + Number(item?.amount_cents || 0), 0);
+}
+
+function ensureMonthlyFinanceScaffold(userId, month, year) {
+  const alreadyInitialized = !!db.prepare(`
+    SELECT 1
+    FROM scratchpad
+    WHERE user_id = ? AND month = ? AND year = ?
+    LIMIT 1
+  `).get(userId, month, year);
+
+  if (alreadyInitialized) return;
+
+  let prevMonth = month - 1;
+  let prevYear = year;
+  if (prevMonth < 1) {
+    prevMonth = 12;
+    prevYear -= 1;
+  }
+
+  const currentCounts = new Map(
+    db.prepare(`
+      SELECT type, COUNT(*) AS total
+      FROM monthly_finances
+      WHERE user_id = ? AND month = ? AND year = ?
+      GROUP BY type
+    `).all(userId, month, year).map((row) => [row.type, Number(row.total || 0)])
+  );
+
+  const selectPrevious = db.prepare(`
+    SELECT type, category_id, description, amount_mode
+    FROM monthly_finances
+    WHERE user_id = ? AND month = ? AND year = ? AND type = ?
+    ORDER BY id ASC
+  `);
+
+  const insertClone = db.prepare(`
+    INSERT INTO monthly_finances (user_id, month, year, type, category_id, description, formula, amount_cents, amount_mode, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, '', 0, ?, ?)
+  `);
+
+  const nowIso = new Date().toISOString();
+
+  db.transaction(() => {
+    for (const type of FINANCE_TYPES) {
+      if ((currentCounts.get(type) || 0) > 0) continue;
+
+      const previousRows = selectPrevious.all(userId, prevMonth, prevYear, type);
+      for (const row of previousRows) {
+        insertClone.run(
+          userId,
+          month,
+          year,
+          type,
+          row.category_id ?? null,
+          row.description ?? "",
+          normalizeFinanceAmountMode(row.amount_mode),
+          nowIso
+        );
+      }
+    }
+  })();
+}
+
+function getFinanceItemsByFinanceId(userId, financeId) {
+  return db.prepare(`
+    SELECT id, finance_id, item_date, item_source, amount_cents
+    FROM monthly_finance_items
+    WHERE finance_id = ? AND user_id = ?
+    ORDER BY CASE WHEN item_date IS NULL OR item_date = '' THEN 1 ELSE 0 END, item_date ASC, id ASC
+  `).all(financeId, userId);
+}
+
+function getFinanceItemsMap(userId, financeIds) {
+  if (!Array.isArray(financeIds) || financeIds.length === 0) {
+    return new Map();
+  }
+
+  const placeholders = financeIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT id, finance_id, item_date, item_source, amount_cents
+    FROM monthly_finance_items
+    WHERE user_id = ? AND finance_id IN (${placeholders})
+    ORDER BY CASE WHEN item_date IS NULL OR item_date = '' THEN 1 ELSE 0 END, item_date ASC, id ASC
+  `).all(userId, ...financeIds);
+
+  const byFinance = new Map();
+  for (const row of rows) {
+    if (!byFinance.has(row.finance_id)) {
+      byFinance.set(row.finance_id, []);
+    }
+    byFinance.get(row.finance_id).push(row);
+  }
+
+  return byFinance;
+}
+
+function syncVariableFinanceAggregate(userId, financeId) {
+  const totalCents = Number(db.prepare(`
+    SELECT COALESCE(SUM(amount_cents), 0) AS total
+    FROM monthly_finance_items
+    WHERE finance_id = ? AND user_id = ?
+  `).get(financeId, userId)?.total || 0);
+
+  db.prepare(`
+    UPDATE monthly_finances
+    SET formula = '', amount_cents = ?
+    WHERE id = ? AND user_id = ?
+  `).run(totalCents, financeId, userId);
+
+  return totalCents;
+}
+
+function hydrateMonthlyFinances(userId, finances) {
+  const normalizedFinances = Array.isArray(finances)
+    ? finances.map((finance) => ({ ...finance, amount_mode: normalizeFinanceAmountMode(finance.amount_mode) }))
+    : [];
+
+  const itemsByFinance = getFinanceItemsMap(userId, normalizedFinances.map((finance) => finance.id));
+  const dirtyVariableRows = [];
+
+  for (const finance of normalizedFinances) {
+    const items = itemsByFinance.get(finance.id) || [];
+    finance.items = items;
+    finance.item_count = items.length;
+
+    if (finance.amount_mode === 'variable') {
+      const totalCents = sumFinanceItemCents(items);
+      if (Number(finance.amount_cents || 0) !== totalCents || String(finance.formula || '').trim()) {
+        dirtyVariableRows.push({ id: finance.id, totalCents });
+      }
+      finance.amount_cents = totalCents;
+      finance.formula = '';
+    }
+  }
+
+  if (dirtyVariableRows.length) {
+    const updateTotal = db.prepare(`
+      UPDATE monthly_finances
+      SET formula = '', amount_cents = ?
+      WHERE id = ? AND user_id = ?
+    `);
+
+    db.transaction((rows) => {
+      for (const row of rows) {
+        updateTotal.run(row.totalCents, row.id, userId);
+      }
+    })(dirtyVariableRows);
+  }
+
+  return normalizedFinances;
+}
+
+function getFinanceByIdForUser(userId, financeId) {
+  const finance = db.prepare(`
+    SELECT *
+    FROM monthly_finances
+    WHERE id = ? AND user_id = ?
+  `).get(financeId, userId);
+
+  if (!finance) return null;
+  finance.amount_mode = normalizeFinanceAmountMode(finance.amount_mode);
+  return finance;
+}
+
+function serializeFinanceForApi(userId, financeId) {
+  const finance = getFinanceByIdForUser(userId, financeId);
+  if (!finance) return null;
+
+  if (finance.amount_mode === 'variable') {
+    finance.items = getFinanceItemsByFinanceId(userId, financeId);
+    finance.item_count = finance.items.length;
+    finance.amount_cents = syncVariableFinanceAggregate(userId, financeId);
+    finance.formula = '';
+  } else {
+    finance.items = [];
+    finance.item_count = 0;
+  }
+
+  return finance;
 }
 
 function monthLabel(month, year) {
@@ -6726,37 +6983,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const currentYear = parseInt(year);
 
   syncRecurringTransactions(userId, currentYear, currentMonth);
-
-  const existingExpenses = db.prepare(`
-    SELECT COUNT(*) as count
-    FROM monthly_finances
-    WHERE user_id = ? AND month = ? AND year = ? AND type = 'expense'
-  `).get(userId, currentMonth, currentYear);
-
-  if (existingExpenses.count === 0) {
-    let prevM = currentMonth - 1;
-    let prevY = currentYear;
-    if (prevM < 1) { prevM = 12; prevY--; }
-
-    const prevExpenses = db.prepare(`
-      SELECT *
-      FROM monthly_finances
-      WHERE user_id = ? AND month = ? AND year = ? AND type = 'expense'
-    `).all(userId, prevM, prevY);
-
-    if (prevExpenses.length > 0) {
-      const insertClone = db.prepare(`
-        INSERT INTO monthly_finances (user_id, month, year, type, description, category_id, formula, amount_cents, created_at)
-        VALUES (?, ?, ?, 'expense', ?, ?, '', 0, ?)
-      `);
-
-      db.transaction(() => {
-        for (const exp of prevExpenses) {
-          insertClone.run(userId, currentMonth, currentYear, exp.description, exp.category_id, new Date().toISOString());
-        }
-      })();
-    }
-  }
+  ensureMonthlyFinanceScaffold(userId, currentMonth, currentYear);
 
   const owner = db.prepare("SELECT * FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
   if (!owner) return res.status(400).send("Defina um titular na aba Amigos primeiro.");
@@ -6774,11 +7001,12 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       )
   `).get(userId, owner.id, currentMonth, currentYear, currentMonth, currentYear);
 
-  const finances = db.prepare(`
+  const finances = hydrateMonthlyFinances(userId, db.prepare(`
     SELECT *
     FROM monthly_finances
     WHERE user_id = ? AND month = ? AND year = ?
-  `).all(userId, currentMonth, currentYear);
+    ORDER BY CASE type WHEN 'income' THEN 0 ELSE 1 END, id ASC
+  `).all(userId, currentMonth, currentYear));
 
   const categories = db.prepare("SELECT * FROM finance_categories WHERE user_id = ? AND is_active = 1").all(userId);
 
@@ -8142,23 +8370,127 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
 });
 // --- ROTAS DO detalhamento ---
 
-// 1. Adiciona nova linha (Tanto para Entradas quanto para Contas)
+app.get("/finances/details/:id", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const finance = serializeFinanceForApi(userId, req.params.id);
+
+  if (!finance) {
+    return res.status(404).json({ error: "Item não encontrado." });
+  }
+
+  return res.json({
+    success: true,
+    finance,
+    isClosed: isMonthClosed(userId, Number(finance.month), Number(finance.year))
+  });
+});
+
+// 1. Adiciona nova linha (Tanto para Entradas quanto para Saídas)
 app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) => {
   const userId = req.user.id;
 
   try {
-    const { month, year, type, description } = req.body;
-    if (isMonthClosed(userId, Number(month), Number(year))) {
-      return res.status(423).json({ error: getMonthLockMessage(Number(month), Number(year)) });
-    }
-    db.prepare(`
-      INSERT INTO monthly_finances (user_id, month, year, type, description, formula, amount_cents, created_at)
-      VALUES (?, ?, ?, ?, ?, '', 0, ?)
-    `).run(userId, month, year, type, description, new Date().toISOString());
+    const month = Number(req.body.month);
+    const year = Number(req.body.year);
+    const type = normalizeFinanceType(req.body.type);
+    const amountMode = normalizeFinanceAmountMode(req.body.amount_mode);
+    const description = sanitizeFinanceDescription(req.body.description);
+    const items = amountMode === 'variable' ? sanitizeVariableFinanceItems(req.body.items) : [];
 
-    res.json({ success: true });
+    if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 2000) {
+      return res.status(400).json({ error: "Mês ou ano inválido." });
+    }
+
+    if (!type) {
+      return res.status(400).json({ error: "Tipo de lançamento inválido." });
+    }
+
+    if (isMonthClosed(userId, month, year)) {
+      return res.status(423).json({ error: getMonthLockMessage(month, year) });
+    }
+
+    const nowIso = new Date().toISOString();
+    const totalCents = amountMode === 'variable' ? sumFinanceItemCents(items) : 0;
+
+    const insertFinance = db.prepare(`
+      INSERT INTO monthly_finances (user_id, month, year, type, description, formula, amount_cents, amount_mode, created_at)
+      VALUES (?, ?, ?, ?, ?, '', ?, ?, ?)
+    `);
+
+    const insertItem = db.prepare(`
+      INSERT INTO monthly_finance_items (finance_id, user_id, item_date, item_source, amount_cents, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const financeId = db.transaction(() => {
+      const result = insertFinance.run(userId, month, year, type, description, totalCents, amountMode, nowIso);
+      const createdFinanceId = Number(result.lastInsertRowid);
+
+      if (amountMode === 'variable') {
+        for (const item of items) {
+          insertItem.run(createdFinanceId, userId, item.item_date, item.item_source, item.amount_cents, nowIso, nowIso);
+        }
+      }
+
+      return createdFinanceId;
+    })();
+
+    return res.json({ success: true, finance: serializeFinanceForApi(userId, financeId) });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    const status = /certinhos|nome para esse item/i.test(String(e.message || '')) ? 400 : 500;
+    return res.status(status).json({ error: e.message });
+  }
+});
+
+app.post("/finances/variable/:id", ensureAuthenticated, express.json(), (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const id = Number(req.params.id);
+    const finance = getFinanceByIdForUser(userId, id);
+    if (!finance) {
+      return res.status(404).json({ error: "Item não encontrado." });
+    }
+
+    if (finance.amount_mode !== 'variable') {
+      return res.status(400).json({ error: "Esse item não usa lançamentos variáveis." });
+    }
+
+    if (isMonthClosed(userId, Number(finance.month), Number(finance.year))) {
+      return res.status(423).json({ error: getMonthLockMessage(Number(finance.month), Number(finance.year)) });
+    }
+
+    const description = sanitizeFinanceDescription(req.body.description);
+    const items = sanitizeVariableFinanceItems(req.body.items);
+    const totalCents = sumFinanceItemCents(items);
+    const nowIso = new Date().toISOString();
+
+    const updateFinance = db.prepare(`
+      UPDATE monthly_finances
+      SET description = ?, formula = '', amount_cents = ?, amount_mode = 'variable'
+      WHERE id = ? AND user_id = ?
+    `);
+    const deleteItems = db.prepare(`
+      DELETE FROM monthly_finance_items
+      WHERE finance_id = ? AND user_id = ?
+    `);
+    const insertItem = db.prepare(`
+      INSERT INTO monthly_finance_items (finance_id, user_id, item_date, item_source, amount_cents, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    db.transaction(() => {
+      updateFinance.run(description, totalCents, id, userId);
+      deleteItems.run(id, userId);
+      for (const item of items) {
+        insertItem.run(id, userId, item.item_date, item.item_source, item.amount_cents, nowIso, nowIso);
+      }
+    })();
+
+    return res.json({ success: true, finance: serializeFinanceForApi(userId, id) });
+  } catch (e) {
+    const status = /certinhos|nome para esse item/i.test(String(e.message || '')) ? 400 : 500;
+    return res.status(status).json({ error: e.message });
   }
 });
 
@@ -8167,40 +8499,59 @@ app.post("/finances/update/:id", ensureAuthenticated, express.json(), (req, res)
   const userId = req.user.id;
 
   try {
-    const id = req.params.id;
+    const id = Number(req.params.id);
     const { field, value, formula, amount_cents } = req.body;
-    const row = db.prepare("SELECT month, year FROM monthly_finances WHERE id = ? AND user_id = ?").get(id, userId);
+    const row = getFinanceByIdForUser(userId, id);
+
     if (!row) {
       return res.status(404).json({ error: "Linha não encontrada." });
     }
+
     if (isMonthClosed(userId, Number(row.month), Number(row.year))) {
       return res.status(423).json({ error: getMonthLockMessage(Number(row.month), Number(row.year)) });
     }
 
     if (field === 'description') {
-      db.prepare("UPDATE monthly_finances SET description = ? WHERE id = ? AND user_id = ?").run(value, id, userId);
+      db.prepare("UPDATE monthly_finances SET description = ? WHERE id = ? AND user_id = ?")
+        .run(sanitizeFinanceDescription(value), id, userId);
     } else if (field === 'formula_and_value') {
-      db.prepare("UPDATE monthly_finances SET formula = ?, amount_cents = ? WHERE id = ? AND user_id = ?").run(formula, amount_cents, id, userId);
+      if (row.amount_mode !== 'fixed') {
+        return res.status(400).json({ error: "Esse item é variável. Abra a lista dele para editar os lançamentos." });
+      }
+
+      const parsedAmountCents = Number.isFinite(Number(amount_cents)) ? Math.max(0, Math.round(Number(amount_cents))) : 0;
+      db.prepare("UPDATE monthly_finances SET formula = ?, amount_cents = ? WHERE id = ? AND user_id = ?")
+        .run(String(formula || '').trim(), parsedAmountCents, id, userId);
+    } else {
+      return res.status(400).json({ error: "Campo de atualização inválido." });
     }
 
-    res.json({ success: true });
+    return res.json({ success: true, finance: serializeFinanceForApi(userId, id) });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    const status = /nome para esse item/i.test(String(e.message || '')) ? 400 : 500;
+    return res.status(status).json({ error: e.message });
   }
 });
 
-// 3. Deleta uma linha (Entrada ou Conta)
+// 3. Deleta uma linha (Entrada ou Saída)
 app.post("/finances/delete/:id", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const row = db.prepare("SELECT month, year FROM monthly_finances WHERE id = ? AND user_id = ?").get(req.params.id, userId);
+  const row = getFinanceByIdForUser(userId, req.params.id);
+
   if (!row) {
     return res.status(404).json({ error: "Linha não encontrada." });
   }
+
   if (isMonthClosed(userId, Number(row.month), Number(row.year))) {
     return res.status(423).json({ error: getMonthLockMessage(Number(row.month), Number(row.year)) });
   }
-  db.prepare("DELETE FROM monthly_finances WHERE id = ? AND user_id = ?").run(req.params.id, userId);
-  res.json({ success: true });
+
+  db.transaction(() => {
+    db.prepare("DELETE FROM monthly_finance_items WHERE finance_id = ? AND user_id = ?").run(req.params.id, userId);
+    db.prepare("DELETE FROM monthly_finances WHERE id = ? AND user_id = ?").run(req.params.id, userId);
+  })();
+
+  return res.json({ success: true });
 });
 
 // 4. Salva Lembretes e Calculadora
@@ -8620,7 +8971,7 @@ app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
   }
 
   try {
-    const tables = ['allocations', 'transactions', 'imports', 'person_payments', 'card_statements', 'people', 'cards', 'monthly_finances', 'scratchpad', 'finance_categories', 'closed_months'];
+    const tables = ['allocations', 'transactions', 'imports', 'person_payments', 'card_statements', 'people', 'cards', 'monthly_finance_items', 'monthly_finances', 'scratchpad', 'finance_categories', 'closed_months'];
 
     for (const table of tables) {
       db.prepare(`DELETE FROM ${table} WHERE user_id = ?`).run(targetUserId);

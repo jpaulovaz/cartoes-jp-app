@@ -144,10 +144,27 @@ CREATE TABLE IF NOT EXISTS monthly_finances (
   description TEXT,
   formula TEXT,
   amount_cents INTEGER DEFAULT 0,
+  amount_mode TEXT NOT NULL DEFAULT 'fixed',
   created_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (category_id) REFERENCES finance_categories(id)
 );
+
+CREATE TABLE IF NOT EXISTS monthly_finance_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  finance_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  item_date TEXT,
+  item_source TEXT,
+  amount_cents INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (finance_id) REFERENCES monthly_finances(id),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_finance_user ON monthly_finance_items(finance_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_user_date ON monthly_finance_items(user_id, item_date);
 
 CREATE TABLE IF NOT EXISTS scratchpad (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -462,6 +479,10 @@ CREATE INDEX IF NOT EXISTS idx_friendships_pair_status ON friendships(user_low_i
 CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_person ON person_app_links(owner_user_id, person_id);
 CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_linked ON person_app_links(owner_user_id, linked_user_id);
 `);
+
+if (!columnExists("monthly_finances", "amount_mode")) {
+  db.exec("ALTER TABLE monthly_finances ADD COLUMN amount_mode TEXT NOT NULL DEFAULT 'fixed';");
+}
 
 // ===== CATEGORIAS PADRÃO =====
 // Nota: Categorias agora são por usuário, então não inserimos padrão aqui

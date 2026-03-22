@@ -283,110 +283,102 @@
 
                     <div class="space-y-8">
                         <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                            <div class="bg-slate-900 px-6 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="bg-slate-900 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <h5 class="text-white font-bold">✨ Grana que entra</h5>
                                     <p class="text-xs font-medium text-white/70 mt-1">Fixa segue no toque rápido. Variável abre a listinha completinha.</p>
                                 </div>
                                 <button type="button" onclick="openFinanceCreator('income')" <%= isClosed ? 'hidden' : '' %> class="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl transition-colors">+ Nova entrada</button>
                             </div>
-                            <div class="p-6">
+                            <div class="p-4 sm:p-6">
                                 <% if (!incomeFinances.length) { %>
                                     <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/60 px-4 py-6 text-sm font-medium text-slate-500 dark:text-slate-400">
                                         Ainda não caiu nada por aqui. Quando pintar uma entrada, ela aparece nessa vitrine.
                                     </div>
                                 <% } else { %>
-                                    <div class="overflow-x-auto" data-no-month-swipe>
-                                        <table class="w-full text-left min-w-[540px]">
-                                            <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                                                <% incomeFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); %>
-                                                    <tr>
-                                                        <td class="py-3 pr-3 align-top">
-                                                            <div class="flex flex-col gap-2">
-                                                                <input type="text" <%= isClosed ? 'disabled' : '' %> class="w-full bg-transparent border-b border-transparent focus:border-blue-500 outline-none dark:text-slate-200 disabled:opacity-60" value="<%= getDesc(fin) %>" onchange="updateRow(<%= fin.id %>, 'description', this.value)">
-                                                                <% if (variable) { %>
-                                                                    <div class="flex flex-wrap items-center gap-2">
-                                                                        <span class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
-                                                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10"></path></svg>
-                                                                            Variável
-                                                                        </span>
-                                                                        <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400"><%= getVariableHint(fin) %></span>
-                                                                    </div>
-                                                                <% } %>
+                                    <div data-no-month-swipe>
+                                        <div class="divide-y divide-slate-100 dark:divide-slate-700">
+                                            <% incomeFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); %>
+                                                <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-2 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:gap-x-3">
+                                                    <div class="min-w-0 space-y-2">
+                                                        <input type="text" <%= isClosed ? 'disabled' : '' %> class="w-full min-w-0 bg-transparent border-b border-transparent text-sm font-semibold text-slate-800 focus:border-blue-500 outline-none dark:text-slate-200 disabled:opacity-60 sm:text-base sm:font-medium" value="<%= getDesc(fin) %>" onchange="updateRow(<%= fin.id %>, 'description', this.value)">
+                                                        <% if (variable) { %>
+                                                            <div class="flex flex-wrap items-center gap-2">
+                                                                <span class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                                                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10"></path></svg>
+                                                                    Variável
+                                                                </span>
+                                                                <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400"><%= getVariableHint(fin) %></span>
                                                             </div>
-                                                        </td>
-                                                        <td class="py-3 w-48 align-top">
-                                                            <% if (variable) { %>
-                                                                <button type="button" onclick="openVariableEditor(<%= fin.id %>)" class="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-right transition hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30">
-                                                                    <span class="block font-mono text-sm font-black text-emerald-700 dark:text-emerald-300"><%= formatBRLFromCents(fin.amount_cents) %></span>
-                                                                    <span class="mt-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400"><%= itemCount ? `${itemCount} lançamento${itemCount === 1 ? '' : 's'}` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
-                                                                </button>
-                                                            <% } else { %>
-                                                                <input type="text" data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %> class="w-full font-mono font-bold text-right text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-60" value="<%= getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>, this.value)">
-                                                            <% } %>
-                                                        </td>
-                                                        <td class="py-3 pl-2 text-right align-top">
-                                                            <button type="button" onclick="deleteRow(<%= fin.id %>, '<%= variable ? 'variable' : 'fixed' %>')" <%= isClosed ? 'hidden' : '' %> class="text-slate-300 hover:text-rose-500 font-bold transition-colors">×</button>
-                                                        </td>
-                                                    </tr>
-                                                <% }) %>
-                                            </tbody>
-                                        </table>
+                                                        <% } %>
+                                                    </div>
+                                                    <div class="min-w-[120px] max-w-[148px] self-start sm:min-w-0 sm:max-w-none">
+                                                        <% if (variable) { %>
+                                                            <button type="button" onclick="openVariableEditor(<%= fin.id %>)" class="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-right transition hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 sm:px-3">
+                                                                <span class="block font-mono text-[13px] font-black text-emerald-700 dark:text-emerald-300 sm:text-sm"><%= formatBRLFromCents(fin.amount_cents) %></span>
+                                                                <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${itemCount} lançamento${itemCount === 1 ? '' : 's'}` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
+                                                            </button>
+                                                        <% } else { %>
+                                                            <input type="text" data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl bg-emerald-50 px-2.5 py-2 font-mono text-[13px] font-bold text-right text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:bg-emerald-900/30 dark:text-emerald-400 sm:rounded-lg sm:px-2 sm:py-1 sm:text-sm" value="<%= getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>, this.value)">
+                                                        <% } %>
+                                                    </div>
+                                                    <div class="self-start pt-0.5 text-right sm:pt-1">
+                                                        <button type="button" onclick="deleteRow(<%= fin.id %>, '<%= variable ? 'variable' : 'fixed' %>')" <%= isClosed ? 'hidden' : '' %> class="inline-flex h-8 w-8 items-center justify-center rounded-full text-lg font-bold text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-900/20">×</button>
+                                                    </div>
+                                                </div>
+                                            <% }) %>
+                                        </div>
                                     </div>
                                 <% } %>
                             </div>
                         </div>
 
                         <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                            <div class="bg-slate-800 dark:bg-slate-900 px-6 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="bg-slate-800 dark:bg-slate-900 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <h5 class="text-white font-bold">🧾 Grana que sai</h5>
                                     <p class="text-xs font-medium text-white/70 mt-1">Vale para rotina, corre do trabalho, combustível e tudo que aperta o mês.</p>
                                 </div>
                                 <button type="button" onclick="openFinanceCreator('expense')" <%= isClosed ? 'hidden' : '' %> class="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl transition-colors">+ Nova saída</button>
                             </div>
-                            <div class="p-6">
+                            <div class="p-4 sm:p-6">
                                 <% if (!expenseFinances.length) { %>
                                     <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/60 px-4 py-6 text-sm font-medium text-slate-500 dark:text-slate-400">
                                         Ainda não saiu nada por aqui. Quando pintar uma saída, ela entra nessa lista.
                                     </div>
                                 <% } else { %>
-                                    <div class="overflow-x-auto" data-no-month-swipe>
-                                        <table class="w-full text-left min-w-[540px]">
-                                            <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                                                <% expenseFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); %>
-                                                    <tr>
-                                                        <td class="py-3 pr-3 align-top">
-                                                            <div class="flex flex-col gap-2">
-                                                                <input type="text" <%= isClosed ? 'disabled' : '' %> class="w-full bg-transparent border-b border-transparent focus:border-rose-500 outline-none dark:text-slate-200 disabled:opacity-60" value="<%= getDesc(fin) %>" onchange="updateRow(<%= fin.id %>, 'description', this.value)">
-                                                                <% if (variable) { %>
-                                                                    <div class="flex flex-wrap items-center gap-2">
-                                                                        <span class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
-                                                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10"></path></svg>
-                                                                            Variável
-                                                                        </span>
-                                                                        <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400"><%= getVariableHint(fin) %></span>
-                                                                    </div>
-                                                                <% } %>
+                                    <div data-no-month-swipe>
+                                        <div class="divide-y divide-slate-100 dark:divide-slate-700">
+                                            <% expenseFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); %>
+                                                <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-2 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:gap-x-3">
+                                                    <div class="min-w-0 space-y-2">
+                                                        <input type="text" <%= isClosed ? 'disabled' : '' %> class="w-full min-w-0 bg-transparent border-b border-transparent text-sm font-semibold text-slate-800 focus:border-rose-500 outline-none dark:text-slate-200 disabled:opacity-60 sm:text-base sm:font-medium" value="<%= getDesc(fin) %>" onchange="updateRow(<%= fin.id %>, 'description', this.value)">
+                                                        <% if (variable) { %>
+                                                            <div class="flex flex-wrap items-center gap-2">
+                                                                <span class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                                                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10"></path></svg>
+                                                                    Variável
+                                                                </span>
+                                                                <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400"><%= getVariableHint(fin) %></span>
                                                             </div>
-                                                        </td>
-                                                        <td class="py-3 w-48 align-top">
-                                                            <% if (variable) { %>
-                                                                <button type="button" onclick="openVariableEditor(<%= fin.id %>)" class="w-full rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-right transition hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900/40 dark:bg-rose-900/20 dark:hover:bg-rose-900/30">
-                                                                    <span class="block font-mono text-sm font-black text-rose-700 dark:text-rose-300"><%= formatBRLFromCents(fin.amount_cents) %></span>
-                                                                    <span class="mt-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400"><%= itemCount ? `${itemCount} lançamento${itemCount === 1 ? '' : 's'}` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
-                                                                </button>
-                                                            <% } else { %>
-                                                                <input type="text" data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %> class="w-full font-mono font-bold text-right text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30 rounded-lg px-2 py-1 focus:ring-2 focus:ring-rose-500 outline-none disabled:opacity-60" value="<%= getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>, this.value)">
-                                                            <% } %>
-                                                        </td>
-                                                        <td class="py-3 pl-2 text-right align-top">
-                                                            <button type="button" onclick="deleteRow(<%= fin.id %>, '<%= variable ? 'variable' : 'fixed' %>')" <%= isClosed ? 'hidden' : '' %> class="text-slate-300 hover:text-rose-500 font-bold transition-colors">×</button>
-                                                        </td>
-                                                    </tr>
-                                                <% }) %>
-                                            </tbody>
-                                        </table>
+                                                        <% } %>
+                                                    </div>
+                                                    <div class="min-w-[120px] max-w-[148px] self-start sm:min-w-0 sm:max-w-none">
+                                                        <% if (variable) { %>
+                                                            <button type="button" onclick="openVariableEditor(<%= fin.id %>)" class="w-full rounded-2xl border border-rose-200 bg-rose-50 px-2.5 py-2 text-right transition hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900/40 dark:bg-rose-900/20 dark:hover:bg-rose-900/30 sm:px-3">
+                                                                <span class="block font-mono text-[13px] font-black text-rose-700 dark:text-rose-300 sm:text-sm"><%= formatBRLFromCents(fin.amount_cents) %></span>
+                                                                <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${itemCount} lançamento${itemCount === 1 ? '' : 's'}` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
+                                                            </button>
+                                                        <% } else { %>
+                                                            <input type="text" data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl bg-rose-50 px-2.5 py-2 font-mono text-[13px] font-bold text-right text-rose-700 outline-none focus:ring-2 focus:ring-rose-500 disabled:opacity-60 dark:bg-rose-900/30 dark:text-rose-400 sm:rounded-lg sm:px-2 sm:py-1 sm:text-sm" value="<%= getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>, this.value)">
+                                                        <% } %>
+                                                    </div>
+                                                    <div class="self-start pt-0.5 text-right sm:pt-1">
+                                                        <button type="button" onclick="deleteRow(<%= fin.id %>, '<%= variable ? 'variable' : 'fixed' %>')" <%= isClosed ? 'hidden' : '' %> class="inline-flex h-8 w-8 items-center justify-center rounded-full text-lg font-bold text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-900/20">×</button>
+                                                    </div>
+                                                </div>
+                                            <% }) %>
+                                        </div>
                                     </div>
                                 <% } %>
                             </div>

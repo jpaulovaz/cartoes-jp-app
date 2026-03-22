@@ -311,6 +311,71 @@ CREATE TABLE IF NOT EXISTS shared_debt_events (
   FOREIGN KEY (actor_user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS shared_debt_monthly_settlements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  requester_user_id INTEGER NOT NULL,
+  receiver_user_id INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  request_kind TEXT NOT NULL DEFAULT 'card',
+  status TEXT NOT NULL DEFAULT 'open',
+  request_count INTEGER NOT NULL DEFAULT 0,
+  total_accepted_cents INTEGER NOT NULL DEFAULT 0,
+  reserved_cents INTEGER NOT NULL DEFAULT 0,
+  confirmed_cents INTEGER NOT NULL DEFAULT 0,
+  open_cents INTEGER NOT NULL DEFAULT 0,
+  last_reported_at TEXT,
+  last_confirmed_at TEXT,
+  last_rejected_at TEXT,
+  last_activity_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(requester_user_id, receiver_user_id, month, year, request_kind),
+  FOREIGN KEY (requester_user_id) REFERENCES users(id),
+  FOREIGN KEY (receiver_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS shared_debt_payment_intents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  settlement_id INTEGER NOT NULL,
+  requester_user_id INTEGER NOT NULL,
+  receiver_user_id INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  request_kind TEXT NOT NULL DEFAULT 'card',
+  requested_by_user_id INTEGER,
+  amount_cents INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'generated',
+  pix_payload TEXT,
+  pix_txid TEXT,
+  payer_note TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  generated_at TEXT,
+  reported_at TEXT,
+  confirmed_at TEXT,
+  rejected_at TEXT,
+  cancelled_at TEXT,
+  FOREIGN KEY (settlement_id) REFERENCES shared_debt_monthly_settlements(id),
+  FOREIGN KEY (requester_user_id) REFERENCES users(id),
+  FOREIGN KEY (receiver_user_id) REFERENCES users(id),
+  FOREIGN KEY (requested_by_user_id) REFERENCES users(id),
+  UNIQUE(pix_txid)
+);
+
+CREATE TABLE IF NOT EXISTS shared_debt_payment_allocations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  settlement_id INTEGER NOT NULL,
+  intent_id INTEGER NOT NULL,
+  request_id INTEGER NOT NULL,
+  allocated_cents INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(intent_id, request_id),
+  FOREIGN KEY (settlement_id) REFERENCES shared_debt_monthly_settlements(id),
+  FOREIGN KEY (intent_id) REFERENCES shared_debt_payment_intents(id),
+  FOREIGN KEY (request_id) REFERENCES shared_debt_requests(id)
+);
+
 CREATE TABLE IF NOT EXISTS notifications (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -542,6 +607,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batc
 CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_user_archived ON shared_debt_archives(user_id, is_archived, updated_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_request_user ON shared_debt_archives(request_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_events_request ON shared_debt_events(request_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_pair ON shared_debt_monthly_settlements(requester_user_id, receiver_user_id, year, month, request_kind);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_receiver ON shared_debt_monthly_settlements(receiver_user_id, year, month, request_kind);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_settlement_status ON shared_debt_payment_intents(settlement_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_pair ON shared_debt_payment_intents(requester_user_id, receiver_user_id, year, month, request_kind, status);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_allocations_intent ON shared_debt_payment_allocations(intent_id, request_id);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_allocations_request ON shared_debt_payment_allocations(request_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_status ON friend_requests(requester_user_id, status, created_at);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_target_status ON friend_requests(target_user_id, status, created_at);

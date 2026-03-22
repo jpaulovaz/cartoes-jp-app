@@ -156,6 +156,74 @@ db.prepare(`
   )
 `).run();
 db.prepare(`
+  CREATE TABLE IF NOT EXISTS shared_debt_monthly_settlements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requester_user_id INTEGER NOT NULL,
+    receiver_user_id INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    request_kind TEXT NOT NULL DEFAULT 'card',
+    status TEXT NOT NULL DEFAULT 'open',
+    request_count INTEGER NOT NULL DEFAULT 0,
+    total_accepted_cents INTEGER NOT NULL DEFAULT 0,
+    reserved_cents INTEGER NOT NULL DEFAULT 0,
+    confirmed_cents INTEGER NOT NULL DEFAULT 0,
+    open_cents INTEGER NOT NULL DEFAULT 0,
+    last_reported_at TEXT,
+    last_confirmed_at TEXT,
+    last_rejected_at TEXT,
+    last_activity_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(requester_user_id, receiver_user_id, month, year, request_kind),
+    FOREIGN KEY (requester_user_id) REFERENCES users(id),
+    FOREIGN KEY (receiver_user_id) REFERENCES users(id)
+  )
+`).run();
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS shared_debt_payment_intents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    settlement_id INTEGER NOT NULL,
+    requester_user_id INTEGER NOT NULL,
+    receiver_user_id INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    request_kind TEXT NOT NULL DEFAULT 'card',
+    requested_by_user_id INTEGER,
+    amount_cents INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'generated',
+    pix_payload TEXT,
+    pix_txid TEXT,
+    payer_note TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    generated_at TEXT,
+    reported_at TEXT,
+    confirmed_at TEXT,
+    rejected_at TEXT,
+    cancelled_at TEXT,
+    FOREIGN KEY (settlement_id) REFERENCES shared_debt_monthly_settlements(id),
+    FOREIGN KEY (requester_user_id) REFERENCES users(id),
+    FOREIGN KEY (receiver_user_id) REFERENCES users(id),
+    FOREIGN KEY (requested_by_user_id) REFERENCES users(id),
+    UNIQUE(pix_txid)
+  )
+`).run();
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS shared_debt_payment_allocations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    settlement_id INTEGER NOT NULL,
+    intent_id INTEGER NOT NULL,
+    request_id INTEGER NOT NULL,
+    allocated_cents INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(intent_id, request_id),
+    FOREIGN KEY (settlement_id) REFERENCES shared_debt_monthly_settlements(id),
+    FOREIGN KEY (intent_id) REFERENCES shared_debt_payment_intents(id),
+    FOREIGN KEY (request_id) REFERENCES shared_debt_requests(id)
+  )
+`).run();
+db.prepare(`
   CREATE TABLE IF NOT EXISTS push_subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -241,6 +309,12 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_receiver ON
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batches(requester_user_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_user_archived ON shared_debt_archives(user_id, is_archived, updated_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_request_user ON shared_debt_archives(request_id, user_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_pair ON shared_debt_monthly_settlements(requester_user_id, receiver_user_id, year, month, request_kind)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_receiver ON shared_debt_monthly_settlements(receiver_user_id, year, month, request_kind)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_settlement_status ON shared_debt_payment_intents(settlement_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_pair ON shared_debt_payment_intents(requester_user_id, receiver_user_id, year, month, request_kind, status)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_allocations_intent ON shared_debt_payment_allocations(intent_id, request_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_allocations_request ON shared_debt_payment_allocations(request_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_status ON friend_requests(requester_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_target_status ON friend_requests(target_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_pair_status ON friend_requests(requester_user_id, target_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
@@ -2524,6 +2598,433 @@ function canArchiveSharedDebtStatus(value) {
   return SHARED_DEBT_ARCHIVABLE_STATUSES.has(String(value || '').trim().toLowerCase());
 }
 
+const SHARED_DEBT_MONTHLY_SETTLEMENT_STATUSES = new Set(['open', 'awaiting_confirmation', 'partial', 'settled']);
+const SHARED_DEBT_PAYMENT_INTENT_STATUSES = new Set(['generated', 'reported', 'confirmed', 'rejected', 'cancelled']);
+
+function normalizeSharedDebtMonthlySettlementStatus(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return SHARED_DEBT_MONTHLY_SETTLEMENT_STATUSES.has(normalized) ? normalized : 'open';
+}
+
+function normalizeSharedDebtPaymentIntentStatus(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return SHARED_DEBT_PAYMENT_INTENT_STATUSES.has(normalized) ? normalized : 'generated';
+}
+
+function buildSharedDebtCardMonthlySettlementKey({ requesterUserId, receiverUserId, month, year, requestKind = 'card' } = {}) {
+  const requesterId = Number(requesterUserId || 0);
+  const receiverId = Number(receiverUserId || 0);
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  const kind = normalizeSharedDebtRequestKind(requestKind);
+  if (!requesterId || !receiverId || !safeMonth || !safeYear || kind !== 'card') return null;
+  return `${requesterId}:${receiverId}:${safeYear}:${String(safeMonth).padStart(2, '0')}:${kind}`;
+}
+
+function isCardSharedDebtRequestKind(value) {
+  return normalizeSharedDebtRequestKind(value) === 'card';
+}
+
+function getSharedDebtCardMonthlySettlementRow(requesterUserId, receiverUserId, month, year) {
+  return db.prepare(`
+    SELECT *
+    FROM shared_debt_monthly_settlements
+    WHERE requester_user_id = ?
+      AND receiver_user_id = ?
+      AND month = ?
+      AND year = ?
+      AND request_kind = 'card'
+    LIMIT 1
+  `).get(requesterUserId, receiverUserId, month, year);
+}
+
+function ensureSharedDebtCardMonthlySettlementRow(requesterUserId, receiverUserId, month, year) {
+  let row = getSharedDebtCardMonthlySettlementRow(requesterUserId, receiverUserId, month, year);
+  if (row) return row;
+
+  const now = nowIso();
+  db.prepare(`
+    INSERT OR IGNORE INTO shared_debt_monthly_settlements (
+      requester_user_id, receiver_user_id, month, year, request_kind, status,
+      request_count, total_accepted_cents, reserved_cents, confirmed_cents, open_cents,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, 'card', 'open', 0, 0, 0, 0, 0, ?, ?)
+  `).run(requesterUserId, receiverUserId, month, year, now, now);
+
+  return getSharedDebtCardMonthlySettlementRow(requesterUserId, receiverUserId, month, year);
+}
+
+function upsertSharedDebtCardMonthlySettlementCache(snapshot) {
+  if (!snapshot) return null;
+
+  const requesterUserId = Number(snapshot.requesterUserId || 0);
+  const receiverUserId = Number(snapshot.receiverUserId || 0);
+  const month = Number(snapshot.month || 0);
+  const year = Number(snapshot.year || 0);
+  if (!requesterUserId || !receiverUserId || !month || !year) return null;
+
+  const createdAt = snapshot.createdAt || nowIso();
+  const updatedAt = snapshot.updatedAt || nowIso();
+
+  db.prepare(`
+    INSERT INTO shared_debt_monthly_settlements (
+      requester_user_id, receiver_user_id, month, year, request_kind, status,
+      request_count, total_accepted_cents, reserved_cents, confirmed_cents, open_cents,
+      last_reported_at, last_confirmed_at, last_rejected_at, last_activity_at,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, 'card', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(requester_user_id, receiver_user_id, month, year, request_kind)
+    DO UPDATE SET
+      status = excluded.status,
+      request_count = excluded.request_count,
+      total_accepted_cents = excluded.total_accepted_cents,
+      reserved_cents = excluded.reserved_cents,
+      confirmed_cents = excluded.confirmed_cents,
+      open_cents = excluded.open_cents,
+      last_reported_at = excluded.last_reported_at,
+      last_confirmed_at = excluded.last_confirmed_at,
+      last_rejected_at = excluded.last_rejected_at,
+      last_activity_at = excluded.last_activity_at,
+      updated_at = excluded.updated_at
+  `).run(
+    requesterUserId,
+    receiverUserId,
+    month,
+    year,
+    normalizeSharedDebtMonthlySettlementStatus(snapshot.status),
+    Math.max(0, Number(snapshot.requestCount || 0)),
+    Math.max(0, Number(snapshot.totalAcceptedCents || 0)),
+    Math.max(0, Number(snapshot.reservedCents || 0)),
+    Math.max(0, Number(snapshot.confirmedCents || 0)),
+    Math.max(0, Number(snapshot.openCents || 0)),
+    snapshot.lastReportedAt || null,
+    snapshot.lastConfirmedAt || null,
+    snapshot.lastRejectedAt || null,
+    snapshot.lastActivityAt || null,
+    createdAt,
+    updatedAt
+  );
+
+  return getSharedDebtCardMonthlySettlementRow(requesterUserId, receiverUserId, month, year);
+}
+
+function getSharedDebtCardMonthlySettlementSnapshot({ requesterUserId, receiverUserId, month, year } = {}) {
+  const safeRequester = Number(requesterUserId || 0);
+  const safeReceiver = Number(receiverUserId || 0);
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+
+  if (!safeRequester || !safeReceiver || !safeMonth || !safeYear) return null;
+
+  const requestRows = db.prepare(`
+    SELECT
+      r.id,
+      r.status,
+      r.amount_cents,
+      r.amount_paid_cents,
+      r.payment_marked_at,
+      r.created_at,
+      r.updated_at,
+      r.responded_at,
+      r.resolved_at,
+      r.description_snapshot,
+      COALESCE(r.source_due_month, i.month, t.due_month) AS source_due_month,
+      COALESCE(r.source_due_year, i.year, t.due_year) AS source_due_year
+    FROM shared_debt_requests r
+    LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE r.requester_user_id = ?
+      AND r.receiver_user_id = ?
+      AND COALESCE(r.request_kind, 'card') = 'card'
+      AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
+      AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
+      AND r.status IN ('accepted', 'settled')
+    ORDER BY COALESCE(r.source_txn_date_snapshot, t.txn_date, r.created_at) ASC, r.created_at ASC, r.id ASC
+  `).all(safeRequester, safeReceiver, safeMonth, safeYear);
+
+  const existingSettlement = getSharedDebtCardMonthlySettlementRow(safeRequester, safeReceiver, safeMonth, safeYear);
+  if (!requestRows.length && !existingSettlement) return null;
+
+  const settlementRow = existingSettlement || ensureSharedDebtCardMonthlySettlementRow(safeRequester, safeReceiver, safeMonth, safeYear);
+  const intentRows = settlementRow
+    ? db.prepare(`
+        SELECT *
+        FROM shared_debt_payment_intents
+        WHERE settlement_id = ?
+        ORDER BY COALESCE(reported_at, generated_at, created_at) DESC, id DESC
+      `).all(settlementRow.id)
+    : [];
+
+  let totalAcceptedCents = 0;
+  let confirmedCents = 0;
+  let legacyReservedCents = 0;
+  let lastLegacyReportedAt = null;
+  let lastLegacyConfirmedAt = null;
+  let lastRequestActivityAt = settlementRow?.updated_at || settlementRow?.created_at || null;
+
+  requestRows.forEach((row) => {
+    const total = Math.max(0, Number(row.amount_cents || 0));
+    const confirmed = Math.min(total, Math.max(0, Number(row.amount_paid_cents || (row.status === 'settled' ? total : 0))));
+    totalAcceptedCents += total;
+    confirmedCents += confirmed;
+
+    if (row.status === 'accepted' && row.payment_marked_at && confirmed < total) {
+      legacyReservedCents += (total - confirmed);
+      if (!lastLegacyReportedAt || String(row.payment_marked_at) > String(lastLegacyReportedAt)) {
+        lastLegacyReportedAt = row.payment_marked_at;
+      }
+    }
+
+    const resolvedAt = row.resolved_at || row.updated_at || row.responded_at || null;
+    if (confirmed > 0 && resolvedAt && (!lastLegacyConfirmedAt || String(resolvedAt) > String(lastLegacyConfirmedAt))) {
+      lastLegacyConfirmedAt = resolvedAt;
+    }
+
+    const activityAt = row.updated_at || row.resolved_at || row.responded_at || row.created_at || null;
+    if (activityAt && (!lastRequestActivityAt || String(activityAt) > String(lastRequestActivityAt))) {
+      lastRequestActivityAt = activityAt;
+    }
+  });
+
+  let intentReservedCents = 0;
+  let generatedIntentCount = 0;
+  let reportedIntentCount = 0;
+  let confirmedIntentCount = 0;
+  let rejectedIntentCount = 0;
+  let lastIntentReportedAt = null;
+  let lastIntentConfirmedAt = null;
+  let lastIntentRejectedAt = null;
+  let lastIntentActivityAt = null;
+
+  intentRows.forEach((row) => {
+    const status = normalizeSharedDebtPaymentIntentStatus(row.status);
+    const amount = Math.max(0, Number(row.amount_cents || 0));
+    const activityAt = row.updated_at || row.reported_at || row.generated_at || row.created_at || null;
+    if (activityAt && (!lastIntentActivityAt || String(activityAt) > String(lastIntentActivityAt))) {
+      lastIntentActivityAt = activityAt;
+    }
+
+    if (status === 'generated') {
+      generatedIntentCount += 1;
+      return;
+    }
+
+    if (status === 'reported') {
+      reportedIntentCount += 1;
+      intentReservedCents += amount;
+      const reportedAt = row.reported_at || row.updated_at || row.created_at || null;
+      if (reportedAt && (!lastIntentReportedAt || String(reportedAt) > String(lastIntentReportedAt))) {
+        lastIntentReportedAt = reportedAt;
+      }
+      return;
+    }
+
+    if (status === 'confirmed') {
+      confirmedIntentCount += 1;
+      const confirmedAt = row.confirmed_at || row.updated_at || row.created_at || null;
+      if (confirmedAt && (!lastIntentConfirmedAt || String(confirmedAt) > String(lastIntentConfirmedAt))) {
+        lastIntentConfirmedAt = confirmedAt;
+      }
+      return;
+    }
+
+    if (status === 'rejected') {
+      rejectedIntentCount += 1;
+      const rejectedAt = row.rejected_at || row.updated_at || row.created_at || null;
+      if (rejectedAt && (!lastIntentRejectedAt || String(rejectedAt) > String(lastIntentRejectedAt))) {
+        lastIntentRejectedAt = rejectedAt;
+      }
+    }
+  });
+
+  const reservedCents = Math.max(0, legacyReservedCents + intentReservedCents);
+  const openCents = Math.max(0, totalAcceptedCents - confirmedCents - reservedCents);
+
+  let status = 'open';
+  if (totalAcceptedCents > 0 && openCents === 0 && reservedCents === 0) {
+    status = 'settled';
+  } else if (confirmedCents > 0) {
+    status = 'partial';
+  } else if (reservedCents > 0) {
+    status = 'awaiting_confirmation';
+  }
+
+  const requestCount = requestRows.length;
+  const lastReportedAt = [lastIntentReportedAt, lastLegacyReportedAt].filter(Boolean).sort().slice(-1)[0] || null;
+  const lastConfirmedAt = [lastIntentConfirmedAt, lastLegacyConfirmedAt].filter(Boolean).sort().slice(-1)[0] || null;
+  const lastRejectedAt = lastIntentRejectedAt || settlementRow?.last_rejected_at || null;
+  const lastActivityAt = [
+    lastReportedAt,
+    lastConfirmedAt,
+    lastRejectedAt,
+    lastIntentActivityAt,
+    lastRequestActivityAt,
+    settlementRow?.updated_at || null
+  ].filter(Boolean).sort().slice(-1)[0] || null;
+
+  const snapshot = {
+    id: settlementRow?.id || null,
+    settlementKey: buildSharedDebtCardMonthlySettlementKey({ requesterUserId: safeRequester, receiverUserId: safeReceiver, month: safeMonth, year: safeYear }),
+    requesterUserId: safeRequester,
+    receiverUserId: safeReceiver,
+    month: safeMonth,
+    year: safeYear,
+    requestKind: 'card',
+    status,
+    requestCount,
+    totalAcceptedCents,
+    reservedCents,
+    confirmedCents,
+    openCents,
+    legacyReservedCents,
+    intentReservedCents,
+    generatedIntentCount,
+    reportedIntentCount,
+    confirmedIntentCount,
+    rejectedIntentCount,
+    lastReportedAt,
+    lastConfirmedAt,
+    lastRejectedAt,
+    lastActivityAt,
+    hasProtectedActivity: reservedCents > 0 || confirmedCents > 0,
+    requestRows,
+    intentRows,
+    createdAt: settlementRow?.created_at || nowIso(),
+    updatedAt: nowIso()
+  };
+
+  const persisted = upsertSharedDebtCardMonthlySettlementCache(snapshot);
+  return { ...snapshot, id: persisted?.id || snapshot.id || null };
+}
+
+function attachSharedDebtCardMonthlyMeta(items = []) {
+  const rows = Array.isArray(items) ? items : [];
+  const snapshotsByKey = new Map();
+
+  rows.forEach((item) => {
+    if (!isCardSharedDebtRequestKind(item?.request_kind)) return;
+    const month = Number(item?.source_due_month || 0);
+    const year = Number(item?.source_due_year || 0);
+    const requesterUserId = Number(item?.requester_user_id || 0);
+    const receiverUserId = Number(item?.receiver_user_id || 0);
+    const key = buildSharedDebtCardMonthlySettlementKey({ requesterUserId, receiverUserId, month, year });
+    if (!key || snapshotsByKey.has(key)) return;
+    snapshotsByKey.set(key, getSharedDebtCardMonthlySettlementSnapshot({ requesterUserId, receiverUserId, month, year }));
+  });
+
+  const enhancedItems = rows.map((item) => {
+    const month = Number(item?.source_due_month || 0);
+    const year = Number(item?.source_due_year || 0);
+    const requesterUserId = Number(item?.requester_user_id || 0);
+    const receiverUserId = Number(item?.receiver_user_id || 0);
+    const key = buildSharedDebtCardMonthlySettlementKey({ requesterUserId, receiverUserId, month, year });
+    const snapshot = key ? snapshotsByKey.get(key) : null;
+    const totalCents = Math.max(0, Number(item?.amount_cents || 0));
+    let paidCents = Math.max(0, Number(item?.amount_paid_cents || (item?.status === 'settled' ? totalCents : 0)));
+    if (paidCents > totalCents) paidCents = totalCents;
+
+    return {
+      ...item,
+      amount_paid_cents: paidCents,
+      amount_pending_cents: Math.max(0, totalCents - paidCents),
+      card_monthly_settlement_key: key,
+      card_monthly_settlement_id: snapshot?.id || null,
+      card_monthly_status: snapshot?.status || null,
+      card_monthly_total_cents: snapshot?.totalAcceptedCents || 0,
+      card_monthly_reserved_cents: snapshot?.reservedCents || 0,
+      card_monthly_confirmed_cents: snapshot?.confirmedCents || 0,
+      card_monthly_open_cents: snapshot?.openCents || 0,
+      card_monthly_request_count: snapshot?.requestCount || 0,
+      card_monthly_generated_intent_count: snapshot?.generatedIntentCount || 0,
+      card_monthly_reported_intent_count: snapshot?.reportedIntentCount || 0,
+      card_monthly_has_protected_activity: !!snapshot?.hasProtectedActivity,
+      card_monthly_last_activity_at: snapshot?.lastActivityAt || null
+    };
+  });
+
+  return {
+    items: enhancedItems,
+    snapshots: Array.from(snapshotsByKey.values()).filter(Boolean)
+  };
+}
+
+function getSharedDebtCardMutationBlockersForTransactions(userId, transactionRowsOrIds = []) {
+  const transactionIds = Array.from(new Set((Array.isArray(transactionRowsOrIds) ? transactionRowsOrIds : [transactionRowsOrIds]).map((entry) => {
+    if (entry && typeof entry === 'object') return Number(entry.id || 0);
+    return Number(entry || 0);
+  }).filter(Boolean)));
+
+  if (!transactionIds.length) return [];
+
+  const placeholders = transactionIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT DISTINCT
+      r.requester_user_id,
+      r.receiver_user_id,
+      COALESCE(r.source_due_month, i.month, t.due_month) AS source_due_month,
+      COALESCE(r.source_due_year, i.year, t.due_year) AS source_due_year,
+      u.name AS receiver_name,
+      u.email AS receiver_email
+    FROM shared_debt_requests r
+    LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN users u ON u.id = r.receiver_user_id
+    WHERE r.requester_user_id = ?
+      AND COALESCE(r.request_kind, 'card') = 'card'
+      AND r.source_transaction_id IN (${placeholders})
+      AND r.status IN ('accepted', 'settled')
+  `).all(userId, ...transactionIds);
+
+  const blockersByKey = new Map();
+  rows.forEach((row) => {
+    const month = Number(row.source_due_month || 0);
+    const year = Number(row.source_due_year || 0);
+    const key = buildSharedDebtCardMonthlySettlementKey({
+      requesterUserId: row.requester_user_id,
+      receiverUserId: row.receiver_user_id,
+      month,
+      year
+    });
+    if (!key || blockersByKey.has(key)) return;
+
+    const snapshot = getSharedDebtCardMonthlySettlementSnapshot({
+      requesterUserId: row.requester_user_id,
+      receiverUserId: row.receiver_user_id,
+      month,
+      year
+    });
+    if (!snapshot || !snapshot.hasProtectedActivity) return;
+
+    blockersByKey.set(key, {
+      ...snapshot,
+      counterpartName: row.receiver_name || row.receiver_email || 'essa pessoa'
+    });
+  });
+
+  return Array.from(blockersByKey.values()).sort((a, b) => {
+    const rankDiff = ((b.year || 0) * 100 + (b.month || 0)) - ((a.year || 0) * 100 + (a.month || 0));
+    if (rankDiff !== 0) return rankDiff;
+    return String(a.counterpartName || '').localeCompare(String(b.counterpartName || ''), 'pt-BR', { sensitivity: 'base' });
+  });
+}
+
+function buildSharedDebtCardMutationBlockerMessage(blockers = []) {
+  const items = Array.isArray(blockers) ? blockers.filter(Boolean) : [];
+  if (!items.length) return null;
+
+  const first = items[0];
+  const pieces = [];
+  if (Number(first.reservedCents || 0) > 0) pieces.push(`${formatBRLFromCents(first.reservedCents)} aguardando confirmação`);
+  if (Number(first.confirmedCents || 0) > 0) pieces.push(`${formatBRLFromCents(first.confirmedCents)} já confirmado`);
+  const stateText = pieces.length ? pieces.join(' e ') : 'movimentação em andamento';
+
+  if (items.length === 1) {
+    return `Essa compra já conversa com a liquidação de ${monthLabel(first.month, first.year)} para ${first.counterpartName}. Como já tem ${stateText}, vou segurar essa edição por enquanto para não embaralhar o saldo.`;
+  }
+
+  return `Tem ${formatCountLabel(items.length, 'mês com liquidação em andamento', 'meses com liquidação em andamento')} ligados a esse ajuste. Para não embaralhar o saldo do Pix, essa edição fica bloqueada enquanto houver valor aguardando confirmação ou já confirmado.`;
+}
+
 function resolveSharedDebtViewPath(rawPath, fallback = '/shared-debts') {
   const normalized = String(rawPath || '').trim();
   if (normalized === '/shared-debts' || normalized === '/shared-debts/archive') return normalized;
@@ -2603,8 +3104,12 @@ function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
   const requestIdToHighlight = Number(query?.request) || null;
   const batchIdToHighlight = Number(query?.batch) || null;
   const archivedRequestIds = getSharedDebtArchivedRequestIdSet(userId);
-  const rawReceived = attachSharedDebtPixMeta(getSharedDebtRequestsReceived(userId), userId);
-  const rawSent = attachSharedDebtPixMeta(getSharedDebtRequestsSent(userId), userId);
+  const receivedWithPixMeta = attachSharedDebtPixMeta(getSharedDebtRequestsReceived(userId), userId);
+  const sentWithPixMeta = attachSharedDebtPixMeta(getSharedDebtRequestsSent(userId), userId);
+  const receivedSettlementMeta = attachSharedDebtCardMonthlyMeta(receivedWithPixMeta);
+  const sentSettlementMeta = attachSharedDebtCardMonthlyMeta(sentWithPixMeta);
+  const rawReceived = receivedSettlementMeta.items;
+  const rawSent = sentSettlementMeta.items;
   const received = filterSharedDebtItemsByArchiveMode(rawReceived, archivedRequestIds, archiveMode);
   const sent = filterSharedDebtItemsByArchiveMode(rawSent, archivedRequestIds, archiveMode);
   const archivedReceivedCount = filterSharedDebtItemsByArchiveMode(rawReceived, archivedRequestIds, true).length;
@@ -2634,6 +3139,10 @@ function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
     manualDebtEligiblePeople: archiveMode ? [] : getManualSharedDebtEligiblePeople(userId),
     eventsByRequest,
     archiveMode,
+    cardMonthlySettlements: Array.from(new Map([
+      ...receivedSettlementMeta.snapshots.map((snapshot) => [snapshot.settlementKey || buildSharedDebtCardMonthlySettlementKey({ requesterUserId: snapshot.requesterUserId, receiverUserId: snapshot.receiverUserId, month: snapshot.month, year: snapshot.year }), snapshot]),
+      ...sentSettlementMeta.snapshots.map((snapshot) => [snapshot.settlementKey || buildSharedDebtCardMonthlySettlementKey({ requesterUserId: snapshot.requesterUserId, receiverUserId: snapshot.receiverUserId, month: snapshot.month, year: snapshot.year }), snapshot])
+    ]).values()).filter(Boolean),
     pagePath: archiveMode ? '/shared-debts/archive' : '/shared-debts',
     counterpartPath: archiveMode ? '/shared-debts' : '/shared-debts/archive',
     archiveTotalCount: archivedReceivedCount + archivedSentCount,
@@ -5365,6 +5874,12 @@ app.post("/geral/:year/:month/card/:cardId/delete", ensureAuthenticated, (req, r
   if (!txns.length) {
     setFlash(req, "info", `Nenhum lançamento foi encontrado para ${card.name} em ${String(month).padStart(2, "0")}/${year}.`);
     return res.redirect("/geral");
+  }
+
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, txns));
+  if (settlementBlockMessage) {
+    setFlash(req, 'error', settlementBlockMessage);
+    return res.redirect('/geral');
   }
 
   const addException = db.prepare(`
@@ -8232,6 +8747,10 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
 
   const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
   const targetRows = getInstallmentScopeRows(userId, txn, applyScope);
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, targetRows));
+  if (settlementBlockMessage) {
+    return res.status(409).send(settlementBlockMessage);
+  }
   const lockedTarget = targetRows.find(row => isMonthClosed(userId, row.month, row.year));
   if (lockedTarget) {
     return res.status(423).send(getMonthLockMessage(lockedTarget.month, lockedTarget.year));
@@ -8307,6 +8826,11 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
 
   const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
   const targetRows = getInstallmentScopeRows(userId, txn, applyScope);
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, targetRows));
+  if (settlementBlockMessage) {
+    setFlash(req, 'error', settlementBlockMessage);
+    return res.redirect(`/txn/${txn.id}`);
+  }
   const lockedTarget = targetRows.find(row => isMonthClosed(userId, row.month, row.year));
   if (lockedTarget) {
     setFlash(req, "error", getMonthLockMessage(lockedTarget.month, lockedTarget.year));
@@ -8355,6 +8879,11 @@ app.post("/txn/:id/delete", ensureAuthenticated, (req, res) => {
 
   const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
   const targetRows = getInstallmentScopeRows(userId, txn, applyScope);
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, targetRows));
+  if (settlementBlockMessage) {
+    setFlash(req, 'error', settlementBlockMessage);
+    return res.redirect(`/month/${txn.year}/${txn.month}`);
+  }
   const lockedTarget = targetRows.find(row => isMonthClosed(userId, row.month, row.year));
   if (lockedTarget) {
     setFlash(req, "error", getMonthLockMessage(lockedTarget.month, lockedTarget.year));
@@ -8395,6 +8924,10 @@ app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
 
   const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
   const targetRows = collectScopedTxnRows(userId, sourceRows, applyScope);
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, targetRows));
+  if (settlementBlockMessage) {
+    return res.status(409).json({ ok: false, error: settlementBlockMessage });
+  }
   const lockedTarget = targetRows.find(row => isMonthClosed(userId, row.month, row.year));
   if (lockedTarget) {
     return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedTarget.month, lockedTarget.year) });
@@ -8448,6 +8981,10 @@ app.post("/month/:year/:month/bulk/delete", ensureAuthenticated, (req, res) => {
 
   const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
   const targetRows = collectScopedTxnRows(userId, sourceRows, applyScope);
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, targetRows));
+  if (settlementBlockMessage) {
+    return res.status(409).json({ ok: false, error: settlementBlockMessage });
+  }
   const lockedTarget = targetRows.find(row => isMonthClosed(userId, row.month, row.year));
   if (lockedTarget) {
     return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedTarget.month, lockedTarget.year) });
@@ -8491,6 +9028,11 @@ app.post("/month/:year/:month/bulk/move", ensureAuthenticated, (req, res) => {
   const sourceRows = getTransactionScopeRowsByIds(userId, req.body.txn_ids);
   if (!sourceRows.length) {
     return res.status(400).json({ ok: false, error: "Selecione pelo menos um lançamento." });
+  }
+
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, sourceRows));
+  if (settlementBlockMessage) {
+    return res.status(409).json({ ok: false, error: settlementBlockMessage });
   }
 
   const lockedSource = sourceRows.find(row => isMonthClosed(userId, row.month, row.year));
@@ -9895,7 +10437,7 @@ app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
   }
 
   try {
-    const tables = ['allocations', 'transactions', 'imports', 'person_payments', 'card_statements', 'people', 'cards', 'monthly_finance_items', 'monthly_finances', 'scratchpad', 'finance_categories', 'closed_months'];
+    const tables = ['shared_debt_payment_allocations', 'shared_debt_payment_intents', 'shared_debt_monthly_settlements', 'shared_debt_events', 'shared_debt_archives', 'shared_debt_requests', 'shared_debt_batches', 'notifications', 'allocations', 'transactions', 'imports', 'person_payments', 'card_statements', 'people', 'cards', 'monthly_finance_items', 'monthly_finances', 'scratchpad', 'finance_categories', 'closed_months', 'person_app_links', 'friendships', 'friend_requests', 'push_subscriptions', 'scheduled_push_logs'];
 
     for (const table of tables) {
       db.prepare(`DELETE FROM ${table} WHERE user_id = ?`).run(targetUserId);

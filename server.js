@@ -2705,7 +2705,7 @@ function sanitizeVariableFinanceItems(items) {
     if (!itemDate && !itemSource && amountCents === 0) continue;
 
     if (!itemDate || !itemSource || amountCents <= 0) {
-      throw new Error("Nos lançamentos variáveis, preencha data, origem e valor certinhos.");
+      throw new Error("Em vários lançamentos, preencha data, origem e valor certinhos.");
     }
 
     normalizedItems.push({
@@ -8453,7 +8453,7 @@ app.post("/finances/variable/:id", ensureAuthenticated, express.json(), (req, re
     }
 
     if (finance.amount_mode !== 'variable') {
-      return res.status(400).json({ error: "Esse item não usa lançamentos variáveis." });
+      return res.status(400).json({ error: "Esse item não usa vários lançamentos." });
     }
 
     if (isMonthClosed(userId, Number(finance.month), Number(finance.year))) {
@@ -8516,7 +8516,7 @@ app.post("/finances/update/:id", ensureAuthenticated, express.json(), (req, res)
         .run(sanitizeFinanceDescription(value), id, userId);
     } else if (field === 'formula_and_value') {
       if (row.amount_mode !== 'fixed') {
-        return res.status(400).json({ error: "Esse item é variável. Abra a lista dele para editar os lançamentos." });
+        return res.status(400).json({ error: "Esse item usa vários lançamentos. Abra a lista dele para editar os lançamentos." });
       }
 
       const parsedAmountCents = Number.isFinite(Number(amount_cents)) ? Math.max(0, Math.round(Number(amount_cents))) : 0;

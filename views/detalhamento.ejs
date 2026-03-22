@@ -38,7 +38,7 @@
             if (fin.description) return fin.description;
             if (fin.category_id) {
                 const cat = categories.find((c) => c.id === fin.category_id);
-                return cat ? cat.name : 'Item fixo';
+                return cat ? cat.name : 'Item de valor único';
             }
             return '';
         }
@@ -286,7 +286,7 @@
                             <div class="bg-slate-900 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <h5 class="text-white font-bold">✨ Grana que entra</h5>
-                                    <p class="text-xs font-medium text-white/70 mt-1">Fixa segue no toque rápido. Variável abre a listinha completinha.</p>
+                                    <p class="text-xs font-medium text-white/70 mt-1">Valor único segue no toque rápido. Vários lançamentos abrem a listinha completinha.</p>
                                 </div>
                                 <button type="button" onclick="openFinanceCreator('income')" <%= isClosed ? 'hidden' : '' %> class="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl transition-colors">+ Nova entrada</button>
                             </div>
@@ -306,7 +306,7 @@
                                                             <div class="flex flex-wrap items-center gap-2">
                                                                 <span class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
                                                                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10"></path></svg>
-                                                                    Variável
+                                                                    Vários lançamentos
                                                                 </span>
                                                                 <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400"><%= getVariableHint(fin) %></span>
                                                             </div>
@@ -357,7 +357,7 @@
                                                             <div class="flex flex-wrap items-center gap-2">
                                                                 <span class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
                                                                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10"></path></svg>
-                                                                    Variável
+                                                                    Vários lançamentos
                                                                 </span>
                                                                 <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400"><%= getVariableHint(fin) %></span>
                                                             </div>
@@ -421,8 +421,8 @@
 
                             <div class="max-h-[72vh] space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
                                 <div id="finance-mode-group" class="grid grid-cols-2 gap-2">
-                                    <button type="button" data-finance-mode-btn data-finance-mode="fixed" class="rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors">Fixa</button>
-                                    <button type="button" data-finance-mode-btn data-finance-mode="variable" class="rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors">Variável</button>
+                                    <button type="button" data-finance-mode-btn data-finance-mode="fixed" class="rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors">Valor único</button>
+                                    <button type="button" data-finance-mode-btn data-finance-mode="variable" class="rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors">Vários lançamentos</button>
                                 </div>
 
                                 <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-start">
@@ -439,7 +439,7 @@
 
                                 <div id="finance-fixed-panel" class="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/60">
                                     <div class="text-sm font-bold text-slate-800 dark:text-white">Modo rápido na área</div>
-                                    <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Esse item vai nascer fixo. Você salva o nome agora e ajusta o valor direto na lista, sem novela.</p>
+                                    <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Esse item vai nascer como valor único. Você salva o nome agora e ajusta o valor direto na lista, sem novela.</p>
                                 </div>
 
                                 <div id="finance-variable-panel" class="hidden space-y-4">
@@ -750,7 +750,7 @@
                         if (!hasAnyValue) return;
 
                         if (validate && (!dateValue || !sourceValue || amountCents <= 0)) {
-                            throw new Error('Nos lançamentos variáveis, preencha data, origem e valor certinhos.');
+                            throw new Error('Em vários lançamentos, preencha data, origem e valor certinhos.');
                         }
 
                         items.push({ item_date: dateValue, item_source: sourceValue, amount_cents: amountCents });
@@ -825,8 +825,8 @@
                     if (isCreate) {
                         financeRefs.eyebrow.textContent = isIncome ? 'Nova entrada' : 'Nova saída';
                         financeRefs.title.textContent = isVariableMode
-                            ? (isIncome ? 'Montar uma entrada variável' : 'Montar uma saída variável')
-                            : (isIncome ? 'Criar uma entrada fixa' : 'Criar uma saída fixa');
+                            ? (isIncome ? 'Montar uma entrada em vários lançamentos' : 'Montar uma saída em vários lançamentos')
+                            : (isIncome ? 'Criar uma entrada de valor único' : 'Criar uma saída de valor único');
                         financeRefs.subtitle.textContent = isVariableMode
                             ? 'Você dá um nome principal e soma cada pedacinho na listinha abaixo.'
                             : 'Salva o nome agora e o valor fica no toque rápido lá na lista.';
@@ -834,7 +834,7 @@
                         financeRefs.descriptionInput.placeholder = isIncome ? 'Ex: Shows, Salário, Freelas' : 'Ex: Combustível, Alimentação, Operação';
                         financeRefs.saveButton.textContent = 'Salvar item';
                     } else {
-                        const baseName = (financeRefs.descriptionInput.value || 'item variável').trim();
+                        const baseName = (financeRefs.descriptionInput.value || 'item com vários lançamentos').trim();
                         financeRefs.eyebrow.textContent = financeModalState.readOnly ? 'Listinha em modo leitura' : 'Editar lançamentos';
                         financeRefs.title.textContent = financeModalState.readOnly ? `Conferir ${baseName}` : `Ajustar ${baseName}`;
                         financeRefs.subtitle.textContent = financeModalState.readOnly
@@ -994,8 +994,8 @@
 
                         if (financeRefs.deleteEyebrow) {
                             financeRefs.deleteEyebrow.textContent = resolvedAmountMode === 'variable'
-                                ? `Apagar ${financeLabel} variável`
-                                : `Apagar ${financeLabel} fixa`;
+                                ? `Apagar ${financeLabel} em vários lançamentos`
+                                : `Apagar ${financeLabel} de valor único`;
                         }
                         if (financeRefs.deleteTitle) {
                             financeRefs.deleteTitle.textContent = resolvedAmountMode === 'variable'
@@ -1043,7 +1043,7 @@
                             const formulaText = String(finance.formula || '').trim();
                             financeRefs.deleteItems.appendChild(createDeletePreviewCard({
                                 title: finance.description || `Essa ${financeLabel}`,
-                                meta: formulaText ? `Conta guardada: ${formulaText}` : 'Valor fixo salvo para este mês.',
+                                meta: formulaText ? `Conta guardada: ${formulaText}` : 'Valor único salvo para este mês.',
                                 amountCents: finance.amount_cents || 0
                             }));
                         }

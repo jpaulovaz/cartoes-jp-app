@@ -81,6 +81,8 @@ try { db.prepare("ALTER TABLE transactions ADD COLUMN due_month INTEGER").run();
 try { db.prepare("ALTER TABLE transactions ADD COLUMN due_year INTEGER").run(); } catch (e) { }
 try { db.prepare("ALTER TABLE transactions ADD COLUMN parent_txn_id INTEGER").run(); } catch (e) { }
 try { db.prepare("ALTER TABLE transactions ADD COLUMN recurring_rule_id INTEGER").run(); } catch (e) { }
+try { db.prepare("ALTER TABLE transactions ADD COLUMN purchase_category_id INTEGER").run(); } catch (e) { }
+try { db.prepare("ALTER TABLE recurring_rules ADD COLUMN purchase_category_id INTEGER").run(); } catch (e) { }
 
 // Adiciona a coluna de telefone na tabela people se ela não existir
 try { db.prepare("ALTER TABLE people ADD COLUMN phone TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -945,6 +947,7 @@ function configureGoogleStrategy() {
       }
 
       ensureSelfPerson(authorizedUser.id, profileName || authorizedUser.name || email.split('@')[0], authorizedUser.email || email);
+      ensurePurchaseCategoriesForUser(authorizedUser.id);
 
       return done(null, {
         id: authorizedUser.id,
@@ -1845,6 +1848,28 @@ refreshRuntimeSettings({ restartScheduler: false });
 const BOOTSTRAP_SESSION_SECRET = getSettingText('SESSION_SECRET', 'chave-secreta-padrao');
 const BOOTSTRAP_PORT = getSettingInt('PORT', 3001);
 const DEFAULT_FINANCE_CATEGORIES = ['Prestação Apartamento', 'Luz', 'Internet', 'Condomínio', 'Tim'];
+const DEFAULT_PURCHASE_CATEGORIES = [
+  'Mercado',
+  'Açougue',
+  'Padaria',
+  'Restaurante',
+  'Lanche / Café',
+  'Farmácia',
+  'Saúde',
+  'Transporte',
+  'Combustível',
+  'Casa',
+  'Assinaturas',
+  'Educação',
+  'Vestuário',
+  'Trabalho',
+  'Lazer',
+  'Pets',
+  'Presentes',
+  'Serviços',
+  'Viagem',
+  'Outros'
+];
 
 function getUserRecord(userId) {
   return db.prepare("SELECT id, email, name, role, can_import, created_at, last_login FROM users WHERE id = ?").get(userId);
@@ -1869,6 +1894,184 @@ function normalizeNameForIdentity(value) {
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+}
+
+function normalizePurchaseCategoryName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function sanitizePurchaseCategoryLabel(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+}
+
+function ensurePurchaseCategoriesForUser(userId) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return [];
+
+  const existingRows = db.prepare(`
+    SELECT id, normalized_name, active, sort_order
+    FROM purchase_categories
+    WHERE user_id = ?
+  `).all(safeUserId);
+
+  const existingByNormalized = new Map(existingRows.map((row) => [normalizePurchaseCategoryName(row.normalized_name || ''), row]));
+  const insertCategory = db.prepare(`
+    INSERT OR IGNORE INTO purchase_categories (user_id, name, normalized_name, kind, active, sort_order, created_at, updated_at)
+    VALUES (?, ?, ?, 'default', 1, ?, ?, ?)
+  `);
+
+  const now = nowIso();
+  DEFAULT_PURCHASE_CATEGORIES.forEach((categoryName, index) => {
+    const normalized = normalizePurchaseCategoryName(categoryName);
+    if (!normalized || existingByNormalized.has(normalized)) return;
+    insertCategory.run(safeUserId, categoryName, normalized, index + 1, now, now);
+  });
+
+  return db.prepare(`
+    SELECT id, user_id, name, normalized_name, kind, active, sort_order, created_at, updated_at
+    FROM purchase_categories
+    WHERE user_id = ?
+    ORDER BY CASE WHEN active = 1 THEN 0 ELSE 1 END,
+             CASE kind WHEN 'default' THEN 0 ELSE 1 END,
+             sort_order ASC,
+             lower(name) ASC,
+             id ASC
+  `).all(safeUserId);
+}
+
+function getPurchaseCategories(userId, { includeInactive = false, includeIds = [] } = {}) {
+  ensurePurchaseCategoriesForUser(userId);
+
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return [];
+
+  const extraIds = Array.from(new Set((includeIds || []).map(Number).filter((value) => Number.isInteger(value) && value > 0)));
+  const params = [safeUserId];
+  let where = 'user_id = ?';
+
+  if (!includeInactive) {
+    if (extraIds.length) {
+      where += ` AND (active = 1 OR id IN (${extraIds.map(() => '?').join(', ')}))`;
+      params.push(...extraIds);
+    } else {
+      where += ' AND active = 1';
+    }
+  }
+
+  return db.prepare(`
+    SELECT id, user_id, name, normalized_name, kind, active, sort_order, created_at, updated_at
+    FROM purchase_categories
+    WHERE ${where}
+    ORDER BY CASE WHEN active = 1 THEN 0 ELSE 1 END,
+             CASE kind WHEN 'default' THEN 0 ELSE 1 END,
+             sort_order ASC,
+             lower(name) ASC,
+             id ASC
+  `).all(...params);
+}
+
+function getPurchaseCategoryById(userId, categoryId, { includeInactive = false } = {}) {
+  const safeCategoryId = Number(categoryId || 0);
+  if (!safeCategoryId) return null;
+  return db.prepare(`
+    SELECT id, user_id, name, normalized_name, kind, active, sort_order, created_at, updated_at
+    FROM purchase_categories
+    WHERE id = ? AND user_id = ? ${includeInactive ? '' : 'AND active = 1'}
+    LIMIT 1
+  `).get(safeCategoryId, Number(userId || 0));
+}
+
+function createOrReusePurchaseCategory(userId, rawName) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) throw new Error('Usuário inválido para criar categoria.');
+
+  ensurePurchaseCategoriesForUser(safeUserId);
+
+  const label = sanitizePurchaseCategoryLabel(rawName);
+  if (!label) {
+    throw new Error('Escreva o nome da categoria antes de salvar.');
+  }
+
+  const normalized = normalizePurchaseCategoryName(label);
+  if (!normalized) {
+    throw new Error('Não consegui entender o nome dessa categoria.');
+  }
+
+  const existing = db.prepare(`
+    SELECT id, name, active
+    FROM purchase_categories
+    WHERE user_id = ? AND normalized_name = ?
+    LIMIT 1
+  `).get(safeUserId, normalized);
+
+  if (existing) {
+    if (Number(existing.active || 0) === 0) {
+      db.prepare(`
+        UPDATE purchase_categories
+        SET active = 1, updated_at = ?
+        WHERE id = ? AND user_id = ?
+      `).run(nowIso(), existing.id, safeUserId);
+    }
+    return getPurchaseCategoryById(safeUserId, existing.id, { includeInactive: true });
+  }
+
+  const nextSortOrder = Number(db.prepare(`
+    SELECT COALESCE(MAX(sort_order), 0) AS total
+    FROM purchase_categories
+    WHERE user_id = ?
+  `).get(safeUserId)?.total || 0) + 1;
+
+  const info = db.prepare(`
+    INSERT INTO purchase_categories (user_id, name, normalized_name, kind, active, sort_order, created_at, updated_at)
+    VALUES (?, ?, ?, 'custom', 1, ?, ?, ?)
+  `).run(safeUserId, label, normalized, nextSortOrder, nowIso(), nowIso());
+
+  return getPurchaseCategoryById(safeUserId, info.lastInsertRowid, { includeInactive: true });
+}
+
+function resolvePurchaseCategorySelection(userId, rawCategoryId, rawCustomName, { allowInactiveIds = [] } = {}) {
+  const selectedValue = String(rawCategoryId || '').trim();
+  const safeAllowInactiveIds = new Set((allowInactiveIds || []).map(Number).filter((value) => Number.isInteger(value) && value > 0));
+
+  if (!selectedValue) return null;
+
+  if (selectedValue === '__new__') {
+    return Number(createOrReusePurchaseCategory(userId, rawCustomName)?.id || 0) || null;
+  }
+
+  const categoryId = Number(selectedValue);
+  if (!Number.isInteger(categoryId) || categoryId <= 0) {
+    throw new Error('Categoria inválida. Escolha uma opção válida.');
+  }
+
+  const category = getPurchaseCategoryById(userId, categoryId, { includeInactive: true });
+  if (!category) {
+    throw new Error('Categoria não encontrada por aqui.');
+  }
+
+  if (Number(category.active || 0) === 0 && !safeAllowInactiveIds.has(categoryId)) {
+    throw new Error('Essa categoria está arquivada. Reative ou escolha outra.');
+  }
+
+  return categoryId;
+}
+
+function setPurchaseCategoryActiveState(userId, categoryId, active) {
+  const category = getPurchaseCategoryById(userId, categoryId, { includeInactive: true });
+  if (!category) throw new Error('Categoria não encontrada por aqui.');
+
+  db.prepare(`
+    UPDATE purchase_categories
+    SET active = ?, updated_at = ?
+    WHERE id = ? AND user_id = ?
+  `).run(active ? 1 : 0, nowIso(), category.id, Number(userId || 0));
+
+  return getPurchaseCategoryById(userId, category.id, { includeInactive: true });
 }
 
 function normalizeProfileKind(value, isOwner = false) {
@@ -2435,6 +2638,7 @@ app.post('/setup', (req, res) => {
 
       const insertCat = db.prepare('INSERT OR IGNORE INTO finance_categories (user_id, name) VALUES (?, ?)');
       DEFAULT_FINANCE_CATEGORIES.forEach((category) => insertCat.run(adminId, category));
+      ensurePurchaseCategoriesForUser(adminId);
 
       markAppSetupCompleted(true, adminId);
     })();
@@ -4439,8 +4643,8 @@ function syncRecurringTransactions(userId, targetYear, targetMonth) {
     LIMIT 1
   `);
   const insTxn = db.prepare(`
-    INSERT INTO transactions (user_id, card_id, txn_date, description, amount_cents, due_month, due_year, recurring_rule_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO transactions (user_id, card_id, txn_date, description, amount_cents, due_month, due_year, recurring_rule_id, purchase_category_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insAlloc = db.prepare(`
     INSERT INTO allocations (user_id, transaction_id, person_id, share_cents, created_at)
@@ -4472,7 +4676,7 @@ function syncRecurringTransactions(userId, targetYear, targetMonth) {
         }
 
         const txnDate = occurrenceDateFromStart(rule.start_txn_date, offset) || rule.start_txn_date;
-        const info = insTxn.run(userId, rule.card_id, txnDate, rule.description, rule.amount_cents, due.month, due.year, rule.id, nowIso());
+        const info = insTxn.run(userId, rule.card_id, txnDate, rule.description, rule.amount_cents, due.month, due.year, rule.id, rule.purchase_category_id || null, nowIso());
 
         if (activePeople.length === 1) {
           insAlloc.run(userId, info.lastInsertRowid, activePeople[0].id, rule.amount_cents, nowIso());
@@ -6724,7 +6928,7 @@ function deleteTransactionsAndAllocations(userId, rows) {
 
 function getTransactionScopeRow(userId, txnId) {
   return db.prepare(`
-    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id,
+    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id, t.purchase_category_id,
            COALESCE(t.due_month, i.month) AS month,
            COALESCE(t.due_year, i.year) AS year
     FROM transactions t
@@ -6820,6 +7024,38 @@ function collectScopedTxnRows(userId, sourceRows, scope = 'single') {
     getInstallmentScopeRows(userId, row, scope).forEach(target => scopedRows.push(target));
   });
   return dedupeTxnRows(scopedRows);
+}
+
+function applyPurchaseCategoryToTransactions(userId, rows, purchaseCategoryId, { includeFutureRecurring = false } = {}) {
+  const safeRows = dedupeTxnRows(rows);
+  if (!safeRows.length) return 0;
+
+  const updateTxn = db.prepare(`
+    UPDATE transactions
+    SET purchase_category_id = ?
+    WHERE user_id = ? AND id = ?
+  `);
+  const updateRecurringRule = db.prepare(`
+    UPDATE recurring_rules
+    SET purchase_category_id = ?, updated_at = ?
+    WHERE user_id = ? AND id = ?
+  `);
+
+  let affected = 0;
+  db.transaction(() => {
+    safeRows.forEach((row) => {
+      affected += updateTxn.run(purchaseCategoryId, userId, row.id).changes || 0;
+    });
+
+    if (includeFutureRecurring) {
+      const recurringRuleIds = Array.from(new Set(safeRows.map((row) => Number(row.recurring_rule_id || 0)).filter((value) => Number.isInteger(value) && value > 0)));
+      recurringRuleIds.forEach((ruleId) => {
+        updateRecurringRule.run(purchaseCategoryId, nowIso(), userId, ruleId);
+      });
+    }
+  })();
+
+  return affected;
 }
 
 function getMonthDelta(fromYear, fromMonth, toYear, toMonth) {
@@ -7036,12 +7272,14 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
   }
 
   const cards = getActiveCards(userId).map(({ id, name, close_day, due_day }) => ({ id, name, close_day, due_day }));
+  const purchaseCategories = getPurchaseCategories(userId);
 
   res.render("home", {
     groupedRecent: groupedRecentDisplay,
     featuredOpenGroup,
     formatBRLFromCents,
     cards,
+    purchaseCategories,
     closedMonths: Array.from(closedMonths.values()),
     user: req.user || req.session.user
   });
@@ -9121,6 +9359,26 @@ app.get("/notifications/:id/open", ensureAuthenticated, (req, res) => {
 });
 
 // People
+app.post('/purchase-categories/:id/archive', ensureAuthenticated, (req, res) => {
+  try {
+    const category = setPurchaseCategoryActiveState(req.user.id, req.params.id, false);
+    setFlash(req, 'success', `${category.name} saiu dos seletores, mas continua viva no histórico.`);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui arquivar essa categoria agora.');
+  }
+  return res.redirect(redirectBackOr(req, '/month'));
+});
+
+app.post('/purchase-categories/:id/restore', ensureAuthenticated, (req, res) => {
+  try {
+    const category = setPurchaseCategoryActiveState(req.user.id, req.params.id, true);
+    setFlash(req, 'success', `${category.name} voltou para os seletores.`);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui reativar essa categoria agora.');
+  }
+  return res.redirect(redirectBackOr(req, '/month'));
+});
+
 app.get("/people", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
@@ -10081,6 +10339,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const isClosed = isMonthClosed(userId, currentMonth, currentYear);
   const visibleCards = getVisibleCardsForMonth(userId, currentMonth, currentYear);
   const cards = getActiveCards(userId).map(({ id, name, close_day, due_day }) => ({ id, name, close_day, due_day }));
+  const purchaseCategories = getPurchaseCategories(userId);
 
   const cardTotalsRows = db.prepare(`
     SELECT t.card_id, SUM(t.amount_cents) AS total_cents
@@ -10354,6 +10613,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     isClosed,
     alerts,
     cards,
+    purchaseCategories,
     sharedDebtSummary
   });
 });
@@ -10381,6 +10641,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   const filters = {
     f_date: (req.query.f_date || "").toString().trim(),
     f_desc: (req.query.f_desc || "").toString().trim(),
+    f_category: (req.query.f_category || "").toString().trim(),
     f_card: (req.query.f_card || "").toString().trim(),
     f_number: (req.query.f_number || "").toString().trim(),
     f_amount: (req.query.f_amount || "").toString().trim(),
@@ -10398,6 +10659,20 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   if (filters.f_desc) {
     where.push("t.description LIKE ?");
     params.push(`%${filters.f_desc}%`);
+  }
+
+  if (filters.f_category) {
+    if (filters.f_category === 'none') {
+      where.push('t.purchase_category_id IS NULL');
+    } else {
+      const categoryId = Number(filters.f_category);
+      if (categoryId > 0) {
+        where.push('t.purchase_category_id = ?');
+        params.push(categoryId);
+      } else {
+        filters.f_category = '';
+      }
+    }
   }
 
   if (filters.f_card) {
@@ -10442,6 +10717,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   const txns = db.prepare(`
     SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
            t.parent_txn_id, t.recurring_rule_id, t.due_month, t.due_year,
+           t.purchase_category_id, pc.name AS purchase_category_name, COALESCE(pc.active, 0) AS purchase_category_active,
            COALESCE(t.due_month, i.month) AS month,
            COALESCE(t.due_year, i.year) AS year,
            ${allocCountExpr} AS alloc_count,
@@ -10450,6 +10726,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     FROM transactions t
     LEFT JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
     WHERE t.user_id = ? AND ${where.join(" AND ")}
     ORDER BY ${orderBy}
   `).all(userId, ...params);
@@ -10469,6 +10746,8 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   const people = getVisiblePeopleForMonth(userId, month, year);
   const cards = getActiveCards(userId);
+  const purchaseCategories = getPurchaseCategories(userId, { includeInactive: true });
+  const activePurchaseCategories = purchaseCategories.filter((category) => Number(category.active || 0) !== 0);
   const recurringRules = getRecurringRules(userId).map(rule => {
     const preview = getRecurringPreview(rule);
     const startDate = dayjs(rule.start_txn_date);
@@ -10495,7 +10774,24 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   const draftQueueSummaryForMonth = getSharedDebtSendQueueDraftSummary(userId, { month, year });
 
-  res.render("month", { month, year, txns, people, cards, recurringRules, formatBRLFromCents, sort, dir, sortLink, filters, isClosed, listOrder, draftQueueSummaryForMonth });
+  res.render("month", {
+    month,
+    year,
+    txns,
+    people,
+    cards,
+    recurringRules,
+    purchaseCategories,
+    activePurchaseCategories,
+    formatBRLFromCents,
+    sort,
+    dir,
+    sortLink,
+    filters,
+    isClosed,
+    listOrder,
+    draftQueueSummaryForMonth
+  });
 });
 
 app.post("/txn/manual", ensureAuthenticated, (req, res) => {
@@ -10505,6 +10801,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
   const assignToOwner = ["1", "true", "on", "sim"].includes(String(req.body.assign_to_owner || "").toLowerCase());
 
   try {
+    const purchaseCategoryId = resolvePurchaseCategorySelection(userId, req.body.purchase_category_id, req.body.purchase_category_custom);
     const cardIdNum = Number(card_id);
     if (!cardIdNum || isNaN(cardIdNum)) {
       return res.status(400).send("Cartao invalido. Selecione um cartao valido.");
@@ -10560,20 +10857,20 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
         ? Number(ownerPerson.id)
         : (activePeople.length === 1 ? Number(activePeople[0].id) : null);
       const insTxn = db.prepare(`
-        INSERT INTO transactions (user_id, card_id, txn_date, description, amount_cents, due_month, due_year, parent_txn_id, recurring_rule_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO transactions (user_id, card_id, txn_date, description, amount_cents, due_month, due_year, parent_txn_id, recurring_rule_id, purchase_category_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const insAlloc = db.prepare(`
         INSERT INTO allocations (user_id, transaction_id, person_id, share_cents, created_at)
         VALUES (?, ?, ?, ?, ?)
       `);
       const insRecurring = db.prepare(`
-        INSERT INTO recurring_rules (user_id, card_id, description, amount_cents, start_txn_date, start_due_month, start_due_year, active_from_month, active_from_year, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+        INSERT INTO recurring_rules (user_id, card_id, description, amount_cents, purchase_category_id, start_txn_date, start_due_month, start_due_year, active_from_month, active_from_year, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
       `);
 
       if (isRecurring) {
-        const info = insRecurring.run(userId, cardIdNum, description, totalCents, date, startMonth, startYear, startMonth, startYear, nowIso(), nowIso());
+        const info = insRecurring.run(userId, cardIdNum, description, totalCents, purchaseCategoryId, date, startMonth, startYear, startMonth, startYear, nowIso(), nowIso());
         recurringRuleId = Number(info.lastInsertRowid);
       }
 
@@ -10592,7 +10889,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
         const currentRecurringRuleId = isRecurring ? recurringRuleId : null;
         const currentParentTxnId = (numInstallments > 1 && installmentRootTxnId) ? installmentRootTxnId : null;
 
-        const info = insTxn.run(userId, cardIdNum, date, finalDesc, currentAmount, currentMonth, currentYear, currentParentTxnId, currentRecurringRuleId, nowIso());
+        const info = insTxn.run(userId, cardIdNum, date, finalDesc, currentAmount, currentMonth, currentYear, currentParentTxnId, currentRecurringRuleId, purchaseCategoryId, nowIso());
         const txnIdCreated = Number(info.lastInsertRowid);
         if (!installmentRootTxnId) installmentRootTxnId = txnIdCreated;
 
@@ -10723,12 +11020,14 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const id = Number(req.params.id);
   const txn = db.prepare(`
-    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, t.parent_txn_id, c.name AS card_name,
+    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, t.parent_txn_id, t.recurring_rule_id, t.purchase_category_id,
+           c.name AS card_name, pc.name AS purchase_category_name, COALESCE(pc.active, 0) AS purchase_category_active,
            COALESCE(t.due_month, i.month) as month,
            COALESCE(t.due_year, i.year) as year
     FROM transactions t
     LEFT JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
     WHERE t.id = ? AND t.user_id = ?
   `).get(id, userId);
 
@@ -10746,8 +11045,61 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
   const isClosed = isMonthClosed(userId, txn.month, txn.year);
   const hasFutureInstallmentsForTxn = hasFutureInstallments(userId, txn);
   const initialSplitMode = inferAllocationMode(Number(txn.amount_cents || 0), allocationRows);
+  const purchaseCategories = getPurchaseCategories(userId, {
+    includeIds: txn.purchase_category_id ? [txn.purchase_category_id] : []
+  });
 
-  res.render("txn", { txn, people, selected, selectedShares, initialSplitMode, formatBRLFromCents, isClosed, hasFutureInstallments: hasFutureInstallmentsForTxn });
+  res.render("txn", {
+    txn,
+    people,
+    selected,
+    selectedShares,
+    initialSplitMode,
+    purchaseCategories,
+    formatBRLFromCents,
+    isClosed,
+    hasFutureInstallments: hasFutureInstallmentsForTxn
+  });
+});
+
+app.post("/txn/:id/category", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const id = Number(req.params.id);
+  const txn = getTransactionScopeRow(userId, id);
+
+  if (!txn) return res.status(404).send("Transação não encontrada.");
+  if (isMonthClosed(userId, txn.month, txn.year)) {
+    setFlash(req, 'error', getMonthLockMessage(txn.month, txn.year));
+    return res.redirect(`/month/${txn.year}/${txn.month}`);
+  }
+
+  const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
+  const targetRows = getInstallmentScopeRows(userId, txn, applyScope);
+  const lockedTarget = targetRows.find((row) => isMonthClosed(userId, row.month, row.year));
+  if (lockedTarget) {
+    setFlash(req, 'error', getMonthLockMessage(lockedTarget.month, lockedTarget.year));
+    return res.redirect(`/month/${txn.year}/${txn.month}`);
+  }
+
+  try {
+    const allowedInactiveIds = Array.from(new Set(targetRows.map((row) => Number(row.purchase_category_id || 0)).filter((value) => Number.isInteger(value) && value > 0)));
+    const purchaseCategoryId = resolvePurchaseCategorySelection(userId, req.body.purchase_category_id, req.body.purchase_category_custom, {
+      allowInactiveIds: allowedInactiveIds
+    });
+
+    applyPurchaseCategoryToTransactions(userId, targetRows, purchaseCategoryId, { includeFutureRecurring: applyScope === 'future' });
+
+    const categoryLabel = purchaseCategoryId
+      ? (getPurchaseCategoryById(userId, purchaseCategoryId, { includeInactive: true })?.name || 'categoria escolhida')
+      : 'sem categoria';
+    setFlash(req, 'success', applyScope === 'future'
+      ? `Categoria atualizada para ${categoryLabel} nesta compra e nas próximas parcelas.`
+      : `Categoria atualizada para ${categoryLabel}.`);
+    return res.redirect(`/txn/${txn.id}`);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui salvar a categoria dessa compra agora.');
+    return res.redirect(`/txn/${txn.id}`);
+  }
 });
 
 app.post("/txn/:id", ensureAuthenticated, (req, res) => {
@@ -10919,6 +11271,53 @@ app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
     });
   } catch (error) {
     return res.status(400).json({ ok: false, error: error.message || 'Não foi possível atualizar a distribuição agora.' });
+  }
+});
+
+app.post("/month/:year/:month/bulk/category", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
+
+  const sourceRows = getTransactionScopeRowsByIds(userId, req.body.txn_ids);
+  if (!sourceRows.length) {
+    return res.status(400).json({ ok: false, error: 'Selecione pelo menos uma compra.' });
+  }
+
+  const lockedSource = sourceRows.find((row) => isMonthClosed(userId, row.month, row.year));
+  if (lockedSource) {
+    return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedSource.month, lockedSource.year) });
+  }
+
+  const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
+  const targetRows = collectScopedTxnRows(userId, sourceRows, applyScope);
+  const lockedTarget = targetRows.find((row) => isMonthClosed(userId, row.month, row.year));
+  if (lockedTarget) {
+    return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedTarget.month, lockedTarget.year) });
+  }
+
+  try {
+    const allowedInactiveIds = Array.from(new Set(targetRows.map((row) => Number(row.purchase_category_id || 0)).filter((value) => Number.isInteger(value) && value > 0)));
+    const purchaseCategoryId = resolvePurchaseCategorySelection(userId, req.body.purchase_category_id, req.body.purchase_category_custom, {
+      allowInactiveIds: allowedInactiveIds
+    });
+
+    const affectedCount = applyPurchaseCategoryToTransactions(userId, targetRows, purchaseCategoryId, { includeFutureRecurring: applyScope === 'future' });
+    const categoryLabel = purchaseCategoryId
+      ? (getPurchaseCategoryById(userId, purchaseCategoryId, { includeInactive: true })?.name || 'categoria escolhida')
+      : 'sem categoria';
+
+    return res.json({
+      ok: true,
+      affected_count: affectedCount,
+      source_count: sourceRows.length,
+      purchase_category_id: purchaseCategoryId,
+      message: affectedCount > 1
+        ? `${affectedCount} compra(s) ficaram com ${categoryLabel}.`
+        : `Categoria atualizada para ${categoryLabel}.`
+    });
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error.message || 'Não consegui atualizar a categoria dessas compras agora.' });
   }
 });
 
@@ -12331,6 +12730,7 @@ app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
     const newUser = db.prepare("SELECT id FROM users WHERE email = ?").get(safeEmail);
     const insertCat = db.prepare("INSERT OR IGNORE INTO finance_categories (user_id, name) VALUES (?, ?)");
     DEFAULT_FINANCE_CATEGORIES.forEach(cat => insertCat.run(newUser.id, cat));
+    ensurePurchaseCategoriesForUser(newUser.id);
 
     return renderAdmin(res, { success: `Usuário ${safeEmail} adicionado com sucesso!` });
   } catch (err) {

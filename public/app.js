@@ -1243,7 +1243,11 @@
 
     (async () => {
       if (needsScope) {
-        const actionLabel = formType === 'delete' ? 'excluir esta compra' : 'ajustar a divisão';
+        const actionLabel = formType === 'delete'
+          ? 'excluir esta compra'
+          : formType === 'category'
+            ? 'mudar a categoria'
+            : 'ajustar a divisão';
         const chosenScope = await resolveInstallmentScope(form, {
           actionLabel,
           destructive: formType === 'delete'
@@ -1824,5 +1828,51 @@
   } else {
     initLastVisitMemory();
     initConnectivityFeedback();
+  }
+})();
+
+
+(function () {
+  function bindPurchaseCategoryControl(root) {
+    if (!(root instanceof HTMLElement)) return;
+    const select = root.querySelector('[data-purchase-category-select]');
+    const customShell = root.querySelector('[data-purchase-category-custom-shell]');
+    const customInput = root.querySelector('[data-purchase-category-custom-input]');
+    if (!(select instanceof HTMLSelectElement)) return;
+
+    const sync = () => {
+      const wantsCustom = String(select.value || '') === '__new__';
+      if (customShell instanceof HTMLElement) {
+        customShell.hidden = !wantsCustom;
+      }
+      if (customInput instanceof HTMLInputElement) {
+        customInput.disabled = !wantsCustom;
+        if (!wantsCustom) {
+          customInput.value = '';
+        } else {
+          window.requestAnimationFrame(() => customInput.focus());
+        }
+      }
+    };
+
+    select.addEventListener('change', sync);
+    sync();
+  }
+
+  function initPurchaseCategoryControls(scope = document) {
+    if (!(scope instanceof Document) && !(scope instanceof HTMLElement) && !(scope instanceof DocumentFragment)) {
+      scope = document;
+    }
+    scope.querySelectorAll('[data-purchase-category-control]').forEach((root) => {
+      bindPurchaseCategoryControl(root);
+    });
+  }
+
+  window.OPInitPurchaseCategoryControls = initPurchaseCategoryControls;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => initPurchaseCategoryControls(document));
+  } else {
+    initPurchaseCategoryControls(document);
   }
 })();

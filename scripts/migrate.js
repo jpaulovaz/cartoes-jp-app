@@ -92,10 +92,12 @@ CREATE TABLE IF NOT EXISTS transactions (
   due_year INTEGER,
   parent_txn_id INTEGER,
   recurring_rule_id INTEGER,
+  purchase_category_id INTEGER,
   created_at TEXT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (import_id) REFERENCES imports(id),
-  FOREIGN KEY (card_id) REFERENCES cards(id)
+  FOREIGN KEY (card_id) REFERENCES cards(id),
+  FOREIGN KEY (purchase_category_id) REFERENCES purchase_categories(id)
 );
 
 CREATE TABLE IF NOT EXISTS allocations (
@@ -147,6 +149,20 @@ CREATE TABLE IF NOT EXISTS finance_categories (
   name TEXT NOT NULL,
   is_active INTEGER DEFAULT 1,
   UNIQUE(user_id, name),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS purchase_categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  normalized_name TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'default',
+  active INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(user_id, normalized_name),
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
@@ -207,6 +223,7 @@ CREATE TABLE IF NOT EXISTS recurring_rules (
   card_id INTEGER NOT NULL,
   description TEXT NOT NULL,
   amount_cents INTEGER NOT NULL,
+  purchase_category_id INTEGER,
   start_txn_date TEXT NOT NULL,
   start_due_month INTEGER NOT NULL,
   start_due_year INTEGER NOT NULL,
@@ -217,7 +234,8 @@ CREATE TABLE IF NOT EXISTS recurring_rules (
   updated_at TEXT NOT NULL,
   ended_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id),
-  FOREIGN KEY (card_id) REFERENCES cards(id)
+  FOREIGN KEY (card_id) REFERENCES cards(id),
+  FOREIGN KEY (purchase_category_id) REFERENCES purchase_categories(id)
 );
 
 CREATE TABLE IF NOT EXISTS recurring_exceptions (
@@ -576,6 +594,14 @@ if (!columnExists("transactions", "recurring_rule_id")) {
   db.exec("ALTER TABLE transactions ADD COLUMN recurring_rule_id INTEGER;");
 }
 
+if (!columnExists("transactions", "purchase_category_id")) {
+  db.exec("ALTER TABLE transactions ADD COLUMN purchase_category_id INTEGER;");
+}
+
+if (!columnExists("recurring_rules", "purchase_category_id")) {
+  db.exec("ALTER TABLE recurring_rules ADD COLUMN purchase_category_id INTEGER;");
+}
+
 if (!columnExists("shared_debt_requests", "source_person_id")) {
   db.exec("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id INTEGER;");
 }
@@ -788,9 +814,12 @@ CREATE INDEX IF NOT EXISTS idx_cards_user ON cards(user_id);
 CREATE INDEX IF NOT EXISTS idx_people_user ON people(user_id);
 CREATE INDEX IF NOT EXISTS idx_people_user_profile_kind ON people(user_id, profile_kind);
 CREATE INDEX IF NOT EXISTS idx_imports_user ON imports(user_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_categories_user_active ON purchase_categories(user_id, active, sort_order, name);
+CREATE INDEX IF NOT EXISTS idx_purchase_categories_user_kind ON purchase_categories(user_id, kind, active);
 CREATE INDEX IF NOT EXISTS idx_txn_user ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_txn_card ON transactions(card_id);
 CREATE INDEX IF NOT EXISTS idx_txn_import ON transactions(import_id);
+CREATE INDEX IF NOT EXISTS idx_txn_purchase_category ON transactions(user_id, purchase_category_id);
 CREATE INDEX IF NOT EXISTS idx_alloc_user ON allocations(user_id);
 CREATE INDEX IF NOT EXISTS idx_alloc_txn ON allocations(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_statements_user ON card_statements(user_id);
@@ -832,10 +861,74 @@ if (!columnExists("monthly_finances", "amount_mode")) {
   db.exec("ALTER TABLE monthly_finances ADD COLUMN amount_mode TEXT NOT NULL DEFAULT 'fixed';");
 }
 
-// ===== CATEGORIAS PADRÃO =====
-// Nota: Categorias agora são por usuário, então não inserimos padrão aqui
-// Cada usuário terá suas categorias criadas na primeira vez que acessar
+const DEFAULT_PURCHASE_CATEGORIES = [
+  'Mercado',
+  'Açougue',
+  'Padaria',
+  'Restaurante',
+  'Lanche / Café',
+  'Farmácia',
+  'Saúde',
+  'Transporte',
+  'Combustível',
+  'Casa',
+  'Assinaturas',
+  'Educação',
+  'Vestuário',
+  'Trabalho',
+  'Lazer',
+  'Pets',
+  'Presentes',
+  'Serviços',
+  'Viagem',
+  'Outros'
+];
+
+function normalizePurchaseCategoryName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function ensurePurchaseCategoriesForUser(userId) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return;
+
+  const existing = new Set(db.prepare(`
+    SELECT normalized_name
+    FROM purchase_categories
+    WHERE user_id = ?
+  `).all(safeUserId).map((row) => normalizePurchaseCategoryName(row.normalized_name || '')));
+
+  const insertCategory = db.prepare(`
+    INSERT OR IGNORE INTO purchase_categories (user_id, name, normalized_name, kind, active, sort_order, created_at, updated_at)
+    VALUES (?, ?, ?, 'default', 1, ?, ?, ?)
+  `);
+
+  const now = new Date().toISOString();
+  DEFAULT_PURCHASE_CATEGORIES.forEach((categoryName, index) => {
+    const normalized = normalizePurchaseCategoryName(categoryName);
+    if (!normalized || existing.has(normalized)) return;
+    insertCategory.run(safeUserId, categoryName, normalized, index + 1, now, now);
+  });
+}
+
+const userRowsForPurchaseSeed = db.prepare(`
+  SELECT id
+  FROM users
+  ORDER BY id ASC
+`).all();
+
+db.transaction(() => {
+  userRowsForPurchaseSeed.forEach((user) => {
+    ensurePurchaseCategoriesForUser(user.id);
+  });
+})();
 
 console.log("✅ Migração Multi-Usuário concluída!");
 console.log("✅ Tabela de usuários criada");
 console.log("✅ user_id adicionado a todas as tabelas");
+console.log("✅ Categorias de compra opcionais preparadas");

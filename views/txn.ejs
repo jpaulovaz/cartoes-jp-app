@@ -179,6 +179,54 @@
       </section>
 
       <section class="op-form-card">
+        <div class="relative z-10 space-y-4">
+          <div>
+            <div class="op-form-card__title">Categoria da compra</div>
+            <p class="op-form-card__subtitle">Opcional, mas uma mão na roda para organizar depois sem mudar o valor da compra.</p>
+          </div>
+
+          <div class="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/55">
+            <div class="op-field-label">Categoria atual</div>
+            <% if (txn.purchase_category_name) { %>
+              <span class="mt-2 inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200"><%= txn.purchase_category_name %><% if (!txn.purchase_category_active) { %> · arquivada<% } %></span>
+            <% } else { %>
+              <div class="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Sem categoria por enquanto</div>
+            <% } %>
+          </div>
+
+          <% if (!isClosed) { %>
+            <form method="post" action="/txn/<%= txn.id %>/category" class="space-y-3" data-installment-scope-form="category" data-has-future-installments="<%= hasFutureInstallments ? '1' : '0' %>" data-installment-label="<%= txn.description %>">
+              <div data-purchase-category-control class="space-y-3">
+                <div>
+                  <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Escolha a categoria</label>
+                  <select name="purchase_category_id" data-purchase-category-select
+                    class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">
+                    <option value="" <%= !txn.purchase_category_id ? 'selected' : '' %>>Sem categoria por enquanto</option>
+                    <% (purchaseCategories || []).forEach(category => { %>
+                      <option value="<%= category.id %>" <%= Number(txn.purchase_category_id || 0) === Number(category.id) ? 'selected' : '' %>><%= category.name %><%= category.active ? '' : ' (arquivada)' %></option>
+                    <% }) %>
+                    <option value="__new__">Criar categoria nova</option>
+                  </select>
+                </div>
+                <div data-purchase-category-custom-shell hidden>
+                  <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nome da nova categoria</label>
+                  <input type="text" name="purchase_category_custom" maxlength="60" placeholder="Ex: Feira de sábado" data-purchase-category-custom-input disabled
+                    class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">
+                </div>
+              </div>
+              <p class="text-xs font-medium text-slate-500 dark:text-slate-400">A categoria ajuda a organizar a leitura do mês e prepara o terreno para relatórios mais bonitos depois.</p>
+              <% if (hasFutureInstallments) { %>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Como essa compra é parcelada, ao salvar você pode decidir se a mudança vale só aqui ou também nas próximas parcelas.</p>
+              <% } %>
+              <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Salvar categoria</button>
+            </form>
+          <% } else { %>
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Mês fechado: a categoria aparece aqui, mas qualquer ajuste fica para quando o mês estiver aberto.</p>
+          <% } %>
+        </div>
+      </section>
+
+      <section class="op-form-card">
         <div class="relative z-10">
           <div class="op-form-card__title">Como mexer aqui</div>
           <div class="op-step-list">

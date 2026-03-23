@@ -1,5 +1,24 @@
 <%- include("partials/header", { title: `OrganizaPay | Itens ${String(month).padStart(2,'0')}/${year}` }) %>
 
+<%
+  function isSelfParticipant(person) {
+    return !!person && (String(person.profile_kind || "").toLowerCase() === "self" || Number(person.is_owner || 0) !== 0 || !!person.is_self);
+  }
+
+  function getParticipantDisplayName(person) {
+    if (!person) return "";
+    return isSelfParticipant(person) ? "Eu" : String(person.name || "").trim();
+  }
+
+  function getParticipantChipLabel(person, totalParticipants) {
+    const label = getParticipantDisplayName(person);
+    if (isSelfParticipant(person) && Number(totalParticipants || 0) === 1) return "Só eu";
+    if (!label) return "";
+    const parts = label.split(/\s+/).filter(Boolean);
+    return parts[0] || label;
+  }
+%>
+
   <div class="max-w-7xl mx-auto space-y-6 pb-24">
     <section class="op-page-hero op-fade-up">
       <div>
@@ -215,8 +234,8 @@
           <input type="checkbox" name="assign_to_owner" value="1" <%= typeof isClosed !== 'undefined' && isClosed ? 'disabled' : '' %>
             class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
           <span>
-            <span class="block text-sm font-bold text-slate-800 dark:text-white">Essa compra é minha</span>
-            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque para jogar esta compra direto no seu nome — e isso também vale para próximas parcelas ou repetições.</span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Essa ficou comigo</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque aqui quando essa compra for só sua. Se tiver parcela ou repetição, a ideia segue junto.</span>
           </span>
         </label>
 
@@ -306,7 +325,7 @@
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none">
             <option value="">Todas</option>
             <% people.forEach(p => { %>
-              <option value="<%= p.id %>" <%= String(filters.f_person || '') === String(p.id) ? 'selected' : '' %>><%= p.name %></option>
+              <option value="<%= p.id %>" <%= String(filters.f_person || '') === String(p.id) ? 'selected' : '' %>><%= getParticipantDisplayName(p) %></option>
             <% }) %>
           </select>
         </div>
@@ -427,11 +446,8 @@
           </thead>
           <tbody class="block md:table-row-group">
             <% txns.forEach(t => {
-                 const participantNames = (t.selected_ids || []).map(pid => {
-                   const person = people.find(p => Number(p.id) === Number(pid));
-                   return person ? person.name : null;
-                 }).filter(Boolean);
-                 const shortParticipantNames = participantNames.map(name => name.split(' ')[0]);
+                 const participantPeople = (t.selected_ids || []).map(pid => people.find(p => Number(p.id) === Number(pid))).filter(Boolean);
+                 const shortParticipantNames = participantPeople.map(person => getParticipantChipLabel(person, participantPeople.length)).filter(Boolean);
             %>
               <tr class="op-month-row block md:table-row mb-3 rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-800/60 md:mb-0 md:rounded-none md:border-b md:border-x-0 md:border-t-0 md:border-slate-100 md:bg-transparent md:p-0 md:shadow-none dark:md:border-slate-700 hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors align-middle space-y-1 md:space-y-0 cursor-pointer"
                 data-month-row data-txn-id="<%= t.id %>" tabindex="0" role="button" aria-label="Abrir ações para <%= t.description %>">
@@ -697,7 +713,7 @@
       month: <%= month %>,
       year: <%= year %>,
       isClosed: <%- JSON.stringify(!!isClosed) %>,
-      people: <%- JSON.stringify((people || []).map(p => ({ id: Number(p.id), name: p.name, is_owner: !!p.is_owner }))).replace(/</g, '\\u003c') %>,
+      people: <%- JSON.stringify((people || []).map(p => ({ id: Number(p.id), name: p.name, is_owner: !!p.is_owner, is_self: !!p.is_self, profile_kind: p.profile_kind || '' }))).replace(/</g, '\\u003c') %>,
       purchaseCategories: <%- JSON.stringify((activePurchaseCategories || []).map(category => ({ id: Number(category.id), name: category.name }))).replace(/</g, '\\u003c') %>,
       txns: <%- JSON.stringify((txns || []).map(t => ({
         id: Number(t.id),
@@ -1153,7 +1169,7 @@
 
         const name = document.createElement('span');
         name.className = 'min-w-0 flex-1 text-sm font-bold leading-5 text-slate-800 dark:text-slate-100';
-        name.textContent = person.name;
+        name.textContent = (person.is_self || String(person.profile_kind || '').toLowerCase() === 'self' || person.is_owner) ? 'Eu' : person.name;
 
         const badge = document.createElement('span');
         badge.className = 'inline-flex h-8 w-8 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 transition-all peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 dark:peer-checked:text-white';
@@ -1385,7 +1401,10 @@
 
             const header = document.createElement('div');
             header.className = 'mb-2 flex items-center justify-between gap-3';
-            header.innerHTML = `<span class="text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(person.name)}</span><span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Digite a parte dessa pessoa</span>`;
+            const isSelfPerson = person.is_self || String(person.profile_kind || '').toLowerCase() === 'self' || person.is_owner;
+            const personTitle = isSelfPerson ? 'Minha parte' : person.name;
+            const personHint = isSelfPerson ? 'Minha parte' : 'Digite a parte dessa pessoa';
+            header.innerHTML = `<span class="text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(personTitle)}</span><span class="text-xs font-semibold text-slate-500 dark:text-slate-400">${escapeHtml(personHint)}</span>`;
             row.appendChild(header);
 
             const input = document.createElement('input');

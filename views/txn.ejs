@@ -1,5 +1,16 @@
 <%- include("partials/header", { title: "Dividir compra" }) %>
 
+<%
+  function isSelfParticipant(person) {
+    return !!person && (String(person.profile_kind || "").toLowerCase() === "self" || Number(person.is_owner || 0) !== 0 || !!person.is_self);
+  }
+
+  function getParticipantDisplayName(person) {
+    if (!person) return "";
+    return isSelfParticipant(person) ? "Eu" : String(person.name || "").trim();
+  }
+%>
+
 <div class="mx-auto max-w-5xl space-y-6">
   <section class="op-page-hero op-fade-up">
     <div>
@@ -74,7 +85,7 @@
                   <%= isClosed ? 'disabled' : '' %>
                 />
                 <span class="flex min-h-[74px] items-center gap-3 rounded-[22px] border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-blue-300 group-hover:shadow-md peer-checked:border-blue-400 peer-checked:bg-blue-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-blue-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/40 <%= isClosed ? 'opacity-70' : '' %>">
-                  <span class="flex-1 text-sm font-bold text-slate-800 dark:text-slate-100"><%= p.name %></span>
+                  <span class="flex-1 text-sm font-bold text-slate-800 dark:text-slate-100"><%= getParticipantDisplayName(p) %></span>
                   <span class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 transition-all peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 dark:peer-checked:text-white">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
@@ -265,7 +276,7 @@
 
     const amountCents = Number(form.dataset.txnAmountCents || 0);
     const isClosed = form.dataset.isClosed === '1';
-    const people = <%- JSON.stringify((people || []).map(p => ({ id: Number(p.id), name: p.name }))).replace(/</g, '\\u003c') %>;
+    const people = <%- JSON.stringify((people || []).map(p => ({ id: Number(p.id), name: p.name, is_self: !!p.is_self, is_owner: !!p.is_owner, profile_kind: p.profile_kind || '' }))).replace(/</g, '\\u003c') %>;
     const selectedIdsSeed = <%- JSON.stringify((selected || []).map(Number)).replace(/</g, '\\u003c') %>;
     const selectedSharesSeed = <%- JSON.stringify(selectedShares || {}).replace(/</g, '\\u003c') %>;
 
@@ -397,7 +408,10 @@
 
         const header = document.createElement('div');
         header.className = 'mb-2 flex items-center justify-between gap-3';
-        header.innerHTML = `<span class=\"text-sm font-black text-slate-900 dark:text-slate-100\">${escapeHtml(person.name)}</span><span class=\"text-xs font-semibold text-slate-500 dark:text-slate-400\">Digite a parte dessa pessoa</span>`;
+        const isSelfPerson = person.is_self || String(person.profile_kind || '').toLowerCase() === 'self' || person.is_owner;
+        const personTitle = isSelfPerson ? 'Minha parte' : person.name;
+        const personHint = isSelfPerson ? 'Minha parte' : 'Digite a parte dessa pessoa';
+        header.innerHTML = `<span class=\"text-sm font-black text-slate-900 dark:text-slate-100\">${escapeHtml(personTitle)}</span><span class=\"text-xs font-semibold text-slate-500 dark:text-slate-400\">${escapeHtml(personHint)}</span>`;
         row.appendChild(header);
 
         const input = document.createElement('input');

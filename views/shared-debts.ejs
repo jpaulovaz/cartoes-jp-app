@@ -564,6 +564,53 @@
     };
   }
 
+
+  function settlementIntentHistoryRows(entry, options = {}) {
+    const rows = Array.isArray(entry?.snapshot?.intentRowsDetailed) ? entry.snapshot.intentRowsDetailed : [];
+    const includeReported = options.includeReported !== false;
+    const limit = Number(options.limit || 4);
+    return rows
+      .filter((intent) => {
+        const status = String(intent?.status || '');
+        if (!['reported', 'confirmed', 'rejected'].includes(status)) return false;
+        if (!includeReported && status === 'reported') return false;
+        return true;
+      })
+      .slice(0, limit > 0 ? limit : 4);
+  }
+
+  function settlementIntentHistoryMeta(intent) {
+    switch (String(intent?.status || '')) {
+      case 'reported':
+        return {
+          label: intent?.historyLabel || 'Pix avisado',
+          classes: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200'
+        };
+      case 'confirmed':
+        return {
+          label: intent?.historyLabel || 'Recebimento confirmado',
+          classes: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200'
+        };
+      case 'rejected':
+        return {
+          label: intent?.historyLabel || 'Pix voltou para revisão',
+          classes: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
+        };
+      default:
+        return {
+          label: intent?.historyLabel || 'Movimentação',
+          classes: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200'
+        };
+    }
+  }
+
+  function settlementIntentHistoryWhen(intent) {
+    const dateLabel = intent?.activityAtLabel || (intent?.activityAt ? formatDateBR(intent.activityAt) : null);
+    const timeLabel = intent?.activityAtTimeLabel || (intent?.activityAt ? formatTimeBR(intent.activityAt) : null);
+    if (!dateLabel) return 'Sem data registrada';
+    return timeLabel ? `${dateLabel} às ${timeLabel}` : dateLabel;
+  }
+
   function buildReceivedActionEntries(items) {
     const entries = [];
     const seenSettlements = new Set();
@@ -1602,7 +1649,7 @@
 
                 <% if (receivedSettlementEntries.length) { %>
                   <div class="grid gap-3 lg:grid-cols-2">
-                    <% receivedSettlementEntries.forEach((entry) => { const settlementMeta = settlementStatusMeta(entry, 'received'); const highlightedSettlement = settlementIdToHighlight && Number(settlementIdToHighlight) === Number(entry.id); %>
+                    <% receivedSettlementEntries.forEach((entry) => { const settlementMeta = settlementStatusMeta(entry, 'received'); const highlightedSettlement = settlementIdToHighlight && Number(settlementIdToHighlight) === Number(entry.id); const receivedSettlementHistoryRows = settlementIntentHistoryRows(entry, { includeReported: true, limit: 4 }); %>
                       <article id="settlement-<%= entry.id %>" class="rounded-[28px] border <%= highlightedSettlement ? 'border-emerald-300 bg-emerald-50/90 shadow-emerald-200/60 dark:border-emerald-700 dark:bg-emerald-900/20 dark:shadow-emerald-950/30' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/40' %> p-4 shadow-sm">
                         <div class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1612,6 +1659,7 @@
                                 <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= settlementMeta.classes %>"><%= settlementMeta.label %></span>
                               </div>
                               <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= settlementMeta.helper %></p>
+                              <% if (entry.lastActivityAt) { %><p class="mt-2 text-xs font-medium text-slate-400 dark:text-slate-500">Último movimento em <%= formatDateBR(entry.lastActivityAt) %> às <%= formatTimeBR(entry.lastActivityAt) %>.</p><% } %>
                             </div>
                             <div class="sm:text-right">
                               <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Falta pagar</div>
@@ -1641,6 +1689,47 @@
                           <% if (!isArchiveMode && entry.openCents > 0) { %>
                             <div class="flex justify-end">
                               <button type="button" data-open-card-monthly-settlement="<%= entry.id %>" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600"><%= entry.reservedCents > 0 ? 'Pagar o que falta' : 'Pagar este mês' %></button>
+                            </div>
+                          <% } %>
+
+                          <% if (receivedSettlementHistoryRows.length) { %>
+                            <div class="rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/50">
+                              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Histórico da carteira</div>
+                                  <div class="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">Últimos movimentos desse mês</div>
+                                </div>
+                                <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"><%= countLabel(receivedSettlementHistoryRows.length, 'movimento recente', 'movimentos recentes') %></span>
+                              </div>
+                              <div class="mt-4 space-y-3">
+                                <% receivedSettlementHistoryRows.forEach((intent) => { const historyMeta = settlementIntentHistoryMeta(intent); %>
+                                  <div class="rounded-2xl border border-slate-200 bg-white/95 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/40">
+                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                      <div class="min-w-0 flex-1">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                          <div class="text-sm font-black text-slate-900 dark:text-white"><%= intent.amountFormatted %></div>
+                                          <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= historyMeta.classes %>"><%= historyMeta.label %></span>
+                                          <% if (intent.status === 'reported' && intent.isStale) { %><span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Saldo mudou</span><% } %>
+                                        </div>
+                                        <p class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= settlementIntentHistoryWhen(intent) %></p>
+                                        <p class="mt-2 text-sm font-medium leading-6 <%= intent.status === 'reported' && intent.isStale ? 'text-amber-700 dark:text-amber-200' : 'text-slate-600 dark:text-slate-300' %>"><%= intent.historySummary || 'Esse movimento ficou registrado nessa carteira.' %></p>
+                                        <% if (intent.historyNote) { %>
+                                          <p class="mt-2 text-sm font-medium leading-6 text-slate-700 dark:text-slate-200"><%= intent.historyNote %></p>
+                                        <% } %>
+                                      </div>
+                                      <div class="sm:text-right">
+                                        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= intent.status === 'reported' ? 'Vai encostar em' : 'Momento' %></div>
+                                        <% if (intent.status === 'reported') { %>
+                                          <div class="mt-1 text-sm font-black text-slate-900 dark:text-white"><%= countLabel(intent.preview?.touchedCount || 0, 'cobrança', 'cobranças') %></div>
+                                          <% if (intent.preview?.partialRow) { %><div class="mt-1 text-xs font-medium text-amber-600 dark:text-amber-300">1 fica parcial</div><% } else if (intent.preview?.allocatedCents) { %><div class="mt-1 text-xs font-medium text-emerald-600 dark:text-emerald-300"><%= formatBRLFromCents(intent.preview.allocatedCents || 0) %> entram nessa rodada</div><% } %>
+                                        <% } else { %>
+                                          <div class="mt-1 text-sm font-black text-slate-900 dark:text-white"><%= settlementIntentHistoryWhen(intent) %></div>
+                                        <% } %>
+                                      </div>
+                                    </div>
+                                  </div>
+                                <% }) %>
+                              </div>
                             </div>
                           <% } %>
                         </div>
@@ -2156,7 +2245,7 @@
 
                 <% if (sentSettlementEntries.length) { %>
                   <div class="grid gap-3 lg:grid-cols-2">
-                    <% sentSettlementEntries.forEach((entry) => { const settlementMeta = settlementStatusMeta(entry, 'sent'); const highlightedSettlement = settlementIdToHighlight && Number(settlementIdToHighlight) === Number(entry.id); const reportedIntentRows = Array.isArray(entry.snapshot?.reportedIntentRows) ? entry.snapshot.reportedIntentRows : []; %>
+                    <% sentSettlementEntries.forEach((entry) => { const settlementMeta = settlementStatusMeta(entry, 'sent'); const highlightedSettlement = settlementIdToHighlight && Number(settlementIdToHighlight) === Number(entry.id); const reportedIntentRows = Array.isArray(entry.snapshot?.reportedIntentRows) ? entry.snapshot.reportedIntentRows : []; const sentSettlementHistoryRows = settlementIntentHistoryRows(entry, { includeReported: reportedIntentRows.length === 0, limit: reportedIntentRows.length ? 3 : 4 }); %>
                       <article id="settlement-<%= entry.id %>" class="rounded-[28px] border <%= highlightedSettlement ? 'border-sky-300 bg-sky-50/90 shadow-sky-200/60 dark:border-sky-700 dark:bg-sky-900/20 dark:shadow-sky-950/30' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/40' %> p-4 shadow-sm">
                         <div class="flex flex-col gap-4">
                           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -2166,6 +2255,7 @@
                                 <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= settlementMeta.classes %>"><%= settlementMeta.label %></span>
                               </div>
                               <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= settlementMeta.helper %></p>
+                              <% if (entry.lastActivityAt) { %><p class="mt-2 text-xs font-medium text-slate-400 dark:text-slate-500">Último movimento em <%= formatDateBR(entry.lastActivityAt) %> às <%= formatTimeBR(entry.lastActivityAt) %>.</p><% } %>
                             </div>
                             <div class="sm:text-right">
                               <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Ainda em aberto</div>
@@ -2238,6 +2328,41 @@
                                       <% } else { %>
                                         <button type="button" data-jump-request="settlement-<%= entry.id %>" class="inline-flex items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-600">Revisar carteira do mês</button>
                                       <% } %>
+                                    </div>
+                                  </div>
+                                <% }) %>
+                              </div>
+                            </div>
+                          <% } %>
+
+                          <% if (sentSettlementHistoryRows.length) { %>
+                            <div class="rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/50">
+                              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Histórico da carteira</div>
+                                  <div class="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">Movimentos recentes já resolvidos por aqui</div>
+                                </div>
+                                <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"><%= countLabel(sentSettlementHistoryRows.length, 'movimento recente', 'movimentos recentes') %></span>
+                              </div>
+                              <div class="mt-4 space-y-3">
+                                <% sentSettlementHistoryRows.forEach((intent) => { const historyMeta = settlementIntentHistoryMeta(intent); %>
+                                  <div class="rounded-2xl border border-slate-200 bg-white/95 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/40">
+                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                      <div class="min-w-0 flex-1">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                          <div class="text-sm font-black text-slate-900 dark:text-white"><%= intent.amountFormatted %></div>
+                                          <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= historyMeta.classes %>"><%= historyMeta.label %></span>
+                                        </div>
+                                        <p class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= settlementIntentHistoryWhen(intent) %></p>
+                                        <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= intent.historySummary || 'Esse movimento ficou registrado nessa carteira.' %></p>
+                                        <% if (intent.historyNote) { %>
+                                          <p class="mt-2 text-sm font-medium leading-6 text-slate-700 dark:text-slate-200"><%= intent.historyNote %></p>
+                                        <% } %>
+                                      </div>
+                                      <div class="sm:text-right">
+                                        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Momento</div>
+                                        <div class="mt-1 text-sm font-black text-slate-900 dark:text-white"><%= settlementIntentHistoryWhen(intent) %></div>
+                                      </div>
                                     </div>
                                   </div>
                                 <% }) %>

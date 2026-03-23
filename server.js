@@ -111,6 +111,7 @@ try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN pix_version INTEGE
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN status_summary TEXT NOT NULL DEFAULT 'pending'").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN first_responded_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN resolved_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_payment_intents ADD COLUMN creditor_note TEXT").run(); } catch (e) { /* Coluna já existe */ }
 
 // Cria a tabela de meses fechados se não existir
 // Em ambiente multi-usuário, o fechamento precisa ser isolado por user_id.
@@ -195,6 +196,7 @@ db.prepare(`
     pix_payload TEXT,
     pix_txid TEXT,
     payer_note TEXT,
+    creditor_note TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     generated_at TEXT,
@@ -2656,6 +2658,7 @@ function buildSharedDebtCardMonthlyIntentDisplayRows(snapshot) {
   const safeSnapshot = snapshot || null;
   const rows = Array.isArray(safeSnapshot?.intentRows) ? safeSnapshot.intentRows : [];
   const maxConfirmableCents = Math.max(0, Number(safeSnapshot?.totalAcceptedCents || 0) - Number(safeSnapshot?.confirmedCents || 0));
+  const periodLabel = monthLabel(safeSnapshot?.month, safeSnapshot?.year);
 
   return rows
     .map((row) => {
@@ -2664,22 +2667,61 @@ function buildSharedDebtCardMonthlyIntentDisplayRows(snapshot) {
       const preview = normalizedStatus === 'reported'
         ? buildSharedDebtCardMonthlyIntentPreview(safeSnapshot, amountCents, { maxAmountCents: maxConfirmableCents })
         : null;
+      const payerNote = String(row?.payer_note || '').trim() || null;
+      const creditorNote = String(row?.creditor_note || '').trim() || null;
+      const activityAt = normalizedStatus === 'confirmed'
+        ? (row?.confirmed_at || row?.updated_at || row?.reported_at || row?.created_at || null)
+        : normalizedStatus === 'rejected'
+          ? (row?.rejected_at || row?.updated_at || row?.reported_at || row?.created_at || null)
+          : normalizedStatus === 'reported'
+            ? (row?.reported_at || row?.updated_at || row?.created_at || null)
+            : normalizedStatus === 'cancelled'
+              ? (row?.cancelled_at || row?.updated_at || row?.generated_at || row?.created_at || null)
+              : (row?.generated_at || row?.updated_at || row?.created_at || null);
+      const historyLabel = normalizedStatus === 'reported'
+        ? 'Pix avisado'
+        : normalizedStatus === 'confirmed'
+          ? 'Recebimento confirmado'
+          : normalizedStatus === 'rejected'
+            ? 'Pix voltou para revisão'
+            : normalizedStatus === 'cancelled'
+              ? 'Tentativa substituída'
+              : 'Pix gerado';
+      const historySummary = normalizedStatus === 'reported'
+        ? (preview?.summary || 'Esse valor foi avisado e agora está aguardando confirmação nessa carteira.')
+        : normalizedStatus === 'confirmed'
+          ? `Esse valor já entrou como confirmado na carteira de ${periodLabel}.`
+          : normalizedStatus === 'rejected'
+            ? 'Esse aviso voltou para o saldo aberto dessa carteira.'
+            : normalizedStatus === 'cancelled'
+              ? 'Essa tentativa ficou para trás quando um novo código entrou em cena.'
+              : 'Essa tentativa de Pix ficou registrada nessa carteira.';
 
       return {
         ...row,
         status: normalizedStatus,
+        payer_note: payerNote,
+        creditor_note: creditorNote,
         amountCents,
         amountFormatted: formatBRLFromCents(amountCents),
         reportedAtLabel: row?.reported_at ? formatDateBR(row.reported_at) : null,
         reportedAtTimeLabel: row?.reported_at ? dayjs(row.reported_at).format('HH:mm') : null,
         confirmedAtLabel: row?.confirmed_at ? formatDateBR(row.confirmed_at) : null,
+        confirmedAtTimeLabel: row?.confirmed_at ? dayjs(row.confirmed_at).format('HH:mm') : null,
         rejectedAtLabel: row?.rejected_at ? formatDateBR(row.rejected_at) : null,
+        rejectedAtTimeLabel: row?.rejected_at ? dayjs(row.rejected_at).format('HH:mm') : null,
+        activityAt,
+        activityAtLabel: activityAt ? formatDateBR(activityAt) : null,
+        activityAtTimeLabel: activityAt ? dayjs(activityAt).format('HH:mm') : null,
+        historyLabel,
+        historySummary,
+        historyNote: normalizedStatus === 'reported' ? payerNote : creditorNote,
         preview,
         canConfirm: normalizedStatus === 'reported' && !!preview && Number(preview.allocatedCents || 0) > 0,
         isStale: normalizedStatus === 'reported' && !!preview && Number(preview.allocatedCents || 0) !== amountCents
       };
     })
-    .sort((a, b) => String(b?.reported_at || b?.updated_at || b?.created_at || '').localeCompare(String(a?.reported_at || a?.updated_at || a?.created_at || '')));
+    .sort((a, b) => String(b?.activityAt || b?.updated_at || b?.created_at || '').localeCompare(String(a?.activityAt || a?.updated_at || a?.created_at || '')));
 }
 
 function buildSharedDebtCardMonthlyIntentResultSummary(preview) {
@@ -7518,6 +7560,7 @@ app.post('/shared-debts/monthly-settlements/:id/confirm-payment', ensureAuthenti
   const updateIntent = db.prepare(`
     UPDATE shared_debt_payment_intents
     SET status = 'confirmed',
+        creditor_note = ?,
         confirmed_at = ?,
         updated_at = ?
     WHERE id = ?
@@ -7527,7 +7570,7 @@ app.post('/shared-debts/monthly-settlements/:id/confirm-payment', ensureAuthenti
   `);
 
   db.transaction(() => {
-    const result = updateIntent.run(now, now, intentId, settlementId, userId);
+    const result = updateIntent.run(note, now, now, intentId, settlementId, userId);
     if (!result.changes) {
       throw new Error('Esse Pix do mês já mudou de estado enquanto você estava por aqui.');
     }
@@ -7651,13 +7694,14 @@ app.post('/shared-debts/monthly-settlements/:id/reject-payment', ensureAuthentic
     const result = db.prepare(`
       UPDATE shared_debt_payment_intents
       SET status = 'rejected',
+          creditor_note = ?,
           rejected_at = ?,
           updated_at = ?
       WHERE id = ?
         AND settlement_id = ?
         AND requester_user_id = ?
         AND status = 'reported'
-    `).run(now, now, intentId, settlementId, userId);
+    `).run(note, now, now, intentId, settlementId, userId);
 
     if (!result.changes) {
       throw new Error('Esse Pix do mês já mudou de estado enquanto você estava por aqui.');

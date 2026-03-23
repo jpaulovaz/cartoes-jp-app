@@ -349,6 +349,7 @@ CREATE TABLE IF NOT EXISTS shared_debt_payment_intents (
   pix_payload TEXT,
   pix_txid TEXT,
   payer_note TEXT,
+  creditor_note TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   generated_at TEXT,
@@ -567,6 +568,10 @@ if (!columnExists("shared_debt_requests", "last_pix_amount_cents")) {
 
 if (!columnExists("shared_debt_requests", "pix_version")) {
   db.exec("ALTER TABLE shared_debt_requests ADD COLUMN pix_version INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("shared_debt_payment_intents", "creditor_note")) {
+  db.exec("ALTER TABLE shared_debt_payment_intents ADD COLUMN creditor_note TEXT;");
 }
 
 if (!columnExists("shared_debt_batches", "status_summary")) {

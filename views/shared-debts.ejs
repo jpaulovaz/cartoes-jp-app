@@ -472,6 +472,18 @@
   const cardMonthlySettlementsList = Array.isArray(cardMonthlySettlements) ? cardMonthlySettlements : [];
   const cardMonthlySettlementsByKey = new Map(cardMonthlySettlementsList.map((snapshot) => [snapshot?.settlementKey, snapshot]).filter(([key]) => !!key));
   const cardMonthlySettlementsById = new Map(cardMonthlySettlementsList.map((snapshot) => [Number(snapshot?.id || 0), snapshot]).filter(([id]) => !!id));
+  const receivedSettlementEntriesAll = rawReceivedGroups.flatMap((group) => buildGroupSettlementEntries(group, 'received'));
+  const sentSettlementEntriesAll = rawSentGroups.flatMap((group) => buildGroupSettlementEntries(group, 'sent'));
+  const monthlyReceiverOpenCount = receivedSettlementEntriesAll.filter((entry) => Number(entry?.openCents || 0) > 0).length;
+  const monthlyReceiverAwaitingCount = receivedSettlementEntriesAll.filter((entry) => Number(entry?.reservedCents || 0) > 0).length;
+  const monthlySenderReviewCount = sentSettlementEntriesAll.filter((entry) => {
+    const reportedRows = Array.isArray(entry?.snapshot?.reportedIntentRows) ? entry.snapshot.reportedIntentRows : [];
+    return reportedRows.length > 0;
+  }).length;
+  const monthlyMovementHistoryCount = [...receivedSettlementEntriesAll, ...sentSettlementEntriesAll].reduce((sum, entry) => {
+    return sum + settlementIntentHistoryRows(entry, { includeReported: false, limit: 99 }).length;
+  }, 0);
+  const monthlyGuideHref = '/docs/guia-pix-cartao-fase2.html';
 
   function cardMonthlySnapshotForItem(item) {
     return cardMonthlySettlementsByKey.get(item?.card_monthly_settlement_key || '') || null;
@@ -806,6 +818,68 @@
   </section>
 
   <% if (!isArchiveMode) { %>
+  <section class="op-fade-up">
+    <div class="grid gap-4 xl:grid-cols-[1.25fr,0.95fr]">
+      <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div class="max-w-2xl">
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-500 dark:text-emerald-300">Pix do cartão por competência</div>
+            <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Agora o acerto do cartão anda pela carteira do mês</h2>
+            <p class="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">O histórico por envio continua vivo, mas o pagamento conversa com a competência mensal entre vocês. Isso deixa o parcial menos novela e mais matemática com final feliz.</p>
+          </div>
+          <div class="flex flex-wrap gap-2 lg:justify-end">
+            <a href="#received" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Ir para Recebidas</a>
+            <a href="#sent" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Ir para Enviadas</a>
+            <a href="<%= monthlyGuideHref %>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Guia da feature</a>
+          </div>
+        </div>
+
+        <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70">
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Para pagar</div>
+            <div class="mt-1 text-2xl font-black text-slate-900 dark:text-white"><%= monthlyReceiverOpenCount %></div>
+            <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= monthlyReceiverOpenCount ? `${countLabel(monthlyReceiverOpenCount, 'mês aberto', 'meses abertos')} do seu lado para quitar ou completar.` : 'Nenhuma carteira mensal aberta do seu lado agora.' %></p>
+          </div>
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70">
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Esperando seu ok</div>
+            <div class="mt-1 text-2xl font-black text-slate-900 dark:text-white"><%= monthlySenderReviewCount %></div>
+            <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= monthlySenderReviewCount ? `${countLabel(monthlySenderReviewCount, 'carteira', 'carteiras')} com Pix do mês avisado e pedindo sua confirmação final.` : 'Nenhum Pix mensal esperando seu ok por enquanto.' %></p>
+          </div>
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70">
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Você já avisou</div>
+            <div class="mt-1 text-2xl font-black text-slate-900 dark:text-white"><%= monthlyReceiverAwaitingCount %></div>
+            <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= monthlyReceiverAwaitingCount ? `${countLabel(monthlyReceiverAwaitingCount, 'carteira', 'carteiras')} em que você já marcou o Pix e agora só falta o outro lado confirmar.` : 'Quando você avisar um Pix do mês, ele aparece aqui até receber o ok.' %></p>
+          </div>
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70">
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Histórico resolvido</div>
+            <div class="mt-1 text-2xl font-black text-slate-900 dark:text-white"><%= monthlyMovementHistoryCount %></div>
+            <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= monthlyMovementHistoryCount ? 'Confirmações e revisões recentes já ficaram registradas na carteira do mês.' : 'Quando um Pix mensal for confirmado ou revisado, o rastro aparece aqui e dentro da carteira.' %></p>
+          </div>
+        </div>
+      </article>
+
+      <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
+        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Guia rapidinho</div>
+        <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Como o Pix do mês se comporta agora</h2>
+        <div class="mt-4 space-y-3">
+          <details class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70" open>
+            <summary class="cursor-pointer list-none text-sm font-black text-slate-900 dark:text-white">1. Paguei tudo</summary>
+            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Você gera o Pix com o valor total da carteira, avisa que pagou e o valor só entra de verdade quando o outro lado confirma. Confirmando, o mês pode ficar redondinho de uma vez.</p>
+          </details>
+          <details class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+            <summary class="cursor-pointer list-none text-sm font-black text-slate-900 dark:text-white">2. Paguei só uma parte</summary>
+            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">O app espalha o valor do mais antigo para o mais novo. Ele fecha o que couber, deixa no máximo uma cobrança parcial e mostra isso em <strong>/shared-debts</strong>, <strong>/summary</strong> e <strong>/detalhamento</strong>.</p>
+          </details>
+          <details class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+            <summary class="cursor-pointer list-none text-sm font-black text-slate-900 dark:text-white">3. Já paguei, mas ainda falta confirmação</summary>
+            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Enquanto o outro lado não confirma, o valor fica reservado. Ele aparece como aguardando confirmação, reduz o que ainda pode ser gerado em novo Pix e ainda não entra no total confirmado do mês.</p>
+          </details>
+        </div>
+        <a href="<%= monthlyGuideHref %>" target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Abrir guia completo e checklist</a>
+      </article>
+    </div>
+  </section>
+
   <section class="op-fade-up">
     <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

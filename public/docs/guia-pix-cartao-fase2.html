@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>OrganizaPay · Guia do Pix do mês no cartão</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f8fafc;
+      --surface: rgba(255,255,255,0.92);
+      --surface-strong: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --line: rgba(148,163,184,0.28);
+      --brand: #059669;
+      --brand-soft: rgba(5,150,105,0.10);
+      --sky: #0284c7;
+      --sky-soft: rgba(2,132,199,0.10);
+      --amber: #d97706;
+      --amber-soft: rgba(217,119,6,0.10);
+      --shadow: 0 18px 48px rgba(15, 23, 42, 0.10);
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #020617;
+        --surface: rgba(15,23,42,0.88);
+        --surface-strong: #0f172a;
+        --text: #e2e8f0;
+        --muted: #cbd5e1;
+        --line: rgba(100,116,139,0.35);
+        --brand-soft: rgba(16,185,129,0.16);
+        --sky-soft: rgba(14,165,233,0.16);
+        --amber-soft: rgba(245,158,11,0.16);
+        --shadow: 0 22px 60px rgba(2, 6, 23, 0.45);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(5,150,105,0.10), transparent 34%),
+        radial-gradient(circle at top right, rgba(14,165,233,0.10), transparent 28%),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    a { color: inherit; }
+    .shell {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 56px;
+    }
+    .hero,
+    .card,
+    .checklist,
+    .scenario,
+    .tip {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+    .hero {
+      padding: 28px;
+      display: grid;
+      gap: 18px;
+      grid-template-columns: 1.25fr .95fr;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--brand-soft);
+      color: var(--brand);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+    h1, h2, h3 { margin: 0; line-height: 1.15; }
+    h1 {
+      font-size: clamp(2rem, 4vw, 3rem);
+      margin-top: 12px;
+      letter-spacing: -0.04em;
+    }
+    h2 {
+      font-size: clamp(1.35rem, 2.8vw, 1.9rem);
+      letter-spacing: -0.03em;
+    }
+    h3 {
+      font-size: 1.05rem;
+      letter-spacing: -0.02em;
+    }
+    p { margin: 0; color: var(--muted); }
+    .hero p.lead {
+      font-size: 1rem;
+      max-width: 58ch;
+    }
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .badge {
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: var(--surface-strong);
+      border: 1px solid var(--line);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .grid {
+      display: grid;
+      gap: 16px;
+      margin-top: 22px;
+    }
+    .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card {
+      padding: 22px;
+    }
+    .card .kicker {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--sky);
+      margin-bottom: 8px;
+    }
+    .metric {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 18px;
+    }
+    .metric .pill {
+      border-radius: var(--radius-md);
+      border: 1px solid var(--line);
+      background: var(--surface-strong);
+      padding: 16px;
+    }
+    .metric .pill strong {
+      display: block;
+      font-size: 1.45rem;
+      letter-spacing: -0.03em;
+      margin-top: 4px;
+    }
+    .section-title {
+      margin: 26px 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--sky);
+    }
+    .scenario {
+      padding: 22px;
+      display: grid;
+      gap: 12px;
+    }
+    .scenario .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .scenario.totalo .tag { background: var(--brand-soft); color: var(--brand); }
+    .scenario.parcial .tag { background: var(--amber-soft); color: var(--amber); }
+    .scenario.aguardando .tag { background: var(--sky-soft); color: var(--sky); }
+    ul, ol {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+    }
+    li + li { margin-top: 8px; }
+    .tip {
+      padding: 22px;
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .tip strong { color: var(--text); }
+    .checklist {
+      padding: 24px;
+      margin-top: 18px;
+    }
+    .checklist ul {
+      list-style: none;
+      padding-left: 0;
+      display: grid;
+      gap: 12px;
+    }
+    .checklist li {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 14px 0;
+      border-top: 1px solid var(--line);
+    }
+    .checklist li:first-child { border-top: 0; padding-top: 0; }
+    .check {
+      width: 28px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--surface-strong);
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--brand);
+    }
+    .muted-box {
+      padding: 16px 18px;
+      border-radius: var(--radius-md);
+      background: var(--surface-strong);
+      border: 1px solid var(--line);
+      color: var(--muted);
+    }
+    footer {
+      margin-top: 28px;
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+    }
+    @media (max-width: 900px) {
+      .hero,
+      .grid.cols-2,
+      .grid.cols-3,
+      .metric {
+        grid-template-columns: 1fr;
+      }
+      .shell { width: min(100% - 24px, 1120px); padding-top: 24px; }
+      .hero, .card, .scenario, .checklist, .tip { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <span class="eyebrow">OrganizaPay · Fase 2 · Pix do cartão</span>
+        <h1>Guia do Pix do mês nas cobranças de cartão</h1>
+        <p class="lead">Este material fecha a Fase 2 com a régua certa: a cobrança continua separada por envio, mas o pagamento passa a conversar com a <strong>carteira mensal</strong> entre credor e devedor. Assim o parcial deixa de ser adivinhação e vira um fluxo claro, previsível e rastreável.</p>
+        <div class="badge-row">
+          <span class="badge">Pagamento total ou parcial</span>
+          <span class="badge">Confirmação manual do recebimento</span>
+          <span class="badge">Alocação FIFO do mais antigo para o mais novo</span>
+          <span class="badge">Reflexo em /shared-debts, /summary e /detalhamento</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="kicker">Leitura rápida</div>
+        <h2>O que mudou de verdade</h2>
+        <div class="metric">
+          <div class="pill">
+            <span>Unidade de pagamento</span>
+            <strong>Mês</strong>
+            <p>O Pix do cartão agora nasce da competência mensal, não da compra isolada.</p>
+          </div>
+          <div class="pill">
+            <span>Momento da baixa</span>
+            <strong>Confirmação</strong>
+            <p>O valor só entra de verdade quando o credor confirma o recebimento.</p>
+          </div>
+          <div class="pill">
+            <span>Regra do parcial</span>
+            <strong>FIFO</strong>
+            <p>O app fecha o que couber e deixa no máximo uma compra parcial.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-title">Três cenários para entender sem tropeço</div>
+    <section class="grid cols-3">
+      <article class="scenario totalo">
+        <span class="tag">1 · Paguei tudo</span>
+        <h3>Quando o devedor quita a carteira inteira</h3>
+        <ol>
+          <li>Na carteira do mês, o devedor escolhe <strong>Pagar tudo</strong>.</li>
+          <li>O app gera o Pix com o valor total ainda disponível naquele mês.</li>
+          <li>Depois do botão <strong>Já fiz o Pix</strong>, o valor fica como <strong>aguardando confirmação</strong>.</li>
+          <li>Quando o credor confirma, as compras elegíveis daquele mês são quitadas e a carteira pode ficar redondinha.</li>
+        </ol>
+        <div class="muted-box"><strong>Onde aparece:</strong> em <strong>/shared-debts</strong> a carteira fica fechada; em <strong>/summary</strong> o valor entra como confirmado automático; em <strong>/detalhamento</strong> o saldo restante real zera.</div>
+      </article>
+
+      <article class="scenario parcial">
+        <span class="tag">2 · Paguei só uma parte</span>
+        <h3>Quando o valor não cobre tudo</h3>
+        <ol>
+          <li>O devedor escolhe <strong>Outro valor</strong> e o app mostra uma prévia humana do encaixe.</li>
+          <li>Depois da confirmação do credor, o sistema distribui o valor do <strong>mais antigo para o mais novo</strong>.</li>
+          <li>Ele fecha quantas compras couberem e deixa, quando necessário, <strong>uma compra parcial</strong>.</li>
+          <li>O restante continua em aberto para a próxima geração de Pix do mesmo mês.</li>
+        </ol>
+        <div class="muted-box"><strong>Onde aparece:</strong> a linha da cobrança passa a mostrar saldo real, a carteira mensal exibe quanto já entrou e quanto ainda falta, e o <strong>/summary</strong> soma só o que foi confirmado.</div>
+      </article>
+
+      <article class="scenario aguardando">
+        <span class="tag">3 · Já paguei, mas ainda falta o ok</span>
+        <h3>Quando o dinheiro foi avisado, mas ainda não confirmado</h3>
+        <ol>
+          <li>O devedor marca <strong>Já fiz o Pix</strong>.</li>
+          <li>O evento vira um movimento <strong>reported</strong> e o valor fica <strong>reservado</strong>.</li>
+          <li>Enquanto o credor não confirma, o app <strong>não</strong> trata aquilo como dinheiro efetivamente recebido.</li>
+          <li>Se o credor rejeitar, o valor volta para o saldo aberto da carteira mensal.</li>
+        </ol>
+        <div class="muted-box"><strong>Regra de ouro:</strong> valor avisado segura a geração de novo Pix acima do saldo realmente disponível, mas só vira pagamento confirmado depois do ok do credor.</div>
+      </article>
+    </section>
+
+    <section class="grid cols-2">
+      <article class="card">
+        <div class="kicker">Mapa de leitura do produto</div>
+        <h2>Onde cada pedaço passa a aparecer</h2>
+        <ul>
+          <li><strong>/shared-debts por mês:</strong> vira a visão operacional principal para pagar, confirmar, revisar histórico e enxergar o que ainda está em aberto.</li>
+          <li><strong>/shared-debts por envio:</strong> continua separado, mas passa a mostrar o saldo restante real de cada item, incluindo parcial confirmado.</li>
+          <li><strong>/summary:</strong> o total pago da pessoa vira <strong>manual + automático confirmado</strong>. O campo editável continua sendo só ajuste manual.</li>
+          <li><strong>/detalhamento:</strong> os cards deixam de fingir que nada aconteceu e passam a olhar saldo aberto real, incluindo parcial e valor aguardando confirmação.</li>
+        </ul>
+      </article>
+
+      <article class="tip">
+        <div class="kicker">Regras que mantêm a casa em pé</div>
+        <h2>O que não pode quebrar</h2>
+        <ul>
+          <li><strong>Nada de baixa fantasma:</strong> gerar Pix ou avisar pagamento não liquida compra nenhuma sozinho.</li>
+          <li><strong>Nada de edição estrutural solta:</strong> se já existe valor confirmado ou aguardando confirmação, o app deve bloquear mudanças que embaralhem o saldo.</li>
+          <li><strong>Nada de dupla contagem:</strong> o que entra no automático confirmado não pode atropelar o lançamento manual de <code>person_payments</code>.</li>
+          <li><strong>Nada de perder o histórico:</strong> cada tentativa de Pix do mês precisa continuar visível como movimento da carteira.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="checklist">
+      <div class="kicker">Checklist manual de regressão</div>
+      <h2>Antes de declarar a Fase 2 “redondinha”</h2>
+      <ul>
+        <li>
+          <span class="check">✓</span>
+          <div><strong>Cenário total:</strong> gerar Pix do mês pelo valor integral, avisar pagamento, confirmar recebimento e validar que a carteira fecha, o <code>/summary</code> recebe o valor automático e o <code>/detalhamento</code> zera o saldo real daquele mês.</div>
+        </li>
+        <li>
+          <span class="check">✓</span>
+          <div><strong>Cenário parcial:</strong> pagar um valor menor que o total, confirmar recebimento e checar que o app fecha as compras mais antigas em FIFO, deixa no máximo uma parcial e guarda o restante como saldo aberto para o próximo Pix.</div>
+        </li>
+        <li>
+          <span class="check">✓</span>
+          <div><strong>Aguardando confirmação:</strong> avisar um Pix do mês e parar por aí. O valor deve aparecer reservado, reduzir o saldo disponível para nova geração e não entrar como confirmado no <code>/summary</code>.</div>
+        </li>
+        <li>
+          <span class="check">✓</span>
+          <div><strong>Rejeição:</strong> o credor marca que não recebeu. O evento precisa ficar no histórico, o valor volta para o saldo aberto da carteira e o devedor pode gerar um novo Pix coerente.</div>
+        </li>
+        <li>
+          <span class="check">✓</span>
+          <div><strong>Fluxo avulso intacto:</strong> as rotas e botões de cobrança manual / Pix avulso continuam funcionando, sem serem puxados à força para o fluxo mensal do cartão.</div>
+        </li>
+        <li>
+          <span class="check">✓</span>
+          <div><strong>Bloqueios estruturais:</strong> tentar editar, mover ou excluir compras já ligadas a carteiras com valor reservado/confirmado deve disparar a blindagem e impedir saldo torto.</div>
+        </li>
+        <li>
+          <span class="check">✓</span>
+          <div><strong>Notificações:</strong> ao avisar, confirmar ou rejeitar um Pix do mês, a pessoa certa recebe notificação e consegue chegar à carteira correspondente sem caça ao tesouro.</div>
+        </li>
+      </ul>
+    </section>
+
+    <footer>
+      OrganizaPay · Guia interno da Fase 2 do Pix no cartão · pensado para produto, operação e revisão manual.
+    </footer>
+  </main>
+</body>
+</html>

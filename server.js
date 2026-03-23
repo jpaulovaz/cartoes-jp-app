@@ -3436,8 +3436,8 @@ function renderSharedDebtsPage(req, res, { archiveMode = false } = {}) {
       SET is_read = 1, read_at = COALESCE(read_at, ?)
       WHERE user_id = ?
         AND (
-          related_type IN ('shared_debt_request', 'shared_debt_batch') OR
-          type IN ('shared_debt_request', 'shared_debt_batch')
+          related_type IN ('shared_debt_request', 'shared_debt_batch', 'shared_debt_payment_intent') OR
+          type IN ('shared_debt_request', 'shared_debt_batch', 'shared_debt_payment_intent')
         )
         AND is_read = 0
     `).run(nowIso(), userId);
@@ -9213,8 +9213,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     SELECT title, body, href, created_at
     FROM notifications
     WHERE user_id = ? AND is_read = 0 AND (
-      related_type IN ('shared_debt_request', 'shared_debt_batch') OR
-      type IN ('shared_debt_request', 'shared_debt_batch')
+      related_type IN ('shared_debt_request', 'shared_debt_batch', 'shared_debt_payment_intent') OR
+      type IN ('shared_debt_request', 'shared_debt_batch', 'shared_debt_payment_intent')
     )
     ORDER BY created_at DESC
     LIMIT 5
@@ -9304,26 +9304,43 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     });
   }
 
-  const pendingReceiptConfirmationCount = (db.prepare(`
+  const legacyPendingReceiptConfirmationCount = db.prepare(`
     SELECT COUNT(*) AS total
     FROM shared_debt_requests
     WHERE requester_user_id = ?
       AND status = 'accepted'
       AND payment_marked_at IS NOT NULL
-  `).get(userId)?.total || 0) + (db.prepare(`
+  `).get(userId)?.total || 0;
+
+  const monthlyPendingReceiptConfirmationCount = db.prepare(`
     SELECT COUNT(*) AS total
     FROM shared_debt_payment_intents
     WHERE requester_user_id = ?
       AND request_kind = 'card'
       AND status = 'reported'
-  `).get(userId)?.total || 0);
+  `).get(userId)?.total || 0;
+
+  const pendingReceiptConfirmationCount = legacyPendingReceiptConfirmationCount + monthlyPendingReceiptConfirmationCount;
 
   if (pendingReceiptConfirmationCount > 0) {
+    let title = 'Pagamentos aguardando sua confirmação';
+    let description = `${formatCountLabel(pendingReceiptConfirmationCount, 'pagamento', 'pagamentos')} já ${pendingReceiptConfirmationCount === 1 ? 'foi marcado como feito e está' : 'foram marcados como feitos e estão'} esperando seu ok final.`;
+
+    if (monthlyPendingReceiptConfirmationCount > 0 && legacyPendingReceiptConfirmationCount === 0) {
+      title = monthlyPendingReceiptConfirmationCount === 1 ? 'Pix do mês aguardando seu ok' : 'Pix do mês aguardando seu ok';
+      description = `${formatCountLabel(monthlyPendingReceiptConfirmationCount, 'Pix do mês', 'Pix do mês')} já ${monthlyPendingReceiptConfirmationCount === 1 ? 'foi avisado e está' : 'foram avisados e estão'} esperando sua confirmação na carteira mensal.`;
+    } else if (monthlyPendingReceiptConfirmationCount > 0) {
+      const monthlyHint = monthlyPendingReceiptConfirmationCount === 1
+        ? '1 deles é Pix do mês.'
+        : `${monthlyPendingReceiptConfirmationCount} deles são Pix do mês.`;
+      description = `${description} ${monthlyHint}`;
+    }
+
     alerts.push({
       type: 'warning',
       icon: '✅',
-      title: 'Pagamentos aguardando sua confirmação',
-      description: `${formatCountLabel(pendingReceiptConfirmationCount, 'pagamento', 'pagamentos')} já ${pendingReceiptConfirmationCount === 1 ? 'foi marcado como feito e está' : 'foram marcados como feitos e estão'} esperando seu ok final.`,
+      title,
+      description,
       href: '/shared-debts#sent'
     });
   }

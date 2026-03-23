@@ -1877,3 +1877,128 @@
     initPurchaseCategoryControls(document);
   }
 })();
+
+(function () {
+  const STYLE_STORAGE_KEY = 'op-theme-style';
+  const VALID_STYLES = new Set(['classic', 'confete']);
+  const root = document.documentElement;
+  const body = document.body;
+
+  function getCurrentStyle() {
+    const style = root.dataset.themeStyle;
+    return VALID_STYLES.has(style) ? style : 'classic';
+  }
+
+  function getCurrentAppearance() {
+    return root.classList.contains('dark') ? 'dark' : 'light';
+  }
+
+  function getThemeColor(style, appearance) {
+    if (style === 'confete') {
+      return appearance === 'dark' ? '#221531' : '#fff1f7';
+    }
+    return appearance === 'dark' ? '#020617' : '#eaf2ff';
+  }
+
+  function syncThemeChrome() {
+    const style = getCurrentStyle();
+    const appearance = getCurrentAppearance();
+    root.dataset.themeStyle = style;
+
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeColorMeta) {
+      themeColorMeta.setAttribute('content', getThemeColor(style, appearance));
+    }
+
+    document.querySelectorAll('[data-theme-style-choice]').forEach((button) => {
+      const isActive = button.getAttribute('data-theme-style-choice') === style;
+      button.classList.toggle('is-active', isActive);
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+
+    document.querySelectorAll('[data-theme-style-open]').forEach((button) => {
+      const label = style === 'confete' ? 'Visual Confete ativo' : 'Visual Clássico ativo';
+      button.setAttribute('title', `${label}. Toque para trocar.`);
+      button.setAttribute('aria-label', `${label}. Toque para trocar.`);
+    });
+  }
+
+  function setThemeStyle(style) {
+    const nextStyle = VALID_STYLES.has(style) ? style : 'classic';
+    root.dataset.themeStyle = nextStyle;
+    try {
+      localStorage.setItem(STYLE_STORAGE_KEY, nextStyle);
+    } catch (error) {
+      // ignore storage issues
+    }
+    syncThemeChrome();
+  }
+
+  function initThemeStyleCenter() {
+    const center = document.querySelector('[data-theme-style-center]');
+    if (!(center instanceof HTMLElement)) {
+      syncThemeChrome();
+      return;
+    }
+
+    const openButtons = document.querySelectorAll('[data-theme-style-open]');
+    const closeButtons = center.querySelectorAll('[data-theme-style-close]');
+    const backdrop = center.querySelector('[data-theme-style-backdrop]');
+    const choiceButtons = center.querySelectorAll('[data-theme-style-choice]');
+    let isOpen = false;
+
+    function setVisibility(visible) {
+      isOpen = visible;
+      center.classList.toggle('hidden', !visible);
+      center.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      if (body) {
+        body.classList.toggle('overflow-hidden', visible);
+      }
+    }
+
+    openButtons.forEach((button) => {
+      button.addEventListener('click', () => setVisibility(true));
+    });
+
+    closeButtons.forEach((button) => {
+      button.addEventListener('click', () => setVisibility(false));
+    });
+
+    if (backdrop instanceof HTMLElement) {
+      backdrop.addEventListener('click', () => setVisibility(false));
+    }
+
+    center.addEventListener('click', (event) => {
+      const panel = center.querySelector('.op-style-center-panel');
+      if (!(panel instanceof HTMLElement)) return;
+      if (event.target === center && !panel.contains(event.target)) {
+        setVisibility(false);
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && isOpen) {
+        setVisibility(false);
+      }
+    });
+
+    choiceButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const style = button.getAttribute('data-theme-style-choice') || 'classic';
+        setThemeStyle(style);
+        window.setTimeout(() => setVisibility(false), 120);
+      });
+    });
+
+    syncThemeChrome();
+  }
+
+  window.OPSyncThemeChrome = syncThemeChrome;
+  window.OPSetThemeStyle = setThemeStyle;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initThemeStyleCenter);
+  } else {
+    initThemeStyleCenter();
+  }
+})();

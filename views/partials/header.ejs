@@ -54,20 +54,33 @@
   </script>
 
   <script>
-    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    (function () {
+      const root = document.documentElement;
+      const styleKey = 'op-theme-style';
+      const storedStyle = localStorage.getItem(styleKey);
+      root.dataset.themeStyle = storedStyle === 'confete' ? 'confete' : 'classic';
+
+      const storedTheme = localStorage.getItem('theme');
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const nextTheme = storedTheme === 'dark' || (!storedTheme && prefersDark) ? 'dark' : 'light';
+      root.classList.toggle('dark', nextTheme === 'dark');
+
+      const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+      if (themeColorMeta) {
+        const themeColor = root.dataset.themeStyle === 'confete'
+          ? (nextTheme === 'dark' ? '#1f1633' : '#fff3f7')
+          : (nextTheme === 'dark' ? '#020617' : '#eaf2ff');
+        themeColorMeta.setAttribute('content', themeColor);
+      }
+    })();
 
     function toggleDarkMode() {
       const html = document.documentElement;
-      if (html.classList.contains('dark')) {
-        html.classList.remove('dark');
-        localStorage.setItem('theme', 'light');
-      } else {
-        html.classList.add('dark');
-        localStorage.setItem('theme', 'dark');
+      const nextTheme = html.classList.contains('dark') ? 'light' : 'dark';
+      html.classList.toggle('dark', nextTheme === 'dark');
+      localStorage.setItem('theme', nextTheme);
+      if (typeof window.OPSyncThemeChrome === 'function') {
+        window.OPSyncThemeChrome();
       }
     }
   </script>
@@ -192,7 +205,10 @@
               <% } %>
             </span>
           </button>
-          <button onclick="toggleDarkMode()" class="op-utility-btn" title="Alternar tema" aria-label="Alternar tema">
+          <button type="button" class="op-utility-btn op-utility-btn--style" data-theme-style-open title="Trocar visual" aria-label="Trocar visual do app">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3c.132 0 .263.053.357.146l2.116 2.117a.505.505 0 00.357.146h2.994c.278 0 .503.225.503.503v2.994c0 .134.053.262.147.357l2.116 2.117a.505.505 0 010 .714l-2.116 2.117a.505.505 0 00-.147.357v2.994a.503.503 0 01-.503.503H14.83a.505.505 0 00-.357.147l-2.116 2.116a.505.505 0 01-.714 0l-2.116-2.116a.505.505 0 00-.357-.147H6.176a.503.503 0 01-.503-.503v-2.994a.505.505 0 00-.147-.357L3.41 12.98a.505.505 0 010-.714l2.116-2.117a.505.505 0 00.147-.357V6.798c0-.278.225-.503.503-.503H9.17a.505.505 0 00.357-.146l2.116-2.117A.503.503 0 0112 3zm0 5.25A3.75 3.75 0 1015.75 12 3.754 3.754 0 0012 8.25z"></path></svg>
+          </button>
+          <button onclick="toggleDarkMode()" class="op-utility-btn" title="Alternar claro e escuro" aria-label="Alternar claro e escuro">
             <svg class="h-5 w-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
             <svg class="h-5 w-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
           </button>
@@ -222,7 +238,10 @@
               <% } %>
             </span>
           </button>
-          <button onclick="toggleDarkMode()" class="op-utility-btn shrink-0" title="Alternar tema" aria-label="Alternar tema">
+          <button type="button" class="op-utility-btn op-utility-btn--style shrink-0" data-theme-style-open title="Trocar visual" aria-label="Trocar visual do app">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3c.132 0 .263.053.357.146l2.116 2.117a.505.505 0 00.357.146h2.994c.278 0 .503.225.503.503v2.994c0 .134.053.262.147.357l2.116 2.117a.505.505 0 010 .714l-2.116 2.117a.505.505 0 00-.147.357v2.994a.503.503 0 01-.503.503H14.83a.505.505 0 00-.357.147l-2.116 2.116a.505.505 0 01-.714 0l-2.116-2.116a.505.505 0 00-.357-.147H6.176a.503.503 0 01-.503-.503v-2.994a.505.505 0 00-.147-.357L3.41 12.98a.505.505 0 010-.714l2.116-2.117a.505.505 0 00.147-.357V6.798c0-.278.225-.503.503-.503H9.17a.505.505 0 00.357-.146l2.116-2.117A.503.503 0 0112 3zm0 5.25A3.75 3.75 0 1015.75 12 3.754 3.754 0 0012 8.25z"></path></svg>
+          </button>
+          <button onclick="toggleDarkMode()" class="op-utility-btn shrink-0" title="Alternar claro e escuro" aria-label="Alternar claro e escuro">
             <svg class="h-5 w-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
             <svg class="h-5 w-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
           </button>
@@ -317,6 +336,57 @@
               </div>
             <% } %>
           </section>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="theme-style-center" data-theme-style-center class="fixed inset-0 z-[10042] hidden" aria-hidden="true">
+    <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-theme-style-backdrop></div>
+    <div class="relative z-10 flex min-h-full items-end justify-center overflow-y-auto px-3 py-3 sm:items-center sm:px-4 sm:py-6">
+      <section class="op-style-center-panel w-full max-w-3xl overflow-hidden rounded-[30px] border border-slate-200 bg-white/95 shadow-2xl ring-1 ring-slate-200 backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95 dark:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="theme-style-title">
+        <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 dark:border-slate-800 sm:px-6">
+          <div>
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-fuchsia-600 dark:text-fuchsia-300">Trocar visual</div>
+            <h2 id="theme-style-title" class="mt-1 text-xl font-black text-slate-900 dark:text-white">Clássico ou Confete?</h2>
+            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">A função continua igualzinha. O que muda aqui é só a roupa do app.</p>
+          </div>
+          <button type="button" class="op-icon-btn shrink-0" data-theme-style-close aria-label="Fechar seleção de visual">✕</button>
+        </div>
+        <div class="space-y-5 px-5 py-5 sm:px-6">
+          <div class="grid gap-4 md:grid-cols-2">
+            <button type="button" class="op-style-card" data-theme-style-choice="classic">
+              <span class="op-style-card__preview op-style-card__preview--classic" aria-hidden="true">
+                <span class="op-style-card__preview-topbar"></span>
+                <span class="op-style-card__preview-body"></span>
+                <span class="op-style-card__preview-pill"></span>
+              </span>
+              <span class="op-style-card__content">
+                <span class="op-style-card__kicker">Clássico</span>
+                <span class="op-style-card__title">Elegante, tech e focado</span>
+                <span class="op-style-card__text">Para quem curte um visual mais sóbrio, com cara de cockpit financeiro arrumadinho.</span>
+              </span>
+              <span class="op-style-card__check" data-theme-style-check>Ativo</span>
+            </button>
+
+            <button type="button" class="op-style-card" data-theme-style-choice="confete">
+              <span class="op-style-card__preview op-style-card__preview--confete" aria-hidden="true">
+                <span class="op-style-card__preview-topbar"></span>
+                <span class="op-style-card__preview-body"></span>
+                <span class="op-style-card__preview-pill"></span>
+              </span>
+              <span class="op-style-card__content">
+                <span class="op-style-card__kicker">Confete</span>
+                <span class="op-style-card__title">Divertido, moderno e quentinho</span>
+                <span class="op-style-card__text">Mais cor, mais personalidade e um clima leve sem perder o conforto visual do dia a dia.</span>
+              </span>
+              <span class="op-style-card__check" data-theme-style-check>Ativo</span>
+            </button>
+          </div>
+
+          <div class="rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 text-sm font-medium leading-6 text-slate-600 dark:border-slate-800 dark:bg-slate-800/70 dark:text-slate-300">
+            <strong class="font-black text-slate-900 dark:text-white">Dica amiga:</strong> você pode misturar o visual com claro ou escuro do jeito que ficar mais gostoso de usar. O app deixa você brincar sem bagunçar nada.
+          </div>
         </div>
       </section>
     </div>

@@ -377,6 +377,60 @@ CREATE TABLE IF NOT EXISTS shared_debt_payment_allocations (
   FOREIGN KEY (request_id) REFERENCES shared_debt_requests(id)
 );
 
+CREATE TABLE IF NOT EXISTS shared_debt_send_queues (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  requester_user_id INTEGER NOT NULL,
+  receiver_user_id INTEGER NOT NULL,
+  source_due_month INTEGER NOT NULL,
+  source_due_year INTEGER NOT NULL,
+  request_kind TEXT NOT NULL DEFAULT 'card',
+  status TEXT NOT NULL DEFAULT 'draft',
+  receiver_email_snapshot TEXT,
+  receiver_name_snapshot TEXT,
+  total_cents INTEGER NOT NULL DEFAULT 0,
+  item_count INTEGER NOT NULL DEFAULT 0,
+  last_item_at TEXT,
+  sent_at TEXT,
+  batch_id INTEGER,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (requester_user_id) REFERENCES users(id),
+  FOREIGN KEY (receiver_user_id) REFERENCES users(id),
+  FOREIGN KEY (batch_id) REFERENCES shared_debt_batches(id)
+);
+
+CREATE TABLE IF NOT EXISTS shared_debt_send_queue_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  queue_id INTEGER NOT NULL,
+  requester_user_id INTEGER NOT NULL,
+  receiver_user_id INTEGER NOT NULL,
+  source_transaction_id INTEGER NOT NULL,
+  source_allocation_id INTEGER,
+  source_person_id INTEGER NOT NULL,
+  source_due_month INTEGER NOT NULL,
+  source_due_year INTEGER NOT NULL,
+  source_txn_date_snapshot TEXT,
+  card_id INTEGER,
+  card_name_snapshot TEXT,
+  description_snapshot TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  receiver_email_snapshot TEXT,
+  receiver_name_snapshot TEXT,
+  sent_request_id INTEGER,
+  cancelled_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(queue_id, source_transaction_id, source_person_id),
+  FOREIGN KEY (queue_id) REFERENCES shared_debt_send_queues(id),
+  FOREIGN KEY (requester_user_id) REFERENCES users(id),
+  FOREIGN KEY (receiver_user_id) REFERENCES users(id),
+  FOREIGN KEY (source_transaction_id) REFERENCES transactions(id),
+  FOREIGN KEY (source_allocation_id) REFERENCES allocations(id),
+  FOREIGN KEY (source_person_id) REFERENCES people(id),
+  FOREIGN KEY (card_id) REFERENCES cards(id),
+  FOREIGN KEY (sent_request_id) REFERENCES shared_debt_requests(id)
+);
+
 CREATE TABLE IF NOT EXISTS notifications (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -618,6 +672,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_settlement_status ON 
 CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_pair ON shared_debt_payment_intents(requester_user_id, receiver_user_id, year, month, request_kind, status);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_allocations_intent ON shared_debt_payment_allocations(intent_id, request_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_allocations_request ON shared_debt_payment_allocations(request_id);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_requester_status ON shared_debt_send_queues(requester_user_id, status, source_due_year DESC, source_due_month DESC, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_receiver_period ON shared_debt_send_queues(receiver_user_id, source_due_year DESC, source_due_month DESC);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_queue ON shared_debt_send_queue_items(queue_id, source_txn_date_snapshot, id);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_txn_person ON shared_debt_send_queue_items(requester_user_id, source_transaction_id, source_person_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_status ON friend_requests(requester_user_id, status, created_at);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_target_status ON friend_requests(target_user_id, status, created_at);

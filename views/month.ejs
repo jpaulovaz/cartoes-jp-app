@@ -55,6 +55,17 @@
       </div>
     <% } %>
 
+    <% const monthDraftQueueSummary = draftQueueSummaryForMonth || { queueCount: 0, itemCount: 0, totalCents: 0 }; %>
+    <% if (monthDraftQueueSummary.queueCount > 0) { %>
+      <div class="op-inline-alert op-inline-alert--info">
+        <div class="op-inline-alert__icon">📤</div>
+        <div>
+          <div class="op-inline-alert__title">Caixa de saída aquecendo para <%= String(month).padStart(2,'0') %>/<%= year %></div>
+          <div class="op-inline-alert__text">Você tem <strong><%= monthDraftQueueSummary.itemCount %> cobrança(s)</strong> guardada(s) em <strong><%= monthDraftQueueSummary.queueCount %> rascunho(s)</strong>, somando <strong><%= formatBRLFromCents(monthDraftQueueSummary.totalCents) %></strong>. Quando quiser, é só disparar tudo lá em <a href="/shared-debts#draft-queues" class="underline underline-offset-2">Cobranças</a>.</div>
+        </div>
+      </div>
+    <% } %>
+
     <div class="mb-6 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
       <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
         <div>
@@ -1379,6 +1390,64 @@
             syncSplitUi();
           });
         });
+        async function submitAllocationChange(deliveryMode = 'send_now') {
+          const checkedIds = getSelectedIds();
+          const payload = {
+            txn_ids: txnIds,
+            person_ids: checkedIds,
+            apply_scope: 'single',
+            delivery_mode: deliveryMode
+          };
+
+          if (checkedIds.length > 1) {
+            const selectedMode = exactModeAvailable ? getSplitMode() : 'equal';
+            if (exactModeAvailable && !selectedMode) {
+              showAllocMessage('Escolha o tipo de divisão antes de salvar.', 'warning');
+              syncSplitUi();
+              return false;
+            }
+            payload.split_mode = selectedMode;
+          }
+
+          if (singleItem && checkedIds.length > 1 && getSplitMode() === 'exact') {
+            const targetTotal = Number(singleItem.amount_cents || 0);
+            const typedTotal = checkedIds.reduce((sum, personId) => sum + Number(draftShares[personId] || 0), 0);
+            if (typedTotal !== targetTotal) {
+              syncExactTotals();
+              showAllocMessage('Os valores definidos ainda não fecharam com o total da compra.', 'warning');
+              return false;
+            }
+            payload.share_amounts = checkedIds.reduce((acc, personId) => {
+              acc[personId] = Number(draftShares[personId] || 0);
+              return acc;
+            }, {});
+          }
+
+          const actionLabel = deliveryMode === 'draft' ? 'guardar a distribuição' : 'alterar a distribuição';
+          const scope = await resolveSelectionScope(items, { actionLabel });
+          if (!scope) return false;
+          payload.apply_scope = scope;
+          const ok = await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/alloc`, payload);
+          if (ok) ensureMonthSheet().close();
+          return false;
+        }
+
+        const saveNowAction = {
+          label: 'Salvar divisão',
+          tone: items.length > 1 ? 'secondary' : 'primary',
+          closeOnClick: false,
+          disabled: !people.length,
+          onClick: async () => submitAllocationChange('send_now')
+        };
+
+        const saveLaterAction = {
+          label: 'Salvar e mandar depois',
+          tone: items.length > 1 ? 'primary' : 'secondary',
+          closeOnClick: false,
+          disabled: !people.length,
+          onClick: async () => submitAllocationChange('draft')
+        };
+
         const sheetState = openMonthSheet({
           title: items.length > 1 ? 'Aplicar participantes' : 'Selecionar participantes',
           subtitle: items.length > 1
@@ -1386,54 +1455,9 @@
             : 'Escolha quem participa e, se quiser, dite o valor de cada um.',
           body: wrapper,
           size: 'people',
-          actions: [
-            { label: 'Fechar', tone: 'secondary' },
-            {
-              label: 'Salvar divisão',
-              tone: 'primary',
-              closeOnClick: false,
-              disabled: !people.length,
-              onClick: async () => {
-                const checkedIds = getSelectedIds();
-                const payload = {
-                  txn_ids: txnIds,
-                  person_ids: checkedIds,
-                  apply_scope: 'single'
-                };
-
-                if (checkedIds.length > 1) {
-                  const selectedMode = exactModeAvailable ? getSplitMode() : 'equal';
-                  if (exactModeAvailable && !selectedMode) {
-                    showAllocMessage('Escolha o tipo de divisão antes de salvar.', 'warning');
-                    syncSplitUi();
-                    return false;
-                  }
-                  payload.split_mode = selectedMode;
-                }
-
-                if (singleItem && checkedIds.length > 1 && getSplitMode() === 'exact') {
-                  const targetTotal = Number(singleItem.amount_cents || 0);
-                  const typedTotal = checkedIds.reduce((sum, personId) => sum + Number(draftShares[personId] || 0), 0);
-                  if (typedTotal !== targetTotal) {
-                    syncExactTotals();
-                    showAllocMessage('Os valores definidos ainda não fecharam com o total da compra.', 'warning');
-                    return false;
-                  }
-                  payload.share_amounts = checkedIds.reduce((acc, personId) => {
-                    acc[personId] = Number(draftShares[personId] || 0);
-                    return acc;
-                  }, {});
-                }
-
-                const scope = await resolveSelectionScope(items, { actionLabel: 'alterar a distribuição' });
-                if (!scope) return false;
-                payload.apply_scope = scope;
-                const ok = await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/alloc`, payload);
-                if (ok) ensureMonthSheet().close();
-                return false;
-              }
-            }
-          ]
+          actions: items.length > 1
+            ? [{ label: 'Fechar', tone: 'secondary' }, saveLaterAction, saveNowAction]
+            : [{ label: 'Fechar', tone: 'secondary' }, saveNowAction, saveLaterAction]
         });
         saveActionButton = sheetState.actions.querySelectorAll('button')[1] || null;
         syncSelectionCounter();

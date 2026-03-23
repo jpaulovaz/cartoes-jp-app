@@ -759,6 +759,8 @@
 
   const quickActions = buildQuickActions();
   const firstQuickAction = quickActions[0] || null;
+  const draftQueueSummaryMeta = draftSendQueueSummary || { queueCount: 0, itemCount: 0, totalCents: 0 };
+  const draftQueueRows = Array.isArray(draftSendQueues) ? draftSendQueues : [];
 %>
 
 <div class="max-w-7xl mx-auto space-y-8">
@@ -782,6 +784,12 @@
         <% if (isArchiveMode) { %>
           <a href="<%= otherPath %>" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Voltar para ativas</a>
         <% } else { %>
+          <% if (draftQueueSummaryMeta.queueCount) { %>
+            <a href="#draft-queues" class="inline-flex items-center justify-center rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-bold text-sky-700 shadow-sm transition-colors hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200 dark:hover:bg-sky-900/30">
+              Caixa de saída
+              <span class="ml-2 inline-flex min-w-[1.8rem] items-center justify-center rounded-full bg-sky-700 px-2 py-0.5 text-[11px] font-black text-white dark:bg-sky-200 dark:text-sky-900"><%= draftQueueSummaryMeta.queueCount %></span>
+            </a>
+          <% } %>
           <a href="<%= otherPath %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
             Arquivo
             <% if (archiveTotalCount) { %>
@@ -913,6 +921,96 @@
           <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200"><%= countLabel(manualDebtEligiblePeople.length, 'amizade pronta', 'amizades prontas') %> para receber</span>
           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70">Data de hoje automática</span>
           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70">Acompanha até quitar</span>
+        </div>
+      <% } %>
+    </div>
+  </section>
+
+  <section id="draft-queues" class="op-fade-up scroll-mt-24">
+    <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
+      <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div class="max-w-3xl">
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Caixa de saída do cartão</div>
+          <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Guardar agora, disparar depois</h2>
+          <p class="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Tudo o que estiver aqui ainda não nasceu como cobrança para o outro lado. Dá para acumular por pessoa e por mês, revisar com calma e mandar num envio só quando fizer sentido.</p>
+        </div>
+        <div class="flex flex-wrap gap-2 xl:justify-end">
+          <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200"><%= countLabel(draftQueueSummaryMeta.queueCount, 'rascunho guardado', 'rascunhos guardados') %></span>
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"><%= countLabel(draftQueueSummaryMeta.itemCount, 'cobrança pronta', 'cobranças prontas') %></span>
+          <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200"><%= formatBRLFromCents(draftQueueSummaryMeta.totalCents) %> na fila</span>
+        </div>
+      </div>
+
+      <div class="mt-4 rounded-2xl border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm font-medium text-sky-900 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200">
+        Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara notificação e nada entra no financeiro do outro lado. É literalmente uma caixa de saída: útil, silenciosa e sem dívida fantasma.
+      </div>
+
+      <% if (draftQueueRows.length) { %>
+        <div class="mt-5 grid gap-4 xl:grid-cols-2">
+          <% draftQueueRows.forEach((queue) => { %>
+            <% const queueItems = Array.isArray(queue.items) ? queue.items : []; %>
+            <% const visibleItems = queueItems.slice(0, 4); %>
+            <% const moreItemsCount = Math.max(0, queueItems.length - visibleItems.length); %>
+            <article class="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pronto para enviar</div>
+                  <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white"><%= queue.receiverDisplayName %> · <%= queue.periodLabel %></h3>
+                  <p class="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Atualizado em <strong><%= queue.updatedAtLabel || 'agora há pouco' %></strong><%= queue.updatedAtTimeLabel ? ` às ${queue.updatedAtTimeLabel}` : '' %>. Quando você mandar, isso vira uma cobrança real agrupada para essa pessoa.</p>
+                </div>
+                <div class="flex flex-wrap gap-2 lg:justify-end">
+                  <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200"><%= queue.totalFormatted %></span>
+                  <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><%= countLabel(queue.itemCount, 'compra', 'compras') %></span>
+                </div>
+              </div>
+
+              <% if (queue.previewDescriptions && queue.previewDescriptions.length) { %>
+                <div class="mt-4 flex flex-wrap gap-2">
+                  <% queue.previewDescriptions.forEach((description) => { %>
+                    <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><%= description %></span>
+                  <% }) %>
+                  <% if (queue.itemCount > queue.previewDescriptions.length) { %>
+                    <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">+ <%= queue.itemCount - queue.previewDescriptions.length %> item(ns)</span>
+                  <% } %>
+                </div>
+              <% } %>
+
+              <div class="mt-4 space-y-2 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/80">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Prévia do envio</div>
+                <% if (visibleItems.length) { %>
+                  <div class="space-y-2">
+                    <% visibleItems.forEach((item) => { %>
+                      <div class="flex items-start justify-between gap-3 text-sm">
+                        <div>
+                          <div class="font-bold text-slate-900 dark:text-slate-100"><%= item.description_snapshot || 'Compra sem descrição' %></div>
+                          <div class="text-xs font-medium text-slate-500 dark:text-slate-400"><%= item.txnDateLabel || queue.periodLabel %></div>
+                        </div>
+                        <div class="text-right font-black text-slate-900 dark:text-slate-100"><%= item.amountFormatted %></div>
+                      </div>
+                    <% }) %>
+                  </div>
+                  <% if (moreItemsCount > 0) { %>
+                    <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">E ainda tem mais <%= countLabel(moreItemsCount, 'compra guardada', 'compras guardadas') %> nesse rascunho.</div>
+                  <% } %>
+                <% } else { %>
+                  <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">Esse rascunho ficou sem itens visíveis por aqui. Se ele estiver estranho, pode descartar sem dó.</div>
+                <% } %>
+              </div>
+
+              <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <form method="post" action="/shared-debts/draft-queues/<%= queue.id %>/send" class="sm:flex-1">
+                  <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Enviar agora</button>
+                </form>
+                <form method="post" action="/shared-debts/draft-queues/<%= queue.id %>/discard" class="sm:flex-1">
+                  <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Descartar rascunho</button>
+                </form>
+              </div>
+            </article>
+          <% }) %>
+        </div>
+      <% } else { %>
+        <div class="mt-5 rounded-[26px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm font-medium leading-6 text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
+          Sua caixa de saída está vazia agora. Quando você usar <strong>Salvar e mandar depois</strong> numa compra ou numa seleção em lote, os rascunhos vão aparecer aqui agrupados por pessoa e por mês.
         </div>
       <% } %>
     </div>

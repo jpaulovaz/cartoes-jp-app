@@ -92,6 +92,7 @@ try { db.prepare("ALTER TABLE people ADD COLUMN pix_city TEXT").run(); } catch (
 try { db.prepare("ALTER TABLE people ADD COLUMN pix_state TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE people ADD COLUMN pix_label TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE people ADD COLUMN pix_updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN profile_kind TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN close_day INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN can_import INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
@@ -892,34 +893,69 @@ function configureGoogleStrategy() {
     clientSecret,
     callbackURL
   }, (accessToken, refreshToken, profile, done) => {
-    const email = profile.emails?.[0]?.value;
-    const name = profile.displayName;
+    const email = normalizeEmail(profile.emails?.[0]?.value);
+    const googleId = String(profile.id || profile?._json?.sub || '').trim();
+    const profileName = String(profile.displayName || '').trim();
 
     if (!email) {
       return done(null, false, { message: 'Email não encontrado no perfil Google.' });
     }
 
-    const authorizedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-
-    if (!authorizedUser) {
-      return done(null, false, { message: 'Email não autorizado. Entre em contato com o administrador.' });
+    if (!googleId) {
+      return done(null, false, { message: 'Não consegui validar a identidade estável dessa conta Google.' });
     }
 
-    const isFirstGoogleLogin = !authorizedUser.last_login;
+    try {
+      let authorizedUser = db.prepare('SELECT * FROM users WHERE google_id = ?').get(googleId);
+      const emailMatchedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
 
-    db.prepare('UPDATE users SET last_login = ? WHERE email = ?').run(dayjs().toISOString(), email);
+      if (!authorizedUser) {
+        if (!emailMatchedUser) {
+          return done(null, false, { message: 'Email não autorizado. Entre em contato com o administrador.' });
+        }
 
-    if (isFirstGoogleLogin) {
-      ensureDefaultOwnerPerson(authorizedUser.id, name || authorizedUser.name || email.split('@')[0], email);
+        if (emailMatchedUser.google_id && String(emailMatchedUser.google_id).trim() !== googleId) {
+          return done(null, false, { message: 'Essa conta do Google não combina com o acesso autorizado por aqui.' });
+        }
+
+        db.prepare(`
+          UPDATE users
+          SET google_id = ?,
+              last_login = ?,
+              name = COALESCE(NULLIF(name, ''), ?),
+              email = ?
+          WHERE id = ?
+        `).run(googleId, nowIso(), profileName || emailMatchedUser.name || email.split('@')[0], email, emailMatchedUser.id);
+
+        authorizedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(emailMatchedUser.id);
+      } else {
+        if (emailMatchedUser && Number(emailMatchedUser.id || 0) !== Number(authorizedUser.id || 0)) {
+          return done(null, false, { message: 'Esse e-mail do Google está ligado a outro acesso por aqui. Bora ajustar isso antes de continuar.' });
+        }
+
+        db.prepare(`
+          UPDATE users
+          SET last_login = ?,
+              name = COALESCE(NULLIF(name, ''), ?),
+              email = CASE WHEN ? IS NOT NULL AND trim(?) <> '' THEN ? ELSE email END
+          WHERE id = ?
+        `).run(nowIso(), profileName || authorizedUser.name || email.split('@')[0], email, email, email, authorizedUser.id);
+
+        authorizedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(authorizedUser.id);
+      }
+
+      ensureSelfPerson(authorizedUser.id, profileName || authorizedUser.name || email.split('@')[0], authorizedUser.email || email);
+
+      return done(null, {
+        id: authorizedUser.id,
+        email: authorizedUser.email || email,
+        name: authorizedUser.name || profileName || email.split('@')[0],
+        role: authorizedUser.role,
+        can_import: Number(authorizedUser.can_import ?? 1)
+      });
+    } catch (error) {
+      return done(error);
     }
-
-    return done(null, {
-      id: authorizedUser.id,
-      email,
-      name: authorizedUser.name || name || email.split('@')[0],
-      role: authorizedUser.role,
-      can_import: Number(authorizedUser.can_import ?? 1)
-    });
   }));
 
   googleAuthConfigured = true;
@@ -1826,32 +1862,147 @@ function canUserImport(userId) {
   return Number(getUserRecord(userId)?.can_import ?? 1) !== 0;
 }
 
-function ensureDefaultOwnerPerson(userId, preferredName, preferredEmail = null) {
-  const safeName = String(preferredName || "").trim();
+function normalizeNameForIdentity(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeProfileKind(value, isOwner = false) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'self') return 'self';
+  if (normalized === 'contact') return 'contact';
+  return isOwner ? 'self' : 'contact';
+}
+
+function isSelfPersonRow(person) {
+  return normalizeProfileKind(person?.profile_kind, Number(person?.is_owner || 0) !== 0) === 'self';
+}
+
+function buildUniqueSelfPersonName(userId, preferredName) {
+  const base = String(preferredName || '').trim() || 'Meu perfil';
+  const candidates = [base, `${base} (perfil)`, `${base} OrganizaPay`, `${base} Minha conta`];
+
+  for (const candidate of candidates) {
+    const exists = db.prepare(`
+      SELECT id
+      FROM people
+      WHERE user_id = ? AND lower(name) = lower(?)
+      LIMIT 1
+    `).get(userId, candidate);
+    if (!exists) return candidate;
+  }
+
+  let suffix = 2;
+  while (suffix < 1000) {
+    const candidate = `${base} (${suffix})`;
+    const exists = db.prepare(`
+      SELECT id
+      FROM people
+      WHERE user_id = ? AND lower(name) = lower(?)
+      LIMIT 1
+    `).get(userId, candidate);
+    if (!exists) return candidate;
+    suffix += 1;
+  }
+
+  return `${base} (${Date.now()})`;
+}
+
+function personHasStrongContactSignalsForUser(userId, personId) {
+  const usage = db.prepare(`
+    SELECT
+      EXISTS(SELECT 1 FROM person_app_links WHERE owner_user_id = ? AND person_id = ?) AS has_app_link,
+      EXISTS(SELECT 1 FROM friend_requests WHERE requester_user_id = ? AND source_person_id = ?) AS has_friend_history
+  `).get(userId, personId, userId, personId);
+
+  return Number(usage?.has_app_link || 0) !== 0 || Number(usage?.has_friend_history || 0) !== 0;
+}
+
+function findExistingSelfPersonCandidate(userId, preferredName, preferredEmail = null) {
   const safeEmail = normalizeEmail(preferredEmail);
-  if (!safeName) return;
+  const safeNameKey = normalizeNameForIdentity(preferredName || '');
+  const rows = db.prepare(`
+    SELECT id, name, email, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner, profile_kind
+    FROM people
+    WHERE user_id = ?
+    ORDER BY COALESCE(is_owner, 0) DESC, COALESCE(active, 1) DESC, id ASC
+  `).all(userId);
+
+  const existingSelf = rows.find((row) => isSelfPersonRow(row));
+  if (existingSelf) return existingSelf;
+
+  const ownerByEmail = rows.find((row) => Number(row.is_owner || 0) !== 0 && safeEmail && normalizeEmail(row.email) === safeEmail);
+  if (ownerByEmail) return ownerByEmail;
+
+  const safeOwnerByName = rows.find((row) => {
+    if (Number(row.is_owner || 0) === 0) return false;
+    if (personHasStrongContactSignalsForUser(userId, row.id)) return false;
+    return safeNameKey && normalizeNameForIdentity(row.name) === safeNameKey;
+  });
+  if (safeOwnerByName) return safeOwnerByName;
+
+  const ownerRows = rows.filter((row) => Number(row.is_owner || 0) !== 0);
+  if (ownerRows.length === 1 && !personHasStrongContactSignalsForUser(userId, ownerRows[0].id)) {
+    return ownerRows[0];
+  }
+
+  return null;
+}
+
+function ensureSelfPerson(userId, preferredName, preferredEmail = null) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return null;
+
+  const safeEmail = normalizeEmail(preferredEmail);
+  const safeName = String(preferredName || '').trim() || (safeEmail ? safeEmail.split('@')[0] : 'Meu perfil');
 
   db.transaction(() => {
-    const existingOwner = db.prepare("SELECT id FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
-    if (existingOwner) return;
+    let target = findExistingSelfPersonCandidate(safeUserId, safeName, safeEmail);
 
-    const existingPerson = db.prepare("SELECT id, email FROM people WHERE user_id = ? AND lower(name) = lower(?) LIMIT 1").get(userId, safeName);
+    if (!target) {
+      const createdAt = nowIso();
+      const targetName = buildUniqueSelfPersonName(safeUserId, safeName);
+      const inserted = db.prepare(`
+        INSERT INTO people (user_id, name, phone, email, pix_enabled, pix_key_type, pix_key_value, pix_city, pix_state, pix_label, pix_updated_at, active, is_owner, profile_kind, created_at)
+        VALUES (?, ?, NULL, ?, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, 1, 'self', ?)
+      `).run(safeUserId, targetName, safeEmail, createdAt);
 
-    if (existingPerson) {
-      db.prepare("UPDATE people SET active = 1 WHERE id = ? AND user_id = ?").run(existingPerson.id, userId);
-      if (safeEmail && !normalizeEmail(existingPerson.email)) {
-        db.prepare("UPDATE people SET email = ? WHERE id = ? AND user_id = ?").run(safeEmail, existingPerson.id, userId);
-      }
-      db.prepare("UPDATE people SET is_owner = 0 WHERE user_id = ?").run(userId);
-      db.prepare("UPDATE people SET is_owner = 1 WHERE id = ? AND user_id = ?").run(existingPerson.id, userId);
-      return;
+      target = {
+        id: Number(inserted.lastInsertRowid || 0),
+        name: targetName,
+        email: safeEmail,
+        profile_kind: 'self',
+        is_owner: 1
+      };
     }
 
     db.prepare(`
-      INSERT INTO people (user_id, name, phone, email, active, is_owner, created_at)
-      VALUES (?, ?, NULL, ?, 1, 1, ?)
-    `).run(userId, safeName, safeEmail, dayjs().toISOString());
+      UPDATE people
+      SET is_owner = 0,
+          profile_kind = 'contact'
+      WHERE user_id = ? AND id <> ?
+    `).run(safeUserId, target.id);
+
+    db.prepare(`
+      UPDATE people
+      SET active = 1,
+          is_owner = 1,
+          profile_kind = 'self',
+          email = CASE WHEN trim(COALESCE(email, '')) = '' AND ? IS NOT NULL THEN ? ELSE email END,
+          name = CASE WHEN trim(COALESCE(name, '')) = '' THEN ? ELSE name END
+      WHERE id = ? AND user_id = ?
+    `).run(safeEmail, safeEmail, safeName, target.id, safeUserId);
   })();
+
+  return getSelfPerson(safeUserId);
+}
+
+function ensureDefaultOwnerPerson(userId, preferredName, preferredEmail = null) {
+  return ensureSelfPerson(userId, preferredName, preferredEmail);
 }
 
 function renderAdmin(res, { error = null, success = null, activeSection = 'access' } = {}) {
@@ -2391,7 +2542,7 @@ app.use((req, res, next) => {
   res.locals.userId = null;
   res.locals.isAdmin = false;
   res.locals.canImport = false;
-  res.locals.nomeTitular = "Detalhamento Contas";
+  res.locals.nomeTitular = "Meu Detalhamento";
   res.locals.formatDateBR = formatDateBR;
   res.locals.flash = req.session?.flash || null;
   res.locals.importReport = req.session?.importReport || null;
@@ -2433,10 +2584,10 @@ app.use((req, res, next) => {
     res.locals.canImport = Number(req.user.can_import ?? 1) !== 0;
 
     try {
-      const owner = db.prepare("SELECT name FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(req.user.id);
-      res.locals.nomeTitular = owner ? `Detalhamento ${owner.name}` : "Detalhamento Contas";
+      const selfProfile = ensureSelfPerson(req.user.id, currentUser?.name || req.user.name || req.user.email, currentUser?.email || req.user.email);
+      res.locals.nomeTitular = selfProfile ? `Detalhamento ${selfProfile.name}` : "Meu Detalhamento";
     } catch (e) {
-      res.locals.nomeTitular = "Detalhamento Contas";
+      res.locals.nomeTitular = "Meu Detalhamento";
     }
 
     const dashboardTarget = getPreferredDashboardMonth(req.user.id);
@@ -2496,7 +2647,7 @@ function getUserPixProfilesByUserIds(userIds = []) {
       pix_label,
       pix_updated_at
     FROM people
-    WHERE COALESCE(is_owner, 0) = 1
+    WHERE COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) = 'self'
       AND user_id IN (${placeholders})
     ORDER BY id ASC
   `).all(...cleanIds);
@@ -3882,7 +4033,7 @@ refreshAllSharedDebtBatches();
 
 function firstTwoNames(value) {
   const parts = String(value || "").trim().split(/\s+/).filter(Boolean);
-  return parts.slice(0, 2).join(" ") || "Titular";
+  return parts.slice(0, 2).join(" ") || "Você";
 }
 
 const FINANCE_TYPES = ["income", "expense"];
@@ -4494,7 +4645,7 @@ function getPeopleByIds(userId, ids) {
 
   const placeholders = uniqueIds.map(() => "?").join(", ");
   return db.prepare(`
-    SELECT id, name, active, is_owner, phone, email
+    SELECT id, name, active, is_owner, profile_kind, phone, email
     FROM people
     WHERE user_id = ? AND id IN (${placeholders})
     ORDER BY active DESC, name
@@ -4654,8 +4805,19 @@ function getVisibleCardsForMonth(userId, month, year) {
   return getCardsByIds(userId, Array.from(visibleIds));
 }
 
+function getSelfPerson(userId) {
+  return db.prepare(`
+    SELECT id, name, email, phone, pix_enabled, pix_key_type, pix_key_value, pix_city, pix_state, pix_label, pix_updated_at, active, is_owner, profile_kind
+    FROM people
+    WHERE user_id = ?
+      AND COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) = 'self'
+    ORDER BY id ASC
+    LIMIT 1
+  `).get(userId);
+}
+
 function getOwnerPerson(userId) {
-  return db.prepare("SELECT id, name, email, pix_enabled, pix_key_type, pix_key_value, pix_city, pix_label, pix_updated_at FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
+  return getSelfPerson(userId);
 }
 
 function normalizeFriendRequestStatus(value) {
@@ -4828,6 +4990,7 @@ function findLinkedPersonForRemoteUser(ownerUserId, remoteUserId) {
     SELECT p.*
     FROM person_app_links pal
     JOIN people p ON p.id = pal.person_id AND p.user_id = pal.owner_user_id
+      AND COALESCE(p.profile_kind, CASE WHEN COALESCE(p.is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) <> 'self'
     WHERE pal.owner_user_id = ? AND pal.linked_user_id = ?
     ORDER BY COALESCE(p.active, 1) DESC, p.id ASC
     LIMIT 1
@@ -4853,6 +5016,7 @@ function ensureFriendPersonForUser({ ownerUserId, remoteUserId, preferredName = 
       SELECT *
       FROM people
       WHERE user_id = ? AND email IS NOT NULL AND lower(email) = lower(?)
+        AND COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) <> 'self'
       ORDER BY COALESCE(active, 1) DESC, id ASC
       LIMIT 1
     `).get(safeOwnerUserId, normalizedEmail);
@@ -4865,8 +5029,8 @@ function ensureFriendPersonForUser({ ownerUserId, remoteUserId, preferredName = 
 
     for (const candidateName of candidateNames) {
       const inserted = db.prepare(`
-        INSERT OR IGNORE INTO people (user_id, name, phone, email, active, is_owner, created_at)
-        VALUES (?, ?, '', ?, 1, 0, ?)
+        INSERT OR IGNORE INTO people (user_id, name, phone, email, active, is_owner, profile_kind, created_at)
+        VALUES (?, ?, '', ?, 1, 0, 'contact', ?)
       `).run(safeOwnerUserId, candidateName, normalizedEmail, now);
 
       const insertedId = Number(inserted.lastInsertRowid || 0);
@@ -5001,6 +5165,7 @@ function getPeopleAll(userId) {
       p.name,
       COALESCE(p.active, 1) AS active,
       COALESCE(p.is_owner, 0) AS is_owner,
+      COALESCE(p.profile_kind, CASE WHEN COALESCE(p.is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind,
       p.phone,
       p.email,
       COALESCE(p.pix_enabled, 0) AS pix_enabled,
@@ -5026,7 +5191,7 @@ function getPeopleAll(userId) {
      AND trim(p.email) <> ''
      AND lower(matched_u.email) = lower(p.email)
     WHERE p.user_id = ?
-    ORDER BY COALESCE(p.is_owner, 0) DESC, COALESCE(p.active, 1) DESC, p.name
+    ORDER BY CASE WHEN COALESCE(p.profile_kind, CASE WHEN COALESCE(p.is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) = 'self' THEN 0 ELSE 1 END, COALESCE(p.active, 1) DESC, p.name
   `).all(userId);
 
   const remoteIds = rows
@@ -5041,14 +5206,14 @@ function getPeopleAll(userId) {
     const linkedUserId = Number(person.stable_linked_user_id || person.email_matched_user_id || 0) || null;
     const hasAppUser = !!linkedUserId && linkedUserId !== Number(userId || 0);
     const isActive = Number(person.active || 0) !== 0;
-    const isOwner = Number(person.is_owner || 0) !== 0;
+    const isSelf = isSelfPersonRow(person);
     const friendship = hasAppUser ? friendshipMap.get(linkedUserId) : null;
     const outgoingRequest = outgoingMap.get(Number(person.id || 0)) || null;
     const incomingRequest = !outgoingRequest && hasAppUser ? (incomingMap.get(linkedUserId) || null) : null;
     const friendshipActive = !!friendship;
     const canShareCharge = isFriendshipGateEnabled()
-      ? friendshipActive && isActive && !isOwner
-      : hasAppUser && !!normalizeEmail(person.email) && isActive && !isOwner;
+      ? friendshipActive && isActive && !isSelf
+      : hasAppUser && !!normalizeEmail(person.email) && isActive && !isSelf;
     const storedPixProfile = {
       keyType: normalizePixKeyType(person.pix_key_type),
       keyValue: normalizePixKeyValue(person.pix_key_type, person.pix_key_value),
@@ -5074,6 +5239,9 @@ function getPeopleAll(userId) {
 
     return {
       ...person,
+      profile_kind: isSelf ? 'self' : 'contact',
+      is_self: isSelf,
+      is_owner: isSelf ? 1 : 0,
       linked_user_id: linkedUserId,
       linked_user_name: person.stable_linked_user_name || person.email_matched_user_name || null,
       linked_user_email: normalizeEmail(person.stable_linked_user_email || person.email_matched_user_email || null),
@@ -5106,7 +5274,7 @@ function getPeopleAll(userId) {
 
 function getManualSharedDebtEligiblePeople(userId) {
   return getPeopleAll(userId)
-    .filter(person => person && person.can_share_charge && person.friendship_active && Number(person.active || 0) !== 0 && Number(person.is_owner || 0) === 0)
+    .filter(person => person && person.can_share_charge && person.friendship_active && Number(person.active || 0) !== 0 && !person.is_self)
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' }));
 }
 
@@ -5615,7 +5783,7 @@ function getSharedDebtEligibleAllocationRows(userId, txnId) {
       WHERE a.user_id = ?
         AND a.transaction_id = ?
         AND COALESCE(p.active, 1) = 1
-        AND COALESCE(p.is_owner, 0) = 0
+        AND COALESCE(p.profile_kind, CASE WHEN COALESCE(p.is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) <> 'self'
         AND remote_u.id <> ?
         AND a.share_cents > 0
       ORDER BY a.id
@@ -6704,11 +6872,8 @@ function likeParam(s) { return `%${String(s).trim()}%`; }
 app.get("/", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
 
-  // Verifica se existe um titular cadastrado para o usuário logado
-  const owner = db.prepare("SELECT id FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
-
-  // Se não houver titular, redireciona para a página de Pessoas para criar um
-  if (!owner) {
+  const selfProfile = getSelfPerson(userId) || ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
+  if (!selfProfile) {
     return res.redirect('/people');
   }
 
@@ -8958,12 +9123,17 @@ app.get("/notifications/:id/open", ensureAuthenticated, (req, res) => {
 // People
 app.get("/people", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const people = getPeopleAll(userId);
+  ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
+  const allPeople = getPeopleAll(userId);
+  const selfPerson = allPeople.find((person) => person && person.is_self) || null;
+  const contacts = allPeople.filter((person) => person && !person.is_self);
   const pendingFriendRequests = getPendingReceivedFriendRequests(userId);
   const highlightedFriendRequestId = Number(req.query.friendRequest || req.query.friend_request || 0) || null;
 
   res.render("people", {
-    people,
+    selfPerson,
+    contacts,
+    people: contacts,
     pendingFriendRequests,
     highlightedFriendRequestId,
     pixStateOptions: PIX_STATE_OPTIONS,
@@ -8981,6 +9151,15 @@ app.post("/people", ensureAuthenticated, (req, res) => {
   const phone = String(req.body.phone || "").trim().replace(/\D/g, "");
   const email = normalizeEmail(req.body.email);
   const id = Number(req.body.id) || null;
+  const targetPerson = id
+    ? db.prepare(`
+        SELECT id, name, email, COALESCE(is_owner, 0) AS is_owner,
+               COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind
+        FROM people
+        WHERE id = ? AND user_id = ?
+        LIMIT 1
+      `).get(id, userId)
+    : null;
   const duplicatedPerson = findPersonByNameForUser(userId, name, id);
   const pixEnabled = normalizePixToggle(req.body.pix_enabled);
   const pixKeyType = normalizePixKeyType(req.body.pix_key_type);
@@ -9001,8 +9180,15 @@ app.post("/people", ensureAuthenticated, (req, res) => {
     ? pixProfile
     : { keyType: null, keyValue: null, city: null, state: null, label: null };
 
+  if (id && !targetPerson) {
+    setFlash(req, 'error', 'Não encontrei essa pessoa por aqui para atualizar.');
+    return res.redirect('/people');
+  }
+
   if (!name) {
-    setFlash(req, 'error', 'Me dá pelo menos o nome dessa pessoa para eu conseguir salvar direitinho.');
+    setFlash(req, 'error', id && isSelfPersonRow(targetPerson)
+      ? 'Me passa pelo menos como você quer aparecer no app para eu salvar seu perfil direitinho.'
+      : 'Me dá pelo menos o nome dessa pessoa para eu conseguir salvar direitinho.');
     return res.redirect('/people');
   }
 
@@ -9017,6 +9203,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
   }
 
   const pixUpdatedAt = pixEnabled ? nowIso() : null;
+  const isSelfTarget = isSelfPersonRow(targetPerson);
 
   if (id) {
     db.prepare(`
@@ -9050,8 +9237,8 @@ app.post("/people", ensureAuthenticated, (req, res) => {
     db.prepare(`
       INSERT INTO people(
         user_id, name, phone, email, pix_enabled, pix_key_type,
-        pix_key_value, pix_city, pix_state, pix_label, pix_updated_at, active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        pix_key_value, pix_city, pix_state, pix_label, pix_updated_at, active, is_owner, profile_kind
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 'contact')
     `).run(
       userId,
       name,
@@ -9067,17 +9254,18 @@ app.post("/people", ensureAuthenticated, (req, res) => {
     );
   }
 
-  setFlash(req, 'success', pixEnabled
-    ? 'Pessoa salva com Pix pronto para entrar em cena quando precisar.'
-    : 'Pessoa salva direitinho por aqui.');
+  const successMessage = isSelfTarget
+    ? (pixEnabled ? 'Seu perfil foi salvo com o Pix prontinho para entrar em cena.' : 'Seu perfil foi atualizado direitinho por aqui.')
+    : (pixEnabled ? 'Contato salvo com Pix pronto para entrar em cena quando precisar.' : 'Contato salvo direitinho por aqui.');
+
+  setFlash(req, 'success', successMessage);
   return res.redirect('/people');
 });
-
 app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const personId = Number(req.params.id);
   const person = db.prepare(`
-    SELECT id, name, email, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner
+    SELECT id, name, email, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner, COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind
     FROM people
     WHERE id = ? AND user_id = ?
     LIMIT 1
@@ -9088,8 +9276,8 @@ app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
     return res.redirect('/people');
   }
 
-  if (Number(person.is_owner || 0) !== 0) {
-    setFlash(req, 'info', 'Você já está no seu próprio time. Esse pedido não precisa existir.');
+  if (isSelfPersonRow(person)) {
+    setFlash(req, 'info', 'Seu perfil já está no comando por aqui. Esse pedido não precisa existir.');
     return res.redirect('/people');
   }
 
@@ -9276,7 +9464,8 @@ app.post('/people/:id/unfriend', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const personId = Number(req.params.id);
   const person = db.prepare(`
-    SELECT id, name
+    SELECT id, name, COALESCE(is_owner, 0) AS is_owner,
+           COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind
     FROM people
     WHERE id = ? AND user_id = ?
     LIMIT 1
@@ -9284,6 +9473,11 @@ app.post('/people/:id/unfriend', ensureAuthenticated, (req, res) => {
 
   if (!person) {
     setFlash(req, 'error', 'Não encontrei essa pessoa por aqui.');
+    return res.redirect('/people');
+  }
+
+  if (isSelfPersonRow(person)) {
+    setFlash(req, 'info', 'Seu perfil não entra nessa dança de amizade. Ele já é você por definição.');
     return res.redirect('/people');
   }
 
@@ -9325,19 +9519,57 @@ app.post('/people/:id/unfriend', ensureAuthenticated, (req, res) => {
 
 app.post("/people/:id/toggle", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  db.prepare("UPDATE people SET active = CASE active WHEN 1 THEN 0 ELSE 1 END WHERE id = ? AND user_id = ?")
-    .run(Number(req.params.id), userId);
-  res.redirect("/people");
+  const personId = Number(req.params.id);
+  const person = db.prepare(`
+    SELECT id, name, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner,
+           COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind
+    FROM people
+    WHERE id = ? AND user_id = ?
+    LIMIT 1
+  `).get(personId, userId);
+
+  if (!person) {
+    setFlash(req, 'error', 'Não encontrei essa pessoa por aqui.');
+    return res.redirect('/people');
+  }
+
+  if (isSelfPersonRow(person)) {
+    setFlash(req, 'info', 'Seu perfil fica sempre ativo por aqui. O que dá para ajustar nele são seus dados e seu Pix.');
+    return res.redirect('/people');
+  }
+
+  db.prepare(`
+    UPDATE people
+    SET active = CASE COALESCE(active, 1) WHEN 1 THEN 0 ELSE 1 END
+    WHERE id = ? AND user_id = ?
+  `).run(personId, userId);
+
+  const becameActive = Number(person.active || 0) === 0;
+  setFlash(req, 'success', becameActive
+    ? `${person.name} voltou para sua lista ativa.`
+    : `${person.name} foi tirado(a) de cena sem mexer no histórico.`);
+  return res.redirect('/people');
 });
 
 app.post("/people/:id/delete", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const personId = Number(req.params.id);
-  const person = db.prepare("SELECT id, name FROM people WHERE id = ? AND user_id = ?").get(personId, userId);
+  const person = db.prepare(`
+    SELECT id, name, COALESCE(is_owner, 0) AS is_owner,
+           COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind
+    FROM people
+    WHERE id = ? AND user_id = ?
+    LIMIT 1
+  `).get(personId, userId);
 
   if (!person) {
     setFlash(req, "error", "Pessoa não encontrada.");
     return res.redirect("/people");
+  }
+
+  if (isSelfPersonRow(person)) {
+    setFlash(req, "info", "Seu perfil não pode ser excluído daqui. Ele é a base da sua conta e das suas cobranças.");
+    return res.redirect('/people');
   }
 
   const usage = db.prepare(`
@@ -9784,17 +10016,9 @@ function resolveChronologicalDirection(order, fallback = "recent") {
   return normalized === "oldest" ? "asc" : "desc";
 }
 
-// Rota para definir o Titular
 app.post("/people/:id/set-owner", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const id = Number(req.params.id);
-
-  db.transaction(() => {
-    db.prepare("UPDATE people SET is_owner = 0 WHERE user_id = ?").run(userId);
-    db.prepare("UPDATE people SET is_owner = 1 WHERE id = ? AND user_id = ?").run(id, userId);
-  })();
-
-  res.redirect("/people");
+  setFlash(req, 'info', 'Agora seu perfil já é fixo por aqui. Não precisa mais trocar quem é você.');
+  return res.redirect('/people');
 });
 
 // Rota Principal do detalhamento
@@ -9822,8 +10046,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   syncRecurringTransactions(userId, currentYear, currentMonth);
   ensureMonthlyFinanceScaffold(userId, currentMonth, currentYear);
 
-  const owner = db.prepare("SELECT * FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
-  if (!owner) return res.status(400).send("Defina um titular na aba Amigos primeiro.");
+  const owner = getSelfPerson(userId) || ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
+  if (!owner) return res.status(400).send("Ajuste seu perfil em Amigos antes de seguir por aqui.");
 
   const cardTotal = db.prepare(`
     SELECT COALESCE(SUM(a.share_cents), 0) as total
@@ -10300,7 +10524,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
 
     const ownerPerson = assignToOwner ? getOwnerPerson(userId) : null;
     if (assignToOwner && !ownerPerson) {
-      setFlash(req, "error", "Defina um titular na aba Amigos antes de usar 'Atribuir esse item a mim'.");
+      setFlash(req, "error", "Ajuste seu perfil em Amigos antes de usar 'Atribuir esse item a mim'.");
       return res.redirect(redirectBackOr(req, "/geral"));
     }
 
@@ -11293,7 +11517,7 @@ async function buildSharePixContext({ userId, month, year, person, totalCents, p
 
   if (safeRemainingCents > 0) {
     if (!ownerPixProfile || !ownerPixProfile.pixEnabled) {
-      pix.reason = 'Salve o Pix do titular em Amigos para este resumo já sair com copia e cola.';
+      pix.reason = 'Salve o Pix do seu perfil em Amigos para este resumo já sair com copia e cola.';
     } else if (!ownerPixProfile.pixValid) {
       pix.reason = ownerPixProfile.pixReason || 'Seu Pix ainda precisa de um ajuste em Amigos.';
     } else {

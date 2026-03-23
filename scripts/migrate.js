@@ -27,6 +27,10 @@ if (!columnExists("people", "pix_state")) {
   db.exec("ALTER TABLE people ADD COLUMN pix_state TEXT;");
 }
 
+if (!columnExists("people", "profile_kind")) {
+  db.exec("ALTER TABLE people ADD COLUMN profile_kind TEXT;");
+}
+
 // ===== TABELAS EXISTENTES COM user_id =====
 db.exec(`
 CREATE TABLE IF NOT EXISTS cards (
@@ -640,10 +644,149 @@ if (!columnExists("shared_debt_batches", "resolved_at")) {
   db.exec("ALTER TABLE shared_debt_batches ADD COLUMN resolved_at TEXT;");
 }
 
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase() || null;
+}
+
+function normalizeName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeProfileKind(value, isOwner = false) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'self') return 'self';
+  if (normalized === 'contact') return 'contact';
+  return isOwner ? 'self' : 'contact';
+}
+
+function buildUniqueSelfName(userId, preferredName) {
+  const base = String(preferredName || '').trim() || 'Meu perfil';
+  const candidates = [base, `${base} (perfil)`, `${base} OrganizaPay`, `${base} Minha conta`];
+
+  for (const candidate of candidates) {
+    const exists = db.prepare(`
+      SELECT id
+      FROM people
+      WHERE user_id = ? AND lower(name) = lower(?)
+      LIMIT 1
+    `).get(userId, candidate);
+    if (!exists) return candidate;
+  }
+
+  let suffix = 2;
+  while (suffix < 1000) {
+    const candidate = `${base} (${suffix})`;
+    const exists = db.prepare(`
+      SELECT id
+      FROM people
+      WHERE user_id = ? AND lower(name) = lower(?)
+      LIMIT 1
+    `).get(userId, candidate);
+    if (!exists) return candidate;
+    suffix += 1;
+  }
+
+  return `${base} (${Date.now()})`;
+}
+
+function personHasStrongContactSignals(userId, personId) {
+  const usage = db.prepare(`
+    SELECT
+      EXISTS(SELECT 1 FROM person_app_links WHERE owner_user_id = ? AND person_id = ?) AS has_app_link,
+      EXISTS(SELECT 1 FROM friend_requests WHERE requester_user_id = ? AND source_person_id = ?) AS has_friend_history
+  `).get(userId, personId, userId, personId);
+
+  return Number(usage?.has_app_link || 0) !== 0 || Number(usage?.has_friend_history || 0) !== 0;
+}
+
+function pickSelfCandidateForUser(user) {
+  const rows = db.prepare(`
+    SELECT id, name, email, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner, profile_kind
+    FROM people
+    WHERE user_id = ?
+    ORDER BY COALESCE(is_owner, 0) DESC, COALESCE(active, 1) DESC, id ASC
+  `).all(user.id);
+
+  const existingSelf = rows.find((row) => normalizeProfileKind(row.profile_kind, Number(row.is_owner || 0) !== 0) === 'self');
+  if (existingSelf) return existingSelf.id;
+
+  const userEmail = normalizeEmail(user.email);
+  const ownerEmailMatch = rows.find((row) => Number(row.is_owner || 0) !== 0 && userEmail && normalizeEmail(row.email) === userEmail);
+  if (ownerEmailMatch) return ownerEmailMatch.id;
+
+  const userName = normalizeName(user.name || user.email || '');
+  const safeOwnerByName = rows.find((row) => {
+    if (Number(row.is_owner || 0) === 0) return false;
+    if (personHasStrongContactSignals(user.id, row.id)) return false;
+    return userName && normalizeName(row.name) === userName;
+  });
+  if (safeOwnerByName) return safeOwnerByName.id;
+
+  const ownerRows = rows.filter((row) => Number(row.is_owner || 0) !== 0);
+  if (ownerRows.length === 1 && !personHasStrongContactSignals(user.id, ownerRows[0].id)) {
+    return ownerRows[0].id;
+  }
+
+  const now = new Date().toISOString();
+  const name = buildUniqueSelfName(user.id, user.name || (user.email ? user.email.split('@')[0] : 'Meu perfil'));
+  const result = db.prepare(`
+    INSERT INTO people (user_id, name, phone, email, pix_enabled, pix_key_type, pix_key_value, pix_city, pix_state, pix_label, pix_updated_at, active, is_owner, profile_kind, created_at)
+    VALUES (?, ?, NULL, ?, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, 1, 'self', ?)
+  `).run(user.id, name, userEmail, now);
+
+  return Number(result.lastInsertRowid || 0) || null;
+}
+
+function reconcileSelfProfiles() {
+  const users = db.prepare(`
+    SELECT id, email, name
+    FROM users
+    ORDER BY id ASC
+  `).all();
+
+  const updateTargetStmt = db.prepare(`
+    UPDATE people
+    SET active = 1,
+        is_owner = 1,
+        profile_kind = 'self',
+        email = CASE WHEN trim(COALESCE(email, '')) = '' AND ? IS NOT NULL THEN ? ELSE email END,
+        name = CASE WHEN trim(COALESCE(name, '')) = '' THEN ? ELSE name END
+    WHERE id = ? AND user_id = ?
+  `);
+
+  const downgradeStmt = db.prepare(`
+    UPDATE people
+    SET is_owner = 0,
+        profile_kind = 'contact'
+    WHERE user_id = ? AND id <> ?
+  `);
+
+  db.transaction(() => {
+    users.forEach((user) => {
+      const targetId = pickSelfCandidateForUser(user);
+      if (!targetId) return;
+
+      downgradeStmt.run(user.id, targetId);
+      updateTargetStmt.run(normalizeEmail(user.email), normalizeEmail(user.email), String(user.name || '').trim() || (normalizeEmail(user.email) || 'Meu perfil'), targetId, user.id);
+    });
+  })();
+}
+
+reconcileSelfProfiles();
+
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_people_user_self_unique ON people(user_id) WHERE profile_kind = 'self';");
+
 // ===== ÍNDICES =====
 db.exec(`
 CREATE INDEX IF NOT EXISTS idx_cards_user ON cards(user_id);
 CREATE INDEX IF NOT EXISTS idx_people_user ON people(user_id);
+CREATE INDEX IF NOT EXISTS idx_people_user_profile_kind ON people(user_id, profile_kind);
 CREATE INDEX IF NOT EXISTS idx_imports_user ON imports(user_id);
 CREATE INDEX IF NOT EXISTS idx_txn_user ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_txn_card ON transactions(card_id);

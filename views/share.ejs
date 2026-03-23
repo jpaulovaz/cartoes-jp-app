@@ -91,7 +91,7 @@
             <% if (sharePixContext.ownerName) { %><span class="badge">Pix de <%= sharePixContext.ownerName %></span><% } %>
           </div>
         <% } else { %>
-          <h2 class="mt-2 text-lg font-black tracking-[-0.03em] text-slate-900 dark:text-slate-100"><%= shareContext && shareContext.state === 'settled' ? 'Agora o resumo vai só como registro bonitinho.' : 'A imagem continua pronta, e o Pix entra assim que o titular deixar ele redondinho.' %></h2>
+          <h2 class="mt-2 text-lg font-black tracking-[-0.03em] text-slate-900 dark:text-slate-100"><%= shareContext && shareContext.state === 'settled' ? 'Agora o resumo vai só como registro bonitinho.' : 'A imagem continua pronta, e o Pix entra assim que você deixar isso redondinho.' %></h2>
           <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= sharePixContext && sharePixContext.reason ? sharePixContext.reason : 'Mesmo sem Pix nesta rodada, o texto já fica preparado para você compartilhar sem perder o ritmo.' %></p>
         <% } %>
       </div>

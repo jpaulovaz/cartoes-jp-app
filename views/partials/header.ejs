@@ -128,9 +128,9 @@
      const isUserAdmin = !!(user && user.role === 'admin');
      const canImportData = Number((user && user.can_import) ?? (typeof canImport !== 'undefined' ? canImport : 1)) !== 0;
      const ownerDisplayNameRaw = ((nomeTitular || '').replace(/^Detalhamento\s+/i, '').trim());
-     const ownerDisplayName = ownerDisplayNameRaw && ownerDisplayNameRaw.toLowerCase() !== 'contas' ? ownerDisplayNameRaw : ((user && user.name) ? user.name : 'Titular');
+     const ownerDisplayName = ownerDisplayNameRaw && ownerDisplayNameRaw.toLowerCase() !== 'contas' ? ownerDisplayNameRaw : ((user && user.name) ? user.name : 'Você');
      const ownerNameParts = ownerDisplayName.split(/\s+/).filter(Boolean);
-     const ownerShortName = ownerNameParts.slice(0, 2).join(' ') || 'Titular';
+     const ownerShortName = ownerNameParts.slice(0, 2).join(' ') || 'Você';
      const unreadNotifications = Number(typeof unreadNotificationCount !== 'undefined' ? unreadNotificationCount : 0) || 0;
      const readNotifications = Number(typeof readNotificationCount !== 'undefined' ? readNotificationCount : 0) || 0;
      const recentNotificationItems = Array.isArray(recentNotifications) ? recentNotifications : [];

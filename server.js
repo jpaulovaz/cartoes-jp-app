@@ -2547,10 +2547,13 @@ function getSharedDebtCardMonthlySettlementSnapshotById(settlementId) {
   });
 }
 
-function buildSharedDebtCardMonthlyIntentPreview(snapshot, rawAmountCents) {
+function buildSharedDebtCardMonthlyIntentPreview(snapshot, rawAmountCents, options = {}) {
   const safeSnapshot = snapshot || null;
   const openCents = Math.max(0, Number(safeSnapshot?.openCents || 0));
-  const requestedAmount = Math.max(0, Math.min(openCents, Number(rawAmountCents || 0)));
+  const maxAmountCents = options && Number.isFinite(Number(options.maxAmountCents))
+    ? Math.max(0, Number(options.maxAmountCents || 0))
+    : openCents;
+  const requestedAmount = Math.max(0, Math.min(maxAmountCents, Number(rawAmountCents || 0)));
   const rows = (Array.isArray(safeSnapshot?.requestRows) ? safeSnapshot.requestRows : []).map((row) => {
     const totalCents = Math.max(0, Number(row?.amount_cents || 0));
     const paidCents = Math.min(totalCents, Math.max(0, Number(row?.amount_paid_cents || (row?.status === 'settled' ? totalCents : 0))));
@@ -2569,6 +2572,7 @@ function buildSharedDebtCardMonthlyIntentPreview(snapshot, rawAmountCents) {
   let touchedCount = 0;
   let partialRow = null;
   let allocatedCents = 0;
+  const allocationRows = [];
 
   for (const row of rows) {
     if (remainingToAllocate <= 0) break;
@@ -2578,6 +2582,22 @@ function buildSharedDebtCardMonthlyIntentPreview(snapshot, rawAmountCents) {
     touchedCount += 1;
     allocatedCents += appliedCents;
     remainingToAllocate -= appliedCents;
+
+    const resultingPendingCents = Math.max(0, row.pendingCents - appliedCents);
+    const resultingPaidCents = Math.min(row.totalCents, row.paidCents + appliedCents);
+
+    allocationRows.push({
+      id: row.id,
+      description: row.description,
+      txnDate: row.txnDate,
+      totalCents: row.totalCents,
+      beforePaidCents: row.paidCents,
+      beforePendingCents: row.pendingCents,
+      appliedCents,
+      afterPaidCents: resultingPaidCents,
+      afterPendingCents: resultingPendingCents,
+      settlesRequest: resultingPendingCents <= 0
+    });
 
     if (appliedCents >= row.pendingCents) {
       fullySettledCount += 1;
@@ -2589,7 +2609,7 @@ function buildSharedDebtCardMonthlyIntentPreview(snapshot, rawAmountCents) {
       description: row.description,
       beforeCents: row.pendingCents,
       appliedCents,
-      remainingCents: Math.max(0, row.pendingCents - appliedCents),
+      remainingCents: resultingPendingCents,
       txnDate: row.txnDate
     };
     break;
@@ -2598,7 +2618,7 @@ function buildSharedDebtCardMonthlyIntentPreview(snapshot, rawAmountCents) {
   let summary = 'Escolha um valor para eu te mostrar como isso vai se espalhar nas compras do mês.';
   if (requestedAmount > 0 && rows.length === 0) {
     summary = 'Não encontrei compras aceitas em aberto para esse mês.';
-  } else if (requestedAmount > 0 && fullySettledCount > 0 && !partialRow && requestedAmount >= openCents) {
+  } else if (requestedAmount > 0 && fullySettledCount > 0 && !partialRow && requestedAmount >= maxAmountCents) {
     summary = `Esse valor fecha ${formatCountLabel(fullySettledCount, 'cobrança', 'cobranças')} e deixa o mês redondinho.`;
   } else if (requestedAmount > 0 && fullySettledCount > 0 && !partialRow) {
     summary = `Esse valor fecha ${formatCountLabel(fullySettledCount, 'cobrança', 'cobranças')} e o restante do mês continua em aberto.`;
@@ -2613,6 +2633,7 @@ function buildSharedDebtCardMonthlyIntentPreview(snapshot, rawAmountCents) {
   return {
     amountCents: requestedAmount,
     openCents,
+    maxAmountCents,
     allocatedCents,
     remainingToAllocateCents: Math.max(0, remainingToAllocate),
     fullySettledCount,
@@ -2626,8 +2647,48 @@ function buildSharedDebtCardMonthlyIntentPreview(snapshot, rawAmountCents) {
       totalCents: row.totalCents,
       paidCents: row.paidCents,
       txnDate: row.txnDate
-    }))
+    })),
+    allocationRows
   };
+}
+
+function buildSharedDebtCardMonthlyIntentDisplayRows(snapshot) {
+  const safeSnapshot = snapshot || null;
+  const rows = Array.isArray(safeSnapshot?.intentRows) ? safeSnapshot.intentRows : [];
+  const maxConfirmableCents = Math.max(0, Number(safeSnapshot?.totalAcceptedCents || 0) - Number(safeSnapshot?.confirmedCents || 0));
+
+  return rows
+    .map((row) => {
+      const normalizedStatus = normalizeSharedDebtPaymentIntentStatus(row?.status);
+      const amountCents = Math.max(0, Number(row?.amount_cents || 0));
+      const preview = normalizedStatus === 'reported'
+        ? buildSharedDebtCardMonthlyIntentPreview(safeSnapshot, amountCents, { maxAmountCents: maxConfirmableCents })
+        : null;
+
+      return {
+        ...row,
+        status: normalizedStatus,
+        amountCents,
+        amountFormatted: formatBRLFromCents(amountCents),
+        reportedAtLabel: row?.reported_at ? formatDateBR(row.reported_at) : null,
+        reportedAtTimeLabel: row?.reported_at ? dayjs(row.reported_at).format('HH:mm') : null,
+        confirmedAtLabel: row?.confirmed_at ? formatDateBR(row.confirmed_at) : null,
+        rejectedAtLabel: row?.rejected_at ? formatDateBR(row.rejected_at) : null,
+        preview,
+        canConfirm: normalizedStatus === 'reported' && !!preview && Number(preview.allocatedCents || 0) > 0,
+        isStale: normalizedStatus === 'reported' && !!preview && Number(preview.allocatedCents || 0) !== amountCents
+      };
+    })
+    .sort((a, b) => String(b?.reported_at || b?.updated_at || b?.created_at || '').localeCompare(String(a?.reported_at || a?.updated_at || a?.created_at || '')));
+}
+
+function buildSharedDebtCardMonthlyIntentResultSummary(preview) {
+  const safePreview = preview || null;
+  const allocatedCents = Math.max(0, Number(safePreview?.allocatedCents || 0));
+  if (!allocatedCents) {
+    return 'Esse Pix não encontrou saldo em aberto para distribuir agora.';
+  }
+  return safePreview?.summary || `Esse Pix entra com ${formatBRLFromCents(allocatedCents)} nessa carteira do mês.`;
 }
 
 function cancelSharedDebtGeneratedMonthlyIntents(settlementId, receiverUserId, keepIntentId = null) {
@@ -3059,6 +3120,9 @@ function getSharedDebtCardMonthlySettlementSnapshot({ requesterUserId, receiverU
     createdAt: settlementRow?.created_at || nowIso(),
     updatedAt: nowIso()
   };
+
+  snapshot.intentRowsDetailed = buildSharedDebtCardMonthlyIntentDisplayRows(snapshot);
+  snapshot.reportedIntentRows = snapshot.intentRowsDetailed.filter((row) => row.status === 'reported');
 
   const persisted = upsertSharedDebtCardMonthlySettlementCache(snapshot);
   return { ...snapshot, id: persisted?.id || snapshot.id || null };
@@ -7248,6 +7312,268 @@ app.post('/shared-debts/monthly-settlements/:id/report-payment', ensureAuthentic
   });
 });
 
+app.post('/shared-debts/monthly-settlements/:id/confirm-payment', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const settlementId = Number(req.params.id);
+  const intentId = Number(req.body.intent_id || req.body.intentId || 0);
+  const note = String(req.body.note || '').trim() || null;
+  const fallbackRedirect = settlementId ? `/shared-debts?settlement=${settlementId}` : '/shared-debts';
+
+  if (!settlementId || !intentId) {
+    setFlash(req, 'error', 'Ainda falta me dizer qual Pix do mês você quer conferir por aqui.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const settlementRow = getSharedDebtCardMonthlySettlementRowById(settlementId);
+  if (!settlementRow || Number(settlementRow.requester_user_id || 0) !== Number(userId || 0)) {
+    setFlash(req, 'error', 'Essa carteira mensal não apareceu do seu lado para confirmar.');
+    return res.redirect('/shared-debts');
+  }
+
+  const intentRow = db.prepare(`
+    SELECT *
+    FROM shared_debt_payment_intents
+    WHERE id = ?
+      AND settlement_id = ?
+      AND requester_user_id = ?
+      AND request_kind = 'card'
+    LIMIT 1
+  `).get(intentId, settlementId, userId);
+
+  if (!intentRow) {
+    setFlash(req, 'error', 'Não encontrei esse Pix do mês para conferir agora.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const intentStatus = normalizeSharedDebtPaymentIntentStatus(intentRow.status);
+  if (intentStatus === 'confirmed') {
+    setFlash(req, 'info', 'Esse Pix do mês já foi confirmado antes.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (intentStatus === 'rejected') {
+    setFlash(req, 'info', 'Esse Pix do mês já foi devolvido para o saldo aberto antes.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (intentStatus !== 'reported') {
+    setFlash(req, 'info', 'Esse Pix do mês ainda não foi marcado como pago do outro lado.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const snapshotBefore = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
+  if (!snapshotBefore) {
+    setFlash(req, 'error', 'Não consegui abrir a carteira desse mês para confirmar o recebimento agora.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const preview = buildSharedDebtCardMonthlyIntentPreview(snapshotBefore, intentRow.amount_cents, {
+    maxAmountCents: Math.max(0, Number(snapshotBefore.totalAcceptedCents || 0) - Number(snapshotBefore.confirmedCents || 0))
+  });
+
+  if (!Number(preview.allocatedCents || 0)) {
+    setFlash(req, 'info', 'Enquanto você estava por aqui, esse mês mudou e não sobrou saldo em aberto para esse Pix. Abre a carteira de novo para conferir a foto atual.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (Number(preview.allocatedCents || 0) !== Math.max(0, Number(intentRow.amount_cents || 0))) {
+    setFlash(req, 'info', `Enquanto você estava por aqui, o saldo desse mês mudou. Agora esse Pix não encaixa inteiro (${formatBRLFromCents(preview.allocatedCents || 0)} ainda cabem). Melhor gerar um novo retrato antes de confirmar.`);
+    return res.redirect(fallbackRedirect);
+  }
+
+  const actor = getUserRecord(userId);
+  const actorName = actor?.name || actor?.email || 'Quem vai receber';
+  const monthText = monthLabel(settlementRow.month, settlementRow.year);
+  const now = nowIso();
+  const allocationRows = Array.isArray(preview.allocationRows) ? preview.allocationRows.filter((row) => Number(row?.id || 0) && Number(row?.appliedCents || 0) > 0) : [];
+  const requestRowById = new Map((Array.isArray(snapshotBefore.requestRows) ? snapshotBefore.requestRows : []).map((row) => [Number(row?.id || 0), row]));
+  const insertAllocation = db.prepare(`
+    INSERT OR REPLACE INTO shared_debt_payment_allocations (settlement_id, intent_id, request_id, allocated_cents, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  const updateRequest = db.prepare(`
+    UPDATE shared_debt_requests
+    SET amount_paid_cents = ?,
+        status = ?,
+        payment_marked_at = NULL,
+        payment_note = NULL,
+        updated_at = ?,
+        resolved_at = ?
+    WHERE id = ?
+      AND requester_user_id = ?
+      AND receiver_user_id = ?
+      AND COALESCE(request_kind, 'card') = 'card'
+  `);
+  const updateIntent = db.prepare(`
+    UPDATE shared_debt_payment_intents
+    SET status = 'confirmed',
+        confirmed_at = ?,
+        updated_at = ?
+    WHERE id = ?
+      AND settlement_id = ?
+      AND requester_user_id = ?
+      AND status = 'reported'
+  `);
+
+  db.transaction(() => {
+    const result = updateIntent.run(now, now, intentId, settlementId, userId);
+    if (!result.changes) {
+      throw new Error('Esse Pix do mês já mudou de estado enquanto você estava por aqui.');
+    }
+
+    allocationRows.forEach((allocation) => {
+      const requestRow = requestRowById.get(Number(allocation.id || 0)) || null;
+      const totalCents = Math.max(0, Number(requestRow?.amount_cents || allocation.totalCents || 0));
+      const nextPaidCents = Math.min(totalCents, Math.max(0, Number(allocation.afterPaidCents || 0)));
+      const nextPendingCents = Math.max(0, totalCents - nextPaidCents);
+      const nextStatus = nextPendingCents <= 0 ? 'settled' : 'accepted';
+      const resolvedAt = nextStatus === 'settled'
+        ? (requestRow?.resolved_at || now)
+        : null;
+
+      insertAllocation.run(settlementId, intentId, allocation.id, Math.max(0, Number(allocation.appliedCents || 0)), now);
+      updateRequest.run(
+        nextPaidCents,
+        nextStatus,
+        now,
+        resolvedAt,
+        allocation.id,
+        settlementRow.requester_user_id,
+        settlementRow.receiver_user_id
+      );
+
+      addSharedDebtEvent({
+        requestId: allocation.id,
+        actorUserId: userId,
+        eventType: nextStatus === 'settled' ? 'settled_via_monthly_pix' : 'partial_payment_confirmed_via_monthly_pix',
+        note
+      });
+    });
+
+    Array.from(new Set(
+      allocationRows
+        .map((allocation) => requestRowById.get(Number(allocation.id || 0))?.batch_id)
+        .map((value) => Number(value || 0))
+        .filter(Boolean)
+    )).forEach((batchId) => {
+      touchSharedDebtBatch(batchId, now);
+    });
+
+    createNotification({
+      userId: settlementRow.receiver_user_id,
+      type: 'shared_debt_request',
+      title: 'Pix do mês confirmado',
+      body: `${actorName} confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. ${buildSharedDebtCardMonthlyIntentResultSummary(preview)}${buildNoteSuffix(note)}`,
+      href: `/shared-debts?settlement=${settlementId}`,
+      relatedType: 'shared_debt_payment_intent',
+      relatedId: intentId
+    });
+  })();
+
+  const snapshotAfter = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
+  const successPieces = [
+    `Recebimento confirmado de ${formatBRLFromCents(intentRow.amount_cents)}.`,
+    buildSharedDebtCardMonthlyIntentResultSummary(preview)
+  ];
+  if (snapshotAfter) {
+    successPieces.push(`Agora ainda ficam ${formatBRLFromCents(snapshotAfter.openCents || 0)} em aberto nessa carteira.`);
+  }
+  setFlash(req, 'success', successPieces.join(' '));
+  return res.redirect(fallbackRedirect);
+});
+
+app.post('/shared-debts/monthly-settlements/:id/reject-payment', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const settlementId = Number(req.params.id);
+  const intentId = Number(req.body.intent_id || req.body.intentId || 0);
+  const note = String(req.body.note || '').trim() || null;
+  const fallbackRedirect = settlementId ? `/shared-debts?settlement=${settlementId}` : '/shared-debts';
+
+  if (!settlementId || !intentId) {
+    setFlash(req, 'error', 'Ainda falta me dizer qual Pix do mês não encaixou por aqui.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const settlementRow = getSharedDebtCardMonthlySettlementRowById(settlementId);
+  if (!settlementRow || Number(settlementRow.requester_user_id || 0) !== Number(userId || 0)) {
+    setFlash(req, 'error', 'Essa carteira mensal não apareceu do seu lado para revisar.');
+    return res.redirect('/shared-debts');
+  }
+
+  const intentRow = db.prepare(`
+    SELECT *
+    FROM shared_debt_payment_intents
+    WHERE id = ?
+      AND settlement_id = ?
+      AND requester_user_id = ?
+      AND request_kind = 'card'
+    LIMIT 1
+  `).get(intentId, settlementId, userId);
+
+  if (!intentRow) {
+    setFlash(req, 'error', 'Não encontrei esse Pix do mês para revisar agora.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const intentStatus = normalizeSharedDebtPaymentIntentStatus(intentRow.status);
+  if (intentStatus === 'rejected') {
+    setFlash(req, 'info', 'Esse Pix do mês já tinha voltado para o saldo aberto antes.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (intentStatus === 'confirmed') {
+    setFlash(req, 'info', 'Esse Pix do mês já foi confirmado antes, então não dá para voltar atrás por aqui.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (intentStatus !== 'reported') {
+    setFlash(req, 'info', 'Esse Pix do mês ainda não foi marcado como pago do outro lado.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const actor = getUserRecord(userId);
+  const actorName = actor?.name || actor?.email || 'Quem vai receber';
+  const monthText = monthLabel(settlementRow.month, settlementRow.year);
+  const now = nowIso();
+
+  db.transaction(() => {
+    const result = db.prepare(`
+      UPDATE shared_debt_payment_intents
+      SET status = 'rejected',
+          rejected_at = ?,
+          updated_at = ?
+      WHERE id = ?
+        AND settlement_id = ?
+        AND requester_user_id = ?
+        AND status = 'reported'
+    `).run(now, now, intentId, settlementId, userId);
+
+    if (!result.changes) {
+      throw new Error('Esse Pix do mês já mudou de estado enquanto você estava por aqui.');
+    }
+
+    createNotification({
+      userId: settlementRow.receiver_user_id,
+      type: 'shared_debt_request',
+      title: 'Pix do mês voltou para revisão',
+      body: `${actorName} não confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. O valor voltou para o saldo aberto dessa carteira.${buildNoteSuffix(note)}`,
+      href: `/shared-debts?settlement=${settlementId}`,
+      relatedType: 'shared_debt_payment_intent',
+      relatedId: intentId
+    });
+  })();
+
+  const snapshotAfter = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
+  const infoPieces = [
+    `Pronto. ${formatBRLFromCents(intentRow.amount_cents)} voltou para o saldo aberto desse mês.`
+  ];
+  if (snapshotAfter) {
+    infoPieces.push(`Agora a carteira mostra ${formatBRLFromCents(snapshotAfter.openCents || 0)} em aberto.`);
+  }
+  setFlash(req, 'success', infoPieces.join(' '));
+  return res.redirect(fallbackRedirect);
+});
+
 app.get('/shared-debts/:id/pix', ensureAuthenticated, async (req, res) => {
   const userId = req.user.id;
   const requestId = Number(req.params.id);
@@ -8823,13 +9149,19 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     });
   }
 
-  const pendingReceiptConfirmationCount = db.prepare(`
+  const pendingReceiptConfirmationCount = (db.prepare(`
     SELECT COUNT(*) AS total
     FROM shared_debt_requests
     WHERE requester_user_id = ?
       AND status = 'accepted'
       AND payment_marked_at IS NOT NULL
-  `).get(userId)?.total || 0;
+  `).get(userId)?.total || 0) + (db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM shared_debt_payment_intents
+    WHERE requester_user_id = ?
+      AND request_kind = 'card'
+      AND status = 'reported'
+  `).get(userId)?.total || 0);
 
   if (pendingReceiptConfirmationCount > 0) {
     alerts.push({

@@ -38,26 +38,6 @@ if (!columnExists("users", "deleted_label")) {
   db.exec("ALTER TABLE users ADD COLUMN deleted_label TEXT;");
 }
 
-if (!columnExists("people", "pix_state")) {
-  db.exec("ALTER TABLE people ADD COLUMN pix_state TEXT;");
-}
-
-if (!columnExists("people", "profile_kind")) {
-  db.exec("ALTER TABLE people ADD COLUMN profile_kind TEXT;");
-}
-
-if (!columnExists("people", "status")) {
-  db.exec("ALTER TABLE people ADD COLUMN status TEXT NOT NULL DEFAULT 'active';");
-}
-
-if (!columnExists("people", "deleted_at")) {
-  db.exec("ALTER TABLE people ADD COLUMN deleted_at TEXT;");
-}
-
-if (!columnExists("people", "deleted_label")) {
-  db.exec("ALTER TABLE people ADD COLUMN deleted_label TEXT;");
-}
-
 // ===== TABELAS EXISTENTES COM user_id =====
 db.exec(`
 CREATE TABLE IF NOT EXISTS cards (
@@ -589,6 +569,26 @@ db.exec("UPDATE users SET status = CASE WHEN trim(COALESCE(status, '')) = '' THE
 db.exec("UPDATE people SET status = CASE WHEN trim(COALESCE(status, '')) = '' THEN CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END ELSE lower(trim(status)) END;");
 db.exec("UPDATE users SET deleted_label = 'Acesso removido' WHERE COALESCE(status, 'active') = 'deleted' AND trim(COALESCE(deleted_label, '')) = '';");
 db.exec("UPDATE people SET deleted_label = 'Contato removido' WHERE COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) = 'deleted' AND trim(COALESCE(deleted_label, '')) = '';");
+
+if (!columnExists("people", "pix_state")) {
+  db.exec("ALTER TABLE people ADD COLUMN pix_state TEXT;");
+}
+
+if (!columnExists("people", "profile_kind")) {
+  db.exec("ALTER TABLE people ADD COLUMN profile_kind TEXT;");
+}
+
+if (!columnExists("people", "status")) {
+  db.exec("ALTER TABLE people ADD COLUMN status TEXT NOT NULL DEFAULT 'active';");
+}
+
+if (!columnExists("people", "deleted_at")) {
+  db.exec("ALTER TABLE people ADD COLUMN deleted_at TEXT;");
+}
+
+if (!columnExists("people", "deleted_label")) {
+  db.exec("ALTER TABLE people ADD COLUMN deleted_label TEXT;");
+}
 
 if (!columnExists("cards", "active")) {
   db.exec("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1;");

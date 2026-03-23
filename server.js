@@ -4786,17 +4786,6 @@ function syncRecurringTransactions(userId, targetYear, targetMonth) {
 }
 
 function getRecurringPreview(rule) {
-  const draftSendQueueSummary = getSharedDebtSendQueueDraftSummary(userId);
-  if (draftSendQueueSummary.queueCount > 0) {
-    alerts.push({
-      type: 'info',
-      icon: '📤',
-      title: draftSendQueueSummary.queueCount === 1 ? 'Tem 1 envio guardado na caixa de saída' : 'Tem envios guardados na caixa de saída',
-      description: `${formatCountLabel(draftSendQueueSummary.itemCount, 'cobrança está', 'cobranças estão')} prontas para disparar, somando ${formatBRLFromCents(draftSendQueueSummary.totalCents)}.`,
-      href: '/shared-debts#draft-queues'
-    });
-  }
-
   const today = dayjs();
   const currentYear = today.year();
   const currentMonth = today.month() + 1;

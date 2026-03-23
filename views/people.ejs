@@ -7,6 +7,14 @@
   const activeFriendCount = contactList.filter(p => p && p.friendship_active).length;
   const discoverableCount = contactList.filter(p => p && p.has_app_user && !p.friendship_active).length;
   const pixStateList = Array.isArray(pixStateOptions) ? pixStateOptions : [];
+  const getPixStateCode = (entry) => entry && typeof entry === 'object' ? String(entry.code || entry.sigla || '').trim() : String(entry || '').trim();
+  const getPixStateName = (entry) => entry && typeof entry === 'object' ? String(entry.name || entry.nome || '').trim() : '';
+  const getPixStateLabel = (entry) => {
+    const code = getPixStateCode(entry);
+    const name = getPixStateName(entry);
+    if (code && name) return `${code} · ${name}`;
+    return code || name || '';
+  };
   const pixStateDefault = pixDefaultState || 'RJ';
   const pixCityDefault = pixDefaultCity || 'Rio de Janeiro';
   const selfName = selfProfile?.name || '';
@@ -271,8 +279,8 @@
                 </label>
                 <label class="block">
                   <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Chave Pix</span>
-                  <input name="pix_key_value" id="selfPixKeyValue" value="<%- selfPixKeyValueInput %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: (21) 99999-9999" inputmode="text" autocomplete="off">
-                  <p id="selfPixKeyHelp" class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Se for celular, pode mandar só DDD + número. O +55 entra por nossa conta.</p>
+                  <input name="pix_key_value" id="selfPixKeyValue" value="<%- selfPixKeyValueInput %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: 21999999999" inputmode="text" autocomplete="off">
+                  <p id="selfPixKeyHelp" class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.</p>
                 </label>
               </div>
 
@@ -280,8 +288,8 @@
                 <label class="block">
                   <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estado</span>
                   <select name="pix_state" id="selfPixState" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
-                    <% pixStateList.forEach((stateCode) => { %>
-                      <option value="<%= stateCode %>" <%= selfPixState === stateCode ? 'selected' : '' %>><%= stateCode %></option>
+                    <% pixStateList.forEach((stateEntry) => { const stateCode = getPixStateCode(stateEntry); const stateLabel = getPixStateLabel(stateEntry); if (!stateCode) return; %>
+                      <option value="<%= stateCode %>" <%= selfPixState === stateCode ? 'selected' : '' %>><%= stateLabel %></option>
                     <% }) %>
                   </select>
                 </label>
@@ -385,8 +393,8 @@
           </label>
           <label class="block">
             <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Chave Pix</span>
-            <input name="pix_key_value" id="contactPixKeyValue" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: (21) 99999-9999" inputmode="text" autocomplete="off">
-            <p id="contactPixKeyHelp" class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Se for celular, pode mandar só DDD + número. O +55 entra por nossa conta.</p>
+            <input name="pix_key_value" id="contactPixKeyValue" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: 21999999999" inputmode="text" autocomplete="off">
+            <p id="contactPixKeyHelp" class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.</p>
           </label>
         </div>
 
@@ -394,8 +402,8 @@
           <label class="block">
             <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estado</span>
             <select name="pix_state" id="contactPixState" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
-              <% pixStateList.forEach((stateCode) => { %>
-                <option value="<%= stateCode %>"><%= stateCode %></option>
+              <% pixStateList.forEach((stateEntry) => { const stateCode = getPixStateCode(stateEntry); const stateLabel = getPixStateLabel(stateEntry); if (!stateCode) return; %>
+                <option value="<%= stateCode %>"><%= stateLabel %></option>
               <% }) %>
             </select>
           </label>
@@ -592,11 +600,18 @@
     return document.getElementById(`${prefix}${suffix}`);
   }
 
+  function suggestionText(entry) {
+    if (entry && typeof entry === 'object') {
+      return String(entry.name || entry.label || entry.value || entry.code || '').trim();
+    }
+    return String(entry || '').trim();
+  }
+
   function findPixStateByCity(city) {
     const safeCity = normalizeText(city);
     if (!safeCity) return '';
     return Object.entries(PIX_CITY_SUGGESTIONS_BY_STATE).find(([, cities]) =>
-      (cities || []).some((entry) => normalizeText(entry) === safeCity)
+      (cities || []).some((entry) => normalizeText(suggestionText(entry)) === safeCity)
     )?.[0] || '';
   }
 
@@ -607,8 +622,10 @@
       ? PIX_CITY_SUGGESTIONS_BY_STATE[stateCode]
       : PIX_ALL_CITY_SUGGESTIONS;
     datalist.innerHTML = (entries || []).map((city) => {
+      const safeCity = suggestionText(city);
+      if (!safeCity) return '';
       const option = document.createElement('option');
-      option.value = city;
+      option.value = safeCity;
       return option.outerHTML;
     }).join('');
   }
@@ -625,15 +642,15 @@
     keyInput.autocapitalize = 'off';
 
     if (type === 'phone') {
-      keyInput.placeholder = 'Ex.: (21) 99999-9999';
+      keyInput.placeholder = 'Ex.: 21999999999';
       keyInput.inputMode = 'numeric';
       keyInput.maxLength = 15;
-      help.textContent = 'Se for celular, pode mandar só DDD + número. O +55 entra por nossa conta.';
+      help.textContent = 'Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.';
       return;
     }
 
     if (type === 'cpf') {
-      keyInput.placeholder = 'Ex.: 123.456.789-00';
+      keyInput.placeholder = 'Ex.: 12345678900';
       keyInput.inputMode = 'numeric';
       keyInput.maxLength = 14;
       help.textContent = 'Pode colar com pontuação ou só os números. A gente limpa por trás.';
@@ -641,7 +658,7 @@
     }
 
     if (type === 'cnpj') {
-      keyInput.placeholder = 'Ex.: 12.345.678/0001-90';
+      keyInput.placeholder = 'Ex.: 12345678000190';
       keyInput.inputMode = 'numeric';
       keyInput.maxLength = 18;
       help.textContent = 'Pode colar com pontuação ou só os números. A gente limpa por trás.';
@@ -660,8 +677,8 @@
       return;
     }
 
-    keyInput.placeholder = 'Ex.: (21) 99999-9999';
-    help.textContent = 'Se for celular, pode mandar só DDD + número. O +55 entra por nossa conta.';
+    keyInput.placeholder = 'Ex.: 21999999999';
+    help.textContent = 'Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.';
   }
 
   function updatePixCityUi(prefix, forceCity = false) {
@@ -672,7 +689,7 @@
     const stateCode = String(stateInput.value || '').trim();
     fillPixCitySuggestions(prefix, stateCode);
 
-    const suggestions = PIX_CITY_SUGGESTIONS_BY_STATE[stateCode] || [];
+    const suggestions = (PIX_CITY_SUGGESTIONS_BY_STATE[stateCode] || []).map(suggestionText).filter(Boolean);
     const currentCity = String(cityInput.value || '').trim();
     if (!currentCity) {
       if (forceCity) {

@@ -514,8 +514,8 @@
                       <form method="post" action="/people/<%= p.id %>/toggle">
                         <button class="w-full px-3 py-2.5 text-xs font-bold rounded-xl border <%= p.active ? 'border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20' : 'border-green-200 dark:border-green-900 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20' %> transition-colors bg-white dark:bg-slate-700 shadow-sm"><%= p.active ? 'Desativar' : 'Reativar' %></button>
                       </form>
-                      <form method="post" action="/people/<%= p.id %>/delete" data-confirm-prompt="Excluir <%= p.name %>? A exclusão só acontece se não houver histórico nem vínculo ligado a essa pessoa." data-confirm-phrase="Eu confirmo">
-                        <button class="w-full px-3 py-2.5 text-xs font-bold rounded-xl border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors bg-white dark:bg-slate-700 shadow-sm">Excluir</button>
+                      <form method="post" action="/people/<%= p.id %>/delete" data-confirm-prompt="Excluir <%= p.name %> da sua lista ativa? O passado continua salvo, mas a exclusão trava se ainda houver valor em aberto, Pix do mês em andamento ou cobrança guardada para enviar depois." data-confirm-phrase="Eu confirmo">
+                        <button class="w-full px-3 py-2.5 text-xs font-bold rounded-xl border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors bg-white dark:bg-slate-700 shadow-sm">Excluir da lista</button>
                       </form>
                     </div>
                   </div>

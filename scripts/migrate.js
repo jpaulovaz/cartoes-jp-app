@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
   google_id TEXT UNIQUE,
   role TEXT DEFAULT 'user',
   can_import INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL DEFAULT 'active',
+  deleted_at TEXT,
+  deleted_label TEXT,
   created_at TEXT NOT NULL,
   last_login TEXT
 );
@@ -23,12 +26,36 @@ if (!columnExists("users", "can_import")) {
   db.exec("ALTER TABLE users ADD COLUMN can_import INTEGER NOT NULL DEFAULT 1;");
 }
 
+if (!columnExists("users", "status")) {
+  db.exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active';");
+}
+
+if (!columnExists("users", "deleted_at")) {
+  db.exec("ALTER TABLE users ADD COLUMN deleted_at TEXT;");
+}
+
+if (!columnExists("users", "deleted_label")) {
+  db.exec("ALTER TABLE users ADD COLUMN deleted_label TEXT;");
+}
+
 if (!columnExists("people", "pix_state")) {
   db.exec("ALTER TABLE people ADD COLUMN pix_state TEXT;");
 }
 
 if (!columnExists("people", "profile_kind")) {
   db.exec("ALTER TABLE people ADD COLUMN profile_kind TEXT;");
+}
+
+if (!columnExists("people", "status")) {
+  db.exec("ALTER TABLE people ADD COLUMN status TEXT NOT NULL DEFAULT 'active';");
+}
+
+if (!columnExists("people", "deleted_at")) {
+  db.exec("ALTER TABLE people ADD COLUMN deleted_at TEXT;");
+}
+
+if (!columnExists("people", "deleted_label")) {
+  db.exec("ALTER TABLE people ADD COLUMN deleted_label TEXT;");
 }
 
 // ===== TABELAS EXISTENTES COM user_id =====
@@ -61,6 +88,10 @@ CREATE TABLE IF NOT EXISTS people (
   pix_updated_at TEXT,
   active INTEGER NOT NULL DEFAULT 1,
   is_owner INTEGER DEFAULT 0,
+  profile_kind TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  deleted_at TEXT,
+  deleted_label TEXT,
   created_at TEXT,
   UNIQUE(user_id, name),
   FOREIGN KEY (user_id) REFERENCES users(id)
@@ -554,6 +585,11 @@ CREATE TABLE IF NOT EXISTS app_settings (
 db.exec(`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id);`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_scheduled_push_logs_event_date ON scheduled_push_logs(event_type, date_key, user_id, sequence_no);`);
 
+db.exec("UPDATE users SET status = CASE WHEN trim(COALESCE(status, '')) = '' THEN 'active' ELSE lower(trim(status)) END;");
+db.exec("UPDATE people SET status = CASE WHEN trim(COALESCE(status, '')) = '' THEN CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END ELSE lower(trim(status)) END;");
+db.exec("UPDATE users SET deleted_label = 'Acesso removido' WHERE COALESCE(status, 'active') = 'deleted' AND trim(COALESCE(deleted_label, '')) = '';");
+db.exec("UPDATE people SET deleted_label = 'Contato removido' WHERE COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) = 'deleted' AND trim(COALESCE(deleted_label, '')) = '';");
+
 if (!columnExists("cards", "active")) {
   db.exec("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1;");
 }
@@ -733,9 +769,10 @@ function personHasStrongContactSignals(userId, personId) {
 
 function pickSelfCandidateForUser(user) {
   const rows = db.prepare(`
-    SELECT id, name, email, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner, profile_kind
+    SELECT id, name, email, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner, profile_kind, COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
     FROM people
     WHERE user_id = ?
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
     ORDER BY COALESCE(is_owner, 0) DESC, COALESCE(active, 1) DESC, id ASC
   `).all(user.id);
 
@@ -773,6 +810,7 @@ function reconcileSelfProfiles() {
   const users = db.prepare(`
     SELECT id, email, name
     FROM users
+    WHERE COALESCE(status, 'active') <> 'deleted'
     ORDER BY id ASC
   `).all();
 
@@ -813,6 +851,8 @@ db.exec(`
 CREATE INDEX IF NOT EXISTS idx_cards_user ON cards(user_id);
 CREATE INDEX IF NOT EXISTS idx_people_user ON people(user_id);
 CREATE INDEX IF NOT EXISTS idx_people_user_profile_kind ON people(user_id, profile_kind);
+CREATE INDEX IF NOT EXISTS idx_people_user_status_active ON people(user_id, status, active);
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 CREATE INDEX IF NOT EXISTS idx_imports_user ON imports(user_id);
 CREATE INDEX IF NOT EXISTS idx_purchase_categories_user_active ON purchase_categories(user_id, active, sort_order, name);
 CREATE INDEX IF NOT EXISTS idx_purchase_categories_user_kind ON purchase_categories(user_id, kind, active);

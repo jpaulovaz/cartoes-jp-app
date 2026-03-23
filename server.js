@@ -95,9 +95,15 @@ try { db.prepare("ALTER TABLE people ADD COLUMN pix_state TEXT").run(); } catch 
 try { db.prepare("ALTER TABLE people ADD COLUMN pix_label TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE people ADD COLUMN pix_updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE people ADD COLUMN profile_kind TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN status TEXT NOT NULL DEFAULT 'active'").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN deleted_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN deleted_label TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN close_day INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN can_import INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN deleted_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN deleted_label TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_txn_date_snapshot TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_marked_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -908,8 +914,8 @@ function configureGoogleStrategy() {
     }
 
     try {
-      let authorizedUser = db.prepare('SELECT * FROM users WHERE google_id = ?').get(googleId);
-      const emailMatchedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+      let authorizedUser = db.prepare(`SELECT * FROM users WHERE google_id = ? AND COALESCE(status, 'active') <> 'deleted' LIMIT 1`).get(googleId);
+      const emailMatchedUser = db.prepare(`SELECT * FROM users WHERE email = ? AND COALESCE(status, 'active') <> 'deleted' LIMIT 1`).get(email);
 
       if (!authorizedUser) {
         if (!emailMatchedUser) {
@@ -1871,20 +1877,77 @@ const DEFAULT_PURCHASE_CATEGORIES = [
   'Outros'
 ];
 
-function getUserRecord(userId) {
-  return db.prepare("SELECT id, email, name, role, can_import, created_at, last_login FROM users WHERE id = ?").get(userId);
+function normalizeLifecycleStatus(value, fallback = 'active') {
+  const normalized = String(value || fallback || 'active').trim().toLowerCase();
+  if (['active', 'inactive', 'deleted'].includes(normalized)) return normalized;
+  return fallback || 'active';
 }
 
-function getAllUsers() {
-  return db.prepare("SELECT id, email, name, role, can_import, created_at, last_login FROM users ORDER BY created_at DESC").all();
+function personLifecycleStatus(row) {
+  const fallback = Number(row?.active ?? 1) === 0 ? 'inactive' : 'active';
+  return normalizeLifecycleStatus(row?.status, fallback);
+}
+
+function isDeletedPersonRow(row) {
+  return personLifecycleStatus(row) === 'deleted';
+}
+
+function isDeletedUserRow(row) {
+  return normalizeLifecycleStatus(row?.status, 'active') === 'deleted';
+}
+
+function userNotDeletedSql(alias = 'u') {
+  return `COALESCE(${alias}.status, 'active') <> 'deleted'`;
+}
+
+function personNotDeletedSql(alias = 'p') {
+  return `COALESCE(${alias}.status, CASE WHEN COALESCE(${alias}.active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'`;
+}
+
+function buildDeletedPersonLabel(personId) {
+  const safeId = Number(personId || 0) || 'x';
+  return `Contato removido ${safeId}`;
+}
+
+function buildDeletedPersonTechnicalName(userId, personId) {
+  return `__deleted_person_${Number(userId || 0)}_${Number(personId || 0)}__`;
+}
+
+function buildDeletedUserLabel(userId) {
+  const safeId = Number(userId || 0) || 'x';
+  return `Acesso removido ${safeId}`;
+}
+
+function buildDeletedUserEmail(userId) {
+  return `deleted-user-${Number(userId || 0)}-${Date.now()}@organizapay.local`;
+}
+
+function getUserRecord(userId, { includeDeleted = true } = {}) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return null;
+  return db.prepare(`
+    SELECT id, email, name, role, can_import, created_at, last_login, COALESCE(status, 'active') AS status, deleted_at, deleted_label
+    FROM users
+    WHERE id = ? ${includeDeleted ? '' : "AND COALESCE(status, 'active') <> 'deleted'"}
+    LIMIT 1
+  `).get(safeUserId);
+}
+
+function getAllUsers({ includeDeleted = false } = {}) {
+  return db.prepare(`
+    SELECT id, email, name, role, can_import, created_at, last_login, COALESCE(status, 'active') AS status, deleted_at, deleted_label
+    FROM users
+    ${includeDeleted ? '' : "WHERE COALESCE(status, 'active') <> 'deleted'"}
+    ORDER BY created_at DESC, id DESC
+  `).all();
 }
 
 function isAdminUser(userId) {
-  return getUserRecord(userId)?.role === 'admin';
+  return getUserRecord(userId, { includeDeleted: false })?.role === 'admin';
 }
 
 function canUserImport(userId) {
-  return Number(getUserRecord(userId)?.can_import ?? 1) !== 0;
+  return Number(getUserRecord(userId, { includeDeleted: false })?.can_import ?? 1) !== 0;
 }
 
 function normalizeNameForIdentity(value) {
@@ -2537,12 +2600,45 @@ app.use((req, res, next) => {
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
 
+function expireDeletedAccessSession(req, res) {
+  const redirectUrl = '/login?reason=access-removed';
+  setFlash(req, 'info', 'Esse acesso saiu da área ativa do app. Se precisar voltar, é só pedir um novo convite para o admin.');
+
+  const respond = () => res.redirect(redirectUrl);
+  const destroySession = () => {
+    if (!req.session) return respond();
+    req.session.destroy(() => respond());
+  };
+
+  if (typeof req.logout === 'function' && req.user) {
+    return req.logout(() => destroySession());
+  }
+
+  return destroySession();
+}
+
 // ===== MIDDLEWARE DE AUTENTICAÇÃO =====
 function ensureAuthenticated(req, res, next) {
-  if (req.isAuthenticated()) {
-    return next();
+  if (!req.isAuthenticated()) {
+    return res.redirect(isInitialSetupRequired() ? '/setup' : '/login');
   }
-  return res.redirect(isInitialSetupRequired() ? '/setup' : '/login');
+
+  const currentUser = getUserRecord(req.user?.id, { includeDeleted: false });
+  if (!currentUser) {
+    return expireDeletedAccessSession(req, res);
+  }
+
+  req.user = {
+    ...req.user,
+    id: currentUser.id,
+    email: currentUser.email,
+    name: currentUser.name,
+    role: currentUser.role,
+    can_import: Number(currentUser.can_import ?? 1),
+    status: currentUser.status
+  };
+
+  return next();
 }
 
 function ensureCanImport(req, res, next) {
@@ -2773,7 +2869,7 @@ app.use((req, res, next) => {
     res.locals.unreadNotificationCount = Number(getUnreadNotificationCount(req.user.id) || 0);
     res.locals.readNotificationCount = Number(getReadNotificationCount(req.user.id) || 0);
     res.locals.recentNotifications = getNotificationsForUser(req.user.id);
-    const currentUser = getUserRecord(req.user.id);
+    const currentUser = getUserRecord(req.user.id, { includeDeleted: false });
 
     if (currentUser) {
       req.user.email = currentUser.email || req.user.email;
@@ -2852,6 +2948,7 @@ function getUserPixProfilesByUserIds(userIds = []) {
       pix_updated_at
     FROM people
     WHERE COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) = 'self'
+      AND ${personNotDeletedSql('people')}
       AND user_id IN (${placeholders})
     ORDER BY id ASC
   `).all(...cleanIds);
@@ -4629,7 +4726,7 @@ function syncRecurringTransactions(userId, targetYear, targetMonth) {
 
   if (!rules.length) return;
 
-  const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1 ORDER BY id").all(userId);
+  const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1 AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted' AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted' ORDER BY id").all(userId);
   const findTxn = db.prepare(`
     SELECT id
     FROM transactions
@@ -4798,7 +4895,7 @@ function getCardsByIds(userId, ids) {
 }
 
 function getPeopleActive(userId) {
-  return db.prepare("SELECT id, name, active, email FROM people WHERE user_id = ? AND active = 1 ORDER BY name").all(userId);
+  return db.prepare("SELECT id, name, active, email, COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status FROM people WHERE user_id = ? AND active = 1 AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted' ORDER BY name").all(userId);
 }
 
 function findPersonByNameForUser(userId, name, excludePersonId = null) {
@@ -4810,6 +4907,7 @@ function findPersonByNameForUser(userId, name, excludePersonId = null) {
       SELECT id, name
       FROM people
       WHERE user_id = ? AND lower(name) = lower(?) AND id <> ?
+        AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
       LIMIT 1
     `).get(userId, safeName, Number(excludePersonId));
   }
@@ -4818,6 +4916,7 @@ function findPersonByNameForUser(userId, name, excludePersonId = null) {
     SELECT id, name
     FROM people
     WHERE user_id = ? AND lower(name) = lower(?)
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
     LIMIT 1
   `).get(userId, safeName);
 }
@@ -4849,7 +4948,10 @@ function getPeopleByIds(userId, ids) {
 
   const placeholders = uniqueIds.map(() => "?").join(", ");
   return db.prepare(`
-    SELECT id, name, active, is_owner, profile_kind, phone, email
+    SELECT id, name, active, is_owner, profile_kind, phone, email,
+           COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status,
+           deleted_at,
+           deleted_label
     FROM people
     WHERE user_id = ? AND id IN (${placeholders})
     ORDER BY active DESC, name
@@ -5011,10 +5113,14 @@ function getVisibleCardsForMonth(userId, month, year) {
 
 function getSelfPerson(userId) {
   return db.prepare(`
-    SELECT id, name, email, phone, pix_enabled, pix_key_type, pix_key_value, pix_city, pix_state, pix_label, pix_updated_at, active, is_owner, profile_kind
+    SELECT id, name, email, phone, pix_enabled, pix_key_type, pix_key_value, pix_city, pix_state, pix_label, pix_updated_at, active, is_owner, profile_kind,
+           COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status,
+           deleted_at,
+           deleted_label
     FROM people
     WHERE user_id = ?
       AND COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) = 'self'
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
     ORDER BY id ASC
     LIMIT 1
   `).get(userId);
@@ -5113,7 +5219,7 @@ function getPendingIncomingFriendRequestMap(userId, remoteIds) {
   const rows = db.prepare(`
     SELECT fr.*, u.name AS requester_name, u.email AS requester_email
     FROM friend_requests fr
-    JOIN users u ON u.id = fr.requester_user_id
+    JOIN users u ON u.id = fr.requester_user_id AND COALESCE(u.status, 'active') <> 'deleted'
     WHERE fr.target_user_id = ?
       AND fr.status = 'pending'
       AND fr.requester_user_id IN (${placeholders})
@@ -5141,17 +5247,20 @@ function getResolvedAppUserForPerson(userId, personId) {
       stable_u.email AS stable_linked_user_email,
       matched_u.id AS email_matched_user_id,
       matched_u.name AS email_matched_user_name,
-      matched_u.email AS email_matched_user_email
+      matched_u.email AS email_matched_user_email,
+      COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
     FROM people p
     LEFT JOIN person_app_links pal
       ON pal.owner_user_id = p.user_id AND pal.person_id = p.id
-    LEFT JOIN users stable_u ON stable_u.id = pal.linked_user_id
+    LEFT JOIN users stable_u ON stable_u.id = pal.linked_user_id AND COALESCE(stable_u.status, 'active') <> 'deleted'
     LEFT JOIN users matched_u
       ON pal.linked_user_id IS NULL
      AND p.email IS NOT NULL
      AND trim(p.email) <> ''
      AND lower(matched_u.email) = lower(p.email)
+     AND COALESCE(matched_u.status, 'active') <> 'deleted'
     WHERE p.user_id = ? AND p.id = ?
+      AND COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
     LIMIT 1
   `).get(userId, personId);
 
@@ -5195,6 +5304,7 @@ function findLinkedPersonForRemoteUser(ownerUserId, remoteUserId) {
     FROM person_app_links pal
     JOIN people p ON p.id = pal.person_id AND p.user_id = pal.owner_user_id
       AND COALESCE(p.profile_kind, CASE WHEN COALESCE(p.is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) <> 'self'
+      AND COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
     WHERE pal.owner_user_id = ? AND pal.linked_user_id = ?
     ORDER BY COALESCE(p.active, 1) DESC, p.id ASC
     LIMIT 1
@@ -5221,6 +5331,7 @@ function ensureFriendPersonForUser({ ownerUserId, remoteUserId, preferredName = 
       FROM people
       WHERE user_id = ? AND email IS NOT NULL AND lower(email) = lower(?)
         AND COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) <> 'self'
+        AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
       ORDER BY COALESCE(active, 1) DESC, id ASC
       LIMIT 1
     `).get(safeOwnerUserId, normalizedEmail);
@@ -5233,13 +5344,13 @@ function ensureFriendPersonForUser({ ownerUserId, remoteUserId, preferredName = 
 
     for (const candidateName of candidateNames) {
       const inserted = db.prepare(`
-        INSERT OR IGNORE INTO people (user_id, name, phone, email, active, is_owner, profile_kind, created_at)
-        VALUES (?, ?, '', ?, 1, 0, 'contact', ?)
+        INSERT OR IGNORE INTO people (user_id, name, phone, email, active, is_owner, profile_kind, status, created_at)
+        VALUES (?, ?, '', ?, 1, 0, 'contact', 'active', ?)
       `).run(safeOwnerUserId, candidateName, normalizedEmail, now);
 
       const insertedId = Number(inserted.lastInsertRowid || 0);
       if (insertedId) {
-        person = db.prepare(`SELECT * FROM people WHERE id = ? AND user_id = ?`).get(insertedId, safeOwnerUserId);
+        person = db.prepare(`SELECT * FROM people WHERE id = ? AND user_id = ? AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'`).get(insertedId, safeOwnerUserId);
         if (person) break;
       }
     }
@@ -5384,17 +5495,22 @@ function getPeopleAll(userId) {
       stable_u.email AS stable_linked_user_email,
       matched_u.id AS email_matched_user_id,
       matched_u.name AS email_matched_user_name,
-      matched_u.email AS email_matched_user_email
+      matched_u.email AS email_matched_user_email,
+      COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status,
+      p.deleted_at,
+      p.deleted_label
     FROM people p
     LEFT JOIN person_app_links pal
       ON pal.owner_user_id = p.user_id AND pal.person_id = p.id
-    LEFT JOIN users stable_u ON stable_u.id = pal.linked_user_id
+    LEFT JOIN users stable_u ON stable_u.id = pal.linked_user_id AND COALESCE(stable_u.status, 'active') <> 'deleted'
     LEFT JOIN users matched_u
       ON pal.linked_user_id IS NULL
      AND p.email IS NOT NULL
      AND trim(p.email) <> ''
      AND lower(matched_u.email) = lower(p.email)
+     AND COALESCE(matched_u.status, 'active') <> 'deleted'
     WHERE p.user_id = ?
+      AND COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
     ORDER BY CASE WHEN COALESCE(p.profile_kind, CASE WHEN COALESCE(p.is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) = 'self' THEN 0 ELSE 1 END, COALESCE(p.active, 1) DESC, p.name
   `).all(userId);
 
@@ -5804,13 +5920,16 @@ function queuePushNotification(userId, payload) {
 }
 
 function createNotification({ userId, type, title, body = null, href = null, relatedType = null, relatedId = null }) {
+  const targetUser = getUserRecord(userId, { includeDeleted: false });
+  if (!targetUser) return null;
+
   const result = db.prepare(`
     INSERT INTO notifications (user_id, type, title, body, href, is_read, related_type, related_id, created_at)
     VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
-  `).run(userId, type, title, body, href, relatedType, relatedId, nowIso());
+  `).run(targetUser.id, type, title, body, href, relatedType, relatedId, nowIso());
 
   const pushTag = relatedType && relatedId ? `${relatedType}:${relatedId}` : `${type}:${result.lastInsertRowid || nowIso()}`;
-  queuePushNotification(userId, { title, body, href, tag: pushTag });
+  queuePushNotification(targetUser.id, { title, body, href, tag: pushTag });
 
   return result;
 }
@@ -5977,9 +6096,9 @@ function getSharedDebtEligibleAllocationRows(userId, txnId) {
         remote_u.name AS receiver_user_name,
         remote_u.email AS receiver_user_email
       FROM allocations a
-      JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id
+      JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id AND COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
       JOIN person_app_links pal ON pal.owner_user_id = p.user_id AND pal.person_id = p.id
-      JOIN users remote_u ON remote_u.id = pal.linked_user_id
+      JOIN users remote_u ON remote_u.id = pal.linked_user_id AND COALESCE(remote_u.status, 'active') <> 'deleted'
       JOIN friendships f
         ON f.status = 'active'
        AND f.user_low_id = CASE WHEN p.user_id < pal.linked_user_id THEN p.user_id ELSE pal.linked_user_id END
@@ -6003,8 +6122,8 @@ function getSharedDebtEligibleAllocationRows(userId, txnId) {
         u.name AS receiver_user_name,
         u.email AS receiver_user_email
       FROM allocations a
-      JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id
-      JOIN users u ON lower(u.email) = lower(p.email)
+      JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id AND COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
+      JOIN users u ON lower(u.email) = lower(p.email) AND COALESCE(u.status, 'active') <> 'deleted'
       WHERE a.user_id = ?
         AND a.transaction_id = ?
         AND p.email IS NOT NULL
@@ -9358,6 +9477,256 @@ app.get("/notifications/:id/open", ensureAuthenticated, (req, res) => {
   return res.redirect('/geral');
 });
 
+function getOpenBalanceMonthsForPerson(userId, personId) {
+  const totals = db.prepare(`
+    SELECT
+      COALESCE(${EFFECTIVE_DUE_MONTH_SQL}, 0) AS month,
+      COALESCE(${EFFECTIVE_DUE_YEAR_SQL}, 0) AS year,
+      COALESCE(SUM(a.share_cents), 0) AS total_cents
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND a.person_id = ?
+    GROUP BY COALESCE(${EFFECTIVE_DUE_YEAR_SQL}, 0), COALESCE(${EFFECTIVE_DUE_MONTH_SQL}, 0)
+  `).all(userId, personId).filter((row) => Number(row.month || 0) > 0 && Number(row.year || 0) > 0);
+
+  const manualMap = new Map(db.prepare(`
+    SELECT month, year, paid_cents
+    FROM person_payments
+    WHERE user_id = ? AND person_id = ?
+  `).all(userId, personId).map((row) => [`${row.year}-${row.month}`, Math.max(0, Number(row.paid_cents || 0))]));
+
+  const autoMap = new Map(db.prepare(`
+    SELECT s.month, s.year, COALESCE(SUM(a.allocated_cents), 0) AS total_cents
+    FROM shared_debt_payment_allocations a
+    JOIN shared_debt_payment_intents pi ON pi.id = a.intent_id
+    JOIN shared_debt_monthly_settlements s ON s.id = a.settlement_id
+    JOIN shared_debt_requests r ON r.id = a.request_id
+    WHERE s.requester_user_id = ?
+      AND r.source_person_id = ?
+      AND pi.status = 'confirmed'
+    GROUP BY s.year, s.month
+  `).all(userId, personId).map((row) => [`${row.year}-${row.month}`, Math.max(0, Number(row.total_cents || 0))]));
+
+  return totals
+    .map((row) => {
+      const key = `${row.year}-${row.month}`;
+      const totalCents = Math.max(0, Number(row.total_cents || 0));
+      const manualPaidCents = Math.max(0, Number(manualMap.get(key) || 0));
+      const autoPaidCents = Math.max(0, Number(autoMap.get(key) || 0));
+      const paidCents = Math.min(totalCents, manualPaidCents + autoPaidCents);
+      return {
+        month: Number(row.month || 0),
+        year: Number(row.year || 0),
+        totalCents,
+        paidCents,
+        openCents: Math.max(0, totalCents - paidCents)
+      };
+    })
+    .filter((row) => row.openCents > 0);
+}
+
+function getContactDeletionBlockers(userId, personId) {
+  const openBalanceMonths = getOpenBalanceMonthsForPerson(userId, personId);
+  const hasDraftQueue = !!db.prepare(`
+    SELECT 1
+    FROM shared_debt_send_queue_items qi
+    JOIN shared_debt_send_queues q ON q.id = qi.queue_id
+    WHERE qi.requester_user_id = ?
+      AND qi.source_person_id = ?
+      AND COALESCE(q.status, 'draft') = 'draft'
+      AND qi.cancelled_at IS NULL
+    LIMIT 1
+  `).get(userId, personId);
+
+  const hasOpenRequests = !!db.prepare(`
+    SELECT 1
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND source_person_id = ?
+      AND status NOT IN ('settled', 'rejected', 'cancelled')
+    LIMIT 1
+  `).get(userId, personId);
+
+  const hasOpenPixIntent = !!db.prepare(`
+    SELECT 1
+    FROM shared_debt_payment_intents pi
+    JOIN shared_debt_payment_allocations a ON a.intent_id = pi.id
+    JOIN shared_debt_requests r ON r.id = a.request_id
+    WHERE pi.requester_user_id = ?
+      AND r.source_person_id = ?
+      AND pi.status IN ('generated', 'reported')
+    LIMIT 1
+  `).get(userId, personId);
+
+  return {
+    openBalanceMonths,
+    hasDraftQueue,
+    hasOpenRequests,
+    hasOpenPixIntent,
+    hasBlockingIssue: openBalanceMonths.length > 0 || hasDraftQueue || hasOpenRequests || hasOpenPixIntent
+  };
+}
+
+function getUserDeletionBlockers(targetUserId) {
+  const hasOpenRequests = !!db.prepare(`
+    SELECT 1
+    FROM shared_debt_requests
+    WHERE (requester_user_id = ? OR receiver_user_id = ?)
+      AND status NOT IN ('settled', 'rejected', 'cancelled')
+    LIMIT 1
+  `).get(targetUserId, targetUserId);
+
+  const hasOpenPixIntent = !!db.prepare(`
+    SELECT 1
+    FROM shared_debt_payment_intents
+    WHERE (requester_user_id = ? OR receiver_user_id = ?)
+      AND status IN ('generated', 'reported')
+    LIMIT 1
+  `).get(targetUserId, targetUserId);
+
+  const hasDraftQueue = !!db.prepare(`
+    SELECT 1
+    FROM shared_debt_send_queues
+    WHERE (requester_user_id = ? OR receiver_user_id = ?)
+      AND COALESCE(status, 'draft') = 'draft'
+    LIMIT 1
+  `).get(targetUserId, targetUserId);
+
+  return {
+    hasOpenRequests,
+    hasOpenPixIntent,
+    hasDraftQueue,
+    hasBlockingIssue: hasOpenRequests || hasOpenPixIntent || hasDraftQueue
+  };
+}
+
+function archivePendingFriendRequestsBetweenUsers(userAId, userBId, status = 'archived_by_contact_delete') {
+  const pair = getFriendPair(userAId, userBId);
+  if (!pair) return;
+
+  const now = nowIso();
+  db.prepare(`
+    UPDATE friend_requests
+    SET status = ?, updated_at = ?, responded_at = COALESCE(responded_at, ?), resolved_at = COALESCE(resolved_at, ?)
+    WHERE status = 'pending'
+      AND (
+        (requester_user_id = ? AND target_user_id = ?) OR
+        (requester_user_id = ? AND target_user_id = ?)
+      )
+  `).run(String(status || 'archived_by_contact_delete'), now, now, now, pair.low, pair.high, pair.high, pair.low);
+}
+
+function archivePendingFriendRequestsForSourcePerson(ownerUserId, personId, status = 'archived_by_contact_delete') {
+  const now = nowIso();
+  db.prepare(`
+    UPDATE friend_requests
+    SET status = ?, updated_at = ?, responded_at = COALESCE(responded_at, ?), resolved_at = COALESCE(resolved_at, ?)
+    WHERE requester_user_id = ?
+      AND source_person_id = ?
+      AND status = 'pending'
+  `).run(String(status || 'archived_by_contact_delete'), now, now, now, ownerUserId, personId);
+}
+
+function archivePendingFriendRequestsForUser(targetUserId, status = 'archived_by_user_delete') {
+  const now = nowIso();
+  db.prepare(`
+    UPDATE friend_requests
+    SET status = ?, updated_at = ?, responded_at = COALESCE(responded_at, ?), resolved_at = COALESCE(resolved_at, ?)
+    WHERE status = 'pending'
+      AND (requester_user_id = ? OR target_user_id = ?)
+  `).run(String(status || 'archived_by_user_delete'), now, now, now, targetUserId, targetUserId);
+}
+
+function endActiveFriendshipBetweenUsers(userAId, userBId, endedByUserId = userAId) {
+  const friendship = getActiveFriendshipBetweenUsers(userAId, userBId);
+  if (!friendship) return false;
+  const now = nowIso();
+  db.prepare(`
+    UPDATE friendships
+    SET status = 'ended', updated_at = ?, ended_at = ?, ended_by_user_id = ?
+    WHERE id = ? AND status = 'active'
+  `).run(now, now, Number(endedByUserId || 0) || null, friendship.id);
+  return true;
+}
+
+function tombstonePersonRecord(userId, personId) {
+  const deletedLabel = buildDeletedPersonLabel(personId);
+  db.prepare(`
+    UPDATE people
+    SET active = 0,
+        status = 'deleted',
+        deleted_at = ?,
+        deleted_label = ?,
+        name = ?,
+        phone = NULL,
+        email = NULL,
+        pix_enabled = 0,
+        pix_key_type = NULL,
+        pix_key_value = NULL,
+        pix_city = NULL,
+        pix_state = NULL,
+        pix_label = NULL,
+        pix_updated_at = NULL
+    WHERE id = ? AND user_id = ?
+  `).run(nowIso(), deletedLabel, deletedLabel, personId, userId);
+
+  return deletedLabel;
+}
+
+function tombstoneUserRecord(targetUserId) {
+  const deletedLabel = buildDeletedUserLabel(targetUserId);
+  const deletedEmail = buildDeletedUserEmail(targetUserId);
+  db.prepare(`
+    UPDATE users
+    SET status = 'deleted',
+        deleted_at = ?,
+        deleted_label = ?,
+        name = ?,
+        email = ?,
+        google_id = NULL,
+        role = 'user',
+        can_import = 0
+    WHERE id = ?
+  `).run(nowIso(), deletedLabel, deletedLabel, deletedEmail, targetUserId);
+
+  return deletedLabel;
+}
+
+function offboardContactFromActiveExperience(ownerUserId, personId) {
+  const resolved = getResolvedAppUserForPerson(ownerUserId, personId);
+  db.transaction(() => {
+    if (resolved?.linked_user_id) {
+      endActiveFriendshipBetweenUsers(ownerUserId, resolved.linked_user_id, ownerUserId);
+      archivePendingFriendRequestsBetweenUsers(ownerUserId, resolved.linked_user_id, 'archived_by_contact_delete');
+    }
+
+    archivePendingFriendRequestsForSourcePerson(ownerUserId, personId, 'archived_by_contact_delete');
+    db.prepare(`DELETE FROM person_app_links WHERE owner_user_id = ? AND person_id = ?`).run(ownerUserId, personId);
+    tombstonePersonRecord(ownerUserId, personId);
+  })();
+}
+
+function offboardUserAccess(actorUserId, targetUserId) {
+  db.transaction(() => {
+    archivePendingFriendRequestsForUser(targetUserId, 'archived_by_user_delete');
+    const now = nowIso();
+    db.prepare(`
+      UPDATE friendships
+      SET status = 'ended', updated_at = ?, ended_at = ?, ended_by_user_id = ?
+      WHERE status = 'active'
+        AND (user_low_id = ? OR user_high_id = ?)
+    `).run(now, now, Number(actorUserId || 0) || null, targetUserId, targetUserId);
+
+    db.prepare(`DELETE FROM person_app_links WHERE owner_user_id = ? OR linked_user_id = ?`).run(targetUserId, targetUserId);
+    db.prepare(`DELETE FROM push_subscriptions WHERE user_id = ?`).run(targetUserId);
+    db.prepare(`DELETE FROM scheduled_push_logs WHERE user_id = ?`).run(targetUserId);
+    db.prepare(`DELETE FROM notifications WHERE user_id = ?`).run(targetUserId);
+    tombstoneUserRecord(targetUserId);
+  })();
+}
+
 // People
 app.post('/purchase-categories/:id/archive', ensureAuthenticated, (req, res) => {
   try {
@@ -9412,9 +9781,11 @@ app.post("/people", ensureAuthenticated, (req, res) => {
   const targetPerson = id
     ? db.prepare(`
         SELECT id, name, email, COALESCE(is_owner, 0) AS is_owner,
-               COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind
+               COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind,
+               COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
         FROM people
         WHERE id = ? AND user_id = ?
+          AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
         LIMIT 1
       `).get(id, userId)
     : null;
@@ -9495,8 +9866,8 @@ app.post("/people", ensureAuthenticated, (req, res) => {
     db.prepare(`
       INSERT INTO people(
         user_id, name, phone, email, pix_enabled, pix_key_type,
-        pix_key_value, pix_city, pix_state, pix_label, pix_updated_at, active, is_owner, profile_kind
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 'contact')
+        pix_key_value, pix_city, pix_state, pix_label, pix_updated_at, active, is_owner, profile_kind, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 'contact', 'active')
     `).run(
       userId,
       name,
@@ -9523,9 +9894,11 @@ app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const personId = Number(req.params.id);
   const person = db.prepare(`
-    SELECT id, name, email, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner, COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind
+    SELECT id, name, email, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner, COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind,
+           COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
     FROM people
     WHERE id = ? AND user_id = ?
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
     LIMIT 1
   `).get(personId, userId);
 
@@ -9723,9 +10096,11 @@ app.post('/people/:id/unfriend', ensureAuthenticated, (req, res) => {
   const personId = Number(req.params.id);
   const person = db.prepare(`
     SELECT id, name, COALESCE(is_owner, 0) AS is_owner,
-           COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind
+           COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind,
+           COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
     FROM people
     WHERE id = ? AND user_id = ?
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
     LIMIT 1
   `).get(personId, userId);
 
@@ -9780,9 +10155,11 @@ app.post("/people/:id/toggle", ensureAuthenticated, (req, res) => {
   const personId = Number(req.params.id);
   const person = db.prepare(`
     SELECT id, name, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner,
-           COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind
+           COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind,
+           COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
     FROM people
     WHERE id = ? AND user_id = ?
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
     LIMIT 1
   `).get(personId, userId);
 
@@ -9796,13 +10173,16 @@ app.post("/people/:id/toggle", ensureAuthenticated, (req, res) => {
     return res.redirect('/people');
   }
 
+  const becameActive = Number(person.active || 0) === 0;
   db.prepare(`
     UPDATE people
-    SET active = CASE COALESCE(active, 1) WHEN 1 THEN 0 ELSE 1 END
+    SET active = ?,
+        status = ?,
+        deleted_at = CASE WHEN ? = 1 THEN NULL ELSE deleted_at END
     WHERE id = ? AND user_id = ?
-  `).run(personId, userId);
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
+  `).run(becameActive ? 1 : 0, becameActive ? 'active' : 'inactive', becameActive ? 1 : 0, personId, userId);
 
-  const becameActive = Number(person.active || 0) === 0;
   setFlash(req, 'success', becameActive
     ? `${person.name} voltou para sua lista ativa.`
     : `${person.name} foi tirado(a) de cena sem mexer no histórico.`);
@@ -9814,9 +10194,11 @@ app.post("/people/:id/delete", ensureAuthenticated, (req, res) => {
   const personId = Number(req.params.id);
   const person = db.prepare(`
     SELECT id, name, COALESCE(is_owner, 0) AS is_owner,
-           COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind
+           COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind,
+           COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
     FROM people
     WHERE id = ? AND user_id = ?
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
     LIMIT 1
   `).get(personId, userId);
 
@@ -9830,22 +10212,42 @@ app.post("/people/:id/delete", ensureAuthenticated, (req, res) => {
     return res.redirect('/people');
   }
 
-  const usage = db.prepare(`
-    SELECT
-      EXISTS(SELECT 1 FROM allocations WHERE user_id = ? AND person_id = ?) AS has_allocations,
-      EXISTS(SELECT 1 FROM person_payments WHERE user_id = ? AND person_id = ?) AS has_payments,
-      EXISTS(SELECT 1 FROM person_app_links WHERE owner_user_id = ? AND person_id = ?) AS has_app_link,
-      EXISTS(SELECT 1 FROM friend_requests WHERE requester_user_id = ? AND source_person_id = ?) AS has_friend_history
-  `).get(userId, personId, userId, personId, userId, personId, userId, personId);
-
-  if (usage.has_allocations || usage.has_payments || usage.has_app_link || usage.has_friend_history) {
-    setFlash(req, "info", `Não foi possível excluir ${person.name} porque já existe histórico ou vínculo ligado a essa pessoa. Use Desativar para tirar de cena sem perder o passado.`);
-    return res.redirect("/people");
+  const blockers = getContactDeletionBlockers(userId, personId);
+  if (blockers.openBalanceMonths.length > 0) {
+    const firstOpenMonth = blockers.openBalanceMonths[0];
+    const extraMonths = blockers.openBalanceMonths.length - 1;
+    const monthText = monthLabel(firstOpenMonth.month, firstOpenMonth.year);
+    setFlash(
+      req,
+      'info',
+      `${person.name} ainda tem valor em aberto em ${monthText}${extraMonths > 0 ? ` e em mais ${extraMonths} ${extraMonths === 1 ? 'mês' : 'meses'}` : ''}. Antes de excluir da sua lista, precisamos fechar essas pendências.`
+    );
+    return res.redirect('/people');
   }
 
-  db.prepare("DELETE FROM people WHERE id = ? AND user_id = ?").run(personId, userId);
-  setFlash(req, "success", `${person.name} foi removido(a) com sucesso.`);
-  return res.redirect("/people");
+  if (blockers.hasDraftQueue) {
+    setFlash(req, 'info', `${person.name} ainda está em uma caixa de saída de cobranças. Envie ou descarte esse rascunho antes de excluir da sua lista.`);
+    return res.redirect('/people');
+  }
+
+  if (blockers.hasOpenPixIntent) {
+    setFlash(req, 'info', `${person.name} ainda tem um Pix do mês aguardando andamento. Fecha esse fluxo primeiro e depois a exclusão fica liberada.`);
+    return res.redirect('/people');
+  }
+
+  if (blockers.hasOpenRequests) {
+    setFlash(req, 'info', `${person.name} ainda participa de cobranças em aberto. Resolve isso primeiro e depois eu libero a exclusão sem apagar o passado.`);
+    return res.redirect('/people');
+  }
+
+  try {
+    offboardContactFromActiveExperience(userId, personId);
+    setFlash(req, 'success', `${person.name} saiu da sua lista ativa. O histórico ficou salvo, e se um dia voltar pode entrar como novo contato.`);
+  } catch (err) {
+    setFlash(req, 'error', getFriendlyErrorMessage(err, { defaultMessage: `Não consegui excluir ${person.name} agora.` }));
+  }
+
+  return res.redirect('/people');
 });
 
 // Cards
@@ -10852,7 +11254,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
     const createdTxnIds = [];
 
     db.transaction(() => {
-      const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1").all(userId);
+      const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1 AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'").all(userId);
       const autoAssignPersonId = assignToOwner
         ? Number(ownerPerson.id)
         : (activePeople.length === 1 ? Number(activePeople[0].id) : null);
@@ -12799,28 +13201,43 @@ app.post("/admin/update-user/:id", ensureAuthenticated, (req, res) => {
 
 app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const targetUserId = req.params.id;
+  const targetUserId = Number(req.params.id);
 
   if (!isAdminUser(userId)) {
     return res.status(403).send('Acesso negado.');
   }
 
   if (String(userId) === String(targetUserId)) {
-    return renderAdmin(res, { error: 'Você não pode remover sua própria conta' });
+    return renderAdmin(res, { error: 'Você não pode remover sua própria conta.' });
+  }
+
+  const targetUser = getUserRecord(targetUserId, { includeDeleted: true });
+  if (!targetUser) {
+    return renderAdmin(res, { error: 'Usuário não encontrado.' });
+  }
+
+  if (isDeletedUserRow(targetUser)) {
+    return renderAdmin(res, { success: 'Esse acesso já tinha sido removido antes.' });
+  }
+
+  const blockers = getUserDeletionBlockers(targetUserId);
+  if (blockers.hasDraftQueue) {
+    return renderAdmin(res, { error: 'Esse acesso ainda tem caixa de saída com cobrança guardada. Envie ou descarte esses rascunhos antes de excluir.' });
+  }
+
+  if (blockers.hasOpenPixIntent) {
+    return renderAdmin(res, { error: 'Esse acesso ainda participa de um Pix do mês em andamento. Fecha esse fluxo primeiro e depois a exclusão fica liberada.' });
+  }
+
+  if (blockers.hasOpenRequests) {
+    return renderAdmin(res, { error: 'Esse acesso ainda está ligado a cobranças em aberto. Resolve essas pendências antes de excluir.' });
   }
 
   try {
-    const tables = ['shared_debt_payment_allocations', 'shared_debt_payment_intents', 'shared_debt_monthly_settlements', 'shared_debt_events', 'shared_debt_archives', 'shared_debt_requests', 'shared_debt_batches', 'notifications', 'allocations', 'transactions', 'imports', 'person_payments', 'card_statements', 'people', 'cards', 'monthly_finance_items', 'monthly_finances', 'scratchpad', 'finance_categories', 'closed_months', 'person_app_links', 'friendships', 'friend_requests', 'push_subscriptions', 'scheduled_push_logs'];
-
-    for (const table of tables) {
-      db.prepare(`DELETE FROM ${table} WHERE user_id = ?`).run(targetUserId);
-    }
-
-    db.prepare("DELETE FROM users WHERE id = ?").run(targetUserId);
-
-    return renderAdmin(res, { success: 'Usuário removido com sucesso!' });
+    offboardUserAccess(userId, targetUserId);
+    return renderAdmin(res, { success: 'Acesso removido da área ativa com histórico preservado. Mais tarde, o mesmo e-mail pode ser autorizado de novo como um novo acesso.' });
   } catch (err) {
-    return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui remover esse usuário agora.' }) });
+    return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui remover esse acesso agora.' }) });
   }
 });
 

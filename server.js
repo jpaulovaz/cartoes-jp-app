@@ -4401,9 +4401,92 @@ function getVisiblePeopleForMonth(userId, month, year, { includePayments = false
     `).all(userId, month, year);
 
     paymentRows.forEach(row => visibleIds.add(row.person_id));
+
+    const autoPaymentRows = db.prepare(`
+      SELECT DISTINCT r.source_person_id AS person_id
+      FROM shared_debt_payment_allocations a
+      JOIN shared_debt_payment_intents pi ON pi.id = a.intent_id
+      JOIN shared_debt_monthly_settlements s ON s.id = a.settlement_id
+      JOIN shared_debt_requests r ON r.id = a.request_id
+      WHERE s.requester_user_id = ?
+        AND s.request_kind = 'card'
+        AND s.month = ?
+        AND s.year = ?
+        AND pi.status = 'confirmed'
+        AND COALESCE(r.request_kind, 'card') = 'card'
+        AND r.source_person_id IS NOT NULL
+    `).all(userId, month, year);
+
+    autoPaymentRows.forEach(row => visibleIds.add(row.person_id));
   }
 
   return getPeopleByIds(userId, Array.from(visibleIds));
+}
+
+function getManualPersonPaymentsByMonth(userId, month, year) {
+  const rows = db.prepare(`
+    SELECT person_id, paid_cents
+    FROM person_payments
+    WHERE user_id = ? AND month = ? AND year = ?
+  `).all(userId, month, year);
+
+  return new Map(rows.map((row) => [Number(row.person_id || 0), Math.max(0, Number(row.paid_cents || 0))]));
+}
+
+function getConfirmedSharedDebtCardPaymentsByPersonForMonth(userId, month, year) {
+  const rows = db.prepare(`
+    SELECT r.source_person_id AS person_id, COALESCE(SUM(a.allocated_cents), 0) AS total_cents
+    FROM shared_debt_payment_allocations a
+    JOIN shared_debt_payment_intents pi ON pi.id = a.intent_id
+    JOIN shared_debt_monthly_settlements s ON s.id = a.settlement_id
+    JOIN shared_debt_requests r ON r.id = a.request_id
+    WHERE s.requester_user_id = ?
+      AND s.request_kind = 'card'
+      AND s.month = ?
+      AND s.year = ?
+      AND pi.status = 'confirmed'
+      AND COALESCE(r.request_kind, 'card') = 'card'
+      AND r.source_person_id IS NOT NULL
+    GROUP BY r.source_person_id
+  `).all(userId, month, year);
+
+  const map = new Map();
+  rows.forEach((row) => {
+    const personId = Number(row.person_id || 0);
+    if (!personId) return;
+    map.set(personId, Math.max(0, Number(row.total_cents || 0)));
+  });
+  return map;
+}
+
+function getCombinedPersonPaymentBreakdownMap(userId, month, year) {
+  const manualMap = getManualPersonPaymentsByMonth(userId, month, year);
+  const autoMap = getConfirmedSharedDebtCardPaymentsByPersonForMonth(userId, month, year);
+  const ids = new Set([...manualMap.keys(), ...autoMap.keys()]);
+  const breakdownMap = new Map();
+
+  ids.forEach((personId) => {
+    const manualCents = Math.max(0, Number(manualMap.get(personId) || 0));
+    const autoCents = Math.max(0, Number(autoMap.get(personId) || 0));
+    breakdownMap.set(personId, {
+      personId,
+      manualCents,
+      autoCents,
+      totalPaidCents: manualCents + autoCents
+    });
+  });
+
+  return breakdownMap;
+}
+
+function getPersonPaymentBreakdownForMonth(userId, month, year, personId) {
+  const safePersonId = Number(personId || 0);
+  if (!safePersonId) {
+    return { manualCents: 0, autoCents: 0, totalPaidCents: 0 };
+  }
+
+  const breakdown = getCombinedPersonPaymentBreakdownMap(userId, month, year).get(safePersonId);
+  return breakdown || { manualCents: 0, autoCents: 0, totalPaidCents: 0 };
 }
 
 function getVisiblePeopleForTransaction(userId, txnId) {
@@ -6330,45 +6413,73 @@ function getSharedDebtEventsByRequestIds(requestIds) {
 function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
   const params = [userId, month, year];
 
-  const owed = db.prepare(`
+  const manualOwed = db.prepare(`
     SELECT
       COUNT(*) AS total_requests,
-      COALESCE(SUM(r.amount_cents), 0) AS total_cents
+      COALESCE(SUM(CASE
+        WHEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0)) > 0 THEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0))
+        ELSE 0
+      END), 0) AS total_cents
     FROM shared_debt_requests r
-    LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
-    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE r.receiver_user_id = ?
+      AND COALESCE(r.request_kind, 'card') = 'manual'
       AND r.status = 'accepted'
-      AND (
-        (COALESCE(r.request_kind, 'card') <> 'manual'
-          AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
-          AND COALESCE(r.source_due_year, i.year, t.due_year) = ?)
-        OR COALESCE(r.request_kind, 'card') = 'manual'
-      )
-  `).get(...params) || { total_requests: 0, total_cents: 0 };
+  `).get(userId) || { total_requests: 0, total_cents: 0 };
 
-  const receivable = db.prepare(`
+  const manualReceivable = db.prepare(`
     SELECT
       COUNT(*) AS total_requests,
-      COALESCE(SUM(r.amount_cents), 0) AS total_cents
+      COALESCE(SUM(CASE
+        WHEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0)) > 0 THEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0))
+        ELSE 0
+      END), 0) AS total_cents
     FROM shared_debt_requests r
-    LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
-    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE r.requester_user_id = ?
+      AND COALESCE(r.request_kind, 'card') = 'manual'
       AND r.status = 'accepted'
-      AND (
-        (COALESCE(r.request_kind, 'card') <> 'manual'
-          AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
-          AND COALESCE(r.source_due_year, i.year, t.due_year) = ?)
-        OR COALESCE(r.request_kind, 'card') = 'manual'
-      )
-  `).get(...params) || { total_requests: 0, total_cents: 0 };
+  `).get(userId) || { total_requests: 0, total_cents: 0 };
+
+  const buildCardSideSummary = (scope) => {
+    const roleColumn = scope === 'owed' ? 'receiver_user_id' : 'requester_user_id';
+    const pairRows = db.prepare(`
+      SELECT DISTINCT r.requester_user_id, r.receiver_user_id
+      FROM shared_debt_requests r
+      LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
+      LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+      WHERE r.${roleColumn} = ?
+        AND COALESCE(r.request_kind, 'card') = 'card'
+        AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
+        AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
+        AND r.status IN ('accepted', 'settled')
+    `).all(...params);
+
+    return pairRows.reduce((acc, row) => {
+      const snapshot = getSharedDebtCardMonthlySettlementSnapshot({
+        requesterUserId: row.requester_user_id,
+        receiverUserId: row.receiver_user_id,
+        month,
+        year
+      });
+      if (!snapshot || Number(snapshot.openCents || 0) <= 0) return acc;
+
+      const preview = buildSharedDebtCardMonthlyIntentPreview(snapshot, snapshot.openCents, {
+        maxAmountCents: snapshot.openCents
+      });
+
+      acc.totalCents += Math.max(0, Number(snapshot.openCents || 0));
+      acc.totalCount += Math.max(1, Number(preview?.touchedCount || 0));
+      return acc;
+    }, { totalCents: 0, totalCount: 0 });
+  };
+
+  const cardOwed = buildCardSideSummary('owed');
+  const cardReceivable = buildCardSideSummary('receivable');
 
   return {
-    owedCents: Number(owed.total_cents || 0),
-    owedCount: Number(owed.total_requests || 0),
-    receivableCents: Number(receivable.total_cents || 0),
-    receivableCount: Number(receivable.total_requests || 0)
+    owedCents: Number(manualOwed.total_cents || 0) + cardOwed.totalCents,
+    owedCount: Number(manualOwed.total_requests || 0) + cardOwed.totalCount,
+    receivableCents: Number(manualReceivable.total_cents || 0) + cardReceivable.totalCents,
+    receivableCount: Number(manualReceivable.total_requests || 0) + cardReceivable.totalCount
   };
 }
 
@@ -10077,20 +10188,20 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
       return a.card_name.localeCompare(b.card_name, "pt-BR", { sensitivity: "base" });
     });
 
-  const payRows = db.prepare(`
-    SELECT person_id, paid_cents
-    FROM person_payments
-    WHERE user_id = ? AND month = ? AND year = ?
-  `).all(userId, month, year);
-  const payByPerson = new Map(payRows.map(row => [row.person_id, row.paid_cents]));
+  const personPaymentBreakdown = getCombinedPersonPaymentBreakdownMap(userId, month, year);
 
-  const personPanel = people.map(person => ({
-    person_id: person.id,
-    person_name: person.name,
-    total_cents: personTotalsMap.get(person.id) || 0,
-    paid_cents: payByPerson.get(person.id) || 0,
-    active: person.active
-  }));
+  const personPanel = people.map(person => {
+    const breakdown = personPaymentBreakdown.get(person.id) || { manualCents: 0, autoCents: 0, totalPaidCents: 0 };
+    return {
+      person_id: person.id,
+      person_name: person.name,
+      total_cents: personTotalsMap.get(person.id) || 0,
+      paid_cents: breakdown.totalPaidCents,
+      manual_paid_cents: breakdown.manualCents,
+      auto_paid_cents: breakdown.autoCents,
+      active: person.active
+    };
+  });
 
   res.render("summary", { month, year, people, cards, rows, unassigned, cardsPanel, personPanel, formatBRLFromCents, isClosed });
 });
@@ -10208,16 +10319,20 @@ function getPersonStatementExportData(userId, month, year, personId, itemOrder =
 
   const total = totalsByCard.reduce((acc, r) => acc + r.total_cents, 0);
 
-  const paymentRow = db.prepare(`
-    SELECT paid_cents
-    FROM person_payments
-    WHERE user_id = ? AND person_id = ? AND month = ? AND year = ?
-  `).get(userId, personId, month, year);
-
-  const paid_cents = paymentRow ? paymentRow.paid_cents : 0;
+  const paymentBreakdown = getPersonPaymentBreakdownForMonth(userId, month, year, personId);
+  const paid_cents = paymentBreakdown.totalPaidCents;
   const remaining_cents = Math.max(0, total - paid_cents);
 
-  return { person, items, totalsByCard, total, paid_cents, remaining_cents };
+  return {
+    person,
+    items,
+    totalsByCard,
+    total,
+    paid_cents,
+    manual_paid_cents: paymentBreakdown.manualCents,
+    auto_paid_cents: paymentBreakdown.autoCents,
+    remaining_cents
+  };
 }
 
 function resolveStatementShareState({ paidCents = 0, remainingCents = 0 } = {}) {

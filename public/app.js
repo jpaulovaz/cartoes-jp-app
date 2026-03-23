@@ -646,21 +646,29 @@
 
   function syncPeopleSummary(root) {
     let paidTotal = 0;
+    let manualTotal = 0;
     let remainingTotal = 0;
     root.querySelectorAll('[data-summary-person-row]').forEach((row) => {
       const totalCents = Number(row.getAttribute('data-total-cents') || 0);
+      const autoPaidCents = Number(row.getAttribute('data-auto-paid-cents') || 0);
       const personId = row.getAttribute('data-person-id');
       const paidInput = root.querySelector(`[data-summary-person-paid][data-person-id="${personId}"]`);
-      const paidCents = centsFromValue(paidInput ? paidInput.value : '');
+      const manualPaidCents = centsFromValue(paidInput ? paidInput.value : '');
+      const paidCents = autoPaidCents + manualPaidCents;
       const remainingCents = totalCents - paidCents;
       paidTotal += paidCents;
+      manualTotal += manualPaidCents;
       remainingTotal += remainingCents;
+      const combinedCell = root.querySelector(`[data-summary-person-combined][data-person-id="${personId}"]`);
+      if (combinedCell) combinedCell.textContent = formatCents(paidCents);
       syncRemainingCell(root.querySelector(`[data-summary-person-remaining][data-person-id="${personId}"]`), remainingCents);
     });
 
     const paidCell = root.querySelector('[data-summary-people-total-paid]');
+    const manualCell = root.querySelector('[data-summary-people-total-manual]');
     const remainingCell = root.querySelector('[data-summary-people-total-remaining]');
     if (paidCell) paidCell.textContent = formatCents(paidTotal);
+    if (manualCell) manualCell.textContent = formatCents(manualTotal);
     syncRemainingCell(remainingCell, remainingTotal);
   }
 

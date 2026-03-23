@@ -45,16 +45,19 @@
 
     if (!person.is_self && person.has_app_user) {
       addChip('border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200', 'Também usa o app');
+      addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix no perfil da pessoa');
     }
 
     if (!person.email) {
       addChip('border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-200', 'Sem e-mail');
     }
 
-    if (person.pix_enabled && person.pix_valid) {
-      addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix pronto');
-    } else if (person.pix_enabled && !person.pix_valid) {
-      addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pix pedindo ajuste');
+    if (person.is_self) {
+      if (person.pix_enabled && person.pix_valid) {
+        addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix pronto');
+      } else if (person.pix_enabled && !person.pix_valid) {
+        addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pix pedindo ajuste');
+      }
     }
 
     if (!person.is_self && person.friendship_active) {
@@ -63,6 +66,13 @@
         addChip('border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200', 'Cobrança automática liberada');
       } else if (!person.active) {
         addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Cobrança pausada');
+      }
+      if (person.linked_user_pix_ready) {
+        addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix pronto do outro lado');
+      } else if (person.linked_user_pix_enabled) {
+        addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pix pedindo ajuste');
+      } else if (person.has_app_user) {
+        addChip('border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300', 'Pix ainda não pronto');
       }
     } else if (!person.is_self && person.friendship_state === 'pending_sent') {
       addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pedido enviado');
@@ -79,10 +89,10 @@
     <div>
       <span class="op-page-hero__eyebrow">Seu perfil + sua rede</span>
       <h1 class="op-page-hero__title mt-4">Amigos</h1>
-      <p class="op-page-hero__subtitle mt-3">Agora ficou cada um no seu quadrado bonitinho: seu perfil vive fixo aqui no app, e a lista de baixo fica só para contatos, amizades e cobranças com quem entra nas suas divisões.</p>
+      <p class="op-page-hero__subtitle mt-3">Agora ficou cada um no seu quadrado bonitinho: seu perfil vive fixo aqui no app, a lista de baixo fica só para contatos, amizades e cobranças, e o Pix de cada pessoa mora no próprio perfil.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge">Seu perfil não disputa lugar com ninguém</span>
-        <span class="badge">Cobrança automática só com amizade ativa</span>
+        <span class="badge">Cada um cuida do próprio Pix</span>
       </div>
     </div>
 
@@ -328,7 +338,7 @@
     </div>
 
     <form method="post" action="/people" id="contactForm" class="flex flex-col gap-4 mb-8 pb-8 border-b border-slate-100 dark:border-slate-700">
-      <div class="text-sm font-medium text-slate-500 dark:text-slate-400 -mb-1">O e-mail continua opcional, e você já pode deixar um Pix salvo nesse contato para facilitar o futuro.</div>
+      <div class="text-sm font-medium text-slate-500 dark:text-slate-400 -mb-1">O e-mail continua opcional. O Pix, agora, cada um cuida do seu: aqui você salva só o contato e o resto entra quando a amizade estiver ativa.</div>
       <input type="hidden" name="id" id="contactPersonId">
 
       <div class="w-full relative">
@@ -366,58 +376,10 @@
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1zm7 4h.01"></path></svg>
           </span>
           <div class="min-w-0 flex-1">
-            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Receber por Pix</div>
-            <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Deixar o Pix salvo aqui não dispara nada sozinho. Só deixa a casa preparada para quando esse contato entrar em jogo nas cobranças.</p>
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Pix da outra pessoa</div>
+            <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Você não precisa cadastrar a chave Pix de ninguém por aqui. Quando a amizade estiver ativa e rolar pagamento, o app usa o Pix que a própria pessoa deixou no perfil dela.</p>
           </div>
         </div>
-
-        <div class="mt-4 flex flex-wrap items-center gap-3">
-          <label class="inline-flex items-center gap-3 rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-bold text-violet-700 shadow-sm dark:border-violet-800 dark:bg-slate-900/70 dark:text-violet-200">
-            <input type="checkbox" name="pix_enabled" id="contactPixEnabled" value="1" class="h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500">
-            <span>Deixar Pix pronto</span>
-          </label>
-          <p class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">A chave fica mascaradinha na lista e só aparece inteira quando alguém realmente for copiar o Pix.</p>
-        </div>
-
-        <div class="mt-4 grid gap-3 md:grid-cols-2">
-          <label class="block">
-            <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Tipo da chave</span>
-            <select name="pix_key_type" id="contactPixKeyType" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
-              <option value="">Escolha um tipo</option>
-              <option value="cpf">CPF</option>
-              <option value="cnpj">CNPJ</option>
-              <option value="email">E-mail</option>
-              <option value="phone">Celular</option>
-              <option value="evp">Chave aleatória</option>
-            </select>
-          </label>
-          <label class="block">
-            <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Chave Pix</span>
-            <input name="pix_key_value" id="contactPixKeyValue" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: 21999999999" inputmode="text" autocomplete="off">
-            <p id="contactPixKeyHelp" class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.</p>
-          </label>
-        </div>
-
-        <div class="mt-4 grid gap-3 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)]">
-          <label class="block">
-            <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estado</span>
-            <select name="pix_state" id="contactPixState" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
-              <% pixStateList.forEach((stateEntry) => { const stateCode = getPixStateCode(stateEntry); const stateLabel = getPixStateLabel(stateEntry); if (!stateCode) return; %>
-                <option value="<%= stateCode %>"><%= stateLabel %></option>
-              <% }) %>
-            </select>
-          </label>
-          <label class="block">
-            <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Cidade</span>
-            <input name="pix_city" id="contactPixCity" list="contactPixCitySuggestions" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Cidade do recebedor">
-            <datalist id="contactPixCitySuggestions"></datalist>
-          </label>
-        </div>
-
-        <label class="mt-4 block">
-          <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nome que aparece no Pix</span>
-          <input name="pix_label" id="contactPixLabel" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: João - OrganizaPay">
-        </label>
       </div>
     </form>
 
@@ -438,19 +400,23 @@
                if (!p.email) {
                  personHintText = 'Quer descobrir se essa pessoa também usa o app? Um e-mail aqui já ajuda a abrir essa porta.';
                } else if (!p.has_app_user) {
-                 personHintText = 'Por enquanto o app não achou uma conta OrganizaPay com esse e-mail. Se a pessoa entrar depois, o convite aparece.';
+                 personHintText = 'Por enquanto o app não achou uma conta OrganizaPay com esse e-mail. Se a pessoa entrar depois, o Pix continua sendo cadastrado por ela, no perfil dela.';
                } else if (p.friendship_active && !p.active) {
-                 personHintText = 'A amizade segue ativa, mas este contato está inativo na sua lista. Novos envios automáticos ficam pausados até você reativar.';
+                 personHintText = 'A amizade segue ativa, mas este contato está inativo na sua lista. Novos envios automáticos ficam pausados até você reativar — e o Pix continua vindo do perfil dessa pessoa quando tudo voltar a rodar.';
+               } else if (p.friendship_active && p.linked_user_pix_ready) {
+                 personHintText = 'Vocês já estão conectados. Quando pintar pagamento, o app pega o Pix vivo dessa pessoa no perfil dela — se ela trocar por lá, aqui já acompanha sem drama.';
+               } else if (p.friendship_active && p.linked_user_pix_enabled && !p.linked_user_pix_ready) {
+                 personHintText = 'A amizade já está ativa, mas o Pix dessa pessoa ainda está pedindo um ajuste no próprio perfil. Quando ela fechar isso, as cobranças pegam a versão certa.';
                } else if (p.friendship_active) {
-                 personHintText = 'Vocês já estão conectados. Daqui pra frente, cobranças automáticas podem circular entre vocês com o ok dos dois lados.';
+                 personHintText = 'A amizade já está ativa. Agora só falta essa pessoa deixar o Pix dela pronto no próprio perfil para os pagamentos ficarem redondinhos.';
                } else if (p.friendship_state === 'pending_sent') {
-                 personHintText = 'O convite já foi enviado. Agora é aquele momento clássico de esperar o joinha chegar.';
+                 personHintText = 'O convite já foi enviado. Quando vier o joinha, o Pix passa a vir do perfil dessa pessoa automaticamente.';
                } else if (p.friendship_state === 'pending_received') {
-                 personHintText = 'Essa pessoa já te chamou. É só aceitar aqui e pronto: amizade ativa, com autorização dos dois lados.';
+                 personHintText = 'Essa pessoa já te chamou. É só aceitar aqui e pronto: amizade ativa, com autorização dos dois lados e cada um cuidando do próprio Pix.';
                } else if (!p.active) {
                  personHintText = 'Esse contato usa o app, mas está desativado na sua lista. Reative quando quiser colocar em jogo de novo.';
                } else {
-                 personHintText = 'O app já reconheceu essa pessoa. Se fizer sentido, mande um pedido de amizade para liberar cobranças automáticas com o ok dos dois lados.';
+                 personHintText = 'O app já reconheceu essa pessoa. Se fizer sentido, mande um pedido de amizade para liberar cobranças automáticas — e o Pix entra depois, vindo do perfil dela.';
                }
           %>
             <div class="group rounded-[28px] border p-5 transition-all bg-white dark:bg-slate-800 shadow-sm <%= isHighlighted ? 'border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-900/70' : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500 hover:shadow-md' %>">
@@ -472,13 +438,6 @@
                           data-name="<%= p.name %>"
                           data-phone="<%= p.phone || '' %>"
                           data-email="<%= p.email || '' %>"
-                          data-pix-enabled="<%= p.pix_enabled ? '1' : '0' %>"
-                          data-pix-key-type="<%= p.pix_key_type || '' %>"
-                          data-pix-key-value="<%= p.pix_key_value || '' %>"
-                          data-pix-key-value-input="<%= p.pix_key_value_input || '' %>"
-                          data-pix-city="<%= p.pix_city || '' %>"
-                          data-pix-state="<%= p.pix_state || '' %>"
-                          data-pix-label="<%= p.pix_label || '' %>"
                           onclick="editContactFromButton(this)"
                           class="text-slate-400 hover:text-blue-500 transition-colors"
                           aria-label="Editar contato"
@@ -537,24 +496,30 @@
                       <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-violet-600 shadow-sm ring-1 ring-violet-100 dark:bg-slate-800 dark:text-violet-300 dark:ring-violet-900/50" aria-hidden="true"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1zm7 4h.01"></path></svg></span>
                       <div class="min-w-0 flex-1">
                         <div class="flex flex-wrap items-center gap-2">
-                          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600/80 dark:text-violet-300/80">Pix por aqui</div>
-                          <% if (p.pix_enabled && p.pix_valid) { %>
-                            <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pronto para uso</span>
-                          <% } else if (p.pix_enabled) { %>
+                          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600/80 dark:text-violet-300/80">Pix nas cobranças</div>
+                          <% if (p.friendship_active && p.linked_user_pix_ready) { %>
+                            <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pronto quando pintar cobrança</span>
+                          <% } else if (p.friendship_active && p.linked_user_pix_enabled) { %>
                             <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Falta um ajuste</span>
+                          <% } else if (p.friendship_active && p.has_app_user) { %>
+                            <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">Ainda não deixou pronto</span>
+                          <% } else if (p.has_app_user) { %>
+                            <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-bold text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200">Entra depois da amizade</span>
                           <% } else { %>
-                            <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">Ainda desligado</span>
+                            <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">Contato local</span>
                           <% } %>
                         </div>
                         <p class="mt-1 max-w-none text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
-                          <% if (p.pix_enabled) { %>
-                            <strong class="font-semibold text-slate-700 dark:text-slate-100"><%= (p.pix_key_type_label || 'Chave Pix') + ' · ' + (p.pix_masked_key || 'aguardando preenchimento') %></strong>.
-                            <% if (p.pix_city) { %>
-                              Cidade do Pix: <strong class="font-semibold text-slate-700 dark:text-slate-100"><%= p.pix_city %><%= p.pix_state ? ' / ' + p.pix_state : '' %></strong>.
-                            <% } %>
-                            Deixando salvo agora, a casa já fica preparada para quando esse contato entrar em uma cobrança com Pix.
+                          <% if (p.friendship_active && p.linked_user_pix_ready) { %>
+                            Quando você for pagar algo a <strong class="font-semibold text-slate-700 dark:text-slate-100"><%= p.name %></strong>, o app usa o Pix que essa pessoa deixou no próprio perfil. Se ela trocar a chave por lá, a próxima cobrança já acompanha a versão nova.
+                          <% } else if (p.friendship_active && p.linked_user_pix_enabled) { %>
+                            A amizade já está ativa, mas o Pix dessa pessoa ainda está pedindo um ajuste no próprio perfil. Quando ela fechar isso, é esse cadastro vivo que entra em cena nas cobranças.
+                          <% } else if (p.friendship_active && p.has_app_user) { %>
+                            A amizade já está ativa. Agora só falta essa pessoa deixar o Pix dela redondinho no próprio perfil para os pagamentos acontecerem sem improviso.
+                          <% } else if (p.has_app_user) { %>
+                            Você não precisa cadastrar a chave Pix dessa pessoa por aqui. Quando a amizade for aceita e surgir um pagamento, o app usa o Pix que ela mesma deixou no perfil dela.
                           <% } else { %>
-                            Nenhuma chave salva por aqui ainda. Se quiser, já dá para deixar esse contato preparado sem pressa.
+                            Por enquanto isso aqui é só contato. Se essa pessoa entrar no app depois, o Pix continua sendo cadastrado por ela, no perfil dela.
                           <% } %>
                         </p>
                       </div>
@@ -708,12 +673,6 @@
     getField('contact', 'Name').value = button.dataset.name || '';
     getField('contact', 'Phone').value = button.dataset.phone || '';
     getField('contact', 'Email').value = button.dataset.email || '';
-    getField('contact', 'PixEnabled').checked = button.dataset.pixEnabled === '1';
-    getField('contact', 'PixKeyType').value = button.dataset.pixKeyType || '';
-    getField('contact', 'PixKeyValue').value = button.dataset.pixKeyValueInput || button.dataset.pixKeyValue || '';
-    getField('contact', 'PixState').value = button.dataset.pixState || findPixStateByCity(button.dataset.pixCity || '') || PIX_DEFAULT_STATE;
-    getField('contact', 'PixCity').value = button.dataset.pixCity || PIX_DEFAULT_CITY;
-    getField('contact', 'PixLabel').value = button.dataset.pixLabel || '';
     const submit = document.getElementById('contactBtnSubmit');
     const cancel = document.getElementById('contactBtnCancel');
     if (submit) {
@@ -724,8 +683,6 @@
     if (cancel) {
       cancel.classList.remove('hidden');
     }
-    updatePixKeyUi('contact');
-    updatePixCityUi('contact', false);
     const target = document.getElementById('contactForm');
     if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -735,12 +692,6 @@
     getField('contact', 'Name').value = '';
     getField('contact', 'Phone').value = '';
     getField('contact', 'Email').value = '';
-    getField('contact', 'PixEnabled').checked = false;
-    getField('contact', 'PixKeyType').value = '';
-    getField('contact', 'PixKeyValue').value = '';
-    getField('contact', 'PixState').value = PIX_DEFAULT_STATE;
-    getField('contact', 'PixCity').value = PIX_DEFAULT_CITY;
-    getField('contact', 'PixLabel').value = '';
     const submit = document.getElementById('contactBtnSubmit');
     const cancel = document.getElementById('contactBtnCancel');
     if (submit) {
@@ -749,8 +700,6 @@
       submit.classList.add('bg-slate-900');
     }
     if (cancel) cancel.classList.add('hidden');
-    updatePixKeyUi('contact');
-    updatePixCityUi('contact', true);
   }
 
   function bindPixForm(prefix, options = {}) {
@@ -782,7 +731,6 @@
 
   window.addEventListener('load', () => {
     bindPixForm('self');
-    bindPixForm('contact', { forceCity: true });
     resetContactForm();
 
     const highlighted = document.querySelector('[id^="friend-request-"][class*="ring-2"]');

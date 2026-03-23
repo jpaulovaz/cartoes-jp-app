@@ -5521,6 +5521,7 @@ function getPeopleAll(userId) {
   const friendshipMap = getFriendshipMapForUser(userId, remoteIds);
   const outgoingMap = getPendingOutgoingFriendRequestByPersonMap(userId, personIds);
   const incomingMap = getPendingIncomingFriendRequestMap(userId, remoteIds);
+  const remotePixMap = getUserPixProfilesByUserIds(remoteIds);
 
   return rows.map((person) => {
     const linkedUserId = Number(person.stable_linked_user_id || person.email_matched_user_id || 0) || null;
@@ -5541,7 +5542,7 @@ function getPeopleAll(userId) {
       state: normalizePixState(person.pix_state) || guessPixStateByCity(person.pix_city) || null,
       label: sanitizePixText(person.pix_label, { max: 25 }) || null
     };
-    const pixProfile = validatePixProfile({
+    const ownPixProfile = validatePixProfile({
       enabled: person.pix_enabled,
       keyType: storedPixProfile.keyType,
       keyValue: storedPixProfile.keyValue,
@@ -5550,6 +5551,23 @@ function getPeopleAll(userId) {
       label: storedPixProfile.label,
       name: person.name || person.email || 'ORGANIZAPAY'
     });
+    const linkedUserPixProfile = !isSelf && hasAppUser
+      ? (remotePixMap.get(linkedUserId) || null)
+      : null;
+
+    const effectivePixEnabled = isSelf ? !!ownPixProfile.enabled : !!linkedUserPixProfile?.pixEnabled;
+    const effectivePixValid = isSelf ? !!ownPixProfile.valid : !!linkedUserPixProfile?.pixValid;
+    const effectivePixReason = isSelf ? (ownPixProfile.reason || null) : (linkedUserPixProfile?.pixReason || null);
+    const effectivePixKeyType = isSelf ? storedPixProfile.keyType : (linkedUserPixProfile?.pixKeyType || null);
+    const effectivePixKeyTypeLabel = isSelf ? ownPixProfile.keyTypeLabel : (linkedUserPixProfile?.pixKeyTypeLabel || null);
+    const effectivePixKeyValue = isSelf ? ownPixProfile.keyValue : (linkedUserPixProfile?.pixKeyValue || null);
+    const effectivePixMaskedKey = isSelf ? ownPixProfile.keyMasked : (linkedUserPixProfile?.pixMaskedKey || null);
+    const effectivePixCity = isSelf ? ownPixProfile.city : (linkedUserPixProfile?.pixCity || null);
+    const effectivePixState = isSelf
+      ? (storedPixProfile.state || guessPixStateByCity(storedPixProfile.city) || null)
+      : (linkedUserPixProfile?.pixState || guessPixStateByCity(linkedUserPixProfile?.pixCity) || null);
+    const effectivePixLabel = isSelf ? ownPixProfile.label : (linkedUserPixProfile?.pixLabel || null);
+    const effectivePixUpdatedAt = isSelf ? (person.pix_updated_at || null) : (linkedUserPixProfile?.pixUpdatedAt || null);
 
     let friendshipState = 'none';
     if (friendshipActive) friendshipState = 'active';
@@ -5576,18 +5594,24 @@ function getPeopleAll(userId) {
       friendship: friendship || null,
       outgoing_friend_request: outgoingRequest,
       incoming_friend_request: incomingRequest,
-      pix_enabled: !!pixProfile.enabled,
-      pix_valid: !!pixProfile.valid,
-      pix_reason: pixProfile.reason || null,
-      pix_key_type: storedPixProfile.keyType,
-      pix_key_type_label: pixProfile.keyTypeLabel,
-      pix_key_value: pixProfile.keyValue,
-      pix_masked_key: pixProfile.keyMasked,
-      pix_city: pixProfile.city,
-      pix_state: storedPixProfile.state || guessPixStateByCity(storedPixProfile.city) || null,
-      pix_label: pixProfile.label,
-      pix_key_value_input: formatPixKeyValueForInput(storedPixProfile.keyType, pixProfile.keyValue),
-      pix_updated_at: person.pix_updated_at || null
+      pix_enabled: effectivePixEnabled,
+      pix_valid: effectivePixValid,
+      pix_reason: effectivePixReason,
+      pix_key_type: effectivePixKeyType,
+      pix_key_type_label: effectivePixKeyTypeLabel,
+      pix_key_value: effectivePixKeyValue,
+      pix_masked_key: effectivePixMaskedKey,
+      pix_city: effectivePixCity,
+      pix_state: effectivePixState,
+      pix_label: effectivePixLabel,
+      pix_key_value_input: isSelf ? formatPixKeyValueForInput(storedPixProfile.keyType, ownPixProfile.keyValue) : '',
+      pix_updated_at: effectivePixUpdatedAt,
+      linked_user_pix_enabled: !isSelf && !!linkedUserPixProfile?.pixEnabled,
+      linked_user_pix_ready: !isSelf && !!linkedUserPixProfile?.pixEnabled && !!linkedUserPixProfile?.pixValid,
+      linked_user_pix_reason: !isSelf ? (linkedUserPixProfile?.pixReason || null) : null,
+      linked_user_pix_city: !isSelf ? (linkedUserPixProfile?.pixCity || null) : null,
+      linked_user_pix_state: !isSelf ? (linkedUserPixProfile?.pixState || guessPixStateByCity(linkedUserPixProfile?.pixCity) || null) : null,
+      linked_user_pix_updated_at: !isSelf ? (linkedUserPixProfile?.pixUpdatedAt || null) : null
     };
   });
 }
@@ -9790,21 +9814,26 @@ app.post("/people", ensureAuthenticated, (req, res) => {
       `).get(id, userId)
     : null;
   const duplicatedPerson = findPersonByNameForUser(userId, name, id);
-  const pixEnabled = normalizePixToggle(req.body.pix_enabled);
-  const pixKeyType = normalizePixKeyType(req.body.pix_key_type);
-  const pixKeyValue = normalizePixKeyValue(pixKeyType, req.body.pix_key_value);
-  const pixStateRaw = normalizePixState(req.body.pix_state) || guessPixStateByCity(req.body.pix_city) || null;
-  const pixCityRaw = String(req.body.pix_city || '').trim();
-  const pixLabelRaw = String(req.body.pix_label || '').trim();
-  const pixProfile = validatePixProfile({
-    enabled: pixEnabled,
-    keyType: pixKeyType,
-    keyValue: pixKeyValue,
-    city: pixCityRaw,
-    state: pixStateRaw,
-    label: pixLabelRaw,
-    name: name || email || 'ORGANIZAPAY'
-  });
+  const isSelfTarget = isSelfPersonRow(targetPerson);
+  const pixEnabled = isSelfTarget ? normalizePixToggle(req.body.pix_enabled) : false;
+  const pixKeyType = isSelfTarget ? normalizePixKeyType(req.body.pix_key_type) : null;
+  const pixKeyValue = isSelfTarget ? normalizePixKeyValue(pixKeyType, req.body.pix_key_value) : null;
+  const pixStateRaw = isSelfTarget
+    ? (normalizePixState(req.body.pix_state) || guessPixStateByCity(req.body.pix_city) || null)
+    : null;
+  const pixCityRaw = isSelfTarget ? String(req.body.pix_city || '').trim() : '';
+  const pixLabelRaw = isSelfTarget ? String(req.body.pix_label || '').trim() : '';
+  const pixProfile = isSelfTarget
+    ? validatePixProfile({
+        enabled: pixEnabled,
+        keyType: pixKeyType,
+        keyValue: pixKeyValue,
+        city: pixCityRaw,
+        state: pixStateRaw,
+        label: pixLabelRaw,
+        name: name || email || 'ORGANIZAPAY'
+      })
+    : { valid: true, enabled: false, keyType: null, keyValue: null, city: null, state: null, label: null };
   const storedPixProfile = pixEnabled
     ? pixProfile
     : { keyType: null, keyValue: null, city: null, state: null, label: null };
@@ -9832,7 +9861,6 @@ app.post("/people", ensureAuthenticated, (req, res) => {
   }
 
   const pixUpdatedAt = pixEnabled ? nowIso() : null;
-  const isSelfTarget = isSelfPersonRow(targetPerson);
 
   if (id) {
     db.prepare(`
@@ -9885,7 +9913,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
 
   const successMessage = isSelfTarget
     ? (pixEnabled ? 'Seu perfil foi salvo com o Pix prontinho para entrar em cena.' : 'Seu perfil foi atualizado direitinho por aqui.')
-    : (pixEnabled ? 'Contato salvo com Pix pronto para entrar em cena quando precisar.' : 'Contato salvo direitinho por aqui.');
+    : 'Contato salvo direitinho por aqui. Quando rolar amizade e pagamento, o Pix vem do perfil da própria pessoa.';
 
   setFlash(req, 'success', successMessage);
   return res.redirect('/people');

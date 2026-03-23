@@ -156,16 +156,17 @@
     </div>
 
     <div id="modalManual" data-manual-modal aria-hidden="true"
-      class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
-        <div class="flex justify-between items-center mb-6">
+      class="hidden fixed inset-0 z-[10020] bg-slate-900/60 backdrop-blur-sm px-3 py-3 sm:px-4 sm:py-6">
+      <div class="pointer-events-none flex min-h-full items-end justify-center sm:items-center">
+        <div class="pointer-events-auto flex w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 lg:max-w-4xl xl:max-w-5xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]">
+        <div class="flex shrink-0 justify-between items-center border-b border-slate-200 px-4 py-4 sm:px-6 dark:border-slate-700">
           <h2 class="text-xl font-black text-slate-800 dark:text-white">Adicionar compra</h2>
           <button type="button" data-manual-modal-close
             class="op-icon-btn" aria-label="Fechar janela">✕</button>
         </div>
 
-        <form action="/txn/manual" method="POST" class="space-y-4" data-auto-first-due-form>
-          <div class="grid grid-cols-2 gap-4">
+        <div class="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6" style="padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));"><form action="/txn/manual" method="POST" class="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0" data-auto-first-due-form>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data da Compra</label>
               <input type="date" name="date" required data-manual-date-input <%= isClosed ? "disabled" : "" %>
@@ -184,7 +185,7 @@
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
               <input type="text" name="amount" placeholder="0,00" required data-money-mask data-manual-amount-input inputmode="decimal" enterkeyhint="next" autocapitalize="off" autocomplete="off" <%= isClosed ? "disabled" : "" %>
@@ -210,7 +211,7 @@
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
 
-          <div data-purchase-category-control class="space-y-3">
+          <div data-purchase-category-control class="space-y-3 lg:col-span-2">
             <div>
               <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Categoria (opcional)</label>
               <select name="purchase_category_id" data-purchase-category-select <%= isClosed ? "disabled" : "" %>
@@ -249,18 +250,19 @@
           </label>
 
           <% if (isClosed) { %>
-            <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+            <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200 lg:col-span-2">
               Este mês está fechado. Abra o mês para lançar novos itens nele.
             </div>
           <% } else { %>
             <button type="submit"
-              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all">
+              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all lg:col-span-2">
               Salvar compra
             </button>
           <% } %>
-        </form>
+        </form></div>
       </div>
     </div>
+  </div>
 
     <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6">
       <form method="get" action="/month/<%= year %>/<%= month %>" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
@@ -415,7 +417,7 @@
               </button>
               <button type="button" id="monthExitSelectionBtn"
                 class="hidden inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
-                Cancelar seleção
+                Cancelar Seleção
               </button>
             </div>
           <% } %>
@@ -596,15 +598,15 @@
         </div>
         <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:flex md:flex-wrap md:justify-end">
           <button type="button" id="monthBulkPeopleBtn"
-            class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">Participantes</button>
+            class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Participantes</button>
           <button type="button" id="monthBulkCategoryBtn"
-            class="inline-flex items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200 dark:hover:bg-blue-900/35">Categoria</button>
+            class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Categoria</button>
           <button type="button" id="monthBulkMoveBtn"
-            class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Mover fatura</button>
+            class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Mover Fatura</button>
           <button type="button" id="monthBulkDeleteBtn"
             class="inline-flex items-center justify-center rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 transition hover:-translate-y-0.5 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200 dark:hover:bg-red-900/35">Excluir</button>
           <button type="button" id="monthBulkCancelBtn"
-            class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Cancelar</button>
+            class="inline-flex items-center justify-center rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 transition hover:-translate-y-0.5 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200 dark:hover:bg-red-900/35">Cancelar</button>
         </div>
       </div>
     </div>
@@ -912,6 +914,7 @@
       function toneClasses(tone = 'secondary') {
         const base = 'w-full rounded-2xl px-4 py-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50';
         if (tone === 'danger') return `${base} bg-red-600 text-white hover:bg-red-700 focus:ring-red-500`;
+        if (tone === 'cancel') return `${base} border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 focus:ring-red-400 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200 dark:hover:bg-red-900/35 dark:focus:ring-red-500`;
         if (tone === 'primary') return `${base} bg-slate-900 text-white hover:bg-slate-800 focus:ring-slate-500 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white dark:focus:ring-slate-300`;
         return `${base} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:ring-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus:ring-slate-500`;
       }
@@ -1071,20 +1074,20 @@
             message: messageParts.join('\n\n'),
             options: destructive
               ? [
-                  { label: 'Cancelar', value: null, tone: 'secondary' },
-                  { label: 'Excluir só itens atuais', value: 'single', tone: 'danger' },
-                  { label: 'Excluir itens atuais + próximas parcelas', value: 'future', tone: 'danger' }
+                  { label: 'Excluir Só Itens Atuais', value: 'single', tone: 'danger' },
+                  { label: 'Excluir Itens Atuais + Próximas Parcelas', value: 'future', tone: 'danger' },
+                  { label: 'Cancelar', value: null, tone: 'cancel' }
                 ]
               : moveAction
                 ? [
-                    { label: 'Cancelar', value: null, tone: 'secondary' },
-                    { label: 'Mover só itens atuais', value: 'single', tone: 'primary' },
-                    { label: 'Mover itens atuais + próximas parcelas', value: 'future', tone: 'primary' }
+                    { label: 'Mover Só Itens Atuais', value: 'single', tone: 'primary' },
+                    { label: 'Mover Itens Atuais + Próximas Parcelas', value: 'future', tone: 'primary' },
+                    { label: 'Cancelar', value: null, tone: 'cancel' }
                   ]
                 : [
-                    { label: 'Cancelar', value: null, tone: 'secondary' },
-                    { label: 'Aplicar só itens atuais', value: 'single', tone: 'primary' },
-                    { label: 'Aplicar itens atuais + próximas parcelas', value: 'future', tone: 'primary' }
+                    { label: 'Aplicar Só Itens Atuais', value: 'single', tone: 'primary' },
+                    { label: 'Aplicar Itens Atuais + Próximas Parcelas', value: 'future', tone: 'primary' },
+                    { label: 'Cancelar', value: null, tone: 'cancel' }
                   ]
           });
         }
@@ -1365,7 +1368,7 @@
         const getSelectedIds = () => Array.from(wrapper.querySelectorAll('input[name="person_ids"]:checked'))
           .map(input => Number(input.value))
           .filter(Number.isInteger);
-        let saveActionButton = null;
+        let saveActionButtons = [];
 
         function clearSplitModeChoice() {
           modeInputs().forEach((input) => {
@@ -1462,10 +1465,13 @@
         }
 
         function syncSaveButtonState() {
-          if (!saveActionButton) return;
+          if (!saveActionButtons.length) return;
           const selectedIds = getSelectedIds();
           const needsExplicitChoice = exactModeAvailable && selectedIds.length > 1;
-          saveActionButton.disabled = !people.length || (needsExplicitChoice && !getSplitMode());
+          const disabled = !people.length || (needsExplicitChoice && !getSplitMode());
+          saveActionButtons.forEach((button) => {
+            if (button) button.disabled = disabled;
+          });
         }
 
         function syncSplitUi() {
@@ -1549,16 +1555,16 @@
         }
 
         const saveNowAction = {
-          label: 'Salvar divisão',
-          tone: items.length > 1 ? 'secondary' : 'primary',
+          label: 'Salvar Divisão',
+          tone: 'primary',
           closeOnClick: false,
           disabled: !people.length,
           onClick: async () => submitAllocationChange('send_now')
         };
 
         const saveLaterAction = {
-          label: 'Salvar e mandar depois',
-          tone: items.length > 1 ? 'primary' : 'secondary',
+          label: 'Salvar e Mandar Depois',
+          tone: 'primary',
           closeOnClick: false,
           disabled: !people.length,
           onClick: async () => submitAllocationChange('draft')
@@ -1571,11 +1577,13 @@
             : 'Escolha quem participa e, se quiser, dite o valor de cada um.',
           body: wrapper,
           size: 'people',
-          actions: items.length > 1
-            ? [{ label: 'Fechar', tone: 'secondary' }, saveLaterAction, saveNowAction]
-            : [{ label: 'Fechar', tone: 'secondary' }, saveNowAction, saveLaterAction]
+          actions: [
+            saveNowAction,
+            saveLaterAction,
+            { label: 'Cancelar', tone: 'cancel' }
+          ]
         });
-        saveActionButton = sheetState.actions.querySelectorAll('button')[1] || null;
+        saveActionButtons = Array.from(sheetState.actions.querySelectorAll('button')).slice(0, 2);
         syncSelectionCounter();
         syncSplitUi();
       }
@@ -1676,9 +1684,8 @@
           subtitle: items.length > 1 ? 'A categoria escolhida será aplicada em todos os itens selecionados.' : 'Escolha a categoria que faz mais sentido para essa compra.',
           body: wrapper,
           actions: [
-            { label: 'Fechar', tone: 'secondary' },
             {
-              label: 'Salvar categoria',
+              label: 'Salvar Categoria',
               tone: 'primary',
               closeOnClick: false,
               onClick: async () => {
@@ -1700,7 +1707,8 @@
                 if (ok) ensureMonthSheet().close();
                 return false;
               }
-            }
+            },
+            { label: 'Cancelar', tone: 'cancel' }
           ]
         });
       }
@@ -1810,9 +1818,8 @@
           subtitle: items.length > 1 ? 'A mudança será aplicada em todos os itens selecionados.' : 'A data da compra continuará a mesma.',
           body: wrapper,
           actions: [
-            { label: 'Fechar', tone: 'secondary' },
             {
-              label: 'Mover para a fatura escolhida',
+              label: 'Mover para a Fatura Escolhida',
               tone: 'primary',
               closeOnClick: false,
               onClick: async () => {
@@ -1833,7 +1840,8 @@
                 if (ok) ensureMonthSheet().close();
                 return false;
               }
-            }
+            },
+            { label: 'Cancelar', tone: 'cancel' }
           ]
         });
       }
@@ -1923,9 +1931,8 @@
           subtitle: futureItems.length ? 'Escolha o alcance da exclusão e confirme a ação.' : 'Confirme a exclusão da compra selecionada.',
           body: wrapper,
           actions: [
-            { label: 'Cancelar', tone: 'secondary' },
             {
-              label: items.length > 1 ? 'Excluir compras' : 'Excluir compra',
+              label: items.length > 1 ? 'Excluir Compras' : 'Excluir Compra',
               tone: 'danger',
               closeOnClick: false,
               onClick: async () => {
@@ -1936,7 +1943,8 @@
                 if (ok) ensureMonthSheet().close();
                 return false;
               }
-            }
+            },
+            { label: 'Cancelar', tone: 'cancel' }
           ]
         });
       }
@@ -1964,11 +1972,12 @@
           title: item.description,
           message,
           options: [
-            { label: 'Selecionar participantes', value: 'people', tone: 'primary' },
-            { label: 'Mudar categoria', value: 'category', tone: 'secondary' },
-            { label: 'Mover para outra fatura', value: 'move', tone: 'secondary' },
-            { label: 'Selecionar vários', value: 'multi', tone: 'secondary' },
-            { label: 'Excluir compra', value: 'delete', tone: 'danger' }
+            { label: 'Selecionar Participantes', value: 'people', tone: 'secondary' },
+            { label: 'Mudar Categoria', value: 'category', tone: 'secondary' },
+            { label: 'Mover para Outra Fatura', value: 'move', tone: 'secondary' },
+            { label: 'Selecionar Vários', value: 'multi', tone: 'secondary' },
+            { label: 'Excluir Compra', value: 'delete', tone: 'danger' },
+            { label: 'Cancelar', value: null, tone: 'cancel' }
           ]
         });
 

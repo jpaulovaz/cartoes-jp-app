@@ -168,6 +168,7 @@
   function toneClasses(tone) {
     const base = 'w-full rounded-2xl px-4 py-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-900';
     if (tone === 'danger') return `${base} bg-red-600 text-white hover:bg-red-700 focus:ring-red-500`;
+    if (tone === 'cancel') return `${base} border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 focus:ring-red-400 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200 dark:hover:bg-red-900/35 dark:focus:ring-red-500`;
     if (tone === 'primary') return `${base} bg-slate-900 text-white hover:bg-slate-800 focus:ring-slate-500 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white dark:focus:ring-slate-300`;
     return `${base} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:ring-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus:ring-slate-500`;
   }
@@ -287,8 +288,8 @@
       title: 'Confirma a exclusão?',
       message,
       options: [
-        { label: 'Cancelar', value: false, tone: 'secondary' },
-        { label: 'Excluir', value: true, tone: 'danger' }
+        { label: 'Excluir', value: true, tone: 'danger' },
+        { label: 'Cancelar', value: false, tone: 'cancel' }
       ]
     });
 
@@ -1209,14 +1210,14 @@
       message,
       options: destructive
         ? [
-            { label: 'Cancelar', value: null, tone: 'secondary' },
-            { label: 'Excluir só esta parcela', value: 'single', tone: 'danger' },
-            { label: 'Excluir esta e próximas', value: 'future', tone: 'danger' }
+            { label: 'Excluir Só Esta Parcela', value: 'single', tone: 'danger' },
+            { label: 'Excluir Esta e Próximas', value: 'future', tone: 'danger' },
+            { label: 'Cancelar', value: null, tone: 'cancel' }
           ]
         : [
-            { label: 'Cancelar', value: null, tone: 'secondary' },
-            { label: 'Aplicar só nesta parcela', value: 'single', tone: 'primary' },
-            { label: 'Aplicar nesta e nas próximas', value: 'future', tone: 'primary' }
+            { label: 'Aplicar Só Nesta Parcela', value: 'single', tone: 'primary' },
+            { label: 'Aplicar Nesta e nas Próximas', value: 'future', tone: 'primary' },
+            { label: 'Cancelar', value: null, tone: 'cancel' }
           ]
     });
 

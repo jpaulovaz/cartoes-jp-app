@@ -45,16 +45,17 @@
 
 
   <div id="modalManual" data-manual-modal aria-hidden="true"
-    class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
-      <div class="flex justify-between items-center mb-6">
+    class="hidden fixed inset-0 z-[10020] bg-slate-900/60 backdrop-blur-sm px-3 py-3 sm:px-4 sm:py-6">
+    <div class="pointer-events-none flex min-h-full items-end justify-center sm:items-center">
+      <div class="pointer-events-auto flex w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 lg:max-w-4xl xl:max-w-5xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]">
+      <div class="flex shrink-0 justify-between items-center border-b border-slate-200 px-4 py-4 sm:px-6 dark:border-slate-700">
         <h2 class="text-xl font-black text-slate-800 dark:text-white">Adicionar compra</h2>
         <button type="button" data-manual-modal-close
           class="op-icon-btn" aria-label="Fechar janela">✕</button>
       </div>
 
-      <form action="/txn/manual" method="POST" class="space-y-4" data-auto-first-due-form>
-        <div class="grid grid-cols-2 gap-4">
+      <div class="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6" style="padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));"><form action="/txn/manual" method="POST" class="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0" data-auto-first-due-form>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data da Compra</label>
             <input type="date" name="date" required data-manual-date-input
@@ -73,7 +74,7 @@
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
             <input type="text" name="amount" placeholder="0,00" required data-money-mask data-manual-amount-input inputmode="decimal" enterkeyhint="next" autocapitalize="off" autocomplete="off"
@@ -99,7 +100,7 @@
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
         </div>
 
-        <div data-purchase-category-control class="space-y-3">
+        <div data-purchase-category-control class="space-y-3 lg:col-span-2">
           <div>
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Categoria (opcional)</label>
             <select name="purchase_category_id" data-purchase-category-select
@@ -138,10 +139,11 @@
         </label>
 
         <button type="submit"
-          class="op-btn op-btn-success op-btn--block">
+          class="op-btn op-btn-success op-btn--block lg:col-span-2">
           Salvar compra
         </button>
-      </form>
+      </form></div>
+      </div>
     </div>
   </div>
 

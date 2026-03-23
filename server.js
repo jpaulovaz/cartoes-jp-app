@@ -1474,7 +1474,7 @@ async function createServerBackup({ triggerKind = 'manual', createdByUserId = nu
   } finally {
     backupJobRunning = false;
     if (workspace) {
-      await fsp.rm(workspace, { recursive: true, force: true }).catch(() => {});
+      await fsp.rm(workspace, { recursive: true, force: true }).catch(() => { });
     }
   }
 }
@@ -1575,7 +1575,7 @@ async function restoreServerBackupFromZip({ zipPath, uploadedFilename, restoredB
   } finally {
     backupRestoreRunning = false;
     if (workspace) {
-      await fsp.rm(workspace, { recursive: true, force: true }).catch(() => {});
+      await fsp.rm(workspace, { recursive: true, force: true }).catch(() => { });
     }
   }
 }
@@ -1852,7 +1852,7 @@ seedAppSettingsFromBootstrap();
 refreshRuntimeSettings({ restartScheduler: false });
 
 const BOOTSTRAP_SESSION_SECRET = getSettingText('SESSION_SECRET', 'chave-secreta-padrao');
-const BOOTSTRAP_PORT = getSettingInt('PORT', 3001);
+const BOOTSTRAP_PORT = getSettingInt('PORT', 3000);
 const DEFAULT_FINANCE_CATEGORIES = ['Prestação Apartamento', 'Luz', 'Internet', 'Condomínio', 'Tim'];
 const DEFAULT_PURCHASE_CATEGORIES = [
   'Mercado',
@@ -7814,9 +7814,9 @@ function parseSharedDebtRequestIds(rawValue) {
   const source = Array.isArray(rawValue)
     ? rawValue
     : String(rawValue || '')
-        .split(',')
-        .map((value) => value.trim())
-        .filter(Boolean);
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
 
   return Array.from(new Set(source.map((value) => Number(value)).filter(Boolean)));
 }
@@ -13078,7 +13078,7 @@ app.post('/admin/backup/restore', ensureAuthenticated, backupRestoreUpload.singl
     });
   } finally {
     if (uploadedPath) {
-      await fsp.rm(uploadedPath, { force: true }).catch(() => {});
+      await fsp.rm(uploadedPath, { force: true }).catch(() => { });
     }
   }
 });

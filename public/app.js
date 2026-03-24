@@ -1257,7 +1257,9 @@
           ? 'excluir esta compra'
           : formType === 'category'
             ? 'mudar a categoria'
-            : 'ajustar a divisão';
+            : formType === 'edit'
+              ? 'salvar essa edição'
+              : 'ajustar a divisão';
         const chosenScope = await resolveInstallmentScope(form, {
           actionLabel,
           destructive: formType === 'delete'

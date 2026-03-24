@@ -11656,7 +11656,7 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const id = Number(req.params.id);
   const txn = db.prepare(`
-    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, t.parent_txn_id, t.recurring_rule_id, t.purchase_category_id,
+    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_id, t.import_id, t.card_number, t.parent_txn_id, t.recurring_rule_id, t.purchase_category_id,
            c.name AS card_name, pc.name AS purchase_category_name, COALESCE(pc.active, 0) AS purchase_category_active,
            COALESCE(t.due_month, i.month) as month,
            COALESCE(t.due_year, i.year) as year
@@ -11684,6 +11684,10 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
   const purchaseCategories = getPurchaseCategories(userId, {
     includeIds: txn.purchase_category_id ? [txn.purchase_category_id] : []
   });
+  const cards = getCardsByIds(userId, [
+    ...(getActiveCards(userId) || []).map((card) => Number(card.id || 0)),
+    Number(txn.card_id || 0)
+  ]);
 
   res.render("txn", {
     txn,
@@ -11692,6 +11696,7 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
     selectedShares,
     initialSplitMode,
     purchaseCategories,
+    cards,
     formatBRLFromCents,
     isClosed,
     hasFutureInstallments: hasFutureInstallmentsForTxn

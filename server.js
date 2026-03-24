@@ -7280,6 +7280,112 @@ function applyPurchaseCategoryToTransactions(userId, rows, purchaseCategoryId, {
   return affected;
 }
 
+
+function getInstallmentChainRows(userId, txnRow) {
+  if (!txnRow) return [];
+  const rootId = Number(txnRow.parent_txn_id || txnRow.id || 0);
+  if (!rootId) return [];
+
+  return db.prepare(`
+    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id, t.purchase_category_id,
+           COALESCE(t.due_month, i.month) AS month,
+           COALESCE(t.due_year, i.year) AS year
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (t.id = ? OR t.parent_txn_id = ?)
+    ORDER BY COALESCE(t.due_year, i.year) ASC, COALESCE(t.due_month, i.month) ASC, t.id ASC
+  `).all(userId, rootId, rootId);
+}
+
+function formatInstallmentDescription(baseDescription, position, total) {
+  const cleanBase = String(baseDescription || '').trim();
+  const normalizedTotal = Math.max(1, Number(total || 1));
+  const normalizedPosition = Math.min(normalizedTotal, Math.max(1, Number(position || 1)));
+  if (normalizedTotal <= 1) return cleanBase;
+  return `${cleanBase} (${String(normalizedPosition).padStart(2, '0')}/${String(normalizedTotal).padStart(2, '0')})`;
+}
+
+function getEditableTransactionScopeRows(userId, txnRow, scope = 'single') {
+  if (!txnRow) return [];
+  if (Number(txnRow.recurring_rule_id || 0) > 0) {
+    return getRecurringCategoryScopeRows(userId, txnRow, scope);
+  }
+  return getInstallmentScopeRows(userId, txnRow, scope);
+}
+
+function getAllocationRowsByTransactionIds(userId, txnIds) {
+  const ids = normalizeTxnIds(txnIds);
+  if (!ids.length) return new Map();
+
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = db.prepare(`
+    SELECT transaction_id, person_id, share_cents
+    FROM allocations
+    WHERE user_id = ? AND transaction_id IN (${placeholders})
+    ORDER BY transaction_id ASC, id ASC
+  `).all(userId, ...ids);
+
+  const map = new Map();
+  rows.forEach((row) => {
+    const txnId = Number(row.transaction_id || 0);
+    if (!txnId) return;
+    if (!map.has(txnId)) map.set(txnId, []);
+    map.get(txnId).push({ person_id: Number(row.person_id || 0), share_cents: Number(row.share_cents || 0) });
+  });
+  return map;
+}
+
+function ensureAmountEditDoesNotBreakAllocations(userId, originalRows, nextAmountCents) {
+  const rows = dedupeTxnRows(originalRows);
+  if (!rows.length) return;
+
+  const allocationsByTxnId = getAllocationRowsByTransactionIds(userId, rows.map((row) => row.id));
+  rows.forEach((row) => {
+    const allocationRows = allocationsByTxnId.get(Number(row.id || 0)) || [];
+    if (!allocationRows.length) return;
+    if (Number(row.amount_cents || 0) === Number(nextAmountCents || 0)) return;
+
+    const participantIds = allocationRows.map((allocation) => Number(allocation.person_id || 0)).filter(Boolean);
+    if (!participantIds.length) return;
+
+    const allocationMode = inferAllocationMode(Number(row.amount_cents || 0), allocationRows);
+    if (allocationMode === 'exact' && participantIds.length > 1) {
+      throw new Error('Essa compra já tem divisão com valores definidos entre pessoas. Para trocar o valor com segurança, ajuste a divisão primeiro.');
+    }
+  });
+}
+
+function syncEqualAllocationsForEditedTransactions(userId, updatedRows) {
+  const rows = dedupeTxnRows(updatedRows);
+  if (!rows.length) return;
+
+  const allocationsByTxnId = getAllocationRowsByTransactionIds(userId, rows.map((row) => row.id));
+  const updateAllocation = db.prepare(`
+    UPDATE allocations
+    SET share_cents = ?
+    WHERE user_id = ? AND transaction_id = ? AND person_id = ?
+  `);
+
+  db.transaction(() => {
+    rows.forEach((row) => {
+      const allocationRows = allocationsByTxnId.get(Number(row.id || 0)) || [];
+      if (!allocationRows.length) return;
+
+      const participantIds = allocationRows.map((allocation) => Number(allocation.person_id || 0)).filter(Boolean);
+      if (!participantIds.length) return;
+
+      const allocationMode = inferAllocationMode(Number(row.amount_cents || 0), allocationRows);
+      if (allocationMode === 'exact' && participantIds.length > 1) return;
+
+      const shareMap = buildEqualShareMap(Number(row.amount_cents || 0), participantIds);
+      participantIds.forEach((personId) => {
+        updateAllocation.run(Number(shareMap[personId] || 0), userId, row.id, personId);
+      });
+    });
+  })();
+}
+
 function getMonthDelta(fromYear, fromMonth, toYear, toMonth) {
   return ((Number(toYear) - Number(fromYear)) * 12) + (Number(toMonth) - Number(fromMonth));
 }
@@ -11235,7 +11341,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   }
 
   const txns = db.prepare(`
-    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
+    SELECT t.id, t.import_id, t.card_id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
            t.parent_txn_id, t.recurring_rule_id, t.due_month, t.due_year,
            t.purchase_category_id, pc.name AS purchase_category_name, COALESCE(pc.active, 0) AS purchase_category_active,
            COALESCE(t.due_month, i.month) AS month,
@@ -11579,6 +11685,223 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
     formatBRLFromCents,
     isClosed,
     hasFutureInstallments: hasFutureInstallmentsForTxn
+  });
+});
+
+app.post("/txn/:id/edit", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const id = Number(req.params.id);
+  const txn = getTransactionScopeRow(userId, id);
+
+  const respondError = (status, message, fallbackRedirect = txn ? `/month/${txn.year}/${txn.month}` : '/month') => {
+    if (isAjaxLikeRequest(req)) {
+      return res.status(status).json({ ok: false, error: message });
+    }
+    setFlash(req, 'error', message);
+    return res.redirect(fallbackRedirect);
+  };
+
+  const respondSuccess = (message, payload = {}) => {
+    const redirectUrl = `/month/${payload.redirect_year || txn.year}/${payload.redirect_month || txn.month}`;
+    if (isAjaxLikeRequest(req)) {
+      return res.json({ ok: true, message, redirect: redirectUrl, ...payload });
+    }
+    setFlash(req, 'success', message);
+    return res.redirect(redirectUrl);
+  };
+
+  if (!txn) return res.status(404).send("Transação não encontrada.");
+  if (Number(txn.import_id || 0) > 0) {
+    return respondError(409, 'Compras importadas ainda não entram na edição completa. Por enquanto, esse ajuste segue no combo excluir e lançar de novo.');
+  }
+  if (isMonthClosed(userId, txn.month, txn.year)) {
+    return respondError(423, getMonthLockMessage(txn.month, txn.year));
+  }
+
+  const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
+  const targetRows = getEditableTransactionScopeRows(userId, txn, applyScope);
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, targetRows));
+  if (settlementBlockMessage) {
+    return respondError(409, settlementBlockMessage, `/txn/${txn.id}`);
+  }
+
+  const lockedTarget = targetRows.find((row) => isMonthClosed(userId, row.month, row.year));
+  if (lockedTarget) {
+    return respondError(423, getMonthLockMessage(lockedTarget.month, lockedTarget.year));
+  }
+
+  const date = String(req.body.date || '').trim();
+  const description = String(req.body.description || '').trim();
+  const amountRaw = String(req.body.amount || '').trim();
+  const firstDueRaw = String(req.body.first_due || '').trim();
+  const cardIdNum = Number(req.body.card_id || 0);
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !dayjs(date).isValid()) {
+    return respondError(400, 'Me passa uma data válida para a compra seguir no trilho.');
+  }
+  if (!description) {
+    return respondError(400, 'A descrição da compra não pode ficar em branco.');
+  }
+  if (!cardIdNum || Number.isNaN(cardIdNum)) {
+    return respondError(400, 'Cartão inválido. Escolha um cartão válido.');
+  }
+
+  const card = db.prepare("SELECT id, name, close_day, due_day FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(cardIdNum, userId);
+  if (!card) {
+    return respondError(400, 'Cartão não encontrado ou desativado.');
+  }
+
+  const amountCents = centsFromPtBrMoney(amountRaw);
+  if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    return respondError(400, 'Me conta um valor válido para salvar essa compra.');
+  }
+
+  let purchaseCategoryId = null;
+  try {
+    const allowedInactiveIds = Array.from(new Set(targetRows.map((row) => Number(row.purchase_category_id || 0)).filter((value) => Number.isInteger(value) && value > 0)));
+    purchaseCategoryId = resolvePurchaseCategorySelection(userId, req.body.purchase_category_id, req.body.purchase_category_custom, {
+      allowInactiveIds: allowedInactiveIds
+    });
+  } catch (error) {
+    return respondError(400, error.message || 'Não consegui entender a categoria dessa compra.');
+  }
+
+  const resolvedFirstDue = resolveFirstDueMonth({
+    firstDue: firstDueRaw,
+    purchaseDate: date,
+    closeDay: card.close_day,
+    dueDay: card.due_day
+  });
+
+  if (!resolvedFirstDue) {
+    return respondError(400, 'Não consegui descobrir a fatura dessa compra.');
+  }
+
+  const [targetDueYear, targetDueMonth] = resolvedFirstDue.split('-').map(Number);
+  if (!parseMonthYear(targetDueMonth, targetDueYear)) {
+    return respondError(400, 'A fatura escolhida não parece válida.');
+  }
+
+  const dueShiftDelta = getMonthDelta(txn.year, txn.month, targetDueYear, targetDueMonth);
+  const futureScope = applyScope === 'future';
+  const isRecurring = Number(txn.recurring_rule_id || 0) > 0;
+
+  const invalidDestination = targetRows.find((row) => {
+    let nextDueMonth = targetDueMonth;
+    let nextDueYear = targetDueYear;
+    if (futureScope) {
+      if (isRecurring) {
+        const offset = getMonthDelta(txn.year, txn.month, row.year, row.month);
+        const shiftedDue = shiftMonth(targetDueYear, targetDueMonth, offset);
+        nextDueMonth = shiftedDue.month;
+        nextDueYear = shiftedDue.year;
+      } else {
+        const shiftedDue = shiftMonth(row.year, row.month, dueShiftDelta);
+        nextDueMonth = shiftedDue.month;
+        nextDueYear = shiftedDue.year;
+      }
+    }
+    return isMonthClosed(userId, nextDueMonth, nextDueYear);
+  });
+  if (invalidDestination) {
+    return respondError(423, getMonthLockMessage(invalidDestination.month, invalidDestination.year));
+  }
+  const installmentChain = txn.parent_txn_id || txn.id ? getInstallmentChainRows(userId, txn) : [];
+  const installmentMetaByTxnId = new Map(installmentChain.map((row, index) => [Number(row.id), { position: index + 1, total: installmentChain.length || 1 }]));
+
+  try {
+    ensureAmountEditDoesNotBreakAllocations(userId, targetRows, amountCents);
+  } catch (error) {
+    return respondError(409, error.message || 'A divisão dessa compra precisa de uma revisão antes de trocar o valor.');
+  }
+
+  const draftQueuedTxnIdSet = getSharedDebtDraftQueuedTxnIdSet(userId, targetRows.map((row) => row.id));
+  const updateTxn = db.prepare(`
+    UPDATE transactions
+    SET txn_date = ?, description = ?, amount_cents = ?, card_id = ?, due_month = ?, due_year = ?, purchase_category_id = ?
+    WHERE id = ? AND user_id = ?
+  `);
+  const updateRule = db.prepare(`
+    UPDATE recurring_rules
+    SET card_id = ?, description = ?, amount_cents = ?, purchase_category_id = ?,
+        start_txn_date = ?, start_due_month = ?, start_due_year = ?, active_from_month = ?, active_from_year = ?, updated_at = ?
+    WHERE id = ? AND user_id = ?
+  `);
+
+  db.transaction(() => {
+    targetRows.forEach((row) => {
+      let nextDueMonth = targetDueMonth;
+      let nextDueYear = targetDueYear;
+      let nextTxnDate = date;
+
+      if (futureScope) {
+        if (isRecurring) {
+          const offset = getMonthDelta(txn.year, txn.month, row.year, row.month);
+          const shiftedDue = shiftMonth(targetDueYear, targetDueMonth, offset);
+          nextDueMonth = shiftedDue.month;
+          nextDueYear = shiftedDue.year;
+          nextTxnDate = occurrenceDateFromStart(date, offset) || date;
+        } else {
+          const shiftedDue = shiftMonth(row.year, row.month, dueShiftDelta);
+          nextDueMonth = shiftedDue.month;
+          nextDueYear = shiftedDue.year;
+        }
+      }
+
+      let nextDescription = description;
+      const installmentMeta = installmentMetaByTxnId.get(Number(row.id || 0));
+      if (installmentMeta && Number(installmentMeta.total || 1) > 1) {
+        nextDescription = formatInstallmentDescription(description, installmentMeta.position, installmentMeta.total);
+      }
+
+      updateTxn.run(nextTxnDate, nextDescription, amountCents, cardIdNum, nextDueMonth, nextDueYear, purchaseCategoryId, row.id, userId);
+    });
+
+    if (isRecurring && futureScope) {
+      updateRule.run(
+        cardIdNum,
+        description,
+        amountCents,
+        purchaseCategoryId,
+        date,
+        targetDueMonth,
+        targetDueYear,
+        targetDueMonth,
+        targetDueYear,
+        nowIso(),
+        txn.recurring_rule_id,
+        userId
+      );
+    }
+  })();
+
+  const refreshedRows = getTransactionScopeRowsByIds(userId, targetRows.map((row) => row.id));
+  syncEqualAllocationsForEditedTransactions(userId, refreshedRows);
+
+  const draftRows = refreshedRows.filter((row) => draftQueuedTxnIdSet.has(Number(row.id || 0)));
+  const liveRows = refreshedRows.filter((row) => !draftQueuedTxnIdSet.has(Number(row.id || 0)));
+
+  if (draftRows.length) {
+    queueSharedDebtDraftsForTransactions(userId, draftRows);
+  }
+
+  if (liveRows.length) {
+    syncSharedDebtRequestsForTransactions(userId, liveRows.map((row) => row.id), {
+      originKind: detectSharedDebtOriginKindFromRows(liveRows)
+    });
+  }
+
+  const movedMonth = futureScope && dueShiftDelta !== 0;
+  const message = futureScope
+    ? (isRecurring
+        ? `Compra atualizada nesta compra e nas próximas recorrências${movedMonth ? ', com a nova fatura já alinhada.' : '.'}`
+        : `Compra atualizada nesta parcela e nas próximas${movedMonth ? ', com a fatura reencaixada junto.' : '.'}`)
+    : 'Compra atualizada com sucesso.';
+
+  return respondSuccess(message, {
+    affected_count: refreshedRows.length,
+    redirect_month: targetDueMonth,
+    redirect_year: targetDueYear
   });
 });
 

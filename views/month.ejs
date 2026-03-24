@@ -716,6 +716,7 @@
       year: <%= year %>,
       isClosed: <%- JSON.stringify(!!isClosed) %>,
       people: <%- JSON.stringify((people || []).map(p => ({ id: Number(p.id), name: p.name, is_owner: !!p.is_owner, is_self: !!p.is_self, profile_kind: p.profile_kind || '' }))).replace(/</g, '\\u003c') %>,
+      cards: <%- JSON.stringify((cards || []).map(card => ({ id: Number(card.id), name: card.name, close_day: card.close_day || '', due_day: card.due_day || '' }))).replace(/</g, '\\u003c') %>,
       purchaseCategories: <%- JSON.stringify((activePurchaseCategories || []).map(category => ({ id: Number(category.id), name: category.name }))).replace(/</g, '\\u003c') %>,
       txns: <%- JSON.stringify((txns || []).map(t => ({
         id: Number(t.id),
@@ -740,12 +741,16 @@
       const currentMonth = Number(bootstrap.month || 0);
       const currentYear = Number(bootstrap.year || 0);
       const people = Array.isArray(bootstrap.people) ? bootstrap.people : [];
+      const cards = Array.isArray(bootstrap.cards) ? bootstrap.cards : [];
       const purchaseCategories = Array.isArray(bootstrap.purchaseCategories) ? bootstrap.purchaseCategories : [];
       const txns = Array.isArray(bootstrap.txns) ? bootstrap.txns : [];
       const txnsById = new Map(txns.map(item => [String(item.id), {
         ...item,
         id: Number(item.id),
+        import_id: item.import_id ? Number(item.import_id) : null,
+        txn_date: item.txn_date || '',
         amount_cents: Number(item.amount_cents || 0),
+        card_id: item.card_id ? Number(item.card_id) : null,
         month: Number(item.month || currentMonth),
         year: Number(item.year || currentYear),
         selected_ids: Array.isArray(item.selected_ids) ? item.selected_ids.map(Number) : [],
@@ -1239,6 +1244,243 @@
           return;
         }
         input.setAttribute('inputmode', 'numeric');
+      }
+
+
+      function buildPurchaseFormField(labelText, field) {
+        const wrapper = document.createElement('div');
+        const label = document.createElement('label');
+        label.className = 'block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5';
+        label.textContent = labelText;
+        wrapper.appendChild(label);
+        wrapper.appendChild(field);
+        return wrapper;
+      }
+
+      function buildInputBase(className = '') {
+        return `w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:bg-slate-950 ${className}`.trim();
+      }
+
+      function buildEditPurchaseForm(item) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'space-y-4';
+
+        const summary = document.createElement('div');
+        summary.className = 'rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-200';
+        summary.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-emerald-500/80 dark:text-emerald-300/80">Edição segura</div><div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(formatMoney(item.amount_cents))} · ${escapeHtml(formatMonthLabel(item.month, item.year))}</div><p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Ajuste os dados da compra e, se houver parcelas ou recorrência, a gente pergunta o alcance antes de salvar.</p></div>`;
+        wrapper.appendChild(summary);
+
+        if (item.import_id) {
+          const warning = document.createElement('div');
+          warning.className = 'rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100';
+          warning.textContent = 'Compras importadas ainda não entram na edição completa. Por enquanto, esse ajuste segue no combo excluir e lançar de novo.';
+          wrapper.appendChild(warning);
+          return { wrapper, form: null, submitButtonLabel: 'Fechar' };
+        }
+
+        const form = document.createElement('form');
+        form.className = 'space-y-4';
+        form.noValidate = true;
+
+        const topGrid = document.createElement('div');
+        topGrid.className = 'grid gap-4 sm:grid-cols-2';
+
+        const dateInput = document.createElement('input');
+        dateInput.type = 'date';
+        dateInput.name = 'date';
+        dateInput.required = true;
+        dateInput.value = item.txn_date || '';
+        dateInput.className = buildInputBase();
+        topGrid.appendChild(buildPurchaseFormField('Data da compra', dateInput));
+
+        const cardSelect = document.createElement('select');
+        cardSelect.name = 'card_id';
+        cardSelect.className = buildInputBase();
+        cards.forEach((card) => {
+          const option = document.createElement('option');
+          option.value = String(card.id);
+          option.textContent = card.name;
+          option.dataset.closeDay = String(card.close_day || '');
+          option.dataset.dueDay = String(card.due_day || '');
+          if (Number(card.id) === Number(item.card_id || 0)) option.selected = true;
+          cardSelect.appendChild(option);
+        });
+        topGrid.appendChild(buildPurchaseFormField('Cartão', cardSelect));
+        form.appendChild(topGrid);
+
+        const amountGrid = document.createElement('div');
+        amountGrid.className = 'grid gap-4 sm:grid-cols-2';
+
+        const amountInput = document.createElement('input');
+        amountInput.type = 'text';
+        amountInput.name = 'amount';
+        amountInput.required = true;
+        amountInput.value = formatMoney(item.amount_cents);
+        amountInput.placeholder = '0,00';
+        amountInput.className = buildInputBase();
+        amountInput.setAttribute('data-money-mask', '1');
+        amountInput.setAttribute('inputmode', 'decimal');
+        bindDynamicMoneyMask(amountInput);
+        amountGrid.appendChild(buildPurchaseFormField('Valor total (R$)', amountInput));
+
+        const firstDueInput = document.createElement('input');
+        firstDueInput.type = 'month';
+        firstDueInput.name = 'first_due';
+        firstDueInput.required = true;
+        firstDueInput.value = `${String(item.year || currentYear).padStart(4, '0')}-${String(item.month || currentMonth).padStart(2, '0')}`;
+        firstDueInput.className = buildInputBase();
+        amountGrid.appendChild(buildPurchaseFormField(item.recurring_rule_id ? 'Próxima fatura desta recorrência' : 'Vai cair em qual fatura?', firstDueInput));
+        form.appendChild(amountGrid);
+
+        const descriptionInput = document.createElement('input');
+        descriptionInput.type = 'text';
+        descriptionInput.name = 'description';
+        descriptionInput.required = true;
+        descriptionInput.value = item.description || '';
+        descriptionInput.className = buildInputBase();
+        form.appendChild(buildPurchaseFormField('Descrição', descriptionInput));
+
+        const categoryBlock = document.createElement('div');
+        categoryBlock.setAttribute('data-purchase-category-control', '1');
+        categoryBlock.className = 'space-y-3';
+
+        const categorySelect = document.createElement('select');
+        categorySelect.name = 'purchase_category_id';
+        categorySelect.className = buildInputBase();
+        categorySelect.setAttribute('data-purchase-category-select', '1');
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = 'Sem categoria por enquanto';
+        categorySelect.appendChild(emptyOption);
+        purchaseCategories.forEach((category) => {
+          const option = document.createElement('option');
+          option.value = String(category.id);
+          option.textContent = category.name;
+          if (Number(category.id) === Number(item.purchase_category_id || 0)) option.selected = true;
+          categorySelect.appendChild(option);
+        });
+        const newOption = document.createElement('option');
+        newOption.value = '__new__';
+        newOption.textContent = 'Criar categoria nova';
+        categorySelect.appendChild(newOption);
+        categoryBlock.appendChild(buildPurchaseFormField('Categoria', categorySelect));
+
+        const customShell = document.createElement('div');
+        customShell.hidden = true;
+        customShell.setAttribute('data-purchase-category-custom-shell', '1');
+        const customInput = document.createElement('input');
+        customInput.type = 'text';
+        customInput.name = 'purchase_category_custom';
+        customInput.maxLength = 60;
+        customInput.disabled = true;
+        customInput.placeholder = 'Ex: Feira de sábado';
+        customInput.className = buildInputBase();
+        customInput.setAttribute('data-purchase-category-custom-input', '1');
+        customShell.appendChild(buildPurchaseFormField('Nome da nova categoria', customInput));
+        categoryBlock.appendChild(customShell);
+        form.appendChild(categoryBlock);
+        if (window.OPInitPurchaseCategoryControls) {
+          window.OPInitPurchaseCategoryControls(categoryBlock);
+        }
+
+        const scopeHint = document.createElement('div');
+        scopeHint.className = 'rounded-[22px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100';
+        scopeHint.innerHTML = item.recurring_rule_id
+          ? '<strong>Compra recorrente:</strong> ao salvar uma mudança estrutural, você poderá aplicar só nesta compra ou também nas próximas recorrências.'
+          : item.has_future_installments
+            ? '<strong>Compra parcelada:</strong> ao salvar, você poderá decidir entre mexer só nesta parcela ou também nas próximas.'
+            : 'Compra única: salvou, atualizou e partiu sem cerimônia.';
+        form.appendChild(scopeHint);
+
+        const syncFirstDueSuggestion = () => {
+          const selectedOption = cardSelect.options[cardSelect.selectedIndex];
+          const suggested = (window.OPComputeSuggestedFirstDue || (() => ''))(dateInput.value, selectedOption?.dataset.closeDay || '', selectedOption?.dataset.dueDay || '');
+          if (suggested && !firstDueInput.dataset.touched) {
+            firstDueInput.value = suggested;
+          }
+        };
+        dateInput.addEventListener('change', syncFirstDueSuggestion);
+        cardSelect.addEventListener('change', syncFirstDueSuggestion);
+        firstDueInput.addEventListener('input', () => { firstDueInput.dataset.touched = '1'; });
+
+        wrapper.appendChild(form);
+        return { wrapper, form, amountInput, submitButtonLabel: 'Salvar alterações' };
+      }
+
+      async function openEditSheet(txnId) {
+        const item = getTxnItem(txnId);
+        if (!item) return;
+
+        const built = buildEditPurchaseForm(item);
+        const wrapper = built.wrapper;
+        const form = built.form;
+
+        openMonthSheet({
+          title: 'Editar compra',
+          subtitle: item.recurring_rule_id ? 'Mudanças estruturais respeitam a lógica das recorrências.' : (item.has_future_installments ? 'Mudanças estruturais também podem alcançar as próximas parcelas.' : 'Ajuste a compra sem precisar excluir e lançar de novo.'),
+          body: wrapper,
+          actions: form ? [
+            {
+              label: built.submitButtonLabel || 'Salvar alterações',
+              tone: 'primary',
+              closeOnClick: false,
+              onClick: async () => {
+                const amountInput = form.querySelector('input[name="amount"]');
+                const descriptionInput = form.querySelector('input[name="description"]');
+                const dateInput = form.querySelector('input[name="date"]');
+                const firstDueInput = form.querySelector('input[name="first_due"]');
+                const cardSelect = form.querySelector('select[name="card_id"]');
+                if (!(amountInput instanceof HTMLInputElement) || !(descriptionInput instanceof HTMLInputElement) || !(dateInput instanceof HTMLInputElement) || !(firstDueInput instanceof HTMLInputElement) || !(cardSelect instanceof HTMLSelectElement)) {
+                  showAllocMessage('Não consegui montar o formulário de edição agora.', 'error');
+                  return false;
+                }
+                if (!descriptionInput.value.trim()) {
+                  showAllocMessage('A descrição não pode ficar em branco.', 'warning');
+                  descriptionInput.focus();
+                  return false;
+                }
+                if (!amountInput.value.trim()) {
+                  showAllocMessage('Falta o valor dessa compra.', 'warning');
+                  amountInput.focus();
+                  return false;
+                }
+                let scope = 'single';
+                if (item.has_future_installments || item.recurring_rule_id) {
+                  scope = await resolveSelectionScope([item], {
+                    actionLabel: 'salvar essa edição',
+                    subjectLabel: 'edição',
+                    includeRecurring: true
+                  });
+                  if (!scope) return false;
+                }
+
+                const payload = new FormData(form);
+                payload.set('apply_scope', scope);
+
+                try {
+                  const response = await fetch(`/txn/${item.id}/edit`, { method: 'POST', body: payload });
+                  let data = null;
+                  try { data = await response.json(); } catch (_) { data = null; }
+                  if (!response.ok || !data || data.ok === false) {
+                    throw new Error((data && data.error) || (data && data.message) || 'Não consegui salvar essa edição agora.');
+                  }
+                  showAllocMessage(data.message || 'Compra atualizada com sucesso.', 'success');
+                  window.setTimeout(() => {
+                    window.location.href = data.redirect || `/month/${currentYear}/${currentMonth}`;
+                  }, 220);
+                  return false;
+                } catch (error) {
+                  console.error(error);
+                  showAllocMessage(error.message || 'Não consegui salvar essa edição agora.', 'error');
+                  return false;
+                }
+              }
+            },
+            { label: 'Cancelar', tone: 'cancel' }
+          ] : [
+            { label: 'Fechar', tone: 'cancel' }
+          ]
+        });
       }
 
       function buildSplitModeOption({ title, description, value, checked, accentClass }) {
@@ -1996,6 +2238,7 @@
           message,
           options: [
             { label: 'Selecionar Participantes', value: 'people', tone: 'secondary' },
+            { label: 'Editar Compra', value: 'edit', tone: 'secondary' },
             { label: 'Mudar Categoria', value: 'category', tone: 'secondary' },
             { label: 'Mover para Outra Fatura', value: 'move', tone: 'secondary' },
             { label: 'Selecionar Vários', value: 'multi', tone: 'secondary' },
@@ -2006,6 +2249,10 @@
 
         if (choice === 'people') {
           openPeopleSheet([txnId]);
+          return;
+        }
+        if (choice === 'edit') {
+          openEditSheet(txnId);
           return;
         }
         if (choice === 'category') {

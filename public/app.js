@@ -351,6 +351,8 @@
     return `${year}-${String(month).padStart(2, '0')}`;
   }
 
+  window.OPComputeSuggestedFirstDue = computeSuggestedFirstDue;
+
   function bindAutoFirstDue(form) {
     const dateInput = form.querySelector('[data-manual-date-input]');
     const cardSelect = form.querySelector('[data-manual-card-select]');

@@ -767,6 +767,192 @@
 })();
 
 (function () {
+  const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+  const donutPalette = ['#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#14b8a6', '#f97316'];
+
+  function formatMoney(cents) {
+    return currency.format(Number(cents || 0) / 100);
+  }
+
+  function readSummaryGraphs(root) {
+    const node = root.querySelector('[data-summary-graphs-json]');
+    if (!node) return null;
+    try {
+      return JSON.parse(node.textContent || '{}');
+    } catch (error) {
+      console.error('Nao consegui ler os dados dos gráficos do summary.', error);
+      return null;
+    }
+  }
+
+  function bindSummaryGraphsToggle(root) {
+    const button = root.querySelector('[data-summary-graphs-toggle]');
+    const panel = root.querySelector('[data-summary-graphs-panel]');
+    const label = root.querySelector('[data-summary-graphs-toggle-label]');
+    if (!button || !panel || !label) return;
+
+    button.addEventListener('click', () => {
+      const expanded = button.getAttribute('aria-expanded') === 'true';
+      button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+      panel.hidden = expanded;
+      label.textContent = expanded ? 'Mostrar gráficos' : 'Esconder gráficos';
+    });
+  }
+
+  function renderDonutChart(root, items) {
+    const chartNode = root.querySelector('[data-summary-donut-chart]');
+    const legendNode = root.querySelector('[data-summary-donut-legend]');
+    if (!chartNode || !legendNode) return;
+
+    const filtered = Array.isArray(items) ? items.filter((item) => Number(item && item.total_cents || 0) > 0).slice(0, 6) : [];
+    const total = filtered.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
+
+    if (!filtered.length || total <= 0) {
+      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não tem categoria suficiente para desenhar uma pizza. Quando o mês ganhar etiqueta, esse gráfico entra no forno.</div>';
+      legendNode.innerHTML = '';
+      return;
+    }
+
+    const radius = 78;
+    const circumference = 2 * Math.PI * radius;
+    let offset = 0;
+    const segments = filtered.map((item, index) => {
+      const ratio = Number(item.total_cents || 0) / total;
+      const segmentLength = Math.max(ratio * circumference, 0);
+      const dashOffset = circumference - offset;
+      offset += segmentLength;
+      const color = donutPalette[index % donutPalette.length];
+      const share = Math.round(ratio * 100);
+      return {
+        ...item,
+        color,
+        share,
+        dashArray: `${segmentLength.toFixed(2)} ${(circumference - segmentLength).toFixed(2)}`,
+        dashOffset: dashOffset.toFixed(2)
+      };
+    });
+
+    chartNode.innerHTML = `
+      <div class="relative mx-auto flex aspect-square max-w-[260px] items-center justify-center">
+        <svg viewBox="0 0 220 220" class="h-full w-full -rotate-90" role="img" aria-label="Distribuição por categoria">
+          <circle cx="110" cy="110" r="${radius}" fill="none" stroke="rgba(148,163,184,0.16)" stroke-width="28"></circle>
+          ${segments.map((segment) => `
+            <circle
+              cx="110"
+              cy="110"
+              r="${radius}"
+              fill="none"
+              stroke="${segment.color}"
+              stroke-width="28"
+              stroke-linecap="butt"
+              stroke-dasharray="${segment.dashArray}"
+              stroke-dashoffset="${segment.dashOffset}"></circle>
+          `).join('')}
+        </svg>
+        <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+          <span class="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Total</span>
+          <span class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">${formatMoney(total)}</span>
+          <span class="mt-1 max-w-[120px] text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400">${filtered.length} categorias liderando o mês</span>
+        </div>
+      </div>`;
+
+    legendNode.innerHTML = `
+      <div class="grid gap-3 sm:grid-cols-2">
+        ${segments.map((segment) => `
+          <div class="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="mt-0.5 inline-block h-3 w-3 flex-shrink-0 rounded-full" style="background:${segment.color}"></span>
+                  <div class="truncate text-sm font-black text-slate-900 dark:text-white">${segment.label || 'Sem nome'}</div>
+                </div>
+                <div class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">${segment.txn_count || 0} compra(s) · ${segment.share}% do mês</div>
+              </div>
+              <div class="text-right text-sm font-black text-slate-900 dark:text-white">${formatMoney(segment.total_cents)}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>`;
+  }
+
+  function renderLineChart(root, points) {
+    const chartNode = root.querySelector('[data-summary-line-chart]');
+    if (!chartNode) return;
+
+    const filtered = Array.isArray(points) ? points : [];
+    if (!filtered.length) {
+      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não deu para desenhar a linha do tempo desse resumo.</div>';
+      return;
+    }
+
+    const width = 520;
+    const height = 250;
+    const padding = { top: 24, right: 18, bottom: 38, left: 18 };
+    const values = filtered.map((point) => Number(point.total_cents || 0));
+    const maxValue = Math.max(...values, 0);
+    const safeMax = maxValue <= 0 ? 1 : maxValue;
+    const stepX = filtered.length === 1 ? 0 : (width - padding.left - padding.right) / (filtered.length - 1);
+
+    const coords = filtered.map((point, index) => {
+      const x = padding.left + (stepX * index);
+      const y = padding.top + ((safeMax - Number(point.total_cents || 0)) / safeMax) * (height - padding.top - padding.bottom);
+      return {
+        ...point,
+        x: Number(x.toFixed(2)),
+        y: Number(y.toFixed(2))
+      };
+    });
+
+    const polyline = coords.map((point) => `${point.x},${point.y}`).join(' ');
+    const areaPolyline = `${padding.left},${height - padding.bottom} ${polyline} ${coords[coords.length - 1].x},${height - padding.bottom}`;
+
+    chartNode.innerHTML = `
+      <div class="overflow-x-auto">
+        <div class="min-w-[520px]">
+          <svg viewBox="0 0 ${width} ${height}" class="h-[260px] w-full" role="img" aria-label="Evolução mensal dos gastos">
+            <defs>
+              <linearGradient id="summaryLineFill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.30"></stop>
+                <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.02"></stop>
+              </linearGradient>
+            </defs>
+            ${[0.25, 0.5, 0.75, 1].map((step) => {
+              const y = padding.top + ((height - padding.top - padding.bottom) * step);
+              return `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="rgba(148,163,184,0.22)" stroke-dasharray="4 6"></line>`;
+            }).join('')}
+            <polygon points="${areaPolyline}" fill="url(#summaryLineFill)"></polygon>
+            <polyline points="${polyline}" fill="none" stroke="#8b5cf6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+            ${coords.map((point) => `
+              <g>
+                <circle cx="${point.x}" cy="${point.y}" r="${point.is_current ? 6.5 : 5}" fill="#ffffff" stroke="#8b5cf6" stroke-width="${point.is_current ? 4 : 3}"></circle>
+                <text x="${point.x}" y="${height - 12}" text-anchor="middle" class="fill-slate-500 text-[11px] font-bold">${point.label}</text>
+              </g>
+            `).join('')}
+          </svg>
+        </div>
+      </div>
+      <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        ${coords.map((point) => `
+          <div class="rounded-2xl border ${point.is_current ? 'border-violet-300 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/20' : 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/70'} px-3 py-2.5">
+            <div class="text-[11px] font-bold uppercase tracking-[0.18em] ${point.is_current ? 'text-violet-700 dark:text-violet-300' : 'text-slate-500 dark:text-slate-400'}">${point.label}</div>
+            <div class="mt-1 text-sm font-black ${point.is_current ? 'text-violet-700 dark:text-violet-200' : 'text-slate-900 dark:text-white'}">${formatMoney(point.total_cents)}</div>
+          </div>
+        `).join('')}
+      </div>`;
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const root = document.querySelector('[data-summary-graphs-root]');
+    if (!root) return;
+    bindSummaryGraphsToggle(root);
+    const payload = readSummaryGraphs(root);
+    if (!payload) return;
+    renderDonutChart(root, payload.categories || []);
+    renderLineChart(root, payload.monthlyTrend || []);
+  });
+})();
+
+(function () {
   const iconBell = '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.389 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>';
   const iconBellOff = '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364L4.636 4.636m13.728 13.728A9.953 9.953 0 0112 20a9.953 9.953 0 01-5.895-1.93M6.343 6.343A5.97 5.97 0 006 8v3.159c0 .538-.214 1.055-.595 1.436L4 14h16l-1.405-1.405A2.032 2.032 0 0118 11.159V8a6 6 0 00-9.33-4.958M9 17a3 3 0 006 0"></path></svg>';
   const iconSpinner = '<svg class="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>';

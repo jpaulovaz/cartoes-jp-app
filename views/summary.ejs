@@ -19,6 +19,91 @@
       </div>
     </section>
 
+    <% const graphKpis = summaryCharts && summaryCharts.kpis ? summaryCharts.kpis : null; %>
+    <% const graphSectionDefaultOpen = true; %>
+    <section class="mb-8 op-surface-card rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6" data-summary-graphs-root>
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div class="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Fase 11 · leitura visual</div>
+          <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Gráficos do mês, sem mistério e sem cambalhota</h2>
+          <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">Aqui o resumo ganha olho de águia: categoria, evolução mensal e indicadores rápidos para entender onde a grana pousou. A regra do app continua a mesma, só ficou mais fácil de ler.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+          <a href="/summary/<%= previousSummaryRef.year %>/<%= previousSummaryRef.month %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/60">← <span class="ml-2">Mês anterior</span></a>
+          <a href="/summary/<%= nextSummaryRef.year %>/<%= nextSummaryRef.month %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/60"><span class="mr-2">Próximo mês</span>→</a>
+          <button type="button" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white" data-summary-graphs-toggle aria-expanded="<%= graphSectionDefaultOpen ? 'true' : 'false' %>">
+            <span data-summary-graphs-toggle-label><%= graphSectionDefaultOpen ? 'Esconder gráficos' : 'Mostrar gráficos' %></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-5 space-y-5" data-summary-graphs-panel <%= graphSectionDefaultOpen ? '' : 'hidden' %>>
+        <div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <div class="rounded-3xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+            <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Total do mês</div>
+            <div class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(graphKpis?.totalSpentCents || 0) %></div>
+            <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">Tudo que caiu neste resumo, sem fazer o usuário brincar de caça ao número.</p>
+          </div>
+          <div class="rounded-3xl border border-emerald-200 bg-emerald-50/80 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-300">Pago nos cartões</div>
+            <div class="mt-2 text-2xl font-black tracking-tight text-emerald-700 dark:text-emerald-200"><%= formatBRLFromCents(graphKpis?.totalPaidCardsCents || 0) %></div>
+            <p class="mt-2 text-xs leading-5 text-emerald-700/80 dark:text-emerald-200/80">Fatura andando bonita: ainda faltam <span class="font-bold"><%= formatBRLFromCents(graphKpis?.totalRemainingCardsCents || 0) %></span>.</p>
+          </div>
+          <div class="rounded-3xl border border-blue-200 bg-blue-50/80 p-4 dark:border-blue-900/60 dark:bg-blue-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-700 dark:text-blue-300">Cobertura por categoria</div>
+            <div class="mt-2 text-2xl font-black tracking-tight text-blue-700 dark:text-blue-200"><%= Number(graphKpis?.categoryCoveragePct || 0) %>%</div>
+            <p class="mt-2 text-xs leading-5 text-blue-700/80 dark:text-blue-200/80"><%= formatBRLFromCents(graphKpis?.categorizedCents || 0) %> já estão com etiqueta bonitinha. O resto ainda está sem crachá.</p>
+          </div>
+          <div class="rounded-3xl border border-violet-200 bg-violet-50/80 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-violet-700 dark:text-violet-300">Categoria campeã</div>
+            <div class="mt-2 text-xl font-black tracking-tight text-violet-700 dark:text-violet-200"><%= graphKpis?.topCategory?.label || 'Sem líder por enquanto' %></div>
+            <p class="mt-2 text-xs leading-5 text-violet-700/80 dark:text-violet-200/80"><% if (graphKpis?.topCategory) { %><span class="font-bold"><%= formatBRLFromCents(graphKpis.topCategory.total_cents || 0) %></span> · <%= Number(graphKpis.topCategory.share_pct || 0) %>% do mês.<% } else { %>Quando pintar gasto por categoria, ela assume a coroa.<% } %></p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h3 class="text-lg font-black text-slate-900 dark:text-white">Distribuição por categoria</h3>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">O famoso “para onde foi o dinheiro?”. Se ele estiver tímido, o gráfico entrega.</p>
+              </div>
+              <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Pizza esperta</span>
+            </div>
+            <div class="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center">
+              <div class="mx-auto w-full max-w-[280px]" data-summary-donut-chart></div>
+              <div class="min-w-0 flex-1" data-summary-donut-legend></div>
+            </div>
+          </div>
+
+          <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h3 class="text-lg font-black text-slate-900 dark:text-white">Evolução mensal</h3>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Se o mês acelerou, freou ou resolveu pedir carona para o próximo, a linha conta.</p>
+              </div>
+              <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
+            </div>
+            <div class="mt-4" data-summary-line-chart></div>
+            <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Comparação com mês anterior</div>
+                <div class="mt-2 text-lg font-black <%= Number(graphKpis?.deltaCents || 0) > 0 ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-300' %>"><%= Number(graphKpis?.deltaCents || 0) > 0 ? '+' : '' %><%= formatBRLFromCents(graphKpis?.deltaCents || 0) %></div>
+                <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400"><% if (graphKpis?.deltaPct === null || graphKpis?.deltaPct === undefined) { %>Ainda não deu para comparar, mas já estamos aquecendo o gramado.<% } else { %><%= Math.abs(Number(graphKpis.deltaPct || 0)) %>% <%= Number(graphKpis.deltaPct || 0) >= 0 ? 'acima' : 'abaixo' %> do mês anterior.<% } %></p>
+              </div>
+              <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Compras sem categoria</div>
+                <div class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(graphKpis?.uncategorizedCents || 0) %></div>
+                <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">Essas aqui ainda estão no modo “sou misteriosa”. Vale classificar antes dos relatórios ficarem fofoqueiros.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <script type="application/json" data-summary-graphs-json><%- JSON.stringify(summaryCharts || { categories: [], monthlyTrend: [], kpis: {} }) %></script>
+    </section>
+
     <div class="mb-6 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold leading-6 text-sky-900 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100 lg:hidden">
       💡 Dica amiga: no celular, esse resumo respira melhor na horizontal. Na vertical também funciona, mas de lado os números ficam bem mais confortáveis.
     </div>

@@ -12460,6 +12460,106 @@ function upsertPersonPaymentsForMonth(userId, month, year, entries) {
   })(entries);
 }
 
+function getSummaryCategoryDistribution(userId, month, year) {
+  const rows = db.prepare(`
+    SELECT
+      COALESCE(NULLIF(TRIM(pc.name), ''), 'Sem categoria') AS label,
+      SUM(t.amount_cents) AS total_cents,
+      COUNT(*) AS txn_count,
+      CASE WHEN t.purchase_category_id IS NULL THEN 1 ELSE 0 END AS is_uncategorized
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+    GROUP BY CASE WHEN t.purchase_category_id IS NULL THEN 0 ELSE t.purchase_category_id END, label
+    HAVING SUM(t.amount_cents) > 0
+    ORDER BY total_cents DESC, label COLLATE NOCASE ASC
+  `).all(userId, month, year, month, year);
+
+  return rows.map((row) => ({
+    label: row.label,
+    total_cents: row.total_cents || 0,
+    txn_count: row.txn_count || 0,
+    is_uncategorized: Number(row.is_uncategorized || 0) === 1
+  }));
+}
+
+function getSummaryMonthlyTrend(userId, month, year, monthsBack = 5) {
+  const points = [];
+  const selectTotal = db.prepare(`
+    SELECT COALESCE(SUM(t.amount_cents), 0) AS total_cents
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+  `);
+
+  for (let offset = Number(monthsBack || 0) * -1; offset <= 0; offset += 1) {
+    const ref = shiftMonth(year, month, offset);
+    const row = selectTotal.get(userId, ref.month, ref.year, ref.month, ref.year);
+    points.push({
+      month: ref.month,
+      year: ref.year,
+      key: `${ref.year}-${String(ref.month).padStart(2, '0')}`,
+      label: `${String(ref.month).padStart(2, '0')}/${ref.year}`,
+      total_cents: row?.total_cents || 0,
+      is_current: ref.month === Number(month) && ref.year === Number(year)
+    });
+  }
+
+  return points;
+}
+
+function buildSummaryChartsPayload({ userId, month, year, cardsPanel = [], personPanel = [], unassigned = [] }) {
+  const categories = getSummaryCategoryDistribution(userId, month, year);
+  const monthlyTrend = getSummaryMonthlyTrend(userId, month, year, 5);
+  const totalSpentCents = cardsPanel.reduce((acc, item) => acc + Number(item?.total_cents || 0), 0);
+  const totalPaidCardsCents = cardsPanel.reduce((acc, item) => acc + Number(item?.paid_cents || 0), 0);
+  const totalRemainingCardsCents = cardsPanel.reduce((acc, item) => acc + (Number(item?.total_cents || 0) - Number(item?.paid_cents || 0)), 0);
+  const totalPeopleAssignedCents = personPanel.reduce((acc, item) => acc + Number(item?.total_cents || 0), 0);
+  const totalUnassignedCents = unassigned.reduce((acc, item) => acc + Number(item?.total_cents || 0), 0);
+  const categorizedCents = categories
+    .filter((item) => !item.is_uncategorized)
+    .reduce((acc, item) => acc + Number(item?.total_cents || 0), 0);
+  const categoryCoveragePct = totalSpentCents > 0 ? Math.round((categorizedCents / totalSpentCents) * 100) : 0;
+  const topCategory = categories.find((item) => Number(item?.total_cents || 0) > 0) || null;
+  const previousPoint = monthlyTrend.length > 1 ? monthlyTrend[monthlyTrend.length - 2] : null;
+  const currentPoint = monthlyTrend.length > 0 ? monthlyTrend[monthlyTrend.length - 1] : null;
+  const deltaCents = previousPoint ? Number(currentPoint?.total_cents || 0) - Number(previousPoint?.total_cents || 0) : 0;
+  const deltaPct = previousPoint && Number(previousPoint.total_cents || 0) > 0
+    ? Math.round((deltaCents / Number(previousPoint.total_cents || 0)) * 100)
+    : null;
+
+  return {
+    categories,
+    monthlyTrend,
+    kpis: {
+      totalSpentCents,
+      totalPaidCardsCents,
+      totalRemainingCardsCents,
+      totalPeopleAssignedCents,
+      totalUnassignedCents,
+      uncategorizedCents: Math.max(0, totalSpentCents - categorizedCents),
+      categorizedCents,
+      categoryCoveragePct,
+      deltaCents,
+      deltaPct,
+      topCategory: topCategory ? {
+        label: topCategory.label,
+        total_cents: topCategory.total_cents,
+        share_pct: totalSpentCents > 0 ? Math.round((Number(topCategory.total_cents || 0) / totalSpentCents) * 100) : 0
+      } : null
+    }
+  };
+}
+
 app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
@@ -12579,7 +12679,25 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
     };
   });
 
-  res.render("summary", { month, year, people, cards, rows, unassigned, cardsPanel, personPanel, formatBRLFromCents, isClosed });
+  const summaryCharts = buildSummaryChartsPayload({ userId, month, year, cardsPanel, personPanel, unassigned });
+  const previousSummaryRef = shiftMonth(year, month, -1);
+  const nextSummaryRef = shiftMonth(year, month, 1);
+
+  res.render("summary", {
+    month,
+    year,
+    people,
+    cards,
+    rows,
+    unassigned,
+    cardsPanel,
+    personPanel,
+    formatBRLFromCents,
+    isClosed,
+    summaryCharts,
+    previousSummaryRef,
+    nextSummaryRef
+  });
 });
 
 app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {

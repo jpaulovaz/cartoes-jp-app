@@ -434,6 +434,7 @@
     const closeButtons = Array.from(modal.querySelectorAll('[data-manual-modal-close]')).filter((element) => element instanceof HTMLElement);
 
     const openModal = () => {
+      document.body.classList.add('op-manual-modal-open');
       modal.classList.remove('hidden');
       modal.setAttribute('aria-hidden', 'false');
       syncManualPurchaseDefaults(modal);
@@ -445,6 +446,7 @@
     const closeModal = () => {
       modal.classList.add('hidden');
       modal.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('op-manual-modal-open');
     };
 
     openButtons.forEach((button) => {

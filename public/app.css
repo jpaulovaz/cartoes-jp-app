@@ -62,6 +62,18 @@ body.op-virtual-keyboard-open .op-bottom-nav {
   transform: translateY(calc(100% + var(--op-bottom-safe) + 1rem));
 }
 
+body.op-manual-modal-open .op-bottom-nav {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+  pointer-events: none;
+}
+
+body.op-manual-modal-open .op-bottom-nav.is-idle-hidden {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+  pointer-events: none;
+}
+
 body.op-virtual-keyboard-open .op-app-main {
   padding-bottom: 1.5rem !important;
   scroll-padding-bottom: 1.5rem;
@@ -3496,6 +3508,16 @@ html.dark[data-theme-style="confete"] [data-shared-debts-sheet] > div:last-child
     radial-gradient(circle at top right, rgba(251, 113, 133, 0.12), transparent 24%),
     linear-gradient(180deg, rgba(42, 22, 60, 0.98), rgba(28, 18, 44, 0.94)) !important;
   box-shadow: 0 36px 76px rgba(13, 8, 22, 0.54), 0 16px 34px rgba(192, 38, 211, 0.08) !important;
+}
+
+.op-manual-modal__scroll {
+  padding-bottom: calc(var(--op-mobile-bottom-clearance, 96px) + 0.9rem) !important;
+}
+
+@media (min-width: 768px) {
+  .op-manual-modal__scroll {
+    padding-bottom: 1.75rem !important;
+  }
 }
 
 html[data-theme-style="confete"] [data-manual-modal] {

@@ -1900,7 +1900,7 @@
       return appearance === 'dark' ? '#221531' : '#fff1f7';
     }
     if (style === 'orgulho') {
-      return appearance === 'dark' ? '#1a1230' : '#fff8f2';
+      return appearance === 'dark' ? '#34173a' : '#f75f70';
     }
     return appearance === 'dark' ? '#020617' : '#eaf2ff';
   }

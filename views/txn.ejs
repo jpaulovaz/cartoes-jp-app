@@ -756,7 +756,7 @@
         const submitButton = document.querySelector('[data-edit-txn-submit]');
         if (submitButton instanceof HTMLButtonElement) submitButton.disabled = true;
         try {
-          const response = await fetch(`/txn/${editTxnSeed.id}/edit`, { method: 'POST', body: payload, headers: { 'X-Requested-With': 'fetch' } });
+          const response = await fetch(`/txn/${editTxnSeed.id}/edit`, { method: 'POST', body: payload, headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-OrganizaPay-Async': '1' } });
           const data = await response.json().catch(() => null);
           if (!response.ok || !data || data.ok === false) throw new Error((data && (data.error || data.message)) || 'Não consegui salvar essa edição agora.');
           setEditFeedback(data.message || 'Compra atualizada com sucesso.', 'success');

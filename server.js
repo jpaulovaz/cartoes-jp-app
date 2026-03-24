@@ -2539,7 +2539,9 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 function isAjaxLikeRequest(req) {
-  return String(req.get('X-Requested-With') || '').toLowerCase() === 'xmlhttprequest';
+  const requestedWith = String(req.get('X-Requested-With') || '').toLowerCase();
+  const asyncFlag = String(req.get('X-OrganizaPay-Async') || '').toLowerCase();
+  return requestedWith === 'xmlhttprequest' || requestedWith === 'fetch' || asyncFlag === '1';
 }
 
 function finishExpiredSessionResponse(req, res, redirectUrl) {
@@ -11833,6 +11835,68 @@ app.post("/txn/:id/edit", ensureAuthenticated, (req, res) => {
   }
   const installmentChain = txn.parent_txn_id || txn.id ? getInstallmentChainRows(userId, txn) : [];
   const installmentMetaByTxnId = new Map(installmentChain.map((row, index) => [Number(row.id), { position: index + 1, total: installmentChain.length || 1 }]));
+
+  const hasEditMutations = targetRows.some((row) => {
+    let nextDueMonth = targetDueMonth;
+    let nextDueYear = targetDueYear;
+    let nextTxnDate = date;
+
+    if (futureScope) {
+      if (isRecurring) {
+        const offset = getMonthDelta(txn.year, txn.month, row.year, row.month);
+        const shiftedDue = shiftMonth(targetDueYear, targetDueMonth, offset);
+        nextDueMonth = shiftedDue.month;
+        nextDueYear = shiftedDue.year;
+        nextTxnDate = occurrenceDateFromStart(date, offset) || date;
+      } else {
+        const shiftedDue = shiftMonth(row.year, row.month, dueShiftDelta);
+        nextDueMonth = shiftedDue.month;
+        nextDueYear = shiftedDue.year;
+      }
+    }
+
+    let nextDescription = description;
+    const installmentMeta = installmentMetaByTxnId.get(Number(row.id || 0));
+    if (installmentMeta && Number(installmentMeta.total || 1) > 1) {
+      nextDescription = formatInstallmentDescription(description, installmentMeta.position, installmentMeta.total);
+    }
+
+    return String(row.txn_date || '') !== String(nextTxnDate || '')
+      || String(row.description || '') !== String(nextDescription || '')
+      || Number(row.amount_cents || 0) !== Number(amountCents || 0)
+      || Number(row.card_id || 0) !== Number(cardIdNum || 0)
+      || Number(row.month || 0) !== Number(nextDueMonth || 0)
+      || Number(row.year || 0) !== Number(nextDueYear || 0)
+      || Number(row.purchase_category_id || 0) !== Number(purchaseCategoryId || 0);
+  });
+
+  const recurringRuleNeedsUpdate = isRecurring && futureScope
+    ? (() => {
+        const rule = db.prepare(`
+          SELECT card_id, description, amount_cents, purchase_category_id, start_txn_date, start_due_month, start_due_year, active_from_month, active_from_year
+          FROM recurring_rules
+          WHERE id = ? AND user_id = ?
+        `).get(txn.recurring_rule_id, userId);
+        if (!rule) return false;
+        return Number(rule.card_id || 0) !== Number(cardIdNum || 0)
+          || String(rule.description || '') !== String(description || '')
+          || Number(rule.amount_cents || 0) !== Number(amountCents || 0)
+          || Number(rule.purchase_category_id || 0) !== Number(purchaseCategoryId || 0)
+          || String(rule.start_txn_date || '') !== String(date || '')
+          || Number(rule.start_due_month || 0) !== Number(targetDueMonth || 0)
+          || Number(rule.start_due_year || 0) !== Number(targetDueYear || 0)
+          || Number(rule.active_from_month || 0) !== Number(targetDueMonth || 0)
+          || Number(rule.active_from_year || 0) !== Number(targetDueYear || 0);
+      })()
+    : false;
+
+  if (!hasEditMutations && !recurringRuleNeedsUpdate) {
+    return respondSuccess('Nenhuma mudança detectada. Essa compra já está redondinha do jeitinho atual.', {
+      affected_count: 0,
+      redirect_month: txn.month,
+      redirect_year: txn.year
+    });
+  }
 
   try {
     ensureAmountEditDoesNotBreakAllocations(userId, targetRows, amountCents);

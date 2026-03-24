@@ -1577,7 +1577,7 @@
                 payload.set('apply_scope', scope);
 
                 try {
-                  const response = await fetch(`/txn/${item.id}/edit`, { method: 'POST', body: payload });
+                  const response = await fetch(`/txn/${item.id}/edit`, { method: 'POST', body: payload, headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-OrganizaPay-Async': '1' } });
                   let data = null;
                   try { data = await response.json(); } catch (_) { data = null; }
                   if (!response.ok || !data || data.ok === false) {

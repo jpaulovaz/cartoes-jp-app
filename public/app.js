@@ -769,9 +769,14 @@
 (function () {
   const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
   const donutPalette = ['#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#14b8a6', '#f97316'];
+  const prefersReducedMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
 
   function formatMoney(cents) {
     return currency.format(Number(cents || 0) / 100);
+  }
+
+  function formatCompactMonthSummary(point) {
+    return `${point.label} · ${formatMoney(point.total_cents)}`;
   }
 
   function buildMonthUrl(year, month, extra = {}) {
@@ -790,20 +795,28 @@
   function setInteractionHint(root, message) {
     const node = root.querySelector('[data-summary-interaction-hint]');
     if (node && message) node.textContent = message;
+    const status = root.querySelector('[data-summary-graphs-status]');
+    if (status && message) status.textContent = message;
+  }
+
+  function setGraphsReady(root, ready) {
+    if (root) root.setAttribute('data-summary-graphs-ready', ready ? 'true' : 'false');
   }
 
   function readSummaryGraphs(root) {
+    if (root.__summaryGraphsPayload) return root.__summaryGraphsPayload;
     const node = root.querySelector('[data-summary-graphs-json]');
     if (!node) return null;
     try {
-      return JSON.parse(node.textContent || '{}');
+      root.__summaryGraphsPayload = JSON.parse(node.textContent || '{}');
+      return root.__summaryGraphsPayload;
     } catch (error) {
       console.error('Nao consegui ler os dados dos gráficos do summary.', error);
       return null;
     }
   }
 
-  function bindSummaryGraphsToggle(root) {
+  function bindSummaryGraphsToggle(root, renderCharts) {
     const button = root.querySelector('[data-summary-graphs-toggle]');
     const panel = root.querySelector('[data-summary-graphs-panel]');
     const label = root.querySelector('[data-summary-graphs-toggle-label]');
@@ -814,7 +827,29 @@
       button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
       panel.hidden = expanded;
       label.textContent = expanded ? 'Mostrar gráficos' : 'Esconder gráficos';
+
+      if (expanded) {
+        window.requestAnimationFrame(() => renderCharts());
+      }
     });
+  }
+
+  function foldCategoryItems(items) {
+    const filtered = Array.isArray(items)
+      ? items.filter((item) => Number(item && item.total_cents || 0) > 0)
+      : [];
+
+    if (filtered.length <= 5) return filtered;
+
+    const visible = filtered.slice(0, 5);
+    const others = filtered.slice(5).reduce((acc, item) => {
+      acc.total_cents += Number(item.total_cents || 0);
+      acc.txn_count += Number(item.txn_count || 0);
+      return acc;
+    }, { id: null, label: 'Outras categorias', total_cents: 0, txn_count: 0, is_uncategorized: false, is_aggregate: true });
+
+    if (others.total_cents > 0) visible.push(others);
+    return visible;
   }
 
   function renderDonutChart(root, items) {
@@ -822,7 +857,7 @@
     const legendNode = root.querySelector('[data-summary-donut-legend]');
     if (!chartNode || !legendNode) return;
 
-    const filtered = Array.isArray(items) ? items.filter((item) => Number(item && item.total_cents || 0) > 0).slice(0, 6) : [];
+    const filtered = foldCategoryItems(items);
     const total = filtered.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
 
     if (!filtered.length || total <= 0) {
@@ -854,7 +889,7 @@
       <div class="relative mx-auto flex aspect-square max-w-[260px] items-center justify-center">
         <svg viewBox="0 0 220 220" class="h-full w-full -rotate-90" role="img" aria-label="Distribuição por categoria">
           <circle cx="110" cy="110" r="${radius}" fill="none" stroke="rgba(148,163,184,0.16)" stroke-width="28"></circle>
-          ${segments.map((segment) => `
+          ${segments.map((segment, index) => `
             <circle
               cx="110"
               cy="110"
@@ -862,22 +897,28 @@
               fill="none"
               stroke="${segment.color}"
               stroke-width="28"
-              stroke-linecap="butt"
+              stroke-linecap="round"
+              class="transition-all duration-300"
+              data-summary-donut-segment
+              data-segment-index="${index}"
+              data-segment-focus="false"
               stroke-dasharray="${segment.dashArray}"
               stroke-dashoffset="${segment.dashOffset}"></circle>
           `).join('')}
         </svg>
-        <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+        <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
           <span class="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Total</span>
           <span class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">${formatMoney(total)}</span>
-          <span class="mt-1 max-w-[120px] text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400">${filtered.length} categorias liderando o mês</span>
+          <span class="mt-1 max-w-[150px] text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400" data-summary-donut-center-copy>${filtered.length} blocos puxando o mês</span>
         </div>
       </div>`;
 
     legendNode.innerHTML = `
       <div class="grid gap-3 sm:grid-cols-2">
-        ${segments.map((segment) => `
-          <button type="button" class="group rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-left transition hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}">
+        ${segments.map((segment, index) => {
+          const canOpen = !segment.is_aggregate && !segment.is_uncategorized && Number(segment.id || 0) > 0;
+          return `
+          <button type="button" class="group rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-left transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}" data-segment-index="${index}" ${canOpen ? '' : 'data-category-disabled="true"'}>
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
@@ -885,20 +926,53 @@
                   <div class="truncate text-sm font-black text-slate-900 dark:text-white">${segment.label || 'Sem nome'}</div>
                 </div>
                 <div class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">${segment.txn_count || 0} compra(s) · ${segment.share}% do mês</div>
-                <div class="mt-2 text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700 opacity-0 transition group-hover:opacity-100 dark:text-violet-300">Abrir no mês filtrado</div>
+                <div class="mt-2 text-[11px] font-bold uppercase tracking-[0.18em] ${canOpen ? 'text-violet-700 opacity-0 transition group-hover:opacity-100 dark:text-violet-300' : 'text-slate-400 dark:text-slate-500'}">${canOpen ? 'Abrir no mês filtrado' : 'Só leitura rápida'}</div>
               </div>
               <div class="text-right text-sm font-black text-slate-900 dark:text-white">${formatMoney(segment.total_cents)}</div>
             </div>
-          </button>
-        `).join('')}
+          </button>`;
+        }).join('')}
       </div>`;
 
-    legendNode.querySelectorAll('[data-summary-category-link]').forEach((button) => {
+    const centerCopy = chartNode.querySelector('[data-summary-donut-center-copy]');
+    const segmentNodes = Array.from(chartNode.querySelectorAll('[data-summary-donut-segment]'));
+    const legendButtons = Array.from(legendNode.querySelectorAll('[data-summary-category-link]'));
+
+    function highlightSegment(index = null) {
+      segmentNodes.forEach((segmentNode, segmentIndex) => {
+        const active = index !== null && Number(index) === segmentIndex;
+        segmentNode.style.opacity = active || index === null ? '1' : '0.28';
+        segmentNode.style.transformOrigin = '110px 110px';
+        segmentNode.style.transform = active && !(prefersReducedMotion && prefersReducedMotion.matches) ? 'scale(1.03)' : 'scale(1)';
+      });
+      if (!centerCopy) return;
+      if (index === null) {
+        centerCopy.textContent = `${filtered.length} blocos puxando o mês`;
+        return;
+      }
+      const activeSegment = segments[Number(index)];
+      if (!activeSegment) return;
+      centerCopy.textContent = `${activeSegment.label} · ${activeSegment.share}% do mês`;
+    }
+
+    legendButtons.forEach((button) => {
+      const index = Number(button.getAttribute('data-segment-index') || -1);
+      const disabled = button.hasAttribute('data-category-disabled');
+      const handleEnter = () => highlightSegment(index);
+      const handleLeave = () => highlightSegment(null);
+      button.addEventListener('mouseenter', handleEnter);
+      button.addEventListener('focus', handleEnter);
+      button.addEventListener('mouseleave', handleLeave);
+      button.addEventListener('blur', handleLeave);
       button.addEventListener('click', () => {
         const categoryId = Number(button.getAttribute('data-category-id') || 0);
         const categoryLabel = button.getAttribute('data-category-label') || 'essa categoria';
         const year = Number(root.getAttribute('data-summary-year') || 0);
         const month = Number(root.getAttribute('data-summary-month') || 0);
+        if (disabled || !categoryId) {
+          setInteractionHint(root, `${categoryLabel} ficou só na vitrine, porque esse bloco é um agrupado para leitura rápida.`);
+          return;
+        }
         setInteractionHint(root, `Abrindo ${categoryLabel} no mês para você enxergar onde o caldo engrossou.`);
         window.location.href = buildMonthUrl(year, month, { f_category: categoryId });
       });
@@ -937,8 +1011,8 @@
     const areaPolyline = `${padding.left},${height - padding.bottom} ${polyline} ${coords[coords.length - 1].x},${height - padding.bottom}`;
 
     chartNode.innerHTML = `
-      <div class="overflow-x-auto">
-        <div class="min-w-[520px]">
+      <div class="overflow-x-auto pb-1">
+        <div class="relative min-w-[520px]">
           <svg viewBox="0 0 ${width} ${height}" class="h-[260px] w-full" role="img" aria-label="Evolução mensal dos gastos">
             <defs>
               <linearGradient id="summaryLineFill" x1="0" x2="0" y1="0" y2="1">
@@ -959,18 +1033,41 @@
               </g>
             `).join('')}
           </svg>
+          ${coords.map((point, index) => `
+            <button
+              type="button"
+              class="absolute h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-transparent bg-transparent outline-none transition focus:border-violet-400"
+              style="left:${((point.x / width) * 100).toFixed(3)}%;top:${((point.y / height) * 100).toFixed(3)}%"
+              aria-label="Abrir resumo de ${point.label}"
+              data-summary-month-hotspot
+              data-point-index="${index}"
+              data-point-year="${point.year}"
+              data-point-month="${point.month}"
+              data-point-label="${point.label}"></button>
+          `).join('')}
         </div>
       </div>
       <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        ${coords.map((point) => `
-          <button type="button" class="rounded-2xl border ${point.is_current ? 'border-violet-300 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/20' : 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/70'} px-3 py-2.5 text-left transition hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-month-point data-point-year="${point.year}" data-point-month="${point.month}" data-point-label="${point.label}">
+        ${coords.map((point, index) => `
+          <button type="button" class="rounded-2xl border ${point.is_current ? 'border-violet-300 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/20' : 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/70'} px-3 py-2.5 text-left transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-month-point data-point-index="${index}" data-point-year="${point.year}" data-point-month="${point.month}" data-point-label="${point.label}">
             <div class="text-[11px] font-bold uppercase tracking-[0.18em] ${point.is_current ? 'text-violet-700 dark:text-violet-300' : 'text-slate-500 dark:text-slate-400'}">${point.label}</div>
             <div class="mt-1 text-sm font-black ${point.is_current ? 'text-violet-700 dark:text-violet-200' : 'text-slate-900 dark:text-white'}">${formatMoney(point.total_cents)}</div>
           </button>
         `).join('')}
       </div>`;
 
-    chartNode.querySelectorAll('[data-summary-month-point]').forEach((button) => {
+    const hotspots = Array.from(chartNode.querySelectorAll('[data-summary-month-hotspot]'));
+    const pointButtons = Array.from(chartNode.querySelectorAll('[data-summary-month-point]'));
+
+    function handlePreview(index) {
+      const point = coords[Number(index)];
+      if (!point) return;
+      setInteractionHint(root, `${formatCompactMonthSummary(point)}. Toque de novo para abrir esse resumo.`);
+    }
+
+    function bindNavigation(button) {
+      button.addEventListener('mouseenter', () => handlePreview(button.getAttribute('data-point-index')));
+      button.addEventListener('focus', () => handlePreview(button.getAttribute('data-point-index')));
       button.addEventListener('click', () => {
         const year = Number(button.getAttribute('data-point-year') || 0);
         const month = Number(button.getAttribute('data-point-month') || 0);
@@ -978,17 +1075,53 @@
         setInteractionHint(root, `Indo para ${label}. Bora comparar esse capítulo da novela financeira.`);
         window.location.href = buildSummaryUrl(year, month);
       });
-    });
+    }
+
+    hotspots.forEach(bindNavigation);
+    pointButtons.forEach(bindNavigation);
+  }
+
+  function scheduleRender(callback) {
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(callback, { timeout: 400 });
+      return;
+    }
+    window.setTimeout(callback, 30);
   }
 
   document.addEventListener('DOMContentLoaded', () => {
     const root = document.querySelector('[data-summary-graphs-root]');
     if (!root) return;
-    bindSummaryGraphsToggle(root);
+
+    let hasRendered = false;
     const payload = readSummaryGraphs(root);
     if (!payload) return;
-    renderDonutChart(root, payload.categories || []);
-    renderLineChart(root, payload.monthlyTrend || []);
+
+    const renderCharts = () => {
+      if (hasRendered) return;
+      hasRendered = true;
+      scheduleRender(() => {
+        renderDonutChart(root, payload.categories || []);
+        renderLineChart(root, payload.monthlyTrend || []);
+        setGraphsReady(root, true);
+        setInteractionHint(root, 'Gráficos prontos. Agora é só tocar e seguir o fio da meada.');
+      });
+    };
+
+    bindSummaryGraphsToggle(root, renderCharts);
+
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          renderCharts();
+          observer.disconnect();
+        });
+      }, { rootMargin: '140px 0px' });
+      observer.observe(root);
+    } else {
+      renderCharts();
+    }
   });
 })();
 

@@ -12538,6 +12538,14 @@ function buildSummaryChartsPayload({ userId, month, year, cardsPanel = [], perso
   const deltaPct = previousPoint && Number(previousPoint.total_cents || 0) > 0
     ? Math.round((deltaCents / Number(previousPoint.total_cents || 0)) * 100)
     : null;
+  const averageMonthlySpendCents = monthlyTrend.length
+    ? Math.round(monthlyTrend.reduce((acc, point) => acc + Number(point?.total_cents || 0), 0) / monthlyTrend.length)
+    : 0;
+  const peakPoint = monthlyTrend.reduce((best, point) => {
+    if (!best) return point;
+    return Number(point?.total_cents || 0) > Number(best?.total_cents || 0) ? point : best;
+  }, null);
+  const monthsWithSpend = monthlyTrend.filter((point) => Number(point?.total_cents || 0) > 0).length;
 
   return {
     categories,
@@ -12558,6 +12566,20 @@ function buildSummaryChartsPayload({ userId, month, year, cardsPanel = [], perso
         total_cents: topCategory.total_cents,
         share_pct: totalSpentCents > 0 ? Math.round((Number(topCategory.total_cents || 0) / totalSpentCents) * 100) : 0
       } : null
+    },
+    insights: {
+      averageMonthlySpendCents,
+      peakPoint: peakPoint ? {
+        month: peakPoint.month,
+        year: peakPoint.year,
+        label: peakPoint.label,
+        total_cents: peakPoint.total_cents
+      } : null,
+      monthsWithSpend,
+      currentVsAveragePct: averageMonthlySpendCents > 0
+        ? Math.round(((Number(currentPoint?.total_cents || 0) - averageMonthlySpendCents) / averageMonthlySpendCents) * 100)
+        : null,
+      trackedCategories: categories.length
     }
   };
 }

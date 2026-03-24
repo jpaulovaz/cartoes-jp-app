@@ -2615,7 +2615,24 @@ html.dark .op-notification-item__icon {
 
 /* ===== Theme style switcher ===== */
 .op-style-center-panel {
+  max-height: calc(var(--op-app-height, 100dvh) - 1.25rem);
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(96, 165, 250, 0.28) transparent;
   backdrop-filter: blur(20px);
+}
+
+.op-style-center-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.op-style-center-panel::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.45), rgba(59, 130, 246, 0.28));
+  border-radius: 999px;
 }
 
 .op-style-card {

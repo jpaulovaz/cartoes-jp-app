@@ -1040,28 +1040,47 @@
         return state;
       }
 
-      async function resolveSelectionScope(items, { actionLabel = 'alterar a distribuição', destructive = false, moveAction = false, subjectLabel = 'participantes' } = {}) {
-        const futureItems = (items || []).filter(item => item.has_future_installments);
-        if (!futureItems.length) {
+      async function resolveSelectionScope(items, { actionLabel = 'alterar a distribuição', destructive = false, moveAction = false, subjectLabel = 'participantes', includeRecurring = false } = {}) {
+        const scopedItems = (items || []).filter(item => item.has_future_installments || (includeRecurring && Number(item.recurring_rule_id || 0) > 0));
+        if (!scopedItems.length) {
           return 'single';
         }
 
-        const nonInstallmentCount = Math.max(0, (items || []).length - futureItems.length);
+        const recurringCount = scopedItems.filter(item => Number(item.recurring_rule_id || 0) > 0).length;
+        const installmentCount = scopedItems.filter(item => item.has_future_installments && Number(item.recurring_rule_id || 0) <= 0).length;
+        const plainCount = Math.max(0, (items || []).length - scopedItems.length);
+        const hasRecurring = recurringCount > 0;
+        const hasInstallments = installmentCount > 0;
+        const scopeGroupLabel = hasRecurring && hasInstallments
+          ? 'compras parceladas e recorrentes'
+          : hasRecurring
+            ? 'compras recorrentes'
+            : 'compras parceladas';
+        const scopeFutureLabel = hasRecurring && hasInstallments
+          ? 'Itens Atuais + Próximas Parcelas/Recorrências'
+          : hasRecurring
+            ? 'Itens Atuais + Próximas Recorrências'
+            : 'Itens Atuais + Próximas Parcelas';
+        const scopeFutureDescription = hasRecurring && hasInstallments
+          ? 'Também aplica a ação nas próximas parcelas e nas próximas recorrências já ligadas aos itens selecionados.'
+          : hasRecurring
+            ? 'Também aplica a ação nas próximas recorrências, incluindo lançamentos futuros que já tenham nascido.'
+            : 'Também aplica a ação nas próximas parcelas de cada compra parcelada selecionada.';
         const title = destructive
-          ? (items.length > 1 ? 'Excluir compras parceladas' : 'Excluir compra parcelada')
+          ? (items.length > 1 ? `Excluir ${scopeGroupLabel}` : `Excluir ${hasRecurring ? 'compra recorrente' : 'compra parcelada'}`)
           : moveAction
             ? (items.length > 1 ? 'Mover compras parceladas' : 'Mover compra parcelada')
-            : (items.length > 1 ? `Aplicar ${subjectLabel} em compras parceladas` : `Aplicar ${subjectLabel} em compra parcelada`);
+            : (items.length > 1 ? `Aplicar ${subjectLabel} em ${scopeGroupLabel}` : `Aplicar ${subjectLabel} em ${hasRecurring ? 'compra recorrente' : 'compra parcelada'}`);
 
         const messageParts = [
           `${items.length} compra(s) · ${formatMoney(sumAmounts(items))}`,
-          `${futureItems.length} item(ns) parcelado(s) exigem confirmação de alcance antes de concluir ${actionLabel}.`,
+          `${scopedItems.length} item(ns) com alcance futuro exigem confirmação antes de concluir ${actionLabel}.`,
           'Só compras atuais: altera apenas as compras selecionadas agora.',
-          'Itens atuais + próximas parcelas: também aplica a ação nas próximas parcelas de cada compra parcelada selecionada.'
+          `${scopeFutureLabel}: ${scopeFutureDescription}`
         ];
 
-        if (nonInstallmentCount > 0) {
-          messageParts.push(`Os ${nonInstallmentCount} item(ns) sem parcelamento continuam sendo alterados apenas uma vez.`);
+        if (plainCount > 0) {
+          messageParts.push(`Os ${plainCount} item(ns) sem parcelamento nem recorrência continuam sendo alterados apenas uma vez.`);
         }
 
         if (moveAction) {
@@ -1075,7 +1094,7 @@
             options: destructive
               ? [
                   { label: 'Excluir Só Itens Atuais', value: 'single', tone: 'danger' },
-                  { label: 'Excluir Itens Atuais + Próximas Parcelas', value: 'future', tone: 'danger' },
+                  { label: `Excluir ${scopeFutureLabel}`, value: 'future', tone: 'danger' },
                   { label: 'Cancelar', value: null, tone: 'cancel' }
                 ]
               : moveAction
@@ -1086,15 +1105,19 @@
                   ]
                 : [
                     { label: 'Aplicar Só Itens Atuais', value: 'single', tone: 'primary' },
-                    { label: 'Aplicar Itens Atuais + Próximas Parcelas', value: 'future', tone: 'primary' },
+                    { label: `Aplicar ${scopeFutureLabel}`, value: 'future', tone: 'primary' },
                     { label: 'Cancelar', value: null, tone: 'cancel' }
                   ]
           });
         }
 
-        const fallbackText = items.length > 1
-          ? `Aplicar ${actionLabel} em ${items.length} compra(s), incluindo próximas parcelas das compras parceladas?`
-          : `Aplicar ${actionLabel} incluindo próximas parcelas desta compra parcelada?`;
+        const fallbackText = hasRecurring
+          ? (items.length > 1
+              ? `Aplicar ${actionLabel} em ${items.length} compra(s), incluindo próximas parcelas e recorrências quando existir alcance futuro?`
+              : 'Aplicar essa mudança também nas próximas parcelas ou recorrências desta compra?')
+          : (items.length > 1
+              ? `Aplicar ${actionLabel} em ${items.length} compra(s), incluindo próximas parcelas das compras parceladas?`
+              : `Aplicar ${actionLabel} incluindo próximas parcelas desta compra parcelada?`);
         return window.confirm(fallbackText) ? 'future' : 'single';
       }
 
@@ -1696,7 +1719,7 @@
                   showAllocMessage('Dê um nome para a nova categoria antes de salvar.', 'warning');
                   return false;
                 }
-                const scope = await resolveSelectionScope(items, { actionLabel: 'mudar a categoria', subjectLabel: items.length > 1 ? 'categorias' : 'categoria' });
+                const scope = await resolveSelectionScope(items, { actionLabel: 'mudar a categoria', subjectLabel: items.length > 1 ? 'categorias' : 'categoria', includeRecurring: true });
                 if (!scope) return false;
                 const ok = await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/category`, {
                   txn_ids: txnIds,
@@ -1965,7 +1988,7 @@
         const message = [
           formatMoney(item.amount_cents),
           formatMonthLabel(item.month, item.year),
-          item.has_future_installments ? 'Compra parcelada' : 'Compra do mês'
+          item.recurring_rule_id ? 'Compra recorrente' : (item.has_future_installments ? 'Compra parcelada' : 'Compra do mês')
         ].filter(Boolean).join(' · ');
 
         const choice = await window.showActionDialog({

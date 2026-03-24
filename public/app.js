@@ -1185,7 +1185,8 @@
   }
 
   async function resolveInstallmentScope(form, { actionLabel = 'ajustar a divisão', destructive = false } = {}) {
-    const hasFuture = String(form?.dataset?.hasFutureInstallments || '') === '1';
+    const scopeKind = String(form?.dataset?.futureScopeKind || 'installment').trim().toLowerCase();
+    const hasFuture = String(form?.dataset?.hasFutureCategoryScope || form?.dataset?.hasFutureInstallments || '') === '1';
     const field = ensureHiddenScopeField(form);
 
     if (!hasFuture) {
@@ -1200,25 +1201,29 @@
     }
 
     const label = String(form?.dataset?.installmentLabel || '').trim();
+    const isRecurring = scopeKind === 'recurring';
+    const entityLabel = isRecurring ? 'compra recorrente' : 'compra parcelada';
     const message = [
       destructive
-        ? 'Este item faz parte de uma compra parcelada. Escolha o alcance da exclusão.'
-        : `Este item faz parte de uma compra parcelada. Escolha se deseja ${actionLabel} só nesta parcela ou também nas próximas.`,
+        ? `Este item faz parte de uma ${entityLabel}. Escolha o alcance da exclusão.`
+        : isRecurring
+          ? `Este item faz parte de uma ${entityLabel}. Escolha se deseja ${actionLabel} só nesta compra ou também nas próximas recorrências.`
+          : `Este item faz parte de uma ${entityLabel}. Escolha se deseja ${actionLabel} só nesta parcela ou também nas próximas.`,
       label ? `Compra: ${label}` : ''
     ].filter(Boolean).join('\n\n');
 
     const result = await window.showActionDialog({
-      title: destructive ? 'Excluir compra parcelada' : 'Aplicar em compra parcelada',
+      title: destructive ? `Excluir ${entityLabel}` : `Aplicar em ${entityLabel}`,
       message,
       options: destructive
         ? [
-            { label: 'Excluir Só Esta Parcela', value: 'single', tone: 'danger' },
-            { label: 'Excluir Esta e Próximas', value: 'future', tone: 'danger' },
+            { label: `Excluir Só ${isRecurring ? 'Esta Compra' : 'Esta Parcela'}`, value: 'single', tone: 'danger' },
+            { label: `Excluir ${isRecurring ? 'Esta Compra e Próximas Recorrências' : 'Esta e Próximas'}`, value: 'future', tone: 'danger' },
             { label: 'Cancelar', value: null, tone: 'cancel' }
           ]
         : [
-            { label: 'Aplicar Só Nesta Parcela', value: 'single', tone: 'primary' },
-            { label: 'Aplicar Nesta e nas Próximas', value: 'future', tone: 'primary' },
+            { label: `Aplicar Só ${isRecurring ? 'Nesta Compra' : 'Nesta Parcela'}`, value: 'single', tone: 'primary' },
+            { label: `Aplicar ${isRecurring ? 'Nesta Compra e nas Próximas Recorrências' : 'Nesta e nas Próximas'}`, value: 'future', tone: 'primary' },
             { label: 'Cancelar', value: null, tone: 'cancel' }
           ]
     });

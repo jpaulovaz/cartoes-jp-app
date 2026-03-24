@@ -7152,7 +7152,7 @@ function getInstallmentScopeRows(userId, txnRow, scope = 'single') {
   }
 
   const rows = db.prepare(`
-    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id,
+    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id, t.purchase_category_id,
            COALESCE(t.due_month, i.month) AS month,
            COALESCE(t.due_year, i.year) AS year
     FROM transactions t
@@ -7167,6 +7167,43 @@ function getInstallmentScopeRows(userId, txnRow, scope = 'single') {
   `).all(userId, rootId, rootId, currentYear, currentYear, currentMonth);
 
   return rows.length ? rows : [txnRow];
+}
+
+function getRecurringCategoryScopeRows(userId, txnRow, scope = 'single') {
+  if (!txnRow) return [];
+
+  const normalizedScope = String(scope || 'single').trim().toLowerCase();
+  const recurringRuleId = Number(txnRow.recurring_rule_id || 0);
+  const currentMonth = Number(txnRow.month || 0);
+  const currentYear = Number(txnRow.year || 0);
+  if (normalizedScope !== 'future' || !recurringRuleId || !currentMonth || !currentYear) {
+    return [txnRow];
+  }
+
+  const rows = db.prepare(`
+    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id, t.purchase_category_id,
+           COALESCE(t.due_month, i.month) AS month,
+           COALESCE(t.due_year, i.year) AS year
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND t.recurring_rule_id = ?
+      AND (
+        COALESCE(t.due_year, i.year) > ? OR
+        (COALESCE(t.due_year, i.year) = ? AND COALESCE(t.due_month, i.month) >= ?)
+      )
+    ORDER BY COALESCE(t.due_year, i.year) ASC, COALESCE(t.due_month, i.month) ASC, t.id ASC
+  `).all(userId, recurringRuleId, currentYear, currentYear, currentMonth);
+
+  return rows.length ? rows : [txnRow];
+}
+
+function getPurchaseCategoryScopeRows(userId, txnRow, scope = 'single') {
+  if (!txnRow) return [];
+  if (Number(txnRow.recurring_rule_id || 0) > 0) {
+    return getRecurringCategoryScopeRows(userId, txnRow, scope);
+  }
+  return getInstallmentScopeRows(userId, txnRow, scope);
 }
 
 function normalizeTxnIds(value) {
@@ -7199,6 +7236,14 @@ function collectScopedTxnRows(userId, sourceRows, scope = 'single') {
   const scopedRows = [];
   (sourceRows || []).forEach(row => {
     getInstallmentScopeRows(userId, row, scope).forEach(target => scopedRows.push(target));
+  });
+  return dedupeTxnRows(scopedRows);
+}
+
+function collectScopedCategoryTxnRows(userId, sourceRows, scope = 'single') {
+  const scopedRows = [];
+  (sourceRows || []).forEach((row) => {
+    getPurchaseCategoryScopeRows(userId, row, scope).forEach((target) => scopedRows.push(target));
   });
   return dedupeTxnRows(scopedRows);
 }
@@ -11549,7 +11594,7 @@ app.post("/txn/:id/category", ensureAuthenticated, (req, res) => {
   }
 
   const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
-  const targetRows = getInstallmentScopeRows(userId, txn, applyScope);
+  const targetRows = getPurchaseCategoryScopeRows(userId, txn, applyScope);
   const lockedTarget = targetRows.find((row) => isMonthClosed(userId, row.month, row.year));
   if (lockedTarget) {
     setFlash(req, 'error', getMonthLockMessage(lockedTarget.month, lockedTarget.year));
@@ -11567,8 +11612,11 @@ app.post("/txn/:id/category", ensureAuthenticated, (req, res) => {
     const categoryLabel = purchaseCategoryId
       ? (getPurchaseCategoryById(userId, purchaseCategoryId, { includeInactive: true })?.name || 'categoria escolhida')
       : 'sem categoria';
+    const updatedRecurring = Number(txn.recurring_rule_id || 0) > 0 && applyScope === 'future';
     setFlash(req, 'success', applyScope === 'future'
-      ? `Categoria atualizada para ${categoryLabel} nesta compra e nas próximas parcelas.`
+      ? (updatedRecurring
+          ? `Categoria atualizada para ${categoryLabel} nesta compra e nas próximas recorrências.`
+          : `Categoria atualizada para ${categoryLabel} nesta compra e nas próximas parcelas.`)
       : `Categoria atualizada para ${categoryLabel}.`);
     return res.redirect(`/txn/${txn.id}`);
   } catch (error) {
@@ -11765,7 +11813,7 @@ app.post("/month/:year/:month/bulk/category", ensureAuthenticated, (req, res) =>
   }
 
   const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
-  const targetRows = collectScopedTxnRows(userId, sourceRows, applyScope);
+  const targetRows = collectScopedCategoryTxnRows(userId, sourceRows, applyScope);
   const lockedTarget = targetRows.find((row) => isMonthClosed(userId, row.month, row.year));
   if (lockedTarget) {
     return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedTarget.month, lockedTarget.year) });

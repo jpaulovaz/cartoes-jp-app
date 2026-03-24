@@ -58,7 +58,8 @@
       const root = document.documentElement;
       const styleKey = 'op-theme-style';
       const storedStyle = localStorage.getItem(styleKey);
-      root.dataset.themeStyle = storedStyle === 'confete' ? 'confete' : 'classic';
+      const validStyles = new Set(['classic', 'confete', 'orgulho']);
+      root.dataset.themeStyle = validStyles.has(storedStyle) ? storedStyle : 'classic';
 
       const storedTheme = localStorage.getItem('theme');
       const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -67,9 +68,14 @@
 
       const themeColorMeta = document.querySelector('meta[name="theme-color"]');
       if (themeColorMeta) {
-        const themeColor = root.dataset.themeStyle === 'confete'
-          ? (nextTheme === 'dark' ? '#1f1633' : '#fff3f7')
-          : (nextTheme === 'dark' ? '#020617' : '#eaf2ff');
+        let themeColor;
+        if (root.dataset.themeStyle === 'confete') {
+          themeColor = nextTheme === 'dark' ? '#1f1633' : '#fff3f7';
+        } else if (root.dataset.themeStyle === 'orgulho') {
+          themeColor = nextTheme === 'dark' ? '#1a1230' : '#fff8f2';
+        } else {
+          themeColor = nextTheme === 'dark' ? '#020617' : '#eaf2ff';
+        }
         themeColorMeta.setAttribute('content', themeColor);
       }
     })();
@@ -267,7 +273,7 @@
             </span>
             <span class="min-w-0 flex-1 text-left">
               <span class="block text-sm font-black text-slate-900 dark:text-white">Trocar visual</span>
-              <span class="mt-0.5 block text-xs font-semibold text-slate-500 dark:text-slate-400" data-mobile-theme-style-caption>Clássico ou Confete</span>
+              <span class="mt-0.5 block text-xs font-semibold text-slate-500 dark:text-slate-400" data-mobile-theme-style-caption>Clássico, Confete ou Orgulho</span>
             </span>
             <svg class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
           </button>
@@ -374,17 +380,17 @@
   <div id="theme-style-center" data-theme-style-center class="fixed inset-0 z-[10042] hidden" aria-hidden="true">
     <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-theme-style-backdrop></div>
     <div class="relative z-10 flex min-h-full items-end justify-center overflow-y-auto px-3 py-3 sm:items-center sm:px-4 sm:py-6">
-      <section class="op-style-center-panel w-full max-w-3xl overflow-hidden rounded-[30px] border border-slate-200 bg-white/95 shadow-2xl ring-1 ring-slate-200 backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95 dark:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="theme-style-title">
+      <section class="op-style-center-panel w-full max-w-5xl overflow-hidden rounded-[30px] border border-slate-200 bg-white/95 shadow-2xl ring-1 ring-slate-200 backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95 dark:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="theme-style-title">
         <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 dark:border-slate-800 sm:px-6">
           <div>
             <div class="text-[11px] font-black uppercase tracking-[0.18em] text-fuchsia-600 dark:text-fuchsia-300">Trocar visual</div>
-            <h2 id="theme-style-title" class="mt-1 text-xl font-black text-slate-900 dark:text-white">Clássico ou Confete?</h2>
-            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">A função continua igualzinha. O que muda aqui é só a roupa do app.</p>
+            <h2 id="theme-style-title" class="mt-1 text-xl font-black text-slate-900 dark:text-white">Clássico, Confete ou Orgulho?</h2>
+            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">A função continua igualzinha. O que muda aqui é só a roupa do app — agora com mais um jeitinho de brilhar.</p>
           </div>
           <button type="button" class="op-icon-btn shrink-0" data-theme-style-close aria-label="Fechar seleção de visual">✕</button>
         </div>
         <div class="space-y-5 px-5 py-5 sm:px-6">
-          <div class="grid gap-4 md:grid-cols-2">
+          <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <button type="button" class="op-style-card" data-theme-style-choice="classic">
               <span class="op-style-card__preview op-style-card__preview--classic" aria-hidden="true">
                 <span class="op-style-card__preview-topbar"></span>
@@ -409,6 +415,20 @@
                 <span class="op-style-card__kicker">Confete</span>
                 <span class="op-style-card__title">Divertido, moderno e quentinho</span>
                 <span class="op-style-card__text">Mais cor, mais personalidade e um clima leve sem perder o conforto visual do dia a dia.</span>
+              </span>
+              <span class="op-style-card__check" data-theme-style-check>Ativo</span>
+            </button>
+
+            <button type="button" class="op-style-card" data-theme-style-choice="orgulho">
+              <span class="op-style-card__preview op-style-card__preview--orgulho" aria-hidden="true">
+                <span class="op-style-card__preview-topbar"></span>
+                <span class="op-style-card__preview-body"></span>
+                <span class="op-style-card__preview-pill"></span>
+              </span>
+              <span class="op-style-card__content">
+                <span class="op-style-card__kicker">Orgulho</span>
+                <span class="op-style-card__title">Vibrante, acolhedor e cheio de presença</span>
+                <span class="op-style-card__text">Mais cor, mais brilho e uma energia de celebração que continua confortável de usar do começo ao fim.</span>
               </span>
               <span class="op-style-card__check" data-theme-style-check>Ativo</span>
             </button>

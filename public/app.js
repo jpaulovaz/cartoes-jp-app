@@ -1882,7 +1882,7 @@
 
 (function () {
   const STYLE_STORAGE_KEY = 'op-theme-style';
-  const VALID_STYLES = new Set(['classic', 'confete']);
+  const VALID_STYLES = new Set(['classic', 'confete', 'orgulho']);
   const root = document.documentElement;
   const body = document.body;
 
@@ -1898,6 +1898,9 @@
   function getThemeColor(style, appearance) {
     if (style === 'confete') {
       return appearance === 'dark' ? '#221531' : '#fff1f7';
+    }
+    if (style === 'orgulho') {
+      return appearance === 'dark' ? '#1a1230' : '#fff8f2';
     }
     return appearance === 'dark' ? '#020617' : '#eaf2ff';
   }
@@ -1918,14 +1921,25 @@
       button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
 
+    const styleLabels = {
+      classic: 'Visual Clássico ativo',
+      confete: 'Visual Confete ativo',
+      orgulho: 'Visual Orgulho ativo'
+    };
+    const styleCaptions = {
+      classic: 'Clássico ativo',
+      confete: 'Confete ativo',
+      orgulho: 'Orgulho ativo'
+    };
+
     document.querySelectorAll('[data-theme-style-open]').forEach((button) => {
-      const label = style === 'confete' ? 'Visual Confete ativo' : 'Visual Clássico ativo';
+      const label = styleLabels[style] || styleLabels.classic;
       button.setAttribute('title', `${label}. Toque para trocar.`);
       button.setAttribute('aria-label', `${label}. Toque para trocar.`);
     });
 
     document.querySelectorAll('[data-mobile-theme-style-caption]').forEach((node) => {
-      node.textContent = style === 'confete' ? 'Confete ativo' : 'Clássico ativo';
+      node.textContent = styleCaptions[style] || styleCaptions.classic;
     });
 
     const nextAppearanceLabel = appearance === 'dark' ? 'Modo claro' : 'Modo escuro';

@@ -720,8 +720,13 @@
       purchaseCategories: <%- JSON.stringify((activePurchaseCategories || []).map(category => ({ id: Number(category.id), name: category.name }))).replace(/</g, '\\u003c') %>,
       txns: <%- JSON.stringify((txns || []).map(t => ({
         id: Number(t.id),
+        import_id: t.import_id ? Number(t.import_id) : null,
+        txn_date: t.txn_date || '',
+        card_id: t.card_id ? Number(t.card_id) : null,
+        card_name: t.card_name || '',
         description: t.description,
         amount_cents: Number(t.amount_cents || 0),
+        alloc_count: Number(t.alloc_count || 0),
         selected_ids: (t.selected_ids || []).map(Number),
         selected_shares: Object.fromEntries(Object.entries(t.selected_shares || {}).map(([key, value]) => [Number(key), Number(value || 0)])),
         has_future_installments: !!t.has_future_installments,
@@ -730,7 +735,7 @@
         purchase_category_name: t.purchase_category_name || '',
         month: Number(t.month || month),
         year: Number(t.year || year)
-      }))).replace(/</g, '\\u003c') %>
+      }))).replace(/</g, '\u003c') %>
     };
   </script>
 
@@ -750,7 +755,9 @@
         import_id: item.import_id ? Number(item.import_id) : null,
         txn_date: item.txn_date || '',
         amount_cents: Number(item.amount_cents || 0),
+        alloc_count: Number(item.alloc_count || 0),
         card_id: item.card_id ? Number(item.card_id) : null,
+        card_name: item.card_name || '',
         month: Number(item.month || currentMonth),
         year: Number(item.year || currentYear),
         selected_ids: Array.isArray(item.selected_ids) ? item.selected_ids.map(Number) : [],
@@ -1261,13 +1268,108 @@
         return `w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:bg-slate-950 ${className}`.trim();
       }
 
+      function buildImpactPanel({ tone = 'info', title = '', body = '' } = {}) {
+        const palette = {
+          info: 'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-100',
+          warning: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100',
+          danger: 'border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-100',
+          success: 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-100'
+        };
+        const panel = document.createElement('div');
+        panel.className = `rounded-[22px] border px-4 py-3 text-sm ${palette[tone] || palette.info}`;
+        panel.innerHTML = `<div class="text-sm font-black">${escapeHtml(title)}</div><p class="mt-1 leading-6 opacity-90">${escapeHtml(body)}</p>`;
+        return panel;
+      }
+
+      function inferItemSplitMode(item) {
+        if (!item || !Array.isArray(item.selected_ids) || !item.selected_ids.length) return 'none';
+        const participantIds = item.selected_ids.map((value) => Number(value || 0)).filter(Boolean);
+        if (!participantIds.length) return 'none';
+        if (participantIds.length <= 1) return 'single';
+        const shares = item.selected_shares && typeof item.selected_shares === 'object' ? item.selected_shares : {};
+        const amount = Number(item.amount_cents || 0);
+        const values = participantIds.map((personId) => Number(shares[personId] || 0));
+        const total = values.reduce((sum, value) => sum + value, 0);
+        if (amount > 0 && total === amount) {
+          const base = Math.floor(amount / participantIds.length);
+          let remainder = amount - (base * participantIds.length);
+          const expected = participantIds.map(() => {
+            const next = base + (remainder > 0 ? 1 : 0);
+            if (remainder > 0) remainder -= 1;
+            return next;
+          });
+          return expected.every((value, index) => value === values[index]) ? 'equal' : 'exact';
+        }
+        return 'exact';
+      }
+
+      function refreshEditPurchaseInsights(item, refs) {
+        if (!item || !refs || !(refs.stack instanceof HTMLElement)) return;
+        const amountInput = refs.amountInput instanceof HTMLInputElement ? refs.amountInput : null;
+        const dateInput = refs.dateInput instanceof HTMLInputElement ? refs.dateInput : null;
+        const cardSelect = refs.cardSelect instanceof HTMLSelectElement ? refs.cardSelect : null;
+        const firstDueInput = refs.firstDueInput instanceof HTMLInputElement ? refs.firstDueInput : null;
+        const descriptionInput = refs.descriptionInput instanceof HTMLInputElement ? refs.descriptionInput : null;
+        refs.stack.innerHTML = '';
+
+        const typeTitle = item.recurring_rule_id ? 'Compra recorrente' : (item.has_future_installments ? 'Compra parcelada' : 'Compra única');
+        const typeBody = item.recurring_rule_id
+          ? 'Se você salvar com alcance futuro, a compra atual, as próximas recorrências já criadas e a regra da recorrência andam juntas.'
+          : item.has_future_installments
+            ? 'Se você salvar com alcance futuro, a parcela atual e as próximas acompanham a mudança.'
+            : 'Mudanças aqui valem só para esta compra. Salvou, atualizou e partiu.';
+        refs.stack.appendChild(buildImpactPanel({ tone: 'info', title: typeTitle, body: typeBody }));
+
+        const splitMode = inferItemSplitMode(item);
+        if (splitMode === 'equal') {
+          refs.stack.appendChild(buildImpactPanel({ tone: 'success', title: 'Divisão em partes iguais detectada', body: 'Se o valor mudar, a divisão entre as pessoas acompanha automaticamente para continuar tudo redondinho.' }));
+        } else if (splitMode === 'exact') {
+          refs.stack.appendChild(buildImpactPanel({ tone: 'warning', title: 'Divisão com valores definidos', body: 'Se você mudar o valor, o app pode travar o salvamento até a divisão ser revisada. Melhor evitar surpresa na hora do acerto.' }));
+        }
+
+        if (descriptionInput && item.has_future_installments && descriptionInput.value.trim() !== String(item.description || '').trim()) {
+          refs.stack.appendChild(buildImpactPanel({ tone: 'info', title: 'Nome das parcelas continua organizado', body: 'Ao aplicar no futuro, o nome-base novo segue para as próximas parcelas e o contador 01/12, 02/12... continua no lugar certo.' }));
+        }
+
+        const originalMonthValue = `${String(item.year || currentYear).padStart(4, '0')}-${String(item.month || currentMonth).padStart(2, '0')}`;
+        if (firstDueInput && /^\d{4}-\d{2}$/.test(firstDueInput.value) && firstDueInput.value !== originalMonthValue) {
+          const dueMonth = Number(firstDueInput.value.slice(5, 7));
+          const dueYear = Number(firstDueInput.value.slice(0, 4));
+          refs.stack.appendChild(buildImpactPanel({
+            tone: 'warning',
+            title: 'Fatura de destino alterada',
+            body: item.recurring_rule_id
+              ? `A base da recorrência passa a apontar para ${formatMonthLabel(dueMonth, dueYear)} se você aplicar no futuro.`
+              : `Essa compra passa a mirar ${formatMonthLabel(dueMonth, dueYear)}. Se escolher alcance futuro, as próximas parcelas reencaixam junto.`
+          }));
+        }
+
+        if (cardSelect && Number(cardSelect.value || 0) !== Number(item.card_id || 0)) {
+          refs.stack.appendChild(buildImpactPanel({ tone: 'warning', title: 'Cartão novo na jogada', body: 'Trocar o cartão mexe na fatura de destino e respeita os bloqueios de mês fechado. Se algum mês estiver fechado, o app segura o passe.' }));
+        }
+
+        if (amountInput && amountInput.value && amountInput.value !== formatMoney(item.amount_cents)) {
+          refs.stack.appendChild(buildImpactPanel({
+            tone: splitMode === 'exact' ? 'warning' : 'info',
+            title: 'Valor alterado',
+            body: splitMode === 'exact'
+              ? 'Como já existe divisão detalhada entre pessoas, esse é o ponto mais sensível da edição.'
+              : 'Se não houver trava de liquidação ou mês fechado, o valor novo segue normalmente.'
+          }));
+        }
+
+        if (dateInput && dateInput.value && dateInput.value !== String(item.txn_date || '')) {
+          refs.stack.appendChild(buildImpactPanel({ tone: 'info', title: 'Data da compra mudou', body: 'O app recalcula a sugestão de fatura com base no cartão escolhido. Se você travar a fatura manualmente, a gente respeita.' }));
+        }
+      }
+
       function buildEditPurchaseForm(item) {
         const wrapper = document.createElement('div');
         wrapper.className = 'space-y-4';
 
         const summary = document.createElement('div');
         summary.className = 'rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-200';
-        summary.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-emerald-500/80 dark:text-emerald-300/80">Edição segura</div><div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(formatMoney(item.amount_cents))} · ${escapeHtml(formatMonthLabel(item.month, item.year))}</div><p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Ajuste os dados da compra e, se houver parcelas ou recorrência, a gente pergunta o alcance antes de salvar.</p></div>`;
+        summary.innerHTML = `<div class="flex flex-wrap items-center gap-2"><span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Edição segura</span><span class="inline-flex items-center rounded-full bg-slate-900/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:bg-slate-100/10 dark:text-slate-300">${escapeHtml(item.recurring_rule_id ? 'Recorrente' : (item.has_future_installments ? 'Parcelada' : 'Única'))}</span></div><div class="mt-2 text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(formatMoney(item.amount_cents))} · ${escapeHtml(formatMonthLabel(item.month, item.year))}</div><p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Ajuste os dados da compra e, se houver parcelas ou recorrência, a gente pergunta o alcance antes de salvar.</p>${item.card_name ? `<div class="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartão atual: ${escapeHtml(item.card_name)}</div>` : ''}</div>`;
         wrapper.appendChild(summary);
 
         if (item.import_id) {
@@ -1383,14 +1485,9 @@
           window.OPInitPurchaseCategoryControls(categoryBlock);
         }
 
-        const scopeHint = document.createElement('div');
-        scopeHint.className = 'rounded-[22px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100';
-        scopeHint.innerHTML = item.recurring_rule_id
-          ? '<strong>Compra recorrente:</strong> ao salvar uma mudança estrutural, você poderá aplicar só nesta compra ou também nas próximas recorrências.'
-          : item.has_future_installments
-            ? '<strong>Compra parcelada:</strong> ao salvar, você poderá decidir entre mexer só nesta parcela ou também nas próximas.'
-            : 'Compra única: salvou, atualizou e partiu sem cerimônia.';
-        form.appendChild(scopeHint);
+        const insightsStack = document.createElement('div');
+        insightsStack.className = 'space-y-3';
+        form.appendChild(insightsStack);
 
         const syncFirstDueSuggestion = () => {
           const selectedOption = cardSelect.options[cardSelect.selectedIndex];
@@ -1399,9 +1496,31 @@
             firstDueInput.value = suggested;
           }
         };
-        dateInput.addEventListener('change', syncFirstDueSuggestion);
-        cardSelect.addEventListener('change', syncFirstDueSuggestion);
-        firstDueInput.addEventListener('input', () => { firstDueInput.dataset.touched = '1'; });
+        const refreshInsights = () => refreshEditPurchaseInsights(item, {
+          stack: insightsStack,
+          amountInput,
+          dateInput,
+          cardSelect,
+          firstDueInput,
+          descriptionInput
+        });
+
+        dateInput.addEventListener('change', () => {
+          syncFirstDueSuggestion();
+          refreshInsights();
+        });
+        cardSelect.addEventListener('change', () => {
+          syncFirstDueSuggestion();
+          refreshInsights();
+        });
+        firstDueInput.addEventListener('input', () => {
+          firstDueInput.dataset.touched = '1';
+          refreshInsights();
+        });
+        amountInput.addEventListener('input', refreshInsights);
+        descriptionInput.addEventListener('input', refreshInsights);
+        syncFirstDueSuggestion();
+        refreshInsights();
 
         wrapper.appendChild(form);
         return { wrapper, form, amountInput, submitButtonLabel: 'Salvar alterações' };

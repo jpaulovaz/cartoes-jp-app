@@ -4598,6 +4598,16 @@ function getMonthLockMessage(month, year) {
   return `O mês ${monthLabel(month, year)} está fechado para edição.`;
 }
 
+function getEditDestinationMonthLockMessage(month, year, { isRecurring = false, futureScope = false } = {}) {
+  if (futureScope && isRecurring) {
+    return `A fatura de destino em ${monthLabel(month, year)} está fechada. Para não bagunçar as próximas recorrências, preciso que você escolha uma fatura aberta.`;
+  }
+  if (futureScope) {
+    return `Uma das faturas de destino em ${monthLabel(month, year)} já está fechada. Para não deixar parcelas com destino torto, escolha uma fatura aberta.`;
+  }
+  return `A fatura de destino em ${monthLabel(month, year)} está fechada. Escolha uma fatura aberta para salvar a edição.`;
+}
+
 function redirectBackOr(req, fallback) {
   return req.get("referer") || fallback;
 }
@@ -11786,7 +11796,8 @@ app.post("/txn/:id/edit", ensureAuthenticated, (req, res) => {
   const futureScope = applyScope === 'future';
   const isRecurring = Number(txn.recurring_rule_id || 0) > 0;
 
-  const invalidDestination = targetRows.find((row) => {
+  let invalidDestination = null;
+  targetRows.some((row) => {
     let nextDueMonth = targetDueMonth;
     let nextDueYear = targetDueYear;
     if (futureScope) {
@@ -11801,10 +11812,19 @@ app.post("/txn/:id/edit", ensureAuthenticated, (req, res) => {
         nextDueYear = shiftedDue.year;
       }
     }
-    return isMonthClosed(userId, nextDueMonth, nextDueYear);
+    if (!isMonthClosed(userId, nextDueMonth, nextDueYear)) return false;
+    invalidDestination = {
+      row,
+      target_month: nextDueMonth,
+      target_year: nextDueYear
+    };
+    return true;
   });
   if (invalidDestination) {
-    return respondError(423, getMonthLockMessage(invalidDestination.month, invalidDestination.year));
+    return respondError(423, getEditDestinationMonthLockMessage(invalidDestination.target_month, invalidDestination.target_year, {
+      futureScope,
+      isRecurring
+    }));
   }
   const installmentChain = txn.parent_txn_id || txn.id ? getInstallmentChainRows(userId, txn) : [];
   const installmentMetaByTxnId = new Map(installmentChain.map((row, index) => [Number(row.id), { position: index + 1, total: installmentChain.length || 1 }]));

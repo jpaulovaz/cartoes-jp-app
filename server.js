@@ -12463,6 +12463,7 @@ function upsertPersonPaymentsForMonth(userId, month, year, entries) {
 function getSummaryCategoryDistribution(userId, month, year) {
   const rows = db.prepare(`
     SELECT
+      t.purchase_category_id AS category_id,
       COALESCE(NULLIF(TRIM(pc.name), ''), 'Sem categoria') AS label,
       SUM(t.amount_cents) AS total_cents,
       COUNT(*) AS txn_count,
@@ -12481,6 +12482,7 @@ function getSummaryCategoryDistribution(userId, month, year) {
   `).all(userId, month, year, month, year);
 
   return rows.map((row) => ({
+    id: row.category_id ? Number(row.category_id) : null,
     label: row.label,
     total_cents: row.total_cents || 0,
     txn_count: row.txn_count || 0,

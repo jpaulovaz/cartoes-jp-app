@@ -774,6 +774,24 @@
     return currency.format(Number(cents || 0) / 100);
   }
 
+  function buildMonthUrl(year, month, extra = {}) {
+    const params = new URLSearchParams();
+    Object.entries(extra || {}).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== '') params.set(key, String(value));
+    });
+    const qs = params.toString();
+    return `/month/${year}/${month}${qs ? `?${qs}` : ''}`;
+  }
+
+  function buildSummaryUrl(year, month) {
+    return `/summary/${year}/${month}`;
+  }
+
+  function setInteractionHint(root, message) {
+    const node = root.querySelector('[data-summary-interaction-hint]');
+    if (node && message) node.textContent = message;
+  }
+
   function readSummaryGraphs(root) {
     const node = root.querySelector('[data-summary-graphs-json]');
     if (!node) return null;
@@ -859,7 +877,7 @@
     legendNode.innerHTML = `
       <div class="grid gap-3 sm:grid-cols-2">
         ${segments.map((segment) => `
-          <div class="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+          <button type="button" class="group rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-left transition hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
@@ -867,12 +885,24 @@
                   <div class="truncate text-sm font-black text-slate-900 dark:text-white">${segment.label || 'Sem nome'}</div>
                 </div>
                 <div class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">${segment.txn_count || 0} compra(s) · ${segment.share}% do mês</div>
+                <div class="mt-2 text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700 opacity-0 transition group-hover:opacity-100 dark:text-violet-300">Abrir no mês filtrado</div>
               </div>
               <div class="text-right text-sm font-black text-slate-900 dark:text-white">${formatMoney(segment.total_cents)}</div>
             </div>
-          </div>
+          </button>
         `).join('')}
       </div>`;
+
+    legendNode.querySelectorAll('[data-summary-category-link]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const categoryId = Number(button.getAttribute('data-category-id') || 0);
+        const categoryLabel = button.getAttribute('data-category-label') || 'essa categoria';
+        const year = Number(root.getAttribute('data-summary-year') || 0);
+        const month = Number(root.getAttribute('data-summary-month') || 0);
+        setInteractionHint(root, `Abrindo ${categoryLabel} no mês para você enxergar onde o caldo engrossou.`);
+        window.location.href = buildMonthUrl(year, month, { f_category: categoryId });
+      });
+    });
   }
 
   function renderLineChart(root, points) {
@@ -933,12 +963,22 @@
       </div>
       <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         ${coords.map((point) => `
-          <div class="rounded-2xl border ${point.is_current ? 'border-violet-300 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/20' : 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/70'} px-3 py-2.5">
+          <button type="button" class="rounded-2xl border ${point.is_current ? 'border-violet-300 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/20' : 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/70'} px-3 py-2.5 text-left transition hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-month-point data-point-year="${point.year}" data-point-month="${point.month}" data-point-label="${point.label}">
             <div class="text-[11px] font-bold uppercase tracking-[0.18em] ${point.is_current ? 'text-violet-700 dark:text-violet-300' : 'text-slate-500 dark:text-slate-400'}">${point.label}</div>
             <div class="mt-1 text-sm font-black ${point.is_current ? 'text-violet-700 dark:text-violet-200' : 'text-slate-900 dark:text-white'}">${formatMoney(point.total_cents)}</div>
-          </div>
+          </button>
         `).join('')}
       </div>`;
+
+    chartNode.querySelectorAll('[data-summary-month-point]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const year = Number(button.getAttribute('data-point-year') || 0);
+        const month = Number(button.getAttribute('data-point-month') || 0);
+        const label = button.getAttribute('data-point-label') || 'esse mês';
+        setInteractionHint(root, `Indo para ${label}. Bora comparar esse capítulo da novela financeira.`);
+        window.location.href = buildSummaryUrl(year, month);
+      });
+    });
   }
 
   document.addEventListener('DOMContentLoaded', () => {

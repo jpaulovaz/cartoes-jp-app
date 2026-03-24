@@ -21,7 +21,7 @@
 
     <% const graphKpis = summaryCharts && summaryCharts.kpis ? summaryCharts.kpis : null; %>
     <% const graphSectionDefaultOpen = true; %>
-    <section class="mb-8 op-surface-card rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6" data-summary-graphs-root>
+    <section class="mb-8 op-surface-card rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6" data-summary-graphs-root data-summary-year="<%= year %>" data-summary-month="<%= month %>">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div class="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Fase 11 · leitura visual</div>
@@ -38,6 +38,31 @@
       </div>
 
       <div class="mt-5 space-y-5" data-summary-graphs-panel <%= graphSectionDefaultOpen ? '' : 'hidden' %>>
+        <div class="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+          <span class="font-bold text-slate-800 dark:text-slate-100">Dica esperta:</span> tocou numa categoria ou num ponto da linha, a gente te leva direto pro mês ou filtro correspondente. Nada de caça ao tesouro financeiro.</span>
+          <div class="hidden sm:block h-4 w-px bg-slate-300 dark:bg-slate-700"></div>
+          <span data-summary-interaction-hint class="font-medium text-slate-500 dark:text-slate-400">Clique para explorar os detalhes.</span>
+        </div>
+
+        <div class="grid gap-3 lg:grid-cols-3">
+          <div class="rounded-[24px] border border-slate-200 bg-white/90 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Mês anterior</div>
+            <div class="mt-2 text-xl font-black tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(summaryCharts?.monthlyTrend?.length > 1 ? summaryCharts.monthlyTrend[summaryCharts.monthlyTrend.length - 2].total_cents : 0) %></div>
+            <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">Ótimo para comparar se o mês atual veio mais comedido ou resolveu fazer cosplay de Carnaval.</p>
+          </div>
+          <div class="rounded-[24px] border border-slate-200 bg-white/90 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Variação</div>
+            <div class="mt-2 text-xl font-black tracking-tight <%= Number(graphKpis?.deltaCents || 0) > 0 ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-300' %>"><%= graphKpis?.deltaPct === null || graphKpis?.deltaPct === undefined ? 'Sem base ainda' : `${Number(graphKpis?.deltaPct || 0) > 0 ? '+' : ''}${Number(graphKpis?.deltaPct || 0)}%` %></div>
+            <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">Comparação pronta no capricho para não deixar aumento de gasto passar desfilando em silêncio.</p>
+          </div>
+          <div class="rounded-[24px] border border-violet-200 bg-violet-50/80 p-4 dark:border-violet-900/70 dark:bg-violet-950/30">
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Atalhos do gráfico</div>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <a href="/month/<%= year %>/<%= month %>" class="inline-flex items-center rounded-full border border-violet-200 bg-white px-3 py-1.5 text-xs font-bold text-violet-700 transition hover:-translate-y-0.5 hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200 dark:hover:bg-violet-900/50">Ver mês atual</a>
+              <a href="/summary/<%= previousSummaryRef.year %>/<%= previousSummaryRef.month %>" class="inline-flex items-center rounded-full border border-violet-200 bg-white px-3 py-1.5 text-xs font-bold text-violet-700 transition hover:-translate-y-0.5 hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200 dark:hover:bg-violet-900/50">Comparar com mês anterior</a>
+            </div>
+          </div>
+        </div>
         <div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <div class="rounded-3xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/50">
             <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Total do mês</div>

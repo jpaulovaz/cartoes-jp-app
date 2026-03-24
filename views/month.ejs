@@ -1573,11 +1573,19 @@
                   if (!scope) return false;
                 }
 
-                const payload = new FormData(form);
+                const payload = new URLSearchParams(new FormData(form));
                 payload.set('apply_scope', scope);
 
                 try {
-                  const response = await fetch(`/txn/${item.id}/edit`, { method: 'POST', body: payload, headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-OrganizaPay-Async': '1' } });
+                  const response = await fetch(`/txn/${item.id}/edit`, {
+                    method: 'POST',
+                    body: payload.toString(),
+                    headers: {
+                      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                      'X-Requested-With': 'XMLHttpRequest',
+                      'X-OrganizaPay-Async': '1'
+                    }
+                  });
                   let data = null;
                   try { data = await response.json(); } catch (_) { data = null; }
                   if (!response.ok || !data || data.ok === false) {

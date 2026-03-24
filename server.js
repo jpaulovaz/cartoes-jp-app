@@ -4711,7 +4711,7 @@ function getRecurringRules(userId, { includeEnded = false } = {}) {
   `).all(userId);
 }
 
-function syncRecurringTransactions(userId, targetYear, targetMonth) {
+function syncRecurringTransactions(userId, targetYear, targetMonth, { referenceDate = dayjs() } = {}) {
   const year = Number(targetYear);
   const month = Number(targetMonth);
   if (!year || !month) return;
@@ -4750,12 +4750,14 @@ function syncRecurringTransactions(userId, targetYear, targetMonth) {
 
   db.transaction(() => {
     rules.forEach(rule => {
-      if (compareMonthYear(rule.start_due_year, rule.start_due_month, year, month) > 0) return;
+      const syncLimit = getRecurringSyncLimitForRule(rule, year, month, referenceDate);
+      if (!syncLimit) return;
+      if (compareMonthYear(rule.start_due_year, rule.start_due_month, syncLimit.year, syncLimit.month) > 0) return;
 
       let offset = 0;
       while (true) {
         const due = shiftMonth(rule.start_due_year, rule.start_due_month, offset);
-        if (compareMonthYear(due.year, due.month, year, month) > 0) break;
+        if (compareMonthYear(due.year, due.month, syncLimit.year, syncLimit.month) > 0) break;
 
         if (compareMonthYear(due.year, due.month, rule.active_from_year, rule.active_from_month) < 0) {
           offset += 1;
@@ -4785,6 +4787,35 @@ function syncRecurringTransactions(userId, targetYear, targetMonth) {
   })();
 }
 
+function getRecurringSyncLimitForRule(rule, targetYear, targetMonth, referenceDate = dayjs()) {
+  const requestedYear = Number(targetYear || 0);
+  const requestedMonth = Number(targetMonth || 0);
+  if (!requestedYear || !requestedMonth) return null;
+
+  const currentDate = dayjs(referenceDate);
+  if (!currentDate.isValid()) return { year: requestedYear, month: requestedMonth };
+
+  const currentYear = currentDate.year();
+  const currentMonth = currentDate.month() + 1;
+
+  let limit = { year: requestedYear, month: requestedMonth };
+  if (compareMonthYear(limit.year, limit.month, currentYear, currentMonth) > 0) {
+    limit = { year: currentYear, month: currentMonth };
+  }
+
+  if (compareMonthYear(limit.year, limit.month, currentYear, currentMonth) === 0) {
+    const occurrenceDate = getRecurringOccurrenceDateForMonth(rule, currentYear, currentMonth);
+    if (occurrenceDate) {
+      const occurrence = dayjs(occurrenceDate);
+      if (occurrence.isValid() && currentDate.isBefore(occurrence, 'day')) {
+        limit = shiftMonth(currentYear, currentMonth, -1);
+      }
+    }
+  }
+
+  return limit;
+}
+
 function getRecurringPreview(rule) {
   const today = dayjs();
   const currentYear = today.year();
@@ -4797,10 +4828,24 @@ function getRecurringPreview(rule) {
       offset += 1;
       continue;
     }
-    if (compareMonthYear(due.year, due.month, currentYear, currentMonth) >= 0) {
-      return due;
+
+    const compareToCurrent = compareMonthYear(due.year, due.month, currentYear, currentMonth);
+    if (compareToCurrent < 0) {
+      offset += 1;
+      continue;
     }
-    offset += 1;
+
+    if (compareToCurrent === 0) {
+      const occurrenceDate = getRecurringOccurrenceDateForMonth(rule, currentYear, currentMonth);
+      const occurrence = occurrenceDate ? dayjs(occurrenceDate) : null;
+      if (!occurrence || !occurrence.isValid() || today.isBefore(occurrence, 'day')) {
+        return due;
+      }
+      offset += 1;
+      continue;
+    }
+
+    return due;
   }
 
   return null;

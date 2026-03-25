@@ -14514,6 +14514,18 @@ app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
   }
 });
 
+app.use((req, res, next) => {
+  if (res.headersSent) return next();
+  res.status(404);
+  return res.render('error', {
+    title: 'OrganizaPay | Opa',
+    errorTitle: 'Deu uma tropeçadinha no caminho',
+    errorMessage: 'Essa página não apareceu por aqui. Bora voltar para um cantinho conhecido do app?',
+    actionHref: req?.isAuthenticated?.() ? (res.locals.dashboardHref || '/') : '/login',
+    actionLabel: req?.isAuthenticated?.() ? 'Voltar para o app' : 'Ir para o login'
+  });
+});
+
 app.use((err, req, res, next) => {
   if (res.headersSent) {
     return next(err);

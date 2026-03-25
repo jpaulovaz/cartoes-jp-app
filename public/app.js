@@ -816,22 +816,64 @@
     }
   }
 
-  function bindSummaryGraphsToggle(root, renderCharts) {
-    const button = root.querySelector('[data-summary-graphs-toggle]');
-    const panel = root.querySelector('[data-summary-graphs-panel]');
-    const label = root.querySelector('[data-summary-graphs-toggle-label]');
+  function bindSummaryDisclosure({ button, panel, label, openLabel, closeLabel, onOpen = null }) {
     if (!button || !panel || !label) return;
+
+    function applyState(expanded) {
+      button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      panel.hidden = !expanded;
+      label.textContent = expanded ? closeLabel : openLabel;
+      if (expanded && typeof onOpen === 'function') {
+        window.requestAnimationFrame(() => onOpen());
+      }
+    }
 
     button.addEventListener('click', () => {
       const expanded = button.getAttribute('aria-expanded') === 'true';
-      button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
-      panel.hidden = expanded;
-      label.textContent = expanded ? 'Mostrar gráficos' : 'Esconder gráficos';
-
-      if (expanded) {
-        window.requestAnimationFrame(() => renderCharts());
-      }
+      applyState(!expanded);
     });
+
+    applyState(button.getAttribute('aria-expanded') === 'true');
+  }
+
+  function buildPageScrollStorageKey(prefix) {
+    return `${prefix}:${window.location.pathname}${window.location.search}`;
+  }
+
+  function storePageScrollState(prefix, state) {
+    try {
+      window.sessionStorage.setItem(buildPageScrollStorageKey(prefix), JSON.stringify({ ...state, savedAt: Date.now() }));
+    } catch (_) {}
+  }
+
+  function restorePageScrollState(prefix, beforeRestore = null) {
+    try {
+      const key = buildPageScrollStorageKey(prefix);
+      const raw = window.sessionStorage.getItem(key);
+      if (!raw) return null;
+      window.sessionStorage.removeItem(key);
+      const state = JSON.parse(raw || '{}');
+      if (typeof beforeRestore === 'function') beforeRestore(state);
+      const attemptRestore = () => {
+        if (state && state.selector) {
+          const target = document.querySelector(state.selector);
+          if (target) {
+            target.scrollIntoView({ block: 'center', behavior: 'auto' });
+            return;
+          }
+        }
+        if (state && Number.isFinite(Number(state.y))) {
+          window.scrollTo({ top: Math.max(0, Number(state.y)), behavior: 'auto' });
+        }
+      };
+      window.requestAnimationFrame(() => {
+        attemptRestore();
+        window.setTimeout(attemptRestore, 180);
+      });
+      return state;
+    } catch (_) {
+      return null;
+    }
   }
 
   function foldCategoryItems(items) {
@@ -1090,37 +1132,127 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    const root = document.querySelector('[data-summary-graphs-root]');
-    if (!root) return;
+    const summaryRoot = document.querySelector('[data-summary-graphs-root]');
+    if (summaryRoot) {
+      const payload = readSummaryGraphs(summaryRoot);
+      let hasRendered = false;
+      let graphPanelSeen = false;
 
-    let hasRendered = false;
-    const payload = readSummaryGraphs(root);
-    if (!payload) return;
-
-    const renderCharts = () => {
-      if (hasRendered) return;
-      hasRendered = true;
-      scheduleRender(() => {
-        renderDonutChart(root, payload.categories || []);
-        renderLineChart(root, payload.monthlyTrend || []);
-        setGraphsReady(root, true);
-        setInteractionHint(root, 'Gráficos prontos. Agora é só tocar e seguir o fio da meada.');
-      });
-    };
-
-    bindSummaryGraphsToggle(root, renderCharts);
-
-    if ('IntersectionObserver' in window) {
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-          renderCharts();
-          observer.disconnect();
+      const renderCharts = () => {
+        if (!payload || hasRendered) return;
+        hasRendered = true;
+        scheduleRender(() => {
+          renderDonutChart(summaryRoot, payload.categories || []);
+          renderLineChart(summaryRoot, payload.monthlyTrend || []);
+          setGraphsReady(summaryRoot, true);
+          setInteractionHint(summaryRoot, 'Gráficos prontos. Agora é só tocar e seguir o fio da meada.');
         });
-      }, { rootMargin: '140px 0px' });
-      observer.observe(root);
-    } else {
-      renderCharts();
+      };
+
+      const graphButton = summaryRoot.querySelector('[data-summary-graphs-toggle]');
+      const graphPanel = summaryRoot.querySelector('[data-summary-graphs-panel]');
+      const graphLabel = summaryRoot.querySelector('[data-summary-graphs-toggle-label]');
+      bindSummaryDisclosure({
+        button: graphButton,
+        panel: graphPanel,
+        label: graphLabel,
+        openLabel: 'Mostrar gráficos',
+        closeLabel: 'Esconder gráficos',
+        onOpen: () => {
+          if (graphPanelSeen) return renderCharts();
+          graphPanelSeen = true;
+          if ('IntersectionObserver' in window && graphPanel) {
+            const observer = new IntersectionObserver((entries) => {
+              entries.forEach((entry) => {
+                if (!entry.isIntersecting) return;
+                renderCharts();
+                observer.disconnect();
+              });
+            }, { rootMargin: '140px 0px' });
+            observer.observe(graphPanel);
+          } else {
+            renderCharts();
+          }
+        }
+      });
+
+      const intelRoot = document.querySelector('[data-summary-intel-root]');
+      if (intelRoot) {
+        bindSummaryDisclosure({
+          button: intelRoot.querySelector('[data-summary-intel-toggle]'),
+          panel: intelRoot.querySelector('[data-summary-intel-panel]'),
+          label: intelRoot.querySelector('[data-summary-intel-toggle-label]'),
+          openLabel: 'Mostrar inteligência',
+          closeLabel: 'Esconder inteligência'
+        });
+      }
+
+      const rankingRoot = document.querySelector('[data-summary-ranking-root]');
+      if (rankingRoot) {
+        bindSummaryDisclosure({
+          button: rankingRoot.querySelector('[data-summary-ranking-toggle]'),
+          panel: rankingRoot.querySelector('[data-summary-ranking-panel]'),
+          label: rankingRoot.querySelector('[data-summary-ranking-toggle-label]'),
+          openLabel: 'Mostrar ranking',
+          closeLabel: 'Esconder ranking'
+        });
+      }
+
+      restorePageScrollState('op-summary-scroll', (state) => {
+        if (!state) return;
+        if (state.expandIntel) {
+          const btn = document.querySelector('[data-summary-intel-toggle]');
+          if (btn && btn.getAttribute('aria-expanded') !== 'true') btn.click();
+        }
+        if (state.expandRanking) {
+          const intelBtn = document.querySelector('[data-summary-intel-toggle]');
+          if (intelBtn && intelBtn.getAttribute('aria-expanded') !== 'true') intelBtn.click();
+          const rankBtn = document.querySelector('[data-summary-ranking-toggle]');
+          if (rankBtn && rankBtn.getAttribute('aria-expanded') !== 'true') rankBtn.click();
+        }
+      });
+      document.querySelectorAll('[data-scroll-preserve-form]').forEach((form) => {
+        form.addEventListener('submit', () => {
+          const preferredSelector = form.getAttribute('data-scroll-restore-target');
+          const selector = preferredSelector || '[data-summary-intel-root]';
+          storePageScrollState('op-summary-scroll', {
+            selector,
+            y: window.scrollY || 0,
+            expandIntel: Boolean(form.closest('[data-summary-intel-root]')),
+            expandRanking: Boolean(form.closest('[data-summary-ranking-root]'))
+          });
+        });
+      });
+    }
+
+    const monthRoot = document.querySelector('.op-screen--month');
+    if (monthRoot) {
+      restorePageScrollState('op-month-scroll');
+      let activeTxnSelector = '';
+
+      document.querySelectorAll('[data-month-row][data-txn-id]').forEach((row) => {
+        row.addEventListener('click', () => {
+          const txnId = String(row.getAttribute('data-txn-id') || '').trim();
+          if (!txnId) return;
+          activeTxnSelector = `[data-month-row][data-txn-id="${txnId.replace(/"/g, '\"')}"]`;
+          storePageScrollState('op-month-scroll', { selector: activeTxnSelector, y: window.scrollY || 0 });
+        }, { capture: true });
+      });
+
+      document.addEventListener('submit', (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        if (!form.closest('.op-screen--month')) return;
+        storePageScrollState('op-month-scroll', { selector: activeTxnSelector, y: window.scrollY || 0 });
+      }, true);
+
+      const nativeAssign = window.location.assign.bind(window.location);
+      window.location.assign = (url) => {
+        if (document.querySelector('.op-screen--month')) {
+          storePageScrollState('op-month-scroll', { selector: activeTxnSelector, y: window.scrollY || 0 });
+        }
+        return nativeAssign(url);
+      };
     }
   });
 })();

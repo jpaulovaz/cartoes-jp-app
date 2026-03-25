@@ -10226,13 +10226,17 @@ app.get("/people", ensureAuthenticated, (req, res) => {
 
 app.post("/people", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const name = String(req.body.name || "").trim();
-  const phone = String(req.body.phone || "").trim().replace(/\D/g, "");
-  const email = normalizeEmail(req.body.email);
   const id = Number(req.body.id) || null;
   const targetPerson = id
     ? db.prepare(`
-        SELECT id, name, email, COALESCE(is_owner, 0) AS is_owner,
+        SELECT id, name, phone, email,
+               COALESCE(pix_enabled, 0) AS pix_enabled,
+               pix_key_type,
+               pix_key_value,
+               pix_city,
+               pix_state,
+               pix_label,
+               COALESCE(is_owner, 0) AS is_owner,
                COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind,
                COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
         FROM people
@@ -10241,16 +10245,58 @@ app.post("/people", ensureAuthenticated, (req, res) => {
         LIMIT 1
       `).get(id, userId)
     : null;
-  const duplicatedPerson = findPersonByNameForUser(userId, name, id);
   const isSelfTarget = isSelfPersonRow(targetPerson);
-  const pixEnabled = isSelfTarget ? normalizePixToggle(req.body.pix_enabled) : false;
-  const pixKeyType = isSelfTarget ? normalizePixKeyType(req.body.pix_key_type) : null;
-  const pixKeyValue = isSelfTarget ? normalizePixKeyValue(pixKeyType, req.body.pix_key_value) : null;
-  const pixStateRaw = isSelfTarget
-    ? (normalizePixState(req.body.pix_state) || guessPixStateByCity(req.body.pix_city) || null)
+  const requestedSection = isSelfTarget ? String(req.body.profile_section || '').trim().toLowerCase() : '';
+  const redirectTarget = isSelfTarget
+    ? (requestedSection === 'pix' ? '/people#self-pix-config' : '/people#my-profile')
+    : '/people#network-lounge';
+
+  const currentName = targetPerson ? String(targetPerson.name || '').trim() : '';
+  const currentPhone = targetPerson ? String(targetPerson.phone || '').trim().replace(/\D/g, '') : '';
+  const currentEmail = targetPerson ? normalizeEmail(targetPerson.email) : null;
+
+  const name = isSelfTarget && requestedSection === 'pix'
+    ? currentName
+    : String(req.body.name || '').trim();
+  const phone = isSelfTarget && requestedSection === 'pix'
+    ? currentPhone
+    : String(req.body.phone || '').trim().replace(/\D/g, '');
+  const email = isSelfTarget && requestedSection === 'pix'
+    ? currentEmail
+    : normalizeEmail(req.body.email);
+
+  const currentPixEnabled = isSelfTarget ? normalizePixToggle(targetPerson?.pix_enabled) : false;
+  const currentPixKeyType = isSelfTarget ? normalizePixKeyType(targetPerson?.pix_key_type) : null;
+  const currentPixKeyValue = isSelfTarget ? normalizePixKeyValue(targetPerson?.pix_key_type, targetPerson?.pix_key_value) : null;
+  const currentPixStateRaw = isSelfTarget
+    ? (normalizePixState(targetPerson?.pix_state) || guessPixStateByCity(targetPerson?.pix_city) || null)
     : null;
-  const pixCityRaw = isSelfTarget ? String(req.body.pix_city || '').trim() : '';
-  const pixLabelRaw = isSelfTarget ? String(req.body.pix_label || '').trim() : '';
+  const currentPixCityRaw = isSelfTarget ? String(targetPerson?.pix_city || '').trim() : '';
+  const currentPixLabelRaw = isSelfTarget ? String(targetPerson?.pix_label || '').trim() : '';
+
+  const pixEnabled = isSelfTarget
+    ? normalizePixToggle(requestedSection === 'identity' ? currentPixEnabled : req.body.pix_enabled)
+    : false;
+  const pixKeyType = isSelfTarget
+    ? normalizePixKeyType(requestedSection === 'identity' ? currentPixKeyType : req.body.pix_key_type)
+    : null;
+  const pixKeyValue = isSelfTarget
+    ? normalizePixKeyValue(pixKeyType, requestedSection === 'identity' ? currentPixKeyValue : req.body.pix_key_value)
+    : null;
+  const pixStateRaw = isSelfTarget
+    ? (
+        requestedSection === 'identity'
+          ? currentPixStateRaw
+          : (normalizePixState(req.body.pix_state) || guessPixStateByCity(req.body.pix_city) || null)
+      )
+    : null;
+  const pixCityRaw = isSelfTarget
+    ? (requestedSection === 'identity' ? currentPixCityRaw : String(req.body.pix_city || '').trim())
+    : '';
+  const pixLabelRaw = isSelfTarget
+    ? (requestedSection === 'identity' ? currentPixLabelRaw : String(req.body.pix_label || '').trim())
+    : '';
+  const duplicatedPerson = findPersonByNameForUser(userId, name, id);
   const pixProfile = isSelfTarget
     ? validatePixProfile({
         enabled: pixEnabled,
@@ -10275,17 +10321,17 @@ app.post("/people", ensureAuthenticated, (req, res) => {
     setFlash(req, 'error', id && isSelfPersonRow(targetPerson)
       ? 'Me passa pelo menos como você quer aparecer no app para eu salvar seu perfil direitinho.'
       : 'Me dá pelo menos o nome dessa pessoa para eu conseguir salvar direitinho.');
-    return res.redirect('/people');
+    return res.redirect(redirectTarget);
   }
 
   if (duplicatedPerson) {
     setFlash(req, 'error', 'Já existe alguém com esse nome na sua lista. Se forem xará, vale colocar um apelido para não virar bagunça.');
-    return res.redirect('/people');
+    return res.redirect(redirectTarget);
   }
 
-  if (pixEnabled && !pixProfile.valid) {
+  if (pixEnabled && requestedSection !== 'identity' && !pixProfile.valid) {
     setFlash(req, 'error', pixProfile.reason || 'Faltou acertar um detalhe do Pix antes de salvar.');
-    return res.redirect('/people');
+    return res.redirect(redirectTarget);
   }
 
   const pixUpdatedAt = pixEnabled ? nowIso() : null;
@@ -10339,12 +10385,23 @@ app.post("/people", ensureAuthenticated, (req, res) => {
     );
   }
 
-  const successMessage = isSelfTarget
-    ? (pixEnabled ? 'Seu perfil foi salvo com o Pix prontinho para entrar em cena.' : 'Seu perfil foi atualizado direitinho por aqui.')
-    : 'Contato salvo direitinho por aqui. Quando rolar amizade e pagamento, o Pix vem do perfil da própria pessoa.';
+  let successMessage = 'Contato salvo direitinho por aqui. Quando rolar amizade e pagamento, o Pix vem do perfil da própria pessoa.';
+  if (isSelfTarget) {
+    if (requestedSection === 'identity') {
+      successMessage = 'Seu jeitinho de aparecer por aqui foi salvo direitinho.';
+    } else if (requestedSection === 'pix') {
+      successMessage = pixEnabled
+        ? 'Seu Pix ficou salvo e prontinho para entrar em cena nas cobranças.'
+        : 'Seu Pix foi desligado por aqui. Quando quiser, é só ligar de novo.';
+    } else {
+      successMessage = pixEnabled
+        ? 'Seu perfil foi salvo com o Pix prontinho para entrar em cena.'
+        : 'Seu perfil foi atualizado direitinho por aqui.';
+    }
+  }
 
   setFlash(req, 'success', successMessage);
-  return res.redirect('/people');
+  return res.redirect(redirectTarget);
 });
 app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;

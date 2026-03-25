@@ -1249,6 +1249,12 @@
           avatar.referrerPolicy = 'no-referrer';
           avatar.className = 'h-12 w-12 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700';
           card.appendChild(avatar);
+        } else if (person.is_self) {
+          const avatarAppIcon = document.createElement('img');
+          avatarAppIcon.src = '/icon-192.png';
+          avatarAppIcon.alt = 'OrganizaPay';
+          avatarAppIcon.className = 'h-12 w-12 rounded-[1rem] object-cover ring-2 ring-slate-200 dark:ring-slate-700';
+          card.appendChild(avatarAppIcon);
         } else {
           const avatarFallback = document.createElement('span');
           avatarFallback.className = 'inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-sm font-black text-slate-700 dark:bg-slate-800 dark:text-slate-100';

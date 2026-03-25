@@ -355,62 +355,56 @@
                 </span>
                 <div class="min-w-0 flex-1">
                   <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Receber por Pix</div>
-                  <p class="mt-1 max-w-none text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando você recebe uma cobrança, é esse Pix que entra em cena. Deixa pronto uma vez e pronto: menos correria, mais paz.</p>
+                  <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando você recebe uma cobrança, é esse Pix que entra em cena. Deixa pronto uma vez e pronto: menos correria, mais paz.</p>
                 </div>
               </div>
 
-              <div class="mt-5 grid gap-5 xl:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)] xl:items-start xl:gap-6">
-                <div class="space-y-4 xl:pr-2">
-                  <label class="inline-flex w-full items-center gap-3 rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-bold text-violet-700 shadow-sm dark:border-violet-800 dark:bg-slate-900/70 dark:text-violet-200 xl:w-fit">
+              <div class="mt-4 grid gap-4 xl:grid-cols-12 xl:items-start">
+                <div class="xl:col-span-5">
+                  <label class="inline-flex w-full items-center gap-3 rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-bold text-violet-700 shadow-sm dark:border-violet-800 dark:bg-slate-900/70 dark:text-violet-200 xl:w-auto">
                     <input type="checkbox" name="pix_enabled" id="selfPixEnabled" value="1" class="h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" <%= selfPixEnabled ? 'checked' : '' %>>
                     <span>Deixar Pix pronto</span>
                   </label>
-                  <p class="text-xs font-medium leading-6 text-slate-500 dark:text-slate-400">A chave fica mascaradinha na lista e só aparece inteira quando alguém realmente for copiar o Pix.</p>
+                  <p class="mt-3 max-w-xl text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">A chave fica mascaradinha na lista e só aparece inteira quando alguém realmente for copiar o Pix.</p>
                 </div>
 
-                <div class="min-w-0 space-y-4">
-                  <div class="grid gap-4 lg:grid-cols-2">
-                    <label class="block">
-                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Tipo da chave</span>
-                      <select name="pix_key_type" id="selfPixKeyType" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
-                        <option value="">Escolha um tipo</option>
-                        <option value="cpf" <%= selfPixKeyType === 'cpf' ? 'selected' : '' %>>CPF</option>
-                        <option value="cnpj" <%= selfPixKeyType === 'cnpj' ? 'selected' : '' %>>CNPJ</option>
-                        <option value="email" <%= selfPixKeyType === 'email' ? 'selected' : '' %>>E-mail</option>
-                        <option value="phone" <%= selfPixKeyType === 'phone' ? 'selected' : '' %>>Celular</option>
-                        <option value="evp" <%= selfPixKeyType === 'evp' ? 'selected' : '' %>>Chave aleatória</option>
-                      </select>
-                    </label>
+                <label class="block xl:col-span-3">
+                  <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Tipo da chave</span>
+                  <select name="pix_key_type" id="selfPixKeyType" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
+                    <option value="">Escolha um tipo</option>
+                    <option value="cpf" <%= selfPixKeyType === 'cpf' ? 'selected' : '' %>>CPF</option>
+                    <option value="cnpj" <%= selfPixKeyType === 'cnpj' ? 'selected' : '' %>>CNPJ</option>
+                    <option value="email" <%= selfPixKeyType === 'email' ? 'selected' : '' %>>E-mail</option>
+                    <option value="phone" <%= selfPixKeyType === 'phone' ? 'selected' : '' %>>Celular</option>
+                    <option value="evp" <%= selfPixKeyType === 'evp' ? 'selected' : '' %>>Chave aleatória</option>
+                  </select>
+                </label>
 
-                    <label class="block">
-                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Chave Pix</span>
-                      <input name="pix_key_value" id="selfPixKeyValue" value="<%- selfPixKeyValueInput %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: 21999999999" inputmode="text" autocomplete="off">
-                      <p id="selfPixKeyHelp" class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.</p>
-                    </label>
-                  </div>
+                <label class="block xl:col-span-4">
+                  <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Chave Pix</span>
+                  <input name="pix_key_value" id="selfPixKeyValue" value="<%- selfPixKeyValueInput %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: 21999999999" inputmode="text" autocomplete="off">
+                  <p id="selfPixKeyHelp" class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.</p>
+                </label>
 
-                  <div class="grid gap-4 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1fr)]">
-                    <label class="block">
-                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estado</span>
-                      <select name="pix_state" id="selfPixState" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
-                        <% pixStateList.forEach((stateEntry) => { const stateCode = getPixStateCode(stateEntry); const stateLabel = getPixStateLabel(stateEntry); if (!stateCode) return; %>
-                          <option value="<%= stateCode %>" <%= selfPixState === stateCode ? 'selected' : '' %>><%= stateLabel %></option>
-                        <% }) %>
-                      </select>
-                    </label>
+                <label class="block xl:col-span-3">
+                  <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estado</span>
+                  <select name="pix_state" id="selfPixState" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
+                    <% pixStateList.forEach((stateEntry) => { const stateCode = getPixStateCode(stateEntry); const stateLabel = getPixStateLabel(stateEntry); if (!stateCode) return; %>
+                      <option value="<%= stateCode %>" <%= selfPixState === stateCode ? 'selected' : '' %>><%= stateLabel %></option>
+                    <% }) %>
+                  </select>
+                </label>
 
-                    <label class="block">
-                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Cidade</span>
-                      <input name="pix_city" id="selfPixCity" value="<%- selfPixCity %>" list="selfPixCitySuggestions" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Cidade do recebedor">
-                      <datalist id="selfPixCitySuggestions"></datalist>
-                    </label>
-                  </div>
+                <label class="block xl:col-span-4">
+                  <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Cidade</span>
+                  <input name="pix_city" id="selfPixCity" value="<%- selfPixCity %>" list="selfPixCitySuggestions" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Cidade do recebedor">
+                  <datalist id="selfPixCitySuggestions"></datalist>
+                </label>
 
-                  <label class="block">
-                    <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nome que aparece no Pix</span>
-                    <input name="pix_label" id="selfPixLabel" value="<%- selfPixLabel %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: João - OrganizaPay">
-                  </label>
-                </div>
+                <label class="block xl:col-span-5">
+                  <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nome que aparece no Pix</span>
+                  <input name="pix_label" id="selfPixLabel" value="<%- selfPixLabel %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: João - OrganizaPay">
+                </label>
               </div>
             </div>
 

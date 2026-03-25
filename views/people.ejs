@@ -248,15 +248,10 @@
 
         <div class="space-y-4">
         <section class="rounded-[28px] border border-sky-200 bg-sky-50/80 p-5 shadow-sm dark:border-sky-900/70 dark:bg-sky-950/20 sm:p-6">
-          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Sua fotinha por aqui</div>
-              <h3 class="mt-2 text-lg font-black text-slate-900 dark:text-white">Seu rosto no crachá do app</h3>
-              <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando você coloca uma foto, ela aparece no topo do app e nas divisões de compra. Se não tiver foto, o ícone do OrganizaPay continua firme no cabeçalho.</p>
-            </div>
-            <div class="relative h-16 w-16 shrink-0">
-              <% if (getAvatarUrl(selfProfile)) { %><img src="<%= getAvatarUrl(selfProfile) %>" alt="<%= selfProfile.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-16 w-16 rounded-full object-cover ring-2 ring-sky-200 dark:ring-sky-800/70"><% } else { %><div class="flex h-16 w-16 items-center justify-center rounded-full bg-white text-lg font-black text-sky-700 shadow-sm ring-1 ring-sky-100 dark:bg-slate-900 dark:text-sky-200 dark:ring-sky-900/60"><%= getAvatarInitials(selfProfile) %></div><% } %>
-            </div>
+          <div>
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Sua fotinha por aqui</div>
+            <h3 class="mt-2 text-lg font-black text-slate-900 dark:text-white">Seu rosto no crachá do app</h3>
+            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando você coloca uma foto, ela aparece no topo do app e nas divisões de compra. Se não tiver foto, o ícone do OrganizaPay continua firme no cabeçalho.</p>
           </div>
           <div id="profile-photo" class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] scroll-mt-28">
             <form method="post" action="/people/profile-photo" enctype="multipart/form-data" class="flex flex-col gap-3" id="profilePhotoForm">
@@ -265,13 +260,13 @@
                 <button id="profilePhotoSubmit" type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60">Salvar foto</button>
               </div>
               <div class="rounded-2xl border border-sky-200/80 bg-white/80 p-3 text-xs font-medium leading-5 text-slate-600 shadow-sm dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-slate-300">
-                Eu dou uma aparadinha antes de subir: deixo quadradinha, leve e pronta para rodar bonito no celular, PWA e desktop.
+                Você escolhe a foto, ajusta no capricho e eu subo ela leve, certinha e pronta para ficar bonita no celular, PWA e desktop.
               </div>
               <div id="profilePhotoPreviewWrap" class="hidden items-center gap-3 rounded-2xl border border-sky-200/80 bg-sky-50/70 px-4 py-3 dark:border-sky-900/60 dark:bg-sky-950/20">
                 <img id="profilePhotoPreview" alt="Prévia da sua foto" class="h-14 w-14 rounded-full object-cover ring-2 ring-sky-200 dark:ring-sky-800/70">
                 <div class="min-w-0 flex-1">
                   <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Prévia da fotinha</div>
-                  <p id="profilePhotoHint" class="mt-1 text-sm font-medium leading-5 text-slate-600 dark:text-slate-300">Assim ela vai aparecer no app.</p>
+                  <p id="profilePhotoHint" class="mt-1 text-sm font-medium leading-5 text-slate-600 dark:text-slate-300">Escolheu? Aí é só salvar que ela sobe lindona.</p>
                 </div>
               </div>
             </form>
@@ -282,6 +277,48 @@
             <% } %>
           </div>
         </section>
+
+        <div id="profilePhotoCropModal" class="fixed inset-0 z-[120] hidden" aria-hidden="true">
+          <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" data-profile-photo-modal-close></div>
+          <div class="relative flex min-h-full items-center justify-center p-4 sm:p-6">
+            <div class="w-full max-w-3xl rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Ajuste sua fotinha</div>
+                  <h4 class="mt-2 text-lg font-black text-slate-900 dark:text-white">Escolha o melhor enquadramento</h4>
+                  <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Arraste para posicionar, puxe o zoom se quiser e deixe seu rosto bem no centro do crachá.</p>
+                </div>
+                <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800" data-profile-photo-modal-close>Fechar</button>
+              </div>
+              <div class="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
+                <div>
+                  <div id="profilePhotoCropStage" class="relative mx-auto aspect-square w-full max-w-[26rem] overflow-hidden rounded-[28px] border border-slate-200 bg-slate-950 shadow-inner dark:border-slate-700 touch-none select-none">
+                    <img id="profilePhotoCropImage" alt="Ajuste da foto" class="absolute left-1/2 top-1/2 max-w-none will-change-transform pointer-events-none select-none" draggable="false">
+                    <div class="pointer-events-none absolute inset-0 rounded-[28px] ring-1 ring-inset ring-white/35"></div>
+                    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0,transparent_56%,rgba(15,23,42,0.42)_100%)]"></div>
+                  </div>
+                  <p class="mt-3 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Dica amiga: se tiver mais gente na foto, arraste até deixar você no centro. A moldura redonda é só a prévia — o recorte sai certinho daqui.</p>
+                </div>
+                <div class="rounded-[24px] border border-sky-200/80 bg-sky-50/70 p-4 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/20">
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Como vai ficar</div>
+                  <div class="mt-4 flex items-center justify-center">
+                    <div class="relative h-28 w-28 overflow-hidden rounded-full border-4 border-white bg-slate-200 shadow-lg ring-1 ring-sky-200 dark:border-slate-900 dark:bg-slate-800 dark:ring-sky-900/70">
+                      <img id="profilePhotoCropPreview" alt="Prévia circular da foto" class="absolute left-1/2 top-1/2 max-w-none will-change-transform pointer-events-none select-none" draggable="false">
+                    </div>
+                  </div>
+                  <label class="mt-5 block">
+                    <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Zoom</span>
+                    <input id="profilePhotoCropZoom" type="range" min="1" max="3" step="0.01" value="1" class="h-2 w-full cursor-pointer appearance-none rounded-full bg-sky-100 accent-sky-600 dark:bg-slate-800">
+                  </label>
+                  <div class="mt-5 flex flex-col gap-3">
+                    <button type="button" id="profilePhotoCropApply" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Usar essa foto</button>
+                    <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800" data-profile-photo-modal-close>Escolher outra depois</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <form method="post" action="/people" class="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:p-6">
           <input type="hidden" name="id" id="selfPersonId" value="<%= selfProfile.id %>">
@@ -775,39 +812,71 @@
     updatePixCityUi(prefix, !!options.forceCity);
   }
 
-  async function prepareProfilePhotoFile(file) {
-    const toDataUrl = (sourceFile) => new Promise((resolve, reject) => {
+  async function readFileAsDataUrl(sourceFile) {
+    return await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || ''));
       reader.onerror = () => reject(new Error('Não consegui ler essa imagem.'));
       reader.readAsDataURL(sourceFile);
     });
+  }
 
-    const toImage = (src) => new Promise((resolve, reject) => {
+  function loadImageElement(src) {
+    return new Promise((resolve, reject) => {
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => reject(new Error('A imagem não abriu direitinho.'));
       image.src = src;
     });
+  }
 
-    const sourceUrl = await toDataUrl(file);
-    const image = await toImage(sourceUrl);
-    const side = Math.min(image.naturalWidth || image.width, image.naturalHeight || image.height);
-    const sx = Math.max(0, Math.floor(((image.naturalWidth || image.width) - side) / 2));
-    const sy = Math.max(0, Math.floor(((image.naturalHeight || image.height) - side) / 2));
+  function clampPhotoCropOffset(state) {
+    if (!state || !state.image) return;
+    const stageSize = Math.max(1, state.stageSize || 1);
+    const displayedWidth = (state.image.naturalWidth || state.image.width || 1) * state.scale;
+    const displayedHeight = (state.image.naturalHeight || state.image.height || 1) * state.scale;
+    const maxOffsetX = Math.max(0, (displayedWidth - stageSize) / 2);
+    const maxOffsetY = Math.max(0, (displayedHeight - stageSize) / 2);
+    state.offsetX = Math.max(-maxOffsetX, Math.min(maxOffsetX, state.offsetX || 0));
+    state.offsetY = Math.max(-maxOffsetY, Math.min(maxOffsetY, state.offsetY || 0));
+  }
+
+  function applyPhotoCropTransforms(state) {
+    if (!state || !state.stage || !state.imageElement || !state.previewElement || !state.image) return;
+    const stageSize = Math.max(1, state.stage.clientWidth || state.stageSize || 1);
+    state.stageSize = stageSize;
+    clampPhotoCropOffset(state);
+    const stageTransform = `translate(-50%, -50%) translate(${state.offsetX}px, ${state.offsetY}px) scale(${state.scale})`;
+    state.imageElement.style.transform = stageTransform;
+    const previewBox = Math.max(1, state.previewElement.parentElement?.clientWidth || 112);
+    const previewRatio = previewBox / stageSize;
+    const previewTransform = `translate(-50%, -50%) translate(${state.offsetX * previewRatio}px, ${state.offsetY * previewRatio}px) scale(${state.scale * previewRatio})`;
+    state.previewElement.style.transform = previewTransform;
+  }
+
+  async function createPreparedPhotoFromCrop(state) {
+    const stageSize = Math.max(1, state.stageSize || state.stage.clientWidth || 1);
     const canvas = document.createElement('canvas');
     canvas.width = 512;
     canvas.height = 512;
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(image, sx, sy, side, side, 0, 0, 512, 512);
+    const factor = 512 / stageSize;
+    ctx.scale(factor, factor);
+    const naturalWidth = state.image.naturalWidth || state.image.width || 1;
+    const naturalHeight = state.image.naturalHeight || state.image.height || 1;
+    const displayedWidth = naturalWidth * state.scale;
+    const displayedHeight = naturalHeight * state.scale;
+    const x = (stageSize / 2) + state.offsetX - (displayedWidth / 2);
+    const y = (stageSize / 2) + state.offsetY - (displayedHeight / 2);
+    ctx.drawImage(state.image, x, y, displayedWidth, displayedHeight);
 
     const blob = await new Promise((resolve, reject) => {
-      canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Não consegui preparar a foto.')), 'image/jpeg', 0.88);
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Não consegui preparar a foto.')), 'image/jpeg', 0.9);
     });
 
     return {
-      file: new File([blob], ((file.name || 'perfil').replace(/\.[^.]+$/, '') || 'perfil') + '.jpg', { type: 'image/jpeg' }),
-      previewUrl: canvas.toDataURL('image/jpeg', 0.88)
+      file: new File([blob], ((state.originalFile?.name || 'perfil').replace(/\.[^.]+$/, '') || 'perfil') + '.jpg', { type: 'image/jpeg' }),
+      previewUrl: canvas.toDataURL('image/jpeg', 0.9)
     };
   }
 
@@ -818,31 +887,200 @@
     const previewWrap = document.getElementById('profilePhotoPreviewWrap');
     const preview = document.getElementById('profilePhotoPreview');
     const hint = document.getElementById('profilePhotoHint');
-    if (!form || !input || !submit || !previewWrap || !preview || !hint) return;
+    const modal = document.getElementById('profilePhotoCropModal');
+    const stage = document.getElementById('profilePhotoCropStage');
+    const stageImage = document.getElementById('profilePhotoCropImage');
+    const previewCircle = document.getElementById('profilePhotoCropPreview');
+    const zoom = document.getElementById('profilePhotoCropZoom');
+    const applyButton = document.getElementById('profilePhotoCropApply');
+    const modalCloseButtons = Array.from(document.querySelectorAll('[data-profile-photo-modal-close]'));
+    if (!form || !input || !submit || !previewWrap || !preview || !hint || !modal || !stage || !stageImage || !previewCircle || !zoom || !applyButton) return;
+
+    let cropState = null;
+    let activeObjectUrl = '';
+    let previewObjectUrl = '';
+
+    const releaseObjectUrls = () => {
+      if (activeObjectUrl) {
+        URL.revokeObjectURL(activeObjectUrl);
+        activeObjectUrl = '';
+      }
+      if (previewObjectUrl) {
+        URL.revokeObjectURL(previewObjectUrl);
+        previewObjectUrl = '';
+      }
+    };
+
+    const closeModal = () => {
+      if (!cropState) return;
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('overflow-hidden');
+      if (cropState.stagePointerId !== undefined && cropState.stagePointerId !== null && stage.hasPointerCapture?.(cropState.stagePointerId)) {
+        try { stage.releasePointerCapture(cropState.stagePointerId); } catch (_error) {}
+      }
+      cropState = null;
+      releaseObjectUrls();
+      stageImage.removeAttribute('src');
+      previewCircle.removeAttribute('src');
+      zoom.value = '1';
+    };
+
+    const openModalForFile = async (file) => {
+      if (!file) return;
+      releaseObjectUrls();
+      activeObjectUrl = URL.createObjectURL(file);
+      const image = await loadImageElement(activeObjectUrl);
+      stageImage.src = activeObjectUrl;
+      previewCircle.src = activeObjectUrl;
+      const stageSize = Math.max(1, stage.clientWidth || 320);
+      const naturalWidth = image.naturalWidth || image.width || 1;
+      const naturalHeight = image.naturalHeight || image.height || 1;
+      const baseScale = Math.max(stageSize / naturalWidth, stageSize / naturalHeight);
+      cropState = {
+        originalFile: file,
+        image,
+        stage,
+        imageElement: stageImage,
+        previewElement: previewCircle,
+        stageSize,
+        baseScale,
+        scale: baseScale,
+        offsetX: 0,
+        offsetY: 0,
+        dragStartX: 0,
+        dragStartY: 0,
+        dragOriginX: 0,
+        dragOriginY: 0,
+        stagePointerId: null
+      };
+      zoom.value = '1';
+      applyPhotoCropTransforms(cropState);
+      modal.classList.remove('hidden');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('overflow-hidden');
+    };
+
+    const showPreview = (previewUrl, message) => {
+      preview.src = previewUrl;
+      previewWrap.classList.remove('hidden');
+      previewWrap.classList.add('flex');
+      hint.textContent = message || 'Escolheu? Agora é só salvar.';
+    };
 
     input.addEventListener('change', async () => {
       const selected = input.files && input.files[0];
       if (!selected) return;
       submit.disabled = true;
       submit.textContent = 'Preparando foto...';
-      hint.textContent = 'Dando aquela aparada para ela ficar redondinha por aqui.';
+      hint.textContent = 'Abrindo o ajuste da sua fotinha...';
       try {
-        const prepared = await prepareProfilePhotoFile(selected);
-        const transfer = new DataTransfer();
-        transfer.items.add(prepared.file);
-        input.files = transfer.files;
-        preview.src = prepared.previewUrl;
-        previewWrap.classList.remove('hidden');
-        previewWrap.classList.add('flex');
-        hint.textContent = 'Tudo certo! Agora é só salvar que ela sobe enxuta e bonitona.';
+        await openModalForFile(selected);
+        submit.textContent = 'Salvar foto';
       } catch (_error) {
+        releaseObjectUrls();
         previewWrap.classList.add('hidden');
         previewWrap.classList.remove('flex');
         hint.textContent = 'Essa foto tropeçou aqui. Tenta outra imagem rapidinho.';
+        input.value = '';
+        submit.textContent = 'Salvar foto';
       } finally {
+        submit.disabled = false;
+      }
+    });
+
+    zoom.addEventListener('input', () => {
+      if (!cropState) return;
+      const zoomFactor = Math.max(1, Number(zoom.value || 1));
+      cropState.scale = cropState.baseScale * zoomFactor;
+      applyPhotoCropTransforms(cropState);
+    });
+
+    stage.addEventListener('pointerdown', (event) => {
+      if (!cropState) return;
+      cropState.stagePointerId = event.pointerId;
+      cropState.dragStartX = event.clientX;
+      cropState.dragStartY = event.clientY;
+      cropState.dragOriginX = cropState.offsetX || 0;
+      cropState.dragOriginY = cropState.offsetY || 0;
+      stage.setPointerCapture?.(event.pointerId);
+    });
+
+    stage.addEventListener('pointermove', (event) => {
+      if (!cropState || cropState.stagePointerId !== event.pointerId) return;
+      cropState.offsetX = cropState.dragOriginX + (event.clientX - cropState.dragStartX);
+      cropState.offsetY = cropState.dragOriginY + (event.clientY - cropState.dragStartY);
+      applyPhotoCropTransforms(cropState);
+    });
+
+    const releaseDrag = (event) => {
+      if (!cropState || cropState.stagePointerId !== event.pointerId) return;
+      if (stage.hasPointerCapture?.(event.pointerId)) {
+        try { stage.releasePointerCapture(event.pointerId); } catch (_error) {}
+      }
+      cropState.stagePointerId = null;
+    };
+    stage.addEventListener('pointerup', releaseDrag);
+    stage.addEventListener('pointercancel', releaseDrag);
+    stage.addEventListener('lostpointercapture', () => {
+      if (cropState) cropState.stagePointerId = null;
+    });
+
+    applyButton.addEventListener('click', async () => {
+      if (!cropState) return;
+      applyButton.disabled = true;
+      applyButton.textContent = 'Preparando...';
+      try {
+        const prepared = await createPreparedPhotoFromCrop(cropState);
+        const transfer = new DataTransfer();
+        transfer.items.add(prepared.file);
+        input.files = transfer.files;
+        if (previewObjectUrl) {
+          URL.revokeObjectURL(previewObjectUrl);
+          previewObjectUrl = '';
+        }
+        showPreview(prepared.previewUrl, 'Boa! Agora ela já está no jeitinho para subir para o app.');
+        closeModal();
+      } catch (_error) {
+        hint.textContent = 'A foto tropeçou no corte. Tenta de novo rapidinho.';
+      } finally {
+        applyButton.disabled = false;
+        applyButton.textContent = 'Usar essa foto';
         submit.disabled = false;
         submit.textContent = 'Salvar foto';
       }
+    });
+
+    modalCloseButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        input.value = '';
+        closeModal();
+        submit.disabled = false;
+        submit.textContent = 'Salvar foto';
+      });
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && cropState) {
+        input.value = '';
+        closeModal();
+        submit.disabled = false;
+        submit.textContent = 'Salvar foto';
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (!cropState) return;
+      const nextStageSize = Math.max(1, stage.clientWidth || cropState.stageSize || 1);
+      if (nextStageSize === cropState.stageSize) return;
+      const ratio = nextStageSize / Math.max(1, cropState.stageSize || 1);
+      cropState.stageSize = nextStageSize;
+      cropState.baseScale = Math.max(nextStageSize / (cropState.image.naturalWidth || cropState.image.width || 1), nextStageSize / (cropState.image.naturalHeight || cropState.image.height || 1));
+      const zoomFactor = Math.max(1, Number(zoom.value || 1));
+      cropState.scale = cropState.baseScale * zoomFactor;
+      cropState.offsetX *= ratio;
+      cropState.offsetY *= ratio;
+      applyPhotoCropTransforms(cropState);
     });
 
     form.addEventListener('submit', () => {

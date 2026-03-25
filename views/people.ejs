@@ -258,10 +258,22 @@
               <% if (getAvatarUrl(selfProfile)) { %><img src="<%= getAvatarUrl(selfProfile) %>" alt="<%= selfProfile.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-16 w-16 rounded-full object-cover ring-2 ring-sky-200 dark:ring-sky-800/70"><% } else { %><div class="flex h-16 w-16 items-center justify-center rounded-full bg-white text-lg font-black text-sky-700 shadow-sm ring-1 ring-sky-100 dark:bg-slate-900 dark:text-sky-200 dark:ring-sky-900/60"><%= getAvatarInitials(selfProfile) %></div><% } %>
             </div>
           </div>
-          <div class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-            <form method="post" action="/people/profile-photo" enctype="multipart/form-data" class="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <input type="file" name="profile_photo" accept="image/png,image/jpeg,image/webp,image/gif" class="block w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm file:mr-3 file:rounded-xl file:border-0 file:bg-sky-100 file:px-3 file:py-2 file:font-bold file:text-sky-700 hover:file:bg-sky-200 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-200 dark:file:bg-sky-900/40 dark:file:text-sky-200">
-              <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Salvar foto</button>
+          <div id="profile-photo" class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] scroll-mt-28">
+            <form method="post" action="/people/profile-photo" enctype="multipart/form-data" class="flex flex-col gap-3" id="profilePhotoForm">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <input id="profilePhotoInput" type="file" name="profile_photo" accept="image/png,image/jpeg,image/webp,image/gif" class="block w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm file:mr-3 file:rounded-xl file:border-0 file:bg-sky-100 file:px-3 file:py-2 file:font-bold file:text-sky-700 hover:file:bg-sky-200 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-200 dark:file:bg-sky-900/40 dark:file:text-sky-200">
+                <button id="profilePhotoSubmit" type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60">Salvar foto</button>
+              </div>
+              <div class="rounded-2xl border border-sky-200/80 bg-white/80 p-3 text-xs font-medium leading-5 text-slate-600 shadow-sm dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-slate-300">
+                Eu dou uma aparadinha antes de subir: deixo quadradinha, leve e pronta para rodar bonito no celular, PWA e desktop.
+              </div>
+              <div id="profilePhotoPreviewWrap" class="hidden items-center gap-3 rounded-2xl border border-sky-200/80 bg-sky-50/70 px-4 py-3 dark:border-sky-900/60 dark:bg-sky-950/20">
+                <img id="profilePhotoPreview" alt="Prévia da sua foto" class="h-14 w-14 rounded-full object-cover ring-2 ring-sky-200 dark:ring-sky-800/70">
+                <div class="min-w-0 flex-1">
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Prévia da fotinha</div>
+                  <p id="profilePhotoHint" class="mt-1 text-sm font-medium leading-5 text-slate-600 dark:text-slate-300">Assim ela vai aparecer no app.</p>
+                </div>
+              </div>
             </form>
             <% if (selfProfile.photo_url) { %>
               <form method="post" action="/people/profile-photo/remove">
@@ -763,9 +775,86 @@
     updatePixCityUi(prefix, !!options.forceCity);
   }
 
+  async function prepareProfilePhotoFile(file) {
+    const toDataUrl = (sourceFile) => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Não consegui ler essa imagem.'));
+      reader.readAsDataURL(sourceFile);
+    });
+
+    const toImage = (src) => new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('A imagem não abriu direitinho.'));
+      image.src = src;
+    });
+
+    const sourceUrl = await toDataUrl(file);
+    const image = await toImage(sourceUrl);
+    const side = Math.min(image.naturalWidth || image.width, image.naturalHeight || image.height);
+    const sx = Math.max(0, Math.floor(((image.naturalWidth || image.width) - side) / 2));
+    const sy = Math.max(0, Math.floor(((image.naturalHeight || image.height) - side) / 2));
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(image, sx, sy, side, side, 0, 0, 512, 512);
+
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Não consegui preparar a foto.')), 'image/jpeg', 0.88);
+    });
+
+    return {
+      file: new File([blob], ((file.name || 'perfil').replace(/\.[^.]+$/, '') || 'perfil') + '.jpg', { type: 'image/jpeg' }),
+      previewUrl: canvas.toDataURL('image/jpeg', 0.88)
+    };
+  }
+
+  function bindProfilePhotoForm() {
+    const form = document.getElementById('profilePhotoForm');
+    const input = document.getElementById('profilePhotoInput');
+    const submit = document.getElementById('profilePhotoSubmit');
+    const previewWrap = document.getElementById('profilePhotoPreviewWrap');
+    const preview = document.getElementById('profilePhotoPreview');
+    const hint = document.getElementById('profilePhotoHint');
+    if (!form || !input || !submit || !previewWrap || !preview || !hint) return;
+
+    input.addEventListener('change', async () => {
+      const selected = input.files && input.files[0];
+      if (!selected) return;
+      submit.disabled = true;
+      submit.textContent = 'Preparando foto...';
+      hint.textContent = 'Dando aquela aparada para ela ficar redondinha por aqui.';
+      try {
+        const prepared = await prepareProfilePhotoFile(selected);
+        const transfer = new DataTransfer();
+        transfer.items.add(prepared.file);
+        input.files = transfer.files;
+        preview.src = prepared.previewUrl;
+        previewWrap.classList.remove('hidden');
+        previewWrap.classList.add('flex');
+        hint.textContent = 'Tudo certo! Agora é só salvar que ela sobe enxuta e bonitona.';
+      } catch (_error) {
+        previewWrap.classList.add('hidden');
+        previewWrap.classList.remove('flex');
+        hint.textContent = 'Essa foto tropeçou aqui. Tenta outra imagem rapidinho.';
+      } finally {
+        submit.disabled = false;
+        submit.textContent = 'Salvar foto';
+      }
+    });
+
+    form.addEventListener('submit', () => {
+      submit.disabled = true;
+      submit.textContent = 'Subindo foto...';
+    });
+  }
+
   window.addEventListener('load', () => {
     bindPixForm('self');
     resetContactForm();
+    bindProfilePhotoForm();
 
     const highlighted = document.querySelector('[id^="friend-request-"][class*="ring-2"]');
     if (highlighted) {

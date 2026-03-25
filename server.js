@@ -923,7 +923,7 @@ function configureGoogleStrategy() {
     const email = normalizeEmail(profile.emails?.[0]?.value);
     const googleId = String(profile.id || profile?._json?.sub || '').trim();
     const profileName = String(profile.displayName || '').trim();
-    const googlePhotoUrl = normalizeProfilePhotoUrl(profile.photos?.[0]?.value || profile?._json?.picture || '');
+    const googlePhotoUrl = extractGoogleProfilePhotoUrl(profile);
 
     if (!email) {
       return done(null, false, { message: 'Email não encontrado no perfil Google.' });
@@ -1950,7 +1950,9 @@ function getUserRecord(userId, { includeDeleted = true } = {}) {
   const safeUserId = Number(userId || 0);
   if (!safeUserId) return null;
   return db.prepare(`
-    SELECT id, email, name, role, can_import, created_at, last_login, COALESCE(status, 'active') AS status, deleted_at, deleted_label
+    SELECT id, email, name, role, can_import, created_at, last_login,
+           google_id, google_photo_url, profile_photo_url,
+           COALESCE(status, 'active') AS status, deleted_at, deleted_label
     FROM users
     WHERE id = ? ${includeDeleted ? '' : "AND COALESCE(status, 'active') <> 'deleted'"}
     LIMIT 1
@@ -2938,6 +2940,27 @@ function normalizeProfilePhotoUrl(value) {
   if (!raw) return '';
   if (raw.startsWith('/uploads/profile-photos/')) return raw;
   if (/^https?:\/\//i.test(raw)) return raw;
+  return '';
+}
+
+function extractGoogleProfilePhotoUrl(profile) {
+  const candidates = [
+    profile?.photos?.[0]?.value,
+    profile?.photos?.[0]?.url,
+    profile?._json?.picture,
+    profile?._json?.picture?.data?.url,
+    profile?._json?.image?.url
+  ];
+
+  try {
+    const rawProfile = typeof profile?._raw === 'string' ? JSON.parse(profile._raw) : null;
+    candidates.push(rawProfile?.picture, rawProfile?.picture?.data?.url, rawProfile?.image?.url);
+  } catch (_error) { }
+
+  for (const candidate of candidates) {
+    const normalized = normalizeProfilePhotoUrl(candidate);
+    if (normalized) return normalized;
+  }
   return '';
 }
 
@@ -10107,7 +10130,7 @@ app.post('/people/profile-photo', ensureAuthenticated, (req, res) => {
       setFlash(req, 'error', 'A foto tropeçou no caminho. Tenta de novo daqui a pouquinho.');
     }
 
-    return res.redirect('/people');
+    return res.redirect('/people#profile-photo');
   });
 });
 
@@ -10122,7 +10145,7 @@ app.post('/people/profile-photo/remove', ensureAuthenticated, async (req, res) =
   } catch (error) {
     setFlash(req, 'error', 'Não consegui remover a foto agora.');
   }
-  return res.redirect('/people');
+  return res.redirect('/people#profile-photo');
 });
 
 app.get("/people", ensureAuthenticated, (req, res) => {

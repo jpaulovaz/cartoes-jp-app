@@ -1205,8 +1205,6 @@
           if (btn && btn.getAttribute('aria-expanded') !== 'true') btn.click();
         }
         if (state.expandRanking) {
-          const intelBtn = document.querySelector('[data-summary-intel-toggle]');
-          if (intelBtn && intelBtn.getAttribute('aria-expanded') !== 'true') intelBtn.click();
           const rankBtn = document.querySelector('[data-summary-ranking-toggle]');
           if (rankBtn && rankBtn.getAttribute('aria-expanded') !== 'true') rankBtn.click();
         }

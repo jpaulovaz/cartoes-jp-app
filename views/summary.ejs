@@ -21,7 +21,7 @@
 
     <% const graphKpis = summaryCharts && summaryCharts.kpis ? summaryCharts.kpis : null; %>
     <% const graphInsights = summaryCharts && summaryCharts.insights ? summaryCharts.insights : null; %>
-    <% const graphSectionDefaultOpen = false; %>
+    <% const graphSectionDefaultOpen = true; %>
     <% const merchantSectionDefaultOpen = false; %>
     <% const merchantRankingDefaultOpen = false; %>
     <% const merchantRanking = summaryCharts && Array.isArray(summaryCharts.establishments) ? summaryCharts.establishments : []; %>
@@ -163,12 +163,80 @@
       <div class="sr-only" aria-live="polite" data-summary-graphs-status>Gráficos do resumo prontos para carregar.</div>
       <script type="application/json" data-summary-graphs-json><%- JSON.stringify(summaryCharts || { categories: [], monthlyTrend: [], kpis: {}, insights: {} }) %></script>
     </section>
+      <div class="mt-5 rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40" data-summary-ranking-root>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 class="text-lg font-black text-slate-900 dark:text-white">Ranking de estabelecimentos</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Os lugares que mais apareceram no mês e quanto cada um puxou do bolso. Abriu aqui, já dá para caçar o campeão sem passar pela inteligência.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+            <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Leitura por nome</span>
+            <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800" data-summary-ranking-toggle aria-expanded="<%= merchantRankingDefaultOpen ? 'true' : 'false' %>">
+              <span data-summary-ranking-toggle-label><%= merchantRankingDefaultOpen ? 'Esconder ranking' : 'Mostrar ranking' %></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="mt-4" data-summary-ranking-panel <%= merchantRankingDefaultOpen ? '' : 'hidden' %>>
+        <% if (merchantRanking.length > 0) { %>
+          <% const merchantMaxTotal = merchantRanking.reduce((best, item) => Math.max(best, Number(item.total_cents || 0)), 0); %>
+          <div class="mt-4 space-y-3">
+            <% merchantRanking.forEach((merchant) => { %>
+              <% const widthPct = merchantMaxTotal > 0 ? Math.max(8, Math.round((Number(merchant.total_cents || 0) / merchantMaxTotal) * 100)) : 8; %>
+              <% const merchantHref = merchant.search_term ? `/month/${year}/${month}?${new URLSearchParams({ f_desc: String(merchant.search_term || '').trim() }).toString()}` : null; %>
+              <% const merchantSample = merchant.sample_descriptions && merchant.sample_descriptions.length ? merchant.sample_descriptions[0] : ''; %>
+              <% if (merchantHref) { %>
+              <a href="<%= merchantHref %>" class="group block rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-4 transition duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50/70 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-emerald-700 dark:hover:bg-emerald-900/10" aria-label="Abrir compras de <%= merchant.label %>">
+              <% } else { %>
+              <div class="group block rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-4 transition duration-200 dark:border-slate-700 dark:bg-slate-800/70">
+              <% } %>
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-full bg-slate-900 px-2 text-xs font-black text-white dark:bg-slate-100 dark:text-slate-900">#<%= merchant.position %></span>
+                      <div class="truncate text-base font-black text-slate-900 dark:text-white"><%= merchant.label %></div>
+                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300"><%= merchant.share_pct || 0 %>% do mês</span>
+                    </div>
+                    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
+                      <span><%= merchant.txn_count || 0 %> compra<%= Number(merchant.txn_count || 0) === 1 ? '' : 's' %></span>
+                      <span class="hidden sm:inline">·</span>
+                      <span>ticket médio de <%= formatBRLFromCents(merchant.avg_ticket_cents || 0) %></span>
+                      <% if (merchant.confidence === 'high') { %>
+                        <span class="hidden sm:inline">·</span>
+                        <span class="font-bold text-emerald-700 dark:text-emerald-300">nome reconhecido</span>
+                      <% } %>
+                    </div>
+                    <% if (merchantSample) { %>
+                      <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">Exemplo lido: <span class="font-semibold text-slate-700 dark:text-slate-200"><%= merchantSample %></span></p>
+                    <% } %>
+                    <div class="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-700/80">
+                      <div class="h-full rounded-full bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500" style="width: <%= widthPct %>%"></div>
+                    </div>
+                  </div>
+                  <div class="text-left lg:ml-4 lg:min-w-[160px] lg:text-right">
+                    <div class="text-lg font-black tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(merchant.total_cents || 0) %></div>
+                    <div class="mt-1 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 opacity-0 transition group-hover:opacity-100 dark:text-emerald-300"><%= merchantHref ? 'Abrir compras desse nome' : 'Só leitura nessa rodada' %></div>
+                  </div>
+                </div>
+              <% if (merchantHref) { %>
+              </a>
+              <% } else { %>
+              </div>
+              <% } %>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <div class="mt-4 flex min-h-[180px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não apareceu compra suficiente para montar esse ranking. Assim que o mês ganhar movimento, essa área entra em cena.</div>
+        <% } %>
+        </div>
+      </div>
+
     <section class="mb-8 op-surface-card rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6" data-summary-intel-root>
       <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Inteligência de consumo</div>
-          <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Onde a grana encosta com mais frequência</h2>
-          <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">Aqui a gente junta compras parecidas pelo nome do lugar. Você confirma quando fizer sentido, pausa quando não gostar e o app vai ficando mais esperto sem bagunçar suas categorias.</p>
+          <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Como eu reconheço seus lugares favoritos</h2>
+          <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">Quando você confirma um nome, eu vou pegando o jeito da coisa e organizo melhor o ranking ali em cima. Nada de trocar categoria por conta própria: aqui é ajuda com juízo, sem meter o louco.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2 lg:justify-end">
           <button type="button" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white" data-summary-intel-toggle aria-expanded="<%= merchantSectionDefaultOpen ? 'true' : 'false' %>">
@@ -179,8 +247,8 @@
 
       <div class="mt-5 space-y-5" data-summary-intel-panel <%= merchantSectionDefaultOpen ? '' : 'hidden' %>>
         <div class="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 lg:max-w-sm">
-          <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Jeitinho dessa leitura</div>
-          <p class="mt-2 leading-6">Nada de trocar categoria sozinho nem sair juntando tudo no embalo. A ideia é achar padrões com cuidado, sem inventar moda.</p>
+          <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Como essa ajuda trabalha</div>
+          <p class="mt-2 leading-6">Você confirma quando fizer sentido, eu aprendo com calma e uso isso para deixar o ranking mais redondinho. Se algo não te agradar, é só pausar e pronto.</p>
         </div>
 
       <div class="mt-5 grid gap-3 lg:grid-cols-3">
@@ -375,73 +443,7 @@
         <% } %>
       </div>
 
-      <div class="mt-5 rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40" data-summary-ranking-root>
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h3 class="text-lg font-black text-slate-900 dark:text-white">Ranking de estabelecimentos</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Os nomes que mais apareceram no mês e quanto cada um puxou do bolso.</p>
-          </div>
-          <div class="flex flex-wrap items-center gap-2 sm:justify-end">
-            <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Leitura por nome</span>
-            <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800" data-summary-ranking-toggle aria-expanded="<%= merchantRankingDefaultOpen ? 'true' : 'false' %>">
-              <span data-summary-ranking-toggle-label><%= merchantRankingDefaultOpen ? 'Esconder ranking' : 'Mostrar ranking' %></span>
-            </button>
-          </div>
-        </div>
 
-        <div class="mt-4" data-summary-ranking-panel <%= merchantRankingDefaultOpen ? '' : 'hidden' %>>
-        <% if (merchantRanking.length > 0) { %>
-          <% const merchantMaxTotal = merchantRanking.reduce((best, item) => Math.max(best, Number(item.total_cents || 0)), 0); %>
-          <div class="mt-4 space-y-3">
-            <% merchantRanking.forEach((merchant) => { %>
-              <% const widthPct = merchantMaxTotal > 0 ? Math.max(8, Math.round((Number(merchant.total_cents || 0) / merchantMaxTotal) * 100)) : 8; %>
-              <% const merchantHref = merchant.search_term ? `/month/${year}/${month}?${new URLSearchParams({ f_desc: String(merchant.search_term || '').trim() }).toString()}` : null; %>
-              <% const merchantSample = merchant.sample_descriptions && merchant.sample_descriptions.length ? merchant.sample_descriptions[0] : ''; %>
-              <% if (merchantHref) { %>
-              <a href="<%= merchantHref %>" class="group block rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-4 transition duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50/70 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-emerald-700 dark:hover:bg-emerald-900/10" aria-label="Abrir compras de <%= merchant.label %>">
-              <% } else { %>
-              <div class="group block rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-4 transition duration-200 dark:border-slate-700 dark:bg-slate-800/70">
-              <% } %>
-                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <span class="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-full bg-slate-900 px-2 text-xs font-black text-white dark:bg-slate-100 dark:text-slate-900">#<%= merchant.position %></span>
-                      <div class="truncate text-base font-black text-slate-900 dark:text-white"><%= merchant.label %></div>
-                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300"><%= merchant.share_pct || 0 %>% do mês</span>
-                    </div>
-                    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
-                      <span><%= merchant.txn_count || 0 %> compra<%= Number(merchant.txn_count || 0) === 1 ? '' : 's' %></span>
-                      <span class="hidden sm:inline">·</span>
-                      <span>ticket médio de <%= formatBRLFromCents(merchant.avg_ticket_cents || 0) %></span>
-                      <% if (merchant.confidence === 'high') { %>
-                        <span class="hidden sm:inline">·</span>
-                        <span class="font-bold text-emerald-700 dark:text-emerald-300">nome reconhecido</span>
-                      <% } %>
-                    </div>
-                    <% if (merchantSample) { %>
-                      <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">Exemplo lido: <span class="font-semibold text-slate-700 dark:text-slate-200"><%= merchantSample %></span></p>
-                    <% } %>
-                    <div class="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-700/80">
-                      <div class="h-full rounded-full bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500" style="width: <%= widthPct %>%"></div>
-                    </div>
-                  </div>
-                  <div class="text-left lg:ml-4 lg:min-w-[160px] lg:text-right">
-                    <div class="text-lg font-black tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(merchant.total_cents || 0) %></div>
-                    <div class="mt-1 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 opacity-0 transition group-hover:opacity-100 dark:text-emerald-300"><%= merchantHref ? 'Abrir compras desse nome' : 'Só leitura nessa rodada' %></div>
-                  </div>
-                </div>
-              <% if (merchantHref) { %>
-              </a>
-              <% } else { %>
-              </div>
-              <% } %>
-            <% }) %>
-          </div>
-        <% } else { %>
-          <div class="mt-4 flex min-h-[180px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não apareceu compra suficiente para montar esse ranking. Assim que o mês ganhar movimento, essa área entra em cena.</div>
-        <% } %>
-        </div>
-      </div>
       </div>
     </section>
 

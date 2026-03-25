@@ -26,11 +26,6 @@
   const selfPixState = selfProfile?.pix_state || pixStateDefault;
   const selfPixCity = selfProfile?.pix_city || pixCityDefault;
   const selfPixLabel = selfProfile?.pix_label || '';
-  const getAvatarUrl = (person) => person && person.photo_url ? String(person.photo_url) : (person && person.linked_user_photo_url && person.friendship_active ? String(person.linked_user_photo_url) : '');
-  const getAvatarInitials = (person) => {
-    const source = String((person && person.name) || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
-    return source.length ? source.map((part) => part.charAt(0).toUpperCase()).join('') : 'OP';
-  };
 
   const renderPersonStatusChips = (person) => {
     const chips = [];
@@ -195,12 +190,8 @@
       <div class="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div class="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
           <div class="flex items-start gap-4">
-            <div class="relative h-14 w-14 shrink-0">
-              <% if (getAvatarUrl(selfProfile)) { %>
-                <img src="<%= getAvatarUrl(selfProfile) %>" alt="<%= selfProfile.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-14 w-14 rounded-full object-cover ring-2 ring-amber-200 dark:ring-amber-800/70">
-              <% } else { %>
-                <div class="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-xl font-black text-amber-700 dark:bg-amber-900/30 dark:text-amber-200"><%= getAvatarInitials(selfProfile) %></div>
-              <% } %>
+            <div class="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xl font-black text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+              <%= selfProfile.name.charAt(0).toUpperCase() %>
               <span class="absolute -top-2 -right-2 text-xl drop-shadow-sm" title="Seu perfil">👑</span>
             </div>
             <div class="min-w-0 flex-1">
@@ -246,169 +237,90 @@
           </div>
         </div>
 
-        <div class="space-y-4">
-        <section class="rounded-[28px] border border-sky-200 bg-sky-50/80 p-5 shadow-sm dark:border-sky-900/70 dark:bg-sky-950/20 sm:p-6">
-          <div>
-            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Sua fotinha por aqui</div>
-            <h3 class="mt-2 text-lg font-black text-slate-900 dark:text-white">Seu rosto no crachá do app</h3>
-            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando você coloca uma foto, ela aparece no topo do app e nas divisões de compra. Se não tiver foto, o ícone do OrganizaPay continua firme no cabeçalho.</p>
-          </div>
-          <% const hasGoogleDefaultPhoto = !!(selfProfile && selfProfile.google_photo_url); %>
-          <% const photoMode = (selfProfile && selfProfile.profile_photo_mode) || 'default'; %>
-          <% const hasManualPhoto = photoMode === 'manual' && !!(selfProfile && selfProfile.profile_photo_url); %>
-          <% const showUseDefaultButton = hasManualPhoto || (photoMode === 'none' && hasGoogleDefaultPhoto); %>
-          <% const showRemoveButton = !!(selfProfile && selfProfile.photo_url); %>
-          <div id="profile-photo" class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_13rem] lg:items-start scroll-mt-28">
-            <form method="post" action="/people/profile-photo" enctype="multipart/form-data" class="min-w-0 space-y-3" id="profilePhotoForm">
-              <input id="profilePhotoInput" type="file" name="profile_photo" accept="image/png,image/jpeg,image/webp,image/gif" class="block w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm file:mr-3 file:rounded-xl file:border-0 file:bg-sky-100 file:px-3 file:py-2 file:font-bold file:text-sky-700 hover:file:bg-sky-200 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-200 dark:file:bg-sky-900/40 dark:file:text-sky-200">
-              <div id="profilePhotoPreviewWrap" class="hidden items-center gap-3 rounded-2xl border border-sky-200/80 bg-sky-50/70 px-4 py-3 dark:border-sky-900/60 dark:bg-sky-950/20">
-                <img id="profilePhotoPreview" alt="Prévia da sua foto" class="h-14 w-14 rounded-full object-cover ring-2 ring-sky-200 dark:ring-sky-800/70">
-                <div class="min-w-0 flex-1">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Prévia da fotinha</div>
-                  <p id="profilePhotoHint" class="mt-1 text-sm font-medium leading-5 text-slate-600 dark:text-slate-300">Escolheu? Aí é só salvar que ela sobe lindona.</p>
-                </div>
-              </div>
-              <div class="rounded-2xl border border-sky-200/80 bg-white/80 p-3 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-slate-300">
-                Escolha uma foto com calma, ajuste do seu jeitinho e depois salve. Aí ela fica bonita no app inteiro.
-              </div>
-            </form>
-            <div class="flex w-full flex-col items-stretch gap-3 lg:w-52 lg:justify-start">
-              <button form="profilePhotoForm" id="profilePhotoSubmit" type="submit" class="inline-flex min-h-[46px] items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60">Salvar foto</button>
-              <% if (showUseDefaultButton) { %>
-                <form method="post" action="/people/profile-photo/use-default" class="w-full">
-                  <button type="submit" class="inline-flex min-h-[46px] w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Usar foto padrão</button>
-                </form>
-              <% } %>
-              <% if (showRemoveButton) { %>
-                <form method="post" action="/people/profile-photo/remove" class="w-full">
-                  <button type="submit" class="inline-flex min-h-[46px] w-full items-center justify-center rounded-2xl border border-rose-200 bg-rose-50/70 px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-100/80 dark:border-rose-900/70 dark:bg-rose-950/20 dark:text-rose-200 dark:hover:bg-rose-950/35">Tirar foto daqui</button>
-                </form>
-              <% } %>
-            </div>
-          </div>
-        </section>
-
-        <div id="profilePhotoCropModal" class="fixed inset-0 z-[120] hidden items-center justify-center overflow-y-auto p-4 sm:p-6" aria-hidden="true">
-          <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" data-profile-photo-modal-close></div>
-          <div class="relative my-auto w-full max-w-3xl rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
-              <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Ajuste sua fotinha</div>
-                  <h4 class="mt-2 text-lg font-black text-slate-900 dark:text-white">Escolha o melhor enquadramento</h4>
-                  <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Arraste para posicionar, puxe o zoom se quiser e deixe seu rosto bem no centro do crachá.</p>
-                </div>
-                <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800" data-profile-photo-modal-close>Fechar</button>
-              </div>
-              <div class="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
-                <div>
-                  <div id="profilePhotoCropStage" class="relative mx-auto aspect-square w-full max-w-[26rem] overflow-hidden rounded-[28px] border border-slate-200 bg-slate-950 shadow-inner dark:border-slate-700 touch-none select-none">
-                    <img id="profilePhotoCropImage" alt="Ajuste da foto" class="absolute left-1/2 top-1/2 max-w-none will-change-transform pointer-events-none select-none" draggable="false">
-                    <div class="pointer-events-none absolute inset-0 rounded-[28px] ring-1 ring-inset ring-white/35"></div>
-                    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0,transparent_56%,rgba(15,23,42,0.42)_100%)]"></div>
-                  </div>
-                  <p class="mt-3 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Dica amiga: se tiver mais gente na foto, arraste até deixar você no centro. A moldura redonda é só a prévia — o recorte sai certinho daqui.</p>
-                </div>
-                <div class="rounded-[24px] border border-sky-200/80 bg-sky-50/70 p-4 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/20">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Como vai ficar</div>
-                  <div class="mt-4 flex items-center justify-center">
-                    <div class="relative h-28 w-28 overflow-hidden rounded-full border-4 border-white bg-slate-200 shadow-lg ring-1 ring-sky-200 dark:border-slate-900 dark:bg-slate-800 dark:ring-sky-900/70">
-                      <img id="profilePhotoCropPreview" alt="Prévia circular da foto" class="absolute left-1/2 top-1/2 max-w-none will-change-transform pointer-events-none select-none" draggable="false">
-                    </div>
-                  </div>
-                  <label class="mt-5 block">
-                    <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Zoom</span>
-                    <input id="profilePhotoCropZoom" type="range" min="1" max="3" step="0.01" value="1" class="h-2 w-full cursor-pointer appearance-none rounded-full bg-sky-100 accent-sky-600 dark:bg-slate-800">
-                  </label>
-                  <div class="mt-5 flex flex-col gap-3">
-                    <button type="button" id="profilePhotoCropApply" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Usar essa foto</button>
-                    <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800" data-profile-photo-modal-close>Escolher outra depois</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <form method="post" action="/people" class="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:p-6">
           <input type="hidden" name="id" id="selfPersonId" value="<%= selfProfile.id %>">
-          <div class="grid gap-4">
-            <div>
-              <label class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Como você aparece</label>
-              <input name="name" id="selfName" value="<%- selfName %>" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-medium text-slate-900 shadow-sm transition-all outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-amber-500 dark:focus:ring-amber-500/20" placeholder="Seu nome no app" required>
-            </div>
-
-            <div class="grid gap-3 md:grid-cols-2">
+          <div class="grid gap-5 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] xl:items-start">
+            <div class="space-y-4 xl:min-w-0">
               <div>
-                <label class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Telefone</label>
-                <input name="phone" id="selfPhone" value="<%- selfPhone %>" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-medium text-slate-900 shadow-sm transition-all outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-amber-500 dark:focus:ring-amber-500/20" placeholder="(21) 99999-9999">
+                <label class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Como você aparece</label>
+                <input name="name" id="selfName" value="<%- selfName %>" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-medium text-slate-900 shadow-sm transition-all outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-amber-500 dark:focus:ring-amber-500/20" placeholder="Seu nome no app" required>
               </div>
-              <div>
-                <label class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">E-mail visível</label>
-                <input name="email" id="selfEmail" type="email" value="<%- selfEmail %>" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-medium text-slate-900 shadow-sm transition-all outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-amber-500 dark:focus:ring-amber-500/20" placeholder="email@exemplo.com">
-              </div>
-            </div>
 
-            <div class="rounded-[24px] border border-violet-200 bg-violet-50/70 px-4 py-4 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/20 sm:px-5">
-              <div class="flex items-start gap-3">
-                <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-violet-600 shadow-sm ring-1 ring-violet-100 dark:bg-slate-800 dark:text-violet-300 dark:ring-violet-900/50" aria-hidden="true">
-                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1zm7 4h.01"></path></svg>
-                </span>
-                <div class="min-w-0 flex-1">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Receber por Pix</div>
-                  <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando você recebe uma cobrança, é esse Pix que entra em cena. Deixa pronto uma vez e pronto: menos correria, mais paz.</p>
+              <div class="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Telefone</label>
+                  <input name="phone" id="selfPhone" value="<%- selfPhone %>" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-medium text-slate-900 shadow-sm transition-all outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-amber-500 dark:focus:ring-amber-500/20" placeholder="(21) 99999-9999">
+                </div>
+                <div>
+                  <label class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">E-mail visível</label>
+                  <input name="email" id="selfEmail" type="email" value="<%- selfEmail %>" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-medium text-slate-900 shadow-sm transition-all outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-amber-500 dark:focus:ring-amber-500/20" placeholder="email@exemplo.com">
                 </div>
               </div>
-
-              <div class="mt-4 flex flex-wrap items-center gap-3">
-                <label class="inline-flex items-center gap-3 rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-bold text-violet-700 shadow-sm dark:border-violet-800 dark:bg-slate-900/70 dark:text-violet-200">
-                  <input type="checkbox" name="pix_enabled" id="selfPixEnabled" value="1" class="h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" <%= selfPixEnabled ? 'checked' : '' %>>
-                  <span>Deixar Pix pronto</span>
-                </label>
-                <p class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">A chave fica mascaradinha na lista e só aparece inteira quando alguém realmente for copiar o Pix.</p>
-              </div>
-
-              <div class="mt-4 grid gap-3 md:grid-cols-2">
-                <label class="block">
-                  <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Tipo da chave</span>
-                  <select name="pix_key_type" id="selfPixKeyType" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
-                    <option value="">Escolha um tipo</option>
-                    <option value="cpf" <%= selfPixKeyType === 'cpf' ? 'selected' : '' %>>CPF</option>
-                    <option value="cnpj" <%= selfPixKeyType === 'cnpj' ? 'selected' : '' %>>CNPJ</option>
-                    <option value="email" <%= selfPixKeyType === 'email' ? 'selected' : '' %>>E-mail</option>
-                    <option value="phone" <%= selfPixKeyType === 'phone' ? 'selected' : '' %>>Celular</option>
-                    <option value="evp" <%= selfPixKeyType === 'evp' ? 'selected' : '' %>>Chave aleatória</option>
-                  </select>
-                </label>
-                <label class="block">
-                  <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Chave Pix</span>
-                  <input name="pix_key_value" id="selfPixKeyValue" value="<%- selfPixKeyValueInput %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: 21999999999" inputmode="text" autocomplete="off">
-                  <p id="selfPixKeyHelp" class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.</p>
-                </label>
-              </div>
-
-              <div class="mt-4 grid gap-3 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)]">
-                <label class="block">
-                  <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estado</span>
-                  <select name="pix_state" id="selfPixState" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
-                    <% pixStateList.forEach((stateEntry) => { const stateCode = getPixStateCode(stateEntry); const stateLabel = getPixStateLabel(stateEntry); if (!stateCode) return; %>
-                      <option value="<%= stateCode %>" <%= selfPixState === stateCode ? 'selected' : '' %>><%= stateLabel %></option>
-                    <% }) %>
-                  </select>
-                </label>
-                <label class="block">
-                  <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Cidade</span>
-                  <input name="pix_city" id="selfPixCity" value="<%- selfPixCity %>" list="selfPixCitySuggestions" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Cidade do recebedor">
-                  <datalist id="selfPixCitySuggestions"></datalist>
-                </label>
-              </div>
-
-              <label class="mt-4 block">
-                <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nome que aparece no Pix</span>
-                <input name="pix_label" id="selfPixLabel" value="<%- selfPixLabel %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: João - OrganizaPay">
-              </label>
             </div>
 
-            <div class="flex flex-wrap justify-end gap-3">
+            <div class="xl:min-w-0">
+              <div class="rounded-[24px] border border-violet-200 bg-violet-50/70 px-4 py-4 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/20 sm:px-5">
+                <div class="flex items-start gap-3">
+                  <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-violet-600 shadow-sm ring-1 ring-violet-100 dark:bg-slate-800 dark:text-violet-300 dark:ring-violet-900/50" aria-hidden="true">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1zm7 4h.01"></path></svg>
+                  </span>
+                  <div class="min-w-0 flex-1">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Receber por Pix</div>
+                    <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando você recebe uma cobrança, é esse Pix que entra em cena. Deixa pronto uma vez e pronto: menos correria, mais paz.</p>
+                  </div>
+                </div>
+
+                <div class="mt-4 flex flex-wrap items-center gap-3">
+                  <label class="inline-flex items-center gap-3 rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-bold text-violet-700 shadow-sm dark:border-violet-800 dark:bg-slate-900/70 dark:text-violet-200">
+                    <input type="checkbox" name="pix_enabled" id="selfPixEnabled" value="1" class="h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" <%= selfPixEnabled ? 'checked' : '' %>>
+                    <span>Deixar Pix pronto</span>
+                  </label>
+                  <p class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">A chave fica mascaradinha na lista e só aparece inteira quando alguém realmente for copiar o Pix.</p>
+                </div>
+
+                <div class="mt-4 grid gap-3 md:grid-cols-2">
+                  <label class="block">
+                    <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Tipo da chave</span>
+                    <select name="pix_key_type" id="selfPixKeyType" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
+                      <option value="">Escolha um tipo</option>
+                      <option value="cpf" <%= selfPixKeyType === 'cpf' ? 'selected' : '' %>>CPF</option>
+                      <option value="cnpj" <%= selfPixKeyType === 'cnpj' ? 'selected' : '' %>>CNPJ</option>
+                      <option value="email" <%= selfPixKeyType === 'email' ? 'selected' : '' %>>E-mail</option>
+                      <option value="phone" <%= selfPixKeyType === 'phone' ? 'selected' : '' %>>Celular</option>
+                      <option value="evp" <%= selfPixKeyType === 'evp' ? 'selected' : '' %>>Chave aleatória</option>
+                    </select>
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Chave Pix</span>
+                    <input name="pix_key_value" id="selfPixKeyValue" value="<%- selfPixKeyValueInput %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: 21999999999" inputmode="text" autocomplete="off">
+                    <p id="selfPixKeyHelp" class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.</p>
+                  </label>
+                </div>
+
+                <div class="mt-4 grid gap-3 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)]">
+                  <label class="block">
+                    <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estado</span>
+                    <select name="pix_state" id="selfPixState" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
+                      <% pixStateList.forEach((stateEntry) => { const stateCode = getPixStateCode(stateEntry); const stateLabel = getPixStateLabel(stateEntry); if (!stateCode) return; %>
+                        <option value="<%= stateCode %>" <%= selfPixState === stateCode ? 'selected' : '' %>><%= stateLabel %></option>
+                      <% }) %>
+                    </select>
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Cidade</span>
+                    <input name="pix_city" id="selfPixCity" value="<%- selfPixCity %>" list="selfPixCitySuggestions" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Cidade do recebedor">
+                    <datalist id="selfPixCitySuggestions"></datalist>
+                  </label>
+                </div>
+
+                <label class="mt-4 block">
+                  <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nome que aparece no Pix</span>
+                  <input name="pix_label" id="selfPixLabel" value="<%- selfPixLabel %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: João - OrganizaPay">
+                </label>
+              </div>
+            </div>
+
+            <div class="xl:col-span-2 flex flex-wrap justify-end gap-3">
               <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400">Salvar meu perfil</button>
             </div>
           </div>
@@ -515,8 +427,8 @@
               <div class="flex flex-col gap-5">
                 <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                   <div class="flex min-w-0 flex-1 gap-4 xl:pr-4">
-                    <div class="relative h-12 w-12 shrink-0">
-                      <% if (getAvatarUrl(p)) { %><img src="<%= getAvatarUrl(p) %>" alt="<%= p.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-12 w-12 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700"><% } else { %><div class="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-600 transition-colors group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:bg-blue-900/40"><%= getAvatarInitials(p) %></div><% } %>
+                    <div class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-600 transition-colors group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:bg-blue-900/40">
+                      <%= p.name.charAt(0).toUpperCase() %>
                       <% if (p.friendship_active) { %>
                         <span class="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-200 bg-emerald-500 text-[13px] text-white shadow-sm dark:border-emerald-700" title="Amizade ativa">🔗</span>
                       <% } %>
@@ -821,293 +733,9 @@
     updatePixCityUi(prefix, !!options.forceCity);
   }
 
-  async function readFileAsDataUrl(sourceFile) {
-    return await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ''));
-      reader.onerror = () => reject(new Error('Não consegui ler essa imagem.'));
-      reader.readAsDataURL(sourceFile);
-    });
-  }
-
-  function loadImageElement(src) {
-    return new Promise((resolve, reject) => {
-      const image = new Image();
-      image.onload = () => resolve(image);
-      image.onerror = () => reject(new Error('A imagem não abriu direitinho.'));
-      image.src = src;
-    });
-  }
-
-  function clampPhotoCropOffset(state) {
-    if (!state || !state.image) return;
-    const stageSize = Math.max(1, state.stageSize || 1);
-    const displayedWidth = (state.image.naturalWidth || state.image.width || 1) * state.scale;
-    const displayedHeight = (state.image.naturalHeight || state.image.height || 1) * state.scale;
-    const maxOffsetX = Math.max(0, (displayedWidth - stageSize) / 2);
-    const maxOffsetY = Math.max(0, (displayedHeight - stageSize) / 2);
-    state.offsetX = Math.max(-maxOffsetX, Math.min(maxOffsetX, state.offsetX || 0));
-    state.offsetY = Math.max(-maxOffsetY, Math.min(maxOffsetY, state.offsetY || 0));
-  }
-
-  function applyPhotoCropTransforms(state) {
-    if (!state || !state.stage || !state.imageElement || !state.previewElement || !state.image) return;
-    const stageSize = Math.max(1, state.stage.clientWidth || state.stageSize || 1);
-    state.stageSize = stageSize;
-    clampPhotoCropOffset(state);
-    const stageTransform = `translate(-50%, -50%) translate(${state.offsetX}px, ${state.offsetY}px) scale(${state.scale})`;
-    state.imageElement.style.transform = stageTransform;
-    const previewBox = Math.max(1, state.previewElement.parentElement?.clientWidth || 112);
-    const previewRatio = previewBox / stageSize;
-    const previewTransform = `translate(-50%, -50%) translate(${state.offsetX * previewRatio}px, ${state.offsetY * previewRatio}px) scale(${state.scale * previewRatio})`;
-    state.previewElement.style.transform = previewTransform;
-  }
-
-  async function createPreparedPhotoFromCrop(state) {
-    const stageSize = Math.max(1, state.stageSize || state.stage.clientWidth || 1);
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d');
-    const factor = 512 / stageSize;
-    ctx.scale(factor, factor);
-    const naturalWidth = state.image.naturalWidth || state.image.width || 1;
-    const naturalHeight = state.image.naturalHeight || state.image.height || 1;
-    const displayedWidth = naturalWidth * state.scale;
-    const displayedHeight = naturalHeight * state.scale;
-    const x = (stageSize / 2) + state.offsetX - (displayedWidth / 2);
-    const y = (stageSize / 2) + state.offsetY - (displayedHeight / 2);
-    ctx.drawImage(state.image, x, y, displayedWidth, displayedHeight);
-
-    const blob = await new Promise((resolve, reject) => {
-      canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Não consegui preparar a foto.')), 'image/jpeg', 0.9);
-    });
-
-    return {
-      file: new File([blob], ((state.originalFile?.name || 'perfil').replace(/\.[^.]+$/, '') || 'perfil') + '.jpg', { type: 'image/jpeg' }),
-      previewUrl: canvas.toDataURL('image/jpeg', 0.9)
-    };
-  }
-
-  function bindProfilePhotoForm() {
-    const form = document.getElementById('profilePhotoForm');
-    const input = document.getElementById('profilePhotoInput');
-    const submit = document.getElementById('profilePhotoSubmit');
-    const previewWrap = document.getElementById('profilePhotoPreviewWrap');
-    const preview = document.getElementById('profilePhotoPreview');
-    const hint = document.getElementById('profilePhotoHint');
-    const modal = document.getElementById('profilePhotoCropModal');
-    const stage = document.getElementById('profilePhotoCropStage');
-    const stageImage = document.getElementById('profilePhotoCropImage');
-    const previewCircle = document.getElementById('profilePhotoCropPreview');
-    const zoom = document.getElementById('profilePhotoCropZoom');
-    const applyButton = document.getElementById('profilePhotoCropApply');
-    const modalCloseButtons = Array.from(document.querySelectorAll('[data-profile-photo-modal-close]'));
-    if (!form || !input || !submit || !previewWrap || !preview || !hint || !modal || !stage || !stageImage || !previewCircle || !zoom || !applyButton) return;
-
-    let cropState = null;
-    let activeObjectUrl = '';
-    let previewObjectUrl = '';
-
-    if (modal.parentElement !== document.body) {
-      document.body.appendChild(modal);
-    }
-
-    const releaseObjectUrls = () => {
-      if (activeObjectUrl) {
-        URL.revokeObjectURL(activeObjectUrl);
-        activeObjectUrl = '';
-      }
-      if (previewObjectUrl) {
-        URL.revokeObjectURL(previewObjectUrl);
-        previewObjectUrl = '';
-      }
-    };
-
-    const closeModal = () => {
-      if (!cropState) return;
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
-      modal.setAttribute('aria-hidden', 'true');
-      document.body.classList.remove('overflow-hidden');
-      if (cropState.stagePointerId !== undefined && cropState.stagePointerId !== null && stage.hasPointerCapture?.(cropState.stagePointerId)) {
-        try { stage.releasePointerCapture(cropState.stagePointerId); } catch (_error) {}
-      }
-      cropState = null;
-      releaseObjectUrls();
-      stageImage.removeAttribute('src');
-      previewCircle.removeAttribute('src');
-      zoom.value = '1';
-    };
-
-    const openModalForFile = async (file) => {
-      if (!file) return;
-      releaseObjectUrls();
-      activeObjectUrl = URL.createObjectURL(file);
-      const image = await loadImageElement(activeObjectUrl);
-      stageImage.src = activeObjectUrl;
-      previewCircle.src = activeObjectUrl;
-      const stageSize = Math.max(1, stage.clientWidth || 320);
-      const naturalWidth = image.naturalWidth || image.width || 1;
-      const naturalHeight = image.naturalHeight || image.height || 1;
-      const baseScale = Math.max(stageSize / naturalWidth, stageSize / naturalHeight);
-      cropState = {
-        originalFile: file,
-        image,
-        stage,
-        imageElement: stageImage,
-        previewElement: previewCircle,
-        stageSize,
-        baseScale,
-        scale: baseScale,
-        offsetX: 0,
-        offsetY: 0,
-        dragStartX: 0,
-        dragStartY: 0,
-        dragOriginX: 0,
-        dragOriginY: 0,
-        stagePointerId: null
-      };
-      zoom.value = '1';
-      applyPhotoCropTransforms(cropState);
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-      modal.setAttribute('aria-hidden', 'false');
-      document.body.classList.add('overflow-hidden');
-    };
-
-    const showPreview = (previewUrl, message) => {
-      preview.src = previewUrl;
-      previewWrap.classList.remove('hidden');
-      previewWrap.classList.add('flex');
-      hint.textContent = message || 'Escolheu? Agora é só salvar.';
-    };
-
-    input.addEventListener('change', async () => {
-      const selected = input.files && input.files[0];
-      if (!selected) return;
-      submit.disabled = true;
-      submit.textContent = 'Preparando foto...';
-      hint.textContent = 'Abrindo o ajuste da sua fotinha...';
-      try {
-        await openModalForFile(selected);
-        submit.textContent = 'Salvar foto';
-      } catch (_error) {
-        releaseObjectUrls();
-        previewWrap.classList.add('hidden');
-        previewWrap.classList.remove('flex');
-        hint.textContent = 'Essa foto tropeçou aqui. Tenta outra imagem rapidinho.';
-        input.value = '';
-        submit.textContent = 'Salvar foto';
-      } finally {
-        submit.disabled = false;
-      }
-    });
-
-    zoom.addEventListener('input', () => {
-      if (!cropState) return;
-      const zoomFactor = Math.max(1, Number(zoom.value || 1));
-      cropState.scale = cropState.baseScale * zoomFactor;
-      applyPhotoCropTransforms(cropState);
-    });
-
-    stage.addEventListener('pointerdown', (event) => {
-      if (!cropState) return;
-      cropState.stagePointerId = event.pointerId;
-      cropState.dragStartX = event.clientX;
-      cropState.dragStartY = event.clientY;
-      cropState.dragOriginX = cropState.offsetX || 0;
-      cropState.dragOriginY = cropState.offsetY || 0;
-      stage.setPointerCapture?.(event.pointerId);
-    });
-
-    stage.addEventListener('pointermove', (event) => {
-      if (!cropState || cropState.stagePointerId !== event.pointerId) return;
-      cropState.offsetX = cropState.dragOriginX + (event.clientX - cropState.dragStartX);
-      cropState.offsetY = cropState.dragOriginY + (event.clientY - cropState.dragStartY);
-      applyPhotoCropTransforms(cropState);
-    });
-
-    const releaseDrag = (event) => {
-      if (!cropState || cropState.stagePointerId !== event.pointerId) return;
-      if (stage.hasPointerCapture?.(event.pointerId)) {
-        try { stage.releasePointerCapture(event.pointerId); } catch (_error) {}
-      }
-      cropState.stagePointerId = null;
-    };
-    stage.addEventListener('pointerup', releaseDrag);
-    stage.addEventListener('pointercancel', releaseDrag);
-    stage.addEventListener('lostpointercapture', () => {
-      if (cropState) cropState.stagePointerId = null;
-    });
-
-    applyButton.addEventListener('click', async () => {
-      if (!cropState) return;
-      applyButton.disabled = true;
-      applyButton.textContent = 'Preparando...';
-      try {
-        const prepared = await createPreparedPhotoFromCrop(cropState);
-        const transfer = new DataTransfer();
-        transfer.items.add(prepared.file);
-        input.files = transfer.files;
-        if (previewObjectUrl) {
-          URL.revokeObjectURL(previewObjectUrl);
-          previewObjectUrl = '';
-        }
-        showPreview(prepared.previewUrl, 'Boa! Agora ela já está no jeitinho para subir para o app.');
-        closeModal();
-      } catch (_error) {
-        hint.textContent = 'A foto tropeçou no corte. Tenta de novo rapidinho.';
-      } finally {
-        applyButton.disabled = false;
-        applyButton.textContent = 'Usar essa foto';
-        submit.disabled = false;
-        submit.textContent = 'Salvar foto';
-      }
-    });
-
-    modalCloseButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        input.value = '';
-        closeModal();
-        submit.disabled = false;
-        submit.textContent = 'Salvar foto';
-      });
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && cropState) {
-        input.value = '';
-        closeModal();
-        submit.disabled = false;
-        submit.textContent = 'Salvar foto';
-      }
-    });
-
-    window.addEventListener('resize', () => {
-      if (!cropState) return;
-      const nextStageSize = Math.max(1, stage.clientWidth || cropState.stageSize || 1);
-      if (nextStageSize === cropState.stageSize) return;
-      const ratio = nextStageSize / Math.max(1, cropState.stageSize || 1);
-      cropState.stageSize = nextStageSize;
-      cropState.baseScale = Math.max(nextStageSize / (cropState.image.naturalWidth || cropState.image.width || 1), nextStageSize / (cropState.image.naturalHeight || cropState.image.height || 1));
-      const zoomFactor = Math.max(1, Number(zoom.value || 1));
-      cropState.scale = cropState.baseScale * zoomFactor;
-      cropState.offsetX *= ratio;
-      cropState.offsetY *= ratio;
-      applyPhotoCropTransforms(cropState);
-    });
-
-    form.addEventListener('submit', () => {
-      submit.disabled = true;
-      submit.textContent = 'Subindo foto...';
-    });
-  }
-
   window.addEventListener('load', () => {
     bindPixForm('self');
     resetContactForm();
-    bindProfilePhotoForm();
 
     const highlighted = document.querySelector('[id^="friend-request-"][class*="ring-2"]');
     if (highlighted) {

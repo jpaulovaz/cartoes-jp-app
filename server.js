@@ -2955,7 +2955,7 @@ function normalizeProfilePhotoMode(value) {
 function looksLikeGoogleDefaultAvatar(value) {
   const raw = normalizeProfilePhotoUrl(value);
   if (!raw || !/googleusercontent\.com/i.test(raw)) return false;
-  return /(?:\/a\/default-user|\/a\/default-user=|\/a\/default-user-|[?&]default=1)/i.test(raw);
+  return /(?:\/a\/default-user|\/a\/default-user=|\/a\/default-user-|\/a-\/|[?&]default=1\b|\/AAAAAAAAAAI\/)/i.test(raw);
 }
 
 function extractGoogleProfilePhotoUrl(profile) {

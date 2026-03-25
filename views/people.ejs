@@ -31,9 +31,10 @@
     const source = String((person && person.name) || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
     return source.length ? source.map((part) => part.charAt(0).toUpperCase()).join('') : 'OP';
   };
-  const googlePhotoLooksReal = !!(selfProfile && selfProfile.google_photo_url && !String(selfProfile.google_photo_url).match(/(?:\/a\/default-user|\/a\/default-user=|\/a\/default-user-|[?&]default=1\b)/i));
+  const googlePhotoLooksReal = !!(selfProfile && selfProfile.google_photo_url && !String(selfProfile.google_photo_url).match(/(?:\/a\/default-user|\/a\/default-user=|\/a\/default-user-|\/a-\/|[?&]default=1\b|\/AAAAAAAAAAI\/)/i));
   const hasManualProfilePhoto = !!(selfProfile && selfProfile.profile_photo_url);
   const effectiveProfilePhotoMode = String((selfProfile && selfProfile.profile_photo_mode) || 'default');
+  const actionButtonBaseClass = 'min-h-[52px] w-full rounded-2xl px-4 py-3 text-sm font-black transition-all';
 
   const renderPersonStatusChips = (person) => {
     const chips = [];
@@ -258,9 +259,9 @@
           </div>
           <div id="profile-photo" class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] scroll-mt-28">
             <form method="post" action="/people/profile-photo" enctype="multipart/form-data" class="flex flex-col gap-3" id="profilePhotoForm">
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <input id="profilePhotoInput" type="file" name="profile_photo" accept="image/png,image/jpeg,image/webp,image/gif" class="block w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm file:mr-3 file:rounded-xl file:border-0 file:bg-sky-100 file:px-3 file:py-2 file:font-bold file:text-sky-700 hover:file:bg-sky-200 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-200 dark:file:bg-sky-900/40 dark:file:text-sky-200">
-                <button id="profilePhotoSubmit" type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60">Salvar foto</button>
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+                <input id="profilePhotoInput" type="file" name="profile_photo" accept="image/png,image/jpeg,image/webp,image/gif" class="block min-h-[52px] w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm file:mr-3 file:rounded-xl file:border-0 file:bg-sky-100 file:px-3 file:py-2 file:font-bold file:text-sky-700 hover:file:bg-sky-200 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-200 dark:file:bg-sky-900/40 dark:file:text-sky-200">
+                <button id="profilePhotoSubmit" type="submit" class="inline-flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-[220px]">Salvar foto</button>
               </div>
               <div class="rounded-2xl border border-sky-200/80 bg-white/80 p-3 text-xs font-medium leading-5 text-slate-600 shadow-sm dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-slate-300">
                 Você escolhe a foto, ajusta no capricho e eu subo ela leve, certinha e pronta para ficar bonita no celular, PWA e desktop.
@@ -276,22 +277,22 @@
             <div class="flex flex-col gap-3">
               <% if (hasManualProfilePhoto) { %>
                 <form method="post" action="/people/profile-photo/use-default">
-                  <button type="submit" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"><%= googlePhotoLooksReal ? 'Usar foto padrão' : 'Voltar para o padrão' %></button>
+                  <button type="submit" class="<%= actionButtonBaseClass %> border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-[220px]"><%= googlePhotoLooksReal ? 'Usar foto padrão' : 'Voltar para o padrão' %></button>
                 </form>
                 <form method="post" action="/people/profile-photo/remove">
-                  <button type="submit" class="w-full rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition-all hover:bg-red-100 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/40">Excluir foto</button>
+                  <button type="submit" class="<%= actionButtonBaseClass %> border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/40 sm:w-[220px]">Excluir foto</button>
                 </form>
               <% } else if (googlePhotoLooksReal && effectiveProfilePhotoMode !== 'none') { %>
                 <form method="post" action="/people/profile-photo/remove">
-                  <button type="submit" class="w-full rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition-all hover:bg-red-100 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/40">Remover foto</button>
+                  <button type="submit" class="<%= actionButtonBaseClass %> border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/40 sm:w-[220px]">Remover foto</button>
                 </form>
               <% } else if (googlePhotoLooksReal && effectiveProfilePhotoMode === 'none') { %>
                 <form method="post" action="/people/profile-photo/use-default">
-                  <button type="submit" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Usar foto padrão</button>
+                  <button type="submit" class="<%= actionButtonBaseClass %> border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-[220px]">Usar foto padrão</button>
                 </form>
               <% } else if (hasManualProfilePhoto) { %>
                 <form method="post" action="/people/profile-photo/remove">
-                  <button type="submit" class="w-full rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition-all hover:bg-red-100 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/40">Excluir foto</button>
+                  <button type="submit" class="<%= actionButtonBaseClass %> border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/40 sm:w-[220px]">Excluir foto</button>
                 </form>
               <% } %>
             </div>

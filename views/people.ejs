@@ -278,10 +278,10 @@
           </div>
         </section>
 
-        <div id="profilePhotoCropModal" class="fixed inset-0 z-[120] hidden" aria-hidden="true">
+        <div id="profilePhotoCropModal" class="fixed inset-0 z-[120] hidden overflow-y-auto" aria-hidden="true">
           <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" data-profile-photo-modal-close></div>
-          <div class="relative flex min-h-full items-center justify-center p-4 sm:p-6">
-            <div class="w-full max-w-3xl rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+          <div class="relative flex min-h-dvh items-center justify-center p-4 sm:p-6">
+            <div class="my-auto w-full max-w-3xl rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
               <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Ajuste sua fotinha</div>
@@ -310,6 +310,12 @@
                     <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Zoom</span>
                     <input id="profilePhotoCropZoom" type="range" min="1" max="3" step="0.01" value="1" class="h-2 w-full cursor-pointer appearance-none rounded-full bg-sky-100 accent-sky-600 dark:bg-slate-800">
                   </label>
+                  <div class="mt-4 grid grid-cols-3 gap-2">
+                    <button type="button" id="profilePhotoCropZoomOut" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800">Afastar</button>
+                    <button type="button" id="profilePhotoCropReset" class="inline-flex items-center justify-center rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm font-black text-sky-700 transition hover:bg-sky-100 dark:border-sky-900/70 dark:bg-sky-950/30 dark:text-sky-200 dark:hover:bg-sky-950/50">Centralizar</button>
+                    <button type="button" id="profilePhotoCropZoomIn" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800">Aproximar</button>
+                  </div>
+                  <p class="mt-3 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">No celular, também vale usar dois dedos para aproximar ou afastar.</p>
                   <div class="mt-5 flex flex-col gap-3">
                     <button type="button" id="profilePhotoCropApply" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Usar essa foto</button>
                     <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800" data-profile-photo-modal-close>Escolher outra depois</button>
@@ -892,13 +898,38 @@
     const stageImage = document.getElementById('profilePhotoCropImage');
     const previewCircle = document.getElementById('profilePhotoCropPreview');
     const zoom = document.getElementById('profilePhotoCropZoom');
+    const zoomOutButton = document.getElementById('profilePhotoCropZoomOut');
+    const zoomInButton = document.getElementById('profilePhotoCropZoomIn');
+    const resetButton = document.getElementById('profilePhotoCropReset');
     const applyButton = document.getElementById('profilePhotoCropApply');
     const modalCloseButtons = Array.from(document.querySelectorAll('[data-profile-photo-modal-close]'));
-    if (!form || !input || !submit || !previewWrap || !preview || !hint || !modal || !stage || !stageImage || !previewCircle || !zoom || !applyButton) return;
+    if (!form || !input || !submit || !previewWrap || !preview || !hint || !modal || !stage || !stageImage || !previewCircle || !zoom || !zoomOutButton || !zoomInButton || !resetButton || !applyButton) return;
 
     let cropState = null;
     let activeObjectUrl = '';
     let previewObjectUrl = '';
+
+    const clampZoomValue = (value) => Math.min(3, Math.max(1, Number(value || 1)));
+    const resetCropPosition = () => {
+      if (!cropState) return;
+      cropState.offsetX = 0;
+      cropState.offsetY = 0;
+      cropState.stagePointerId = null;
+      applyPhotoCropTransforms(cropState);
+    };
+    const setZoomValue = (value) => {
+      if (!cropState) return;
+      const nextZoom = clampZoomValue(value);
+      zoom.value = String(nextZoom);
+      cropState.scale = cropState.baseScale * nextZoom;
+      applyPhotoCropTransforms(cropState);
+    };
+    const syncModalInViewport = () => {
+      if (modal.classList.contains('hidden')) return;
+      requestAnimationFrame(() => {
+        modal.scrollTop = 0;
+      });
+    };
 
     const releaseObjectUrls = () => {
       if (activeObjectUrl) {
@@ -916,6 +947,13 @@
       modal.classList.add('hidden');
       modal.setAttribute('aria-hidden', 'true');
       document.body.classList.remove('overflow-hidden');
+      document.body.style.removeProperty('top');
+      document.body.style.removeProperty('position');
+      document.body.style.removeProperty('width');
+      if (document.body.dataset.profilePhotoScrollY) {
+        window.scrollTo({ top: Number(document.body.dataset.profilePhotoScrollY || 0), behavior: 'instant' in window ? 'instant' : 'auto' });
+        delete document.body.dataset.profilePhotoScrollY;
+      }
       if (cropState.stagePointerId !== undefined && cropState.stagePointerId !== null && stage.hasPointerCapture?.(cropState.stagePointerId)) {
         try { stage.releasePointerCapture(cropState.stagePointerId); } catch (_error) {}
       }
@@ -956,9 +994,17 @@
       };
       zoom.value = '1';
       applyPhotoCropTransforms(cropState);
+      if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+      }
+      document.body.dataset.profilePhotoScrollY = String(window.scrollY || window.pageYOffset || 0);
+      document.body.classList.add('overflow-hidden');
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${document.body.dataset.profilePhotoScrollY}px`;
+      document.body.style.width = '100%';
       modal.classList.remove('hidden');
       modal.setAttribute('aria-hidden', 'false');
-      document.body.classList.add('overflow-hidden');
+      syncModalInViewport();
     };
 
     const showPreview = (previewUrl, message) => {
@@ -990,11 +1036,50 @@
     });
 
     zoom.addEventListener('input', () => {
-      if (!cropState) return;
-      const zoomFactor = Math.max(1, Number(zoom.value || 1));
-      cropState.scale = cropState.baseScale * zoomFactor;
-      applyPhotoCropTransforms(cropState);
+      setZoomValue(zoom.value);
     });
+
+    zoomOutButton.addEventListener('click', () => {
+      setZoomValue(clampZoomValue(Number(zoom.value || 1) - 0.12));
+    });
+
+    zoomInButton.addEventListener('click', () => {
+      setZoomValue(clampZoomValue(Number(zoom.value || 1) + 0.12));
+    });
+
+    resetButton.addEventListener('click', () => {
+      setZoomValue(1);
+      resetCropPosition();
+    });
+
+    let pinchStartDistance = 0;
+    let pinchStartZoom = 1;
+    const getTouchDistance = (touches) => {
+      if (!touches || touches.length < 2) return 0;
+      const [first, second] = [touches[0], touches[1]];
+      const dx = second.clientX - first.clientX;
+      const dy = second.clientY - first.clientY;
+      return Math.hypot(dx, dy);
+    };
+
+    stage.addEventListener('touchstart', (event) => {
+      if (!cropState || event.touches.length < 2) return;
+      pinchStartDistance = getTouchDistance(event.touches);
+      pinchStartZoom = clampZoomValue(zoom.value);
+    }, { passive: true });
+
+    stage.addEventListener('touchmove', (event) => {
+      if (!cropState || event.touches.length < 2 || !pinchStartDistance) return;
+      const nextDistance = getTouchDistance(event.touches);
+      if (!nextDistance) return;
+      const ratio = nextDistance / pinchStartDistance;
+      setZoomValue(clampZoomValue(pinchStartZoom * ratio));
+    }, { passive: true });
+
+    stage.addEventListener('touchend', (event) => {
+      if (!cropState || event.touches.length >= 2) return;
+      pinchStartDistance = 0;
+    }, { passive: true });
 
     stage.addEventListener('pointerdown', (event) => {
       if (!cropState) return;

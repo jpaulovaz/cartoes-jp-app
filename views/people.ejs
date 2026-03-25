@@ -242,15 +242,16 @@
   </div>
 
   <% if (selfProfile) { %>
-    <section id="my-profile" class="scroll-mt-28 mb-8 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-      <div class="overflow-hidden rounded-[32px] border border-amber-200 bg-white shadow-sm dark:border-amber-900/50 dark:bg-slate-800">
-        <div class="relative overflow-hidden border-b border-amber-100 bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,0.24),transparent_45%),radial-gradient(circle_at_right,rgba(56,189,248,0.18),transparent_35%)] px-6 py-6 dark:border-amber-900/40 sm:px-8 sm:py-7">
+    <section id="my-profile" class="scroll-mt-28 mb-8 grid gap-6 xl:grid-cols-[minmax(0,1.03fr)_minmax(360px,0.97fr)] xl:items-stretch">
+
+      <div class="h-full overflow-hidden rounded-[32px] border border-amber-200 bg-white shadow-sm dark:border-amber-900/50 dark:bg-slate-800">
+        <div class="relative overflow-hidden border-b border-amber-100 bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,0.24),transparent_45%),radial-gradient(circle_at_right,rgba(56,189,248,0.18),transparent_35%)] px-5 py-5 dark:border-amber-900/40 sm:px-6 sm:py-6">
           <div class="pointer-events-none absolute inset-0 opacity-70 dark:opacity-40">
             <div class="absolute -left-10 top-0 h-28 w-28 rounded-full bg-amber-200/60 blur-3xl dark:bg-amber-500/20"></div>
             <div class="absolute right-0 top-6 h-24 w-24 rounded-full bg-sky-200/60 blur-3xl dark:bg-sky-500/20"></div>
           </div>
-          <div class="relative flex flex-col gap-6">
-            <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div class="relative flex flex-col gap-5">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div class="flex min-w-0 flex-1 gap-4">
                 <div class="relative h-20 w-20 shrink-0">
                   <% if (getAvatarUrl(selfProfile)) { %>
@@ -271,20 +272,20 @@
                 </div>
               </div>
 
-              <div class="grid grid-cols-2 gap-3 sm:w-[18rem]">
-                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+              <div class="grid grid-cols-2 gap-3 sm:w-[17rem] lg:shrink-0">
+                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
                   <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Amizades</div>
                   <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= activeFriendCount %></div>
                 </div>
-                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
                   <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Contatos</div>
                   <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= contactList.length %></div>
                 </div>
-                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
                   <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Convites</div>
                   <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= pendingContactCount %></div>
                 </div>
-                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
                   <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Pix pronto</div>
                   <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= selfProfile.pix_enabled && selfProfile.pix_valid ? 'Sim' : 'Não' %></div>
                 </div>
@@ -293,7 +294,7 @@
           </div>
         </div>
 
-        <form method="post" action="/people" id="selfIdentityForm" class="space-y-5 p-6 sm:p-8">
+        <form method="post" action="/people" id="selfIdentityForm" class="space-y-4 p-5 sm:p-6">
           <input type="hidden" name="id" id="selfPersonId" value="<%= selfProfile.id %>">
           <input type="hidden" name="profile_section" value="identity">
 
@@ -325,7 +326,7 @@
             </label>
           </div>
 
-          <div class="rounded-[24px] border border-sky-100 bg-sky-50/80 px-4 py-4 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20 dark:text-slate-300">
+          <div class="rounded-[24px] border border-sky-100 bg-sky-50/80 px-4 py-3.5 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20 dark:text-slate-300">
             Essas infos aparecem no clima de perfil: ajudam você a ser reconhecido nas divisões e deixam a conversa das cobranças com mais cara de gente de verdade, não de cadastro perdido no rolê.
           </div>
 
@@ -335,8 +336,8 @@
         </form>
       </div>
 
-      <div class="space-y-6">
-        <section id="profile-photo" class="rounded-[32px] border border-sky-200 bg-white p-6 shadow-sm dark:border-sky-900/50 dark:bg-slate-800 sm:p-7">
+      <div class="h-full">
+        <section id="profile-photo" class="flex h-full flex-col rounded-[32px] border border-sky-200 bg-white p-5 shadow-sm dark:border-sky-900/50 dark:bg-slate-800 sm:p-6">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Sua fotinha por aqui</div>
@@ -354,11 +355,11 @@
           <% const showUseDefaultButton = hasManualPhoto || (photoMode === 'none' && hasGoogleDefaultPhoto); %>
           <% const showRemoveButton = !!(selfProfile && selfProfile.photo_url); %>
 
-          <div class="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_14.5rem] lg:items-start">
+          <div class="mt-4 grid flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-stretch">
             <div class="grid gap-4">
-              <div class="rounded-[28px] border border-sky-100 bg-sky-50/70 p-4 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20">
+              <div class="rounded-[28px] border border-sky-100 bg-sky-50/70 p-5 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20">
                 <div class="flex items-center gap-4">
-                  <div class="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border-4 border-white bg-slate-200 shadow-lg dark:border-slate-900 dark:bg-slate-800">
+                  <div class="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border-4 border-white bg-slate-200 shadow-lg dark:border-slate-900 dark:bg-slate-800">
                     <% if (getAvatarUrl(selfProfile)) { %>
                       <img src="<%= getAvatarUrl(selfProfile) %>" alt="<%= selfProfile.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-full w-full object-cover">
                     <% } else { %>
@@ -387,7 +388,7 @@
               </form>
             </div>
 
-            <div class="flex w-full flex-col gap-3 lg:sticky lg:top-28">
+            <div class="flex w-full flex-col gap-3 lg:justify-end">
               <button form="profilePhotoForm" id="profilePhotoSubmit" type="submit" class="inline-flex min-h-[46px] items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60">Salvar foto</button>
               <% if (showUseDefaultButton) { %>
                 <form method="post" action="/people/profile-photo/use-default" class="w-full">
@@ -442,8 +443,9 @@
             </div>
           </div>
         </div>
+      </div>
 
-        <form method="post" action="/people" id="self-pix-config" class="rounded-[32px] border border-violet-200 bg-white p-6 shadow-sm dark:border-violet-900/50 dark:bg-slate-800 sm:p-7">
+      <form method="post" action="/people" id="self-pix-config" class="xl:col-span-2 rounded-[32px] border border-violet-200 bg-white p-5 shadow-sm dark:border-violet-900/50 dark:bg-slate-800 sm:p-6">
           <input type="hidden" name="id" value="<%= selfProfile.id %>">
           <input type="hidden" name="profile_section" value="pix">
 
@@ -462,91 +464,95 @@
             <% } %>
           </div>
 
-          <div class="mt-5 rounded-[26px] border border-violet-200/70 bg-violet-50/80 px-4 py-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20 sm:px-5">
-            <div class="flex items-start gap-3">
-              <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-violet-600 shadow-sm ring-1 ring-violet-100 dark:bg-slate-800 dark:text-violet-300 dark:ring-violet-900/50" aria-hidden="true">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1zm7 4h.01"></path></svg>
-              </span>
-              <div class="min-w-0 flex-1">
-                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600/80 dark:text-violet-300/80">Resumo atual</div>
-                <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
-                  <% if (selfProfile.pix_enabled) { %>
-                    <strong class="font-semibold text-slate-700 dark:text-slate-100"><%= (selfProfile.pix_key_type_label || 'Chave Pix') + ' · ' + (selfProfile.pix_masked_key || 'aguardando preenchimento') %></strong>.
-                    <% if (selfProfile.pix_city) { %>
-                      Cidade do Pix: <strong class="font-semibold text-slate-700 dark:text-slate-100"><%= selfProfile.pix_city %><%= selfProfile.pix_state ? ' / ' + selfProfile.pix_state : '' %></strong>.
-                    <% } %>
-                    Esse é o Pix que entra em cena quando você recebe cobranças por aqui.
-                  <% } else { %>
-                    Nenhuma chave salva por aqui ainda. Quando você ligar isso aqui, as cobranças já podem sair com o seu Pix sem correria depois.
-                  <% } %>
-                </p>
+          <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(280px,0.82fr)_minmax(0,1.18fr)] xl:items-start">
+            <div class="grid gap-4">
+              <div class="rounded-[26px] border border-violet-200/70 bg-violet-50/80 px-4 py-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20 sm:px-5">
+                <div class="flex items-start gap-3">
+                  <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-violet-600 shadow-sm ring-1 ring-violet-100 dark:bg-slate-800 dark:text-violet-300 dark:ring-violet-900/50" aria-hidden="true">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1zm7 4h.01"></path></svg>
+                  </span>
+                  <div class="min-w-0 flex-1">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600/80 dark:text-violet-300/80">Resumo atual</div>
+                    <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
+                      <% if (selfProfile.pix_enabled) { %>
+                        <strong class="font-semibold text-slate-700 dark:text-slate-100"><%= (selfProfile.pix_key_type_label || 'Chave Pix') + ' · ' + (selfProfile.pix_masked_key || 'aguardando preenchimento') %></strong>.
+                        <% if (selfProfile.pix_city) { %>
+                          Cidade do Pix: <strong class="font-semibold text-slate-700 dark:text-slate-100"><%= selfProfile.pix_city %><%= selfProfile.pix_state ? ' / ' + selfProfile.pix_state : '' %></strong>.
+                        <% } %>
+                        Esse é o Pix que entra em cena quando você recebe cobranças por aqui.
+                      <% } else { %>
+                        Nenhuma chave salva por aqui ainda. Quando você ligar isso aqui, as cobranças já podem sair com o seu Pix sem correria depois.
+                      <% } %>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+                <label class="flex cursor-pointer items-start gap-3">
+                  <input type="checkbox" name="pix_enabled" id="selfPixEnabled" value="1" class="mt-1 h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" <%= selfPixEnabled ? 'checked' : '' %>>
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-sm font-black text-slate-900 dark:text-white">Deixar Pix pronto por aqui</span>
+                    <span class="mt-1 block text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">A chave fica mascaradinha na lista e só aparece inteira quando alguém realmente for copiar o Pix.</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div class="grid gap-4">
+              <div class="grid gap-4 lg:grid-cols-2" data-self-pix-field>
+                <label class="block">
+                  <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Tipo da chave</span>
+                  <select name="pix_key_type" id="selfPixKeyType" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
+                    <option value="">Escolha um tipo</option>
+                    <option value="cpf" <%= selfPixKeyType === 'cpf' ? 'selected' : '' %>>CPF</option>
+                    <option value="cnpj" <%= selfPixKeyType === 'cnpj' ? 'selected' : '' %>>CNPJ</option>
+                    <option value="email" <%= selfPixKeyType === 'email' ? 'selected' : '' %>>E-mail</option>
+                    <option value="phone" <%= selfPixKeyType === 'phone' ? 'selected' : '' %>>Celular</option>
+                    <option value="evp" <%= selfPixKeyType === 'evp' ? 'selected' : '' %>>Chave aleatória</option>
+                  </select>
+                </label>
+
+                <label class="block">
+                  <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Chave Pix</span>
+                  <input name="pix_key_value" id="selfPixKeyValue" value="<%- selfPixKeyValueInput %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: 21999999999" inputmode="text" autocomplete="off">
+                  <p id="selfPixKeyHelp" class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.</p>
+                </label>
+              </div>
+
+              <div class="grid gap-4 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)]" data-self-pix-field>
+                <label class="block">
+                  <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estado</span>
+                  <select name="pix_state" id="selfPixState" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
+                    <% pixStateList.forEach((stateEntry) => { const stateCode = getPixStateCode(stateEntry); const stateLabel = getPixStateLabel(stateEntry); if (!stateCode) return; %>
+                      <option value="<%= stateCode %>" <%= selfPixState === stateCode ? 'selected' : '' %>><%= stateLabel %></option>
+                    <% }) %>
+                  </select>
+                </label>
+
+                <label class="block">
+                  <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Cidade</span>
+                  <input name="pix_city" id="selfPixCity" value="<%- selfPixCity %>" list="selfPixCitySuggestions" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Cidade do recebedor">
+                  <datalist id="selfPixCitySuggestions"></datalist>
+                </label>
+              </div>
+
+              <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                <label class="block" data-self-pix-field>
+                  <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nome que aparece no Pix</span>
+                  <input name="pix_label" id="selfPixLabel" value="<%- selfPixLabel %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: João - OrganizaPay">
+                </label>
+
+                <div class="grid gap-3 lg:justify-items-end">
+                  <div id="selfPixDormantHint" class="rounded-[24px] border border-dashed border-violet-200 bg-violet-50/70 px-4 py-4 text-sm font-medium leading-6 text-slate-600 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-slate-300 lg:max-w-[24rem] <%= selfPixEnabled ? 'hidden' : '' %>">
+                    Deixa desligado sem culpa nenhuma. Quando você quiser transformar cobranças em algo mais redondinho, é só ligar, preencher e salvar.
+                  </div>
+                  <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 sm:w-auto">Salvar meu Pix</button>
+                </div>
               </div>
             </div>
           </div>
-
-          <div class="mt-5 rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
-            <label class="flex cursor-pointer items-start gap-3">
-              <input type="checkbox" name="pix_enabled" id="selfPixEnabled" value="1" class="mt-1 h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" <%= selfPixEnabled ? 'checked' : '' %>>
-              <span class="min-w-0 flex-1">
-                <span class="block text-sm font-black text-slate-900 dark:text-white">Deixar Pix pronto por aqui</span>
-                <span class="mt-1 block text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">A chave fica mascaradinha na lista e só aparece inteira quando alguém realmente for copiar o Pix.</span>
-              </span>
-            </label>
-          </div>
-
-          <div class="mt-5 grid gap-4">
-            <div class="grid gap-4 md:grid-cols-2" data-self-pix-field>
-              <label class="block">
-                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Tipo da chave</span>
-                <select name="pix_key_type" id="selfPixKeyType" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
-                  <option value="">Escolha um tipo</option>
-                  <option value="cpf" <%= selfPixKeyType === 'cpf' ? 'selected' : '' %>>CPF</option>
-                  <option value="cnpj" <%= selfPixKeyType === 'cnpj' ? 'selected' : '' %>>CNPJ</option>
-                  <option value="email" <%= selfPixKeyType === 'email' ? 'selected' : '' %>>E-mail</option>
-                  <option value="phone" <%= selfPixKeyType === 'phone' ? 'selected' : '' %>>Celular</option>
-                  <option value="evp" <%= selfPixKeyType === 'evp' ? 'selected' : '' %>>Chave aleatória</option>
-                </select>
-              </label>
-
-              <label class="block">
-                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Chave Pix</span>
-                <input name="pix_key_value" id="selfPixKeyValue" value="<%- selfPixKeyValueInput %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: 21999999999" inputmode="text" autocomplete="off">
-                <p id="selfPixKeyHelp" class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.</p>
-              </label>
-            </div>
-
-            <div class="grid gap-4 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)]" data-self-pix-field>
-              <label class="block">
-                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estado</span>
-                <select name="pix_state" id="selfPixState" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
-                  <% pixStateList.forEach((stateEntry) => { const stateCode = getPixStateCode(stateEntry); const stateLabel = getPixStateLabel(stateEntry); if (!stateCode) return; %>
-                    <option value="<%= stateCode %>" <%= selfPixState === stateCode ? 'selected' : '' %>><%= stateLabel %></option>
-                  <% }) %>
-                </select>
-              </label>
-
-              <label class="block">
-                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Cidade</span>
-                <input name="pix_city" id="selfPixCity" value="<%- selfPixCity %>" list="selfPixCitySuggestions" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Cidade do recebedor">
-                <datalist id="selfPixCitySuggestions"></datalist>
-              </label>
-            </div>
-
-            <label class="block" data-self-pix-field>
-              <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nome que aparece no Pix</span>
-              <input name="pix_label" id="selfPixLabel" value="<%- selfPixLabel %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: João - OrganizaPay">
-            </label>
-
-            <div id="selfPixDormantHint" class="rounded-[24px] border border-dashed border-violet-200 bg-violet-50/70 px-4 py-4 text-sm font-medium leading-6 text-slate-600 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-slate-300 <%= selfPixEnabled ? 'hidden' : '' %>">
-              Deixa desligado sem culpa nenhuma. Quando você quiser transformar cobranças em algo mais redondinho, é só ligar, preencher e salvar.
-            </div>
-          </div>
-
-          <div class="mt-6 flex flex-wrap justify-end gap-3">
-            <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700">Salvar meu Pix</button>
-          </div>
         </form>
-      </div>
     </section>
   <% } %>
 
@@ -610,8 +616,9 @@
   <% } %>
 
   <section id="network-lounge" class="scroll-mt-28 mb-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
-    <div class="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
-      <div id="contactComposerCard" class="rounded-[30px] border border-sky-200 bg-sky-50/70 p-5 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/20 sm:p-6">
+    <div class="grid gap-6 xl:grid-cols-[minmax(0,1.02fr)_minmax(340px,0.98fr)] xl:items-stretch">
+
+      <div id="contactComposerCard" class="flex h-full flex-col rounded-[30px] border border-sky-200 bg-sky-50/70 p-5 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/20 sm:p-6">
         <div class="flex flex-wrap items-center gap-2">
           <div id="contactFormEyebrow" class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Adicionar à sua rede</div>
           <span id="contactEditingBadge" class="hidden inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-bold text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">Modo edição</span>
@@ -619,7 +626,7 @@
         <h2 id="contactFormTitle" class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Quem vai entrar nessa roda?</h2>
         <p id="contactFormHint" class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Salva nome, telefone e e-mail. Se essa pessoa também usa o app, o convite de amizade entra depois e o Pix continua sendo cuidado por ela, no perfil dela.</p>
 
-        <form method="post" action="/people" id="contactForm" class="mt-6 flex flex-col gap-4">
+        <form method="post" action="/people" id="contactForm" class="mt-5 flex flex-col gap-3">
           <input type="hidden" name="id" id="contactPersonId">
 
           <div class="w-full relative">
@@ -645,30 +652,32 @@
             </div>
           </div>
 
-          <div class="rounded-[24px] border border-violet-200 bg-violet-50/70 px-4 py-4 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/20 sm:px-5">
-            <div class="flex items-start gap-3">
-              <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-violet-600 shadow-sm ring-1 ring-violet-100 dark:bg-slate-800 dark:text-violet-300 dark:ring-violet-900/50" aria-hidden="true">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1zm7 4h.01"></path></svg>
-              </span>
-              <div class="min-w-0 flex-1">
-                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Pix da outra pessoa</div>
-                <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Você não precisa cadastrar a chave Pix de ninguém por aqui. Quando a amizade estiver ativa e rolar pagamento, o app usa o Pix que a própria pessoa deixou no perfil dela.</p>
+          <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+            <div class="rounded-[24px] border border-violet-200 bg-violet-50/70 px-4 py-3.5 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/20 sm:px-5">
+              <div class="flex items-start gap-3">
+                <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-violet-600 shadow-sm ring-1 ring-violet-100 dark:bg-slate-800 dark:text-violet-300 dark:ring-violet-900/50" aria-hidden="true">
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1zm7 4h.01"></path></svg>
+                </span>
+                <div class="min-w-0 flex-1">
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Pix da outra pessoa</div>
+                  <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Você não precisa cadastrar a chave Pix de ninguém por aqui. Quando a amizade estiver ativa e rolar pagamento, o app usa o Pix que a própria pessoa deixou no perfil dela.</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-            <button type="button" id="contactBtnCancel" onclick="resetContactForm()" class="hidden w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto">Cancelar</button>
-            <button type="submit" id="contactBtnSubmit" class="inline-flex w-full items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 sm:w-auto">
-              <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-              Salvar contato
-            </button>
+            <div class="flex flex-col gap-3 sm:flex-row xl:flex-col 2xl:flex-row xl:justify-end">
+              <button type="button" id="contactBtnCancel" onclick="resetContactForm()" class="hidden w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto">Cancelar</button>
+              <button type="submit" id="contactBtnSubmit" class="inline-flex w-full items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 sm:w-auto">
+                <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Salvar contato
+              </button>
+            </div>
           </div>
         </form>
       </div>
 
-      <div class="space-y-4">
-        <section class="rounded-[30px] border border-slate-200 bg-slate-50/80 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:p-6">
+      <div class="h-full">
+        <section class="flex h-full flex-col justify-between rounded-[30px] border border-slate-200 bg-slate-50/80 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:p-6">
           <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Radar da rede</div>
           <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Como está sua turma hoje</h3>
           <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Um resumão rápido para você sacar onde a sua rede está bombando e onde ainda tem gente só no modo contato.</p>
@@ -695,12 +704,17 @@
               <div class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">guardados localmente</div>
             </div>
           </div>
+          <div class="mt-4 rounded-[24px] border border-violet-200/70 bg-violet-50/70 px-4 py-3.5 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20">
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Pix pronto na turma</div>
+            <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><strong class="font-black text-slate-900 dark:text-white"><%= readyPixNetworkCount %></strong> amizade<%= readyPixNetworkCount === 1 ? "" : "s" %> já tem Pix redondinho do outro lado para quando pintar pagamento.</p>
+          </div>
         </section>
+      </div>
 
-        <section class="rounded-[30px] border border-violet-200 bg-violet-50/70 p-5 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/20 sm:p-6">
+      <section class="xl:col-span-2 rounded-[30px] border border-violet-200 bg-violet-50/70 p-5 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/20 sm:p-6">
           <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Como essa rede funciona</div>
           <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Três passos, zero confusão</h3>
-          <div class="mt-5 grid gap-3">
+          <div class="mt-5 grid gap-3 lg:grid-cols-3">
             <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
               <div class="text-sm font-black text-slate-900 dark:text-white">1. Salve o contato</div>
               <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Nome, telefone e e-mail já dão conta do recado para essa pessoa entrar na sua rede.</p>
@@ -715,7 +729,6 @@
             </div>
           </div>
         </section>
-      </div>
     </div>
   </section>
 

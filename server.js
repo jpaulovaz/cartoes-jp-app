@@ -12719,6 +12719,16 @@ function resolveMerchantFromDescription(description, userRules = []) {
   };
 }
 
+function getRelativeMonthYear(month, year, offset) {
+  const baseMonth = Number(month || 1);
+  const baseYear = Number(year || 1970);
+  const date = new Date(Date.UTC(baseYear, Math.max(0, baseMonth - 1) + Number(offset || 0), 1));
+  return {
+    month: date.getUTCMonth() + 1,
+    year: date.getUTCFullYear()
+  };
+}
+
 function getSummaryMerchantRanking(userId, month, year, limit = 6) {
   const rows = db.prepare(`
     SELECT t.id, t.description, t.amount_cents
@@ -12772,14 +12782,41 @@ function getSummaryMerchantRanking(userId, month, year, limit = 6) {
   const learnedCount = ranking.filter((item) => item.source === 'user-rule').length;
   const totalCents = ranking.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
   const visible = ranking.slice(0, Math.max(1, Number(limit || 6)));
+  const previousRef = getRelativeMonthYear(month, year, -1);
+  const previousRows = db.prepare(`
+    SELECT t.id, t.description, t.amount_cents
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+      AND t.amount_cents > 0
+    ORDER BY t.amount_cents DESC, t.id DESC
+  `).all(userId, previousRef.month, previousRef.year, previousRef.month, previousRef.year);
+  const previousGrouped = new Map();
+  previousRows.forEach((row) => {
+    const merchant = resolveMerchantFromDescription(row.description, userRules);
+    const key = merchant.normalizedLabel || normalizeMerchantText(merchant.label) || 'sem estabelecimento definido';
+    previousGrouped.set(key, (previousGrouped.get(key) || 0) + Number(row.amount_cents || 0));
+  });
 
   return {
-    ranking: visible.map((item, index) => ({
-      ...item,
-      position: index + 1,
-      share_pct: totalCents > 0 ? Math.round((Number(item.total_cents || 0) / totalCents) * 100) : 0,
-      avg_ticket_cents: Number(item.txn_count || 0) > 0 ? Math.round(Number(item.total_cents || 0) / Number(item.txn_count || 1)) : 0
-    })),
+    ranking: visible.map((item, index) => {
+      const previousTotalCents = Number(previousGrouped.get(item.id) || 0);
+      const deltaCents = Number(item.total_cents || 0) - previousTotalCents;
+      const deltaPct = previousTotalCents > 0 ? Math.round((deltaCents / previousTotalCents) * 100) : null;
+      return {
+        ...item,
+        position: index + 1,
+        share_pct: totalCents > 0 ? Math.round((Number(item.total_cents || 0) / totalCents) * 100) : 0,
+        avg_ticket_cents: Number(item.txn_count || 0) > 0 ? Math.round(Number(item.total_cents || 0) / Number(item.txn_count || 1)) : 0,
+        previous_total_cents: previousTotalCents,
+        delta_cents: deltaCents,
+        delta_pct: deltaPct
+      };
+    }),
     totalCents,
     merchantCount: ranking.length,
     recognizedCount,

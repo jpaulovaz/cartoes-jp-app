@@ -167,7 +167,7 @@
         <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h3 class="text-lg font-black text-slate-900 dark:text-white">Ranking de estabelecimentos</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Os lugares que mais apareceram no mês e quanto cada um puxou do bolso. Abriu aqui, já dá para caçar o campeão sem passar pela inteligência.</p>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Aqui mora o pódio do mês: quem mais apareceu, quem puxou mais grana e quem subiu ou respirou em relação ao mês passado.</p>
           </div>
           <div class="flex flex-wrap items-center gap-2 sm:justify-end">
             <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Leitura por nome</span>
@@ -180,8 +180,101 @@
         <div class="mt-4" data-summary-ranking-panel <%= merchantRankingDefaultOpen ? '' : 'hidden' %>>
         <% if (merchantRanking.length > 0) { %>
           <% const merchantMaxTotal = merchantRanking.reduce((best, item) => Math.max(best, Number(item.total_cents || 0)), 0); %>
+          <% const rankingPodium = merchantRanking.slice(0, 3); %>
+          <% const rankingRest = merchantRanking.slice(3); %>
+          <% const medalMeta = {
+            1: { emoji: '🥇', label: 'Ouro do mês', border: 'border-amber-200 dark:border-amber-700', bg: 'bg-amber-50/90 dark:bg-amber-900/20', chip: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-100' },
+            2: { emoji: '🥈', label: 'Prata valente', border: 'border-slate-300 dark:border-slate-600', bg: 'bg-slate-50/90 dark:bg-slate-800/80', chip: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100' },
+            3: { emoji: '🥉', label: 'Bronze na cola', border: 'border-orange-200 dark:border-orange-700', bg: 'bg-orange-50/90 dark:bg-orange-900/20', chip: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-100' }
+          }; %>
+          <% const rankingLeader = merchantRanking[0]; %>
+
+          <div class="rounded-[24px] border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-emerald-50 p-5 shadow-sm dark:border-amber-800 dark:from-amber-900/25 dark:via-slate-900 dark:to-emerald-900/20">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div class="min-w-0 flex-1">
+                <div class="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-amber-800 dark:bg-amber-900/50 dark:text-amber-100">🏆 Campeão do mês</div>
+                <div class="mt-3 flex flex-wrap items-center gap-2">
+                  <h4 class="text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= rankingLeader.label %></h4>
+                  <span class="inline-flex items-center rounded-full border border-amber-200 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:border-amber-700 dark:bg-slate-900/60 dark:text-amber-200"><%= rankingLeader.share_pct || 0 %>% do mês</span>
+                </div>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">Esse aqui levou a taça da gastança no período. Se quiser investigar de perto, é só tocar no card dele logo abaixo.</p>
+                <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  <span><%= rankingLeader.txn_count || 0 %> compra<%= Number(rankingLeader.txn_count || 0) === 1 ? '' : 's' %></span>
+                  <span class="hidden sm:inline">·</span>
+                  <span>ticket médio de <%= formatBRLFromCents(rankingLeader.avg_ticket_cents || 0) %></span>
+                  <% if (rankingLeader.delta_pct !== null && rankingLeader.delta_pct !== undefined) { %>
+                    <span class="hidden sm:inline">·</span>
+                    <span class="font-bold <%= Number(rankingLeader.delta_cents || 0) > 0 ? 'text-rose-600 dark:text-rose-300' : Number(rankingLeader.delta_cents || 0) < 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-600 dark:text-slate-300' %>"><%= Number(rankingLeader.delta_cents || 0) > 0 ? 'Subiu' : Number(rankingLeader.delta_cents || 0) < 0 ? 'Respirou' : 'Ficou estável' %> <%= Math.abs(Number(rankingLeader.delta_pct || 0)) %>% vs mês passado</span>
+                  <% } else { %>
+                    <span class="hidden sm:inline">·</span>
+                    <span class="font-bold text-slate-600 dark:text-slate-300">Primeira aparição forte por aqui</span>
+                  <% } %>
+                </div>
+              </div>
+              <div class="rounded-[22px] border border-white/70 bg-white/80 px-5 py-4 text-left shadow-sm dark:border-slate-700 dark:bg-slate-900/60 lg:min-w-[220px] lg:text-right">
+                <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Total no mês</div>
+                <div class="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(rankingLeader.total_cents || 0) %></div>
+                <div class="mt-2 text-xs font-semibold <%= Number(rankingLeader.delta_cents || 0) > 0 ? 'text-rose-600 dark:text-rose-300' : Number(rankingLeader.delta_cents || 0) < 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400' %>">
+                  <% if (rankingLeader.delta_pct !== null && rankingLeader.delta_pct !== undefined) { %>
+                    <%= Number(rankingLeader.delta_cents || 0) > 0 ? '▲' : Number(rankingLeader.delta_cents || 0) < 0 ? '▼' : '•' %>
+                    <%= Number(rankingLeader.delta_cents || 0) > 0 ? '+' : '' %><%= formatBRLFromCents(rankingLeader.delta_cents || 0) %> no comparativo
+                  <% } else { %>
+                    Ainda sem base para comparar esse craque.
+                  <% } %>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 grid gap-3 lg:grid-cols-3">
+            <% rankingPodium.forEach((merchant) => { %>
+              <% const merchantHref = merchant.search_term ? `/month/${year}/${month}?${new URLSearchParams({ f_desc: String(merchant.search_term || '').trim() }).toString()}` : null; %>
+              <% const medal = medalMeta[merchant.position] || medalMeta[3]; %>
+              <% const merchantSample = merchant.sample_descriptions && merchant.sample_descriptions.length ? merchant.sample_descriptions[0] : ''; %>
+              <% const cardClass = `group rounded-[24px] border p-4 transition duration-200 ${medal.border} ${medal.bg} ${merchantHref ? 'block hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-400' : 'block'}`; %>
+              <% if (merchantHref) { %>
+              <a href="<%= merchantHref %>" class="<%= cardClass %>" aria-label="Abrir compras de <%= merchant.label %>">
+              <% } else { %>
+              <div class="<%= cardClass %>">
+              <% } %>
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0 flex-1">
+                    <div class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] <%= medal.chip %>">
+                      <span><%= medal.emoji %></span>
+                      <span><%= medal.label %></span>
+                    </div>
+                    <div class="mt-3 truncate text-lg font-black text-slate-900 dark:text-white"><%= merchant.label %></div>
+                  </div>
+                  <span class="inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-full bg-slate-900 px-2 text-sm font-black text-white dark:bg-slate-100 dark:text-slate-900">#<%= merchant.position %></span>
+                </div>
+                <div class="mt-4 text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(merchant.total_cents || 0) %></div>
+                <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= merchant.share_pct || 0 %>% do mês · <%= merchant.txn_count || 0 %> compra<%= Number(merchant.txn_count || 0) === 1 ? '' : 's' %></div>
+                <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
+                  <span class="inline-flex items-center rounded-full border border-white/80 bg-white/80 px-2.5 py-1 text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">ticket médio <%= formatBRLFromCents(merchant.avg_ticket_cents || 0) %></span>
+                  <% if (merchant.delta_pct !== null && merchant.delta_pct !== undefined) { %>
+                    <span class="inline-flex items-center rounded-full border px-2.5 py-1 <%= Number(merchant.delta_cents || 0) > 0 ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/30 dark:text-rose-200' : Number(merchant.delta_cents || 0) < 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200' %>">
+                      <%= Number(merchant.delta_cents || 0) > 0 ? '▲' : Number(merchant.delta_cents || 0) < 0 ? '▼' : '•' %>
+                      <span class="ml-1"><%= Math.abs(Number(merchant.delta_pct || 0)) %>% vs mês passado</span>
+                    </span>
+                  <% } else { %>
+                    <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200">estreia no radar</span>
+                  <% } %>
+                </div>
+                <% if (merchantSample) { %>
+                  <p class="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">Exemplo lido: <span class="font-semibold text-slate-700 dark:text-slate-200"><%= merchantSample %></span></p>
+                <% } %>
+                <div class="mt-3 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 opacity-0 transition group-hover:opacity-100 dark:text-emerald-300"><%= merchantHref ? 'Toque para abrir as compras desse nome' : 'Só leitura nessa rodada' %></div>
+              <% if (merchantHref) { %>
+              </a>
+              <% } else { %>
+              </div>
+              <% } %>
+            <% }) %>
+          </div>
+
+          <% if (rankingRest.length > 0) { %>
           <div class="mt-4 space-y-3">
-            <% merchantRanking.forEach((merchant) => { %>
+            <% rankingRest.forEach((merchant) => { %>
               <% const widthPct = merchantMaxTotal > 0 ? Math.max(8, Math.round((Number(merchant.total_cents || 0) / merchantMaxTotal) * 100)) : 8; %>
               <% const merchantHref = merchant.search_term ? `/month/${year}/${month}?${new URLSearchParams({ f_desc: String(merchant.search_term || '').trim() }).toString()}` : null; %>
               <% const merchantSample = merchant.sample_descriptions && merchant.sample_descriptions.length ? merchant.sample_descriptions[0] : ''; %>
@@ -201,6 +294,15 @@
                       <span><%= merchant.txn_count || 0 %> compra<%= Number(merchant.txn_count || 0) === 1 ? '' : 's' %></span>
                       <span class="hidden sm:inline">·</span>
                       <span>ticket médio de <%= formatBRLFromCents(merchant.avg_ticket_cents || 0) %></span>
+                      <% if (merchant.delta_pct !== null && merchant.delta_pct !== undefined) { %>
+                        <span class="hidden sm:inline">·</span>
+                        <span class="font-bold <%= Number(merchant.delta_cents || 0) > 0 ? 'text-rose-600 dark:text-rose-300' : Number(merchant.delta_cents || 0) < 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-600 dark:text-slate-300' %>">
+                          <%= Number(merchant.delta_cents || 0) > 0 ? 'Subiu' : Number(merchant.delta_cents || 0) < 0 ? 'Respirou' : 'Ficou estável' %> <%= Math.abs(Number(merchant.delta_pct || 0)) %>%
+                        </span>
+                      <% } else { %>
+                        <span class="hidden sm:inline">·</span>
+                        <span class="font-bold text-slate-600 dark:text-slate-300">estreia no radar</span>
+                      <% } %>
                       <% if (merchant.confidence === 'high') { %>
                         <span class="hidden sm:inline">·</span>
                         <span class="font-bold text-emerald-700 dark:text-emerald-300">nome reconhecido</span>
@@ -215,6 +317,13 @@
                   </div>
                   <div class="text-left lg:ml-4 lg:min-w-[160px] lg:text-right">
                     <div class="text-lg font-black tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(merchant.total_cents || 0) %></div>
+                    <div class="mt-1 text-[11px] font-bold uppercase tracking-[0.18em] <%= Number(merchant.delta_cents || 0) > 0 ? 'text-rose-600 dark:text-rose-300' : Number(merchant.delta_cents || 0) < 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400' %>">
+                      <% if (merchant.delta_pct !== null && merchant.delta_pct !== undefined) { %>
+                        <%= Number(merchant.delta_cents || 0) > 0 ? '▲' : Number(merchant.delta_cents || 0) < 0 ? '▼' : '•' %> <%= Number(merchant.delta_cents || 0) > 0 ? '+' : '' %><%= formatBRLFromCents(merchant.delta_cents || 0) %>
+                      <% } else { %>
+                        primeira aparição forte
+                      <% } %>
+                    </div>
                     <div class="mt-1 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 opacity-0 transition group-hover:opacity-100 dark:text-emerald-300"><%= merchantHref ? 'Abrir compras desse nome' : 'Só leitura nessa rodada' %></div>
                   </div>
                 </div>
@@ -225,6 +334,7 @@
               <% } %>
             <% }) %>
           </div>
+          <% } %>
         <% } else { %>
           <div class="mt-4 flex min-h-[180px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não apareceu compra suficiente para montar esse ranking. Assim que o mês ganhar movimento, essa área entra em cena.</div>
         <% } %>

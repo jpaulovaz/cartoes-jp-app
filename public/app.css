@@ -5193,3 +5193,23 @@ html[data-theme-style="orgulho"] .op-screen--month .op-month-selection-toolbar,
 html.dark[data-theme-style="orgulho"] .op-screen--month .op-month-selection-toolbar {
   position: fixed;
 }
+
+/* Force the month bulk-action toolbar to stay pinned in the viewport on Orgulho theme. */
+html[data-theme-style="orgulho"] .op-screen--month > #monthSelectionToolbar.op-month-selection-toolbar,
+html.dark[data-theme-style="orgulho"] .op-screen--month > #monthSelectionToolbar.op-month-selection-toolbar {
+  position: fixed !important;
+  left: 1rem !important;
+  right: 1rem !important;
+  bottom: calc(var(--op-mobile-bottom-clearance, 5.75rem) + 0.75rem) !important;
+  z-index: 70 !important;
+}
+
+@media (min-width: 768px) {
+  html[data-theme-style="orgulho"] .op-screen--month > #monthSelectionToolbar.op-month-selection-toolbar,
+  html.dark[data-theme-style="orgulho"] .op-screen--month > #monthSelectionToolbar.op-month-selection-toolbar {
+    left: 50% !important;
+    right: auto !important;
+    bottom: 1.5rem !important;
+    width: min(760px, calc(100vw - 3rem)) !important;
+  }
+}

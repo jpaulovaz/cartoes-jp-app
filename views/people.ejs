@@ -253,15 +253,14 @@
             <h3 class="mt-2 text-lg font-black text-slate-900 dark:text-white">Seu rosto no crachá do app</h3>
             <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando você coloca uma foto, ela aparece no topo do app e nas divisões de compra. Se não tiver foto, o ícone do OrganizaPay continua firme no cabeçalho.</p>
           </div>
-          <div id="profile-photo" class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] scroll-mt-28">
-            <form method="post" action="/people/profile-photo" enctype="multipart/form-data" class="flex flex-col gap-3" id="profilePhotoForm">
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <input id="profilePhotoInput" type="file" name="profile_photo" accept="image/png,image/jpeg,image/webp,image/gif" class="block w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm file:mr-3 file:rounded-xl file:border-0 file:bg-sky-100 file:px-3 file:py-2 file:font-bold file:text-sky-700 hover:file:bg-sky-200 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-200 dark:file:bg-sky-900/40 dark:file:text-sky-200">
-                <button id="profilePhotoSubmit" type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60">Salvar foto</button>
-              </div>
-              <div class="rounded-2xl border border-sky-200/80 bg-white/80 p-3 text-xs font-medium leading-5 text-slate-600 shadow-sm dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-slate-300">
-                Você escolhe a foto, ajusta no capricho e eu subo ela leve, certinha e pronta para ficar bonita no celular, PWA e desktop.
-              </div>
+          <% const hasGoogleDefaultPhoto = !!(selfProfile && selfProfile.google_photo_url); %>
+          <% const photoMode = (selfProfile && selfProfile.profile_photo_mode) || 'default'; %>
+          <% const hasManualPhoto = photoMode === 'manual' && !!(selfProfile && selfProfile.profile_photo_url); %>
+          <% const showUseDefaultButton = hasManualPhoto || (photoMode === 'none' && hasGoogleDefaultPhoto); %>
+          <% const showRemoveButton = !!(selfProfile && selfProfile.photo_url); %>
+          <div id="profile-photo" class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_13rem] lg:items-start scroll-mt-28">
+            <form method="post" action="/people/profile-photo" enctype="multipart/form-data" class="min-w-0 space-y-3" id="profilePhotoForm">
+              <input id="profilePhotoInput" type="file" name="profile_photo" accept="image/png,image/jpeg,image/webp,image/gif" class="block w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm file:mr-3 file:rounded-xl file:border-0 file:bg-sky-100 file:px-3 file:py-2 file:font-bold file:text-sky-700 hover:file:bg-sky-200 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-200 dark:file:bg-sky-900/40 dark:file:text-sky-200">
               <div id="profilePhotoPreviewWrap" class="hidden items-center gap-3 rounded-2xl border border-sky-200/80 bg-sky-50/70 px-4 py-3 dark:border-sky-900/60 dark:bg-sky-950/20">
                 <img id="profilePhotoPreview" alt="Prévia da sua foto" class="h-14 w-14 rounded-full object-cover ring-2 ring-sky-200 dark:ring-sky-800/70">
                 <div class="min-w-0 flex-1">
@@ -269,19 +268,29 @@
                   <p id="profilePhotoHint" class="mt-1 text-sm font-medium leading-5 text-slate-600 dark:text-slate-300">Escolheu? Aí é só salvar que ela sobe lindona.</p>
                 </div>
               </div>
+              <div class="rounded-2xl border border-sky-200/80 bg-white/80 p-3 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-slate-300">
+                Escolha uma foto com calma, ajuste do seu jeitinho e depois salve. Aí ela fica bonita no app inteiro.
+              </div>
             </form>
-            <% if (selfProfile.photo_url) { %>
-              <form method="post" action="/people/profile-photo/remove">
-                <button type="submit" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Tirar foto daqui</button>
-              </form>
-            <% } %>
+            <div class="flex w-full flex-col items-stretch gap-3 lg:w-52 lg:justify-start">
+              <button form="profilePhotoForm" id="profilePhotoSubmit" type="submit" class="inline-flex min-h-[46px] items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60">Salvar foto</button>
+              <% if (showUseDefaultButton) { %>
+                <form method="post" action="/people/profile-photo/default" class="w-full">
+                  <button type="submit" class="inline-flex min-h-[46px] w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Usar foto padrão</button>
+                </form>
+              <% } %>
+              <% if (showRemoveButton) { %>
+                <form method="post" action="/people/profile-photo/remove" class="w-full">
+                  <button type="submit" class="inline-flex min-h-[46px] w-full items-center justify-center rounded-2xl border border-rose-200 bg-rose-50/70 px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-100/80 dark:border-rose-900/70 dark:bg-rose-950/20 dark:text-rose-200 dark:hover:bg-rose-950/35">Tirar foto daqui</button>
+                </form>
+              <% } %>
+            </div>
           </div>
         </section>
 
-        <div id="profilePhotoCropModal" class="fixed inset-0 z-[120] hidden" aria-hidden="true">
+        <div id="profilePhotoCropModal" class="fixed inset-0 z-[120] hidden items-center justify-center overflow-y-auto p-4 sm:p-6" aria-hidden="true">
           <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" data-profile-photo-modal-close></div>
-          <div class="relative flex min-h-full items-center justify-center p-4 sm:p-6">
-            <div class="w-full max-w-3xl rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+          <div class="relative my-auto w-full max-w-3xl rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
               <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Ajuste sua fotinha</div>
@@ -900,6 +909,10 @@
     let activeObjectUrl = '';
     let previewObjectUrl = '';
 
+    if (modal.parentElement !== document.body) {
+      document.body.appendChild(modal);
+    }
+
     const releaseObjectUrls = () => {
       if (activeObjectUrl) {
         URL.revokeObjectURL(activeObjectUrl);
@@ -914,6 +927,7 @@
     const closeModal = () => {
       if (!cropState) return;
       modal.classList.add('hidden');
+      modal.classList.remove('flex');
       modal.setAttribute('aria-hidden', 'true');
       document.body.classList.remove('overflow-hidden');
       if (cropState.stagePointerId !== undefined && cropState.stagePointerId !== null && stage.hasPointerCapture?.(cropState.stagePointerId)) {
@@ -957,6 +971,7 @@
       zoom.value = '1';
       applyPhotoCropTransforms(cropState);
       modal.classList.remove('hidden');
+      modal.classList.add('flex');
       modal.setAttribute('aria-hidden', 'false');
       document.body.classList.add('overflow-hidden');
     };

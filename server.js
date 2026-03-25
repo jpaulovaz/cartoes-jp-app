@@ -1953,7 +1953,7 @@ function getUserRecord(userId, { includeDeleted = true } = {}) {
   if (!safeUserId) return null;
   return db.prepare(`
     SELECT id, email, name, role, can_import, created_at, last_login,
-           google_id, google_photo_url, profile_photo_url,
+           google_id, google_photo_url, profile_photo_url, profile_photo_mode,
            COALESCE(status, 'active') AS status, deleted_at, deleted_label
     FROM users
     WHERE id = ? ${includeDeleted ? '' : "AND COALESCE(status, 'active') <> 'deleted'"}
@@ -2955,7 +2955,7 @@ function normalizeProfilePhotoMode(value) {
 function looksLikeGoogleDefaultAvatar(value) {
   const raw = normalizeProfilePhotoUrl(value);
   if (!raw || !/googleusercontent\.com/i.test(raw)) return false;
-  return /(?:\/a\/default-user|=s\d+-c$|\/a-\/AOh14|\/a\/AAcHTte|\/a\/ACg8ocK)/i.test(raw);
+  return /(?:\/a\/default-user|\/a\/default-user=|\/a\/default-user-|[?&]default=1)/i.test(raw);
 }
 
 function extractGoogleProfilePhotoUrl(profile) {

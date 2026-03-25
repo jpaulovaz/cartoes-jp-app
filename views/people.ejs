@@ -31,7 +31,7 @@
     const source = String((person && person.name) || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
     return source.length ? source.map((part) => part.charAt(0).toUpperCase()).join('') : 'OP';
   };
-  const googlePhotoLooksReal = !!(selfProfile && selfProfile.google_photo_url && !String(selfProfile.google_photo_url).match(/(?:\/a\/default-user|=s\d+-c$|\/a-\/AOh14|\/a\/AAcHTte|\/a\/ACg8ocK)/i));
+  const googlePhotoLooksReal = !!(selfProfile && selfProfile.google_photo_url && !String(selfProfile.google_photo_url).match(/(?:\/a\/default-user|\/a\/default-user=|\/a\/default-user-|[?&]default=1\b)/i));
   const hasManualProfilePhoto = !!(selfProfile && selfProfile.profile_photo_url);
   const effectiveProfilePhotoMode = String((selfProfile && selfProfile.profile_photo_mode) || 'default');
 

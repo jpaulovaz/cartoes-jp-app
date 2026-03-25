@@ -1243,7 +1243,8 @@
 
         const displayName = (person.is_self || String(person.profile_kind || '').toLowerCase() === 'self' || person.is_owner) ? 'Eu' : String(person.name || '').trim();
         const photoUrl = getParticipantPhotoUrlClient(person);
-        const initials = String(displayName || person.name || 'OP').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || 'OP';
+        const initialsSource = String(person.name || displayName || 'OP').trim();
+        const initials = initialsSource.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || 'OP';
 
         const card = document.createElement('span');
         card.className = 'flex min-h-[96px] flex-col items-center justify-center gap-2 rounded-[20px] border border-slate-200/80 bg-white/90 px-3 py-3 text-center shadow-sm transition-all group-hover:border-blue-300 group-hover:shadow-md peer-checked:border-blue-500 peer-checked:bg-blue-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/60 dark:group-hover:border-blue-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/35';
@@ -1256,12 +1257,6 @@
           avatar.referrerPolicy = 'no-referrer';
           avatar.className = 'h-12 w-12 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700';
           card.appendChild(avatar);
-        } else if (person.is_self) {
-          const avatarAppIcon = document.createElement('img');
-          avatarAppIcon.src = '/icon-192.png';
-          avatarAppIcon.alt = 'OrganizaPay';
-          avatarAppIcon.className = 'h-12 w-12 rounded-[1rem] object-cover ring-2 ring-slate-200 dark:ring-slate-700';
-          card.appendChild(avatarAppIcon);
         } else {
           const avatarFallback = document.createElement('span');
           avatarFallback.className = 'inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-sm font-black text-slate-700 dark:bg-slate-800 dark:text-slate-100';

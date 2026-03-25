@@ -31,6 +31,9 @@
     const source = String((person && person.name) || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
     return source.length ? source.map((part) => part.charAt(0).toUpperCase()).join('') : 'OP';
   };
+  const googlePhotoLooksReal = !!(selfProfile && selfProfile.google_photo_url && !String(selfProfile.google_photo_url).match(/(?:\/a\/default-user|=s\d+-c$|\/a-\/AOh14|\/a\/AAcHTte|\/a\/ACg8ocK)/i));
+  const hasManualProfilePhoto = !!(selfProfile && selfProfile.profile_photo_url);
+  const effectiveProfilePhotoMode = String((selfProfile && selfProfile.profile_photo_mode) || 'default');
 
   const renderPersonStatusChips = (person) => {
     const chips = [];
@@ -199,7 +202,7 @@
               <% if (getAvatarUrl(selfProfile)) { %>
                 <img src="<%= getAvatarUrl(selfProfile) %>" alt="<%= selfProfile.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-14 w-14 rounded-full object-cover ring-2 ring-amber-200 dark:ring-amber-800/70">
               <% } else { %>
-                <img src="/icon-192.png" alt="OrganizaPay" class="h-14 w-14 rounded-[1.15rem] object-cover shadow-sm ring-2 ring-amber-200 dark:ring-amber-800/70">
+                <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-base font-black text-amber-700 ring-2 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:ring-amber-800/70"><%= getAvatarInitials(selfProfile) %></span>
               <% } %>
               <span class="absolute -top-2 -right-2 text-xl drop-shadow-sm" title="Seu perfil">👑</span>
             </div>
@@ -251,7 +254,7 @@
           <div>
             <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Sua fotinha por aqui</div>
             <h3 class="mt-2 text-lg font-black text-slate-900 dark:text-white">Seu rosto no crachá do app</h3>
-            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando você coloca uma foto, ela aparece no topo do app e nas divisões de compra. Se não tiver foto, o ícone do OrganizaPay continua firme no cabeçalho.</p>
+            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando você coloca uma foto, ela aparece no topo do app e nas divisões de compra. Se não tiver foto, o cabeçalho segura o ícone do OrganizaPay e o resto do app segue com suas iniciais.</p>
           </div>
           <div id="profile-photo" class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] scroll-mt-28">
             <form method="post" action="/people/profile-photo" enctype="multipart/form-data" class="flex flex-col gap-3" id="profilePhotoForm">
@@ -271,14 +274,24 @@
               </div>
             </form>
             <div class="flex flex-col gap-3">
-              <% if (selfProfile.profile_photo_url || selfProfile.photo_url) { %>
+              <% if (hasManualProfilePhoto) { %>
+                <form method="post" action="/people/profile-photo/use-default">
+                  <button type="submit" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"><%= googlePhotoLooksReal ? 'Usar foto padrão' : 'Voltar para o padrão' %></button>
+                </form>
+                <form method="post" action="/people/profile-photo/remove">
+                  <button type="submit" class="w-full rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition-all hover:bg-red-100 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/40">Excluir foto</button>
+                </form>
+              <% } else if (googlePhotoLooksReal && effectiveProfilePhotoMode !== 'none') { %>
                 <form method="post" action="/people/profile-photo/remove">
                   <button type="submit" class="w-full rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition-all hover:bg-red-100 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/40">Remover foto</button>
                 </form>
-              <% } %>
-              <% if ((selfProfile.google_photo_url && !String(selfProfile.google_photo_url).match(/(?:\/a\/default-user|=s\d+-c$|\/a-\/AOh14|\/a\/AAcHTte|\/a\/ACg8ocK)/i)) || selfProfile.profile_photo_mode === 'none' || selfProfile.profile_photo_url) { %>
+              <% } else if (googlePhotoLooksReal && effectiveProfilePhotoMode === 'none') { %>
                 <form method="post" action="/people/profile-photo/use-default">
-                  <button type="submit" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Usar padrão do app</button>
+                  <button type="submit" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Usar foto padrão</button>
+                </form>
+              <% } else if (hasManualProfilePhoto) { %>
+                <form method="post" action="/people/profile-photo/remove">
+                  <button type="submit" class="w-full rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition-all hover:bg-red-100 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/40">Excluir foto</button>
                 </form>
               <% } %>
             </div>

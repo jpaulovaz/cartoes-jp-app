@@ -447,6 +447,23 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_txn_recurring_rule ON transacti
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_recurring_rules_user_status ON recurring_rules(user_id, status)").run(); } catch (e) { }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_recurring_exceptions_user_rule_month ON recurring_exceptions(user_id, rule_id, year, month)").run(); } catch (e) { }
 
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS merchant_learning_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    normalized_pattern TEXT NOT NULL,
+    merchant_label TEXT NOT NULL,
+    search_term TEXT,
+    source_sample TEXT,
+    status TEXT NOT NULL DEFAULT 'confirmed',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(user_id, normalized_pattern),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_merchant_learning_feedback_user_status ON merchant_learning_feedback(user_id, status, updated_at DESC)").run(); } catch (e) { }
+
 const { parseCsvByCardName } = require("./src/importers");
 const { formatBRLFromCents, parseMonthYear, toISOFromBRDate, centsFromPtBrMoney } = require("./src/utils");
 const {
@@ -12558,7 +12575,90 @@ function humanizeMerchantLabel(value) {
     .trim();
 }
 
-function resolveMerchantFromDescription(description) {
+function buildMerchantTextTokens(normalized) {
+  if (!normalized) return [];
+  const cleaned = normalized
+    .replace(/compra(?:\s+no)?/g, ' ')
+    .replace(/debito/g, ' ')
+    .replace(/credito/g, ' ')
+    .replace(/parcela(?:do)?/g, ' ')
+    .replace(/pagamento/g, ' ')
+    .replace(/transacao/g, ' ')
+    .replace(/pix/g, ' ')
+    .replace(/elo/g, ' ')
+    .replace(/mastercard/g, ' ')
+    .replace(/visa/g, ' ')
+    .replace(/deb/g, ' ')
+    .replace(/cred/g, ' ')
+    .replace(/online/g, ' ')
+    .replace(/app/g, ' ')
+    .replace(/marketplace/g, ' ')
+    .replace(/brasil/g, ' ')
+    .replace(/sao/g, ' ')
+    .replace(/paulo/g, ' ')
+    .replace(/sp/g, ' ')
+    .replace(/rj/g, ' ')
+    .replace(/mg/g, ' ')
+    .replace(/curitiba/g, ' ')
+    .replace(/belo\s+horizonte/g, ' ')
+    .replace(/porto\s+alegre/g, ' ')
+    .replace(/recife/g, ' ')
+    .replace(/fortaleza/g, ' ')
+    .replace(/salvador/g, ' ')
+    .replace(/\d+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const stopwords = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'para', 'na', 'no', 'com', 'sem', 'por', 'via']);
+  return cleaned.split(' ').filter((token) => token.length >= 2 && !stopwords.has(token));
+}
+
+function buildMerchantPatternFromDescription(description) {
+  const normalized = normalizeMerchantText(description);
+  const tokens = buildMerchantTextTokens(normalized);
+  return tokens.slice(0, 2).join(' ').trim();
+}
+
+function getMerchantLearningRules(userId) {
+  return db.prepare(`
+    SELECT normalized_pattern, merchant_label, search_term, source_sample, status, updated_at
+    FROM merchant_learning_feedback
+    WHERE user_id = ?
+    ORDER BY updated_at DESC, id DESC
+  `).all(userId).map((row) => ({
+    normalizedPattern: normalizeMerchantText(row.normalized_pattern),
+    merchantLabel: String(row.merchant_label || '').trim(),
+    searchTerm: String(row.search_term || '').trim(),
+    sourceSample: String(row.source_sample || '').trim(),
+    status: String(row.status || 'confirmed').trim().toLowerCase(),
+    updatedAt: row.updated_at
+  })).filter((row) => row.normalizedPattern && row.merchantLabel);
+}
+
+function upsertMerchantLearningFeedback(userId, { normalizedPattern, merchantLabel, searchTerm = '', sourceSample = '', status = 'confirmed' }) {
+  const pattern = normalizeMerchantText(normalizedPattern);
+  const label = humanizeMerchantLabel(merchantLabel) || 'Estabelecimento sugerido';
+  const safeSearchTerm = normalizeMerchantText(searchTerm).split(' ').slice(0, 3).join(' ');
+  if (!pattern) {
+    const error = new Error('Padrão de agrupamento inválido.');
+    error.status = 400;
+    throw error;
+  }
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO merchant_learning_feedback (
+      user_id, normalized_pattern, merchant_label, search_term, source_sample, status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, normalized_pattern) DO UPDATE SET
+      merchant_label = excluded.merchant_label,
+      search_term = excluded.search_term,
+      source_sample = excluded.source_sample,
+      status = excluded.status,
+      updated_at = excluded.updated_at
+  `).run(userId, pattern, label, safeSearchTerm, String(sourceSample || '').trim(), String(status || 'confirmed'), now, now);
+}
+
+function resolveMerchantFromDescription(description, userRules = []) {
   const raw = String(description || '').trim();
   const normalized = normalizeMerchantText(raw);
   if (!normalized) {
@@ -12567,8 +12667,24 @@ function resolveMerchantFromDescription(description) {
       normalizedLabel: 'sem estabelecimento definido',
       searchTerm: '',
       confidence: 'empty',
-      raw
+      raw,
+      source: 'empty'
     };
+  }
+
+  for (const rule of userRules) {
+    if (rule.status !== 'confirmed') continue;
+    const normalizedPattern = normalizeMerchantText(rule.normalizedPattern || rule.normalized_pattern);
+    if (normalizedPattern && normalized.includes(normalizedPattern)) {
+      return {
+        label: rule.merchantLabel,
+        normalizedLabel: normalizeMerchantText(rule.merchantLabel),
+        searchTerm: rule.searchTerm || normalizedPattern,
+        confidence: 'high',
+        raw,
+        source: 'user-rule'
+      };
+    }
   }
 
   for (const rule of MERCHANT_KEYWORD_RULES) {
@@ -12582,43 +12698,13 @@ function resolveMerchantFromDescription(description) {
         normalizedLabel: normalizeMerchantText(rule.label),
         searchTerm: rule.searchTerm,
         confidence: 'high',
-        raw
+        raw,
+        source: 'keyword-rule'
       };
     }
   }
 
-  const cleaned = normalized
-    .replace(/\bcompra(?:\s+no)?\b/g, ' ')
-    .replace(/\bdebito\b/g, ' ')
-    .replace(/\bcredito\b/g, ' ')
-    .replace(/\bparcela(?:do)?\b/g, ' ')
-    .replace(/\bpagamento\b/g, ' ')
-    .replace(/\btransacao\b/g, ' ')
-    .replace(/\bpix\b/g, ' ')
-    .replace(/\belo\b/g, ' ')
-    .replace(/\bmastercard\b/g, ' ')
-    .replace(/\bvisa\b/g, ' ')
-    .replace(/\bdeb\b/g, ' ')
-    .replace(/\bcred\b/g, ' ')
-    .replace(/\bonline\b/g, ' ')
-    .replace(/\bbrasil\b/g, ' ')
-    .replace(/\bsao\b/g, ' ')
-    .replace(/\bpaulo\b/g, ' ')
-    .replace(/\bsp\b/g, ' ')
-    .replace(/\brj\b/g, ' ')
-    .replace(/\bmg\b/g, ' ')
-    .replace(/\bcuritiba\b/g, ' ')
-    .replace(/\bbelo\s+horizonte\b/g, ' ')
-    .replace(/\bporto\s+alegre\b/g, ' ')
-    .replace(/\brecife\b/g, ' ')
-    .replace(/\bfortaleza\b/g, ' ')
-    .replace(/\bsalvador\b/g, ' ')
-    .replace(/\d+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  const stopwords = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'para', 'na', 'no', 'com', 'sem', 'por', 'via']);
-  const tokens = cleaned.split(' ').filter((token) => token.length >= 2 && !stopwords.has(token));
+  const tokens = buildMerchantTextTokens(normalized);
   const baseTokens = tokens.slice(0, 3);
   const fallbackLabel = humanizeMerchantLabel(baseTokens.join(' ')) || humanizeMerchantLabel(normalized.split(' ').slice(0, 3).join(' ')) || 'Estabelecimento variado';
   const searchTerm = baseTokens.slice(0, 2).join(' ') || normalized.split(' ').slice(0, 2).join(' ');
@@ -12628,7 +12714,8 @@ function resolveMerchantFromDescription(description) {
     normalizedLabel: normalizeMerchantText(fallbackLabel),
     searchTerm,
     confidence: baseTokens.length >= 1 ? 'medium' : 'low',
-    raw
+    raw,
+    source: 'fallback'
   };
 }
 
@@ -12646,10 +12733,11 @@ function getSummaryMerchantRanking(userId, month, year, limit = 6) {
     ORDER BY t.amount_cents DESC, t.id DESC
   `).all(userId, month, year, month, year);
 
+  const userRules = getMerchantLearningRules(userId);
   const grouped = new Map();
 
   rows.forEach((row) => {
-    const merchant = resolveMerchantFromDescription(row.description);
+    const merchant = resolveMerchantFromDescription(row.description, userRules);
     const key = merchant.normalizedLabel || normalizeMerchantText(merchant.label) || 'sem estabelecimento definido';
     const current = grouped.get(key) || {
       id: key,
@@ -12658,6 +12746,7 @@ function getSummaryMerchantRanking(userId, month, year, limit = 6) {
       total_cents: 0,
       txn_count: 0,
       confidence: merchant.confidence,
+      source: merchant.source,
       sample_descriptions: []
     };
     current.total_cents += Number(row.amount_cents || 0);
@@ -12668,6 +12757,7 @@ function getSummaryMerchantRanking(userId, month, year, limit = 6) {
     }
     if (!current.search_term && merchant.searchTerm) current.search_term = merchant.searchTerm;
     if (current.confidence !== 'high' && merchant.confidence === 'high') current.confidence = 'high';
+    if (current.source !== 'user-rule' && merchant.source === 'user-rule') current.source = 'user-rule';
     grouped.set(key, current);
   });
 
@@ -12679,6 +12769,7 @@ function getSummaryMerchantRanking(userId, month, year, limit = 6) {
     });
 
   const recognizedCount = ranking.filter((item) => item.confidence === 'high').length;
+  const learnedCount = ranking.filter((item) => item.source === 'user-rule').length;
   const totalCents = ranking.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
   const visible = ranking.slice(0, Math.max(1, Number(limit || 6)));
 
@@ -12692,6 +12783,7 @@ function getSummaryMerchantRanking(userId, month, year, limit = 6) {
     totalCents,
     merchantCount: ranking.length,
     recognizedCount,
+    learnedCount,
     totalTransactions: rows.length,
     topMerchant: ranking[0]
       ? {
@@ -12701,6 +12793,75 @@ function getSummaryMerchantRanking(userId, month, year, limit = 6) {
         }
       : null
   };
+}
+
+function getSummaryMerchantSuggestions(userId, month, year, limit = 4) {
+  const rows = db.prepare(`
+    SELECT t.id, t.description, t.amount_cents
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+      AND t.amount_cents > 0
+    ORDER BY t.amount_cents DESC, t.id DESC
+  `).all(userId, month, year, month, year);
+
+  const userRules = getMerchantLearningRules(userId);
+  const blockedPatterns = new Set(
+    userRules
+      .filter((rule) => rule.status !== 'confirmed')
+      .map((rule) => normalizeMerchantText(rule.normalizedPattern || rule.normalized_pattern))
+      .filter(Boolean)
+  );
+  const confirmedPatterns = new Set(
+    userRules
+      .filter((rule) => rule.status === 'confirmed')
+      .map((rule) => normalizeMerchantText(rule.normalizedPattern || rule.normalized_pattern))
+      .filter(Boolean)
+  );
+
+  const grouped = new Map();
+  rows.forEach((row) => {
+    const merchant = resolveMerchantFromDescription(row.description, userRules);
+    if (merchant.source !== 'fallback' || merchant.confidence !== 'medium') return;
+    const pattern = buildMerchantPatternFromDescription(row.description);
+    if (!pattern || pattern.length < 4 || blockedPatterns.has(pattern) || confirmedPatterns.has(pattern)) return;
+    const key = `${pattern}::${merchant.normalizedLabel}`;
+    const current = grouped.get(key) || {
+      pattern,
+      label: merchant.label,
+      normalizedLabel: merchant.normalizedLabel,
+      search_term: merchant.searchTerm || pattern,
+      total_cents: 0,
+      txn_count: 0,
+      sample_descriptions: []
+    };
+    current.total_cents += Number(row.amount_cents || 0);
+    current.txn_count += 1;
+    const sample = String(row.description || '').trim();
+    if (sample && current.sample_descriptions.length < 3 && !current.sample_descriptions.includes(sample)) {
+      current.sample_descriptions.push(sample);
+    }
+    grouped.set(key, current);
+  });
+
+  return Array.from(grouped.values())
+    .filter((item) => item.txn_count >= 2 || item.total_cents >= 5000)
+    .sort((a, b) => {
+      const totalDiff = Number(b.total_cents || 0) - Number(a.total_cents || 0);
+      if (totalDiff !== 0) return totalDiff;
+      return Number(b.txn_count || 0) - Number(a.txn_count || 0);
+    })
+    .slice(0, Math.max(1, Number(limit || 4)))
+    .map((item, index) => ({
+      ...item,
+      position: index + 1,
+      preview_label: humanizeMerchantLabel(item.pattern),
+      sample_description: item.sample_descriptions[0] || ''
+    }));
 }
 
 function getSummaryMonthlyTrend(userId, month, year, monthsBack = 5) {
@@ -12736,6 +12897,7 @@ function buildSummaryChartsPayload({ userId, month, year, cardsPanel = [], perso
   const categories = getSummaryCategoryDistribution(userId, month, year);
   const monthlyTrend = getSummaryMonthlyTrend(userId, month, year, 5);
   const merchantIntel = getSummaryMerchantRanking(userId, month, year, 6);
+  const merchantSuggestions = getSummaryMerchantSuggestions(userId, month, year, 4);
   const totalSpentCents = cardsPanel.reduce((acc, item) => acc + Number(item?.total_cents || 0), 0);
   const totalPaidCardsCents = cardsPanel.reduce((acc, item) => acc + Number(item?.paid_cents || 0), 0);
   const totalRemainingCardsCents = cardsPanel.reduce((acc, item) => acc + (Number(item?.total_cents || 0) - Number(item?.paid_cents || 0)), 0);
@@ -12796,6 +12958,8 @@ function buildSummaryChartsPayload({ userId, month, year, cardsPanel = [], perso
       trackedCategories: categories.length,
       merchantCount: merchantIntel.merchantCount,
       recognizedMerchantCount: merchantIntel.recognizedCount,
+      learnedMerchantCount: merchantIntel.learnedCount,
+      merchantSuggestionCount: merchantSuggestions.length,
       topMerchant: merchantIntel.topMerchant
         ? {
             label: merchantIntel.topMerchant.label,
@@ -12807,7 +12971,8 @@ function buildSummaryChartsPayload({ userId, month, year, cardsPanel = [], perso
           }
         : null
     },
-    establishments: merchantIntel.ranking
+    establishments: merchantIntel.ranking,
+    establishmentSuggestions: merchantSuggestions
   };
 }
 
@@ -12949,6 +13114,68 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
     previousSummaryRef,
     nextSummaryRef
   });
+});
+
+app.post("/summary/:year/:month/merchant-suggestions/confirm", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+  const normalizedPattern = buildMerchantPatternFromDescription(req.body.pattern || req.body.sample_description || '');
+  const merchantLabel = humanizeMerchantLabel(req.body.label || req.body.preview_label || '');
+  const searchTerm = normalizeMerchantText(req.body.search_term || normalizedPattern).split(' ').slice(0, 3).join(' ');
+  const sourceSample = String(req.body.sample_description || '').trim();
+
+  if (!normalizedPattern || !merchantLabel) {
+    setFlash(req, 'error', 'A sugestão veio meio sem molho. Tenta de novo que a gente organiza.');
+    return res.redirect(`/summary/${year}/${month}`);
+  }
+
+  try {
+    upsertMerchantLearningFeedback(userId, {
+      normalizedPattern,
+      merchantLabel,
+      searchTerm,
+      sourceSample,
+      status: 'confirmed'
+    });
+    setFlash(req, 'success', `Fechou! Agora "${merchantLabel}" entra no radar desse jeitinho.`);
+  } catch (error) {
+    setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui salvar essa confirmação agora.' }).message);
+  }
+
+  return res.redirect(`/summary/${year}/${month}`);
+});
+
+app.post("/summary/:year/:month/merchant-suggestions/dismiss", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+  const normalizedPattern = buildMerchantPatternFromDescription(req.body.pattern || req.body.sample_description || '');
+  const merchantLabel = humanizeMerchantLabel(req.body.label || req.body.preview_label || 'Agrupamento adiado');
+  const searchTerm = normalizeMerchantText(req.body.search_term || normalizedPattern).split(' ').slice(0, 3).join(' ');
+  const sourceSample = String(req.body.sample_description || '').trim();
+
+  if (!normalizedPattern) {
+    setFlash(req, 'error', 'Essa sugestão escapou sem pista suficiente para ser adiada.');
+    return res.redirect(`/summary/${year}/${month}`);
+  }
+
+  try {
+    upsertMerchantLearningFeedback(userId, {
+      normalizedPattern,
+      merchantLabel,
+      searchTerm,
+      sourceSample,
+      status: 'dismissed'
+    });
+    setFlash(req, 'success', 'Sugestão guardada na geladeira. A gente não insiste nela por enquanto.');
+  } catch (error) {
+    setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui guardar essa decisão agora.' }).message);
+  }
+
+  return res.redirect(`/summary/${year}/${month}`);
 });
 
 app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {

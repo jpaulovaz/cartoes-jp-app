@@ -24,6 +24,7 @@
     <% const graphSectionDefaultOpen = true; %>
     <% const merchantRanking = summaryCharts && Array.isArray(summaryCharts.establishments) ? summaryCharts.establishments : []; %>
     <% const merchantTop = graphInsights && graphInsights.topMerchant ? graphInsights.topMerchant : null; %>
+    <% const merchantSuggestions = summaryCharts && Array.isArray(summaryCharts.establishmentSuggestions) ? summaryCharts.establishmentSuggestions : []; %>
     <section class="mb-8 op-surface-card rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6" data-summary-graphs-root data-summary-year="<%= year %>" data-summary-month="<%= month %>" data-summary-graphs-ready="false">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
@@ -195,13 +196,68 @@
         <div class="rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
           <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Estabelecimentos mapeados</div>
           <div class="mt-2 text-xl font-black tracking-tight text-violet-900 dark:text-violet-100"><%= Number(graphInsights?.merchantCount || 0) %> leitura<%= Number(graphInsights?.merchantCount || 0) === 1 ? '' : 's' %> no radar</div>
-          <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Dessas, <span class="font-bold"><%= Number(graphInsights?.recognizedMerchantCount || 0) %></span> vieram de agrupamentos mais certeiros por palavra-chave. O resto entrou no modo prudente, sem forçar apelido onde não precisava.</p>
+          <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Dessas, <span class="font-bold"><%= Number(graphInsights?.recognizedMerchantCount || 0) %></span> vieram de agrupamentos mais certeiros por palavra-chave. <% if (Number(graphInsights?.learnedMerchantCount || 0) > 0) { %><span class="font-bold"><%= Number(graphInsights?.learnedMerchantCount || 0) %></span> já aprenderam com as suas confirmações.<% } else { %>O resto entrou no modo prudente, sem forçar apelido onde não precisava.<% } %></p>
         </div>
         <div class="rounded-[24px] border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
           <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Jeito de usar</div>
           <div class="mt-2 text-xl font-black tracking-tight text-amber-900 dark:text-amber-100">Ranking clicável e sem drama</div>
           <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80">Tocou num estabelecimento? A gente abre o mês já com a descrição filtrada, para você investigar sem ficar pescando compra na unha.</p>
         </div>
+      </div>
+
+      <div class="mt-5 rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 class="text-lg font-black text-slate-900 dark:text-white">Sugestões para você confirmar</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Essa é a camada da Fase 2: o app sugere, você dá o veredito. Nada de sair batizando compra sem a sua bênção.</p>
+          </div>
+          <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-300"><%= merchantSuggestions.length %> sugest<%= merchantSuggestions.length === 1 ? 'ão' : 'ões' %> no balcão</span>
+        </div>
+
+        <% if (merchantSuggestions.length > 0) { %>
+          <div class="mt-4 grid gap-3 lg:grid-cols-2">
+            <% merchantSuggestions.forEach((suggestion) => { %>
+              <div class="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Sugestão #<%= suggestion.position %></div>
+                    <div class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white"><%= suggestion.label %></div>
+                    <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">Padrão detectado: <span class="font-bold text-slate-700 dark:text-slate-200"><%= suggestion.preview_label || suggestion.pattern %></span></p>
+                  </div>
+                  <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300"><%= suggestion.txn_count %> compra<%= Number(suggestion.txn_count || 0) === 1 ? '' : 's' %></span>
+                </div>
+                <div class="mt-3 rounded-2xl border border-dashed border-slate-300 bg-white/80 px-3 py-3 text-xs leading-5 text-slate-600 dark:border-slate-600 dark:bg-slate-900/50 dark:text-slate-300">
+                  Exemplo lido: <span class="font-semibold text-slate-800 dark:text-slate-100"><%= suggestion.sample_description || 'Sem exemplo nessa rodada' %></span>
+                </div>
+                <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                  <span>Total visto: <span class="font-bold text-slate-800 dark:text-slate-100"><%= formatBRLFromCents(suggestion.total_cents || 0) %></span></span>
+                  <span class="hidden sm:inline">·</span>
+                  <span>Busca pronta: <span class="font-bold text-slate-800 dark:text-slate-100"><%= suggestion.search_term || suggestion.pattern %></span></span>
+                </div>
+                <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <form method="POST" action="/summary/<%= year %>/<%= month %>/merchant-suggestions/confirm" class="flex-1">
+                    <input type="hidden" name="pattern" value="<%= suggestion.pattern %>">
+                    <input type="hidden" name="label" value="<%= suggestion.label %>">
+                    <input type="hidden" name="preview_label" value="<%= suggestion.preview_label || '' %>">
+                    <input type="hidden" name="search_term" value="<%= suggestion.search_term || '' %>">
+                    <input type="hidden" name="sample_description" value="<%= suggestion.sample_description || '' %>">
+                    <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-emerald-700">Confirmar agrupamento</button>
+                  </form>
+                  <form method="POST" action="/summary/<%= year %>/<%= month %>/merchant-suggestions/dismiss" class="sm:w-auto">
+                    <input type="hidden" name="pattern" value="<%= suggestion.pattern %>">
+                    <input type="hidden" name="label" value="<%= suggestion.label %>">
+                    <input type="hidden" name="preview_label" value="<%= suggestion.preview_label || '' %>">
+                    <input type="hidden" name="search_term" value="<%= suggestion.search_term || '' %>">
+                    <input type="hidden" name="sample_description" value="<%= suggestion.sample_description || '' %>">
+                    <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Agora não</button>
+                  </form>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Nesse mês a lupa não encontrou sugestões novas dignas de confirmação. Quando surgir padrão com cara de repeteco, ele aparece aqui para você decidir sem chute.</div>
+        <% } %>
       </div>
 
       <div class="mt-5 rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">

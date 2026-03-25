@@ -5,6 +5,13 @@
     return !!person && (String(person.profile_kind || "").toLowerCase() === "self" || Number(person.is_owner || 0) !== 0 || !!person.is_self);
   }
 
+  function getParticipantPhotoUrl(person) {
+    if (!person) return '';
+    if (person.photo_url) return String(person.photo_url);
+    if (person.linked_user_photo_url) return String(person.linked_user_photo_url);
+    return '';
+  }
+
   function getParticipantDisplayName(person) {
     if (!person) return "";
     return isSelfParticipant(person) ? "Eu" : String(person.name || "").trim();
@@ -733,7 +740,7 @@
       month: <%= month %>,
       year: <%= year %>,
       isClosed: <%- JSON.stringify(!!isClosed) %>,
-      people: <%- JSON.stringify(sortedPeopleForSelection.map(p => ({ id: Number(p.id), name: p.name, is_owner: !!p.is_owner, is_self: !!p.is_self, profile_kind: p.profile_kind || '' }))).replace(/</g, '\u003c') %>,
+      people: <%- JSON.stringify(sortedPeopleForSelection.map(p => ({ id: Number(p.id), name: p.name, is_owner: !!p.is_owner, is_self: !!p.is_self, profile_kind: p.profile_kind || '', photo_url: p.photo_url || '', linked_user_photo_url: p.linked_user_photo_url || '' }))).replace(/</g, '\u003c') %>,
       cards: <%- JSON.stringify((cards || []).map(card => ({ id: Number(card.id), name: card.name, close_day: card.close_day || '', due_day: card.due_day || '' }))).replace(/</g, '\\u003c') %>,
       purchaseCategories: <%- JSON.stringify(sortedActivePurchaseCategories.map(category => ({ id: Number(category.id), name: category.name }))).replace(/</g, '\u003c') %>,
       txns: <%- JSON.stringify((txns || []).map(t => ({
@@ -1227,19 +1234,38 @@
         input.className = 'peer sr-only';
         input.checked = checked;
 
+        const displayName = (person.is_self || String(person.profile_kind || '').toLowerCase() === 'self' || person.is_owner) ? 'Eu' : String(person.name || '').trim();
+        const photoUrl = getParticipantPhotoUrl(person);
+        const initials = String(displayName || person.name || 'OP').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || 'OP';
+
         const card = document.createElement('span');
-        card.className = 'flex min-h-[58px] items-center gap-2 rounded-[18px] border border-slate-200/80 bg-white/90 px-3 py-2.5 shadow-sm transition-all group-hover:border-blue-300 group-hover:shadow-md peer-checked:border-blue-500 peer-checked:bg-blue-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/60 dark:group-hover:border-blue-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/35';
+        card.className = 'flex min-h-[96px] flex-col items-center justify-center gap-2 rounded-[20px] border border-slate-200/80 bg-white/90 px-3 py-3 text-center shadow-sm transition-all group-hover:border-blue-300 group-hover:shadow-md peer-checked:border-blue-500 peer-checked:bg-blue-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/60 dark:group-hover:border-blue-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/35';
+
+        if (photoUrl) {
+          const avatar = document.createElement('img');
+          avatar.src = photoUrl;
+          avatar.alt = displayName || 'Pessoa';
+          avatar.loading = 'lazy';
+          avatar.referrerPolicy = 'no-referrer';
+          avatar.className = 'h-12 w-12 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700';
+          card.appendChild(avatar);
+        } else {
+          const avatarFallback = document.createElement('span');
+          avatarFallback.className = 'inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-sm font-black text-slate-700 dark:bg-slate-800 dark:text-slate-100';
+          avatarFallback.textContent = initials;
+          card.appendChild(avatarFallback);
+        }
 
         const name = document.createElement('span');
-        name.className = 'min-w-0 flex-1 text-sm font-bold leading-5 text-slate-800 dark:text-slate-100';
-        name.textContent = (person.is_self || String(person.profile_kind || '').toLowerCase() === 'self' || person.is_owner) ? 'Eu' : person.name;
+        name.className = 'min-w-0 text-sm font-black leading-5 text-slate-800 dark:text-slate-100';
+        name.textContent = displayName || 'Pessoa';
 
-        const badge = document.createElement('span');
-        badge.className = 'inline-flex h-8 w-8 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 transition-all peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 dark:peer-checked:text-white';
-        badge.innerHTML = '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+        const hint = document.createElement('span');
+        hint.className = 'text-[11px] font-semibold text-slate-500 dark:text-slate-400';
+        hint.textContent = displayName === 'Eu' ? 'Seu perfil' : 'Entra na divisão';
 
         card.appendChild(name);
-        card.appendChild(badge);
+        card.appendChild(hint);
         label.appendChild(input);
         label.appendChild(card);
         return label;

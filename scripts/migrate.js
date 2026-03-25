@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS users (
   status TEXT NOT NULL DEFAULT 'active',
   deleted_at TEXT,
   deleted_label TEXT,
+  google_photo_url TEXT,
+  profile_photo_url TEXT,
   created_at TEXT NOT NULL,
   last_login TEXT
 );
@@ -36,6 +38,14 @@ if (!columnExists("users", "deleted_at")) {
 
 if (!columnExists("users", "deleted_label")) {
   db.exec("ALTER TABLE users ADD COLUMN deleted_label TEXT;");
+}
+
+if (!columnExists("users", "profile_photo_url")) {
+  db.exec("ALTER TABLE users ADD COLUMN profile_photo_url TEXT;");
+}
+
+if (!columnExists("users", "google_photo_url")) {
+  db.exec("ALTER TABLE users ADD COLUMN google_photo_url TEXT;");
 }
 
 // ===== TABELAS EXISTENTES COM user_id =====

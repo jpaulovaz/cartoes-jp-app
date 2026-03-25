@@ -26,6 +26,11 @@
   const selfPixState = selfProfile?.pix_state || pixStateDefault;
   const selfPixCity = selfProfile?.pix_city || pixCityDefault;
   const selfPixLabel = selfProfile?.pix_label || '';
+  const getAvatarUrl = (person) => person && person.photo_url ? String(person.photo_url) : (person && person.linked_user_photo_url && person.friendship_active ? String(person.linked_user_photo_url) : '');
+  const getAvatarInitials = (person) => {
+    const source = String((person && person.name) || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    return source.length ? source.map((part) => part.charAt(0).toUpperCase()).join('') : 'OP';
+  };
 
   const renderPersonStatusChips = (person) => {
     const chips = [];
@@ -190,8 +195,12 @@
       <div class="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div class="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
           <div class="flex items-start gap-4">
-            <div class="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xl font-black text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
-              <%= selfProfile.name.charAt(0).toUpperCase() %>
+            <div class="relative h-14 w-14 shrink-0">
+              <% if (getAvatarUrl(selfProfile)) { %>
+                <img src="<%= getAvatarUrl(selfProfile) %>" alt="<%= selfProfile.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-14 w-14 rounded-full object-cover ring-2 ring-amber-200 dark:ring-amber-800/70">
+              <% } else { %>
+                <div class="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-xl font-black text-amber-700 dark:bg-amber-900/30 dark:text-amber-200"><%= getAvatarInitials(selfProfile) %></div>
+              <% } %>
               <span class="absolute -top-2 -right-2 text-xl drop-shadow-sm" title="Seu perfil">👑</span>
             </div>
             <div class="min-w-0 flex-1">
@@ -236,6 +245,31 @@
             </div>
           </div>
         </div>
+
+        <div class="space-y-4">
+        <section class="rounded-[28px] border border-sky-200 bg-sky-50/80 p-5 shadow-sm dark:border-sky-900/70 dark:bg-sky-950/20 sm:p-6">
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Sua fotinha por aqui</div>
+              <h3 class="mt-2 text-lg font-black text-slate-900 dark:text-white">Seu rosto no crachá do app</h3>
+              <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando você coloca uma foto, ela aparece no topo do app e nas divisões de compra. Se não tiver foto, o ícone do OrganizaPay continua firme no cabeçalho.</p>
+            </div>
+            <div class="relative h-16 w-16 shrink-0">
+              <% if (getAvatarUrl(selfProfile)) { %><img src="<%= getAvatarUrl(selfProfile) %>" alt="<%= selfProfile.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-16 w-16 rounded-full object-cover ring-2 ring-sky-200 dark:ring-sky-800/70"><% } else { %><div class="flex h-16 w-16 items-center justify-center rounded-full bg-white text-lg font-black text-sky-700 shadow-sm ring-1 ring-sky-100 dark:bg-slate-900 dark:text-sky-200 dark:ring-sky-900/60"><%= getAvatarInitials(selfProfile) %></div><% } %>
+            </div>
+          </div>
+          <div class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <form method="post" action="/people/profile-photo" enctype="multipart/form-data" class="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <input type="file" name="profile_photo" accept="image/png,image/jpeg,image/webp,image/gif" class="block w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm file:mr-3 file:rounded-xl file:border-0 file:bg-sky-100 file:px-3 file:py-2 file:font-bold file:text-sky-700 hover:file:bg-sky-200 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-200 dark:file:bg-sky-900/40 dark:file:text-sky-200">
+              <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Salvar foto</button>
+            </form>
+            <% if (selfProfile.photo_url) { %>
+              <form method="post" action="/people/profile-photo/remove">
+                <button type="submit" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Tirar foto daqui</button>
+              </form>
+            <% } %>
+          </div>
+        </section>
 
         <form method="post" action="/people" class="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:p-6">
           <input type="hidden" name="id" id="selfPersonId" value="<%= selfProfile.id %>">
@@ -423,8 +457,8 @@
               <div class="flex flex-col gap-5">
                 <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                   <div class="flex min-w-0 flex-1 gap-4 xl:pr-4">
-                    <div class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-600 transition-colors group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:bg-blue-900/40">
-                      <%= p.name.charAt(0).toUpperCase() %>
+                    <div class="relative h-12 w-12 shrink-0">
+                      <% if (getAvatarUrl(p)) { %><img src="<%= getAvatarUrl(p) %>" alt="<%= p.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-12 w-12 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700"><% } else { %><div class="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-600 transition-colors group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:bg-blue-900/40"><%= getAvatarInitials(p) %></div><% } %>
                       <% if (p.friendship_active) { %>
                         <span class="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-200 bg-emerald-500 text-[13px] text-white shadow-sm dark:border-emerald-700" title="Amizade ativa">🔗</span>
                       <% } %>

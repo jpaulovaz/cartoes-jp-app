@@ -104,6 +104,8 @@ try { db.prepare("ALTER TABLE users ADD COLUMN can_import INTEGER NOT NULL DEFAU
 try { db.prepare("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN deleted_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN deleted_label TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN google_photo_url TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN profile_photo_url TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_txn_date_snapshot TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_marked_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -921,6 +923,7 @@ function configureGoogleStrategy() {
     const email = normalizeEmail(profile.emails?.[0]?.value);
     const googleId = String(profile.id || profile?._json?.sub || '').trim();
     const profileName = String(profile.displayName || '').trim();
+    const googlePhotoUrl = normalizeProfilePhotoUrl(profile.photos?.[0]?.value || profile?._json?.picture || '');
 
     if (!email) {
       return done(null, false, { message: 'Email não encontrado no perfil Google.' });
@@ -948,9 +951,10 @@ function configureGoogleStrategy() {
           SET google_id = ?,
               last_login = ?,
               name = COALESCE(NULLIF(name, ''), ?),
-              email = ?
+              email = ?,
+              google_photo_url = CASE WHEN ? IS NOT NULL AND trim(?) <> '' THEN ? ELSE google_photo_url END
           WHERE id = ?
-        `).run(googleId, nowIso(), profileName || emailMatchedUser.name || email.split('@')[0], email, emailMatchedUser.id);
+        `).run(googleId, nowIso(), profileName || emailMatchedUser.name || email.split('@')[0], email, googlePhotoUrl, googlePhotoUrl, googlePhotoUrl, emailMatchedUser.id);
 
         authorizedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(emailMatchedUser.id);
       } else {
@@ -962,9 +966,10 @@ function configureGoogleStrategy() {
           UPDATE users
           SET last_login = ?,
               name = COALESCE(NULLIF(name, ''), ?),
-              email = CASE WHEN ? IS NOT NULL AND trim(?) <> '' THEN ? ELSE email END
+              email = CASE WHEN ? IS NOT NULL AND trim(?) <> '' THEN ? ELSE email END,
+              google_photo_url = CASE WHEN ? IS NOT NULL AND trim(?) <> '' THEN ? ELSE google_photo_url END
           WHERE id = ?
-        `).run(nowIso(), profileName || authorizedUser.name || email.split('@')[0], email, email, email, authorizedUser.id);
+        `).run(nowIso(), profileName || authorizedUser.name || email.split('@')[0], email, email, email, googlePhotoUrl, googlePhotoUrl, googlePhotoUrl, authorizedUser.id);
 
         authorizedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(authorizedUser.id);
       }
@@ -977,7 +982,9 @@ function configureGoogleStrategy() {
         email: authorizedUser.email || email,
         name: authorizedUser.name || profileName || email.split('@')[0],
         role: authorizedUser.role,
-        can_import: Number(authorizedUser.can_import ?? 1)
+        can_import: Number(authorizedUser.can_import ?? 1),
+        google_photo_url: authorizedUser.google_photo_url || googlePhotoUrl || '',
+        profile_photo_url: authorizedUser.profile_photo_url || ''
       });
     } catch (error) {
       return done(error);
@@ -2540,6 +2547,9 @@ app.use((req, res, next) => {
   res.set('X-Request-Id', req.requestId);
   if (req.method === 'POST' && req.path === '/txn/manual') {
   }
+  if (!res.locals.userAvatar) {
+    res.locals.userAvatar = getAvatarPayload(null, 'Você');
+  }
   next();
 });
 
@@ -2654,7 +2664,9 @@ function ensureAuthenticated(req, res, next) {
     name: currentUser.name,
     role: currentUser.role,
     can_import: Number(currentUser.can_import ?? 1),
-    status: currentUser.status
+    status: currentUser.status,
+    google_photo_url: currentUser.google_photo_url || '',
+    profile_photo_url: currentUser.profile_photo_url || ''
   };
 
   return next();
@@ -2895,9 +2907,12 @@ app.use((req, res, next) => {
       req.user.name = currentUser.name || req.user.name || currentUser.email;
       req.user.role = currentUser.role;
       req.user.can_import = Number(currentUser.can_import ?? 1);
+      req.user.google_photo_url = currentUser.google_photo_url || '';
+      req.user.profile_photo_url = currentUser.profile_photo_url || '';
     }
 
     res.locals.user = req.user;
+    res.locals.userAvatar = getAvatarPayload(req.user, req.user.name || req.user.email);
     res.locals.userId = req.user.id;
     res.locals.isAdmin = req.user.role === 'admin';
     res.locals.canImport = Number(req.user.can_import ?? 1) !== 0;
@@ -2917,6 +2932,66 @@ app.use((req, res, next) => {
 });
 
 function nowIso() { return dayjs().toISOString(); }
+
+function normalizeProfilePhotoUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('/uploads/profile-photos/')) return raw;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return '';
+}
+
+function getEffectiveProfilePhoto(userLike) {
+  if (!userLike || typeof userLike !== 'object') return '';
+  return normalizeProfilePhotoUrl(userLike.profile_photo_url) || normalizeProfilePhotoUrl(userLike.google_photo_url) || '';
+}
+
+function isManagedProfilePhotoPath(value) {
+  const normalized = normalizeProfilePhotoUrl(value);
+  return normalized.startsWith('/uploads/profile-photos/');
+}
+
+async function removeManagedProfilePhoto(value) {
+  const normalized = normalizeProfilePhotoUrl(value);
+  if (!normalized || !normalized.startsWith('/uploads/profile-photos/')) return;
+  const targetPath = path.join(__dirname, 'public', normalized.replace(/^\//, ''));
+  try {
+    await fsp.rm(targetPath, { force: true });
+  } catch (error) { }
+}
+
+function buildAvatarInitials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  if (!parts.length) return 'OP';
+  return parts.map((part) => part.charAt(0).toUpperCase()).join('');
+}
+
+function getAvatarPayload(userLike, fallbackName) {
+  const name = String((userLike && userLike.name) || fallbackName || '').trim();
+  return {
+    photo_url: getEffectiveProfilePhoto(userLike),
+    initials: buildAvatarInitials(name || 'OP')
+  };
+}
+
+const profilePhotoUploadDir = path.join(__dirname, 'public', 'uploads', 'profile-photos');
+try { fs.mkdirSync(profilePhotoUploadDir, { recursive: true }); } catch (error) { }
+const profilePhotoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, profilePhotoUploadDir),
+  filename: (req, file, cb) => {
+    const userId = Number(req.user?.id || 0) || 'user';
+    const ext = (path.extname(String(file.originalname || '')).toLowerCase() || '.jpg').replace(/[^.a-z0-9]/gi, '') || '.jpg';
+    cb(null, `user-${userId}-${Date.now()}${ext}`);
+  }
+});
+const profilePhotoUpload = multer({
+  storage: profilePhotoStorage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (/^image\//i.test(String(file.mimetype || ''))) return cb(null, true);
+    cb(new Error('Me manda uma imagem bonitinha em JPG, PNG ou WebP.'));
+  }
+});
 
 function normalizeDayNumber(value) {
   const num = Number(value);
@@ -5065,7 +5140,11 @@ function getVisiblePeopleForMonth(userId, month, year, { includePayments = false
     autoPaymentRows.forEach(row => visibleIds.add(row.person_id));
   }
 
-  return getPeopleByIds(userId, Array.from(visibleIds));
+  const allPeople = getPeopleAll(userId);
+  const currentUser = getUserRecord(userId, { includeDeleted: false });
+  return allPeople
+    .filter((person) => visibleIds.has(Number(person.id || 0)))
+    .map((person) => person && person.is_self ? { ...person, photo_url: getEffectiveProfilePhoto(currentUser) } : person);
 }
 
 function getManualPersonPaymentsByMonth(userId, month, year) {
@@ -5144,7 +5223,11 @@ function getVisiblePeopleForTransaction(userId, txnId) {
 
   selectedRows.forEach(row => visibleIds.add(row.person_id));
 
-  return getPeopleByIds(userId, Array.from(visibleIds));
+  const allPeople = getPeopleAll(userId);
+  const currentUser = getUserRecord(userId, { includeDeleted: false });
+  return allPeople
+    .filter((person) => visibleIds.has(Number(person.id || 0)))
+    .map((person) => person && person.is_self ? { ...person, photo_url: getEffectiveProfilePhoto(currentUser) } : person);
 }
 
 function getVisibleCardsForMonth(userId, month, year) {
@@ -5308,9 +5391,13 @@ function getResolvedAppUserForPerson(userId, personId) {
       pal.linked_user_id AS stable_linked_user_id,
       stable_u.name AS stable_linked_user_name,
       stable_u.email AS stable_linked_user_email,
+      stable_u.google_photo_url AS stable_linked_user_google_photo_url,
+      stable_u.profile_photo_url AS stable_linked_user_profile_photo_url,
       matched_u.id AS email_matched_user_id,
       matched_u.name AS email_matched_user_name,
       matched_u.email AS email_matched_user_email,
+      matched_u.google_photo_url AS email_matched_user_google_photo_url,
+      matched_u.profile_photo_url AS email_matched_user_profile_photo_url,
       COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
     FROM people p
     LEFT JOIN person_app_links pal
@@ -5556,9 +5643,13 @@ function getPeopleAll(userId) {
       pal.linked_user_id AS stable_linked_user_id,
       stable_u.name AS stable_linked_user_name,
       stable_u.email AS stable_linked_user_email,
+      stable_u.google_photo_url AS stable_linked_user_google_photo_url,
+      stable_u.profile_photo_url AS stable_linked_user_profile_photo_url,
       matched_u.id AS email_matched_user_id,
       matched_u.name AS email_matched_user_name,
       matched_u.email AS email_matched_user_email,
+      matched_u.google_photo_url AS email_matched_user_google_photo_url,
+      matched_u.profile_photo_url AS email_matched_user_profile_photo_url,
       COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status,
       p.deleted_at,
       p.deleted_label
@@ -5646,6 +5737,10 @@ function getPeopleAll(userId) {
       linked_user_id: linkedUserId,
       linked_user_name: person.stable_linked_user_name || person.email_matched_user_name || null,
       linked_user_email: normalizeEmail(person.stable_linked_user_email || person.email_matched_user_email || null),
+      linked_user_photo_url: getEffectiveProfilePhoto({
+        profile_photo_url: person.stable_linked_user_profile_photo_url || person.email_matched_user_profile_photo_url || '',
+        google_photo_url: person.stable_linked_user_google_photo_url || person.email_matched_user_google_photo_url || ''
+      }),
       discovery_via: person.stable_linked_user_id ? 'person_link' : (hasAppUser ? 'email_match' : null),
       has_app_user: hasAppUser,
       can_share_charge: canShareCharge,
@@ -9986,11 +10081,59 @@ app.post('/purchase-categories/:id/restore', ensureAuthenticated, (req, res) => 
   return res.redirect(redirectBackOr(req, '/month'));
 });
 
+app.post('/people/profile-photo', ensureAuthenticated, (req, res) => {
+  profilePhotoUpload.single('profile_photo')(req, res, async (error) => {
+    const userId = req.user.id;
+    const uploadedPath = req.file ? `/uploads/profile-photos/${req.file.filename}` : '';
+    if (error) {
+      if (uploadedPath) await removeManagedProfilePhoto(uploadedPath);
+      setFlash(req, 'error', error.message || 'Não consegui salvar sua foto agora.');
+      return res.redirect('/people');
+    }
+
+    if (!uploadedPath) {
+      setFlash(req, 'error', 'Escolha uma imagem antes de salvar a foto do perfil.');
+      return res.redirect('/people');
+    }
+
+    try {
+      const currentUser = getUserRecord(userId, { includeDeleted: false });
+      db.prepare('UPDATE users SET profile_photo_url = ? WHERE id = ?').run(uploadedPath, userId);
+      req.user.profile_photo_url = uploadedPath;
+      if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
+      setFlash(req, 'success', 'Foto nova no crachá! Já deixei seu perfil mais reconhecível por aqui.');
+    } catch (err) {
+      await removeManagedProfilePhoto(uploadedPath);
+      setFlash(req, 'error', 'A foto tropeçou no caminho. Tenta de novo daqui a pouquinho.');
+    }
+
+    return res.redirect('/people');
+  });
+});
+
+app.post('/people/profile-photo/remove', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const currentUser = getUserRecord(userId, { includeDeleted: false });
+    db.prepare('UPDATE users SET profile_photo_url = NULL WHERE id = ?').run(userId);
+    req.user.profile_photo_url = '';
+    if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
+    setFlash(req, 'success', currentUser?.google_photo_url ? 'Voltei para sua foto do Google aqui no app.' : 'Removi sua foto e deixei o ícone do app segurando a bronca por enquanto.');
+  } catch (error) {
+    setFlash(req, 'error', 'Não consegui remover a foto agora.');
+  }
+  return res.redirect('/people');
+});
+
 app.get("/people", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
   const allPeople = getPeopleAll(userId);
   const selfPerson = allPeople.find((person) => person && person.is_self) || null;
+  if (selfPerson) {
+    const currentUser = getUserRecord(userId, { includeDeleted: false }) || req.user || {};
+    selfPerson.photo_url = getEffectiveProfilePhoto(currentUser);
+  }
   const contacts = allPeople.filter((person) => person && !person.is_self);
   const pendingFriendRequests = getPendingReceivedFriendRequests(userId);
   const highlightedFriendRequestId = Number(req.query.friendRequest || req.query.friend_request || 0) || null;

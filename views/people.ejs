@@ -278,9 +278,9 @@
           </div>
         </section>
 
-        <div id="profilePhotoCropModal" class="fixed inset-0 z-[120] hidden" aria-hidden="true">
+        <div id="profilePhotoCropModal" class="fixed inset-0 z-[140] hidden overflow-y-auto" aria-hidden="true">
           <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" data-profile-photo-modal-close></div>
-          <div class="relative flex min-h-full items-center justify-center p-4 sm:p-6">
+          <div class="relative flex min-h-screen items-center justify-center p-4 sm:p-6">
             <div class="w-full max-w-3xl rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
               <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -310,6 +310,12 @@
                     <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Zoom</span>
                     <input id="profilePhotoCropZoom" type="range" min="1" max="3" step="0.01" value="1" class="h-2 w-full cursor-pointer appearance-none rounded-full bg-sky-100 accent-sky-600 dark:bg-slate-800">
                   </label>
+                  <div class="mt-4 grid grid-cols-3 gap-2">
+                    <button type="button" id="profilePhotoCropZoomOut" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800">Afastar</button>
+                    <button type="button" id="profilePhotoCropReset" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800">Centralizar</button>
+                    <button type="button" id="profilePhotoCropZoomIn" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800">Aproximar</button>
+                  </div>
+                  <div class="mt-2 text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400">No celular, também rola usar dois dedos para dar aquele zoom caprichado.</div>
                   <div class="mt-5 flex flex-col gap-3">
                     <button type="button" id="profilePhotoCropApply" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Usar essa foto</button>
                     <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800" data-profile-photo-modal-close>Escolher outra depois</button>
@@ -892,9 +898,12 @@
     const stageImage = document.getElementById('profilePhotoCropImage');
     const previewCircle = document.getElementById('profilePhotoCropPreview');
     const zoom = document.getElementById('profilePhotoCropZoom');
+    const zoomOutButton = document.getElementById('profilePhotoCropZoomOut');
+    const zoomInButton = document.getElementById('profilePhotoCropZoomIn');
+    const resetButton = document.getElementById('profilePhotoCropReset');
     const applyButton = document.getElementById('profilePhotoCropApply');
     const modalCloseButtons = Array.from(document.querySelectorAll('[data-profile-photo-modal-close]'));
-    if (!form || !input || !submit || !previewWrap || !preview || !hint || !modal || !stage || !stageImage || !previewCircle || !zoom || !applyButton) return;
+    if (!form || !input || !submit || !previewWrap || !preview || !hint || !modal || !stage || !stageImage || !previewCircle || !zoom || !applyButton || !zoomOutButton || !zoomInButton || !resetButton) return;
 
     let cropState = null;
     let activeObjectUrl = '';
@@ -921,6 +930,7 @@
       }
       cropState = null;
       releaseObjectUrls();
+      if (modal.parentElement !== document.body) document.body.appendChild(modal);
       stageImage.removeAttribute('src');
       previewCircle.removeAttribute('src');
       zoom.value = '1';
@@ -952,13 +962,20 @@
         dragStartY: 0,
         dragOriginX: 0,
         dragOriginY: 0,
-        stagePointerId: null
+        stagePointerId: null,
+        activePointers: new Map(),
+        pinchStartDistance: 0,
+        pinchStartScale: baseScale
       };
       zoom.value = '1';
       applyPhotoCropTransforms(cropState);
       modal.classList.remove('hidden');
       modal.setAttribute('aria-hidden', 'false');
       document.body.classList.add('overflow-hidden');
+      document.body.appendChild(modal);
+      requestAnimationFrame(() => {
+        stage.scrollIntoView({ block: 'center', inline: 'nearest' });
+      });
     };
 
     const showPreview = (previewUrl, message) => {
@@ -989,41 +1006,99 @@
       }
     });
 
-    zoom.addEventListener('input', () => {
+    const clampZoomValue = (value) => Math.min(3, Math.max(1, Number(value || 1)));
+    const applyZoomValue = (value) => {
       if (!cropState) return;
-      const zoomFactor = Math.max(1, Number(zoom.value || 1));
-      cropState.scale = cropState.baseScale * zoomFactor;
+      const nextValue = clampZoomValue(value);
+      zoom.value = String(nextValue);
+      cropState.scale = cropState.baseScale * nextValue;
       applyPhotoCropTransforms(cropState);
-    });
+    };
+    const resetCropView = () => {
+      if (!cropState) return;
+      cropState.offsetX = 0;
+      cropState.offsetY = 0;
+      cropState.dragOriginX = 0;
+      cropState.dragOriginY = 0;
+      cropState.pinchStartDistance = 0;
+      cropState.pinchStartScale = cropState.baseScale;
+      applyZoomValue(1);
+    };
+
+    zoom.addEventListener('input', () => applyZoomValue(zoom.value));
+    zoomOutButton.addEventListener('click', () => applyZoomValue(Number(zoom.value || 1) - 0.12));
+    zoomInButton.addEventListener('click', () => applyZoomValue(Number(zoom.value || 1) + 0.12));
+    resetButton.addEventListener('click', resetCropView);
+
+    const getPointerDistance = () => {
+      if (!cropState || cropState.activePointers.size < 2) return 0;
+      const points = Array.from(cropState.activePointers.values());
+      const [first, second] = points;
+      return Math.hypot((second.x || 0) - (first.x || 0), (second.y || 0) - (first.y || 0));
+    };
 
     stage.addEventListener('pointerdown', (event) => {
       if (!cropState) return;
+      cropState.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       cropState.stagePointerId = event.pointerId;
       cropState.dragStartX = event.clientX;
       cropState.dragStartY = event.clientY;
       cropState.dragOriginX = cropState.offsetX || 0;
       cropState.dragOriginY = cropState.offsetY || 0;
+      if (cropState.activePointers.size === 2) {
+        cropState.pinchStartDistance = getPointerDistance();
+        cropState.pinchStartScale = cropState.scale;
+      }
       stage.setPointerCapture?.(event.pointerId);
     });
 
     stage.addEventListener('pointermove', (event) => {
-      if (!cropState || cropState.stagePointerId !== event.pointerId) return;
+      if (!cropState) return;
+      if (cropState.activePointers.has(event.pointerId)) {
+        cropState.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      }
+      if (cropState.activePointers.size >= 2) {
+        const distance = getPointerDistance();
+        if (distance > 0 && cropState.pinchStartDistance > 0) {
+          applyZoomValue((cropState.pinchStartScale / cropState.baseScale) * (distance / cropState.pinchStartDistance));
+        }
+        return;
+      }
+      if (cropState.stagePointerId !== event.pointerId) return;
       cropState.offsetX = cropState.dragOriginX + (event.clientX - cropState.dragStartX);
       cropState.offsetY = cropState.dragOriginY + (event.clientY - cropState.dragStartY);
       applyPhotoCropTransforms(cropState);
     });
 
     const releaseDrag = (event) => {
-      if (!cropState || cropState.stagePointerId !== event.pointerId) return;
+      if (!cropState) return;
+      cropState.activePointers.delete(event.pointerId);
       if (stage.hasPointerCapture?.(event.pointerId)) {
         try { stage.releasePointerCapture(event.pointerId); } catch (_error) {}
       }
-      cropState.stagePointerId = null;
+      if (cropState.activePointers.size >= 2) {
+        cropState.pinchStartDistance = getPointerDistance();
+        cropState.pinchStartScale = cropState.scale;
+      } else {
+        cropState.pinchStartDistance = 0;
+      }
+      if (cropState.stagePointerId === event.pointerId) {
+        cropState.stagePointerId = cropState.activePointers.size ? Array.from(cropState.activePointers.keys())[0] : null;
+        const carry = cropState.stagePointerId != null ? cropState.activePointers.get(cropState.stagePointerId) : null;
+        if (carry) {
+          cropState.dragStartX = carry.x;
+          cropState.dragStartY = carry.y;
+          cropState.dragOriginX = cropState.offsetX || 0;
+          cropState.dragOriginY = cropState.offsetY || 0;
+        }
+      }
     };
     stage.addEventListener('pointerup', releaseDrag);
     stage.addEventListener('pointercancel', releaseDrag);
-    stage.addEventListener('lostpointercapture', () => {
-      if (cropState) cropState.stagePointerId = null;
+    stage.addEventListener('lostpointercapture', (event) => {
+      if (!cropState) return;
+      cropState.activePointers.delete(event.pointerId);
+      if (cropState.stagePointerId === event.pointerId) cropState.stagePointerId = null;
     });
 
     applyButton.addEventListener('click', async () => {

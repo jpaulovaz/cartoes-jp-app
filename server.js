@@ -12490,6 +12490,219 @@ function getSummaryCategoryDistribution(userId, month, year) {
   }));
 }
 
+
+const MERCHANT_KEYWORD_RULES = [
+  { label: 'iFood', searchTerm: 'ifood', keywords: ['ifood', 'ifd*ifood', 'ifood mercado'] },
+  { label: 'Uber', searchTerm: 'uber', keywords: ['uber', 'uber trip', 'uber eats'] },
+  { label: '99', searchTerm: '99', keywords: ['99app', '99 pop', '99pay', '99*'] },
+  { label: 'Amazon', searchTerm: 'amazon', keywords: ['amazon', 'amzn', 'amazon br'] },
+  { label: 'Mercado Livre', searchTerm: 'mercado livre', keywords: ['mercado livre', 'mercadolivre', 'ml mercado livre', 'merc libre'] },
+  { label: 'Shopee', searchTerm: 'shopee', keywords: ['shopee'] },
+  { label: 'Magalu', searchTerm: 'magalu', keywords: ['magazine luiza', 'magalu'] },
+  { label: 'Shein', searchTerm: 'shein', keywords: ['shein'] },
+  { label: 'AliExpress', searchTerm: 'aliexpress', keywords: ['aliexpress', 'ali express'] },
+  { label: 'Mercado Pago', searchTerm: 'mercado pago', keywords: ['mercado pago', 'mercadopago', 'mp*'] },
+  { label: 'PicPay', searchTerm: 'picpay', keywords: ['picpay'] },
+  { label: 'PayPal', searchTerm: 'paypal', keywords: ['paypal'] },
+  { label: 'Nubank', searchTerm: 'nubank', keywords: ['nubank', 'nu pagamentos'] },
+  { label: 'Netflix', searchTerm: 'netflix', keywords: ['netflix'] },
+  { label: 'Spotify', searchTerm: 'spotify', keywords: ['spotify'] },
+  { label: 'YouTube', searchTerm: 'youtube', keywords: ['youtube', 'google youtube'] },
+  { label: 'Google', searchTerm: 'google', keywords: ['google', 'google play'] },
+  { label: 'Apple', searchTerm: 'apple', keywords: ['apple', 'apple com bill', 'itunes'] },
+  { label: 'Steam', searchTerm: 'steam', keywords: ['steam'] },
+  { label: 'PlayStation', searchTerm: 'playstation', keywords: ['playstation', 'psn'] },
+  { label: 'Xbox', searchTerm: 'xbox', keywords: ['xbox', 'microsoft xbox'] },
+  { label: 'McDonald\'s', searchTerm: 'mcdonald', keywords: ['mcdonald', 'mcdonalds', 'mc donald'] },
+  { label: 'Burger King', searchTerm: 'burger king', keywords: ['burger king', 'bk brasil'] },
+  { label: 'Habib\'s', searchTerm: 'habibs', keywords: ['habibs', 'habib'] },
+  { label: 'Outback', searchTerm: 'outback', keywords: ['outback'] },
+  { label: 'Starbucks', searchTerm: 'starbucks', keywords: ['starbucks'] },
+  { label: 'Rappi', searchTerm: 'rappi', keywords: ['rappi'] },
+  { label: 'Zé Delivery', searchTerm: 'ze delivery', keywords: ['ze delivery', 'zedelivery'] },
+  { label: 'Airbnb', searchTerm: 'airbnb', keywords: ['airbnb'] },
+  { label: 'Booking', searchTerm: 'booking', keywords: ['booking'] },
+  { label: 'Decolar', searchTerm: 'decolar', keywords: ['decolar'] },
+  { label: 'Localiza', searchTerm: 'localiza', keywords: ['localiza'] },
+  { label: 'Shell', searchTerm: 'shell', keywords: ['shell'] },
+  { label: 'Ipiranga', searchTerm: 'ipiranga', keywords: ['ipiranga'] },
+  { label: 'Petrobras', searchTerm: 'petrobras', keywords: ['petrobras', 'br mania', 'posto br'] },
+  { label: 'Drogasil', searchTerm: 'drogasil', keywords: ['drogasil'] },
+  { label: 'Droga Raia', searchTerm: 'droga raia', keywords: ['droga raia'] },
+  { label: 'Pague Menos', searchTerm: 'pague menos', keywords: ['pague menos'] },
+  { label: 'Carrefour', searchTerm: 'carrefour', keywords: ['carrefour'] },
+  { label: 'Assaí', searchTerm: 'assai', keywords: ['assai', 'assai atacadista'] },
+  { label: 'Atacadão', searchTerm: 'atacadao', keywords: ['atacadao', 'atacadão'] },
+  { label: 'Extra', searchTerm: 'extra', keywords: ['extra hiper', 'extra mercado', 'extra'] },
+  { label: 'Pão de Açúcar', searchTerm: 'pao de acucar', keywords: ['pao de acucar', 'pão de açúcar', 'paodeacucar'] },
+  { label: 'Americanas', searchTerm: 'americanas', keywords: ['americanas'] }
+];
+
+function normalizeMerchantText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\(\d{2}\/\d{2}\)\s*$/g, ' ')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function humanizeMerchantLabel(value) {
+  return String(value || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+    .trim();
+}
+
+function resolveMerchantFromDescription(description) {
+  const raw = String(description || '').trim();
+  const normalized = normalizeMerchantText(raw);
+  if (!normalized) {
+    return {
+      label: 'Sem estabelecimento definido',
+      normalizedLabel: 'sem estabelecimento definido',
+      searchTerm: '',
+      confidence: 'empty',
+      raw
+    };
+  }
+
+  for (const rule of MERCHANT_KEYWORD_RULES) {
+    const matched = rule.keywords.some((keyword) => {
+      const normalizedKeyword = normalizeMerchantText(keyword).replace(/\*/g, '');
+      return normalizedKeyword && normalized.includes(normalizedKeyword);
+    });
+    if (matched) {
+      return {
+        label: rule.label,
+        normalizedLabel: normalizeMerchantText(rule.label),
+        searchTerm: rule.searchTerm,
+        confidence: 'high',
+        raw
+      };
+    }
+  }
+
+  const cleaned = normalized
+    .replace(/\bcompra(?:\s+no)?\b/g, ' ')
+    .replace(/\bdebito\b/g, ' ')
+    .replace(/\bcredito\b/g, ' ')
+    .replace(/\bparcela(?:do)?\b/g, ' ')
+    .replace(/\bpagamento\b/g, ' ')
+    .replace(/\btransacao\b/g, ' ')
+    .replace(/\bpix\b/g, ' ')
+    .replace(/\belo\b/g, ' ')
+    .replace(/\bmastercard\b/g, ' ')
+    .replace(/\bvisa\b/g, ' ')
+    .replace(/\bdeb\b/g, ' ')
+    .replace(/\bcred\b/g, ' ')
+    .replace(/\bonline\b/g, ' ')
+    .replace(/\bbrasil\b/g, ' ')
+    .replace(/\bsao\b/g, ' ')
+    .replace(/\bpaulo\b/g, ' ')
+    .replace(/\bsp\b/g, ' ')
+    .replace(/\brj\b/g, ' ')
+    .replace(/\bmg\b/g, ' ')
+    .replace(/\bcuritiba\b/g, ' ')
+    .replace(/\bbelo\s+horizonte\b/g, ' ')
+    .replace(/\bporto\s+alegre\b/g, ' ')
+    .replace(/\brecife\b/g, ' ')
+    .replace(/\bfortaleza\b/g, ' ')
+    .replace(/\bsalvador\b/g, ' ')
+    .replace(/\d+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const stopwords = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'para', 'na', 'no', 'com', 'sem', 'por', 'via']);
+  const tokens = cleaned.split(' ').filter((token) => token.length >= 2 && !stopwords.has(token));
+  const baseTokens = tokens.slice(0, 3);
+  const fallbackLabel = humanizeMerchantLabel(baseTokens.join(' ')) || humanizeMerchantLabel(normalized.split(' ').slice(0, 3).join(' ')) || 'Estabelecimento variado';
+  const searchTerm = baseTokens.slice(0, 2).join(' ') || normalized.split(' ').slice(0, 2).join(' ');
+
+  return {
+    label: fallbackLabel,
+    normalizedLabel: normalizeMerchantText(fallbackLabel),
+    searchTerm,
+    confidence: baseTokens.length >= 1 ? 'medium' : 'low',
+    raw
+  };
+}
+
+function getSummaryMerchantRanking(userId, month, year, limit = 6) {
+  const rows = db.prepare(`
+    SELECT t.id, t.description, t.amount_cents
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+      AND t.amount_cents > 0
+    ORDER BY t.amount_cents DESC, t.id DESC
+  `).all(userId, month, year, month, year);
+
+  const grouped = new Map();
+
+  rows.forEach((row) => {
+    const merchant = resolveMerchantFromDescription(row.description);
+    const key = merchant.normalizedLabel || normalizeMerchantText(merchant.label) || 'sem estabelecimento definido';
+    const current = grouped.get(key) || {
+      id: key,
+      label: merchant.label,
+      search_term: merchant.searchTerm || '',
+      total_cents: 0,
+      txn_count: 0,
+      confidence: merchant.confidence,
+      sample_descriptions: []
+    };
+    current.total_cents += Number(row.amount_cents || 0);
+    current.txn_count += 1;
+    const sample = String(row.description || '').trim();
+    if (sample && current.sample_descriptions.length < 2 && !current.sample_descriptions.includes(sample)) {
+      current.sample_descriptions.push(sample);
+    }
+    if (!current.search_term && merchant.searchTerm) current.search_term = merchant.searchTerm;
+    if (current.confidence !== 'high' && merchant.confidence === 'high') current.confidence = 'high';
+    grouped.set(key, current);
+  });
+
+  const ranking = Array.from(grouped.values())
+    .sort((a, b) => {
+      const totalDiff = Number(b.total_cents || 0) - Number(a.total_cents || 0);
+      if (totalDiff !== 0) return totalDiff;
+      return String(a.label || '').localeCompare(String(b.label || ''), 'pt-BR', { sensitivity: 'base' });
+    });
+
+  const recognizedCount = ranking.filter((item) => item.confidence === 'high').length;
+  const totalCents = ranking.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
+  const visible = ranking.slice(0, Math.max(1, Number(limit || 6)));
+
+  return {
+    ranking: visible.map((item, index) => ({
+      ...item,
+      position: index + 1,
+      share_pct: totalCents > 0 ? Math.round((Number(item.total_cents || 0) / totalCents) * 100) : 0,
+      avg_ticket_cents: Number(item.txn_count || 0) > 0 ? Math.round(Number(item.total_cents || 0) / Number(item.txn_count || 1)) : 0
+    })),
+    totalCents,
+    merchantCount: ranking.length,
+    recognizedCount,
+    totalTransactions: rows.length,
+    topMerchant: ranking[0]
+      ? {
+          ...ranking[0],
+          share_pct: totalCents > 0 ? Math.round((Number(ranking[0].total_cents || 0) / totalCents) * 100) : 0,
+          avg_ticket_cents: Number(ranking[0].txn_count || 0) > 0 ? Math.round(Number(ranking[0].total_cents || 0) / Number(ranking[0].txn_count || 1)) : 0
+        }
+      : null
+  };
+}
+
 function getSummaryMonthlyTrend(userId, month, year, monthsBack = 5) {
   const points = [];
   const selectTotal = db.prepare(`
@@ -12522,6 +12735,7 @@ function getSummaryMonthlyTrend(userId, month, year, monthsBack = 5) {
 function buildSummaryChartsPayload({ userId, month, year, cardsPanel = [], personPanel = [], unassigned = [] }) {
   const categories = getSummaryCategoryDistribution(userId, month, year);
   const monthlyTrend = getSummaryMonthlyTrend(userId, month, year, 5);
+  const merchantIntel = getSummaryMerchantRanking(userId, month, year, 6);
   const totalSpentCents = cardsPanel.reduce((acc, item) => acc + Number(item?.total_cents || 0), 0);
   const totalPaidCardsCents = cardsPanel.reduce((acc, item) => acc + Number(item?.paid_cents || 0), 0);
   const totalRemainingCardsCents = cardsPanel.reduce((acc, item) => acc + (Number(item?.total_cents || 0) - Number(item?.paid_cents || 0)), 0);
@@ -12579,8 +12793,21 @@ function buildSummaryChartsPayload({ userId, month, year, cardsPanel = [], perso
       currentVsAveragePct: averageMonthlySpendCents > 0
         ? Math.round(((Number(currentPoint?.total_cents || 0) - averageMonthlySpendCents) / averageMonthlySpendCents) * 100)
         : null,
-      trackedCategories: categories.length
-    }
+      trackedCategories: categories.length,
+      merchantCount: merchantIntel.merchantCount,
+      recognizedMerchantCount: merchantIntel.recognizedCount,
+      topMerchant: merchantIntel.topMerchant
+        ? {
+            label: merchantIntel.topMerchant.label,
+            total_cents: merchantIntel.topMerchant.total_cents,
+            txn_count: merchantIntel.topMerchant.txn_count,
+            share_pct: merchantIntel.topMerchant.share_pct,
+            avg_ticket_cents: merchantIntel.topMerchant.avg_ticket_cents,
+            search_term: merchantIntel.topMerchant.search_term || ''
+          }
+        : null
+    },
+    establishments: merchantIntel.ranking
   };
 }
 

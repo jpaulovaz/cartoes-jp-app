@@ -12893,11 +12893,91 @@ function getSummaryMonthlyTrend(userId, month, year, monthsBack = 5) {
   return points;
 }
 
+function getSummaryMerchantLearningOverview(userId, month, year, activeLimit = 6, pausedLimit = 3) {
+  const rules = getMerchantLearningRules(userId);
+  const confirmedRules = rules.filter((rule) => rule.status === 'confirmed');
+  const dismissedRules = rules.filter((rule) => rule.status !== 'confirmed');
+  const monthRows = db.prepare(`
+    SELECT t.description, t.amount_cents
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+      AND t.amount_cents > 0
+  `).all(userId, month, year, month, year);
+
+  const activeRules = confirmedRules
+    .map((rule) => {
+      const normalizedPattern = normalizeMerchantText(rule.normalizedPattern || rule.normalized_pattern);
+      let appliedTxnCount = 0;
+      let appliedTotalCents = 0;
+      let latestSample = rule.sourceSample || '';
+      monthRows.forEach((row) => {
+        const normalizedDescription = normalizeMerchantText(row.description);
+        if (!normalizedPattern || !normalizedDescription.includes(normalizedPattern)) return;
+        appliedTxnCount += 1;
+        appliedTotalCents += Number(row.amount_cents || 0);
+        if (!latestSample && row.description) latestSample = String(row.description || '').trim();
+      });
+      return {
+        normalizedPattern,
+        label: humanizeMerchantLabel(rule.merchantLabel),
+        search_term: rule.searchTerm || normalizedPattern,
+        source_sample: latestSample,
+        applied_txn_count: appliedTxnCount,
+        applied_total_cents: appliedTotalCents,
+        updated_at: rule.updatedAt || null
+      };
+    })
+    .sort((a, b) => {
+      const appliedDiff = Number(b.applied_txn_count || 0) - Number(a.applied_txn_count || 0);
+      if (appliedDiff !== 0) return appliedDiff;
+      const centsDiff = Number(b.applied_total_cents || 0) - Number(a.applied_total_cents || 0);
+      if (centsDiff !== 0) return centsDiff;
+      return String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
+    });
+
+  const pausedRules = dismissedRules
+    .slice(0, Math.max(0, Number(pausedLimit || 3)))
+    .map((rule) => ({
+      normalizedPattern: normalizeMerchantText(rule.normalizedPattern || rule.normalized_pattern),
+      label: humanizeMerchantLabel(rule.merchantLabel),
+      search_term: rule.searchTerm || '',
+      source_sample: rule.sourceSample || '',
+      updated_at: rule.updatedAt || null
+    }));
+
+  const appliedRuleTxnCount = activeRules.reduce((acc, item) => acc + Number(item.applied_txn_count || 0), 0);
+  const appliedRuleTotalCents = activeRules.reduce((acc, item) => acc + Number(item.applied_total_cents || 0), 0);
+  const mostAppliedRule = activeRules.find((item) => Number(item.applied_txn_count || 0) > 0) || activeRules[0] || null;
+
+  return {
+    activeCount: activeRules.length,
+    pausedCount: dismissedRules.length,
+    appliedRuleTxnCount,
+    appliedRuleTotalCents,
+    mostAppliedRule: mostAppliedRule ? {
+      label: mostAppliedRule.label,
+      applied_txn_count: mostAppliedRule.applied_txn_count,
+      applied_total_cents: mostAppliedRule.applied_total_cents,
+      search_term: mostAppliedRule.search_term || '',
+      source_sample: mostAppliedRule.source_sample || ''
+    } : null,
+    activeRules: activeRules.slice(0, Math.max(0, Number(activeLimit || 6))),
+    pausedRules,
+    lastLearnedAt: confirmedRules.length ? confirmedRules[0].updatedAt || null : null
+  };
+}
+
 function buildSummaryChartsPayload({ userId, month, year, cardsPanel = [], personPanel = [], unassigned = [] }) {
   const categories = getSummaryCategoryDistribution(userId, month, year);
   const monthlyTrend = getSummaryMonthlyTrend(userId, month, year, 5);
   const merchantIntel = getSummaryMerchantRanking(userId, month, year, 6);
   const merchantSuggestions = getSummaryMerchantSuggestions(userId, month, year, 4);
+  const merchantLearning = getSummaryMerchantLearningOverview(userId, month, year, 6, 3);
   const totalSpentCents = cardsPanel.reduce((acc, item) => acc + Number(item?.total_cents || 0), 0);
   const totalPaidCardsCents = cardsPanel.reduce((acc, item) => acc + Number(item?.paid_cents || 0), 0);
   const totalRemainingCardsCents = cardsPanel.reduce((acc, item) => acc + (Number(item?.total_cents || 0) - Number(item?.paid_cents || 0)), 0);
@@ -12960,6 +13040,7 @@ function buildSummaryChartsPayload({ userId, month, year, cardsPanel = [], perso
       recognizedMerchantCount: merchantIntel.recognizedCount,
       learnedMerchantCount: merchantIntel.learnedCount,
       merchantSuggestionCount: merchantSuggestions.length,
+      merchantLearning: merchantLearning,
       topMerchant: merchantIntel.topMerchant
         ? {
             label: merchantIntel.topMerchant.label,
@@ -13173,6 +13254,69 @@ app.post("/summary/:year/:month/merchant-suggestions/dismiss", ensureAuthenticat
     setFlash(req, 'success', 'Sugestão guardada na geladeira. A gente não insiste nela por enquanto.');
   } catch (error) {
     setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui guardar essa decisão agora.' }).message);
+  }
+
+  return res.redirect(`/summary/${year}/${month}`);
+});
+
+
+app.post("/summary/:year/:month/merchant-learning/pause", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+  const normalizedPattern = normalizeMerchantText(req.body.pattern || '');
+  const merchantLabel = humanizeMerchantLabel(req.body.label || 'Agrupamento pausado');
+  const searchTerm = normalizeMerchantText(req.body.search_term || normalizedPattern).split(' ').slice(0, 3).join(' ');
+  const sourceSample = String(req.body.source_sample || '').trim();
+
+  if (!normalizedPattern) {
+    setFlash(req, 'error', 'Faltou a pista principal desse agrupamento para pausar com segurança.');
+    return res.redirect(`/summary/${year}/${month}`);
+  }
+
+  try {
+    upsertMerchantLearningFeedback(userId, {
+      normalizedPattern,
+      merchantLabel,
+      searchTerm,
+      sourceSample,
+      status: 'dismissed'
+    });
+    setFlash(req, 'success', `Beleza! Dei uma pausa no agrupamento de "${merchantLabel}".`);
+  } catch (error) {
+    setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui pausar esse agrupamento agora.' }).message);
+  }
+
+  return res.redirect(`/summary/${year}/${month}`);
+});
+
+app.post("/summary/:year/:month/merchant-learning/resume", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+  const normalizedPattern = normalizeMerchantText(req.body.pattern || '');
+  const merchantLabel = humanizeMerchantLabel(req.body.label || req.body.preview_label || 'Agrupamento retomado');
+  const searchTerm = normalizeMerchantText(req.body.search_term || normalizedPattern).split(' ').slice(0, 3).join(' ');
+  const sourceSample = String(req.body.source_sample || '').trim();
+
+  if (!normalizedPattern) {
+    setFlash(req, 'error', 'Esse agrupamento veio sem rastro suficiente para voltar ao jogo.');
+    return res.redirect(`/summary/${year}/${month}`);
+  }
+
+  try {
+    upsertMerchantLearningFeedback(userId, {
+      normalizedPattern,
+      merchantLabel,
+      searchTerm,
+      sourceSample,
+      status: 'confirmed'
+    });
+    setFlash(req, 'success', `Pronto! "${merchantLabel}" voltou para a memória ativa.`);
+  } catch (error) {
+    setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui reativar esse agrupamento agora.' }).message);
   }
 
   return res.redirect(`/summary/${year}/${month}`);

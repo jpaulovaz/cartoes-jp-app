@@ -25,6 +25,7 @@
     <% const merchantRanking = summaryCharts && Array.isArray(summaryCharts.establishments) ? summaryCharts.establishments : []; %>
     <% const merchantTop = graphInsights && graphInsights.topMerchant ? graphInsights.topMerchant : null; %>
     <% const merchantSuggestions = summaryCharts && Array.isArray(summaryCharts.establishmentSuggestions) ? summaryCharts.establishmentSuggestions : []; %>
+    <% const merchantLearning = graphInsights && graphInsights.merchantLearning ? graphInsights.merchantLearning : { activeRules: [], pausedRules: [] }; %>
     <section class="mb-8 op-surface-card rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6" data-summary-graphs-root data-summary-year="<%= year %>" data-summary-month="<%= month %>" data-summary-graphs-ready="false">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
@@ -165,9 +166,9 @@
     <section class="mb-8 op-surface-card rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <div class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Fase 12 · inteligência de consumo</div>
+          <div class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Fase 12 · inteligência de consumo viva</div>
           <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Onde a grana encosta com mais frequência</h2>
-          <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">Entrou a primeira camada de leitura por estabelecimento. É um agrupamento inicial por palavras-chave e descrição, feito para acertar mais do que arriscar — categoria continua mandando na organização, e estabelecimento entra como lupa extra.</p>
+          <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">Agora a leitura por estabelecimento já não vive só de chute inicial: ela aprende com o que você confirma, respeita o que você pausa e vai ficando mais sabida sem bagunçar suas categorias.</p>
         </div>
         <div class="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 lg:max-w-sm">
           <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Modo dessa fase</div>
@@ -202,6 +203,113 @@
           <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Jeito de usar</div>
           <div class="mt-2 text-xl font-black tracking-tight text-amber-900 dark:text-amber-100">Ranking clicável e sem drama</div>
           <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80">Tocou num estabelecimento? A gente abre o mês já com a descrição filtrada, para você investigar sem ficar pescando compra na unha.</p>
+        </div>
+      </div>
+
+      <div class="mt-5 grid gap-3 xl:grid-cols-[1.3fr,0.9fr]">
+        <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h3 class="text-lg font-black text-slate-900 dark:text-white">Memória do app nessa fase</h3>
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Cada confirmação sua vira repertório. Cada pausa evita teimosia. A ideia é aprender sem sair inventando moda.</p>
+            </div>
+            <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Aprendizado progressivo</span>
+          </div>
+
+          <div class="mt-4 grid gap-3 md:grid-cols-3">
+            <div class="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Memórias ativas</div>
+              <div class="mt-2 text-2xl font-black text-emerald-900 dark:text-emerald-100"><%= Number(merchantLearning?.activeCount || 0) %></div>
+              <p class="mt-1 text-xs leading-5 text-emerald-800/80 dark:text-emerald-100/80">Regras já confirmadas e prontas para entrar em campo nos próximos lançamentos.</p>
+            </div>
+            <div class="rounded-2xl border border-violet-200 bg-violet-50/80 px-4 py-3 dark:border-violet-900/50 dark:bg-violet-950/20">
+              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Aplicadas no mês</div>
+              <div class="mt-2 text-2xl font-black text-violet-900 dark:text-violet-100"><%= Number(merchantLearning?.appliedRuleTxnCount || 0) %></div>
+              <p class="mt-1 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Compras que já passaram pela memória aprendida, somando <span class="font-bold"><%= formatBRLFromCents(merchantLearning?.appliedRuleTotalCents || 0) %></span>.</p>
+            </div>
+            <div class="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/20">
+              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Sugestões na fila</div>
+              <div class="mt-2 text-2xl font-black text-amber-900 dark:text-amber-100"><%= Number(graphInsights?.merchantSuggestionCount || 0) %></div>
+              <p class="mt-1 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80">Tem padrão novo pedindo sua bênção. Confirmou, aprende. Pausou, a gente respeita.</p>
+            </div>
+          </div>
+
+          <% if (merchantLearning?.mostAppliedRule) { %>
+            <div class="mt-4 rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-800/70">
+              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Memória mais acionada</div>
+              <div class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= merchantLearning.mostAppliedRule.label %></div>
+              <p class="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">Essa regra apareceu em <span class="font-bold"><%= Number(merchantLearning.mostAppliedRule.applied_txn_count || 0) %></span> compra(s) do mês e puxou <span class="font-bold"><%= formatBRLFromCents(merchantLearning.mostAppliedRule.applied_total_cents || 0) %></span>. Tá trabalhando mais que café em segunda.</p>
+            </div>
+          <% } %>
+        </div>
+
+        <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h3 class="text-lg font-black text-slate-900 dark:text-white">Aprendizados em campo</h3>
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Aqui mora o que o app já entendeu com a sua ajuda.</p>
+            </div>
+            <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Controle seu</span>
+          </div>
+
+          <% if (merchantLearning?.activeRules && merchantLearning.activeRules.length > 0) { %>
+            <div class="mt-4 space-y-3">
+              <% merchantLearning.activeRules.forEach((rule) => { %>
+                <div class="rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-800/70">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <div class="truncate text-base font-black text-slate-900 dark:text-white"><%= rule.label %></div>
+                        <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">ativa</span>
+                      </div>
+                      <div class="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
+                        <span>padrão: <span class="font-bold text-slate-800 dark:text-slate-100"><%= rule.normalizedPattern %></span></span>
+                        <span class="hidden sm:inline">·</span>
+                        <span><%= Number(rule.applied_txn_count || 0) %> compra<%= Number(rule.applied_txn_count || 0) === 1 ? '' : 's' %> no mês</span>
+                      </div>
+                      <% if (rule.source_sample) { %>
+                        <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">Exemplo visto: <span class="font-semibold text-slate-700 dark:text-slate-200"><%= rule.source_sample %></span></p>
+                      <% } %>
+                    </div>
+                    <div class="sm:w-auto">
+                      <form method="POST" action="/summary/<%= year %>/<%= month %>/merchant-learning/pause">
+                        <input type="hidden" name="pattern" value="<%= rule.normalizedPattern %>">
+                        <input type="hidden" name="label" value="<%= rule.label %>">
+                        <input type="hidden" name="search_term" value="<%= rule.search_term || '' %>">
+                        <input type="hidden" name="source_sample" value="<%= rule.source_sample || '' %>">
+                        <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Pausar aprendizado</button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } else { %>
+            <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não tem aprendizado ativo por aqui. Quando você confirmar uma sugestão, ela passa a morar nesta vitrine.</div>
+          <% } %>
+
+          <% if (merchantLearning?.pausedRules && merchantLearning.pausedRules.length > 0) { %>
+            <div class="mt-4 rounded-[22px] border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Na geladeira por escolha sua</div>
+              <div class="mt-3 space-y-3">
+                <% merchantLearning.pausedRules.forEach((rule) => { %>
+                  <div class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+                    <div>
+                      <div class="text-sm font-black text-slate-900 dark:text-white"><%= rule.label %></div>
+                      <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">Padrão pausado: <span class="font-semibold text-slate-700 dark:text-slate-200"><%= rule.normalizedPattern %></span></p>
+                    </div>
+                    <form method="POST" action="/summary/<%= year %>/<%= month %>/merchant-learning/resume">
+                      <input type="hidden" name="pattern" value="<%= rule.normalizedPattern %>">
+                      <input type="hidden" name="label" value="<%= rule.label %>">
+                      <input type="hidden" name="search_term" value="<%= rule.search_term || '' %>">
+                      <input type="hidden" name="source_sample" value="<%= rule.source_sample || '' %>">
+                      <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Reativar aprendizado</button>
+                    </form>
+                  </div>
+                <% }) %>
+              </div>
+            </div>
+          <% } %>
         </div>
       </div>
 

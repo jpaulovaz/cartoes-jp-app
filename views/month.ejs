@@ -1223,6 +1223,13 @@
         return first ? first.split(',').map(Number).filter(Number.isInteger) : [];
       }
 
+      function getParticipantPhotoUrlClient(person) {
+        if (!person || typeof person !== 'object') return '';
+        if (person.photo_url) return String(person.photo_url);
+        if (person.linked_user_photo_url) return String(person.linked_user_photo_url);
+        return '';
+      }
+
       function buildPersonCard(person, checked) {
         const label = document.createElement('label');
         label.className = 'group min-w-0 cursor-pointer';
@@ -1235,7 +1242,7 @@
         input.checked = checked;
 
         const displayName = (person.is_self || String(person.profile_kind || '').toLowerCase() === 'self' || person.is_owner) ? 'Eu' : String(person.name || '').trim();
-        const photoUrl = getParticipantPhotoUrl(person);
+        const photoUrl = getParticipantPhotoUrlClient(person);
         const initials = String(displayName || person.name || 'OP').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || 'OP';
 
         const card = document.createElement('span');

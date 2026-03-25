@@ -48,6 +48,10 @@ if (!columnExists("users", "google_photo_url")) {
   db.exec("ALTER TABLE users ADD COLUMN google_photo_url TEXT;");
 }
 
+if (!columnExists("users", "profile_photo_mode")) {
+  db.exec("ALTER TABLE users ADD COLUMN profile_photo_mode TEXT NOT NULL DEFAULT 'default';");
+}
+
 // ===== TABELAS EXISTENTES COM user_id =====
 db.exec(`
 CREATE TABLE IF NOT EXISTS cards (

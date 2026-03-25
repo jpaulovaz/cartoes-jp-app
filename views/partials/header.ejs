@@ -153,13 +153,7 @@
      const unreadNotifications = Number(typeof unreadNotificationCount !== 'undefined' ? unreadNotificationCount : 0) || 0;
      const readNotifications = Number(typeof readNotificationCount !== 'undefined' ? readNotificationCount : 0) || 0;
      const recentNotificationItems = Array.isArray(recentNotifications) ? recentNotifications : [];
-     const rawUserPhotoUrl = (user && (user.profile_photo_url || user.google_photo_url)) ? String(user.profile_photo_url || user.google_photo_url) : '';
-     const looksLikeGoogleDefaultAvatar = (url) => {
-       const raw = String(url || '').trim();
-       if (!raw || !/^https?:\/\//i.test(raw)) return false;
-       return /googleusercontent\.com\/(?:a\/default-user|.*\/a-\/AOh14|.*\/a\/AAcHTte|.*\/a\/ACg8ocKf)|=s\d+-c$/i.test(raw) && /(?:default-user|\/a-\/|\/a\/AA|\/a\/AC)/i.test(raw);
-     };
-     const userPhotoUrl = looksLikeGoogleDefaultAvatar(rawUserPhotoUrl) ? '' : rawUserPhotoUrl;
+     const userPhotoUrl = (typeof userAvatar !== 'undefined' && userAvatar && userAvatar.photo_url) ? String(userAvatar.photo_url) : '';
      const hasUserPhoto = !!userPhotoUrl;
   %>
 

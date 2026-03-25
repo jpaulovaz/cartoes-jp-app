@@ -270,11 +270,18 @@
                 </div>
               </div>
             </form>
-            <% if (selfProfile.photo_url) { %>
-              <form method="post" action="/people/profile-photo/remove">
-                <button type="submit" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Tirar foto daqui</button>
-              </form>
-            <% } %>
+            <div class="flex flex-col gap-3">
+              <% if (selfProfile.profile_photo_url || selfProfile.photo_url) { %>
+                <form method="post" action="/people/profile-photo/remove">
+                  <button type="submit" class="w-full rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition-all hover:bg-red-100 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/40">Remover foto</button>
+                </form>
+              <% } %>
+              <% if ((selfProfile.google_photo_url && !String(selfProfile.google_photo_url).match(/(?:\/a\/default-user|=s\d+-c$|\/a-\/AOh14|\/a\/AAcHTte|\/a\/ACg8ocK)/i)) || selfProfile.profile_photo_mode === 'none' || selfProfile.profile_photo_url) { %>
+                <form method="post" action="/people/profile-photo/use-default">
+                  <button type="submit" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Usar padrão do app</button>
+                </form>
+              <% } %>
+            </div>
           </div>
         </section>
 

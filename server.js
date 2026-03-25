@@ -106,6 +106,7 @@ try { db.prepare("ALTER TABLE users ADD COLUMN deleted_at TEXT").run(); } catch 
 try { db.prepare("ALTER TABLE users ADD COLUMN deleted_label TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN google_photo_url TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN profile_photo_url TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN profile_photo_mode TEXT NOT NULL DEFAULT 'default'").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_txn_date_snapshot TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_marked_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -984,7 +985,8 @@ function configureGoogleStrategy() {
         role: authorizedUser.role,
         can_import: Number(authorizedUser.can_import ?? 1),
         google_photo_url: authorizedUser.google_photo_url || googlePhotoUrl || '',
-        profile_photo_url: authorizedUser.profile_photo_url || ''
+        profile_photo_url: authorizedUser.profile_photo_url || '',
+        profile_photo_mode: authorizedUser.profile_photo_mode || 'default'
       });
     } catch (error) {
       return done(error);
@@ -2911,6 +2913,7 @@ app.use((req, res, next) => {
       req.user.can_import = Number(currentUser.can_import ?? 1);
       req.user.google_photo_url = currentUser.google_photo_url || '';
       req.user.profile_photo_url = currentUser.profile_photo_url || '';
+      req.user.profile_photo_mode = currentUser.profile_photo_mode || 'default';
     }
 
     res.locals.user = req.user;
@@ -2943,6 +2946,18 @@ function normalizeProfilePhotoUrl(value) {
   return '';
 }
 
+function normalizeProfilePhotoMode(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'manual' || raw === 'none' || raw === 'default') return raw;
+  return 'default';
+}
+
+function looksLikeGoogleDefaultAvatar(value) {
+  const raw = normalizeProfilePhotoUrl(value);
+  if (!raw || !/googleusercontent\.com/i.test(raw)) return false;
+  return /(?:\/a\/default-user|=s\d+-c$|\/a-\/AOh14|\/a\/AAcHTte|\/a\/ACg8ocK)/i.test(raw);
+}
+
 function extractGoogleProfilePhotoUrl(profile) {
   const candidates = [
     profile?.photos?.[0]?.value,
@@ -2966,7 +2981,14 @@ function extractGoogleProfilePhotoUrl(profile) {
 
 function getEffectiveProfilePhoto(userLike) {
   if (!userLike || typeof userLike !== 'object') return '';
-  return normalizeProfilePhotoUrl(userLike.profile_photo_url) || normalizeProfilePhotoUrl(userLike.google_photo_url) || '';
+  const mode = normalizeProfilePhotoMode(userLike.profile_photo_mode);
+  const manualPhoto = normalizeProfilePhotoUrl(userLike.profile_photo_url);
+  const googlePhoto = normalizeProfilePhotoUrl(userLike.google_photo_url);
+  const safeGooglePhoto = looksLikeGoogleDefaultAvatar(googlePhoto) ? '' : googlePhoto;
+  if (mode === 'none') return '';
+  if (manualPhoto) return manualPhoto;
+  if (mode === 'manual') return '';
+  return safeGooglePhoto || '';
 }
 
 function isManagedProfilePhotoPath(value) {
@@ -5416,11 +5438,13 @@ function getResolvedAppUserForPerson(userId, personId) {
       stable_u.email AS stable_linked_user_email,
       stable_u.google_photo_url AS stable_linked_user_google_photo_url,
       stable_u.profile_photo_url AS stable_linked_user_profile_photo_url,
+      stable_u.profile_photo_mode AS stable_linked_user_profile_photo_mode,
       matched_u.id AS email_matched_user_id,
       matched_u.name AS email_matched_user_name,
       matched_u.email AS email_matched_user_email,
       matched_u.google_photo_url AS email_matched_user_google_photo_url,
       matched_u.profile_photo_url AS email_matched_user_profile_photo_url,
+      matched_u.profile_photo_mode AS email_matched_user_profile_photo_mode,
       COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
     FROM people p
     LEFT JOIN person_app_links pal
@@ -5446,6 +5470,7 @@ function getResolvedAppUserForPerson(userId, personId) {
   return {
     linked_user_id: linkedUserId,
     linked_user_name: row.stable_linked_user_name || row.email_matched_user_name || null,
+    linked_user_photo_url: getEffectiveProfilePhoto({ profile_photo_url: row.stable_linked_user_profile_photo_url || row.email_matched_user_profile_photo_url || '', google_photo_url: row.stable_linked_user_google_photo_url || row.email_matched_user_google_photo_url || '', profile_photo_mode: row.stable_linked_user_profile_photo_mode || row.email_matched_user_profile_photo_mode || 'default' }),
     linked_user_email: normalizeEmail(row.stable_linked_user_email || row.email_matched_user_email || null),
     via,
     person: row
@@ -5668,11 +5693,13 @@ function getPeopleAll(userId) {
       stable_u.email AS stable_linked_user_email,
       stable_u.google_photo_url AS stable_linked_user_google_photo_url,
       stable_u.profile_photo_url AS stable_linked_user_profile_photo_url,
+      stable_u.profile_photo_mode AS stable_linked_user_profile_photo_mode,
       matched_u.id AS email_matched_user_id,
       matched_u.name AS email_matched_user_name,
       matched_u.email AS email_matched_user_email,
       matched_u.google_photo_url AS email_matched_user_google_photo_url,
       matched_u.profile_photo_url AS email_matched_user_profile_photo_url,
+      matched_u.profile_photo_mode AS email_matched_user_profile_photo_mode,
       COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status,
       p.deleted_at,
       p.deleted_label
@@ -5762,7 +5789,8 @@ function getPeopleAll(userId) {
       linked_user_email: normalizeEmail(person.stable_linked_user_email || person.email_matched_user_email || null),
       linked_user_photo_url: getEffectiveProfilePhoto({
         profile_photo_url: person.stable_linked_user_profile_photo_url || person.email_matched_user_profile_photo_url || '',
-        google_photo_url: person.stable_linked_user_google_photo_url || person.email_matched_user_google_photo_url || ''
+        google_photo_url: person.stable_linked_user_google_photo_url || person.email_matched_user_google_photo_url || '',
+        profile_photo_mode: person.stable_linked_user_profile_photo_mode || person.email_matched_user_profile_photo_mode || 'default'
       }),
       discovery_via: person.stable_linked_user_id ? 'person_link' : (hasAppUser ? 'email_match' : null),
       has_app_user: hasAppUser,
@@ -10121,8 +10149,9 @@ app.post('/people/profile-photo', ensureAuthenticated, (req, res) => {
 
     try {
       const currentUser = getUserRecord(userId, { includeDeleted: false });
-      db.prepare('UPDATE users SET profile_photo_url = ? WHERE id = ?').run(uploadedPath, userId);
+      db.prepare("UPDATE users SET profile_photo_url = ?, profile_photo_mode = 'manual' WHERE id = ?").run(uploadedPath, userId);
       req.user.profile_photo_url = uploadedPath;
+      req.user.profile_photo_mode = 'manual';
       if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
       setFlash(req, 'success', 'Foto nova no crachá! Já deixei seu perfil mais reconhecível por aqui.');
     } catch (err) {
@@ -10134,14 +10163,30 @@ app.post('/people/profile-photo', ensureAuthenticated, (req, res) => {
   });
 });
 
+app.post('/people/profile-photo/use-default', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const currentUser = getUserRecord(userId, { includeDeleted: false });
+    db.prepare("UPDATE users SET profile_photo_url = NULL, profile_photo_mode = 'default' WHERE id = ?").run(userId);
+    req.user.profile_photo_url = '';
+    req.user.profile_photo_mode = 'default';
+    if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
+    setFlash(req, 'success', currentUser?.google_photo_url && !looksLikeGoogleDefaultAvatar(currentUser.google_photo_url) ? 'Voltei para sua foto do Google aqui no app.' : 'Voltei para o visual padrão com o ícone do app no cabeçalho.');
+  } catch (error) {
+    setFlash(req, 'error', 'Não consegui voltar para o padrão agora.');
+  }
+  return res.redirect('/people#profile-photo');
+});
+
 app.post('/people/profile-photo/remove', ensureAuthenticated, async (req, res) => {
   const userId = req.user.id;
   try {
     const currentUser = getUserRecord(userId, { includeDeleted: false });
-    db.prepare('UPDATE users SET profile_photo_url = NULL WHERE id = ?').run(userId);
+    db.prepare("UPDATE users SET profile_photo_url = NULL, profile_photo_mode = 'none' WHERE id = ?").run(userId);
     req.user.profile_photo_url = '';
+    req.user.profile_photo_mode = 'none';
     if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
-    setFlash(req, 'success', currentUser?.google_photo_url ? 'Voltei para sua foto do Google aqui no app.' : 'Removi sua foto e deixei o ícone do app segurando a bronca por enquanto.');
+    setFlash(req, 'success', 'Pronto, escondi sua foto por aqui e deixei o app no modo sem avatar.');
   } catch (error) {
     setFlash(req, 'error', 'Não consegui remover a foto agora.');
   }
@@ -10156,6 +10201,9 @@ app.get("/people", ensureAuthenticated, (req, res) => {
   if (selfPerson) {
     const currentUser = getUserRecord(userId, { includeDeleted: false }) || req.user || {};
     selfPerson.photo_url = getEffectiveProfilePhoto(currentUser);
+    selfPerson.google_photo_url = normalizeProfilePhotoUrl(currentUser?.google_photo_url || '');
+    selfPerson.profile_photo_url = normalizeProfilePhotoUrl(currentUser?.profile_photo_url || '');
+    selfPerson.profile_photo_mode = normalizeProfilePhotoMode(currentUser?.profile_photo_mode || 'default');
   }
   const contacts = allPeople.filter((person) => person && !person.is_self);
   const pendingFriendRequests = getPendingReceivedFriendRequests(userId);

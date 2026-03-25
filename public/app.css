@@ -5186,3 +5186,10 @@ html.dark[data-theme-style="orgulho"] .op-screen--people [class*="text-slate-50"
 html.dark[data-theme-style="orgulho"] .op-screen--people [class*="text-slate-100"] {
   color: #fff4fa !important;
 }
+
+
+/* Keep the month bulk-action toolbar anchored to the viewport in themed mode. */
+html[data-theme-style="orgulho"] .op-screen--month .op-month-selection-toolbar,
+html.dark[data-theme-style="orgulho"] .op-screen--month .op-month-selection-toolbar {
+  position: fixed;
+}

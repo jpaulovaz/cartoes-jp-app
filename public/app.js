@@ -904,7 +904,7 @@
     const total = filtered.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
 
     if (!filtered.length || total <= 0) {
-      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não tem categoria suficiente para desenhar uma pizza. Quando o mês ganhar etiqueta, esse gráfico entra no forno.</div>';
+      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda falta categoria suficiente para montar esse retrato. Quando o mês ganhar mais cara, esse gráfico entra no jogo.</div>';
       legendNode.innerHTML = '';
       return;
     }
@@ -952,26 +952,34 @@
         <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
           <span class="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Total</span>
           <span class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">${formatMoney(total)}</span>
-          <span class="mt-1 max-w-[150px] text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400" data-summary-donut-center-copy>${filtered.length} blocos puxando o mês</span>
+          <span class="mt-1 max-w-[150px] text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400" data-summary-donut-center-copy>${filtered.length} categorias no mapa</span>
         </div>
       </div>`;
 
     legendNode.innerHTML = `
-      <div class="grid gap-3 sm:grid-cols-2">
+      <div class="grid gap-3">
         ${segments.map((segment, index) => {
           const canOpen = !segment.is_aggregate && !segment.is_uncategorized && Number(segment.id || 0) > 0;
           return `
-          <button type="button" class="group rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-left transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}" data-segment-index="${index}" ${canOpen ? '' : 'data-category-disabled="true"'}>
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0">
-                <div class="flex items-center gap-2">
-                  <span class="mt-0.5 inline-block h-3 w-3 flex-shrink-0 rounded-full" style="background:${segment.color}"></span>
-                  <div class="truncate text-sm font-black text-slate-900 dark:text-white">${segment.label || 'Sem nome'}</div>
+          <button type="button" class="group min-h-[110px] rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-left transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}" data-segment-index="${index}" ${canOpen ? '' : 'data-category-disabled="true"'}>
+            <div class="flex h-full flex-col justify-between gap-3">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="flex items-start gap-2">
+                    <span class="mt-1 inline-block h-3 w-3 flex-shrink-0 rounded-full" style="background:${segment.color}"></span>
+                    <div class="text-sm font-black leading-5 text-slate-900 break-words dark:text-white">${segment.label || 'Sem nome'}</div>
+                  </div>
+                  <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    <span>${segment.txn_count || 0} compra(s)</span>
+                    <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">${segment.share}% do seu pedaço</span>
+                  </div>
                 </div>
-                <div class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">${segment.txn_count || 0} compra(s) · ${segment.share}% do mês</div>
-                <div class="mt-2 text-[11px] font-bold uppercase tracking-[0.18em] ${canOpen ? 'text-violet-700 opacity-0 transition group-hover:opacity-100 dark:text-violet-300' : 'text-slate-400 dark:text-slate-500'}">${canOpen ? 'Abrir no mês filtrado' : 'Só leitura rápida'}</div>
+                <div class="text-right text-sm font-black text-slate-900 dark:text-white">${formatMoney(segment.total_cents)}</div>
               </div>
-              <div class="text-right text-sm font-black text-slate-900 dark:text-white">${formatMoney(segment.total_cents)}</div>
+              <div>
+                <div class="h-2 rounded-full bg-slate-200/80 dark:bg-slate-700/80"><div class="h-2 rounded-full" style="width:${Math.max(8, Number(segment.share || 0))}%;background:${segment.color}"></div></div>
+                <div class="mt-2 text-[11px] font-bold uppercase tracking-[0.18em] ${canOpen ? 'text-violet-700 opacity-0 transition group-hover:opacity-100 dark:text-violet-300' : 'text-slate-400 dark:text-slate-500'}">${canOpen ? 'Abrir essas compras' : 'Só para olhar'}</div>
+              </div>
             </div>
           </button>`;
         }).join('')}
@@ -990,12 +998,12 @@
       });
       if (!centerCopy) return;
       if (index === null) {
-        centerCopy.textContent = `${filtered.length} blocos puxando o mês`;
+        centerCopy.textContent = `${filtered.length} categorias no mapa`;
         return;
       }
       const activeSegment = segments[Number(index)];
       if (!activeSegment) return;
-      centerCopy.textContent = `${activeSegment.label} · ${activeSegment.share}% do mês`;
+      centerCopy.textContent = `${activeSegment.label} · ${activeSegment.share}% do seu pedaço`;
     }
 
     legendButtons.forEach((button) => {
@@ -1013,10 +1021,10 @@
         const year = Number(root.getAttribute('data-summary-year') || 0);
         const month = Number(root.getAttribute('data-summary-month') || 0);
         if (disabled || !categoryId) {
-          setInteractionHint(root, `${categoryLabel} ficou só na vitrine, porque esse bloco é um agrupado para leitura rápida.`);
+          setInteractionHint(root, `${categoryLabel} ficou só na vitrine por enquanto, porque esse pedaço é um agrupado rápido.`);
           return;
         }
-        setInteractionHint(root, `Abrindo ${categoryLabel} no mês para você enxergar onde o caldo engrossou.`);
+        setInteractionHint(root, `Abrindo ${categoryLabel} para você ver onde essa grana apareceu.`);
         window.location.href = buildMonthUrl(year, month, { f_category: categoryId });
       });
     });
@@ -1028,7 +1036,7 @@
 
     const filtered = Array.isArray(points) ? points : [];
     if (!filtered.length) {
-      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não deu para desenhar a linha do tempo desse mês.</div>';
+      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não deu para desenhar essa linha direitinho.</div>';
       return;
     }
 
@@ -1056,7 +1064,7 @@
     chartNode.innerHTML = `
       <div class="overflow-x-auto pb-1">
         <div class="relative min-w-[520px]">
-          <svg viewBox="0 0 ${width} ${height}" class="h-[260px] w-full" role="img" aria-label="Evolução mensal dos gastos">
+          <svg viewBox="0 0 ${width} ${height}" class="h-[260px] w-full" role="img" aria-label="Seu pedaço no cartão, mês a mês">
             <defs>
               <linearGradient id="summaryLineFill" x1="0" x2="0" y1="0" y2="1">
                 <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.30"></stop>

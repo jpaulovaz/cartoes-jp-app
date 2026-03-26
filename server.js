@@ -12868,6 +12868,42 @@ function getSummaryCategoryDistribution(userId, month, year) {
 }
 
 
+function getPersonShareCategoryDistribution(userId, personId, month, year) {
+  const safePersonId = Number(personId || 0);
+  if (!safePersonId) return [];
+
+  const rows = db.prepare(`
+    SELECT
+      t.purchase_category_id AS category_id,
+      COALESCE(NULLIF(TRIM(pc.name), ''), 'Sem categoria') AS label,
+      SUM(a.share_cents) AS total_cents,
+      COUNT(*) AS txn_count,
+      CASE WHEN t.purchase_category_id IS NULL THEN 1 ELSE 0 END AS is_uncategorized
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND a.person_id = ?
+      AND a.share_cents > 0
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+    GROUP BY CASE WHEN t.purchase_category_id IS NULL THEN 0 ELSE t.purchase_category_id END, label
+    HAVING SUM(a.share_cents) > 0
+    ORDER BY total_cents DESC, label COLLATE NOCASE ASC
+  `).all(userId, safePersonId, month, year, month, year);
+
+  return rows.map((row) => ({
+    id: row.category_id ? Number(row.category_id) : null,
+    label: row.label,
+    total_cents: row.total_cents || 0,
+    txn_count: row.txn_count || 0,
+    is_uncategorized: Number(row.is_uncategorized || 0) === 1
+  }));
+}
+
 const MERCHANT_KEYWORD_RULES = [
   { label: 'iFood', searchTerm: 'ifood', keywords: ['ifood', 'ifd*ifood', 'ifood mercado'] },
   { label: 'Uber', searchTerm: 'uber', keywords: ['uber', 'uber trip', 'uber eats'] },
@@ -13261,6 +13297,243 @@ function getSummaryMerchantSuggestions(userId, month, year, limit = 4) {
     }));
 }
 
+function buildMerchantRankingOverviewFromRows({ rows = [], previousRows = [], userRules = [], limit = 6 } = {}) {
+  const grouped = new Map();
+
+  rows.forEach((row) => {
+    const merchant = resolveMerchantFromDescription(row.description, userRules);
+    const key = merchant.normalizedLabel || normalizeMerchantText(merchant.label) || 'sem estabelecimento definido';
+    const current = grouped.get(key) || {
+      id: key,
+      label: merchant.label,
+      search_term: merchant.searchTerm || '',
+      total_cents: 0,
+      txn_count: 0,
+      confidence: merchant.confidence,
+      source: merchant.source,
+      sample_descriptions: []
+    };
+    current.total_cents += Number(row.amount_cents || 0);
+    current.txn_count += 1;
+    const sample = String(row.description || '').trim();
+    if (sample && current.sample_descriptions.length < 2 && !current.sample_descriptions.includes(sample)) {
+      current.sample_descriptions.push(sample);
+    }
+    if (!current.search_term && merchant.searchTerm) current.search_term = merchant.searchTerm;
+    if (current.confidence !== 'high' && merchant.confidence === 'high') current.confidence = 'high';
+    if (current.source !== 'user-rule' && merchant.source === 'user-rule') current.source = 'user-rule';
+    grouped.set(key, current);
+  });
+
+  const ranking = Array.from(grouped.values())
+    .sort((a, b) => {
+      const totalDiff = Number(b.total_cents || 0) - Number(a.total_cents || 0);
+      if (totalDiff !== 0) return totalDiff;
+      return String(a.label || '').localeCompare(String(b.label || ''), 'pt-BR', { sensitivity: 'base' });
+    });
+
+  const recognizedCount = ranking.filter((item) => item.confidence === 'high').length;
+  const learnedCount = ranking.filter((item) => item.source === 'user-rule').length;
+  const totalCents = ranking.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
+  const visible = ranking.slice(0, Math.max(1, Number(limit || 6)));
+  const previousGrouped = new Map();
+  previousRows.forEach((row) => {
+    const merchant = resolveMerchantFromDescription(row.description, userRules);
+    const key = merchant.normalizedLabel || normalizeMerchantText(merchant.label) || 'sem estabelecimento definido';
+    previousGrouped.set(key, (previousGrouped.get(key) || 0) + Number(row.amount_cents || 0));
+  });
+
+  return {
+    ranking: visible.map((item, index) => {
+      const previousTotalCents = Number(previousGrouped.get(item.id) || 0);
+      const deltaCents = Number(item.total_cents || 0) - previousTotalCents;
+      const deltaPct = previousTotalCents > 0 ? Math.round((deltaCents / previousTotalCents) * 100) : null;
+      return {
+        ...item,
+        position: index + 1,
+        share_pct: totalCents > 0 ? Math.round((Number(item.total_cents || 0) / totalCents) * 100) : 0,
+        avg_ticket_cents: Number(item.txn_count || 0) > 0 ? Math.round(Number(item.total_cents || 0) / Number(item.txn_count || 1)) : 0,
+        previous_total_cents: previousTotalCents,
+        delta_cents: deltaCents,
+        delta_pct: deltaPct
+      };
+    }),
+    totalCents,
+    merchantCount: ranking.length,
+    recognizedCount,
+    learnedCount,
+    totalTransactions: rows.length,
+    topMerchant: ranking[0]
+      ? {
+          ...ranking[0],
+          share_pct: totalCents > 0 ? Math.round((Number(ranking[0].total_cents || 0) / totalCents) * 100) : 0,
+          avg_ticket_cents: Number(ranking[0].txn_count || 0) > 0 ? Math.round(Number(ranking[0].total_cents || 0) / Number(ranking[0].txn_count || 1)) : 0
+        }
+      : null
+  };
+}
+
+function getPersonMerchantRanking(userId, personId, month, year, limit = 6) {
+  const safePersonId = Number(personId || 0);
+  if (!safePersonId) {
+    return {
+      ranking: [],
+      totalCents: 0,
+      merchantCount: 0,
+      recognizedCount: 0,
+      learnedCount: 0,
+      totalTransactions: 0,
+      topMerchant: null
+    };
+  }
+
+  const rows = db.prepare(`
+    SELECT t.id, t.description, a.share_cents AS amount_cents
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND a.person_id = ?
+      AND a.share_cents > 0
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+    ORDER BY a.share_cents DESC, t.id DESC
+  `).all(userId, safePersonId, month, year, month, year);
+
+  const previousRef = getRelativeMonthYear(month, year, -1);
+  const previousRows = db.prepare(`
+    SELECT t.id, t.description, a.share_cents AS amount_cents
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND a.person_id = ?
+      AND a.share_cents > 0
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+    ORDER BY a.share_cents DESC, t.id DESC
+  `).all(userId, safePersonId, previousRef.month, previousRef.year, previousRef.month, previousRef.year);
+
+  return buildMerchantRankingOverviewFromRows({
+    rows,
+    previousRows,
+    userRules: getMerchantLearningRules(userId),
+    limit
+  });
+}
+
+function getPersonMerchantSuggestions(userId, personId, month, year, limit = 4) {
+  const safePersonId = Number(personId || 0);
+  if (!safePersonId) return [];
+
+  const rows = db.prepare(`
+    SELECT t.id, t.description, a.share_cents AS amount_cents
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND a.person_id = ?
+      AND a.share_cents > 0
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+    ORDER BY a.share_cents DESC, t.id DESC
+  `).all(userId, safePersonId, month, year, month, year);
+
+  const userRules = getMerchantLearningRules(userId);
+  const blockedPatterns = new Set(
+    userRules
+      .filter((rule) => rule.status !== 'confirmed')
+      .map((rule) => normalizeMerchantText(rule.normalizedPattern || rule.normalized_pattern))
+      .filter(Boolean)
+  );
+  const confirmedPatterns = new Set(
+    userRules
+      .filter((rule) => rule.status === 'confirmed')
+      .map((rule) => normalizeMerchantText(rule.normalizedPattern || rule.normalized_pattern))
+      .filter(Boolean)
+  );
+
+  const grouped = new Map();
+  rows.forEach((row) => {
+    const merchant = resolveMerchantFromDescription(row.description, userRules);
+    if (merchant.source !== 'fallback' || merchant.confidence !== 'medium') return;
+    const pattern = buildMerchantPatternFromDescription(row.description);
+    if (!pattern || pattern.length < 4 || blockedPatterns.has(pattern) || confirmedPatterns.has(pattern)) return;
+    const key = `${pattern}::${merchant.normalizedLabel}`;
+    const current = grouped.get(key) || {
+      pattern,
+      label: merchant.label,
+      normalizedLabel: merchant.normalizedLabel,
+      search_term: merchant.searchTerm || pattern,
+      total_cents: 0,
+      txn_count: 0,
+      sample_descriptions: []
+    };
+    current.total_cents += Number(row.amount_cents || 0);
+    current.txn_count += 1;
+    const sample = String(row.description || '').trim();
+    if (sample && current.sample_descriptions.length < 3 && !current.sample_descriptions.includes(sample)) {
+      current.sample_descriptions.push(sample);
+    }
+    grouped.set(key, current);
+  });
+
+  return Array.from(grouped.values())
+    .filter((item) => item.txn_count >= 2 || item.total_cents >= 5000)
+    .sort((a, b) => {
+      const totalDiff = Number(b.total_cents || 0) - Number(a.total_cents || 0);
+      if (totalDiff !== 0) return totalDiff;
+      return Number(b.txn_count || 0) - Number(a.txn_count || 0);
+    })
+    .slice(0, Math.max(1, Number(limit || 4)))
+    .map((item, index) => ({
+      ...item,
+      position: index + 1,
+      preview_label: humanizeMerchantLabel(item.pattern),
+      sample_description: item.sample_descriptions[0] || ''
+    }));
+}
+
+function getPersonShareMonthlyTrend(userId, personId, month, year, monthsBack = 5) {
+  const safePersonId = Number(personId || 0);
+  const points = [];
+  if (!safePersonId) return points;
+
+  const selectTotal = db.prepare(`
+    SELECT COALESCE(SUM(a.share_cents), 0) AS total_cents
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND a.person_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+  `);
+
+  for (let offset = Number(monthsBack || 0) * -1; offset <= 0; offset += 1) {
+    const ref = shiftMonth(year, month, offset);
+    const row = selectTotal.get(userId, safePersonId, ref.month, ref.year, ref.month, ref.year);
+    points.push({
+      month: ref.month,
+      year: ref.year,
+      key: `${ref.year}-${String(ref.month).padStart(2, '0')}`,
+      label: `${String(ref.month).padStart(2, '0')}/${ref.year}`,
+      total_cents: row?.total_cents || 0,
+      is_current: ref.month === Number(month) && ref.year === Number(year)
+    });
+  }
+
+  return points;
+}
+
 function getSummaryMonthlyTrend(userId, month, year, monthsBack = 5) {
   const points = [];
   const selectTotal = db.prepare(`
@@ -13536,6 +13809,107 @@ function aggregateFinanceAnalyticsRows(rows, type) {
   }));
 }
 
+function getCardMonthlyTrend(userId, month, year, span = 6, { personId = null } = {}) {
+  const refs = [];
+  for (let offset = Math.max(0, Number(span || 6)) - 1; offset >= 0; offset -= 1) {
+    refs.push(shiftMonth(year, month, -offset));
+  }
+  if (!refs.length) return { refs: [], cards: [] };
+
+  const conditions = refs.map(() => `(${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)`).join(' OR ');
+  const params = refs.flatMap((ref) => [ref.month, ref.year]);
+  const safePersonId = Number(personId || 0);
+
+  const rows = safePersonId
+    ? db.prepare(`
+        SELECT
+          t.card_id,
+          c.name AS card_name,
+          ${EFFECTIVE_DUE_MONTH_SQL} AS ref_month,
+          ${EFFECTIVE_DUE_YEAR_SQL} AS ref_year,
+          SUM(a.share_cents) AS total_cents
+        FROM allocations a
+        JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+        JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
+        LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+        WHERE a.user_id = ?
+          AND a.person_id = ?
+          AND a.share_cents > 0
+          AND (${conditions})
+        GROUP BY t.card_id, c.name, ref_year, ref_month
+      `).all(userId, safePersonId, ...params)
+    : db.prepare(`
+        SELECT
+          t.card_id,
+          c.name AS card_name,
+          ${EFFECTIVE_DUE_MONTH_SQL} AS ref_month,
+          ${EFFECTIVE_DUE_YEAR_SQL} AS ref_year,
+          SUM(t.amount_cents) AS total_cents
+        FROM transactions t
+        JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
+        LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+        WHERE t.user_id = ?
+          AND t.amount_cents > 0
+          AND (${conditions})
+        GROUP BY t.card_id, c.name, ref_year, ref_month
+      `).all(userId, ...params);
+
+  const refKeys = refs.map((ref) => `${ref.year}-${String(ref.month).padStart(2, '0')}`);
+  const cardsById = new Map();
+
+  rows.forEach((row) => {
+    const cardId = Number(row.card_id || 0);
+    if (!cardId) return;
+    const key = `${row.ref_year}-${String(row.ref_month).padStart(2, '0')}`;
+    if (!cardsById.has(cardId)) {
+      cardsById.set(cardId, {
+        card_id: cardId,
+        label: String(row.card_name || '').trim() || 'Cartão sem nome',
+        seriesMap: new Map(refKeys.map((refKey, index) => [
+          refKey,
+          {
+            month: refs[index].month,
+            year: refs[index].year,
+            label: `${String(refs[index].month).padStart(2, '0')}/${refs[index].year}`,
+            total_cents: 0,
+            is_current: refs[index].month === Number(month) && refs[index].year === Number(year)
+          }
+        ]))
+      });
+    }
+    const card = cardsById.get(cardId);
+    const point = card.seriesMap.get(key);
+    if (!point) return;
+    point.total_cents = Number(row.total_cents || 0);
+  });
+
+  const cards = Array.from(cardsById.values())
+    .map((card) => {
+      const series = refKeys.map((key) => card.seriesMap.get(key)).filter(Boolean);
+      const totalCents = series.reduce((acc, point) => acc + Number(point.total_cents || 0), 0);
+      const currentPoint = series.find((point) => point.is_current) || series[series.length - 1] || null;
+      const peakCents = series.reduce((best, point) => Math.max(best, Number(point.total_cents || 0)), 0);
+      return {
+        card_id: card.card_id,
+        label: card.label,
+        total_cents: totalCents,
+        current_cents: Number(currentPoint?.total_cents || 0),
+        peak_cents: peakCents,
+        series
+      };
+    })
+    .filter((card) => Number(card.total_cents || 0) > 0)
+    .sort((a, b) => {
+      const currentDiff = Number(b.current_cents || 0) - Number(a.current_cents || 0);
+      if (currentDiff !== 0) return currentDiff;
+      const totalDiff = Number(b.total_cents || 0) - Number(a.total_cents || 0);
+      if (totalDiff !== 0) return totalDiff;
+      return String(a.label || '').localeCompare(String(b.label || ''), 'pt-BR', { sensitivity: 'base' });
+    });
+
+  return { refs, cards };
+}
+
 function getMonthlyFinanceAnalytics(userId, month, year, span = 6) {
   const currentRows = hydrateMonthlyFinances(userId, db.prepare(`
     SELECT mf.*, fc.name AS category_name
@@ -13755,6 +14129,103 @@ function buildMonthlyReviewViewModel(userId, month, year) {
     totalKey: 'total_cents',
     paidKey: 'paid_cents'
   });
+  const summaryCharts = buildSummaryChartsPayload({ userId, month, year, cardsPanel, personPanel, unassigned });
+  const selfPerson = people.find((person) => isSelfPersonRow(person)) || getSelfPerson(userId) || null;
+  const selfPersonId = Number(selfPerson?.id || 0);
+  const selfPersonPanel = selfPersonId
+    ? personPanel.find((item) => Number(item.person_id || 0) === selfPersonId) || null
+    : null;
+  const personalCategories = getPersonShareCategoryDistribution(userId, selfPersonId, month, year);
+  const personalMonthlyTrend = getPersonShareMonthlyTrend(userId, selfPersonId, month, year, 5);
+  const personalMerchantRanking = getPersonMerchantRanking(userId, selfPersonId, month, year, 6);
+  const personalMerchantSuggestions = getPersonMerchantSuggestions(userId, selfPersonId, month, year, 4);
+  const cardMonthlyTrend = getCardMonthlyTrend(userId, month, year, 6);
+  const personalCardShareCents = Number(selfPersonPanel?.total_cents || 0);
+  const personalPaidCents = Number(selfPersonPanel?.paid_cents || 0);
+  const personalRemainingCents = Math.max(0, personalCardShareCents - personalPaidCents);
+  const personalCategorizedCents = personalCategories
+    .filter((item) => !item.is_uncategorized)
+    .reduce((acc, item) => acc + Number(item?.total_cents || 0), 0);
+  const personalCoveragePct = personalCardShareCents > 0 ? Math.round((personalCategorizedCents / personalCardShareCents) * 100) : 0;
+  const personalTopCategory = personalCategories.find((item) => Number(item?.total_cents || 0) > 0) || null;
+  const personalPreviousPoint = personalMonthlyTrend.length > 1 ? personalMonthlyTrend[personalMonthlyTrend.length - 2] : null;
+  const personalCurrentPoint = personalMonthlyTrend.length > 0 ? personalMonthlyTrend[personalMonthlyTrend.length - 1] : null;
+  const personalDeltaCents = personalPreviousPoint ? Number(personalCurrentPoint?.total_cents || 0) - Number(personalPreviousPoint?.total_cents || 0) : 0;
+  const personalDeltaPct = personalPreviousPoint && Number(personalPreviousPoint.total_cents || 0) > 0
+    ? Math.round((personalDeltaCents / Number(personalPreviousPoint.total_cents || 0)) * 100)
+    : null;
+  const personalAverageMonthlySpendCents = personalMonthlyTrend.length
+    ? Math.round(personalMonthlyTrend.reduce((acc, point) => acc + Number(point?.total_cents || 0), 0) / personalMonthlyTrend.length)
+    : 0;
+  const personalPeakPoint = personalMonthlyTrend.reduce((best, point) => {
+    if (!best) return point;
+    return Number(point?.total_cents || 0) > Number(best?.total_cents || 0) ? point : best;
+  }, null);
+  const personalTrendMap = new Map(personalMonthlyTrend.map((point) => [point.key, point]));
+  const flowTrend = (financeAnalytics?.trend || []).map((point) => {
+    const key = `${point.year}-${String(point.month).padStart(2, '0')}`;
+    const personalPoint = personalTrendMap.get(key);
+    const cardCents = Number(personalPoint?.total_cents || 0);
+    const outsideExpenseCents = Number(point.expense_cents || 0);
+    const totalOutflowCents = outsideExpenseCents + cardCents;
+    return {
+      ...point,
+      card_cents: cardCents,
+      total_outflow_cents: totalOutflowCents,
+      net_cents: Number(point.income_cents || 0) - totalOutflowCents
+    };
+  });
+  const analyticsCharts = {
+    categories: personalCategories,
+    monthlyTrend: personalMonthlyTrend,
+    flowTrend,
+    kpis: {
+      totalSpentCents: personalCardShareCents,
+      totalPaidCardsCents: personalPaidCents,
+      totalRemainingCardsCents: personalRemainingCents,
+      categorizedCents: personalCategorizedCents,
+      uncategorizedCents: Math.max(0, personalCardShareCents - personalCategorizedCents),
+      categoryCoveragePct: personalCoveragePct,
+      deltaCents: personalDeltaCents,
+      deltaPct: personalDeltaPct,
+      topCategory: personalTopCategory ? {
+        label: personalTopCategory.label,
+        total_cents: personalTopCategory.total_cents,
+        share_pct: personalCardShareCents > 0 ? Math.round((Number(personalTopCategory.total_cents || 0) / personalCardShareCents) * 100) : 0
+      } : null
+    },
+    insights: {
+      averageMonthlySpendCents: personalAverageMonthlySpendCents,
+      peakPoint: personalPeakPoint ? {
+        month: personalPeakPoint.month,
+        year: personalPeakPoint.year,
+        label: personalPeakPoint.label,
+        total_cents: personalPeakPoint.total_cents
+      } : null,
+      currentVsAveragePct: personalAverageMonthlySpendCents > 0
+        ? Math.round(((Number(personalCurrentPoint?.total_cents || 0) - personalAverageMonthlySpendCents) / personalAverageMonthlySpendCents) * 100)
+        : null,
+      trackedCategories: personalCategories.length,
+      merchantCount: personalMerchantRanking.merchantCount,
+      recognizedMerchantCount: personalMerchantRanking.recognizedCount,
+      learnedMerchantCount: personalMerchantRanking.learnedCount,
+      merchantSuggestionCount: personalMerchantSuggestions.length,
+      merchantLearning: summaryCharts?.insights?.merchantLearning || { activeRules: [], pausedRules: [] },
+      topMerchant: personalMerchantRanking.topMerchant
+        ? {
+            label: personalMerchantRanking.topMerchant.label,
+            total_cents: personalMerchantRanking.topMerchant.total_cents,
+            txn_count: personalMerchantRanking.topMerchant.txn_count,
+            share_pct: personalMerchantRanking.topMerchant.share_pct,
+            avg_ticket_cents: personalMerchantRanking.topMerchant.avg_ticket_cents,
+            search_term: personalMerchantRanking.topMerchant.search_term || ''
+          }
+        : null
+    },
+    establishments: personalMerchantRanking.ranking,
+    establishmentSuggestions: personalMerchantSuggestions.length ? personalMerchantSuggestions : (summaryCharts?.establishmentSuggestions || []),
+    cardTrendByCard: cardMonthlyTrend.cards
+  };
 
   return {
     month,
@@ -13768,8 +14239,11 @@ function buildMonthlyReviewViewModel(userId, month, year) {
     peopleBreakdown,
     cardBreakdown,
     financeAnalytics,
+    analyticsCharts,
+    cardMonthlyTrend,
+    selfPerson,
     isClosed,
-    summaryCharts: buildSummaryChartsPayload({ userId, month, year, cardsPanel, personPanel, unassigned }),
+    summaryCharts,
     previousSummaryRef: shiftMonth(year, month, -1),
     nextSummaryRef: shiftMonth(year, month, 1)
   };

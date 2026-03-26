@@ -56,50 +56,55 @@
         </div>
         <div id="allocMsg" class="mt-3 h-5 text-sm font-bold text-emerald-600 transition-all duration-300"></div>
       </div>
-      <div class="op-page-hero__actions op-page-hero__actions--compact">
-        <% if (isClosed) { %>
-          <button type="button" disabled
-            class="op-btn op-btn-muted op-btn--compact whitespace-nowrap">
-            🔒 Mês Fechado
-          </button>
-        <% } else { %>
-          <button type="button" data-manual-modal-open
-            class="op-btn op-btn-success op-btn--compact whitespace-nowrap">
-            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+      <div class="op-page-hero__actions op-page-hero__actions--month">
+        <div class="op-page-hero__action-row op-page-hero__action-row--month-top">
+          <a href="/summary/<%= year %>/<%= month %>"
+            class="op-btn op-btn-info op-btn--compact">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6m4 6V7m4 10v-3M5 19h14"></path>
             </svg>
-            Nova compra
-          </button>
-        <% } %>
+            Fechamento</a>
 
-        <a href="/summary/<%= year %>/<%= month %>"
-          class="op-btn op-btn-info op-btn--compact whitespace-nowrap">
-          <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6m4 6V7m4 10v-3M5 19h14"></path>
-          </svg>
-          Fechamento</a>
-
-        <a href="/analytics/<%= year %>/<%= month %>"
-          class="op-btn op-btn-primary op-btn--compact whitespace-nowrap">
-          <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 14l3-3 3 2 4-5"></path>
-          </svg>
-          Análises</a>
-
-        <a href="/month/<%= year %>/<%= month %>/export.csv"
-          class="op-btn op-btn-export op-btn--compact whitespace-nowrap">
-          <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v10m0 0l-4-4m4 4l4-4M5 19h14"></path>
-          </svg>
-          Exportar compras</a>
-        <% if (canImport) { %>
-          <a href="/import"
-            class="op-btn op-btn-primary op-btn--compact whitespace-nowrap">
-            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+          <a href="/analytics/<%= year %>/<%= month %>"
+            class="op-btn op-btn-primary op-btn--compact">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 14l3-3 3 2 4-5"></path>
             </svg>
-            Importar fatura</a>
-        <% } %>
+            Análises</a>
+        </div>
+
+        <div class="op-page-hero__action-row op-page-hero__action-row--month-bottom">
+          <% if (isClosed) { %>
+            <button type="button" disabled
+              class="op-btn op-btn-muted op-btn--compact">
+              🔒 Fechado
+            </button>
+          <% } else { %>
+            <button type="button" data-manual-modal-open
+              class="op-btn op-btn-success op-btn--compact">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+              </svg>
+              Nova compra
+            </button>
+          <% } %>
+
+          <% if (canImport) { %>
+            <a href="/import"
+              class="op-btn op-btn-primary op-btn--compact">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+              </svg>
+              Importar</a>
+          <% } %>
+
+          <a href="/month/<%= year %>/<%= month %>/export.csv"
+            class="op-btn op-btn-muted op-btn--compact">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v10m0 0l-4-4m4 4l4-4M5 19h14"></path>
+            </svg>
+            Exportar</a>
+        </div>
       </div>
     </section>
 
@@ -124,13 +129,15 @@
       </div>
     <% } %>
 
-    <div class="mb-6 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
-      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
+    <details class="mb-6 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 group" open>
+      <summary class="flex cursor-pointer list-none items-start justify-between gap-3">
         <div>
           <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Compras que se repetem</h2>
+          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">As que voltam todo mês ficam reunidas aqui para você pausar, retomar ou encerrar sem caça ao tesouro.</p>
         </div>
-      </div>
-
+        <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600 transition group-open:rotate-180 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">⌄</span>
+      </summary>
+      <div class="mt-4">
       <% if (recurringRules && recurringRules.length) { %>
         <div class="grid gap-4 lg:grid-cols-2">
           <% recurringRules.forEach(rule => { %>
@@ -192,7 +199,8 @@
           <p class="op-empty-state__text">Crie uma compra manual e marque <strong class="text-slate-700 dark:text-slate-200">Repetir todo mês</strong> para deixar essa rotina no piloto semi-automático.</p>
         </div>
       <% } %>
-    </div>
+      </div>
+    </details>
 
     <div id="modalManual" data-manual-modal aria-hidden="true"
       class="hidden fixed inset-0 z-[10020] bg-slate-900/60 backdrop-blur-sm px-3 py-3 sm:px-4 sm:py-6">
@@ -303,6 +311,51 @@
     </div>
   </div>
 
+    <details class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6 group">
+      <summary class="flex cursor-pointer list-none items-start justify-between gap-3">
+        <div>
+          <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Categorias de compra</h2>
+          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Use esse cantinho para organizar suas categorias sem bagunçar o histórico que já existe.</p>
+        </div>
+        <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600 transition group-open:rotate-180 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">⌄</span>
+      </summary>
+      <div class="mt-4 space-y-4">
+        <div>
+          <div class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ativas no momento</div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <% if ((activePurchaseCategories || []).length) { %>
+              <% activePurchaseCategories.forEach(category => { %>
+                <form method="post" action="/purchase-categories/<%= category.id %>/archive" class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">
+                  <span><%= category.name %></span>
+                  <button type="submit" class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800">Arquivar</button>
+                </form>
+              <% }) %>
+            <% } else { %>
+              <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">Ainda não apareceu nenhuma categoria ativa por aqui.</div>
+            <% } %>
+          </div>
+        </div>
+
+        <div>
+          <div class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Arquivadas</div>
+          <p class="mt-1 text-xs font-medium text-slate-400 dark:text-slate-500">Arquivar tira a categoria dos seletores, mas não mexe no histórico das compras que já usaram esse nome.</p>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <% const archivedPurchaseCategories = sortedPurchaseCategories.filter(category => !category.active); %>
+            <% if (archivedPurchaseCategories.length) { %>
+              <% archivedPurchaseCategories.forEach(category => { %>
+                <form method="post" action="/purchase-categories/<%= category.id %>/restore" class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                  <span><%= category.name %></span>
+                  <button type="submit" class="inline-flex items-center rounded-full border border-amber-200 bg-white/90 px-2 py-0.5 text-[11px] font-bold text-amber-700 transition hover:bg-white dark:border-amber-700 dark:bg-slate-950/80 dark:text-amber-200 dark:hover:bg-slate-900">Reativar</button>
+                </form>
+              <% }) %>
+            <% } else { %>
+              <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">Nenhuma categoria arquivada até agora.</div>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    </details>
+
     <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6">
       <form method="get" action="/month/<%= year %>/<%= month %>" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         <input type="hidden" name="sort" value="<%= sort %>" />
@@ -389,51 +442,6 @@
         </div>
       </form>
     </div>
-
-    <details class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6 group">
-      <summary class="flex cursor-pointer list-none items-start justify-between gap-3">
-        <div>
-          <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Categorias de compra</h2>
-          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Use esse cantinho para organizar suas categorias sem bagunçar o histórico que já existe.</p>
-        </div>
-        <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600 transition group-open:rotate-180 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">⌄</span>
-      </summary>
-      <div class="mt-4 space-y-4">
-        <div>
-          <div class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ativas no momento</div>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <% if ((activePurchaseCategories || []).length) { %>
-              <% activePurchaseCategories.forEach(category => { %>
-                <form method="post" action="/purchase-categories/<%= category.id %>/archive" class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">
-                  <span><%= category.name %></span>
-                  <button type="submit" class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800">Arquivar</button>
-                </form>
-              <% }) %>
-            <% } else { %>
-              <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">Ainda não apareceu nenhuma categoria ativa por aqui.</div>
-            <% } %>
-          </div>
-        </div>
-
-        <div>
-          <div class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Arquivadas</div>
-          <p class="mt-1 text-xs font-medium text-slate-400 dark:text-slate-500">Arquivar tira a categoria dos seletores, mas não mexe no histórico das compras que já usaram esse nome.</p>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <% const archivedPurchaseCategories = sortedPurchaseCategories.filter(category => !category.active); %>
-            <% if (archivedPurchaseCategories.length) { %>
-              <% archivedPurchaseCategories.forEach(category => { %>
-                <form method="post" action="/purchase-categories/<%= category.id %>/restore" class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-                  <span><%= category.name %></span>
-                  <button type="submit" class="inline-flex items-center rounded-full border border-amber-200 bg-white/90 px-2 py-0.5 text-[11px] font-bold text-amber-700 transition hover:bg-white dark:border-amber-700 dark:bg-slate-950/80 dark:text-amber-200 dark:hover:bg-slate-900">Reativar</button>
-                </form>
-              <% }) %>
-            <% } else { %>
-              <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">Nenhuma categoria arquivada até agora.</div>
-            <% } %>
-          </div>
-        </div>
-      </div>
-    </details>
 
     <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
       <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">

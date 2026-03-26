@@ -56,15 +56,15 @@
         </div>
         <div id="allocMsg" class="mt-3 h-5 text-sm font-bold text-emerald-600 transition-all duration-300"></div>
       </div>
-      <div class="op-page-hero__actions">
+      <div class="op-page-hero__actions op-page-hero__actions--compact">
         <% if (isClosed) { %>
           <button type="button" disabled
-            class="op-btn op-btn-muted op-btn--block">
+            class="op-btn op-btn-muted op-btn--compact whitespace-nowrap">
             🔒 Mês Fechado
           </button>
         <% } else { %>
           <button type="button" data-manual-modal-open
-            class="op-btn op-btn-success op-btn--block">
+            class="op-btn op-btn-success op-btn--compact whitespace-nowrap">
             <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
             </svg>
@@ -73,28 +73,28 @@
         <% } %>
 
         <a href="/summary/<%= year %>/<%= month %>"
-          class="op-btn op-btn-info op-btn--block">
+          class="op-btn op-btn-info op-btn--compact whitespace-nowrap">
           <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6m4 6V7m4 10v-3M5 19h14"></path>
           </svg>
-          Fechamento do mês</a>
+          Fechamento</a>
 
         <a href="/analytics/<%= year %>/<%= month %>"
-          class="op-btn op-btn-primary op-btn--block">
+          class="op-btn op-btn-primary op-btn--compact whitespace-nowrap">
           <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 14l3-3 3 2 4-5"></path>
           </svg>
-          Análises do mês</a>
+          Análises</a>
 
         <a href="/month/<%= year %>/<%= month %>/export.csv"
-          class="op-btn op-btn-muted op-btn--block">
+          class="op-btn op-btn-export op-btn--compact whitespace-nowrap">
           <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v10m0 0l-4-4m4 4l4-4M5 19h14"></path>
           </svg>
           Exportar compras</a>
         <% if (canImport) { %>
           <a href="/import"
-            class="op-btn op-btn-primary op-btn--block">
+            class="op-btn op-btn-primary op-btn--compact whitespace-nowrap">
             <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
             </svg>

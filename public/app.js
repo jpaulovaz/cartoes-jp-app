@@ -1154,29 +1154,34 @@
       const graphButton = summaryRoot.querySelector('[data-summary-graphs-toggle]');
       const graphPanel = summaryRoot.querySelector('[data-summary-graphs-panel]');
       const graphLabel = summaryRoot.querySelector('[data-summary-graphs-toggle-label]');
-      bindSummaryDisclosure({
-        button: graphButton,
-        panel: graphPanel,
-        label: graphLabel,
-        openLabel: 'Mostrar gráficos',
-        closeLabel: 'Esconder gráficos',
-        onOpen: () => {
-          if (graphPanelSeen) return renderCharts();
-          graphPanelSeen = true;
-          if ('IntersectionObserver' in window && graphPanel) {
-            const observer = new IntersectionObserver((entries) => {
-              entries.forEach((entry) => {
-                if (!entry.isIntersecting) return;
-                renderCharts();
-                observer.disconnect();
-              });
-            }, { rootMargin: '140px 0px' });
-            observer.observe(graphPanel);
-          } else {
-            renderCharts();
+      if (graphButton && graphPanel && graphLabel) {
+        bindSummaryDisclosure({
+          button: graphButton,
+          panel: graphPanel,
+          label: graphLabel,
+          openLabel: 'Mostrar gráficos',
+          closeLabel: 'Esconder gráficos',
+          onOpen: () => {
+            if (graphPanelSeen) return renderCharts();
+            graphPanelSeen = true;
+            if ('IntersectionObserver' in window && graphPanel) {
+              const observer = new IntersectionObserver((entries) => {
+                entries.forEach((entry) => {
+                  if (!entry.isIntersecting) return;
+                  renderCharts();
+                  observer.disconnect();
+                });
+              }, { rootMargin: '140px 0px' });
+              observer.observe(graphPanel);
+            } else {
+              renderCharts();
+            }
           }
-        }
-      });
+        });
+      } else {
+        graphPanelSeen = true;
+        renderCharts();
+      }
 
       const intelRoot = document.querySelector('[data-summary-intel-root]');
       if (intelRoot) {
@@ -2595,5 +2600,56 @@
   } else {
     initMobileAppearanceMenu();
     initThemeStyleCenter();
+  }
+})();
+
+
+(function () {
+  function initAnalyticsTabs() {
+    document.querySelectorAll('[data-op-tabs]').forEach((root) => {
+      const buttons = Array.from(root.querySelectorAll('[data-op-tab-target]'));
+      const panels = Array.from(root.querySelectorAll('[data-op-tab-panel]'));
+      if (!buttons.length || !panels.length) return;
+
+      const activate = (targetId, { focus = false } = {}) => {
+        buttons.forEach((button) => {
+          const isActive = button.getAttribute('data-op-tab-target') === targetId;
+          button.classList.toggle('is-active', isActive);
+          button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+          button.setAttribute('tabindex', isActive ? '0' : '-1');
+          if (isActive && focus) button.focus();
+        });
+
+        panels.forEach((panel) => {
+          const isActive = panel.getAttribute('data-op-tab-panel') === targetId;
+          panel.hidden = !isActive;
+        });
+      };
+
+      buttons.forEach((button, index) => {
+        button.addEventListener('click', () => activate(button.getAttribute('data-op-tab-target') || ''));
+        button.addEventListener('keydown', (event) => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+          event.preventDefault();
+          let nextIndex = index;
+          if (event.key === 'ArrowRight') nextIndex = (index + 1) % buttons.length;
+          if (event.key === 'ArrowLeft') nextIndex = (index - 1 + buttons.length) % buttons.length;
+          if (event.key === 'Home') nextIndex = 0;
+          if (event.key === 'End') nextIndex = buttons.length - 1;
+          const nextButton = buttons[nextIndex];
+          if (!nextButton) return;
+          activate(nextButton.getAttribute('data-op-tab-target') || '', { focus: true });
+        });
+      });
+
+      const initialButton = buttons.find((button) => button.getAttribute('aria-selected') === 'true') || buttons[0];
+      activate(initialButton.getAttribute('data-op-tab-target') || '');
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAnalyticsTabs);
+  } else {
+    initAnalyticsTabs();
   }
 })();

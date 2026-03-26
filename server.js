@@ -13454,6 +13454,178 @@ function buildSummaryChartsPayload({ userId, month, year, cardsPanel = [], perso
   };
 }
 
+
+function buildAnalyticsBreakdown(items, { idKey = 'id', labelKey = 'label', totalKey = 'total_cents', paidKey = 'paid_cents', activeKey = null } = {}) {
+  const rows = Array.isArray(items) ? items : [];
+  const normalized = rows
+    .map((item) => {
+      const totalCents = Math.max(0, Number(item?.[totalKey] || 0));
+      const paidCents = Math.max(0, Number(item?.[paidKey] || 0));
+      return {
+        id: Number(item?.[idKey] || 0),
+        label: String(item?.[labelKey] || '').trim(),
+        total_cents: totalCents,
+        paid_cents: paidCents,
+        remaining_cents: Math.max(0, totalCents - paidCents),
+        active: activeKey ? Number(item?.[activeKey] || 0) !== 0 : true
+      };
+    })
+    .filter((item) => item.label && item.total_cents > 0)
+    .sort((a, b) => {
+      const diff = Number(b.total_cents || 0) - Number(a.total_cents || 0);
+      if (diff !== 0) return diff;
+      return String(a.label || '').localeCompare(String(b.label || ''), 'pt-BR', { sensitivity: 'base' });
+    });
+
+  const totalAllCents = normalized.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
+  const maxCents = normalized.reduce((best, item) => Math.max(best, Number(item.total_cents || 0)), 0);
+
+  return normalized.map((item, index) => ({
+    ...item,
+    position: index + 1,
+    share_pct: totalAllCents > 0 ? Math.round((Number(item.total_cents || 0) / totalAllCents) * 100) : 0,
+    paid_pct: Number(item.total_cents || 0) > 0 ? Math.round((Number(item.paid_cents || 0) / Number(item.total_cents || 0)) * 100) : 0,
+    intensity_pct: maxCents > 0 ? Math.max(8, Math.round((Number(item.total_cents || 0) / maxCents) * 100)) : 0
+  }));
+}
+
+function normalizeFinanceAnalyticsLabel(rawLabel, fallback) {
+  const label = String(rawLabel || '').trim();
+  return label || fallback;
+}
+
+function aggregateFinanceAnalyticsRows(rows, type) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const fallbackLabel = type === 'income' ? 'Outras entradas' : 'Outras saídas';
+  const grouped = new Map();
+
+  safeRows.forEach((row) => {
+    const amountCents = Math.max(0, Number(row?.amount_cents || 0));
+    if (amountCents <= 0) return;
+    const label = normalizeFinanceAnalyticsLabel(row?.description || row?.category_name, fallbackLabel);
+    const key = label.toLocaleLowerCase('pt-BR');
+    const current = grouped.get(key) || {
+      label,
+      total_cents: 0,
+      row_count: 0,
+      item_count: 0,
+      amount_mode: normalizeFinanceAmountMode(row?.amount_mode)
+    };
+    current.total_cents += amountCents;
+    current.row_count += 1;
+    current.item_count += normalizeFinanceAmountMode(row?.amount_mode) === 'variable'
+      ? Math.max(1, Number(row?.item_count || 0))
+      : 1;
+    grouped.set(key, current);
+  });
+
+  const normalized = Array.from(grouped.values()).sort((a, b) => {
+    const centsDiff = Number(b.total_cents || 0) - Number(a.total_cents || 0);
+    if (centsDiff !== 0) return centsDiff;
+    return String(a.label || '').localeCompare(String(b.label || ''), 'pt-BR', { sensitivity: 'base' });
+  });
+
+  const totalAllCents = normalized.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
+  const maxCents = normalized.reduce((best, item) => Math.max(best, Number(item.total_cents || 0)), 0);
+
+  return normalized.map((item, index) => ({
+    ...item,
+    position: index + 1,
+    share_pct: totalAllCents > 0 ? Math.round((Number(item.total_cents || 0) / totalAllCents) * 100) : 0,
+    intensity_pct: maxCents > 0 ? Math.max(8, Math.round((Number(item.total_cents || 0) / maxCents) * 100)) : 0
+  }));
+}
+
+function getMonthlyFinanceAnalytics(userId, month, year, span = 6) {
+  const currentRows = hydrateMonthlyFinances(userId, db.prepare(`
+    SELECT mf.*, fc.name AS category_name
+    FROM monthly_finances mf
+    LEFT JOIN finance_categories fc ON fc.id = mf.category_id AND fc.user_id = mf.user_id
+    WHERE mf.user_id = ? AND mf.month = ? AND mf.year = ?
+    ORDER BY CASE mf.type WHEN 'income' THEN 0 ELSE 1 END, mf.id ASC
+  `).all(userId, month, year));
+
+  const incomeRows = currentRows.filter((row) => row?.type === 'income' && Number(row?.amount_cents || 0) > 0);
+  const expenseRows = currentRows.filter((row) => row?.type === 'expense' && Number(row?.amount_cents || 0) > 0);
+
+  const incomeCents = incomeRows.reduce((acc, row) => acc + Number(row?.amount_cents || 0), 0);
+  const expenseCents = expenseRows.reduce((acc, row) => acc + Number(row?.amount_cents || 0), 0);
+
+  const refs = [];
+  for (let offset = Math.max(0, Number(span || 6)) - 1; offset >= 0; offset -= 1) {
+    refs.push(shiftMonth(year, month, -offset));
+  }
+
+  let trendRows = [];
+  if (refs.length > 0) {
+    const conditions = refs.map(() => '(mf.month = ? AND mf.year = ?)').join(' OR ');
+    const params = refs.flatMap((ref) => [ref.month, ref.year]);
+    trendRows = hydrateMonthlyFinances(userId, db.prepare(`
+      SELECT mf.*, fc.name AS category_name
+      FROM monthly_finances mf
+      LEFT JOIN finance_categories fc ON fc.id = mf.category_id AND fc.user_id = mf.user_id
+      WHERE mf.user_id = ? AND (${conditions})
+    `).all(userId, ...params));
+  }
+
+  const buckets = new Map(refs.map((ref) => [
+    `${ref.year}-${String(ref.month).padStart(2, '0')}`,
+    {
+      month: ref.month,
+      year: ref.year,
+      label: `${String(ref.month).padStart(2, '0')}/${ref.year}`,
+      income_cents: 0,
+      expense_cents: 0,
+      net_cents: 0,
+      is_current: ref.month === Number(month) && ref.year === Number(year)
+    }
+  ]));
+
+  trendRows.forEach((row) => {
+    const key = `${row.year}-${String(row.month).padStart(2, '0')}`;
+    const bucket = buckets.get(key);
+    if (!bucket) return;
+    const amountCents = Math.max(0, Number(row?.amount_cents || 0));
+    if (row?.type === 'income') bucket.income_cents += amountCents;
+    if (row?.type === 'expense') bucket.expense_cents += amountCents;
+  });
+
+  const trend = refs.map((ref) => {
+    const key = `${ref.year}-${String(ref.month).padStart(2, '0')}`;
+    const point = buckets.get(key) || {
+      month: ref.month,
+      year: ref.year,
+      label: `${String(ref.month).padStart(2, '0')}/${ref.year}`,
+      income_cents: 0,
+      expense_cents: 0,
+      net_cents: 0,
+      is_current: ref.month === Number(month) && ref.year === Number(year)
+    };
+    point.net_cents = Number(point.income_cents || 0) - Number(point.expense_cents || 0);
+    return point;
+  });
+
+  const topIncome = aggregateFinanceAnalyticsRows(incomeRows, 'income');
+  const topExpense = aggregateFinanceAnalyticsRows(expenseRows, 'expense');
+  const positiveNetMonths = trend.filter((point) => Number(point.net_cents || 0) >= 0 && (Number(point.income_cents || 0) > 0 || Number(point.expense_cents || 0) > 0)).length;
+
+  return {
+    totals: {
+      incomeCents,
+      expenseCents,
+      netCents: incomeCents - expenseCents,
+      incomeRowCount: incomeRows.length,
+      expenseRowCount: expenseRows.length,
+      positiveNetMonths
+    },
+    incomeSources: topIncome,
+    expenseSources: topExpense,
+    trend,
+    topIncome: topIncome[0] || null,
+    topExpense: topExpense[0] || null
+  };
+}
+
 function buildMonthlyReviewViewModel(userId, month, year) {
   syncRecurringTransactions(userId, year, month);
   const isClosed = isMonthClosed(userId, month, year);
@@ -13569,6 +13741,21 @@ function buildMonthlyReviewViewModel(userId, month, year) {
     };
   });
 
+  const financeAnalytics = getMonthlyFinanceAnalytics(userId, month, year, 6);
+  const peopleBreakdown = buildAnalyticsBreakdown(personPanel, {
+    idKey: 'person_id',
+    labelKey: 'person_name',
+    totalKey: 'total_cents',
+    paidKey: 'paid_cents',
+    activeKey: 'active'
+  });
+  const cardBreakdown = buildAnalyticsBreakdown(cardsPanel, {
+    idKey: 'card_id',
+    labelKey: 'card_name',
+    totalKey: 'total_cents',
+    paidKey: 'paid_cents'
+  });
+
   return {
     month,
     year,
@@ -13578,6 +13765,9 @@ function buildMonthlyReviewViewModel(userId, month, year) {
     unassigned,
     cardsPanel,
     personPanel,
+    peopleBreakdown,
+    cardBreakdown,
+    financeAnalytics,
     isClosed,
     summaryCharts: buildSummaryChartsPayload({ userId, month, year, cardsPanel, personPanel, unassigned }),
     previousSummaryRef: shiftMonth(year, month, -1),

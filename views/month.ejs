@@ -57,7 +57,7 @@
         <div id="allocMsg" class="mt-3 h-5 text-sm font-bold text-emerald-600 transition-all duration-300"></div>
       </div>
       <div class="op-page-hero__actions op-page-hero__actions--compact op-month-hero-actions">
-        <div class="op-month-hero-actions__row">
+        <div class="op-month-hero-actions__row op-month-hero-actions__row--dual">
           <a href="/summary/<%= year %>/<%= month %>"
             class="op-btn op-btn-info op-btn--compact whitespace-nowrap">
             <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -73,7 +73,7 @@
             Análises</a>
         </div>
 
-        <div class="op-month-hero-actions__row">
+        <div class="op-month-hero-actions__row op-month-hero-actions__row--triple">
           <% if (isClosed) { %>
             <button type="button" disabled
               class="op-btn op-btn-muted op-btn--compact whitespace-nowrap">
@@ -133,7 +133,7 @@
     <% } %>
 
     <div class="mb-6 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
-      <details open class="group">
+      <details class="group">
         <summary class="flex cursor-pointer list-none items-start justify-between gap-3">
           <div>
             <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Compras que se repetem</h2>
@@ -735,7 +735,37 @@
       }
     }
 
+    .op-month-hero-actions {
+      width: min(100%, 36rem);
+      margin-left: auto;
+      align-items: stretch;
+      gap: 0.7rem;
+    }
+
+    .op-month-hero-actions__row {
+      display: grid;
+      width: 100%;
+      gap: 0.7rem;
+    }
+
+    .op-month-hero-actions__row--dual {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .op-month-hero-actions__row--triple {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .op-month-hero-actions__row > a,
+    .op-month-hero-actions__row > button {
+      width: 100%;
+      min-width: 0;
+      justify-content: center;
+      text-align: center;
+    }
+
     .op-month-selection-toolbar {
+      position: fixed;
       bottom: calc(var(--op-mobile-bottom-clearance, 5.75rem) + 0.75rem);
       opacity: 0;
       pointer-events: none;
@@ -743,10 +773,40 @@
       transition: opacity 0.2s ease, transform 0.2s ease;
     }
 
+    [data-month-sheet-root] {
+      position: fixed !important;
+      inset: 0 !important;
+      z-index: 9999 !important;
+    }
+
     .op-month-selection-toolbar.is-visible {
       opacity: 1;
       pointer-events: auto;
       transform: translateY(0);
+    }
+
+    @media (max-width: 640px) {
+      .op-month-hero-actions {
+        width: 100%;
+      }
+
+      .op-month-hero-actions__row {
+        gap: 0.55rem;
+      }
+
+      .op-month-hero-actions__row > a,
+      .op-month-hero-actions__row > button {
+        padding-left: 0.7rem;
+        padding-right: 0.7rem;
+        font-size: 0.82rem;
+      }
+
+      .op-month-hero-actions__row > a svg,
+      .op-month-hero-actions__row > button svg {
+        width: 1rem;
+        height: 1rem;
+        margin-right: 0.35rem;
+      }
     }
 
     @media (min-width: 768px) {
@@ -998,6 +1058,7 @@
         }
 
         const root = document.createElement('div');
+        root.setAttribute('data-month-sheet-root', '');
         root.className = 'fixed inset-0 z-[9999] hidden';
         root.innerHTML = `
           <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-month-sheet-backdrop></div>

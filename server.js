@@ -10913,6 +10913,7 @@ app.get("/cards", ensureAuthenticated, (req, res) => {
 
 app.post("/cards", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
+  const editId = Number(req.body.edit_id || 0) || null;
   const name = (req.body.name || "").trim();
   const dueDay = normalizeDayNumber(req.body.due_day);
   const closeDay = normalizeDayNumber(req.body.close_day);
@@ -10920,6 +10921,25 @@ app.post("/cards", ensureAuthenticated, (req, res) => {
 
   if (!name) {
     setFlash(req, 'error', 'Me conta o nome do cartão antes de salvar.');
+    return res.redirect("/cards");
+  }
+
+  if (editId) {
+    const existingCard = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ?").get(editId, userId);
+    if (!existingCard) {
+      setFlash(req, 'error', 'Não achei esse cartão por aqui.');
+      return res.redirect("/cards");
+    }
+
+    if (findCardByNameForUser(userId, name, editId)) {
+      setFlash(req, 'error', 'Esse nome já está na carteira. Se quiser diferenciar, dá para usar um apelido.');
+      return res.redirect("/cards");
+    }
+
+    db.prepare("UPDATE cards SET name = ?, due_day = ?, close_day = ?, brand = ? WHERE id = ? AND user_id = ?")
+      .run(name, dueDay, closeDay, brand, editId, userId);
+
+    setFlash(req, 'success', `${name} ficou atualizado direitinho.`);
     return res.redirect("/cards");
   }
 
@@ -10937,9 +10957,25 @@ app.post("/cards", ensureAuthenticated, (req, res) => {
 
 app.post("/cards/:id/update", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  db.prepare("UPDATE cards SET due_day = ?, close_day = ?, brand = ? WHERE id = ? AND user_id = ?")
-    .run(normalizeDayNumber(req.body.due_day), normalizeDayNumber(req.body.close_day), normalizeCardBrand(req.body.brand) || null, Number(req.params.id), userId);
-  res.redirect("/cards");
+  const cardId = Number(req.params.id);
+  const currentCard = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ?").get(cardId, userId);
+
+  if (!currentCard) {
+    setFlash(req, 'error', 'Não achei esse cartão por aqui.');
+    return res.redirect("/cards");
+  }
+
+  const name = (req.body.name || currentCard.name || '').trim() || currentCard.name;
+  if (findCardByNameForUser(userId, name, cardId)) {
+    setFlash(req, 'error', 'Esse nome já está na carteira. Se quiser diferenciar, dá para usar um apelido.');
+    return res.redirect('/cards');
+  }
+
+  db.prepare("UPDATE cards SET name = ?, due_day = ?, close_day = ?, brand = ? WHERE id = ? AND user_id = ?")
+    .run(name, normalizeDayNumber(req.body.due_day), normalizeDayNumber(req.body.close_day), normalizeCardBrand(req.body.brand) || null, cardId, userId);
+
+  setFlash(req, 'success', `${name} ficou atualizado direitinho.`);
+  return res.redirect("/cards");
 });
 
 app.post("/cards/:id/toggle", ensureAuthenticated, (req, res) => {

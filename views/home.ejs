@@ -61,20 +61,16 @@
             <input type="date" name="date" required data-manual-date-input
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
-          <div data-card-brand-field>
+          <div>
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cartão</label>
-            <select name="card_id" data-manual-card-select data-card-brand-select
+            <select name="card_id" data-manual-card-select
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
-              <% cards.forEach(c=> { const brandMeta = getCardBrandMeta(c.brand); %>
-                <option value="<%= c.id %>" data-close-day="<%= c.close_day || '' %>" data-due-day="<%= c.due_day || '' %>" data-brand="<%= brandMeta ? brandMeta.value : '' %>" data-brand-label="<%= brandMeta ? brandMeta.label : '' %>" data-brand-asset="<%= brandMeta ? brandMeta.asset : '' %>">
+              <% cards.forEach(c=> { %>
+                <option value="<%= c.id %>" data-close-day="<%= c.close_day || '' %>" data-due-day="<%= c.due_day || '' %>">
                   <%= c.name %>
                 </option>
                 <% }) %>
             </select>
-            <div class="op-card-brand-preview hidden" data-card-brand-preview>
-              <img data-card-brand-preview-image alt="" class="op-card-brand-logo" loading="lazy">
-              <span data-card-brand-preview-label></span>
-            </div>
           </div>
         </div>
 

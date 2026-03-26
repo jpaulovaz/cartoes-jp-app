@@ -184,17 +184,13 @@
                     <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Data da compra</span>
                     <input type="date" name="date" value="<%= txn.txn_date %>" required class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-950/70 dark:text-slate-100">
                   </label>
-                  <label class="block" data-card-brand-field>
+                  <label class="block">
                     <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartão</span>
-                    <select name="card_id" required data-card-brand-select class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-950/70 dark:text-slate-100">
-                      <% (cards || []).forEach(card => { const brandMeta = getCardBrandMeta(card.brand); %>
-                        <option value="<%= card.id %>" data-close-day="<%= card.close_day || '' %>" data-due-day="<%= card.due_day || '' %>" data-brand="<%= brandMeta ? brandMeta.value : '' %>" data-brand-label="<%= brandMeta ? brandMeta.label : '' %>" data-brand-asset="<%= brandMeta ? brandMeta.asset : '' %>" <%= Number(card.id) === Number(txn.card_id || 0) ? 'selected' : '' %>><%= card.name %></option>
+                    <select name="card_id" required class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-950/70 dark:text-slate-100">
+                      <% (cards || []).forEach(card => { %>
+                        <option value="<%= card.id %>" data-close-day="<%= card.close_day || '' %>" data-due-day="<%= card.due_day || '' %>" <%= Number(card.id) === Number(txn.card_id || 0) ? 'selected' : '' %>><%= card.name %></option>
                       <% }) %>
                     </select>
-                    <div class="op-card-brand-preview hidden" data-card-brand-preview>
-                      <img data-card-brand-preview-image alt="" class="op-card-brand-logo" loading="lazy">
-                      <span data-card-brand-preview-label></span>
-                    </div>
                   </label>
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2">

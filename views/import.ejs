@@ -45,18 +45,14 @@
       </div>
 
       <form method="post" action="/import" enctype="multipart/form-data" class="space-y-5">
-        <div data-card-brand-field>
+        <div>
           <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartão</label>
-          <select name="card_id" required data-card-brand-select class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">
+          <select name="card_id" required class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">
             <option value="">Selecione um cartão</option>
-            <% cards.forEach(card => { const brandMeta = getCardBrandMeta(card.brand); %>
-              <option value="<%= card.id %>" data-brand="<%= brandMeta ? brandMeta.value : '' %>" data-brand-label="<%= brandMeta ? brandMeta.label : '' %>" data-brand-asset="<%= brandMeta ? brandMeta.asset : '' %>"><%= card.name %></option>
+            <% cards.forEach(card => { %>
+              <option value="<%= card.id %>"><%= card.name %></option>
             <% }) %>
           </select>
-          <div class="op-card-brand-preview hidden" data-card-brand-preview>
-            <img data-card-brand-preview-image alt="" class="op-card-brand-logo" loading="lazy">
-            <span data-card-brand-preview-label></span>
-          </div>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2">

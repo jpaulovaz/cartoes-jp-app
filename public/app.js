@@ -904,12 +904,12 @@
     const total = filtered.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
 
     if (!filtered.length || total <= 0) {
-      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda falta categoria suficiente para montar esse retrato. Quando o mês ganhar mais cara, esse gráfico entra no jogo.</div>';
+      chartNode.innerHTML = '<div class="flex min-h-[280px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda falta categoria suficiente para montar esse retrato. Quando o mês ganhar mais cara, esse gráfico entra no jogo.</div>';
       legendNode.innerHTML = '';
       return;
     }
 
-    const radius = 78;
+    const radius = 86;
     const circumference = 2 * Math.PI * radius;
     let offset = 0;
     const segments = filtered.map((item, index) => {
@@ -928,59 +928,74 @@
       };
     });
 
+    const totalPurchases = filtered.reduce((acc, item) => acc + Number(item.txn_count || 0), 0);
+    const topCategory = segments.reduce((best, item) => (Number(item.total_cents || 0) > Number((best && best.total_cents) || 0) ? item : best), null);
+
     chartNode.innerHTML = `
-      <div class="relative mx-auto flex aspect-square max-w-[260px] items-center justify-center">
-        <svg viewBox="0 0 220 220" class="h-full w-full -rotate-90" role="img" aria-label="Distribuição por categoria">
-          <circle cx="110" cy="110" r="${radius}" fill="none" stroke="rgba(148,163,184,0.16)" stroke-width="28"></circle>
-          ${segments.map((segment, index) => `
-            <circle
-              cx="110"
-              cy="110"
-              r="${radius}"
-              fill="none"
-              stroke="${segment.color}"
-              stroke-width="28"
-              stroke-linecap="round"
-              class="transition-all duration-300"
-              data-summary-donut-segment
-              data-segment-index="${index}"
-              data-segment-focus="false"
-              stroke-dasharray="${segment.dashArray}"
-              stroke-dashoffset="${segment.dashOffset}"></circle>
-          `).join('')}
-        </svg>
-        <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-          <span class="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Total</span>
-          <span class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">${formatMoney(total)}</span>
-          <span class="mt-1 max-w-[150px] text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400" data-summary-donut-center-copy>${filtered.length} categorias no mapa</span>
+      <div class="rounded-[24px] border border-slate-200 bg-slate-50/70 px-4 py-5 dark:border-slate-700 dark:bg-slate-900/40">
+        <div class="relative mx-auto flex aspect-square w-full max-w-[340px] items-center justify-center sm:max-w-[380px]">
+          <svg viewBox="0 0 240 240" class="h-full w-full -rotate-90" role="img" aria-label="Distribuição por categoria">
+            <circle cx="120" cy="120" r="${radius}" fill="none" stroke="rgba(148,163,184,0.16)" stroke-width="30"></circle>
+            ${segments.map((segment, index) => `
+              <circle
+                cx="120"
+                cy="120"
+                r="${radius}"
+                fill="none"
+                stroke="${segment.color}"
+                stroke-width="30"
+                stroke-linecap="round"
+                class="transition-all duration-300"
+                data-summary-donut-segment
+                data-segment-index="${index}"
+                data-segment-focus="false"
+                stroke-dasharray="${segment.dashArray}"
+                stroke-dashoffset="${segment.dashOffset}"></circle>
+            `).join('')}
+          </svg>
+          <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+            <span class="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Total</span>
+            <span class="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-white">${formatMoney(total)}</span>
+            <span class="mt-1 max-w-[180px] text-xs font-medium leading-5 text-slate-500 dark:text-slate-400" data-summary-donut-center-copy>${filtered.length} categorias no mapa</span>
+          </div>
+        </div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-3">
+          <div class="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/60">
+            <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Categoria que mais puxou</div>
+            <div class="mt-1 text-sm font-black text-slate-900 dark:text-white">${topCategory ? topCategory.label : 'Ainda sem líder'}</div>
+          </div>
+          <div class="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/60">
+            <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Compras lidas</div>
+            <div class="mt-1 text-sm font-black text-slate-900 dark:text-white">${totalPurchases} compra(s)</div>
+          </div>
+          <div class="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/60">
+            <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Categorias no mapa</div>
+            <div class="mt-1 text-sm font-black text-slate-900 dark:text-white">${filtered.length} fatia(s)</div>
+          </div>
         </div>
       </div>`;
 
     legendNode.innerHTML = `
-      <div class="grid gap-3">
+      <div class="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
         ${segments.map((segment, index) => {
           const canOpen = !segment.is_aggregate && !segment.is_uncategorized && Number(segment.id || 0) > 0;
           return `
-          <button type="button" class="group min-h-[110px] rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-left transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}" data-segment-index="${index}" ${canOpen ? '' : 'data-category-disabled="true"'}>
-            <div class="flex h-full flex-col justify-between gap-3">
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                  <div class="flex items-start gap-2">
-                    <span class="mt-1 inline-block h-3 w-3 flex-shrink-0 rounded-full" style="background:${segment.color}"></span>
-                    <div class="text-sm font-black leading-5 text-slate-900 break-words dark:text-white">${segment.label || 'Sem nome'}</div>
-                  </div>
-                  <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                    <span>${segment.txn_count || 0} compra(s)</span>
-                    <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">${segment.share}% do seu pedaço</span>
-                  </div>
+          <button type="button" class="group rounded-[20px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-left transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}" data-segment-index="${index}" ${canOpen ? '' : 'data-category-disabled="true"'}>
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="inline-block h-3 w-3 flex-shrink-0 rounded-full" style="background:${segment.color}"></span>
+                  <div class="truncate text-sm font-black text-slate-900 dark:text-white">${segment.label || 'Sem nome'}</div>
                 </div>
-                <div class="text-right text-sm font-black text-slate-900 dark:text-white">${formatMoney(segment.total_cents)}</div>
+                <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                  <span>${segment.txn_count || 0} compra(s)</span>
+                  <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">${segment.share}% do seu pedaço</span>
+                </div>
               </div>
-              <div>
-                <div class="h-2 rounded-full bg-slate-200/80 dark:bg-slate-700/80"><div class="h-2 rounded-full" style="width:${Math.max(8, Number(segment.share || 0))}%;background:${segment.color}"></div></div>
-                <div class="mt-2 text-[11px] font-bold uppercase tracking-[0.18em] ${canOpen ? 'text-violet-700 opacity-0 transition group-hover:opacity-100 dark:text-violet-300' : 'text-slate-400 dark:text-slate-500'}">${canOpen ? 'Abrir essas compras' : 'Só para olhar'}</div>
-              </div>
+              <div class="text-right text-base font-black text-slate-900 dark:text-white">${formatMoney(segment.total_cents)}</div>
             </div>
+            <div class="mt-3 h-2 rounded-full bg-slate-200/80 dark:bg-slate-700/80"><div class="h-2 rounded-full" style="width:${Math.max(8, Number(segment.share || 0))}%;background:${segment.color}"></div></div>
+            <div class="mt-2 text-[11px] font-bold uppercase tracking-[0.16em] ${canOpen ? 'text-violet-700 opacity-70 transition group-hover:opacity-100 dark:text-violet-300' : 'text-slate-400 dark:text-slate-500'}">${canOpen ? 'Abrir essas compras' : 'Só para olhar'}</div>
           </button>`;
         }).join('')}
       </div>`;
@@ -993,7 +1008,7 @@
       segmentNodes.forEach((segmentNode, segmentIndex) => {
         const active = index !== null && Number(index) === segmentIndex;
         segmentNode.style.opacity = active || index === null ? '1' : '0.28';
-        segmentNode.style.transformOrigin = '110px 110px';
+        segmentNode.style.transformOrigin = '120px 120px';
         segmentNode.style.transform = active && !(prefersReducedMotion && prefersReducedMotion.matches) ? 'scale(1.03)' : 'scale(1)';
       });
       if (!centerCopy) return;
@@ -1036,72 +1051,81 @@
 
     const filtered = Array.isArray(points) ? points : [];
     if (!filtered.length) {
-      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não deu para desenhar essa linha direitinho.</div>';
+      chartNode.innerHTML = '<div class="flex min-h-[240px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não deu para desenhar esse vai e vem direitinho.</div>';
       return;
     }
 
-    const width = 520;
-    const height = 250;
-    const padding = { top: 24, right: 18, bottom: 38, left: 18 };
+    const width = Math.max(420, filtered.length * 72 + 64);
+    const height = 238;
+    const padding = { top: 22, right: 16, bottom: 44, left: 16 };
     const values = filtered.map((point) => Number(point.total_cents || 0));
     const maxValue = Math.max(...values, 0);
     const safeMax = maxValue <= 0 ? 1 : maxValue;
-    const stepX = filtered.length === 1 ? 0 : (width - padding.left - padding.right) / (filtered.length - 1);
+    const slotWidth = (width - padding.left - padding.right) / filtered.length;
+    const barWidth = Math.min(48, Math.max(24, slotWidth * 0.54));
 
     const coords = filtered.map((point, index) => {
-      const x = padding.left + (stepX * index);
-      const y = padding.top + ((safeMax - Number(point.total_cents || 0)) / safeMax) * (height - padding.top - padding.bottom);
+      const value = Number(point.total_cents || 0);
+      const barHeight = value > 0
+        ? Math.max(18, (value / safeMax) * (height - padding.top - padding.bottom))
+        : 10;
+      const x = padding.left + (slotWidth * index) + ((slotWidth - barWidth) / 2);
+      const y = height - padding.bottom - barHeight;
       return {
         ...point,
         x: Number(x.toFixed(2)),
-        y: Number(y.toFixed(2))
+        y: Number(y.toFixed(2)),
+        barHeight: Number(barHeight.toFixed(2))
       };
     });
 
-    const polyline = coords.map((point) => `${point.x},${point.y}`).join(' ');
-    const areaPolyline = `${padding.left},${height - padding.bottom} ${polyline} ${coords[coords.length - 1].x},${height - padding.bottom}`;
-
     chartNode.innerHTML = `
-      <div class="overflow-x-auto pb-1">
-        <div class="relative min-w-[520px]">
-          <svg viewBox="0 0 ${width} ${height}" class="h-[260px] w-full" role="img" aria-label="Seu pedaço no cartão, mês a mês">
-            <defs>
-              <linearGradient id="summaryLineFill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.30"></stop>
-                <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.02"></stop>
-              </linearGradient>
-            </defs>
-            ${[0.25, 0.5, 0.75, 1].map((step) => {
-              const y = padding.top + ((height - padding.top - padding.bottom) * step);
-              return `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="rgba(148,163,184,0.22)" stroke-dasharray="4 6"></line>`;
-            }).join('')}
-            <polygon points="${areaPolyline}" fill="url(#summaryLineFill)"></polygon>
-            <polyline points="${polyline}" fill="none" stroke="#8b5cf6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
-            ${coords.map((point) => `
-              <g>
-                <circle cx="${point.x}" cy="${point.y}" r="${point.is_current ? 6.5 : 5}" fill="#ffffff" stroke="#8b5cf6" stroke-width="${point.is_current ? 4 : 3}"></circle>
-                <text x="${point.x}" y="${height - 12}" text-anchor="middle" class="fill-slate-500 text-[11px] font-bold">${point.label}</text>
-              </g>
+      <div class="rounded-[24px] border border-slate-200 bg-slate-50/70 px-3 py-4 dark:border-slate-700 dark:bg-slate-900/40">
+        <div class="overflow-x-auto pb-1">
+          <div class="relative min-w-[${width}px]">
+            <svg viewBox="0 0 ${width} ${height}" class="h-[220px] w-full" role="img" aria-label="Seu pedaço no cartão, mês a mês">
+              ${[0.25, 0.5, 0.75, 1].map((step) => {
+                const y = padding.top + ((height - padding.top - padding.bottom) * step);
+                return `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="rgba(148,163,184,0.18)" stroke-dasharray="4 6"></line>`;
+              }).join('')}
+              ${coords.map((point) => {
+                const fill = point.is_current ? '#8b5cf6' : '#a78bfa';
+                const shadow = point.is_current ? 'rgba(139,92,246,0.26)' : 'rgba(167,139,250,0.16)';
+                return `
+                  <g>
+                    <rect x="${point.x}" y="${point.y}" width="${barWidth}" height="${point.barHeight}" rx="16" fill="${fill}"></rect>
+                    <rect x="${point.x}" y="${point.y}" width="${barWidth}" height="${point.barHeight}" rx="16" fill="url(#summaryBarGlow)"></rect>
+                    <text x="${point.x + (barWidth / 2)}" y="${height - 14}" text-anchor="middle" class="fill-slate-500 text-[11px] font-bold">${point.label}</text>
+                    ${Number(point.total_cents || 0) > 0 ? `<text x="${point.x + (barWidth / 2)}" y="${Math.max(16, point.y - 8)}" text-anchor="middle" class="fill-slate-500 text-[10px] font-bold">${formatMoney(point.total_cents)}</text>` : ''}
+                    <rect x="${point.x}" y="${point.y}" width="${barWidth}" height="${point.barHeight}" rx="16" fill="none" stroke="${point.is_current ? '#6d28d9' : shadow}" stroke-width="${point.is_current ? 2 : 1.2}"></rect>
+                  </g>`;
+              }).join('')}
+              <defs>
+                <linearGradient id="summaryBarGlow" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stop-color="#ffffff" stop-opacity="0.16"></stop>
+                  <stop offset="100%" stop-color="#ffffff" stop-opacity="0"></stop>
+                </linearGradient>
+              </defs>
+            </svg>
+            ${coords.map((point, index) => `
+              <button
+                type="button"
+                class="absolute rounded-[20px] border-2 border-transparent bg-transparent outline-none transition focus:border-violet-400"
+                style="left:${((point.x / width) * 100).toFixed(3)}%;top:${(((point.y - 8) / height) * 100).toFixed(3)}%;width:${((barWidth / width) * 100).toFixed(3)}%;height:${(((point.barHeight + 18) / height) * 100).toFixed(3)}%"
+                aria-label="Abrir detalhes de ${point.label}"
+                data-summary-month-hotspot
+                data-point-index="${index}"
+                data-point-year="${point.year}"
+                data-point-month="${point.month}"
+                data-point-label="${point.label}"></button>
             `).join('')}
-          </svg>
-          ${coords.map((point, index) => `
-            <button
-              type="button"
-              class="absolute h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-transparent bg-transparent outline-none transition focus:border-violet-400"
-              style="left:${((point.x / width) * 100).toFixed(3)}%;top:${((point.y / height) * 100).toFixed(3)}%"
-              aria-label="Abrir detalhes de ${point.label}"
-              data-summary-month-hotspot
-              data-point-index="${index}"
-              data-point-year="${point.year}"
-              data-point-month="${point.month}"
-              data-point-label="${point.label}"></button>
-          `).join('')}
+          </div>
         </div>
       </div>
-      <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         ${coords.map((point, index) => `
-          <button type="button" class="rounded-2xl border ${point.is_current ? 'border-violet-300 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/20' : 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/70'} px-3 py-2.5 text-left transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-month-point data-point-index="${index}" data-point-year="${point.year}" data-point-month="${point.month}" data-point-label="${point.label}">
-            <div class="text-[11px] font-bold uppercase tracking-[0.18em] ${point.is_current ? 'text-violet-700 dark:text-violet-300' : 'text-slate-500 dark:text-slate-400'}">${point.label}</div>
+          <button type="button" class="rounded-2xl border ${point.is_current ? 'border-violet-300 bg-violet-50/80 dark:border-violet-800 dark:bg-violet-900/20' : 'border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/70'} px-3 py-2.5 text-left transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/90 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-month-point data-point-index="${index}" data-point-year="${point.year}" data-point-month="${point.month}" data-point-label="${point.label}">
+            <div class="text-[11px] font-bold uppercase tracking-[0.16em] ${point.is_current ? 'text-violet-700 dark:text-violet-300' : 'text-slate-500 dark:text-slate-400'}">${point.label}</div>
             <div class="mt-1 text-sm font-black ${point.is_current ? 'text-violet-700 dark:text-violet-200' : 'text-slate-900 dark:text-white'}">${formatMoney(point.total_cents)}</div>
           </button>
         `).join('')}

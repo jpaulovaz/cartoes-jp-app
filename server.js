@@ -501,10 +501,13 @@ const EFFECTIVE_DUE_YEAR_SQL = "COALESCE(t.due_year, i.year)";
 
 const PROFILE_SIGNATURE_MAX_LENGTH = 60;
 const PROFILE_SIGNATURE_VIBE_OPTIONS = Object.freeze([
-  { code: 'responde_rapidinho', label: 'Responde rapidinho' },
+  { code: 'paga_direitinho', label: 'Paga direitinho' },
+  { code: 'cobra_com_jeitinho', label: 'Cobra com jeitinho' },
   { code: 'topa_dividir', label: 'Topa dividir' },
   { code: 'pix_sempre_pronto', label: 'Pix sempre pronto' },
-  { code: 'so_observo', label: 'Só observo e organizo' },
+  { code: 'acerta_rapidinho', label: 'Acerta rapidinho' },
+  { code: 'divide_na_boa', label: 'Divide na boa' },
+  { code: 'ta_em_dia', label: 'Tá em dia' },
   { code: 'bom_de_acerto', label: 'Bom de acerto' }
 ]);
 const PROFILE_SIGNATURE_VIBE_MAP = new Map(PROFILE_SIGNATURE_VIBE_OPTIONS.map((option) => [option.code, option]));
@@ -10385,7 +10388,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
     req.user.profile_signature_text = signatureText;
     req.user.profile_signature_vibe = signatureVibe;
     setFlash(req, 'success', signatureText || signatureVibe
-      ? 'Sua assinatura no app ficou salva do jeitinho que você montou.'
+      ? 'Sua assinatura no app ficou salva do seu jeitinho.'
       : 'Sua assinatura voltou para o modo discreto por aqui.');
     return res.redirect(redirectTarget);
   }
@@ -10461,7 +10464,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
   let successMessage = 'Contato salvo direitinho por aqui. Quando rolar amizade e pagamento, o Pix vem do perfil da própria pessoa.';
   if (isSelfTarget) {
     if (requestedSection === 'identity') {
-      successMessage = 'Seu jeitinho de aparecer por aqui foi salvo direitinho.';
+      successMessage = 'Seu perfil por aqui foi salvo direitinho.';
     } else if (requestedSection === 'pix') {
       successMessage = pixEnabled
         ? 'Seu Pix ficou salvo e prontinho para entrar em cena nas cobranças.'

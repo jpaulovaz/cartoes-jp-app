@@ -30,6 +30,13 @@
   const selfPixState = selfProfile?.pix_state || pixStateDefault;
   const selfPixCity = selfProfile?.pix_city || pixCityDefault;
   const selfPixLabel = selfProfile?.pix_label || '';
+  const signatureMaxLength = Number(profileSignatureMaxLength || 60) || 60;
+  const signatureVibeOptions = Array.isArray(profileSignatureVibeOptions) ? profileSignatureVibeOptions : [];
+  const signatureVibeMap = new Map(signatureVibeOptions.map((option) => [String(option?.code || '').trim(), option]));
+  const getSignatureVibeMeta = (value) => signatureVibeMap.get(String(value || '').trim()) || null;
+  const selfSignatureText = String(selfProfile?.profile_signature_text || '').trim();
+  const selfSignatureVibe = String(selfProfile?.profile_signature_vibe || '').trim();
+  const selfSignatureMeta = getSignatureVibeMeta(selfSignatureVibe);
   const getAvatarUrl = (person) => person && person.photo_url ? String(person.photo_url) : (person && person.linked_user_photo_url && person.friendship_active ? String(person.linked_user_photo_url) : '');
   const getAvatarInitials = (person) => {
     const source = String((person && person.name) || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
@@ -346,7 +353,7 @@
           <% const showRemoveButton = !!(selfProfile && selfProfile.photo_url); %>
 
           <div class="mt-4 flex flex-1 flex-col">
-            <form method="post" action="/people/profile-photo" enctype="multipart/form-data" class="flex flex-1 flex-col gap-3" id="profilePhotoForm">
+            <form method="post" action="/people/profile-photo" enctype="multipart/form-data" class="flex flex-col gap-3" id="profilePhotoForm">
               <input id="profilePhotoInput" type="file" name="profile_photo" accept="image/png,image/jpeg,image/webp,image/gif" class="block w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm file:mr-3 file:rounded-xl file:border-0 file:bg-sky-100 file:px-3 file:py-2 file:font-bold file:text-sky-700 hover:file:bg-sky-200 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-200 dark:file:bg-sky-900/40 dark:file:text-sky-200">
               <div id="profilePhotoPreviewWrap" class="hidden w-full items-center gap-3 rounded-2xl border border-sky-200/80 bg-sky-50/70 px-4 py-3 dark:border-sky-900/60 dark:bg-sky-950/20">
                 <img id="profilePhotoPreview" alt="Prévia da sua foto" class="h-14 w-14 rounded-full object-cover ring-2 ring-sky-200 dark:ring-sky-800/70">
@@ -360,7 +367,7 @@
               </div>
             </form>
 
-            <div class="mt-auto flex flex-wrap items-stretch justify-end gap-3 pt-4">
+            <div class="flex flex-wrap items-stretch justify-end gap-3 pt-4">
               <% if (showUseDefaultButton) { %>
                 <form method="post" action="/people/profile-photo/use-default" class="shrink-0">
                   <button type="submit" class="inline-flex min-h-[46px] items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Usar foto padrão</button>
@@ -373,6 +380,52 @@
               <% } %>
               <button form="profilePhotoForm" id="profilePhotoSubmit" type="submit" class="inline-flex min-h-[46px] items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60 shrink-0">Salvar foto</button>
             </div>
+
+            <form method="post" action="/people" id="profileSignatureForm" class="mt-5 border-t border-sky-100 pt-5 dark:border-sky-900/40">
+              <input type="hidden" name="id" value="<%= selfProfile.id %>">
+              <input type="hidden" name="profile_section" value="signature">
+              <input type="hidden" name="profile_signature_vibe" id="profileSignatureVibe" value="<%= selfSignatureVibe %>">
+
+              <div id="profile-signature" class="scroll-mt-28">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Sua assinatura no app</div>
+                <h4 class="mt-2 text-lg font-black text-slate-900 dark:text-white">O toque que seus amigos enxergam por aqui</h4>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Escreva um recado rapidinho, escolha um jeitinho e deixe sua presença com mais cara de gente de verdade.</p>
+              </div>
+
+              <div class="mt-4 grid gap-4">
+                <label class="block">
+                  <div class="mb-2 flex items-center justify-between gap-3">
+                    <span class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Recado rápido</span>
+                    <span id="profileSignatureCount" class="text-[11px] font-bold text-slate-400 dark:text-slate-500"><%= selfSignatureText.length %>/<%= signatureMaxLength %></span>
+                  </div>
+                  <input type="text" name="profile_signature_text" id="profileSignatureText" value="<%- selfSignatureText %>" maxlength="<%= signatureMaxLength %>" autocomplete="off" class="w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20" placeholder="Ex.: Pix ligado e coração tranquilo 😄">
+                  <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Até <%= signatureMaxLength %> caracteres, sem quebra de linha e só visível para amizades ativas nesse começo de festa.</p>
+                </label>
+
+                <div>
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Seu jeitinho por aqui</div>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <% signatureVibeOptions.forEach((option) => { const selected = option.code === selfSignatureVibe; %>
+                      <button type="button" data-signature-vibe-option data-vibe-code="<%= option.code %>" class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-bold transition-all <%= selected ? 'border-sky-600 bg-sky-600 text-white shadow-lg shadow-sky-500/15 dark:border-sky-400 dark:bg-sky-400 dark:text-slate-950' : 'border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-800 dark:hover:bg-sky-900/20 dark:hover:text-sky-200' %>"><%= option.label %></button>
+                    <% }) %>
+                    <button type="button" id="profileSignatureClear" class="inline-flex items-center rounded-full border border-dashed border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-500 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:bg-slate-800">Limpar chip</button>
+                  </div>
+                </div>
+
+                <div class="rounded-[26px] border border-sky-200/80 bg-sky-50/70 px-4 py-4 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/20">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Prévia para amizades ativas</div>
+                    <span id="profileSignaturePreviewVibe" class="<%= selfSignatureMeta ? '' : 'hidden ' %>inline-flex items-center rounded-full border border-sky-200 bg-white px-3 py-1 text-[11px] font-bold text-sky-700 dark:border-sky-800 dark:bg-slate-900 dark:text-sky-200"><%= selfSignatureMeta ? selfSignatureMeta.label : '' %></span>
+                  </div>
+                  <p id="profileSignaturePreviewText" class="mt-2 text-sm font-medium leading-6 text-slate-700 dark:text-slate-200"><%= selfSignatureText ? selfSignatureText : 'Quando você escrever um recadinho aqui, seus amigos vão ver esse toque extra no seu card da rede.' %></p>
+                  <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Nada público geral por enquanto: isso aqui fica só entre você e quem já entrou oficialmente na sua turma.</p>
+                </div>
+              </div>
+
+              <div class="mt-4 flex flex-wrap justify-end gap-3">
+                <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Salvar assinatura</button>
+              </div>
+            </form>
           </div>
         </section>
 
@@ -734,6 +787,8 @@
              const isHighlighted = highlightedFriendRequestId && Number(p.incoming_friend_request_id || 0) === Number(highlightedFriendRequestId);
              const personState = getNetworkState(p);
              const pixState = getPixStateMeta(p);
+             const profileSignatureMeta = getSignatureVibeMeta(p.profile_signature_vibe);
+             const profileSignatureVisible = p.friendship_active && !!(p.profile_signature_text || p.profile_signature_vibe);
              let personHintText = '';
              if (!p.email) {
                personHintText = 'Quer descobrir se essa pessoa também usa o app? Um e-mail aqui já ajuda a abrir essa porta.';
@@ -760,7 +815,7 @@
           <article
             data-person-card
             data-filter-state="<%= personState.key %>"
-            data-search-text="<%= [p.name, p.phone, p.email, personState.label, personHintText].filter(Boolean).join(' ') %>"
+            data-search-text="<%= [p.name, p.phone, p.email, personState.label, personHintText, p.profile_signature_text, profileSignatureMeta?.label].filter(Boolean).join(' ') %>"
             class="group relative overflow-hidden rounded-[30px] border bg-white shadow-sm transition-all dark:bg-slate-800 <%= isHighlighted ? 'border-emerald-400 ring-2 ring-emerald-200 dark:border-emerald-500 dark:ring-emerald-900/70' : 'border-slate-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md dark:border-slate-700 dark:hover:border-slate-600' %>">
             <div class="h-1.5 bg-gradient-to-r <%= personState.barClasses %>"></div>
             <div class="flex flex-col gap-5 p-5 sm:p-6">
@@ -858,11 +913,24 @@
               <div class="rounded-[24px] border border-sky-100/70 bg-slate-50/90 px-4 py-4 shadow-sm shadow-sky-100/10 dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
                 <div class="flex items-start gap-3">
                   <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-sky-600 shadow-sm ring-1 ring-sky-100 dark:bg-slate-800 dark:text-sky-300 dark:ring-slate-700" aria-hidden="true">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <% if (profileSignatureVisible) { %>
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h6m5 8H6a2 2 0 01-2-2V6a2 2 0 012-2h7.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V18a2 2 0 01-2 2z"></path></svg>
+                    <% } else { %>
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <% } %>
                   </span>
                   <div class="min-w-0 flex-1">
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/70 dark:text-sky-300/80">Recadinho do app</div>
-                    <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= personHintText %></p>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/70 dark:text-sky-300/80"><%= profileSignatureVisible ? 'Assinatura da pessoa' : 'Recadinho do app' %></div>
+                      <% if (profileSignatureVisible && profileSignatureMeta) { %>
+                        <span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-3 py-1 text-[11px] font-bold text-sky-700 dark:border-sky-800 dark:bg-slate-900 dark:text-sky-200"><%= profileSignatureMeta.label %></span>
+                      <% } %>
+                    </div>
+                    <% if (profileSignatureVisible) { %>
+                      <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= p.profile_signature_text || 'Essa pessoa preferiu deixar só o jeitinho dela aparecendo por aqui.' %></p>
+                    <% } else { %>
+                      <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= personHintText %></p>
+                    <% } %>
                   </div>
                 </div>
               </div>
@@ -1161,6 +1229,80 @@ function bindNetworkDiscoveryControls() {
 
   if (searchInput) {
     searchInput.addEventListener('input', render);
+  }
+
+  render();
+}
+
+function bindProfileSignatureForm() {
+  const textInput = document.getElementById('profileSignatureText');
+  const vibeInput = document.getElementById('profileSignatureVibe');
+  const counter = document.getElementById('profileSignatureCount');
+  const previewText = document.getElementById('profileSignaturePreviewText');
+  const previewVibe = document.getElementById('profileSignaturePreviewVibe');
+  const clearButton = document.getElementById('profileSignatureClear');
+  const vibeButtons = Array.from(document.querySelectorAll('[data-signature-vibe-option]'));
+  if (!textInput || !vibeInput || !previewText || !previewVibe || !vibeButtons.length) return;
+
+  const selectedClasses = ['border-sky-600', 'bg-sky-600', 'text-white', 'shadow-lg', 'shadow-sky-500/15', 'dark:border-sky-400', 'dark:bg-sky-400', 'dark:text-slate-950'];
+  const idleClasses = ['border-slate-200', 'bg-white', 'text-slate-600', 'dark:border-slate-700', 'dark:bg-slate-900', 'dark:text-slate-300'];
+
+  const sanitizeText = (value) => String(value || '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+  const render = () => {
+    textInput.value = sanitizeText(textInput.value).slice(0, Number(textInput.maxLength || 60));
+    if (counter) {
+      counter.textContent = `${textInput.value.length}/${textInput.maxLength || 60}`;
+    }
+
+    const activeVibeCode = String(vibeInput.value || '').trim();
+    const activeButton = vibeButtons.find((button) => String(button.dataset.vibeCode || '') === activeVibeCode) || null;
+
+    vibeButtons.forEach((button) => {
+      const isActive = button === activeButton;
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      button.classList.toggle('hover:border-sky-200', !isActive);
+      button.classList.toggle('hover:bg-sky-50', !isActive);
+      button.classList.toggle('hover:text-sky-700', !isActive);
+      button.classList.toggle('dark:hover:border-sky-800', !isActive);
+      button.classList.toggle('dark:hover:bg-sky-900/20', !isActive);
+      button.classList.toggle('dark:hover:text-sky-200', !isActive);
+      selectedClasses.forEach((className) => button.classList.toggle(className, isActive));
+      idleClasses.forEach((className) => button.classList.toggle(className, !isActive));
+    });
+
+    if (activeButton) {
+      previewVibe.textContent = activeButton.textContent.trim();
+      previewVibe.classList.remove('hidden');
+    } else {
+      previewVibe.textContent = '';
+      previewVibe.classList.add('hidden');
+    }
+
+    previewText.textContent = textInput.value || 'Quando você escrever um recadinho aqui, seus amigos vão ver esse toque extra no seu card da rede.';
+  };
+
+  vibeButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const nextCode = String(button.dataset.vibeCode || '').trim();
+      vibeInput.value = vibeInput.value === nextCode ? '' : nextCode;
+      render();
+    });
+  });
+
+  if (clearButton) {
+    clearButton.addEventListener('click', () => {
+      vibeInput.value = '';
+      render();
+    });
+  }
+
+  textInput.addEventListener('input', render);
+  const form = document.getElementById('profileSignatureForm');
+  if (form) {
+    form.addEventListener('submit', () => {
+      textInput.value = sanitizeText(textInput.value).slice(0, Number(textInput.maxLength || 60));
+    });
   }
 
   render();
@@ -1482,6 +1624,7 @@ function bindPixForm(prefix, options = {}) {
     resetContactForm();
     bindNetworkDiscoveryControls();
     bindProfilePhotoForm();
+    bindProfileSignatureForm();
 
     const highlighted = document.querySelector('[id^="friend-request-"][class*="ring-2"]');
     if (highlighted) {

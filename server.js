@@ -107,6 +107,9 @@ try { db.prepare("ALTER TABLE users ADD COLUMN deleted_label TEXT").run(); } cat
 try { db.prepare("ALTER TABLE users ADD COLUMN google_photo_url TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN profile_photo_url TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN profile_photo_mode TEXT NOT NULL DEFAULT 'default'").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_text TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_vibe TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_txn_date_snapshot TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_marked_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -495,6 +498,35 @@ const { computeDueDate } = require("./src/dueDate");
 
 const EFFECTIVE_DUE_MONTH_SQL = "COALESCE(t.due_month, i.month)";
 const EFFECTIVE_DUE_YEAR_SQL = "COALESCE(t.due_year, i.year)";
+
+const PROFILE_SIGNATURE_MAX_LENGTH = 60;
+const PROFILE_SIGNATURE_VIBE_OPTIONS = Object.freeze([
+  { code: 'responde_rapidinho', label: 'Responde rapidinho' },
+  { code: 'topa_dividir', label: 'Topa dividir' },
+  { code: 'pix_sempre_pronto', label: 'Pix sempre pronto' },
+  { code: 'so_observo', label: 'Só observo e organizo' },
+  { code: 'bom_de_acerto', label: 'Bom de acerto' }
+]);
+const PROFILE_SIGNATURE_VIBE_MAP = new Map(PROFILE_SIGNATURE_VIBE_OPTIONS.map((option) => [option.code, option]));
+
+function normalizeProfileSignatureText(value, { max = PROFILE_SIGNATURE_MAX_LENGTH } = {}) {
+  return String(value || '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, Math.max(0, Number(max || 0)))
+    .trim();
+}
+
+function normalizeProfileSignatureVibe(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return PROFILE_SIGNATURE_VIBE_MAP.has(normalized) ? normalized : '';
+}
+
+function getProfileSignatureVibeMeta(value) {
+  const normalized = normalizeProfileSignatureVibe(value);
+  return normalized ? (PROFILE_SIGNATURE_VIBE_MAP.get(normalized) || null) : null;
+}
 
 function normalizeAllocationPersonIds(rawPersonIds, validPeople) {
   let personIds = rawPersonIds || [];
@@ -1954,6 +1986,7 @@ function getUserRecord(userId, { includeDeleted = true } = {}) {
   return db.prepare(`
     SELECT id, email, name, role, can_import, created_at, last_login,
            google_id, google_photo_url, profile_photo_url, profile_photo_mode,
+           profile_signature_text, profile_signature_vibe, profile_signature_updated_at,
            COALESCE(status, 'active') AS status, deleted_at, deleted_label
     FROM users
     WHERE id = ? ${includeDeleted ? '' : "AND COALESCE(status, 'active') <> 'deleted'"}
@@ -2914,6 +2947,8 @@ app.use((req, res, next) => {
       req.user.google_photo_url = currentUser.google_photo_url || '';
       req.user.profile_photo_url = currentUser.profile_photo_url || '';
       req.user.profile_photo_mode = currentUser.profile_photo_mode || 'default';
+      req.user.profile_signature_text = normalizeProfileSignatureText(currentUser.profile_signature_text || '');
+      req.user.profile_signature_vibe = normalizeProfileSignatureVibe(currentUser.profile_signature_vibe || '');
     }
 
     res.locals.user = req.user;
@@ -5439,12 +5474,16 @@ function getResolvedAppUserForPerson(userId, personId) {
       stable_u.google_photo_url AS stable_linked_user_google_photo_url,
       stable_u.profile_photo_url AS stable_linked_user_profile_photo_url,
       stable_u.profile_photo_mode AS stable_linked_user_profile_photo_mode,
+      stable_u.profile_signature_text AS stable_linked_user_profile_signature_text,
+      stable_u.profile_signature_vibe AS stable_linked_user_profile_signature_vibe,
       matched_u.id AS email_matched_user_id,
       matched_u.name AS email_matched_user_name,
       matched_u.email AS email_matched_user_email,
       matched_u.google_photo_url AS email_matched_user_google_photo_url,
       matched_u.profile_photo_url AS email_matched_user_profile_photo_url,
       matched_u.profile_photo_mode AS email_matched_user_profile_photo_mode,
+      matched_u.profile_signature_text AS email_matched_user_profile_signature_text,
+      matched_u.profile_signature_vibe AS email_matched_user_profile_signature_vibe,
       COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
     FROM people p
     LEFT JOIN person_app_links pal
@@ -5739,6 +5778,12 @@ function getPeopleAll(userId) {
     const canShareCharge = isFriendshipGateEnabled()
       ? friendshipActive && isActive && !isSelf
       : hasAppUser && !!normalizeEmail(person.email) && isActive && !isSelf;
+    const rawProfileSignatureText = normalizeProfileSignatureText(person.stable_linked_user_profile_signature_text || person.email_matched_user_profile_signature_text || '');
+    const rawProfileSignatureVibe = normalizeProfileSignatureVibe(person.stable_linked_user_profile_signature_vibe || person.email_matched_user_profile_signature_vibe || '');
+    const canExposeProfileSignature = isSelf || friendshipActive;
+    const visibleProfileSignatureText = canExposeProfileSignature ? rawProfileSignatureText : '';
+    const visibleProfileSignatureVibe = canExposeProfileSignature ? rawProfileSignatureVibe : '';
+    const visibleProfileSignatureMeta = getProfileSignatureVibeMeta(visibleProfileSignatureVibe);
     const storedPixProfile = {
       keyType: normalizePixKeyType(person.pix_key_type),
       keyValue: normalizePixKeyValue(person.pix_key_type, person.pix_key_value),
@@ -5820,7 +5865,11 @@ function getPeopleAll(userId) {
       linked_user_pix_reason: !isSelf ? (linkedUserPixProfile?.pixReason || null) : null,
       linked_user_pix_city: !isSelf ? (linkedUserPixProfile?.pixCity || null) : null,
       linked_user_pix_state: !isSelf ? (linkedUserPixProfile?.pixState || guessPixStateByCity(linkedUserPixProfile?.pixCity) || null) : null,
-      linked_user_pix_updated_at: !isSelf ? (linkedUserPixProfile?.pixUpdatedAt || null) : null
+      linked_user_pix_updated_at: !isSelf ? (linkedUserPixProfile?.pixUpdatedAt || null) : null,
+      profile_signature_text: visibleProfileSignatureText || '',
+      profile_signature_vibe: visibleProfileSignatureVibe || '',
+      profile_signature_vibe_label: visibleProfileSignatureMeta?.label || null,
+      has_profile_signature: !!(visibleProfileSignatureText || visibleProfileSignatureVibe)
     };
   });
 }
@@ -10204,6 +10253,10 @@ app.get("/people", ensureAuthenticated, (req, res) => {
     selfPerson.google_photo_url = normalizeProfilePhotoUrl(currentUser?.google_photo_url || '');
     selfPerson.profile_photo_url = normalizeProfilePhotoUrl(currentUser?.profile_photo_url || '');
     selfPerson.profile_photo_mode = normalizeProfilePhotoMode(currentUser?.profile_photo_mode || 'default');
+    selfPerson.profile_signature_text = normalizeProfileSignatureText(currentUser?.profile_signature_text || selfPerson.profile_signature_text || '');
+    selfPerson.profile_signature_vibe = normalizeProfileSignatureVibe(currentUser?.profile_signature_vibe || selfPerson.profile_signature_vibe || '');
+    selfPerson.profile_signature_vibe_label = getProfileSignatureVibeMeta(selfPerson.profile_signature_vibe)?.label || null;
+    selfPerson.has_profile_signature = !!(selfPerson.profile_signature_text || selfPerson.profile_signature_vibe);
   }
   const contacts = allPeople.filter((person) => person && !person.is_self);
   const pendingFriendRequests = getPendingReceivedFriendRequests(userId);
@@ -10220,6 +10273,8 @@ app.get("/people", ensureAuthenticated, (req, res) => {
     pixAllCitySuggestions: PIX_ALL_CITY_SUGGESTIONS,
     pixDefaultState: PIX_DEFAULT_STATE,
     pixDefaultCity: PIX_DEFAULT_CITY,
+    profileSignatureVibeOptions: PROFILE_SIGNATURE_VIBE_OPTIONS,
+    profileSignatureMaxLength: PROFILE_SIGNATURE_MAX_LENGTH,
     title: "Amigos"
   });
 });
@@ -10248,7 +10303,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
   const isSelfTarget = isSelfPersonRow(targetPerson);
   const requestedSection = isSelfTarget ? String(req.body.profile_section || '').trim().toLowerCase() : '';
   const redirectTarget = isSelfTarget
-    ? (requestedSection === 'pix' ? '/people#self-pix-config' : '/people#my-profile')
+    ? (requestedSection === 'pix' ? '/people#self-pix-config' : requestedSection === 'signature' ? '/people#profile-signature' : '/people#my-profile')
     : '/people#network-lounge';
 
   const currentName = targetPerson ? String(targetPerson.name || '').trim() : '';
@@ -10315,6 +10370,24 @@ app.post("/people", ensureAuthenticated, (req, res) => {
   if (id && !targetPerson) {
     setFlash(req, 'error', 'Não encontrei essa pessoa por aqui para atualizar.');
     return res.redirect('/people');
+  }
+
+  if (isSelfTarget && requestedSection === 'signature') {
+    const signatureText = normalizeProfileSignatureText(req.body.profile_signature_text);
+    const signatureVibe = normalizeProfileSignatureVibe(req.body.profile_signature_vibe);
+    db.prepare(`
+      UPDATE users
+      SET profile_signature_text = ?,
+          profile_signature_vibe = ?,
+          profile_signature_updated_at = ?
+      WHERE id = ?
+    `).run(signatureText || null, signatureVibe || null, (signatureText || signatureVibe) ? nowIso() : null, userId);
+    req.user.profile_signature_text = signatureText;
+    req.user.profile_signature_vibe = signatureVibe;
+    setFlash(req, 'success', signatureText || signatureVibe
+      ? 'Sua assinatura no app ficou salva do jeitinho que você montou.'
+      : 'Sua assinatura voltou para o modo discreto por aqui.');
+    return res.redirect(redirectTarget);
   }
 
   if (!name) {

@@ -2619,6 +2619,8 @@
       const panels = Array.from(root.querySelectorAll('[data-op-tab-panel]'));
       if (!buttons.length || !panels.length) return;
 
+      const tabStrip = root.querySelector('.op-tab-strip');
+
       const activate = (targetId, { focus = false } = {}) => {
         buttons.forEach((button) => {
           const isActive = button.getAttribute('data-op-tab-target') === targetId;
@@ -2626,6 +2628,9 @@
           button.setAttribute('aria-selected', isActive ? 'true' : 'false');
           button.setAttribute('tabindex', isActive ? '0' : '-1');
           if (isActive && focus) button.focus();
+          if (isActive && tabStrip && tabStrip.scrollWidth > tabStrip.clientWidth + 4) {
+            button.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: focus ? 'smooth' : 'auto' });
+          }
         });
 
         panels.forEach((panel) => {

@@ -5512,3 +5512,82 @@ html.dark .op-card-brand-preview {
     flex-basis: 100%;
   }
 }
+
+/* Mobile/PWA polish sweep — recent screens */
+@media (max-width: 767px) {
+  .op-screen--analytics .op-page-hero__meta,
+  .op-screen--shared-debts .op-page-hero__meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.55rem;
+  }
+
+  .op-screen--analytics .op-page-hero__meta .badge,
+  .op-screen--shared-debts .op-page-hero__meta .badge {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+    white-space: normal;
+    line-height: 1.3;
+    text-wrap: pretty;
+  }
+
+  .op-screen--analytics .op-page-hero__actions--compact {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 0.75rem;
+  }
+
+  .op-screen--analytics .op-page-hero__actions--compact > a,
+  .op-screen--analytics .op-page-hero__actions--compact > button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .op-screen--analytics .op-page-hero__actions--compact > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .op-screen--analytics .op-tab-strip {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    padding-inline: 0.15rem;
+    padding-bottom: 0.35rem;
+    margin-inline: -0.15rem;
+  }
+
+  .op-screen--analytics .op-tab-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .op-screen--analytics .op-tab-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    scroll-snap-align: start;
+  }
+
+  .op-screen--analytics [data-summary-donut-chart],
+  .op-screen--analytics [data-summary-line-chart] {
+    overflow: hidden;
+  }
+
+  .op-screen--shared-debts [data-shared-debts-sheet] > div:last-child {
+    max-height: min(88dvh, calc(100dvh - max(var(--op-top-safe), 0px) - 0.75rem)) !important;
+    bottom: max(0px, var(--op-bottom-safe)) !important;
+  }
+}
+
+@media (max-width: 479px) {
+  .op-screen--analytics .op-page-hero__actions--compact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .op-screen--analytics .op-page-hero__actions--compact > :last-child {
+    grid-column: auto;
+  }
+}

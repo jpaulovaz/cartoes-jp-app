@@ -353,6 +353,44 @@
 
   window.OPComputeSuggestedFirstDue = computeSuggestedFirstDue;
 
+  function bindCardBrandPreview(root = document) {
+    if (!root || typeof root.querySelectorAll !== 'function') return;
+
+    root.querySelectorAll('select[data-card-brand-select]').forEach((select) => {
+      if (!(select instanceof HTMLSelectElement)) return;
+      const field = select.closest('[data-card-brand-field]') || select.parentElement;
+      const preview = field ? field.querySelector('[data-card-brand-preview]') : null;
+      const previewImage = preview ? preview.querySelector('[data-card-brand-preview-image]') : null;
+      const previewLabel = preview ? preview.querySelector('[data-card-brand-preview-label]') : null;
+      if (!preview || !(previewImage instanceof HTMLImageElement) || !previewLabel) return;
+
+      const syncPreview = () => {
+        const option = select.options[select.selectedIndex];
+        const brandLabel = String(option?.dataset.brandLabel || '').trim();
+        const brandAsset = String(option?.dataset.brandAsset || '').trim();
+        if (!brandLabel || !brandAsset) {
+          preview.classList.add('hidden');
+          previewImage.removeAttribute('src');
+          previewImage.alt = '';
+          previewLabel.textContent = '';
+          return;
+        }
+        previewImage.src = brandAsset;
+        previewImage.alt = brandLabel;
+        previewLabel.textContent = `Bandeira: ${brandLabel}`;
+        preview.classList.remove('hidden');
+      };
+
+      syncPreview();
+      if (!select.__opBrandPreviewBound) {
+        select.addEventListener('change', syncPreview);
+        select.__opBrandPreviewBound = true;
+      }
+    });
+  }
+
+  window.OPBindCardBrandPreview = bindCardBrandPreview;
+
   function bindAutoFirstDue(form) {
     const dateInput = form.querySelector('[data-manual-date-input]');
     const cardSelect = form.querySelector('[data-manual-card-select]');
@@ -379,6 +417,7 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-auto-first-due-form]').forEach(bindAutoFirstDue);
+    bindCardBrandPreview(document);
   });
 })();
 

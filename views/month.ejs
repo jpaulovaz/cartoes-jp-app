@@ -225,16 +225,20 @@
               <input type="date" name="date" required data-manual-date-input <%= isClosed ? "disabled" : "" %>
                 class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
             </div>
-            <div>
+            <div data-card-brand-field>
               <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cartão</label>
-              <select name="card_id" data-manual-card-select <%= isClosed ? "disabled" : "" %>
+              <select name="card_id" data-manual-card-select data-card-brand-select <%= isClosed ? "disabled" : "" %>
                 class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
-                <% cards.forEach(c=> { %>
-                  <option value="<%= c.id %>" data-close-day="<%= c.close_day || '' %>" data-due-day="<%= c.due_day || '' %>">
+                <% cards.forEach(c=> { const brandMeta = getCardBrandMeta(c.brand); %>
+                  <option value="<%= c.id %>" data-close-day="<%= c.close_day || '' %>" data-due-day="<%= c.due_day || '' %>" data-brand="<%= brandMeta ? brandMeta.value : '' %>" data-brand-label="<%= brandMeta ? brandMeta.label : '' %>" data-brand-asset="<%= brandMeta ? brandMeta.asset : '' %>">
                     <%= c.name %>
                   </option>
                   <% }) %>
               </select>
+              <div class="op-card-brand-preview hidden" data-card-brand-preview>
+                <img data-card-brand-preview-image alt="" class="op-card-brand-logo" loading="lazy">
+                <span data-card-brand-preview-label></span>
+              </div>
             </div>
           </div>
 
@@ -830,7 +834,7 @@
       year: <%= year %>,
       isClosed: <%- JSON.stringify(!!isClosed) %>,
       people: <%- JSON.stringify(sortedPeopleForSelection.map(p => ({ id: Number(p.id), name: p.name, is_owner: !!p.is_owner, is_self: !!p.is_self, profile_kind: p.profile_kind || '', photo_url: p.photo_url || '', linked_user_photo_url: p.linked_user_photo_url || '' }))).replace(/</g, '\u003c') %>,
-      cards: <%- JSON.stringify((cards || []).map(card => ({ id: Number(card.id), name: card.name, close_day: card.close_day || '', due_day: card.due_day || '' }))).replace(/</g, '\\u003c') %>,
+      cards: <%- JSON.stringify((cards || []).map(card => ({ id: Number(card.id), name: card.name, close_day: card.close_day || '', due_day: card.due_day || '', brand: card.brand || '', brandMeta: getCardBrandMeta(card.brand) }))).replace(/</g, '\\u003c') %>,
       purchaseCategories: <%- JSON.stringify(sortedActivePurchaseCategories.map(category => ({ id: Number(category.id), name: category.name }))).replace(/</g, '\u003c') %>,
       txns: <%- JSON.stringify((txns || []).map(t => ({
         id: Number(t.id),

@@ -5388,3 +5388,86 @@ html.dark[data-theme-style="orgulho"] .op-screen--month > #monthSelectionToolbar
     width: min(760px, calc(100vw - 3rem)) !important;
   }
 }
+
+
+.op-card-brand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.86);
+  color: rgb(51 65 85);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  backdrop-filter: blur(10px);
+}
+
+html.dark .op-card-brand-badge {
+  border-color: rgba(71, 85, 105, 0.9);
+  background: rgba(15, 23, 42, 0.9);
+  color: rgb(226 232 240);
+}
+
+.op-card-brand-logo {
+  width: auto;
+  height: 1rem;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.op-card-brand-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.8rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(248, 250, 252, 0.9);
+  color: rgb(71 85 105);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+html.dark .op-card-brand-preview {
+  border-color: rgba(71, 85, 105, 0.82);
+  background: rgba(15, 23, 42, 0.72);
+  color: rgb(203 213 225);
+}
+
+.op-shared-action-row {
+  align-items: stretch;
+}
+
+.op-shared-action-row > a.inline-flex,
+.op-shared-action-row > button,
+.op-shared-action-row > form {
+  flex: 1 1 11rem;
+  min-width: 0;
+}
+
+.op-shared-action-row > form > button,
+.op-shared-action-row > form > a,
+.op-shared-action-row > a.inline-flex,
+.op-shared-action-row > button {
+  width: 100%;
+  min-height: 2.75rem;
+  white-space: nowrap;
+}
+
+.op-shared-action-row--compact > a.inline-flex,
+.op-shared-action-row--compact > button,
+.op-shared-action-row--compact > form {
+  flex-basis: 10rem;
+}
+
+@media (max-width: 639px) {
+  .op-shared-action-row > a.inline-flex,
+  .op-shared-action-row > button,
+  .op-shared-action-row > form {
+    flex-basis: 100%;
+  }
+}

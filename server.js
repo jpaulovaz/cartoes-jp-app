@@ -35,6 +35,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const SQLiteStore = require('connect-sqlite3')(session);
 const db = require("./src/db");
+const { version: APP_VERSION } = require('./package.json');
 const {
   BACKUP_FILE_PREFIX,
   BACKUP_MANIFEST_FILENAME,
@@ -75,6 +76,52 @@ require('./scripts/migrate.js');
 // --- OPCIONAL: EXECUTA SEED AUTOMÁTICO (comentar se não quiser dados de exemplo) ---
 // require('./scripts/seed.js');
 
+const CARD_BRAND_OPTIONS = [
+  { value: 'visa', label: 'Visa', asset: '/card-brands/visa.svg' },
+  { value: 'mastercard', label: 'Mastercard', asset: '/card-brands/mastercard.svg' },
+  { value: 'elo', label: 'Elo', asset: '/card-brands/elo.svg' },
+  { value: 'amex', label: 'American Express', asset: '/card-brands/amex.svg' },
+  { value: 'hipercard', label: 'Hipercard', asset: '/card-brands/hipercard.svg' },
+  { value: 'diners', label: 'Diners Club', asset: '/card-brands/diners.svg' },
+  { value: 'discover', label: 'Discover', asset: '/card-brands/discover.svg' },
+  { value: 'aura', label: 'Aura', asset: '/card-brands/aura.svg' }
+];
+
+const CARD_BRAND_ALIASES = new Map([
+  ['', ''],
+  ['visa', 'visa'],
+  ['mastercard', 'mastercard'],
+  ['master', 'mastercard'],
+  ['master card', 'mastercard'],
+  ['elo', 'elo'],
+  ['amex', 'amex'],
+  ['american express', 'amex'],
+  ['americanexpress', 'amex'],
+  ['hipercard', 'hipercard'],
+  ['diners', 'diners'],
+  ['diners club', 'diners'],
+  ['dinersclub', 'diners'],
+  ['discover', 'discover'],
+  ['aura', 'aura']
+]);
+
+function normalizeCardBrand(value) {
+  const cleaned = String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  return CARD_BRAND_ALIASES.get(cleaned) || '';
+}
+
+function getCardBrandMeta(value) {
+  const normalized = normalizeCardBrand(value);
+  if (!normalized) return null;
+  return CARD_BRAND_OPTIONS.find((option) => option.value === normalized) || null;
+}
+
 // Migrações adicionais específicas
 
 try { db.prepare("ALTER TABLE transactions ADD COLUMN due_month INTEGER").run(); } catch (e) { }
@@ -100,6 +147,7 @@ try { db.prepare("ALTER TABLE people ADD COLUMN deleted_at TEXT").run(); } catch
 try { db.prepare("ALTER TABLE people ADD COLUMN deleted_label TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN close_day INTEGER").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE cards ADD COLUMN brand TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN can_import INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN deleted_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -2923,6 +2971,9 @@ app.use((req, res, next) => {
   res.locals.recentNotifications = [];
   res.locals.pushNotificationsEnabled = isPushConfigured();
   res.locals.pushPublicKey = getPushPublicKey();
+  res.locals.appVersion = APP_VERSION;
+  res.locals.cardBrandOptions = CARD_BRAND_OPTIONS;
+  res.locals.getCardBrandMeta = getCardBrandMeta;
   const now = dayjs();
   res.locals.dashboardHref = `/detalhamento/${now.year()}/${now.month() + 1}`;
 
@@ -5086,7 +5137,7 @@ function removeFutureRecurringTransactions(userId, ruleId, fromYear, fromMonth, 
 
 function getCards(userId) {
   return db.prepare(`
-    SELECT id, name, due_day, close_day, holiday_scope, COALESCE(active, 1) AS active
+    SELECT id, name, due_day, close_day, holiday_scope, brand, COALESCE(active, 1) AS active
     FROM cards
     WHERE user_id = ?
     ORDER BY COALESCE(active, 1) DESC, name
@@ -5095,7 +5146,7 @@ function getCards(userId) {
 
 function getActiveCards(userId) {
   return db.prepare(`
-    SELECT id, name, due_day, close_day, holiday_scope, COALESCE(active, 1) AS active
+    SELECT id, name, due_day, close_day, holiday_scope, brand, COALESCE(active, 1) AS active
     FROM cards
     WHERE user_id = ? AND COALESCE(active, 1) = 1
     ORDER BY name
@@ -5108,7 +5159,7 @@ function getCardsByIds(userId, ids) {
 
   const placeholders = uniqueIds.map(() => "?").join(", ");
   return db.prepare(`
-    SELECT id, name, due_day, close_day, holiday_scope, COALESCE(active, 1) AS active
+    SELECT id, name, due_day, close_day, holiday_scope, brand, COALESCE(active, 1) AS active
     FROM cards
     WHERE user_id = ? AND id IN (${placeholders})
     ORDER BY COALESCE(active, 1) DESC, name
@@ -7680,7 +7731,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
 
   // 1. Puxamos todas as importações e transações manuais do usuário logado
   const recent = db.prepare(`
-    SELECT i.id, i.month, i.year, i.created_at, i.original_filename, c.name AS card_name, c.id AS card_id,
+    SELECT i.id, i.month, i.year, i.created_at, i.original_filename, c.name AS card_name, c.id AS card_id, c.brand AS card_brand,
            (SELECT COUNT(*) FROM transactions t WHERE t.import_id = i.id AND t.user_id = i.user_id) AS txn_count,
            (SELECT COALESCE(SUM(amount_cents), 0) FROM transactions t WHERE t.import_id = i.id AND t.user_id = i.user_id) AS import_total
     FROM imports i
@@ -7690,7 +7741,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
     UNION ALL
 
     SELECT NULL as id, t.due_month as month, t.due_year as year, t.created_at, 'Manual' as original_filename,
-           c.name AS card_name, c.id AS card_id,
+           c.name AS card_name, c.id AS card_id, c.brand AS card_brand,
            1 AS txn_count,
            t.amount_cents AS import_total
     FROM transactions t
@@ -7734,6 +7785,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
       group.cardsMap.set(r.card_id, {
         card_id: r.card_id,
         card_name: r.card_name,
+        card_brand: r.card_brand || '',
         month: r.month,
         year: r.year,
         txn_count: 0,
@@ -7759,6 +7811,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
         return {
           card_id: card.card_id,
           card_name: card.card_name,
+          card_brand: card.card_brand || '',
           month: card.month,
           year: card.year,
           txn_count: card.txn_count,
@@ -7826,7 +7879,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
     groupedRecentDisplay.push(...closedGroups);
   }
 
-  const cards = getActiveCards(userId).map(({ id, name, close_day, due_day }) => ({ id, name, close_day, due_day }));
+  const cards = getActiveCards(userId).map(({ id, name, close_day, due_day, brand }) => ({ id, name, close_day, due_day, brand }));
   const purchaseCategories = getPurchaseCategories(userId);
 
   res.render("home", {
@@ -8186,7 +8239,7 @@ function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
 function normalizeSharedDebtSearchTerm(value = '') {
   return String(value || '')
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim();
 }
@@ -10863,6 +10916,7 @@ app.post("/cards", ensureAuthenticated, (req, res) => {
   const name = (req.body.name || "").trim();
   const dueDay = normalizeDayNumber(req.body.due_day);
   const closeDay = normalizeDayNumber(req.body.close_day);
+  const brand = normalizeCardBrand(req.body.brand) || null;
 
   if (!name) {
     setFlash(req, 'error', 'Me conta o nome do cartão antes de salvar.');
@@ -10874,8 +10928,8 @@ app.post("/cards", ensureAuthenticated, (req, res) => {
     return res.redirect("/cards");
   }
 
-  db.prepare("INSERT INTO cards(user_id, name, due_day, close_day, holiday_scope) VALUES (?, ?, ?, ?, ?)")
-    .run(userId, name, dueDay, closeDay, "BR");
+  db.prepare("INSERT INTO cards(user_id, name, due_day, close_day, holiday_scope, brand) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(userId, name, dueDay, closeDay, "BR", brand);
 
   setFlash(req, 'success', `${name} entrou na carteira direitinho.`);
   return res.redirect("/cards");
@@ -10883,8 +10937,8 @@ app.post("/cards", ensureAuthenticated, (req, res) => {
 
 app.post("/cards/:id/update", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  db.prepare("UPDATE cards SET due_day = ?, close_day = ? WHERE id = ? AND user_id = ?")
-    .run(normalizeDayNumber(req.body.due_day), normalizeDayNumber(req.body.close_day), Number(req.params.id), userId);
+  db.prepare("UPDATE cards SET due_day = ?, close_day = ?, brand = ? WHERE id = ? AND user_id = ?")
+    .run(normalizeDayNumber(req.body.due_day), normalizeDayNumber(req.body.close_day), normalizeCardBrand(req.body.brand) || null, Number(req.params.id), userId);
   res.redirect("/cards");
 });
 
@@ -11342,7 +11396,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 
   const isClosed = isMonthClosed(userId, currentMonth, currentYear);
   const visibleCards = getVisibleCardsForMonth(userId, currentMonth, currentYear);
-  const cards = getActiveCards(userId).map(({ id, name, close_day, due_day }) => ({ id, name, close_day, due_day }));
+  const cards = getActiveCards(userId).map(({ id, name, close_day, due_day, brand }) => ({ id, name, close_day, due_day, brand }));
   const purchaseCategories = getPurchaseCategories(userId);
 
   const cardTotalsRows = db.prepare(`

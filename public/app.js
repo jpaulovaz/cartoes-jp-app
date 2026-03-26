@@ -788,8 +788,9 @@
     return `/month/${year}/${month}${qs ? `?${qs}` : ''}`;
   }
 
-  function buildSummaryUrl(year, month) {
-    return `/summary/${year}/${month}`;
+  function buildSummaryUrl(year, month, base = 'summary') {
+    const cleanBase = String(base || 'summary').replace(/[^a-z-]/gi, '') || 'summary';
+    return `/${cleanBase}/${year}/${month}`;
   }
 
   function setInteractionHint(root, message) {
@@ -1027,7 +1028,7 @@
 
     const filtered = Array.isArray(points) ? points : [];
     if (!filtered.length) {
-      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não deu para desenhar a linha do tempo desse resumo.</div>';
+      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não deu para desenhar a linha do tempo desse mês.</div>';
       return;
     }
 
@@ -1080,7 +1081,7 @@
               type="button"
               class="absolute h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-transparent bg-transparent outline-none transition focus:border-violet-400"
               style="left:${((point.x / width) * 100).toFixed(3)}%;top:${((point.y / height) * 100).toFixed(3)}%"
-              aria-label="Abrir resumo de ${point.label}"
+              aria-label="Abrir detalhes de ${point.label}"
               data-summary-month-hotspot
               data-point-index="${index}"
               data-point-year="${point.year}"
@@ -1104,7 +1105,7 @@
     function handlePreview(index) {
       const point = coords[Number(index)];
       if (!point) return;
-      setInteractionHint(root, `${formatCompactMonthSummary(point)}. Toque de novo para abrir esse resumo.`);
+      setInteractionHint(root, `${formatCompactMonthSummary(point)}. Toque de novo para abrir esse mês.`);
     }
 
     function bindNavigation(button) {
@@ -1115,7 +1116,8 @@
         const month = Number(button.getAttribute('data-point-month') || 0);
         const label = button.getAttribute('data-point-label') || 'esse mês';
         setInteractionHint(root, `Indo para ${label}. Bora comparar esse capítulo da novela financeira.`);
-        window.location.href = buildSummaryUrl(year, month);
+        const detailBase = root.getAttribute('data-summary-detail-base') || 'summary';
+        window.location.href = buildSummaryUrl(year, month, detailBase);
       });
     }
 

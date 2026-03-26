@@ -7903,12 +7903,7 @@ app.post("/geral/:year/:month/card/:cardId/delete", ensureAuthenticated, (req, r
   return res.redirect("/geral");
 });
 
-app.get("/geral/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
-  const { month, year } = parsed;
-
+function sendMonthTransactionsCsv(res, userId, month, year) {
   syncRecurringTransactions(userId, year, month);
 
   const rows = db.prepare(`
@@ -7963,6 +7958,24 @@ app.get("/geral/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.send('\uFEFF' + lines.join('\r\n'));
+}
+
+app.get("/geral/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+
+  return sendMonthTransactionsCsv(res, userId, month, year);
+});
+
+app.get("/month/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+
+  return sendMonthTransactionsCsv(res, userId, month, year);
 });
 
 function getSharedDebtRequestsReceived(userId) {
@@ -13441,11 +13454,7 @@ function buildSummaryChartsPayload({ userId, month, year, cardsPanel = [], perso
   };
 }
 
-app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
-  const { month, year } = parsed;
+function buildMonthlyReviewViewModel(userId, month, year) {
   syncRecurringTransactions(userId, year, month);
   const isClosed = isMonthClosed(userId, month, year);
 
@@ -13560,11 +13569,7 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
     };
   });
 
-  const summaryCharts = buildSummaryChartsPayload({ userId, month, year, cardsPanel, personPanel, unassigned });
-  const previousSummaryRef = shiftMonth(year, month, -1);
-  const nextSummaryRef = shiftMonth(year, month, 1);
-
-  res.render("summary", {
+  return {
     month,
     year,
     people,
@@ -13573,15 +13578,40 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
     unassigned,
     cardsPanel,
     personPanel,
-    formatBRLFromCents,
     isClosed,
-    summaryCharts,
-    previousSummaryRef,
-    nextSummaryRef
+    summaryCharts: buildSummaryChartsPayload({ userId, month, year, cardsPanel, personPanel, unassigned }),
+    previousSummaryRef: shiftMonth(year, month, -1),
+    nextSummaryRef: shiftMonth(year, month, 1)
+  };
+}
+
+app.get("/analytics/:year/:month", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+
+  const viewModel = buildMonthlyReviewViewModel(userId, month, year);
+  res.render("analytics", {
+    ...viewModel,
+    formatBRLFromCents
   });
 });
 
-app.post("/summary/:year/:month/merchant-suggestions/confirm", ensureAuthenticated, (req, res) => {
+app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+
+  const viewModel = buildMonthlyReviewViewModel(userId, month, year);
+  res.render("summary", {
+    ...viewModel,
+    formatBRLFromCents
+  });
+});
+
+app.post(["/summary/:year/:month/merchant-suggestions/confirm", "/analytics/:year/:month/merchant-suggestions/confirm"], ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
@@ -13593,7 +13623,7 @@ app.post("/summary/:year/:month/merchant-suggestions/confirm", ensureAuthenticat
 
   if (!normalizedPattern || !merchantLabel) {
     setFlash(req, 'error', 'A sugestão veio meio sem molho. Tenta de novo que a gente organiza.');
-    return res.redirect(`/summary/${year}/${month}`);
+    return res.redirect(`/analytics/${year}/${month}`);
   }
 
   try {
@@ -13609,10 +13639,10 @@ app.post("/summary/:year/:month/merchant-suggestions/confirm", ensureAuthenticat
     setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui salvar essa confirmação agora.' }).message);
   }
 
-  return res.redirect(`/summary/${year}/${month}`);
+  return res.redirect(`/analytics/${year}/${month}`);
 });
 
-app.post("/summary/:year/:month/merchant-suggestions/dismiss", ensureAuthenticated, (req, res) => {
+app.post(["/summary/:year/:month/merchant-suggestions/dismiss", "/analytics/:year/:month/merchant-suggestions/dismiss"], ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
@@ -13624,7 +13654,7 @@ app.post("/summary/:year/:month/merchant-suggestions/dismiss", ensureAuthenticat
 
   if (!normalizedPattern) {
     setFlash(req, 'error', 'Essa sugestão escapou sem pista suficiente para ser adiada.');
-    return res.redirect(`/summary/${year}/${month}`);
+    return res.redirect(`/analytics/${year}/${month}`);
   }
 
   try {
@@ -13640,11 +13670,11 @@ app.post("/summary/:year/:month/merchant-suggestions/dismiss", ensureAuthenticat
     setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui guardar essa decisão agora.' }).message);
   }
 
-  return res.redirect(`/summary/${year}/${month}`);
+  return res.redirect(`/analytics/${year}/${month}`);
 });
 
 
-app.post("/summary/:year/:month/merchant-learning/pause", ensureAuthenticated, (req, res) => {
+app.post(["/summary/:year/:month/merchant-learning/pause", "/analytics/:year/:month/merchant-learning/pause"], ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
@@ -13656,7 +13686,7 @@ app.post("/summary/:year/:month/merchant-learning/pause", ensureAuthenticated, (
 
   if (!normalizedPattern) {
     setFlash(req, 'error', 'Faltou a pista principal desse agrupamento para pausar com segurança.');
-    return res.redirect(`/summary/${year}/${month}`);
+    return res.redirect(`/analytics/${year}/${month}`);
   }
 
   try {
@@ -13672,10 +13702,10 @@ app.post("/summary/:year/:month/merchant-learning/pause", ensureAuthenticated, (
     setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui pausar esse agrupamento agora.' }).message);
   }
 
-  return res.redirect(`/summary/${year}/${month}`);
+  return res.redirect(`/analytics/${year}/${month}`);
 });
 
-app.post("/summary/:year/:month/merchant-learning/resume", ensureAuthenticated, (req, res) => {
+app.post(["/summary/:year/:month/merchant-learning/resume", "/analytics/:year/:month/merchant-learning/resume"], ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
   if (!parsed) return res.status(400).send("Mês/ano inválidos.");
@@ -13687,7 +13717,7 @@ app.post("/summary/:year/:month/merchant-learning/resume", ensureAuthenticated, 
 
   if (!normalizedPattern) {
     setFlash(req, 'error', 'Esse agrupamento veio sem rastro suficiente para voltar ao jogo.');
-    return res.redirect(`/summary/${year}/${month}`);
+    return res.redirect(`/analytics/${year}/${month}`);
   }
 
   try {
@@ -13703,7 +13733,7 @@ app.post("/summary/:year/:month/merchant-learning/resume", ensureAuthenticated, 
     setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui reativar esse agrupamento agora.' }).message);
   }
 
-  return res.redirect(`/summary/${year}/${month}`);
+  return res.redirect(`/analytics/${year}/${month}`);
 });
 
 app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {

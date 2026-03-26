@@ -1093,6 +1093,23 @@ html.dark .op-surface-card {
     width: 100%;
   }
 
+
+  .op-month-hero-actions {
+    display: flex;
+  }
+
+  .op-month-hero-actions__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    justify-content: flex-start;
+  }
+
+  .op-month-hero-actions__row > a,
+  .op-month-hero-actions__row > button {
+    width: auto;
+  }
+
   .op-admin-status-panel {
     padding: 1rem;
   }
@@ -1642,6 +1659,28 @@ html.dark .op-doc-body li { color: #cbd5e1; }
   flex: 0 0 auto;
 }
 
+
+.op-month-hero-actions {
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.65rem;
+}
+
+.op-month-hero-actions__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.op-month-hero-actions__row > a,
+.op-month-hero-actions__row > button {
+  width: auto;
+  min-height: 44px;
+  flex: 0 0 auto;
+}
+
 @media (max-width: 1023px) {
   .op-page-hero__actions--compact {
     display: flex;
@@ -1652,6 +1691,14 @@ html.dark .op-doc-body li { color: #cbd5e1; }
   .op-page-hero__actions--compact > a,
   .op-page-hero__actions--compact > button {
     width: auto;
+  }
+
+  .op-month-hero-actions {
+    align-items: stretch;
+  }
+
+  .op-month-hero-actions__row {
+    justify-content: flex-start;
   }
 }
 

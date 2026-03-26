@@ -5435,58 +5435,29 @@ html.dark .op-card-brand-face {
   backdrop-filter: blur(10px);
 }
 
-html.dark 
-.op-card-brand-face {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(241, 245, 249, 0.88));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: rgb(51 65 85);
-  overflow: hidden;
-  flex: 0 0 auto;
-}
-
-html.dark .op-card-brand-face {
-  border-color: rgba(71, 85, 105, 0.88);
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.86));
-  color: rgb(226 232 240);
-}
-
-.op-card-brand-face__logo {
-  max-width: 2rem;
-  max-height: 1.45rem;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-}
-
-.op-card-brand-badge {
+html.dark .op-card-brand-badge {
   border-color: rgba(71, 85, 105, 0.9);
   background: rgba(15, 23, 42, 0.9);
   color: rgb(226 232 240);
 }
 
 .op-card-brand-logo {
+  display: block;
   width: auto;
   height: 1rem;
   object-fit: contain;
   flex: 0 0 auto;
-  padding: 0.12rem 0.28rem;
-  border-radius: 0.65rem;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 html.dark .op-card-brand-logo {
-  border-color: rgba(71, 85, 105, 0.86);
-  background: rgba(15, 23, 42, 0.92);
+  background: transparent;
+  border: 0;
 }
+
 
 .op-card-brand-preview {
   display: inline-flex;

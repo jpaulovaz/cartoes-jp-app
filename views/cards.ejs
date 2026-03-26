@@ -18,18 +18,13 @@
       <form id="card-form" method="post" action="/cards" class="mb-8 pb-8 border-b border-slate-100 dark:border-slate-700">
         <input type="hidden" name="edit_id" id="card-form-edit-id" value="">
 
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-5">
-          <div>
-            <h2 id="card-form-title" class="text-xl font-black text-slate-900 dark:text-white">Colocar cartão novo na carteira</h2>
-            <p id="card-form-subtitle" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Preencha uma vez e deixe o app pronto para sugerir a fatura sem tropeço.</p>
-          </div>
-          <button type="button" id="card-form-cancel" class="hidden op-btn op-btn-secondary shrink-0">
-            Cancelar edição
-          </button>
+        <div class="mb-5">
+          <h2 id="card-form-title" class="text-xl font-black text-slate-900 dark:text-white">Colocar cartão novo na carteira</h2>
+          <p id="card-form-subtitle" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Preencha uma vez e deixe o app pronto para sugerir a fatura sem tropeço.</p>
         </div>
 
         <div class="grid md:grid-cols-12 gap-3 items-end">
-          <div class="md:col-span-4">
+          <div class="md:col-span-5">
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Nome do cartão</label>
             <input id="card-form-name" name="name"
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-slate-900 dark:text-white"
@@ -47,7 +42,7 @@
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-slate-900 dark:text-white"
               placeholder="Dia" />
           </div>
-          <div class="md:col-span-2">
+          <div class="md:col-span-3">
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Bandeira (opcional)</label>
             <select id="card-form-brand" name="brand" class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-slate-900 dark:text-white">
               <option value="">Sem informar por enquanto</option>
@@ -56,15 +51,19 @@
               <% }) %>
             </select>
           </div>
-          <div class="md:col-span-2">
-            <button id="card-form-submit" type="submit"
-              class="op-btn op-btn-primary op-btn--block">
-              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-              </svg>
-              <span id="card-form-submit-label">Salvar cartão</span>
-            </button>
-          </div>
+        </div>
+
+        <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+          <button type="button" id="card-form-cancel" class="hidden op-btn op-btn-ghost w-full sm:w-auto sm:min-w-[12rem]">
+            Cancelar edição
+          </button>
+          <button id="card-form-submit" type="submit"
+            class="op-btn op-btn-primary w-full sm:w-auto sm:min-w-[13.5rem]">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            <span id="card-form-submit-label">Salvar cartão</span>
+          </button>
         </div>
         <p class="text-xs font-medium text-slate-400 dark:text-slate-500 mt-3 flex items-center">
           <svg class="w-4 h-4 mr-1 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -96,19 +95,21 @@
                   <div class="font-extrabold text-slate-800 dark:text-white text-lg break-words leading-tight">
                     <%= c.name %>
                   </div>
-                  <div class="flex flex-wrap gap-2 mt-2 text-xs font-bold">
+                  <div class="mt-2 space-y-2 text-xs font-bold">
                     <% if (brandMeta) { %>
                       <span class="op-card-brand-badge">
                         <img src="<%= brandMeta.asset %>" alt="<%= brandMeta.label %>" class="op-card-brand-logo" loading="lazy">
                         <span><%= brandMeta.label %></span>
                       </span>
                     <% } %>
-                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600">
-                      Fechamento: <span class="ml-1"><%= c.close_day ? 'Dia ' + c.close_day : 'Não definido' %></span>
-                    </span>
-                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600">
-                      Vencimento: <span class="ml-1"><%= c.due_day ? 'Dia ' + c.due_day : 'Não definido' %></span>
-                    </span>
+                    <div class="flex flex-wrap sm:flex-nowrap gap-2">
+                      <span class="inline-flex flex-1 min-w-0 items-center justify-center sm:justify-start px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 whitespace-nowrap">
+                        Fecha: <span class="ml-1"><%= c.close_day ? 'Dia ' + c.close_day : 'A definir' %></span>
+                      </span>
+                      <span class="inline-flex flex-1 min-w-0 items-center justify-center sm:justify-start px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 whitespace-nowrap">
+                        Vence: <span class="ml-1"><%= c.due_day ? 'Dia ' + c.due_day : 'A definir' %></span>
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -127,8 +128,8 @@
                 data-card-close-day="<%= c.close_day || '' %>"
                 data-card-due-day="<%= c.due_day || '' %>"
                 data-card-brand="<%= c.brand || '' %>"
-                class="op-btn op-btn-secondary op-btn--block">
-                Editar no formulário
+                class="op-btn op-btn-info op-btn--block">
+                Editar Cartão
               </button>
 
               <div class="grid gap-2 sm:grid-cols-2">

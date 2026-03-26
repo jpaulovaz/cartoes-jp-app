@@ -61,7 +61,7 @@
 
     if (!person.is_self && person.has_app_user) {
       addChip('border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200', 'Também usa o app');
-      addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix no perfil da pessoa');
+      addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix fica com a pessoa');
     }
 
     if (!person.email) {
@@ -79,12 +79,12 @@
     if (!person.is_self && person.friendship_active) {
       addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Amizade ativa');
       if (person.can_share_charge) {
-        addChip('border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200', 'Cobrança automática liberada');
+        addChip('border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200', 'Cobrança liberada');
       } else if (!person.active) {
         addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Cobrança pausada');
       }
       if (person.linked_user_pix_ready) {
-        addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix pronto do outro lado');
+        addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix pronto');
       } else if (person.linked_user_pix_enabled) {
         addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pix pedindo ajuste');
       } else if (person.has_app_user) {
@@ -104,7 +104,7 @@
       return {
         key: 'friend',
         label: 'Amizade ativa',
-        summary: 'Cobranças automáticas podem rolar entre vocês sem gambiarra.',
+        summary: 'Vocês já podem dividir e cobrar por aqui.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
         barClasses: 'from-emerald-400 via-cyan-400 to-sky-500'
       };
@@ -114,7 +114,7 @@
       return {
         key: 'pending',
         label: 'Te chamou no app',
-        summary: 'Só falta seu aceite para a amizade entrar em campo.',
+        summary: 'Só falta você aceitar.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
         barClasses: 'from-emerald-400 via-amber-300 to-orange-400'
       };
@@ -124,7 +124,7 @@
       return {
         key: 'pending',
         label: 'Convite enviado',
-        summary: 'O convite já saiu voando. Agora é esperar o joinha.',
+        summary: 'O convite já foi. Agora é esperar a resposta.',
         badgeClasses: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200',
         barClasses: 'from-amber-300 via-orange-400 to-rose-400'
       };
@@ -134,7 +134,7 @@
       return {
         key: 'discover',
         label: 'Já está no app',
-        summary: 'Dá para mandar convite e transformar esse contato em amizade oficial.',
+        summary: 'Dá para mandar convite e virar amizade por aqui.',
         badgeClasses: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200',
         barClasses: 'from-sky-400 via-cyan-400 to-violet-400'
       };
@@ -142,8 +142,8 @@
 
     return {
       key: 'local',
-      label: 'Contato local',
-      summary: 'Por enquanto essa pessoa mora só na sua lista — e tá tudo bem.',
+      label: 'Só na sua lista',
+      summary: 'Por enquanto essa pessoa aparece só na sua lista.',
       badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300',
       barClasses: 'from-slate-300 via-slate-200 to-slate-400 dark:from-slate-600 dark:via-slate-500 dark:to-slate-700'
     };
@@ -153,7 +153,7 @@
     if (person && person.friendship_active && person.linked_user_pix_ready) {
       return {
         label: 'Pix pronto',
-        summary: 'Quando pintar pagamento, o app usa o Pix vivo que essa pessoa deixou no perfil dela.',
+        summary: 'Quando rolar pagamento, o app usa o Pix que essa pessoa deixou no perfil.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200'
       };
     }
@@ -161,7 +161,7 @@
     if (person && person.friendship_active && person.linked_user_pix_enabled) {
       return {
         label: 'Falta ajuste',
-        summary: 'O Pix já existe, mas ainda está pedindo um carinho no perfil da outra pessoa.',
+        summary: 'Essa pessoa já ligou o Pix, mas ainda falta terminar.',
         badgeClasses: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
       };
     }
@@ -169,22 +169,22 @@
     if (person && person.friendship_active && person.has_app_user) {
       return {
         label: 'Ainda não deixou pronto',
-        summary: 'A amizade já vale, só falta a outra ponta deixar o Pix em ordem.',
+        summary: 'A amizade já está valendo, só falta a pessoa deixar o Pix pronto.',
         badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300'
       };
     }
 
     if (person && person.has_app_user) {
       return {
-        label: 'Entra depois da amizade',
-        summary: 'Quando a amizade for aceita e surgir cobrança, o Pix vem do perfil dela automaticamente.',
+        label: 'Depois da amizade',
+        summary: 'Depois que a amizade for aceita, o Pix vem do perfil da pessoa.',
         badgeClasses: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200'
       };
     }
 
     return {
-      label: 'Contato local',
-      summary: 'Sem Pix por aqui. Se a pessoa entrar no app, ela mesma cadastra do lado dela.',
+      label: 'Só na sua lista',
+      summary: 'Sem Pix por aqui. Se a pessoa entrar no app, ela mesma cadastra do lado de lá.',
       badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300'
     };
   };
@@ -195,12 +195,7 @@
     <div>
       <span class="op-page-hero__eyebrow">Seu perfil + sua rede</span>
       <h1 class="op-page-hero__title mt-4">Amigos</h1>
-      <p class="op-page-hero__subtitle mt-3">Agora essa área ficou mais rede social de verdade: seu perfil virou vitrine fixa, os convites têm espaço próprio e a sua turma ganhou uma vitrine mais fácil de explorar no mobile, no desktop e no PWA.</p>
-      <div class="op-page-hero__meta mt-4">
-        <span class="badge">Seu perfil não compete com contatos</span>
-        <span class="badge">Cada pessoa cuida do próprio Pix</span>
-        <span class="badge">Convites e vínculos mais fáceis de ler</span>
-      </div>
+      <p class="op-page-hero__subtitle mt-3">Aqui você cuida do seu perfil, acompanha seus convites e vê sua turma de um jeito bem mais simples.</p>
     </div>
 
     <div class="op-kpi-strip xl:max-w-[34rem]">
@@ -217,7 +212,7 @@
       <div class="op-kpi-card text-center">
         <div class="op-kpi-card__label text-emerald-600 dark:text-emerald-300">Amizades</div>
         <div class="op-kpi-card__value text-emerald-700 dark:text-emerald-200"><%= activeFriendCount %></div>
-        <div class="op-kpi-card__hint text-emerald-700/80 dark:text-emerald-200/80">vínculo(s) ativo(s)</div>
+        <div class="op-kpi-card__hint text-emerald-700/80 dark:text-emerald-200/80">amizade(s) ativas</div>
       </div>
       <div class="op-kpi-card text-center">
         <div class="op-kpi-card__label text-violet-600 dark:text-violet-300"><%= pendingContactCount ? 'Convites' : 'Pix pronto' %></div>
@@ -275,7 +270,7 @@
                   <div class="mt-3 flex flex-wrap gap-2">
                     <%- renderPersonStatusChips(selfProfile) %>
                   </div>
-                  <p class="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Esse é o seu crachá dentro do OrganizaPay. É daqui que saem sua identidade nas cobranças, seu papel nas divisões e tudo o que o app usa para te reconhecer sem tropeço.</p>
+                  <p class="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Esse é o seu espaço dentro do OrganizaPay. É daqui que saem suas informações quando você participa de cobranças e divisões.</p>
                 </div>
               </div>
 
@@ -307,8 +302,8 @@
 
           <div>
             <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Como você aparece</div>
-            <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seu crachá social dentro do app</h3>
-            <p class="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Nome, telefone e e-mail ficam juntinhos aqui porque são a sua assinatura na rede. Mudou alguma dessas infos? Salva sem mexer no Pix.</p>
+            <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seus dados por aqui</h3>
+            <p class="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Nome, telefone e e-mail ficam juntinhos aqui. Mudou alguma coisa? Salva por aqui sem mexer no Pix.</p>
           </div>
 
           <div class="grid gap-4 xl:grid-cols-2">
@@ -389,7 +384,7 @@
               <div id="profile-signature" class="scroll-mt-28">
                 <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Sua assinatura no app</div>
                 <h4 class="mt-2 text-lg font-black text-slate-900 dark:text-white">O toque que seus amigos enxergam por aqui</h4>
-                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Escreva um recado rapidinho, escolha um jeitinho e deixe sua presença com mais cara de gente de verdade.</p>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Escreva um recado curtinho, escolha um jeitinho e deixe seu perfil com mais a sua cara.</p>
               </div>
 
               <div class="mt-4 grid gap-4">
@@ -399,7 +394,7 @@
                     <span id="profileSignatureCount" class="text-[11px] font-bold text-slate-400 dark:text-slate-500"><%= selfSignatureText.length %>/<%= signatureMaxLength %></span>
                   </div>
                   <input type="text" name="profile_signature_text" id="profileSignatureText" value="<%- selfSignatureText %>" maxlength="<%= signatureMaxLength %>" autocomplete="off" class="w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20" placeholder="Ex.: Pix ligado e coração tranquilo 😄">
-                  <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Até <%= signatureMaxLength %> caracteres, sem quebra de linha e só visível para amizades ativas nesse começo de festa.</p>
+                  <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Até <%= signatureMaxLength %> caracteres, em uma linha só. Só quem já é seu amigo por aqui vê isso.</p>
                 </label>
 
                 <div>
@@ -408,7 +403,7 @@
                     <% signatureVibeOptions.forEach((option) => { const selected = option.code === selfSignatureVibe; %>
                       <button type="button" data-signature-vibe-option data-vibe-code="<%= option.code %>" class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-bold transition-all <%= selected ? 'border-sky-600 bg-sky-600 text-white shadow-lg shadow-sky-500/15 dark:border-sky-400 dark:bg-sky-400 dark:text-slate-950' : 'border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-800 dark:hover:bg-sky-900/20 dark:hover:text-sky-200' %>"><%= option.label %></button>
                     <% }) %>
-                    <button type="button" id="profileSignatureClear" class="inline-flex items-center rounded-full border border-dashed border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-500 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:bg-slate-800">Limpar chip</button>
+                    <button type="button" id="profileSignatureClear" class="inline-flex items-center rounded-full border border-dashed border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-500 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:bg-slate-800">Limpar jeitinho</button>
                   </div>
                 </div>
 
@@ -417,8 +412,8 @@
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Prévia para amizades ativas</div>
                     <span id="profileSignaturePreviewVibe" class="<%= selfSignatureMeta ? '' : 'hidden ' %>inline-flex items-center rounded-full border border-sky-200 bg-white px-3 py-1 text-[11px] font-bold text-sky-700 dark:border-sky-800 dark:bg-slate-900 dark:text-sky-200"><%= selfSignatureMeta ? selfSignatureMeta.label : '' %></span>
                   </div>
-                  <p id="profileSignaturePreviewText" class="mt-2 text-sm font-medium leading-6 text-slate-700 dark:text-slate-200"><%= selfSignatureText ? selfSignatureText : 'Quando você escrever um recadinho aqui, seus amigos vão ver esse toque extra no seu card da rede.' %></p>
-                  <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Nada público geral por enquanto: isso aqui fica só entre você e quem já entrou oficialmente na sua turma.</p>
+                  <p id="profileSignaturePreviewText" class="mt-2 text-sm font-medium leading-6 text-slate-700 dark:text-slate-200"><%= selfSignatureText ? selfSignatureText : 'Quando você escrever um recado aqui, ele aparece para seus amigos na sua rede.' %></p>
+                  <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Por enquanto, isso aparece só para quem já é seu amigo por aqui.</p>
                 </div>
               </div>
 
@@ -477,8 +472,8 @@
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Receber por Pix</div>
-              <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seu cofrinho automático nas cobranças</h3>
-              <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Esse bloco é opcional e fica separado de propósito: aqui você decide se quer deixar o Pix pronto para quando alguém for te pagar.</p>
+              <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seu Pix pronto para receber</h3>
+              <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Aqui você decide se quer deixar seu Pix pronto para quando alguém for te pagar.</p>
             </div>
             <% if (selfProfile.pix_enabled && selfProfile.pix_valid) { %>
               <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pronto para uso</span>
@@ -496,7 +491,7 @@
                   <input type="checkbox" name="pix_enabled" id="selfPixEnabled" value="1" class="mt-1 h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" <%= selfPixEnabled ? 'checked' : '' %>>
                   <span class="min-w-0 flex-1">
                     <span class="block text-sm font-black text-slate-900 dark:text-white">Deixar Pix pronto por aqui</span>
-                    <span class="mt-1 block text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">A chave fica mascaradinha na lista e só aparece inteira quando alguém realmente for copiar o Pix.</span>
+                    <span class="mt-1 block text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Sua chave fica escondidinha na lista e só aparece inteira na hora de copiar.</span>
                   </span>
                 </label>
               </div>
@@ -514,9 +509,9 @@
                         <% if (selfProfile.pix_city) { %>
                           Cidade do Pix: <strong class="font-semibold text-slate-700 dark:text-slate-100"><%= selfProfile.pix_city %><%= selfProfile.pix_state ? ' / ' + selfProfile.pix_state : '' %></strong>.
                         <% } %>
-                        Esse é o Pix que entra em cena quando você recebe cobranças por aqui.
+                        Esse é o Pix que aparece quando alguém precisa te pagar.
                       <% } else { %>
-                        Nenhuma chave salva por aqui ainda. Quando você ligar isso aqui, as cobranças já podem sair com o seu Pix sem correria depois.
+                        Nenhuma chave salva por aqui ainda. Quando você ligar isso, quem for te pagar já encontra seu Pix sem correria.
                       <% } %>
                     </p>
                   </div>
@@ -570,8 +565,8 @@
 
                 <div class="grid gap-3 lg:justify-items-end">
                   <div id="selfPixDormantHint" class="rounded-[24px] border border-dashed border-violet-200 bg-violet-50/70 px-4 py-4 text-sm font-medium leading-6 text-slate-600 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-slate-300 lg:max-w-[24rem] <%= selfPixEnabled ? 'hidden' : '' %>">
-                    <div class="font-black text-slate-900 dark:text-white">Deixa desligado sem culpa nenhuma.</div>
-                    <p class="mt-2">Quando você quiser transformar cobranças em algo mais redondinho, é só ligar, preencher e salvar.</p>
+                    <div class="font-black text-slate-900 dark:text-white">Pode deixar desligado sem problema.</div>
+                    <p class="mt-2">Quando quiser, é só ligar, preencher e salvar.</p>
                   </div>
                   <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 sm:w-auto">Salvar meu Pix</button>
                 </div>
@@ -588,7 +583,7 @@
         <div>
           <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Convites que chegaram</div>
           <h2 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Tem gente batendo na porta da sua rede</h2>
-          <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Aceitando, vocês passam a trocar cobranças automáticas entre si. Recusando, fica tudo no zero drama — sem climão e sem bagunça.</p>
+          <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Aceitando, vocês podem usar cobranças entre si com mais facilidade. Se não quiser, é só recusar.</p>
         </div>
         <div class="rounded-2xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-sm font-semibold text-emerald-700 shadow-sm dark:border-emerald-900/70 dark:bg-emerald-900/20 dark:text-emerald-200">
           <%= pendingRequests.length === 1 ? '1 convite esperando você' : `${pendingRequests.length} convites esperando você` %>
@@ -610,7 +605,7 @@
                     </span>
                     <div class="min-w-0">
                       <div class="text-lg font-black text-slate-900 dark:text-white"><%= request.requester_name || 'Usuário OrganizaPay' %></div>
-                      <div class="text-sm font-medium text-slate-500 dark:text-slate-400">Quer virar seu contato de confiança no app.</div>
+                      <div class="text-sm font-medium text-slate-500 dark:text-slate-400">Quer entrar na sua rede por aqui.</div>
                     </div>
                   </div>
 
@@ -650,7 +645,7 @@
           <span id="contactEditingBadge" class="hidden inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-bold text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">Modo edição</span>
         </div>
         <h2 id="contactFormTitle" class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Quem vai entrar nessa roda?</h2>
-        <p id="contactFormHint" class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Salva nome, telefone e e-mail. Se essa pessoa também usa o app, o convite de amizade entra depois e o Pix continua sendo cuidado por ela, no perfil dela.</p>
+        <p id="contactFormHint" class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Salve nome, telefone e e-mail. Se essa pessoa também usa o app, você pode mandar o convite depois. O Pix fica por conta dela.</p>
 
         <form method="post" action="/people" id="contactForm" class="mt-5 flex flex-col gap-3">
           <input type="hidden" name="id" id="contactPersonId">
@@ -693,7 +688,7 @@
               </span>
               <div class="min-w-0 flex-1">
                 <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Pix da outra pessoa</div>
-                <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Você não precisa cadastrar a chave Pix de ninguém por aqui. Quando a amizade estiver ativa e rolar pagamento, o app usa o Pix que a própria pessoa deixou no perfil dela.</p>
+                <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Você não precisa guardar o Pix de ninguém aqui. Quando a amizade estiver valendo e rolar pagamento, o app usa o Pix que a própria pessoa deixou no perfil.</p>
               </div>
             </div>
           </div>
@@ -704,18 +699,18 @@
         <section class="flex h-full flex-col justify-between rounded-[30px] border border-slate-200 bg-slate-50/80 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:p-6">
           <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Radar da rede</div>
           <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Como está sua turma hoje</h3>
-          <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Um resumão rápido para você sacar onde a sua rede está bombando e onde ainda tem gente só no modo contato.</p>
+          <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Um resumo rápido para ver quem já está com você e quem ainda está só na sua lista.</p>
 
           <div class="mt-5 grid gap-3 sm:grid-cols-2">
             <div class="rounded-[24px] border border-emerald-200 bg-white px-4 py-4 shadow-sm dark:border-emerald-900/50 dark:bg-slate-950/70">
               <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Amizades</div>
               <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= activeFriendCount %></div>
-              <div class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">já podem trocar cobranças automáticas</div>
+              <div class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">já podem dividir e cobrar por aqui</div>
             </div>
             <div class="rounded-[24px] border border-amber-200 bg-white px-4 py-4 shadow-sm dark:border-amber-900/50 dark:bg-slate-950/70">
               <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Convites</div>
               <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= pendingContactCount %></div>
-              <div class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">gente no quase lá</div>
+              <div class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">esperando resposta</div>
             </div>
             <div class="rounded-[24px] border border-sky-200 bg-white px-4 py-4 shadow-sm dark:border-sky-900/50 dark:bg-slate-950/70">
               <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Já no app</div>
@@ -725,31 +720,31 @@
             <div class="rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/70">
               <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Só contato</div>
               <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= localOnlyCount %></div>
-              <div class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">guardados localmente</div>
+              <div class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">só na sua lista</div>
             </div>
           </div>
           <div class="mt-4 rounded-[24px] border border-violet-200/70 bg-violet-50/70 px-4 py-3.5 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20">
             <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Pix pronto na turma</div>
-            <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><strong class="font-black text-slate-900 dark:text-white"><%= readyPixNetworkCount %></strong> amizade<%= readyPixNetworkCount === 1 ? "" : "s" %> já tem Pix redondinho do outro lado para quando pintar pagamento.</p>
+            <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Você já tem <strong class="font-black text-slate-900 dark:text-white"><%= readyPixNetworkCount %></strong> amizade<%= readyPixNetworkCount === 1 ? "" : "s" %> com Pix pronto para quando pintar pagamento.</p>
           </div>
         </section>
       </div>
 
       <section class="xl:col-span-2 rounded-[30px] border border-violet-200 bg-violet-50/70 p-5 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/20 sm:p-6">
           <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Como essa rede funciona</div>
-          <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Três passos, zero confusão</h3>
+          <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Três passos, sem enrolação</h3>
           <div class="mt-5 grid gap-3 lg:grid-cols-3">
             <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
               <div class="text-sm font-black text-slate-900 dark:text-white">1. Salve o contato</div>
               <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Nome, telefone e e-mail já dão conta do recado para essa pessoa entrar na sua rede.</p>
             </div>
             <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-              <div class="text-sm font-black text-slate-900 dark:text-white">2. Virem amizade no app</div>
-              <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando os dois lados topam, as cobranças automáticas entram em jogo.</p>
+              <div class="text-sm font-black text-slate-900 dark:text-white">2. Virem amigos por aqui</div>
+              <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando os dois aceitam, vocês conseguem usar cobranças entre si.</p>
             </div>
             <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
               <div class="text-sm font-black text-slate-900 dark:text-white">3. Pix vem do perfil da pessoa</div>
-              <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Nada de você guardar a chave dos outros. O app puxa a versão certa direto do perfil dela.</p>
+              <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Você não precisa guardar a chave dos outros. Quando chegar a hora, o app usa o Pix que a própria pessoa deixou no perfil.</p>
             </div>
           </div>
         </section>
@@ -760,7 +755,7 @@
     <div>
       <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Sua rede ativa</div>
       <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Amigos e contatos</h2>
-      <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Explore sua lista como quem navega num feed: filtre por vínculo, procure alguém pelo nome e edite sem caçar formulário perdido.</p>
+      <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Use a busca, filtre do seu jeito e ache alguém rapidinho.</p>
     </div>
 
     <% if (contactList.length) { %>
@@ -778,7 +773,7 @@
           <button type="button" data-network-filter="friend" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Amizades <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= activeFriendCount %></span></button>
           <button type="button" data-network-filter="pending" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Convites <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= pendingContactCount %></span></button>
           <button type="button" data-network-filter="discover" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Já no app <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= discoverableCount %></span></button>
-          <button type="button" data-network-filter="local" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Locais <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= localOnlyCount %></span></button>
+          <button type="button" data-network-filter="local" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Só na sua lista <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= localOnlyCount %></span></button>
         </div>
       </div>
 
@@ -791,25 +786,25 @@
              const profileSignatureVisible = p.friendship_active && !!(p.profile_signature_text || p.profile_signature_vibe);
              let personHintText = '';
              if (!p.email) {
-               personHintText = 'Quer descobrir se essa pessoa também usa o app? Um e-mail aqui já ajuda a abrir essa porta.';
+               personHintText = 'Quer descobrir se essa pessoa também usa o app? Colocar um e-mail aqui já ajuda.';
              } else if (!p.has_app_user) {
-               personHintText = 'Por enquanto o app não achou uma conta OrganizaPay com esse e-mail. Se a pessoa entrar depois, o Pix continua sendo cadastrado por ela, no perfil dela.';
+               personHintText = 'Ainda não encontramos essa pessoa no OrganizaPay com esse e-mail. Se ela entrar depois, o Pix continua sendo cadastrado por ela.';
              } else if (p.friendship_active && !p.active) {
-               personHintText = 'A amizade segue ativa, mas este contato está inativo na sua lista. Novos envios automáticos ficam pausados até você reativar — e o Pix continua vindo do perfil dessa pessoa quando tudo voltar a rodar.';
+               personHintText = 'A amizade continua valendo, mas esse contato está desativado na sua lista. Se quiser usar de novo, é só reativar.';
              } else if (p.friendship_active && p.linked_user_pix_ready) {
-               personHintText = 'Vocês já estão conectados. Quando pintar pagamento, o app pega o Pix vivo dessa pessoa no perfil dela — se ela trocar por lá, aqui já acompanha sem drama.';
+               personHintText = 'Vocês já são amigos por aqui. Quando pintar pagamento, o app usa o Pix que essa pessoa deixou no perfil.';
              } else if (p.friendship_active && p.linked_user_pix_enabled && !p.linked_user_pix_ready) {
-               personHintText = 'A amizade já está ativa, mas o Pix dessa pessoa ainda está pedindo um ajuste no próprio perfil. Quando ela fechar isso, as cobranças pegam a versão certa.';
+               personHintText = 'A amizade já está valendo, mas essa pessoa ainda está terminando o Pix no perfil.';
              } else if (p.friendship_active) {
-               personHintText = 'A amizade já está ativa. Agora só falta essa pessoa deixar o Pix dela pronto no próprio perfil para os pagamentos ficarem redondinhos.';
+               personHintText = 'A amizade já está valendo. Agora só falta essa pessoa deixar o Pix pronto no perfil.';
              } else if (p.friendship_state === 'pending_sent') {
-               personHintText = 'O convite já foi enviado. Quando vier o joinha, o Pix passa a vir do perfil dessa pessoa automaticamente.';
+               personHintText = 'O convite já foi enviado. Agora é esperar a resposta.';
              } else if (p.friendship_state === 'pending_received') {
-               personHintText = 'Essa pessoa já te chamou. É só aceitar aqui e pronto: amizade ativa, com autorização dos dois lados e cada um cuidando do próprio Pix.';
+               personHintText = 'Essa pessoa já te chamou. É só aceitar e pronto.';
              } else if (!p.active) {
-               personHintText = 'Esse contato usa o app, mas está desativado na sua lista. Reative quando quiser colocar em jogo de novo.';
+               personHintText = 'Esse contato usa o app, mas está desativado na sua lista. Reative quando quiser.';
              } else {
-               personHintText = 'O app já reconheceu essa pessoa. Se fizer sentido, mande um pedido de amizade para liberar cobranças automáticas — e o Pix entra depois, vindo do perfil dela.';
+               personHintText = 'O app já encontrou essa pessoa. Se fizer sentido, mande um pedido de amizade.';
              }
         %>
           <article
@@ -857,7 +852,7 @@
 
                 <div class="flex w-full flex-col gap-2 xl:w-[15rem] xl:shrink-0">
                   <% if (p.friendship_state === 'active') { %>
-                    <form method="post" action="/people/<%= p.id %>/unfriend" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novos envios automáticos entre vocês param na hora.">
+                    <form method="post" action="/people/<%= p.id %>/unfriend" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novas cobranças entre vocês param na hora.">
                       <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Desfazer amizade</button>
                     </form>
                   <% } else if (p.friendship_state === 'pending_sent') { %>
@@ -927,7 +922,7 @@
                       <% } %>
                     </div>
                     <% if (profileSignatureVisible) { %>
-                      <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= p.profile_signature_text || 'Essa pessoa preferiu deixar só o jeitinho dela aparecendo por aqui.' %></p>
+                      <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= p.profile_signature_text || 'Essa pessoa preferiu mostrar só o jeitinho dela por aqui.' %></p>
                     <% } else { %>
                       <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= personHintText %></p>
                     <% } %>
@@ -938,10 +933,10 @@
           </article>
         <% }) %>
 
-        <div id="networkFilteredEmpty" class="hidden rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 px-6 py-10 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400 lg:col-span-2">Nada apareceu com esse filtro agora. Dá uma limpada na busca ou troca o chip que a galera volta para a tela.</div>
+        <div id="networkFilteredEmpty" class="hidden rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 px-6 py-10 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400 lg:col-span-2">Nada apareceu com esse filtro agora. Limpa a busca ou troque o filtro para ver mais gente.</div>
       </div>
     <% } else { %>
-      <div class="mt-6 rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 px-6 py-12 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">Sua rede ainda está vazia por aqui. Quando quiser, comece adicionando quem entra nas suas divisões e cobranças.</div>
+      <div class="mt-6 rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 px-6 py-12 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">Sua rede ainda está vazia por aqui. Quando quiser, comece adicionando quem participa das suas divisões e cobranças.</div>
     <% } %>
   </section>
 </div>
@@ -1095,7 +1090,7 @@ function editContactFromButton(button) {
   if (cancel) cancel.classList.remove('hidden');
   if (eyebrow) eyebrow.textContent = 'Editando contato';
   if (title) title.textContent = `Ajustando ${button.dataset.name || 'esse contato'}`;
-  if (hint) hint.textContent = 'Mude só o que precisar e salve. O restante da rede continua no lugar certinho.';
+  if (hint) hint.textContent = 'Mude só o que precisar e salve. O resto continua como está.';
   if (badge) badge.classList.remove('hidden');
   if (composer) {
     composer.classList.add('ring-2', 'ring-sky-200', 'dark:ring-sky-900/60');
@@ -1132,7 +1127,7 @@ function resetContactForm() {
   if (cancel) cancel.classList.add('hidden');
   if (eyebrow) eyebrow.textContent = 'Adicionar à sua rede';
   if (title) title.textContent = 'Quem vai entrar nessa roda?';
-  if (hint) hint.textContent = 'Salva nome, telefone e e-mail. Se essa pessoa também usa o app, o convite de amizade entra depois e o Pix continua sendo cuidado por ela, no perfil dela.';
+  if (hint) hint.textContent = 'Salve nome, telefone e e-mail. Se essa pessoa também usa o app, você pode mandar o convite depois. O Pix fica por conta dela.';
   if (badge) badge.classList.add('hidden');
   if (composer) {
     composer.classList.remove('ring-2', 'ring-sky-200', 'dark:ring-sky-900/60');
@@ -1247,10 +1242,14 @@ function bindProfileSignatureForm() {
   const selectedClasses = ['border-sky-600', 'bg-sky-600', 'text-white', 'shadow-lg', 'shadow-sky-500/15', 'dark:border-sky-400', 'dark:bg-sky-400', 'dark:text-slate-950'];
   const idleClasses = ['border-slate-200', 'bg-white', 'text-slate-600', 'dark:border-slate-700', 'dark:bg-slate-900', 'dark:text-slate-300'];
 
-  const sanitizeText = (value) => String(value || '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const sanitizeTextLive = (value) => String(value || '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/[ 	]{2,}/g, ' ')
+    .replace(/^\s+/g, '');
+  const sanitizeTextSubmit = (value) => sanitizeTextLive(value).trim();
 
   const render = () => {
-    textInput.value = sanitizeText(textInput.value).slice(0, Number(textInput.maxLength || 60));
+    textInput.value = sanitizeTextLive(textInput.value).slice(0, Number(textInput.maxLength || 60));
     if (counter) {
       counter.textContent = `${textInput.value.length}/${textInput.maxLength || 60}`;
     }
@@ -1279,7 +1278,7 @@ function bindProfileSignatureForm() {
       previewVibe.classList.add('hidden');
     }
 
-    previewText.textContent = textInput.value || 'Quando você escrever um recadinho aqui, seus amigos vão ver esse toque extra no seu card da rede.';
+    previewText.textContent = textInput.value || 'Quando você escrever um recado aqui, ele aparece para seus amigos na sua rede.';
   };
 
   vibeButtons.forEach((button) => {
@@ -1301,7 +1300,7 @@ function bindProfileSignatureForm() {
   const form = document.getElementById('profileSignatureForm');
   if (form) {
     form.addEventListener('submit', () => {
-      textInput.value = sanitizeText(textInput.value).slice(0, Number(textInput.maxLength || 60));
+      textInput.value = sanitizeTextSubmit(textInput.value).slice(0, Number(textInput.maxLength || 60));
     });
   }
 
@@ -1568,7 +1567,7 @@ function bindPixForm(prefix, options = {}) {
           URL.revokeObjectURL(previewObjectUrl);
           previewObjectUrl = '';
         }
-        showPreview(prepared.previewUrl, 'Boa! Agora ela já está no jeitinho para subir para o app.');
+        showPreview(prepared.previewUrl, 'Boa! Agora ela já está pronta para salvar.');
         closeModal();
       } catch (_error) {
         hint.textContent = 'A foto tropeçou no corte. Tenta de novo rapidinho.';

@@ -265,10 +265,10 @@
                 <div class="min-w-0 flex-1">
                   <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Seu perfil oficial</div>
                   <h2 class="mt-2 truncate text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= selfProfile.name %></h2>
-                  <p class="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Esse é o seu crachá dentro do OrganizaPay. É daqui que saem sua identidade nas cobranças, seu papel nas divisões e tudo o que o app usa para te reconhecer sem tropeço.</p>
-                  <div class="mt-4 flex flex-wrap gap-2">
+                  <div class="mt-3 flex flex-wrap gap-2">
                     <%- renderPersonStatusChips(selfProfile) %>
                   </div>
+                  <p class="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Esse é o seu crachá dentro do OrganizaPay. É daqui que saem sua identidade nas cobranças, seu papel nas divisões e tudo o que o app usa para te reconhecer sem tropeço.</p>
                 </div>
               </div>
 
@@ -298,15 +298,10 @@
           <input type="hidden" name="id" id="selfPersonId" value="<%= selfProfile.id %>">
           <input type="hidden" name="profile_section" value="identity">
 
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Como você aparece</div>
-              <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seu crachá social dentro do app</h3>
-              <p class="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Nome, telefone e e-mail ficam juntinhos aqui porque são a sua assinatura na rede. Mudou alguma dessas infos? Salva sem mexer no Pix.</p>
-            </div>
-            <div class="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
-              Salva separado do Pix
-            </div>
+          <div>
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Como você aparece</div>
+            <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seu crachá social dentro do app</h3>
+            <p class="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Nome, telefone e e-mail ficam juntinhos aqui porque são a sua assinatura na rede. Mudou alguma dessas infos? Salva sem mexer no Pix.</p>
           </div>
 
           <div class="grid gap-4 xl:grid-cols-2">
@@ -338,15 +333,10 @@
 
       <div class="h-full">
         <section id="profile-photo" class="flex h-full flex-col rounded-[32px] border border-sky-200 bg-white p-5 shadow-sm dark:border-sky-900/50 dark:bg-slate-800 sm:p-6">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Sua fotinha por aqui</div>
-              <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seu rosto no crachá do app</h3>
-              <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Ela aparece no topo do app e nas divisões de compra. Sem foto, o ícone do OrganizaPay segura a bronca bonitinho.</p>
-            </div>
-            <div class="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
-              Atualize quando quiser
-            </div>
+          <div>
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Sua fotinha por aqui</div>
+            <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seu rosto no crachá do app</h3>
+            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Ela aparece no topo do app e nas divisões de compra. Sem foto, o ícone do OrganizaPay segura a bronca bonitinho.</p>
           </div>
 
           <% const hasGoogleDefaultPhoto = !!(selfProfile && selfProfile.google_photo_url); %>
@@ -355,51 +345,33 @@
           <% const showUseDefaultButton = hasManualPhoto || (photoMode === 'none' && hasGoogleDefaultPhoto); %>
           <% const showRemoveButton = !!(selfProfile && selfProfile.photo_url); %>
 
-          <div class="mt-4 grid flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-stretch">
-            <div class="grid gap-4">
-              <div class="rounded-[28px] border border-sky-100 bg-sky-50/70 p-5 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20">
-                <div class="flex items-center gap-4">
-                  <div class="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border-4 border-white bg-slate-200 shadow-lg dark:border-slate-900 dark:bg-slate-800">
-                    <% if (getAvatarUrl(selfProfile)) { %>
-                      <img src="<%= getAvatarUrl(selfProfile) %>" alt="<%= selfProfile.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-full w-full object-cover">
-                    <% } else { %>
-                      <div class="flex h-full w-full items-center justify-center text-lg font-black text-slate-600 dark:text-slate-200"><%= getAvatarInitials(selfProfile) %></div>
-                    <% } %>
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Prévia atual</div>
-                    <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">É essa carinha que o app mostra hoje no topo e nas divisões.</p>
-                  </div>
+          <div class="mt-4 flex flex-1 flex-col">
+            <form method="post" action="/people/profile-photo" enctype="multipart/form-data" class="flex flex-1 flex-col gap-3" id="profilePhotoForm">
+              <input id="profilePhotoInput" type="file" name="profile_photo" accept="image/png,image/jpeg,image/webp,image/gif" class="block w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm file:mr-3 file:rounded-xl file:border-0 file:bg-sky-100 file:px-3 file:py-2 file:font-bold file:text-sky-700 hover:file:bg-sky-200 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-200 dark:file:bg-sky-900/40 dark:file:text-sky-200">
+              <div id="profilePhotoPreviewWrap" class="hidden w-full items-center gap-3 rounded-2xl border border-sky-200/80 bg-sky-50/70 px-4 py-3 dark:border-sky-900/60 dark:bg-sky-950/20">
+                <img id="profilePhotoPreview" alt="Prévia da sua foto" class="h-14 w-14 rounded-full object-cover ring-2 ring-sky-200 dark:ring-sky-800/70">
+                <div class="min-w-0 flex-1">
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Prévia da fotinha</div>
+                  <p id="profilePhotoHint" class="mt-1 text-sm font-medium leading-5 text-slate-600 dark:text-slate-300">Escolheu? Aí é só salvar que ela sobe lindona.</p>
                 </div>
               </div>
+              <div class="w-full rounded-2xl border border-sky-200/80 bg-white/80 p-3 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-slate-300">
+                Escolha com calma, ajuste do seu jeitinho e salve quando estiver curtindo o resultado.
+              </div>
+            </form>
 
-              <form method="post" action="/people/profile-photo" enctype="multipart/form-data" class="space-y-3" id="profilePhotoForm">
-                <input id="profilePhotoInput" type="file" name="profile_photo" accept="image/png,image/jpeg,image/webp,image/gif" class="block w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm file:mr-3 file:rounded-xl file:border-0 file:bg-sky-100 file:px-3 file:py-2 file:font-bold file:text-sky-700 hover:file:bg-sky-200 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-200 dark:file:bg-sky-900/40 dark:file:text-sky-200">
-                <div id="profilePhotoPreviewWrap" class="hidden items-center gap-3 rounded-2xl border border-sky-200/80 bg-sky-50/70 px-4 py-3 dark:border-sky-900/60 dark:bg-sky-950/20">
-                  <img id="profilePhotoPreview" alt="Prévia da sua foto" class="h-14 w-14 rounded-full object-cover ring-2 ring-sky-200 dark:ring-sky-800/70">
-                  <div class="min-w-0 flex-1">
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Prévia da fotinha</div>
-                    <p id="profilePhotoHint" class="mt-1 text-sm font-medium leading-5 text-slate-600 dark:text-slate-300">Escolheu? Aí é só salvar que ela sobe lindona.</p>
-                  </div>
-                </div>
-                <div class="rounded-2xl border border-sky-200/80 bg-white/80 p-3 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-slate-300">
-                  Escolha com calma, ajuste do seu jeitinho e salve quando estiver curtindo o resultado.
-                </div>
-              </form>
-            </div>
-
-            <div class="flex w-full flex-col gap-3 lg:justify-end">
-              <button form="profilePhotoForm" id="profilePhotoSubmit" type="submit" class="inline-flex min-h-[46px] items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60">Salvar foto</button>
+            <div class="mt-auto flex flex-wrap items-stretch justify-end gap-3 pt-4">
               <% if (showUseDefaultButton) { %>
-                <form method="post" action="/people/profile-photo/use-default" class="w-full">
-                  <button type="submit" class="inline-flex min-h-[46px] w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Usar foto padrão</button>
+                <form method="post" action="/people/profile-photo/use-default" class="shrink-0">
+                  <button type="submit" class="inline-flex min-h-[46px] items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Usar foto padrão</button>
                 </form>
               <% } %>
               <% if (showRemoveButton) { %>
-                <form method="post" action="/people/profile-photo/remove" class="w-full">
-                  <button type="submit" class="inline-flex min-h-[46px] w-full items-center justify-center rounded-2xl border border-rose-200 bg-rose-50/70 px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-100/80 dark:border-rose-900/70 dark:bg-rose-950/20 dark:text-rose-200 dark:hover:bg-rose-950/35">Tirar foto daqui</button>
+                <form method="post" action="/people/profile-photo/remove" class="shrink-0">
+                  <button type="submit" class="inline-flex min-h-[46px] items-center justify-center rounded-2xl border border-rose-200 bg-rose-50/70 px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-100/80 dark:border-rose-900/70 dark:bg-rose-950/20 dark:text-rose-200 dark:hover:bg-rose-950/35">Excluir foto</button>
                 </form>
               <% } %>
+              <button form="profilePhotoForm" id="profilePhotoSubmit" type="submit" class="inline-flex min-h-[46px] items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60 shrink-0">Salvar foto</button>
             </div>
           </div>
         </section>
@@ -466,6 +438,16 @@
 
           <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(280px,0.82fr)_minmax(0,1.18fr)] xl:items-start">
             <div class="grid gap-4">
+              <div class="rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+                <label class="flex cursor-pointer items-start gap-3">
+                  <input type="checkbox" name="pix_enabled" id="selfPixEnabled" value="1" class="mt-1 h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" <%= selfPixEnabled ? 'checked' : '' %>>
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-sm font-black text-slate-900 dark:text-white">Deixar Pix pronto por aqui</span>
+                    <span class="mt-1 block text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">A chave fica mascaradinha na lista e só aparece inteira quando alguém realmente for copiar o Pix.</span>
+                  </span>
+                </label>
+              </div>
+
               <div class="rounded-[26px] border border-violet-200/70 bg-violet-50/80 px-4 py-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20 sm:px-5">
                 <div class="flex items-start gap-3">
                   <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-violet-600 shadow-sm ring-1 ring-violet-100 dark:bg-slate-800 dark:text-violet-300 dark:ring-violet-900/50" aria-hidden="true">
@@ -486,16 +468,6 @@
                     </p>
                   </div>
                 </div>
-              </div>
-
-              <div class="rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
-                <label class="flex cursor-pointer items-start gap-3">
-                  <input type="checkbox" name="pix_enabled" id="selfPixEnabled" value="1" class="mt-1 h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" <%= selfPixEnabled ? 'checked' : '' %>>
-                  <span class="min-w-0 flex-1">
-                    <span class="block text-sm font-black text-slate-900 dark:text-white">Deixar Pix pronto por aqui</span>
-                    <span class="mt-1 block text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">A chave fica mascaradinha na lista e só aparece inteira quando alguém realmente for copiar o Pix.</span>
-                  </span>
-                </label>
               </div>
             </div>
 
@@ -545,7 +517,8 @@
 
                 <div class="grid gap-3 lg:justify-items-end">
                   <div id="selfPixDormantHint" class="rounded-[24px] border border-dashed border-violet-200 bg-violet-50/70 px-4 py-4 text-sm font-medium leading-6 text-slate-600 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-slate-300 lg:max-w-[24rem] <%= selfPixEnabled ? 'hidden' : '' %>">
-                    Deixa desligado sem culpa nenhuma. Quando você quiser transformar cobranças em algo mais redondinho, é só ligar, preencher e salvar.
+                    <div class="font-black text-slate-900 dark:text-white">Deixa desligado sem culpa nenhuma.</div>
+                    <p class="mt-2">Quando você quiser transformar cobranças em algo mais redondinho, é só ligar, preencher e salvar.</p>
                   </div>
                   <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 sm:w-auto">Salvar meu Pix</button>
                 </div>
@@ -652,25 +625,23 @@
             </div>
           </div>
 
-          <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-            <div class="rounded-[24px] border border-violet-200 bg-violet-50/70 px-4 py-3.5 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/20 sm:px-5">
-              <div class="flex items-start gap-3">
-                <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-violet-600 shadow-sm ring-1 ring-violet-100 dark:bg-slate-800 dark:text-violet-300 dark:ring-violet-900/50" aria-hidden="true">
-                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1zm7 4h.01"></path></svg>
-                </span>
-                <div class="min-w-0 flex-1">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Pix da outra pessoa</div>
-                  <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Você não precisa cadastrar a chave Pix de ninguém por aqui. Quando a amizade estiver ativa e rolar pagamento, o app usa o Pix que a própria pessoa deixou no perfil dela.</p>
-                </div>
-              </div>
-            </div>
+          <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <button type="button" id="contactBtnCancel" onclick="resetContactForm()" class="hidden w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto">Cancelar</button>
+            <button type="submit" id="contactBtnSubmit" class="inline-flex w-full items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 sm:w-auto">
+              <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              Salvar contato
+            </button>
+          </div>
 
-            <div class="flex flex-col gap-3 sm:flex-row xl:flex-col 2xl:flex-row xl:justify-end">
-              <button type="button" id="contactBtnCancel" onclick="resetContactForm()" class="hidden w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto">Cancelar</button>
-              <button type="submit" id="contactBtnSubmit" class="inline-flex w-full items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 sm:w-auto">
-                <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                Salvar contato
-              </button>
+          <div class="rounded-[24px] border border-violet-200 bg-violet-50/70 px-4 py-3.5 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/20 sm:px-5">
+            <div class="flex items-start gap-3">
+              <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-violet-600 shadow-sm ring-1 ring-violet-100 dark:bg-slate-800 dark:text-violet-300 dark:ring-violet-900/50" aria-hidden="true">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1zm7 4h.01"></path></svg>
+              </span>
+              <div class="min-w-0 flex-1">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Pix da outra pessoa</div>
+                <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Você não precisa cadastrar a chave Pix de ninguém por aqui. Quando a amizade estiver ativa e rolar pagamento, o app usa o Pix que a própria pessoa deixou no perfil dela.</p>
+              </div>
             </div>
           </div>
         </form>
@@ -733,13 +704,10 @@
   </section>
 
   <section id="network-list" class="scroll-mt-28 mb-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
-    <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-      <div>
-        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Sua rede ativa</div>
-        <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Amigos e contatos</h2>
-        <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Explore sua lista como quem navega num feed: filtre por vínculo, procure alguém pelo nome e edite sem caçar formulário perdido.</p>
-      </div>
-      <div id="networkVisibleCounter" class="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300"><%= contactList.length === 1 ? '1 pessoa aparecendo' : `${contactList.length} pessoas aparecendo` %></div>
+    <div>
+      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Sua rede ativa</div>
+      <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Amigos e contatos</h2>
+      <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Explore sua lista como quem navega num feed: filtre por vínculo, procure alguém pelo nome e edite sem caçar formulário perdido.</p>
     </div>
 
     <% if (contactList.length) { %>

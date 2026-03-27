@@ -895,6 +895,7 @@
     return visible;
   }
 
+
   function renderDonutChart(root, items) {
     const chartNode = root.querySelector('[data-summary-donut-chart]');
     const legendNode = root.querySelector('[data-summary-donut-legend]');
@@ -909,7 +910,9 @@
       return;
     }
 
-    const radius = 78;
+    const isNarrowScreen = window.matchMedia('(max-width: 767px)').matches;
+    const radius = isNarrowScreen ? 74 : 82;
+    const strokeWidth = isNarrowScreen ? 26 : 28;
     const circumference = 2 * Math.PI * radius;
     let offset = 0;
     const segments = filtered.map((item, index) => {
@@ -918,7 +921,7 @@
       const dashOffset = circumference - offset;
       offset += segmentLength;
       const color = donutPalette[index % donutPalette.length];
-      const share = Math.round(ratio * 100);
+      const share = Math.max(1, Math.round(ratio * 100));
       return {
         ...item,
         color,
@@ -928,60 +931,74 @@
       };
     });
 
+    const topCategory = segments[0] || null;
+    const totalPurchases = segments.reduce((acc, item) => acc + Number(item.txn_count || 0), 0);
+
     chartNode.innerHTML = `
-      <div class="relative mx-auto flex aspect-square w-full max-w-[300px] items-center justify-center sm:max-w-[320px]">
-        <svg viewBox="0 0 220 220" class="h-full w-full -rotate-90" role="img" aria-label="Distribuição por categoria">
-          <circle cx="110" cy="110" r="${radius}" fill="none" stroke="rgba(148,163,184,0.16)" stroke-width="28"></circle>
-          ${segments.map((segment, index) => `
-            <circle
-              cx="110"
-              cy="110"
-              r="${radius}"
-              fill="none"
-              stroke="${segment.color}"
-              stroke-width="28"
-              stroke-linecap="round"
-              class="transition-all duration-300"
-              data-summary-donut-segment
-              data-segment-index="${index}"
-              data-segment-focus="false"
-              stroke-dasharray="${segment.dashArray}"
-              stroke-dashoffset="${segment.dashOffset}"></circle>
-          `).join('')}
-        </svg>
-        <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-5 text-center">
-          <span class="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Total</span>
-          <span class="mt-2 text-[1.7rem] font-black tracking-tight text-slate-900 dark:text-white sm:text-2xl">${formatMoney(total)}</span>
-          <span class="mt-1 max-w-[160px] text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400" data-summary-donut-center-copy>${filtered.length} categorias no mapa</span>
+      <div class="op-analytics-donut-shell">
+        <div class="op-analytics-donut-figure">
+          <svg viewBox="0 0 220 220" class="op-analytics-donut-svg" role="img" aria-label="Distribuição por categoria">
+            <circle cx="110" cy="110" r="${radius}" fill="none" stroke="rgba(148,163,184,0.16)" stroke-width="${strokeWidth}"></circle>
+            ${segments.map((segment, index) => `
+              <circle
+                cx="110"
+                cy="110"
+                r="${radius}"
+                fill="none"
+                stroke="${segment.color}"
+                stroke-width="${strokeWidth}"
+                stroke-linecap="round"
+                class="transition-all duration-300"
+                data-summary-donut-segment
+                data-segment-index="${index}"
+                data-segment-focus="false"
+                stroke-dasharray="${segment.dashArray}"
+                stroke-dashoffset="${segment.dashOffset}"></circle>
+            `).join('')}
+          </svg>
+          <div class="op-analytics-donut-center">
+            <span class="op-analytics-donut-center__eyebrow">Total</span>
+            <span class="op-analytics-donut-center__value">${formatMoney(total)}</span>
+            <span class="op-analytics-donut-center__copy" data-summary-donut-center-copy>${filtered.length} categorias no mapa</span>
+          </div>
+        </div>
+
+        <div class="op-analytics-donut-summary">
+          <div class="op-analytics-donut-summary-card">
+            <span class="op-analytics-donut-summary-card__label">Campeã</span>
+            <strong class="op-analytics-donut-summary-card__value">${topCategory ? topCategory.label : 'Ainda sem líder'}</strong>
+            <span class="op-analytics-donut-summary-card__sub">${topCategory ? `${topCategory.share}% do seu pedaço` : 'Quando pintar gasto, a campeã aparece.'}</span>
+          </div>
+          <div class="op-analytics-donut-summary-card">
+            <span class="op-analytics-donut-summary-card__label">Compras lidas</span>
+            <strong class="op-analytics-donut-summary-card__value">${totalPurchases}</strong>
+            <span class="op-analytics-donut-summary-card__sub">só no que entrou no mapa</span>
+          </div>
+          <div class="op-analytics-donut-summary-card">
+            <span class="op-analytics-donut-summary-card__label">Categorias</span>
+            <strong class="op-analytics-donut-summary-card__value">${filtered.length}</strong>
+            <span class="op-analytics-donut-summary-card__sub">aparecendo por aqui</span>
+          </div>
         </div>
       </div>`;
 
     legendNode.innerHTML = `
-      <div class="grid gap-3 sm:grid-cols-2 2xl:grid-cols-1">
+      <div class="op-analytics-category-list">
         ${segments.map((segment, index) => {
           const canOpen = !segment.is_aggregate && !segment.is_uncategorized && Number(segment.id || 0) > 0;
           return `
-          <button type="button" class="group rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}" data-segment-index="${index}" ${canOpen ? '' : 'data-category-disabled="true"'}>
-            <div class="flex h-full flex-col gap-3">
-              <div class="flex items-start gap-3">
-                <span class="mt-1 inline-block h-3 w-3 flex-shrink-0 rounded-full" style="background:${segment.color}"></span>
-                <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <div class="text-sm font-black leading-5 break-words text-slate-900 dark:text-white">${segment.label || 'Sem nome'}</div>
-                    <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">${segment.share}% do total</span>
-                  </div>
-                  <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                    <span>${segment.txn_count || 0} compra(s)</span>
-                    <span class="text-sm font-black text-slate-900 dark:text-white">${formatMoney(segment.total_cents)}</span>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <div class="h-2 rounded-full bg-slate-200/80 dark:bg-slate-700/80"><div class="h-2 rounded-full" style="width:${Math.max(8, Number(segment.share || 0))}%;background:${segment.color}"></div></div>
-                <div class="mt-2 text-[11px] font-bold uppercase tracking-[0.18em] ${canOpen ? 'text-violet-700 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 dark:text-violet-300' : 'text-slate-400 dark:text-slate-500'}">${canOpen ? 'Abrir essas compras' : 'Só para olhar'}</div>
-              </div>
-            </div>
-          </button>`;
+            <button type="button" class="op-analytics-category-item group" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}" data-segment-index="${index}" ${canOpen ? '' : 'data-category-disabled="true"'}>
+              <span class="op-analytics-category-item__swatch" style="background:${segment.color}"></span>
+              <span class="op-analytics-category-item__body">
+                <span class="op-analytics-category-item__top">
+                  <span class="op-analytics-category-item__label">${segment.label || 'Sem nome'}</span>
+                  <span class="op-analytics-category-item__share">${segment.share}%</span>
+                </span>
+                <span class="op-analytics-category-item__meta">${segment.txn_count || 0} compra(s) · ${formatMoney(segment.total_cents)}</span>
+                <span class="op-analytics-category-item__bar"><span style="width:${Math.max(8, Number(segment.share || 0))}%;background:${segment.color}"></span></span>
+                <span class="op-analytics-category-item__hint ${canOpen ? 'op-analytics-category-item__hint--active' : ''}">${canOpen ? 'Abrir essas compras' : 'Só para olhar'}</span>
+              </span>
+            </button>`;
         }).join('')}
       </div>`;
 
@@ -1030,6 +1047,8 @@
     });
   }
 
+
+
   function renderLineChart(root, points) {
     const chartNode = root.querySelector('[data-summary-line-chart]');
     if (!chartNode) return;
@@ -1040,10 +1059,11 @@
       return;
     }
 
-    const isNarrowScreen = window.matchMedia('(max-width: 640px)').matches;
-    const width = isNarrowScreen ? 460 : 520;
-    const height = isNarrowScreen ? 236 : 250;
-    const padding = isNarrowScreen ? { top: 22, right: 16, bottom: 36, left: 16 } : { top: 24, right: 18, bottom: 38, left: 18 };
+    const isNarrowScreen = window.matchMedia('(max-width: 767px)').matches;
+    const pointSpacing = isNarrowScreen ? 110 : 88;
+    const width = Math.max((filtered.length - 1) * pointSpacing + 96, isNarrowScreen ? 560 : 520);
+    const height = isNarrowScreen ? 240 : 250;
+    const padding = isNarrowScreen ? { top: 24, right: 24, bottom: 42, left: 24 } : { top: 24, right: 18, bottom: 38, left: 18 };
     const values = filtered.map((point) => Number(point.total_cents || 0));
     const maxValue = Math.max(...values, 0);
     const safeMax = maxValue <= 0 ? 1 : maxValue;
@@ -1063,41 +1083,44 @@
     const areaPolyline = `${padding.left},${height - padding.bottom} ${polyline} ${coords[coords.length - 1].x},${height - padding.bottom}`;
 
     chartNode.innerHTML = `
-      <div class="overflow-x-auto pb-1" data-summary-chart-scroller>
-        <div class="relative" style="min-width:${width}px">
-          <svg viewBox="0 0 ${width} ${height}" class="h-[260px] w-full" role="img" aria-label="Seu pedaço no cartão, mês a mês">
-            <defs>
-              <linearGradient id="summaryLineFill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.30"></stop>
-                <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.02"></stop>
-              </linearGradient>
-            </defs>
-            ${[0.25, 0.5, 0.75, 1].map((step) => {
-              const y = padding.top + ((height - padding.top - padding.bottom) * step);
-              return `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="rgba(148,163,184,0.22)" stroke-dasharray="4 6"></line>`;
-            }).join('')}
-            <polygon points="${areaPolyline}" fill="url(#summaryLineFill)"></polygon>
-            <polyline points="${polyline}" fill="none" stroke="#8b5cf6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
-            ${coords.map((point) => `
-              <g>
-                <circle cx="${point.x}" cy="${point.y}" r="${point.is_current ? 6.5 : 5}" fill="#ffffff" stroke="#8b5cf6" stroke-width="${point.is_current ? 4 : 3}"></circle>
-                <text x="${point.x}" y="${height - 12}" text-anchor="middle" class="fill-slate-500 text-[11px] font-bold">${point.label}</text>
-              </g>
+      <div class="op-analytics-line-shell">
+        <div class="op-analytics-line-scroller" data-summary-chart-scroller>
+          <div class="op-analytics-line-stage" style="min-width:${width}px">
+            <svg viewBox="0 0 ${width} ${height}" class="op-analytics-line-svg" role="img" aria-label="Seu pedaço no cartão, mês a mês">
+              <defs>
+                <linearGradient id="summaryLineFill" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.30"></stop>
+                  <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.02"></stop>
+                </linearGradient>
+              </defs>
+              ${[0.25, 0.5, 0.75, 1].map((step) => {
+                const y = padding.top + ((height - padding.top - padding.bottom) * step);
+                return `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="rgba(148,163,184,0.22)" stroke-dasharray="4 6"></line>`;
+              }).join('')}
+              <polygon points="${areaPolyline}" fill="url(#summaryLineFill)"></polygon>
+              <polyline points="${polyline}" fill="none" stroke="#8b5cf6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+              ${coords.map((point) => `
+                <g>
+                  <circle cx="${point.x}" cy="${point.y}" r="${point.is_current ? 6.5 : 5}" fill="#ffffff" stroke="#8b5cf6" stroke-width="${point.is_current ? 4 : 3}"></circle>
+                  <text x="${point.x}" y="${height - 12}" text-anchor="middle" class="fill-slate-500 text-[11px] font-bold">${point.label}</text>
+                </g>
+              `).join('')}
+            </svg>
+            ${isNarrowScreen ? '' : coords.map((point, index) => `
+              <button
+                type="button"
+                class="absolute h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-transparent bg-transparent outline-none transition focus:border-violet-400"
+                style="left:${((point.x / width) * 100).toFixed(3)}%;top:${((point.y / height) * 100).toFixed(3)}%"
+                aria-label="Abrir detalhes de ${point.label}"
+                data-summary-month-hotspot
+                data-point-index="${index}"
+                data-point-year="${point.year}"
+                data-point-month="${point.month}"
+                data-point-label="${point.label}"></button>
             `).join('')}
-          </svg>
-          ${coords.map((point, index) => `
-            <button
-              type="button"
-              class="absolute h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-transparent bg-transparent outline-none transition focus:border-violet-400"
-              style="left:${((point.x / width) * 100).toFixed(3)}%;top:${((point.y / height) * 100).toFixed(3)}%"
-              aria-label="Abrir detalhes de ${point.label}"
-              data-summary-month-hotspot
-              data-point-index="${index}"
-              data-point-year="${point.year}"
-              data-point-month="${point.month}"
-              data-point-label="${point.label}"></button>
-          `).join('')}
+          </div>
         </div>
+        ${isNarrowScreen ? '<div class="op-analytics-line-hint">Arraste para os lados para passear pelos meses.</div>' : ''}
       </div>
       <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         ${coords.map((point, index) => `
@@ -1107,6 +1130,17 @@
           </button>
         `).join('')}
       </div>`;
+
+    const scroller = chartNode.querySelector('[data-summary-chart-scroller]');
+    if (scroller && isNarrowScreen) {
+      const activePoint = coords.find((point) => point.is_current) || coords[coords.length - 1];
+      if (activePoint) {
+        window.requestAnimationFrame(() => {
+          const targetLeft = Math.max(0, activePoint.x - (scroller.clientWidth / 2));
+          scroller.scrollLeft = targetLeft;
+        });
+      }
+    }
 
     const hotspots = Array.from(chartNode.querySelectorAll('[data-summary-month-hotspot]'));
     const pointButtons = Array.from(chartNode.querySelectorAll('[data-summary-month-point]'));
@@ -1133,6 +1167,7 @@
     hotspots.forEach(bindNavigation);
     pointButtons.forEach(bindNavigation);
   }
+
 
   function scheduleRender(callback) {
     if ('requestIdleCallback' in window) {

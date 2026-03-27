@@ -5559,16 +5559,31 @@ html.dark .op-card-brand-preview {
     width: 100%;
     min-width: 0;
     min-height: 52px;
-    padding: 0.85rem 0.95rem;
-    border-radius: 1.1rem;
+    padding: 0.8rem 0.9rem;
+    border-radius: 1rem;
     white-space: normal;
     line-height: 1.2;
+    text-align: center;
     text-wrap: balance;
   }
 
   .op-screen--analytics [data-summary-donut-chart],
-  .op-screen--analytics [data-summary-line-chart] {
+  .op-screen--analytics [data-summary-line-chart],
+  .op-screen--analytics [data-summary-donut-legend] {
     overflow: visible;
+    min-width: 0;
+  }
+
+  .op-screen--analytics [data-summary-chart-scroller] {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    touch-action: pan-x;
+  }
+
+  .op-screen--analytics [data-summary-chart-scroller]::-webkit-scrollbar {
+    display: none;
   }
 
   .op-screen--shared-debts [data-shared-debts-sheet] > div:last-child {

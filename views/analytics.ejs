@@ -75,9 +75,9 @@
     </div>
 
     <div class="mt-5 op-tab-strip" role="tablist" aria-label="Blocos das análises">
-      <button type="button" class="op-tab-btn is-active" role="tab" aria-selected="true" data-op-tab-target="overview"><span class="hidden sm:inline">Visão geral</span><span class="sm:hidden">Resumão</span></button>
-      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="flow"><span class="hidden sm:inline">Entradas e saídas</span><span class="sm:hidden">Entra e sai</span></button>
-      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="split"><span class="hidden sm:inline">Pessoas e cartões</span><span class="sm:hidden">Turma e cartões</span></button>
+      <button type="button" class="op-tab-btn is-active" role="tab" aria-selected="true" data-op-tab-target="overview"><span class="sm:hidden">Resumão</span><span class="hidden sm:inline">Visão geral</span></button>
+      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="flow"><span class="sm:hidden">Entra e sai</span><span class="hidden sm:inline">Entradas e saídas</span></button>
+      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="split"><span class="sm:hidden">Turma e cartões</span><span class="hidden sm:inline">Pessoas e cartões</span></button>
       <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="places">Lugares</button>
     </div>
 
@@ -146,26 +146,26 @@
 
           <div class="mt-6 grid gap-4 xl:grid-cols-2">
             <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
-              <div class="flex items-start justify-between gap-3">
-                <div>
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0">
                   <h3 class="text-lg font-black text-slate-900 dark:text-white">Seu pedaço por categoria</h3>
-                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Mostra para onde foi o seu pedaço do cartão neste mês.</p>
+                  <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">Mostra para onde foi o seu pedaço do cartão neste mês.</p>
                 </div>
-                <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Categorias</span>
+                <span class="inline-flex items-center self-start rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Categorias</span>
               </div>
-              <div class="mt-5 space-y-4">
-                <div class="w-full" data-summary-donut-chart><div class="flex min-h-[300px] animate-pulse items-center justify-center rounded-[24px] border border-slate-200 bg-slate-50/80 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-400 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-500">Assando a pizza financeira...</div></div>
-                <div class="min-w-0" data-summary-donut-legend><div class="grid gap-3 md:grid-cols-2 2xl:grid-cols-3"><div class="h-24 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-24 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-24 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-24 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div></div></div>
+              <div class="mt-4 flex flex-col gap-4 2xl:flex-row 2xl:items-center">
+                <div class="w-full 2xl:max-w-[320px]" data-summary-donut-chart><div class="flex min-h-[260px] animate-pulse items-center justify-center rounded-[24px] border border-slate-200 bg-slate-50/80 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-400 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-500">Assando a pizza financeira...</div></div>
+                <div class="min-w-0 flex-1" data-summary-donut-legend><div class="grid gap-3 sm:grid-cols-2 2xl:grid-cols-1"><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div></div></div>
               </div>
             </div>
 
             <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
-              <div class="flex items-start justify-between gap-3">
-                <div>
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0">
                   <h3 class="text-lg font-black text-slate-900 dark:text-white">Seu cartão, mês a mês</h3>
-                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Bom para ver quando o seu pedaço no cartão engrossou ou deu uma respirada.</p>
+                  <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">Bom para ver quando o seu pedaço no cartão engrossou ou deu uma respirada.</p>
                 </div>
-                <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
+                <span class="inline-flex items-center self-start rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
               </div>
               <div class="mt-4" data-summary-line-chart><div class="flex min-h-[260px] animate-pulse items-center justify-center rounded-[24px] border border-slate-200 bg-slate-50/80 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-400 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-500">Afinando a linha do tempo das compras...</div></div>
               <div class="mt-4 grid gap-3 sm:grid-cols-2">

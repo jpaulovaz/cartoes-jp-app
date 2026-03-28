@@ -9,10 +9,15 @@
   const merchantSuggestions = analyticsSource && Array.isArray(analyticsSource.establishmentSuggestions) ? analyticsSource.establishmentSuggestions : [];
   const merchantLearning = graphInsights && graphInsights.merchantLearning ? graphInsights.merchantLearning : { activeRules: [], pausedRules: [] };
   const cardTrendByCard = analyticsSource && Array.isArray(analyticsSource.cardTrendByCard) ? analyticsSource.cardTrendByCard : [];
+  const cardTrendByCardDisplay = cardTrendByCard.map((cardTrend) => ({
+    ...cardTrend,
+    series: Array.isArray(cardTrend && cardTrend.series) ? [...cardTrend.series].reverse() : []
+  }));
   const merchantSectionDefaultOpen = true;
   const merchantRankingDefaultOpen = true;
   const financeTotals = financeAnalytics && financeAnalytics.totals ? financeAnalytics.totals : { incomeCents: 0, expenseCents: 0, netCents: 0, incomeRowCount: 0, expenseRowCount: 0, positiveNetMonths: 0 };
   const financeTrend = analyticsSource && Array.isArray(analyticsSource.flowTrend) ? analyticsSource.flowTrend : [];
+  const financeTrendDisplay = [...financeTrend].reverse();
   const financeIncomeSources = financeAnalytics && Array.isArray(financeAnalytics.incomeSources) ? financeAnalytics.incomeSources : [];
   const financeExpenseSources = financeAnalytics && Array.isArray(financeAnalytics.expenseSources) ? financeAnalytics.expenseSources : [];
   const financeTrendMax = Math.max(1, ...financeTrend.map((point) => Math.max(Number(point.income_cents || 0), Number(point.expense_cents || 0), Number(point.card_cents || 0))));
@@ -237,7 +242,7 @@
                 <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
               </div>
               <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                <% financeTrend.forEach((point) => { 
+                <% financeTrendDisplay.forEach((point) => { 
                      const incomePct = financeTrendMax > 0 ? Math.max(8, Math.round((Number(point.income_cents || 0) / financeTrendMax) * 100)) : 0;
                      const expensePct = financeTrendMax > 0 ? Math.max(8, Math.round((Number(point.expense_cents || 0) / financeTrendMax) * 100)) : 0;
                      const cardPct = financeTrendMax > 0 ? Math.max(8, Math.round((Number(point.card_cents || 0) / financeTrendMax) * 100)) : 0;
@@ -431,7 +436,7 @@
           </div>
           <% if (cardTrendByCard.length > 0) { %>
             <div class="mt-4 grid gap-4 xl:grid-cols-2">
-              <% cardTrendByCard.forEach((cardTrend) => { const cardPeak = Math.max(1, Number(cardTrend.peak_cents || 0)); %>
+              <% cardTrendByCardDisplay.forEach((cardTrend) => { const cardPeak = Math.max(1, Number(cardTrend.peak_cents || 0)); %>
                 <section class="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/60">
                   <div class="flex items-start justify-between gap-3">
                     <div>

@@ -5536,6 +5536,14 @@ html.dark .op-card-brand-preview {
   grid-template-columns: minmax(0, 1fr);
 }
 
+@media (min-width: 1024px) {
+  .op-analytics-donut-layout {
+    grid-template-columns: minmax(22rem, 24rem) minmax(0, 1fr);
+    column-gap: 1.35rem;
+    align-items: center;
+  }
+}
+
 .op-analytics-donut-stage,
 .op-analytics-donut-legend,
 .op-analytics-line-wrap {
@@ -5614,6 +5622,11 @@ html.dark .op-analytics-donut-center__value {
   gap: 0.95rem;
 }
 
+.op-analytics-donut-stage {
+  display: flex;
+  justify-content: center;
+}
+
 .op-analytics-donut-summary {
   display: grid;
   gap: 0.75rem;
@@ -5671,6 +5684,13 @@ html.dark .op-analytics-donut-summary-card__value {
   display: grid;
   gap: 0.75rem;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (min-width: 1024px) {
+  .op-analytics-category-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+  }
 }
 
 .op-analytics-category-item {

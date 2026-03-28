@@ -899,7 +899,8 @@
   function renderDonutChart(root, items) {
     const chartNode = root.querySelector('[data-summary-donut-chart]');
     const legendNode = root.querySelector('[data-summary-donut-legend]');
-    if (!chartNode || !legendNode) return;
+    const summaryNode = root.querySelector('[data-summary-donut-summary]');
+    if (!chartNode || !legendNode || !summaryNode) return;
 
     const filtered = foldCategoryItems(items);
     const total = filtered.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
@@ -907,6 +908,7 @@
     if (!filtered.length || total <= 0) {
       chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda falta categoria suficiente para montar esse retrato. Quando o mês ganhar mais cara, esse gráfico entra no jogo.</div>';
       legendNode.innerHTML = '';
+      summaryNode.innerHTML = '';
       return;
     }
 
@@ -965,45 +967,45 @@
       </div>`;
 
     legendNode.innerHTML = `
-      <div class="op-analytics-category-stack">
-        <div class="op-analytics-category-list">
-          ${segments.map((segment, index) => {
-            const canOpen = !segment.is_aggregate && !segment.is_uncategorized && Number(segment.id || 0) > 0;
-            return `
-              <button type="button" class="op-analytics-category-item group" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}" data-segment-index="${index}" ${canOpen ? '' : 'data-category-disabled="true"'}>
-                <span class="op-analytics-category-item__body">
-                  <span class="op-analytics-category-item__top">
-                    <span class="op-analytics-category-item__title">
-                      <span class="op-analytics-category-item__swatch" style="background:${segment.color}"></span>
-                      <span class="op-analytics-category-item__label">${segment.label || 'Sem nome'}</span>
-                    </span>
-                    <span class="op-analytics-category-item__share">${segment.share}%</span>
+      <div class="op-analytics-category-list">
+        ${segments.map((segment, index) => {
+          const canOpen = !segment.is_aggregate && !segment.is_uncategorized && Number(segment.id || 0) > 0;
+          return `
+            <button type="button" class="op-analytics-category-item group" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}" data-segment-index="${index}" ${canOpen ? '' : 'data-category-disabled="true"'}>
+              <span class="op-analytics-category-item__body">
+                <span class="op-analytics-category-item__top">
+                  <span class="op-analytics-category-item__title">
+                    <span class="op-analytics-category-item__swatch" style="background:${segment.color}"></span>
+                    <span class="op-analytics-category-item__label">${segment.label || 'Sem nome'}</span>
                   </span>
-                  <span class="op-analytics-category-item__meta-row">
-                    <span class="op-analytics-category-item__meta">${segment.txn_count || 0} compra(s)</span>
-                    <span class="op-analytics-category-item__amount">${formatMoney(segment.total_cents)}</span>
-                  </span>
-                  <span class="op-analytics-category-item__bar"><span style="width:${Math.max(8, Number(segment.share || 0))}%;background:${segment.color}"></span></span>
+                  <span class="op-analytics-category-item__share">${segment.share}%</span>
                 </span>
-              </button>`;
-          }).join('')}
+                <span class="op-analytics-category-item__meta-row">
+                  <span class="op-analytics-category-item__meta">${segment.txn_count || 0} compra(s)</span>
+                  <span class="op-analytics-category-item__amount">${formatMoney(segment.total_cents)}</span>
+                </span>
+                <span class="op-analytics-category-item__bar"><span style="width:${Math.max(8, Number(segment.share || 0))}%;background:${segment.color}"></span></span>
+              </span>
+            </button>`;
+        }).join('')}
+      </div>`;
+
+    summaryNode.innerHTML = `
+      <div class="op-analytics-donut-summary op-analytics-donut-summary--below">
+        <div class="op-analytics-donut-summary-card">
+          <span class="op-analytics-donut-summary-card__label">Campeã</span>
+          <strong class="op-analytics-donut-summary-card__value">${topCategory ? topCategory.label : 'Ainda sem líder'}</strong>
+          <span class="op-analytics-donut-summary-card__sub">${topCategory ? `${topCategory.share}% do seu pedaço` : 'Quando pintar gasto, a campeã aparece.'}</span>
         </div>
-        <div class="op-analytics-donut-summary op-analytics-donut-summary--below">
-          <div class="op-analytics-donut-summary-card">
-            <span class="op-analytics-donut-summary-card__label">Campeã</span>
-            <strong class="op-analytics-donut-summary-card__value">${topCategory ? topCategory.label : 'Ainda sem líder'}</strong>
-            <span class="op-analytics-donut-summary-card__sub">${topCategory ? `${topCategory.share}% do seu pedaço` : 'Quando pintar gasto, a campeã aparece.'}</span>
-          </div>
-          <div class="op-analytics-donut-summary-card">
-            <span class="op-analytics-donut-summary-card__label">Compras lidas</span>
-            <strong class="op-analytics-donut-summary-card__value">${totalPurchases}</strong>
-            <span class="op-analytics-donut-summary-card__sub">só no que entrou no mapa</span>
-          </div>
-          <div class="op-analytics-donut-summary-card">
-            <span class="op-analytics-donut-summary-card__label">Categorias</span>
-            <strong class="op-analytics-donut-summary-card__value">${filtered.length}</strong>
-            <span class="op-analytics-donut-summary-card__sub">aparecendo por aqui</span>
-          </div>
+        <div class="op-analytics-donut-summary-card">
+          <span class="op-analytics-donut-summary-card__label">Compras lidas</span>
+          <strong class="op-analytics-donut-summary-card__value">${totalPurchases}</strong>
+          <span class="op-analytics-donut-summary-card__sub">só no que entrou no mapa</span>
+        </div>
+        <div class="op-analytics-donut-summary-card">
+          <span class="op-analytics-donut-summary-card__label">Categorias</span>
+          <strong class="op-analytics-donut-summary-card__value">${filtered.length}</strong>
+          <span class="op-analytics-donut-summary-card__sub">aparecendo por aqui</span>
         </div>
       </div>`;
 

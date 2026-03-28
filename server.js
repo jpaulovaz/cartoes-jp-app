@@ -14894,6 +14894,10 @@ function maskPhoneForLog(rawPhone) {
 function summarizeAxiosError(error) {
   if (!error) return 'Erro desconhecido.';
 
+  if (error.evolutionDebugSummary) {
+    return error.evolutionDebugSummary;
+  }
+
   const status = error.response && error.response.status;
   const payload = error.response && error.response.data;
   if (typeof payload === 'string' && payload.trim()) {
@@ -14914,68 +14918,97 @@ function summarizeAxiosError(error) {
   return status ? `HTTP ${status}` : 'Erro desconhecido.';
 }
 
-async function sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNumber, message, base64Data) {
-  const endpoint = `${apiUrl.replace(/\/$/, '')}/message/sendMedia/${instance}`;
-  const headers = { apikey: apiKey };
-  const fileName = `AcerttaPay_${new Date().toISOString().slice(0, 10)}.png`;
+function normalizeEvolutionMediaBase64(rawBase64) {
+  return String(rawBase64 || '')
+    .replace(/^data:[^;]+;base64,/i, '')
+    .replace(/\s+/g, '')
+    .trim();
+}
 
-  const payloadCandidates = [
-    {
-      number: cleanNumber,
-      mediatype: 'image',
-      mimetype: 'image/png',
-      media: base64Data,
-      fileName,
-      caption: message,
-      delay: 1200
+function shouldRetryEvolutionMediaAsLegacy(error) {
+  if (!(error && error.response && [400, 404, 415, 422].includes(error.response.status))) {
+    return false;
+  }
+
+  const summary = summarizeAxiosError(error).toLowerCase();
+  if (!summary) return false;
+
+  if (summary.includes('requires property "mediatype"') || summary.includes("requires property 'mediatype'")) {
+    return false;
+  }
+
+  return summary.includes('mediamessage') || summary.includes('media type');
+}
+
+async function postToEvolution(endpoint, headers, payload) {
+  return axios.post(endpoint, payload, {
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...headers
     },
-    {
+    timeout: 30000,
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity
+  });
+}
+
+async function sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNumber, message, base64Data) {
+  const endpoint = `${String(apiUrl || '').trim().replace(/\/$/, '')}/message/sendMedia/${String(instance || '').trim()}`;
+  const headers = { apikey: String(apiKey || '').trim() };
+  const fileName = `AcerttaPay_${new Date().toISOString().slice(0, 10)}.png`;
+  const safeCaption = String(message || '').trim();
+  const normalizedBase64 = normalizeEvolutionMediaBase64(base64Data);
+
+  const v2Payload = {
+    number: cleanNumber,
+    mediatype: 'image',
+    mimetype: 'image/png',
+    media: normalizedBase64,
+    fileName,
+    filename: fileName,
+    caption: safeCaption || ' ',
+    delay: 1200,
+    linkPreview: false
+  };
+
+  try {
+    return await postToEvolution(endpoint, headers, v2Payload);
+  } catch (v2Error) {
+    if (!shouldRetryEvolutionMediaAsLegacy(v2Error)) {
+      throw v2Error;
+    }
+
+    const v1Payload = {
       number: cleanNumber,
       mediaMessage: {
         mediatype: 'image',
-        mimetype: 'image/png',
-        fileName,
-        caption: message,
-        media: base64Data
-      },
-      options: {
-        delay: 1200,
-        presence: 'composing'
-      }
-    },
-    {
-      number: cleanNumber,
-      mediaMessage: {
         mediaType: 'image',
         mimetype: 'image/png',
         fileName,
-        caption: message,
-        media: base64Data
+        filename: fileName,
+        caption: safeCaption || ' ',
+        media: normalizedBase64
       },
       options: {
         delay: 1200,
-        presence: 'composing'
+        presence: 'composing',
+        linkPreview: false
       }
-    }
-  ];
+    };
 
-  let lastError = null;
-
-  for (let index = 0; index < payloadCandidates.length; index += 1) {
-    const payload = payloadCandidates[index];
     try {
-      return await axios.post(endpoint, payload, { headers, timeout: 30000 });
-    } catch (error) {
-      lastError = error;
-      const status = error.response && error.response.status;
-      const canRetryNextPayload = Boolean(error.response) && [400, 404, 415, 422].includes(status) && index < payloadCandidates.length - 1;
-      if (!canRetryNextPayload) {
-        throw error;
-      }
+      return await postToEvolution(endpoint, headers, v1Payload);
+    } catch (legacyError) {
+      legacyError.evolutionDebugSummary = [
+        'Envio em schema v2 falhou.',
+        summarizeAxiosError(v2Error),
+        'Fallback legado também falhou.',
+        summarizeAxiosError(legacyError)
+      ].join(' ');
+      throw legacyError;
     }
   }
-
-  throw lastError || new Error('Não consegui enviar a imagem pelo Evolution agora.');
 }
 
 async function sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, message) {

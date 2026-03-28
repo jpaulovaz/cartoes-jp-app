@@ -748,7 +748,7 @@ function normalizeProfileKind(value, isOwner = false) {
 
 function buildUniqueSelfName(userId, preferredName) {
   const base = String(preferredName || '').trim() || 'Meu perfil';
-  const candidates = [base, `${base} (perfil)`, `${base} OrganizaPay`, `${base} Minha conta`];
+  const candidates = [base, `${base} (perfil)`, `${base} AcerttaPay`, `${base} Minha conta`];
 
   for (const candidate of candidates) {
     const exists = db.prepare(`

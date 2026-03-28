@@ -1,5 +1,5 @@
-const STATIC_CACHE = 'organizapay-static-v20260320-1';
-const RUNTIME_CACHE = 'organizapay-runtime-v20260320-1';
+const STATIC_CACHE = 'acerttapay-static-v20260327-1';
+const RUNTIME_CACHE = 'acerttapay-runtime-v20260327-1';
 const OFFLINE_FALLBACK_URL = '/offline.html';
 const PRECACHE_URLS = [
   OFFLINE_FALLBACK_URL,
@@ -131,10 +131,10 @@ self.addEventListener('push', (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch (err) {
-    data = { title: 'OrganizaPay', body: event.data ? event.data.text() : '' };
+    data = { title: 'AcerttaPay', body: event.data ? event.data.text() : '' };
   }
 
-  const title = data.title || 'OrganizaPay';
+  const title = data.title || 'AcerttaPay';
   const options = {
     body: data.body || '',
     icon: '/icon-192.png',

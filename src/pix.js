@@ -158,7 +158,7 @@ function validatePixProfile({ enabled, keyType, keyValue, city, state, label, na
   const normalizedKeyValue = normalizePixKeyValue(normalizedType, keyValue);
   const normalizedState = normalizePixState(state);
   const normalizedCity = sanitizePixText(city, { max: 15 });
-  const merchantName = sanitizePixText(label || name || 'ORGANIZAPAY', { max: 25, fallback: 'ORGANIZAPAY' });
+  const merchantName = sanitizePixText(label || name || 'ACERTTAPAY', { max: 25, fallback: 'ACERTTAPAY' });
   const errors = [];
 
   if (pixEnabled) {

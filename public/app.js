@@ -2232,14 +2232,14 @@
 })();
 
 (function () {
-  const LAST_VISIT_STORAGE_KEY = 'organizapay:last-visit';
-  const STATUS_STYLE_ID = 'organizapay-network-pill-style';
+  const LAST_VISIT_STORAGE_KEY = 'acerttapay:last-visit';
+  const STATUS_STYLE_ID = 'acerttapay-network-pill-style';
 
   function rememberLastVisit() {
     if (window.location.pathname === '/offline.html') return;
 
     const payload = {
-      title: document.title || 'OrganizaPay',
+      title: document.title || 'AcerttaPay',
       path: `${window.location.pathname}${window.location.search}${window.location.hash}`,
       timestamp: new Date().toISOString()
     };

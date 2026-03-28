@@ -764,7 +764,7 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_backup_restores_started_at ON b
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 const backupRestoreUpload = multer({
-  dest: path.join(os.tmpdir(), 'organizapay-restore-uploads'),
+  dest: path.join(os.tmpdir(), 'acerttapay-restore-uploads'),
   limits: { fileSize: 250 * 1024 * 1024 }
 });
 
@@ -932,7 +932,7 @@ function getPushRuntimeConfig() {
   return {
     publicKey: getSettingText('VAPID_PUBLIC_KEY'),
     privateKey: getSettingText('VAPID_PRIVATE_KEY'),
-    subject: getSettingText('VAPID_SUBJECT', 'mailto:no-reply@organizapay.local'),
+    subject: getSettingText('VAPID_SUBJECT', 'mailto:no-reply@acerttapay.local'),
     duePushEnabled: getSettingBoolean('CARD_DUE_PUSH_ENABLED', true),
     timezone: getSettingText('CARD_DUE_PUSH_TIMEZONE', 'America/Sao_Paulo') || 'America/Sao_Paulo',
     hour: getSettingInt('CARD_DUE_PUSH_HOUR', 10),
@@ -1107,7 +1107,7 @@ function getBackupRuntimeConfig() {
     localPrimaryDir: resolveConfiguredDirectory(__dirname, getSettingText('BACKUP_LOCAL_PRIMARY_DIR', DEFAULT_PRIMARY_BACKUP_DIR), DEFAULT_PRIMARY_BACKUP_DIR),
     localSecondaryDir: resolveConfiguredDirectory(__dirname, getSettingText('BACKUP_LOCAL_SECONDARY_DIR', DEFAULT_SECONDARY_BACKUP_DIR), DEFAULT_SECONDARY_BACKUP_DIR),
     googleEnabled: getSettingBoolean('BACKUP_GOOGLE_ENABLED', false),
-    googleFolderName: getSettingText('BACKUP_GOOGLE_FOLDER_NAME', 'OrganizaPay Backups') || 'OrganizaPay Backups',
+    googleFolderName: getSettingText('BACKUP_GOOGLE_FOLDER_NAME', 'AcerttaPay Backups') || 'AcerttaPay Backups',
     googleRefreshToken: getInternalSettingValue(BACKUP_GOOGLE_REFRESH_TOKEN_KEY),
     googleConnectedEmail: getInternalSettingValue(BACKUP_GOOGLE_CONNECTED_EMAIL_KEY),
     googleConnectedAt: getInternalSettingValue(BACKUP_GOOGLE_CONNECTED_AT_KEY),
@@ -1288,7 +1288,7 @@ async function ensureGoogleBackupFolder(accessToken, config, updatedByUserId = n
     }
   }
 
-  const folderName = String(config.googleFolderName || 'OrganizaPay Backups').trim() || 'OrganizaPay Backups';
+  const folderName = String(config.googleFolderName || 'AcerttaPay Backups').trim() || 'AcerttaPay Backups';
   const found = await googleDriveRequest({
     url: 'https://www.googleapis.com/drive/v3/files',
     accessToken,
@@ -1332,7 +1332,7 @@ async function uploadBackupZipToGoogle({ filePath, fileName, config, updatedByUs
   const accessToken = await refreshGoogleBackupAccessToken(config.googleRefreshToken);
   const folder = await ensureGoogleBackupFolder(accessToken, config, updatedByUserId);
   const fileBuffer = await fsp.readFile(filePath);
-  const boundary = `organizapay-${crypto.randomBytes(12).toString('hex')}`;
+  const boundary = `acerttapay-${crypto.randomBytes(12).toString('hex')}`;
   const metadata = {
     name: fileName,
     parents: [folder.id]
@@ -1430,7 +1430,7 @@ async function collectBackupManifestEntries(filesRoot, backupName) {
 
   return {
     signature: BACKUP_SIGNATURE,
-    app: 'OrganizaPay',
+    app: 'AcerttaPay',
     backupName,
     createdAt: currentConfigTimestamp(),
     files: manifestFiles
@@ -1464,7 +1464,7 @@ async function createServerBackup({ triggerKind = 'manual', createdByUserId = nu
 
   try {
     assertBackupDirectories(config);
-    workspace = await createTempWorkspace('organizapay-backup-');
+    workspace = await createTempWorkspace('acerttapay-backup-');
     const payloadRoot = path.join(workspace, 'payload');
     const filesRoot = path.join(payloadRoot, 'files');
     const dbSnapshotPath = path.join(filesRoot, 'data', 'app.db');
@@ -1600,15 +1600,17 @@ async function restoreServerBackupFromZip({ zipPath, uploadedFilename, restoredB
   let safetyBackupRunId = null;
 
   try {
-    workspace = await createTempWorkspace('organizapay-restore-');
+    workspace = await createTempWorkspace('acerttapay-restore-');
     const entries = await listZipEntries(zipPath);
     validateZipEntries(entries);
     await extractZip(zipPath, workspace);
 
     const manifestPath = path.join(workspace, BACKUP_MANIFEST_FILENAME);
     const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8'));
-    if (!manifest || manifest.signature !== BACKUP_SIGNATURE) {
-      throw new Error('O arquivo enviado não tem a assinatura oficial de backup do OrganizaPay.');
+    const backupSignature = String(manifest?.signature || '').trim();
+    const looksLikeLegacyBackup = backupSignature.endsWith('-backup-v1');
+    if (!manifest || (!looksLikeLegacyBackup && backupSignature !== BACKUP_SIGNATURE)) {
+      throw new Error('O arquivo enviado não tem a assinatura oficial de backup do AcerttaPay.');
     }
 
     backupName = String(manifest.backupName || '').trim() || path.basename(zipPath);
@@ -2028,7 +2030,7 @@ function buildDeletedUserLabel(userId) {
 }
 
 function buildDeletedUserEmail(userId) {
-  return `deleted-user-${Number(userId || 0)}-${Date.now()}@organizapay.local`;
+  return `deleted-user-${Number(userId || 0)}-${Date.now()}@acerttapay.local`;
 }
 
 function getUserRecord(userId, { includeDeleted = true } = {}) {
@@ -2262,7 +2264,7 @@ function isSelfPersonRow(person) {
 
 function buildUniqueSelfPersonName(userId, preferredName) {
   const base = String(preferredName || '').trim() || 'Meu perfil';
-  const candidates = [base, `${base} (perfil)`, `${base} OrganizaPay`, `${base} Minha conta`];
+  const candidates = [base, `${base} (perfil)`, `${base} AcerttaPay`, `${base} Minha conta`];
 
   for (const candidate of candidates) {
     const exists = db.prepare(`
@@ -2385,7 +2387,7 @@ function ensureDefaultOwnerPerson(userId, preferredName, preferredEmail = null) 
 
 function renderAdmin(res, { error = null, success = null, activeSection = 'access' } = {}) {
   return res.render('admin', {
-    title: 'OrganizaPay | Administração',
+    title: 'AcerttaPay | Administração',
     users: getAllUsers(),
     error,
     success,
@@ -2413,7 +2415,7 @@ function buildSetupFormSeed(overrides = {}) {
 
 function renderSetup(res, { error = null, success = null, form = {} } = {}) {
   return res.render('setup', {
-    title: 'OrganizaPay | Primeira configuração',
+    title: 'AcerttaPay | Primeira configuração',
     error,
     success,
     form: buildSetupFormSeed(form),
@@ -2593,7 +2595,7 @@ function logFriendlyRouteError(req, error, details) {
 
 function renderFriendlyErrorPage(res, { status = 500, message, actionHref = '/', actionLabel = 'Voltar para o app' } = {}) {
   return res.status(status).render('error', {
-    title: 'OrganizaPay | Opa',
+    title: 'AcerttaPay | Opa',
     errorTitle: status >= 500 ? 'Deu uma tropeçada por aqui' : 'Tem um ajuste pedindo atenção',
     errorMessage: message,
     actionHref,
@@ -2655,7 +2657,7 @@ app.use(passport.session());
 
 function isAjaxLikeRequest(req) {
   const requestedWith = String(req.get('X-Requested-With') || '').toLowerCase();
-  const asyncFlag = String(req.get('X-OrganizaPay-Async') || '').toLowerCase();
+  const asyncFlag = String(req.get('X-AcerttaPay-Async') || '').toLowerCase();
   return requestedWith === 'xmlhttprequest' || requestedWith === 'fetch' || asyncFlag === '1';
 }
 
@@ -3190,7 +3192,7 @@ function getUserPixProfilesByUserIds(userIds = []) {
       city: row.pix_city,
       state: row.pix_state,
       label: row.pix_label,
-      name: row.name || row.email || 'ORGANIZAPAY'
+      name: row.name || row.email || 'ACERTTAPAY'
     });
 
     map.set(Number(row.user_id || 0), {
@@ -4197,7 +4199,7 @@ function renderSharedDebtsPage(req, res, { archiveMode = false } = {}) {
 
   const payload = buildSharedDebtsPagePayload(userId, req.query, archiveMode);
   return res.render('shared-debts', {
-    title: archiveMode ? 'OrganizaPay | Arquivo de cobranças' : 'OrganizaPay | Cobranças',
+    title: archiveMode ? 'AcerttaPay | Arquivo de cobranças' : 'AcerttaPay | Cobranças',
     ...payload,
     formatBRLFromCents,
     monthLabel,
@@ -5629,9 +5631,9 @@ function ensureFriendPersonForUser({ ownerUserId, remoteUserId, preferredName = 
   }
 
   if (!person) {
-    const baseName = String(preferredName || '').trim() || 'Contato OrganizaPay';
+    const baseName = String(preferredName || '').trim() || 'Contato AcerttaPay';
     const now = nowIso();
-    const candidateNames = [baseName, `${baseName} (app)`, `${baseName} OrganizaPay`];
+    const candidateNames = [baseName, `${baseName} (app)`, `${baseName} AcerttaPay`];
 
     for (const candidateName of candidateNames) {
       const inserted = db.prepare(`
@@ -5852,7 +5854,7 @@ function getPeopleAll(userId) {
       city: storedPixProfile.city,
       state: storedPixProfile.state,
       label: storedPixProfile.label,
-      name: person.name || person.email || 'ORGANIZAPAY'
+      name: person.name || person.email || 'ACERTTAPAY'
     });
     const linkedUserPixProfile = !isSelf && hasAppUser
       ? (remotePixMap.get(linkedUserId) || null)
@@ -6162,7 +6164,7 @@ async function sendPushNotificationToUser(userId, payload) {
   if (!subscriptions.length) return { attempted: 0, sent: 0, failed: 0 };
 
   const message = JSON.stringify({
-    title: String(payload?.title || 'OrganizaPay'),
+    title: String(payload?.title || 'AcerttaPay'),
     body: payload?.body ? String(payload.body) : '',
     href: payload?.href ? String(payload.href) : '/shared-debts',
     tag: payload?.tag ? String(payload.tag) : undefined
@@ -8007,7 +8009,7 @@ function sendMonthTransactionsCsv(res, userId, month, year) {
     ].map(csvEscape).join(';'));
   });
 
-  const filename = `organizapay-cartoes-${year}-${String(month).padStart(2, '0')}.csv`;
+  const filename = `acerttapay-cartoes-${year}-${String(month).padStart(2, '0')}.csv`;
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.send('\uFEFF' + lines.join('\r\n'));
@@ -10429,7 +10431,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
         city: pixCityRaw,
         state: pixStateRaw,
         label: pixLabelRaw,
-        name: name || email || 'ORGANIZAPAY'
+        name: name || email || 'ACERTTAPAY'
       })
     : { valid: true, enabled: false, keyType: null, keyValue: null, city: null, state: null, label: null };
   const storedPixProfile = pixEnabled
@@ -10574,7 +10576,7 @@ app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
 
   const resolved = getResolvedAppUserForPerson(userId, personId);
   if (!resolved?.linked_user_id) {
-    setFlash(req, 'info', 'Essa pessoa ainda não apareceu como usuária do OrganizaPay. Quando isso rolar, o botão vem pra festa.');
+    setFlash(req, 'info', 'Essa pessoa ainda não apareceu como usuária do AcerttaPay. Quando isso rolar, o botão vem pra festa.');
     return res.redirect('/people');
   }
 
@@ -10627,7 +10629,7 @@ app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
     userId: resolved.linked_user_id,
     type: 'friend_request',
     title: 'Chegou um pedido de amizade',
-    body: `${requester?.name || person.name || 'Alguém'} quer virar seu contato de confiança no OrganizaPay.`,
+    body: `${requester?.name || person.name || 'Alguém'} quer virar seu contato de confiança no AcerttaPay.`,
     href: `/people?friendRequest=${requestId}`,
     relatedType: 'friend_request',
     relatedId: requestId
@@ -10795,7 +10797,7 @@ app.post('/people/:id/unfriend', ensureAuthenticated, (req, res) => {
     userId: resolved.linked_user_id,
     type: 'friendship_update',
     title: 'Amizade desfeita',
-    body: `${actor?.name || 'Um contato'} desfez a amizade no OrganizaPay. O histórico continua, mas novos envios automáticos param por aqui.`,
+    body: `${actor?.name || 'Um contato'} desfez a amizade no AcerttaPay. O histórico continua, mas novos envios automáticos param por aqui.`,
     href: '/people',
     relatedType: 'friendship',
     relatedId: friendship.id
@@ -11497,7 +11499,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       type: 'info',
       icon: '💌',
       title: newestFriendNotification.title || 'Tem novidade na sua rede',
-      description: newestFriendNotification.body || 'Seu espaço de amizades ganhou novidade no OrganizaPay.',
+      description: newestFriendNotification.body || 'Seu espaço de amizades ganhou novidade no AcerttaPay.',
       href: newestFriendNotification.href || '/people'
     });
   }
@@ -14770,7 +14772,7 @@ async function buildSharePixContext({ userId, month, year, person, totalCents, p
         const payload = buildPixPayload({
           keyType: ownerPixProfile.pixKeyType,
           keyValue: ownerPixProfile.pixKeyValue,
-          merchantName: ownerPixProfile.pixMerchantName || ownerPixProfile.ownerName || 'ORGANIZAPAY',
+          merchantName: ownerPixProfile.pixMerchantName || ownerPixProfile.ownerName || 'ACERTTAPAY',
           merchantCity: ownerPixProfile.pixCity || PIX_DEFAULT_CITY,
           amountCents: safeRemainingCents,
           txid,
@@ -14818,7 +14820,7 @@ async function buildSharePixContext({ userId, month, year, person, totalCents, p
   return {
     state,
     periodLabel,
-    shareTitle: `Resumo ${periodLabel} — ${person?.name || 'OrganizaPay'}`,
+    shareTitle: `Resumo ${periodLabel} — ${person?.name || 'AcerttaPay'}`,
     nativeShareText: messages.nativeShareText,
     whatsappCaption: messages.whatsappCaption,
     whatsappFollowUpMessage: messages.whatsappFollowUpMessage,
@@ -14915,7 +14917,7 @@ function summarizeAxiosError(error) {
 async function sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNumber, message, base64Data) {
   const endpoint = `${apiUrl.replace(/\/$/, '')}/message/sendMedia/${instance}`;
   const headers = { apikey: apiKey };
-  const fileName = `OrganizaPay_${new Date().toISOString().slice(0, 10)}.png`;
+  const fileName = `AcerttaPay_${new Date().toISOString().slice(0, 10)}.png`;
 
   const v2Payload = {
     number: cleanNumber,
@@ -15362,12 +15364,12 @@ app.get('/admin/backup/guide', ensureAuthenticated, (req, res) => {
     return res.status(403).send('Acesso negado.');
   }
 
-  const guidePath = path.join(__dirname, 'public', 'docs', 'guia-backup-organizapay.pdf');
+  const guidePath = path.join(__dirname, 'public', 'docs', 'guia-backup-acerttapay.pdf');
   if (!fs.existsSync(guidePath)) {
     return renderAdmin(res, { error: 'O guia em PDF ainda não está disponível neste servidor.', activeSection: 'backup' });
   }
 
-  return res.download(guidePath, 'guia-backup-organizapay.pdf');
+  return res.download(guidePath, 'guia-backup-acerttapay.pdf');
 });
 
 app.get('/admin/backup/google/connect', ensureAuthenticated, (req, res) => {
@@ -15686,7 +15688,7 @@ app.use((req, res, next) => {
   if (res.headersSent) return next();
   res.status(404);
   return res.render('error', {
-    title: 'OrganizaPay | Opa',
+    title: 'AcerttaPay | Opa',
     errorTitle: 'Deu uma tropeçadinha no caminho',
     errorMessage: 'Essa página não apareceu por aqui. Bora voltar para um cantinho conhecido do app?',
     actionHref: req?.isAuthenticated?.() ? (res.locals.dashboardHref || '/') : '/login',

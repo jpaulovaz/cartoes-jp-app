@@ -1,6 +1,6 @@
-# OrganizaPay
+# AcerttaPay
 
-OrganizaPay é uma aplicação web/PWA para controle financeiro com foco em cartões, competência mensal, distribuição por pessoa e negociação de dívidas compartilhadas entre usuários autorizados.
+AcerttaPay é uma aplicação web/PWA para controle financeiro com foco em cartões, competência mensal, distribuição por pessoa e negociação de dívidas compartilhadas entre usuários autorizados.
 
 O projeto foi pensado para uso real no dia a dia, com fluxo forte em mobile, preservação de histórico e o mínimo possível de trabalho manual em tarefas repetitivas.
 
@@ -353,7 +353,7 @@ pm2 start ecosystem.config.js
 
 ## Roadmap natural do produto
 
-Boas evoluções futuras para o OrganizaPay:
+Boas evoluções futuras para o AcerttaPay:
 
 - agrupamento inteligente de cobranças compartilhadas
 - busca e filtros nas telas principais

@@ -1,5 +1,5 @@
 
-<%- include("partials/header", { title: "OrganizaPay | Amigos" }) %>
+<%- include("partials/header", { title: "AcerttaPay | Amigos" }) %>
 
 <%
   const pendingRequests = Array.isArray(pendingFriendRequests) ? pendingFriendRequests : [];
@@ -247,7 +247,7 @@
                   <div class="mt-3 flex flex-wrap gap-2">
                     <%- renderPersonStatusChips(selfProfile) %>
                   </div>
-                  <p class="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Esse é o seu espaço dentro do OrganizaPay. É daqui que saem suas informações quando você participa de cobranças e divisões.</p>
+                  <p class="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Esse é o seu espaço dentro do AcerttaPay. É daqui que saem suas informações quando você participa de cobranças e divisões.</p>
                 </div>
               </div>
 
@@ -315,7 +315,7 @@
           <div>
             <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Sua fotinha por aqui</div>
             <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seu rosto no crachá do app</h3>
-            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Ela aparece no topo do app e nas divisões de compra. Sem foto, o ícone do OrganizaPay segura a bronca bonitinho.</p>
+            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Ela aparece no topo do app e nas divisões de compra. Sem foto, o ícone do AcerttaPay segura a bronca bonitinho.</p>
           </div>
 
           <% const hasGoogleDefaultPhoto = !!(selfProfile && selfProfile.google_photo_url); %>
@@ -536,7 +536,7 @@
               <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                 <label class="block" data-self-pix-field>
                   <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nome que aparece no Pix</span>
-                  <input name="pix_label" id="selfPixLabel" value="<%- selfPixLabel %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: João - OrganizaPay">
+                  <input name="pix_label" id="selfPixLabel" value="<%- selfPixLabel %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: João - AcerttaPay">
                 </label>
 
                 <div class="grid gap-3 lg:justify-items-end">
@@ -580,7 +580,7 @@
                       <%= (request.requester_name || 'A').charAt(0).toUpperCase() %>
                     </span>
                     <div class="min-w-0">
-                      <div class="text-lg font-black text-slate-900 dark:text-white"><%= request.requester_name || 'Usuário OrganizaPay' %></div>
+                      <div class="text-lg font-black text-slate-900 dark:text-white"><%= request.requester_name || 'Usuário AcerttaPay' %></div>
                       <div class="text-sm font-medium text-slate-500 dark:text-slate-400">Quer entrar na sua rede por aqui.</div>
                     </div>
                   </div>
@@ -764,7 +764,7 @@
              if (!p.email) {
                personHintText = 'Quer descobrir se essa pessoa também usa o app? Colocar um e-mail aqui já ajuda.';
              } else if (!p.has_app_user) {
-               personHintText = 'Ainda não encontramos essa pessoa no OrganizaPay com esse e-mail. Se ela entrar depois, o Pix continua sendo cadastrado por ela.';
+               personHintText = 'Ainda não encontramos essa pessoa no AcerttaPay com esse e-mail. Se ela entrar depois, o Pix continua sendo cadastrado por ela.';
              } else if (p.friendship_active && !p.active) {
                personHintText = 'A amizade continua valendo, mas esse contato está desativado na sua lista. Se quiser usar de novo, é só reativar.';
              } else if (p.friendship_active && p.linked_user_pix_ready) {

@@ -2395,12 +2395,36 @@
 
 
 (function () {
+  function sortPurchaseCategoryOptions(select) {
+    if (!(select instanceof HTMLSelectElement)) return;
+
+    const options = Array.from(select.options || []);
+    if (!options.length) return;
+
+    const firstOption = options.find((option) => String(option.value || '') === '') || null;
+    const customOption = options.find((option) => String(option.value || '') === '__new__') || null;
+    const sortableOptions = options.filter((option) => option !== firstOption && option !== customOption);
+
+    sortableOptions.sort((a, b) => String(a.textContent || '').localeCompare(String(b.textContent || ''), 'pt-BR', { sensitivity: 'base' }));
+
+    const orderedOptions = [];
+    if (firstOption) orderedOptions.push(firstOption);
+    orderedOptions.push(...sortableOptions);
+    if (customOption) orderedOptions.push(customOption);
+
+    orderedOptions.forEach((option) => {
+      select.appendChild(option);
+    });
+  }
+
   function bindPurchaseCategoryControl(root) {
     if (!(root instanceof HTMLElement)) return;
     const select = root.querySelector('[data-purchase-category-select]');
     const customShell = root.querySelector('[data-purchase-category-custom-shell]');
     const customInput = root.querySelector('[data-purchase-category-custom-input]');
     if (!(select instanceof HTMLSelectElement)) return;
+
+    sortPurchaseCategoryOptions(select);
 
     const sync = () => {
       const wantsCustom = String(select.value || '') === '__new__';

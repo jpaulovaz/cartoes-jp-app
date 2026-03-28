@@ -6,8 +6,9 @@
   const safePaymentTitle = typeof paymentTitle !== 'undefined' ? paymentTitle : 'Situação do pagamento';
   const safeTotalLabel = typeof totalLabel !== 'undefined' ? totalLabel : 'Total do período';
   const safeListTitle = typeof listTitle !== 'undefined' ? listTitle : 'Compras do período';
-  const safeFooterLeft = typeof footerLeft !== 'undefined' ? footerLeft : 'Feito no OrganizaPay';
+  const safeFooterLeft = typeof footerLeft !== 'undefined' ? footerLeft : 'Feito no AcerttaPay';
   const safeCaptureScale = typeof captureScale !== 'undefined' ? captureScale : 2;
+  const safeSharePixContext = typeof sharePixContext !== 'undefined' ? sharePixContext : null;
   const numericTotalCents = Number(totalCents || 0) || 0;
   const paidValueCents = Number(typeof paidCents !== 'undefined' ? paidCents : 0) || 0;
   const rawBalanceCents = numericTotalCents - paidValueCents;
@@ -59,9 +60,9 @@
     <div class="relative z-10 flex items-start justify-between gap-4 border-b border-slate-100 pb-5">
       <div class="min-w-0">
         <div class="share-summary-card__brand">
-          <img src="/icon-192.png" alt="OrganizaPay" class="share-summary-card__brand-logo">
+          <img src="/icon-192.png" alt="AcerttaPay" class="share-summary-card__brand-logo">
           <div class="min-w-0">
-            <div class="share-summary-card__brand-title">OrganizaPay</div>
+            <div class="share-summary-card__brand-title">AcerttaPay</div>
             <div class="share-summary-card__brand-subtitle">Resumo financeiro</div>
           </div>
         </div>
@@ -92,6 +93,34 @@
         <div class="mt-2 share-summary-card__total-value"><%= formatBRL(numericTotalCents) %></div>
       </div>
     </div>
+
+    <% if (safeSharePixContext && safeSharePixContext.available && normalizedRemainingCents > 0) { %>
+      <div class="relative z-10 mt-5 share-summary-card__pix-shell">
+        <div class="share-summary-card__pix-copy">
+          <div class="share-summary-card__section-label">Pix desta vez</div>
+          <div class="mt-2 share-summary-card__pix-amount"><%= formatBRL(Number(safeSharePixContext.amountCents || normalizedRemainingCents)) %></div>
+          <p class="mt-2 share-summary-card__pix-text"><%= safeSharePixContext.helperText || 'No banco, é só escanear ou usar o código que segue no texto.' %></p>
+          <div class="mt-3 share-summary-card__pix-chips">
+            <% if (safeSharePixContext.keyTypeLabel) { %>
+              <span class="share-summary-card__pix-chip"><%= safeSharePixContext.keyTypeLabel %></span>
+            <% } %>
+            <% if (safeSharePixContext.maskedKey) { %>
+              <span class="share-summary-card__pix-chip"><%= safeSharePixContext.maskedKey %></span>
+            <% } %>
+            <% if (safeSharePixContext.ownerName) { %>
+              <span class="share-summary-card__pix-chip">Recebe: <%= safeSharePixContext.ownerName %></span>
+            <% } %>
+          </div>
+        </div>
+        <div class="share-summary-card__pix-qr-shell">
+          <% if (safeSharePixContext.qrDataUrl) { %>
+            <img src="<%= safeSharePixContext.qrDataUrl %>" alt="QR Code Pix" class="share-summary-card__pix-qr-image">
+          <% } else { %>
+            <div class="share-summary-card__pix-qr-fallback">O QR não apareceu aqui, mas o código completo segue no texto.</div>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
 
     <div class="relative z-10 mt-5 rounded-[28px] border border-slate-200 bg-slate-50/88 px-4 py-4 sm:px-5">
       <div class="share-summary-card__list-head">

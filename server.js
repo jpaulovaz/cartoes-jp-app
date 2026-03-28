@@ -19,6 +19,13 @@ try {
   webPush = null;
 }
 
+let QRCode = null;
+try {
+  QRCode = require('qrcode');
+} catch (err) {
+  QRCode = null;
+}
+
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
@@ -28,6 +35,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const SQLiteStore = require('connect-sqlite3')(session);
 const db = require("./src/db");
+const { version: APP_VERSION } = require('./package.json');
 const {
   BACKUP_FILE_PREFIX,
   BACKUP_MANIFEST_FILENAME,
@@ -61,6 +69,13 @@ const {
   parseIntegerSetting,
   sanitizeSettingValue
 } = require("./src/appConfig");
+const {
+  DEFAULT_PHONE_COUNTRY,
+  buildPhoneCountryOptions,
+  normalizePhoneForStorage,
+  normalizePhoneForWhatsapp,
+  decoratePersonPhoneForView
+} = require('./src/phone');
 
 // --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
 require('./scripts/migrate.js');
@@ -68,28 +83,105 @@ require('./scripts/migrate.js');
 // --- OPCIONAL: EXECUTA SEED AUTOMÁTICO (comentar se não quiser dados de exemplo) ---
 // require('./scripts/seed.js');
 
+const CARD_BRAND_OPTIONS = [
+  { value: 'visa', label: 'Visa', asset: '/card-brands/visa.svg' },
+  { value: 'mastercard', label: 'Mastercard', asset: '/card-brands/mastercard.svg' },
+  { value: 'elo', label: 'Elo', asset: '/card-brands/elo.svg' },
+  { value: 'amex', label: 'American Express', asset: '/card-brands/amex.svg' },
+  { value: 'hipercard', label: 'Hipercard', asset: '/card-brands/hipercard.svg' },
+  { value: 'diners', label: 'Diners Club', asset: '/card-brands/diners.svg' },
+  { value: 'discover', label: 'Discover', asset: '/card-brands/discover.svg' },
+  { value: 'aura', label: 'Aura', asset: '/card-brands/aura.svg' }
+];
+
+const CARD_BRAND_ALIASES = new Map([
+  ['', ''],
+  ['visa', 'visa'],
+  ['mastercard', 'mastercard'],
+  ['master', 'mastercard'],
+  ['master card', 'mastercard'],
+  ['elo', 'elo'],
+  ['amex', 'amex'],
+  ['american express', 'amex'],
+  ['americanexpress', 'amex'],
+  ['hipercard', 'hipercard'],
+  ['diners', 'diners'],
+  ['diners club', 'diners'],
+  ['dinersclub', 'diners'],
+  ['discover', 'discover'],
+  ['aura', 'aura']
+]);
+
+function normalizeCardBrand(value) {
+  const cleaned = String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  return CARD_BRAND_ALIASES.get(cleaned) || '';
+}
+
+function getCardBrandMeta(value) {
+  const normalized = normalizeCardBrand(value);
+  if (!normalized) return null;
+  return CARD_BRAND_OPTIONS.find((option) => option.value === normalized) || null;
+}
+
 // Migrações adicionais específicas
 
 try { db.prepare("ALTER TABLE transactions ADD COLUMN due_month INTEGER").run(); } catch (e) { }
 try { db.prepare("ALTER TABLE transactions ADD COLUMN due_year INTEGER").run(); } catch (e) { }
 try { db.prepare("ALTER TABLE transactions ADD COLUMN parent_txn_id INTEGER").run(); } catch (e) { }
 try { db.prepare("ALTER TABLE transactions ADD COLUMN recurring_rule_id INTEGER").run(); } catch (e) { }
+try { db.prepare("ALTER TABLE transactions ADD COLUMN purchase_category_id INTEGER").run(); } catch (e) { }
+try { db.prepare("ALTER TABLE recurring_rules ADD COLUMN purchase_category_id INTEGER").run(); } catch (e) { }
 
 // Adiciona a coluna de telefone na tabela people se ela não existir
 try { db.prepare("ALTER TABLE people ADD COLUMN phone TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE people ADD COLUMN email TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN pix_enabled INTEGER NOT NULL DEFAULT 0").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN pix_key_type TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN pix_key_value TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN pix_city TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN pix_state TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN pix_label TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN pix_updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN profile_kind TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN status TEXT NOT NULL DEFAULT 'active'").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN deleted_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE people ADD COLUMN deleted_label TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN close_day INTEGER").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE cards ADD COLUMN brand TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN can_import INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN deleted_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN deleted_label TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN google_photo_url TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN profile_photo_url TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN profile_photo_mode TEXT NOT NULL DEFAULT 'default'").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_text TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_vibe TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_txn_date_snapshot TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_marked_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_note TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN batch_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN request_kind TEXT NOT NULL DEFAULT 'card'").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN amount_paid_cents INTEGER NOT NULL DEFAULT 0").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN settlement_mode TEXT NOT NULL DEFAULT 'manual'").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_payload TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_txid TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_generated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_amount_cents INTEGER NOT NULL DEFAULT 0").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN pix_version INTEGER NOT NULL DEFAULT 0").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN status_summary TEXT NOT NULL DEFAULT 'pending'").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN first_responded_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN resolved_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_payment_intents ADD COLUMN creditor_note TEXT").run(); } catch (e) { /* Coluna já existe */ }
 
 // Cria a tabela de meses fechados se não existir
 // Em ambiente multi-usuário, o fechamento precisa ser isolado por user_id.
@@ -115,6 +207,148 @@ db.prepare(`
     updated_at TEXT NOT NULL,
     FOREIGN KEY (requester_user_id) REFERENCES users(id),
     FOREIGN KEY (receiver_user_id) REFERENCES users(id)
+  )
+`).run();
+
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS shared_debt_archives (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    is_archived INTEGER NOT NULL DEFAULT 1,
+    archived_at TEXT,
+    restored_at TEXT,
+    archived_from_status TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(request_id, user_id),
+    FOREIGN KEY (request_id) REFERENCES shared_debt_requests(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS shared_debt_monthly_settlements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requester_user_id INTEGER NOT NULL,
+    receiver_user_id INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    request_kind TEXT NOT NULL DEFAULT 'card',
+    status TEXT NOT NULL DEFAULT 'open',
+    request_count INTEGER NOT NULL DEFAULT 0,
+    total_accepted_cents INTEGER NOT NULL DEFAULT 0,
+    reserved_cents INTEGER NOT NULL DEFAULT 0,
+    confirmed_cents INTEGER NOT NULL DEFAULT 0,
+    open_cents INTEGER NOT NULL DEFAULT 0,
+    last_reported_at TEXT,
+    last_confirmed_at TEXT,
+    last_rejected_at TEXT,
+    last_activity_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(requester_user_id, receiver_user_id, month, year, request_kind),
+    FOREIGN KEY (requester_user_id) REFERENCES users(id),
+    FOREIGN KEY (receiver_user_id) REFERENCES users(id)
+  )
+`).run();
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS shared_debt_payment_intents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    settlement_id INTEGER NOT NULL,
+    requester_user_id INTEGER NOT NULL,
+    receiver_user_id INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    request_kind TEXT NOT NULL DEFAULT 'card',
+    requested_by_user_id INTEGER,
+    amount_cents INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'generated',
+    pix_payload TEXT,
+    pix_txid TEXT,
+    payer_note TEXT,
+    creditor_note TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    generated_at TEXT,
+    reported_at TEXT,
+    confirmed_at TEXT,
+    rejected_at TEXT,
+    cancelled_at TEXT,
+    FOREIGN KEY (settlement_id) REFERENCES shared_debt_monthly_settlements(id),
+    FOREIGN KEY (requester_user_id) REFERENCES users(id),
+    FOREIGN KEY (receiver_user_id) REFERENCES users(id),
+    FOREIGN KEY (requested_by_user_id) REFERENCES users(id),
+    UNIQUE(pix_txid)
+  )
+`).run();
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS shared_debt_payment_allocations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    settlement_id INTEGER NOT NULL,
+    intent_id INTEGER NOT NULL,
+    request_id INTEGER NOT NULL,
+    allocated_cents INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(intent_id, request_id),
+    FOREIGN KEY (settlement_id) REFERENCES shared_debt_monthly_settlements(id),
+    FOREIGN KEY (intent_id) REFERENCES shared_debt_payment_intents(id),
+    FOREIGN KEY (request_id) REFERENCES shared_debt_requests(id)
+  )
+`).run();
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS shared_debt_send_queues (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requester_user_id INTEGER NOT NULL,
+    receiver_user_id INTEGER NOT NULL,
+    source_due_month INTEGER NOT NULL,
+    source_due_year INTEGER NOT NULL,
+    request_kind TEXT NOT NULL DEFAULT 'card',
+    status TEXT NOT NULL DEFAULT 'draft',
+    receiver_email_snapshot TEXT,
+    receiver_name_snapshot TEXT,
+    total_cents INTEGER NOT NULL DEFAULT 0,
+    item_count INTEGER NOT NULL DEFAULT 0,
+    last_item_at TEXT,
+    sent_at TEXT,
+    batch_id INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (requester_user_id) REFERENCES users(id),
+    FOREIGN KEY (receiver_user_id) REFERENCES users(id),
+    FOREIGN KEY (batch_id) REFERENCES shared_debt_batches(id)
+  )
+`).run();
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS shared_debt_send_queue_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    queue_id INTEGER NOT NULL,
+    requester_user_id INTEGER NOT NULL,
+    receiver_user_id INTEGER NOT NULL,
+    source_transaction_id INTEGER NOT NULL,
+    source_allocation_id INTEGER,
+    source_person_id INTEGER NOT NULL,
+    source_due_month INTEGER NOT NULL,
+    source_due_year INTEGER NOT NULL,
+    source_txn_date_snapshot TEXT,
+    card_id INTEGER,
+    card_name_snapshot TEXT,
+    description_snapshot TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL,
+    receiver_email_snapshot TEXT,
+    receiver_name_snapshot TEXT,
+    sent_request_id INTEGER,
+    cancelled_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(queue_id, source_transaction_id, source_person_id),
+    FOREIGN KEY (queue_id) REFERENCES shared_debt_send_queues(id),
+    FOREIGN KEY (requester_user_id) REFERENCES users(id),
+    FOREIGN KEY (receiver_user_id) REFERENCES users(id),
+    FOREIGN KEY (source_transaction_id) REFERENCES transactions(id),
+    FOREIGN KEY (source_allocation_id) REFERENCES allocations(id),
+    FOREIGN KEY (source_person_id) REFERENCES people(id),
+    FOREIGN KEY (card_id) REFERENCES cards(id),
+    FOREIGN KEY (sent_request_id) REFERENCES shared_debt_requests(id)
   )
 `).run();
 db.prepare(`
@@ -201,6 +435,18 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_scheduled_push_logs_event_date 
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_requests_batch_id ON shared_debt_requests(batch_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_receiver ON shared_debt_batches(receiver_user_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batches(requester_user_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_user_archived ON shared_debt_archives(user_id, is_archived, updated_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_request_user ON shared_debt_archives(request_id, user_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_pair ON shared_debt_monthly_settlements(requester_user_id, receiver_user_id, year, month, request_kind)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_receiver ON shared_debt_monthly_settlements(receiver_user_id, year, month, request_kind)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_settlement_status ON shared_debt_payment_intents(settlement_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_pair ON shared_debt_payment_intents(requester_user_id, receiver_user_id, year, month, request_kind, status)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_allocations_intent ON shared_debt_payment_allocations(intent_id, request_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_allocations_request ON shared_debt_payment_allocations(request_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_requester_status ON shared_debt_send_queues(requester_user_id, status, source_due_year DESC, source_due_month DESC, updated_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_receiver_period ON shared_debt_send_queues(receiver_user_id, source_due_year DESC, source_due_month DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_queue ON shared_debt_send_queue_items(queue_id, source_txn_date_snapshot, id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_txn_person ON shared_debt_send_queue_items(requester_user_id, source_transaction_id, source_person_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_status ON friend_requests(requester_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_target_status ON friend_requests(target_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_pair_status ON friend_requests(requester_user_id, target_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
@@ -209,6 +455,23 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_person O
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_linked ON person_app_links(owner_user_id, linked_user_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("ALTER TABLE closed_months ADD COLUMN user_id INTEGER").run(); } catch (e) { /* Coluna já existe ou tabela ainda não precisava de ajuste */ }
 try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_closed_months_user_month_year ON closed_months(user_id, month, year)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN amount_mode TEXT NOT NULL DEFAULT 'fixed'").run(); } catch (e) { /* Coluna já existe */ }
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS monthly_finance_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    finance_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    item_date TEXT,
+    item_source TEXT,
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (finance_id) REFERENCES monthly_finances(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_finance_user ON monthly_finance_items(finance_id, user_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_user_date ON monthly_finance_items(user_id, item_date)").run(); } catch (e) { /* Índice já existe */ }
 
 db.prepare(`
   CREATE TABLE IF NOT EXISTS recurring_rules (
@@ -245,13 +508,83 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_txn_recurring_rule ON transacti
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_recurring_rules_user_status ON recurring_rules(user_id, status)").run(); } catch (e) { }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_recurring_exceptions_user_rule_month ON recurring_exceptions(user_id, rule_id, year, month)").run(); } catch (e) { }
 
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS merchant_learning_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    normalized_pattern TEXT NOT NULL,
+    merchant_label TEXT NOT NULL,
+    search_term TEXT,
+    source_sample TEXT,
+    status TEXT NOT NULL DEFAULT 'confirmed',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(user_id, normalized_pattern),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_merchant_learning_feedback_user_status ON merchant_learning_feedback(user_id, status, updated_at DESC)").run(); } catch (e) { }
+
 const { parseCsvByCardName } = require("./src/importers");
 const { formatBRLFromCents, parseMonthYear, toISOFromBRDate, centsFromPtBrMoney } = require("./src/utils");
+const {
+  PIX_DEFAULT_STATE,
+  PIX_DEFAULT_CITY,
+  PIX_STATE_OPTIONS,
+  PIX_CITY_SUGGESTIONS_BY_STATE,
+  PIX_ALL_CITY_SUGGESTIONS,
+  normalizePixState,
+  guessPixStateByCity
+} = require("./src/brazil-locations");
+const {
+  PIX_KEY_TYPE_LABELS,
+  normalizePixKeyType,
+  normalizePixKeyValue,
+  formatPixKeyValueForInput,
+  validatePixProfile,
+  sanitizePixText,
+  sanitizeTxid,
+  buildPixPayload,
+  buildSharedDebtPixTxid,
+  buildSharedDebtCardMonthlyPixTxid
+} = require("./src/pix");
 const formatDateBR = (dateStr) => { if (!dateStr) return "-"; return dayjs(dateStr).format("DD/MM/YYYY"); };
 const { computeDueDate } = require("./src/dueDate");
 
 const EFFECTIVE_DUE_MONTH_SQL = "COALESCE(t.due_month, i.month)";
 const EFFECTIVE_DUE_YEAR_SQL = "COALESCE(t.due_year, i.year)";
+
+const PROFILE_SIGNATURE_MAX_LENGTH = 60;
+const PROFILE_SIGNATURE_VIBE_OPTIONS = Object.freeze([
+  { code: 'paga_direitinho', label: 'Paga direitinho' },
+  { code: 'cobra_com_jeitinho', label: 'Cobra com jeitinho' },
+  { code: 'topa_dividir', label: 'Topa dividir' },
+  { code: 'pix_sempre_pronto', label: 'Pix sempre pronto' },
+  { code: 'acerta_rapidinho', label: 'Acerta rapidinho' },
+  { code: 'divide_na_boa', label: 'Divide na boa' },
+  { code: 'ta_em_dia', label: 'Tá em dia' },
+  { code: 'bom_de_acerto', label: 'Bom de acerto' }
+]);
+const PROFILE_SIGNATURE_VIBE_MAP = new Map(PROFILE_SIGNATURE_VIBE_OPTIONS.map((option) => [option.code, option]));
+
+function normalizeProfileSignatureText(value, { max = PROFILE_SIGNATURE_MAX_LENGTH } = {}) {
+  return String(value || '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, Math.max(0, Number(max || 0)))
+    .trim();
+}
+
+function normalizeProfileSignatureVibe(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return PROFILE_SIGNATURE_VIBE_MAP.has(normalized) ? normalized : '';
+}
+
+function getProfileSignatureVibeMeta(value) {
+  const normalized = normalizeProfileSignatureVibe(value);
+  return normalized ? (PROFILE_SIGNATURE_VIBE_MAP.get(normalized) || null) : null;
+}
 
 function normalizeAllocationPersonIds(rawPersonIds, validPeople) {
   let personIds = rawPersonIds || [];
@@ -438,7 +771,7 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_backup_restores_started_at ON b
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 const backupRestoreUpload = multer({
-  dest: path.join(os.tmpdir(), 'organizapay-restore-uploads'),
+  dest: path.join(os.tmpdir(), 'acerttapay-restore-uploads'),
   limits: { fileSize: 250 * 1024 * 1024 }
 });
 
@@ -606,7 +939,7 @@ function getPushRuntimeConfig() {
   return {
     publicKey: getSettingText('VAPID_PUBLIC_KEY'),
     privateKey: getSettingText('VAPID_PRIVATE_KEY'),
-    subject: getSettingText('VAPID_SUBJECT', 'mailto:no-reply@organizapay.local'),
+    subject: getSettingText('VAPID_SUBJECT', 'mailto:no-reply@acerttapay.local'),
     duePushEnabled: getSettingBoolean('CARD_DUE_PUSH_ENABLED', true),
     timezone: getSettingText('CARD_DUE_PUSH_TIMEZONE', 'America/Sao_Paulo') || 'America/Sao_Paulo',
     hour: getSettingInt('CARD_DUE_PUSH_HOUR', 10),
@@ -678,34 +1011,76 @@ function configureGoogleStrategy() {
     clientSecret,
     callbackURL
   }, (accessToken, refreshToken, profile, done) => {
-    const email = profile.emails?.[0]?.value;
-    const name = profile.displayName;
+    const email = normalizeEmail(profile.emails?.[0]?.value);
+    const googleId = String(profile.id || profile?._json?.sub || '').trim();
+    const profileName = String(profile.displayName || '').trim();
+    const googlePhotoUrl = extractGoogleProfilePhotoUrl(profile);
 
     if (!email) {
       return done(null, false, { message: 'Email não encontrado no perfil Google.' });
     }
 
-    const authorizedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-
-    if (!authorizedUser) {
-      return done(null, false, { message: 'Email não autorizado. Entre em contato com o administrador.' });
+    if (!googleId) {
+      return done(null, false, { message: 'Não consegui validar a identidade estável dessa conta Google.' });
     }
 
-    const isFirstGoogleLogin = !authorizedUser.last_login;
+    try {
+      let authorizedUser = db.prepare(`SELECT * FROM users WHERE google_id = ? AND COALESCE(status, 'active') <> 'deleted' LIMIT 1`).get(googleId);
+      const emailMatchedUser = db.prepare(`SELECT * FROM users WHERE email = ? AND COALESCE(status, 'active') <> 'deleted' LIMIT 1`).get(email);
 
-    db.prepare('UPDATE users SET last_login = ? WHERE email = ?').run(dayjs().toISOString(), email);
+      if (!authorizedUser) {
+        if (!emailMatchedUser) {
+          return done(null, false, { message: 'Email não autorizado. Entre em contato com o administrador.' });
+        }
 
-    if (isFirstGoogleLogin) {
-      ensureDefaultOwnerPerson(authorizedUser.id, name || authorizedUser.name || email.split('@')[0], email);
+        if (emailMatchedUser.google_id && String(emailMatchedUser.google_id).trim() !== googleId) {
+          return done(null, false, { message: 'Essa conta do Google não combina com o acesso autorizado por aqui.' });
+        }
+
+        db.prepare(`
+          UPDATE users
+          SET google_id = ?,
+              last_login = ?,
+              name = COALESCE(NULLIF(name, ''), ?),
+              email = ?,
+              google_photo_url = CASE WHEN ? IS NOT NULL AND trim(?) <> '' THEN ? ELSE google_photo_url END
+          WHERE id = ?
+        `).run(googleId, nowIso(), profileName || emailMatchedUser.name || email.split('@')[0], email, googlePhotoUrl, googlePhotoUrl, googlePhotoUrl, emailMatchedUser.id);
+
+        authorizedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(emailMatchedUser.id);
+      } else {
+        if (emailMatchedUser && Number(emailMatchedUser.id || 0) !== Number(authorizedUser.id || 0)) {
+          return done(null, false, { message: 'Esse e-mail do Google está ligado a outro acesso por aqui. Bora ajustar isso antes de continuar.' });
+        }
+
+        db.prepare(`
+          UPDATE users
+          SET last_login = ?,
+              name = COALESCE(NULLIF(name, ''), ?),
+              email = CASE WHEN ? IS NOT NULL AND trim(?) <> '' THEN ? ELSE email END,
+              google_photo_url = CASE WHEN ? IS NOT NULL AND trim(?) <> '' THEN ? ELSE google_photo_url END
+          WHERE id = ?
+        `).run(nowIso(), profileName || authorizedUser.name || email.split('@')[0], email, email, email, googlePhotoUrl, googlePhotoUrl, googlePhotoUrl, authorizedUser.id);
+
+        authorizedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(authorizedUser.id);
+      }
+
+      ensureSelfPerson(authorizedUser.id, profileName || authorizedUser.name || email.split('@')[0], authorizedUser.email || email);
+      ensurePurchaseCategoriesForUser(authorizedUser.id);
+
+      return done(null, {
+        id: authorizedUser.id,
+        email: authorizedUser.email || email,
+        name: authorizedUser.name || profileName || email.split('@')[0],
+        role: authorizedUser.role,
+        can_import: Number(authorizedUser.can_import ?? 1),
+        google_photo_url: authorizedUser.google_photo_url || googlePhotoUrl || '',
+        profile_photo_url: authorizedUser.profile_photo_url || '',
+        profile_photo_mode: authorizedUser.profile_photo_mode || 'default'
+      });
+    } catch (error) {
+      return done(error);
     }
-
-    return done(null, {
-      id: authorizedUser.id,
-      email,
-      name: authorizedUser.name || name || email.split('@')[0],
-      role: authorizedUser.role,
-      can_import: Number(authorizedUser.can_import ?? 1)
-    });
   }));
 
   googleAuthConfigured = true;
@@ -739,7 +1114,7 @@ function getBackupRuntimeConfig() {
     localPrimaryDir: resolveConfiguredDirectory(__dirname, getSettingText('BACKUP_LOCAL_PRIMARY_DIR', DEFAULT_PRIMARY_BACKUP_DIR), DEFAULT_PRIMARY_BACKUP_DIR),
     localSecondaryDir: resolveConfiguredDirectory(__dirname, getSettingText('BACKUP_LOCAL_SECONDARY_DIR', DEFAULT_SECONDARY_BACKUP_DIR), DEFAULT_SECONDARY_BACKUP_DIR),
     googleEnabled: getSettingBoolean('BACKUP_GOOGLE_ENABLED', false),
-    googleFolderName: getSettingText('BACKUP_GOOGLE_FOLDER_NAME', 'OrganizaPay Backups') || 'OrganizaPay Backups',
+    googleFolderName: getSettingText('BACKUP_GOOGLE_FOLDER_NAME', 'AcerttaPay Backups') || 'AcerttaPay Backups',
     googleRefreshToken: getInternalSettingValue(BACKUP_GOOGLE_REFRESH_TOKEN_KEY),
     googleConnectedEmail: getInternalSettingValue(BACKUP_GOOGLE_CONNECTED_EMAIL_KEY),
     googleConnectedAt: getInternalSettingValue(BACKUP_GOOGLE_CONNECTED_AT_KEY),
@@ -920,7 +1295,7 @@ async function ensureGoogleBackupFolder(accessToken, config, updatedByUserId = n
     }
   }
 
-  const folderName = String(config.googleFolderName || 'OrganizaPay Backups').trim() || 'OrganizaPay Backups';
+  const folderName = String(config.googleFolderName || 'AcerttaPay Backups').trim() || 'AcerttaPay Backups';
   const found = await googleDriveRequest({
     url: 'https://www.googleapis.com/drive/v3/files',
     accessToken,
@@ -964,7 +1339,7 @@ async function uploadBackupZipToGoogle({ filePath, fileName, config, updatedByUs
   const accessToken = await refreshGoogleBackupAccessToken(config.googleRefreshToken);
   const folder = await ensureGoogleBackupFolder(accessToken, config, updatedByUserId);
   const fileBuffer = await fsp.readFile(filePath);
-  const boundary = `organizapay-${crypto.randomBytes(12).toString('hex')}`;
+  const boundary = `acerttapay-${crypto.randomBytes(12).toString('hex')}`;
   const metadata = {
     name: fileName,
     parents: [folder.id]
@@ -1062,7 +1437,7 @@ async function collectBackupManifestEntries(filesRoot, backupName) {
 
   return {
     signature: BACKUP_SIGNATURE,
-    app: 'OrganizaPay',
+    app: 'AcerttaPay',
     backupName,
     createdAt: currentConfigTimestamp(),
     files: manifestFiles
@@ -1096,7 +1471,7 @@ async function createServerBackup({ triggerKind = 'manual', createdByUserId = nu
 
   try {
     assertBackupDirectories(config);
-    workspace = await createTempWorkspace('organizapay-backup-');
+    workspace = await createTempWorkspace('acerttapay-backup-');
     const payloadRoot = path.join(workspace, 'payload');
     const filesRoot = path.join(payloadRoot, 'files');
     const dbSnapshotPath = path.join(filesRoot, 'data', 'app.db');
@@ -1215,7 +1590,7 @@ async function createServerBackup({ triggerKind = 'manual', createdByUserId = nu
   } finally {
     backupJobRunning = false;
     if (workspace) {
-      await fsp.rm(workspace, { recursive: true, force: true }).catch(() => {});
+      await fsp.rm(workspace, { recursive: true, force: true }).catch(() => { });
     }
   }
 }
@@ -1232,15 +1607,17 @@ async function restoreServerBackupFromZip({ zipPath, uploadedFilename, restoredB
   let safetyBackupRunId = null;
 
   try {
-    workspace = await createTempWorkspace('organizapay-restore-');
+    workspace = await createTempWorkspace('acerttapay-restore-');
     const entries = await listZipEntries(zipPath);
     validateZipEntries(entries);
     await extractZip(zipPath, workspace);
 
     const manifestPath = path.join(workspace, BACKUP_MANIFEST_FILENAME);
     const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8'));
-    if (!manifest || manifest.signature !== BACKUP_SIGNATURE) {
-      throw new Error('O arquivo enviado não tem a assinatura oficial de backup do OrganizaPay.');
+    const backupSignature = String(manifest?.signature || '').trim();
+    const looksLikeLegacyBackup = backupSignature.endsWith('-backup-v1');
+    if (!manifest || (!looksLikeLegacyBackup && backupSignature !== BACKUP_SIGNATURE)) {
+      throw new Error('O arquivo enviado não tem a assinatura oficial de backup do AcerttaPay.');
     }
 
     backupName = String(manifest.backupName || '').trim() || path.basename(zipPath);
@@ -1316,7 +1693,7 @@ async function restoreServerBackupFromZip({ zipPath, uploadedFilename, restoredB
   } finally {
     backupRestoreRunning = false;
     if (workspace) {
-      await fsp.rm(workspace, { recursive: true, force: true }).catch(() => {});
+      await fsp.rm(workspace, { recursive: true, force: true }).catch(() => { });
     }
   }
 }
@@ -1439,7 +1816,7 @@ function buildBackupAdminState() {
     recentRestores,
     running: backupJobRunning,
     restoring: backupRestoreRunning,
-    guideUrl: '/admin/guide'
+    guideUrl: '/admin/backup/guide'
   };
 }
 
@@ -1593,56 +1970,431 @@ seedAppSettingsFromBootstrap();
 refreshRuntimeSettings({ restartScheduler: false });
 
 const BOOTSTRAP_SESSION_SECRET = getSettingText('SESSION_SECRET', 'chave-secreta-padrao');
-const BOOTSTRAP_PORT = getSettingInt('PORT', 3001);
+const BOOTSTRAP_PORT = getSettingInt('PORT', 3000);
 const DEFAULT_FINANCE_CATEGORIES = ['Prestação Apartamento', 'Luz', 'Internet', 'Condomínio', 'Tim'];
+const DEFAULT_PURCHASE_CATEGORIES = [
+  'Mercado',
+  'Açougue',
+  'Padaria',
+  'Restaurante',
+  'Lanche / Café',
+  'Farmácia',
+  'Saúde',
+  'Transporte',
+  'Combustível',
+  'Casa',
+  'Assinaturas',
+  'Educação',
+  'Vestuário',
+  'Trabalho',
+  'Lazer',
+  'Pets',
+  'Presentes',
+  'Serviços',
+  'Viagem',
+  'Outros'
+];
 
-function getUserRecord(userId) {
-  return db.prepare("SELECT id, email, name, role, can_import, created_at, last_login FROM users WHERE id = ?").get(userId);
+function normalizeLifecycleStatus(value, fallback = 'active') {
+  const normalized = String(value || fallback || 'active').trim().toLowerCase();
+  if (['active', 'inactive', 'deleted'].includes(normalized)) return normalized;
+  return fallback || 'active';
 }
 
-function getAllUsers() {
-  return db.prepare("SELECT id, email, name, role, can_import, created_at, last_login FROM users ORDER BY created_at DESC").all();
+function personLifecycleStatus(row) {
+  const fallback = Number(row?.active ?? 1) === 0 ? 'inactive' : 'active';
+  return normalizeLifecycleStatus(row?.status, fallback);
+}
+
+function isDeletedPersonRow(row) {
+  return personLifecycleStatus(row) === 'deleted';
+}
+
+function isDeletedUserRow(row) {
+  return normalizeLifecycleStatus(row?.status, 'active') === 'deleted';
+}
+
+function userNotDeletedSql(alias = 'u') {
+  return `COALESCE(${alias}.status, 'active') <> 'deleted'`;
+}
+
+function personNotDeletedSql(alias = 'p') {
+  return `COALESCE(${alias}.status, CASE WHEN COALESCE(${alias}.active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'`;
+}
+
+function buildDeletedPersonLabel(personId) {
+  const safeId = Number(personId || 0) || 'x';
+  return `Contato removido ${safeId}`;
+}
+
+function buildDeletedPersonTechnicalName(userId, personId) {
+  return `__deleted_person_${Number(userId || 0)}_${Number(personId || 0)}__`;
+}
+
+function buildDeletedUserLabel(userId) {
+  const safeId = Number(userId || 0) || 'x';
+  return `Acesso removido ${safeId}`;
+}
+
+function buildDeletedUserEmail(userId) {
+  return `deleted-user-${Number(userId || 0)}-${Date.now()}@acerttapay.local`;
+}
+
+function getUserRecord(userId, { includeDeleted = true } = {}) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return null;
+  return db.prepare(`
+    SELECT id, email, name, role, can_import, created_at, last_login,
+           google_id, google_photo_url, profile_photo_url, profile_photo_mode,
+           profile_signature_text, profile_signature_vibe, profile_signature_updated_at,
+           COALESCE(status, 'active') AS status, deleted_at, deleted_label
+    FROM users
+    WHERE id = ? ${includeDeleted ? '' : "AND COALESCE(status, 'active') <> 'deleted'"}
+    LIMIT 1
+  `).get(safeUserId);
+}
+
+function getAllUsers({ includeDeleted = false } = {}) {
+  return db.prepare(`
+    SELECT id, email, name, role, can_import, created_at, last_login, COALESCE(status, 'active') AS status, deleted_at, deleted_label
+    FROM users
+    ${includeDeleted ? '' : "WHERE COALESCE(status, 'active') <> 'deleted'"}
+    ORDER BY created_at DESC, id DESC
+  `).all();
 }
 
 function isAdminUser(userId) {
-  return getUserRecord(userId)?.role === 'admin';
+  return getUserRecord(userId, { includeDeleted: false })?.role === 'admin';
 }
 
 function canUserImport(userId) {
-  return Number(getUserRecord(userId)?.can_import ?? 1) !== 0;
+  return Number(getUserRecord(userId, { includeDeleted: false })?.can_import ?? 1) !== 0;
 }
 
-function ensureDefaultOwnerPerson(userId, preferredName, preferredEmail = null) {
-  const safeName = String(preferredName || "").trim();
+function normalizeNameForIdentity(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function normalizePurchaseCategoryName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function sanitizePurchaseCategoryLabel(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+}
+
+function ensurePurchaseCategoriesForUser(userId) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return [];
+
+  const existingRows = db.prepare(`
+    SELECT id, normalized_name, active, sort_order
+    FROM purchase_categories
+    WHERE user_id = ?
+  `).all(safeUserId);
+
+  const existingByNormalized = new Map(existingRows.map((row) => [normalizePurchaseCategoryName(row.normalized_name || ''), row]));
+  const insertCategory = db.prepare(`
+    INSERT OR IGNORE INTO purchase_categories (user_id, name, normalized_name, kind, active, sort_order, created_at, updated_at)
+    VALUES (?, ?, ?, 'default', 1, ?, ?, ?)
+  `);
+
+  const now = nowIso();
+  DEFAULT_PURCHASE_CATEGORIES.forEach((categoryName, index) => {
+    const normalized = normalizePurchaseCategoryName(categoryName);
+    if (!normalized || existingByNormalized.has(normalized)) return;
+    insertCategory.run(safeUserId, categoryName, normalized, index + 1, now, now);
+  });
+
+  return db.prepare(`
+    SELECT id, user_id, name, normalized_name, kind, active, sort_order, created_at, updated_at
+    FROM purchase_categories
+    WHERE user_id = ?
+    ORDER BY CASE WHEN active = 1 THEN 0 ELSE 1 END,
+             CASE kind WHEN 'default' THEN 0 ELSE 1 END,
+             sort_order ASC,
+             lower(name) ASC,
+             id ASC
+  `).all(safeUserId);
+}
+
+function getPurchaseCategories(userId, { includeInactive = false, includeIds = [] } = {}) {
+  ensurePurchaseCategoriesForUser(userId);
+
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return [];
+
+  const extraIds = Array.from(new Set((includeIds || []).map(Number).filter((value) => Number.isInteger(value) && value > 0)));
+  const params = [safeUserId];
+  let where = 'user_id = ?';
+
+  if (!includeInactive) {
+    if (extraIds.length) {
+      where += ` AND (active = 1 OR id IN (${extraIds.map(() => '?').join(', ')}))`;
+      params.push(...extraIds);
+    } else {
+      where += ' AND active = 1';
+    }
+  }
+
+  return db.prepare(`
+    SELECT id, user_id, name, normalized_name, kind, active, sort_order, created_at, updated_at
+    FROM purchase_categories
+    WHERE ${where}
+    ORDER BY CASE WHEN active = 1 THEN 0 ELSE 1 END,
+             CASE kind WHEN 'default' THEN 0 ELSE 1 END,
+             sort_order ASC,
+             lower(name) ASC,
+             id ASC
+  `).all(...params);
+}
+
+function getPurchaseCategoryById(userId, categoryId, { includeInactive = false } = {}) {
+  const safeCategoryId = Number(categoryId || 0);
+  if (!safeCategoryId) return null;
+  return db.prepare(`
+    SELECT id, user_id, name, normalized_name, kind, active, sort_order, created_at, updated_at
+    FROM purchase_categories
+    WHERE id = ? AND user_id = ? ${includeInactive ? '' : 'AND active = 1'}
+    LIMIT 1
+  `).get(safeCategoryId, Number(userId || 0));
+}
+
+function createOrReusePurchaseCategory(userId, rawName) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) throw new Error('Usuário inválido para criar categoria.');
+
+  ensurePurchaseCategoriesForUser(safeUserId);
+
+  const label = sanitizePurchaseCategoryLabel(rawName);
+  if (!label) {
+    throw new Error('Escreva o nome da categoria antes de salvar.');
+  }
+
+  const normalized = normalizePurchaseCategoryName(label);
+  if (!normalized) {
+    throw new Error('Não consegui entender o nome dessa categoria.');
+  }
+
+  const existing = db.prepare(`
+    SELECT id, name, active
+    FROM purchase_categories
+    WHERE user_id = ? AND normalized_name = ?
+    LIMIT 1
+  `).get(safeUserId, normalized);
+
+  if (existing) {
+    if (Number(existing.active || 0) === 0) {
+      db.prepare(`
+        UPDATE purchase_categories
+        SET active = 1, updated_at = ?
+        WHERE id = ? AND user_id = ?
+      `).run(nowIso(), existing.id, safeUserId);
+    }
+    return getPurchaseCategoryById(safeUserId, existing.id, { includeInactive: true });
+  }
+
+  const nextSortOrder = Number(db.prepare(`
+    SELECT COALESCE(MAX(sort_order), 0) AS total
+    FROM purchase_categories
+    WHERE user_id = ?
+  `).get(safeUserId)?.total || 0) + 1;
+
+  const info = db.prepare(`
+    INSERT INTO purchase_categories (user_id, name, normalized_name, kind, active, sort_order, created_at, updated_at)
+    VALUES (?, ?, ?, 'custom', 1, ?, ?, ?)
+  `).run(safeUserId, label, normalized, nextSortOrder, nowIso(), nowIso());
+
+  return getPurchaseCategoryById(safeUserId, info.lastInsertRowid, { includeInactive: true });
+}
+
+function resolvePurchaseCategorySelection(userId, rawCategoryId, rawCustomName, { allowInactiveIds = [] } = {}) {
+  const selectedValue = String(rawCategoryId || '').trim();
+  const safeAllowInactiveIds = new Set((allowInactiveIds || []).map(Number).filter((value) => Number.isInteger(value) && value > 0));
+
+  if (!selectedValue) return null;
+
+  if (selectedValue === '__new__') {
+    return Number(createOrReusePurchaseCategory(userId, rawCustomName)?.id || 0) || null;
+  }
+
+  const categoryId = Number(selectedValue);
+  if (!Number.isInteger(categoryId) || categoryId <= 0) {
+    throw new Error('Categoria inválida. Escolha uma opção válida.');
+  }
+
+  const category = getPurchaseCategoryById(userId, categoryId, { includeInactive: true });
+  if (!category) {
+    throw new Error('Categoria não encontrada por aqui.');
+  }
+
+  if (Number(category.active || 0) === 0 && !safeAllowInactiveIds.has(categoryId)) {
+    throw new Error('Essa categoria está arquivada. Reative ou escolha outra.');
+  }
+
+  return categoryId;
+}
+
+function setPurchaseCategoryActiveState(userId, categoryId, active) {
+  const category = getPurchaseCategoryById(userId, categoryId, { includeInactive: true });
+  if (!category) throw new Error('Categoria não encontrada por aqui.');
+
+  db.prepare(`
+    UPDATE purchase_categories
+    SET active = ?, updated_at = ?
+    WHERE id = ? AND user_id = ?
+  `).run(active ? 1 : 0, nowIso(), category.id, Number(userId || 0));
+
+  return getPurchaseCategoryById(userId, category.id, { includeInactive: true });
+}
+
+function normalizeProfileKind(value, isOwner = false) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'self') return 'self';
+  if (normalized === 'contact') return 'contact';
+  return isOwner ? 'self' : 'contact';
+}
+
+function isSelfPersonRow(person) {
+  return normalizeProfileKind(person?.profile_kind, Number(person?.is_owner || 0) !== 0) === 'self';
+}
+
+function buildUniqueSelfPersonName(userId, preferredName) {
+  const base = String(preferredName || '').trim() || 'Meu perfil';
+  const candidates = [base, `${base} (perfil)`, `${base} AcerttaPay`, `${base} Minha conta`];
+
+  for (const candidate of candidates) {
+    const exists = db.prepare(`
+      SELECT id
+      FROM people
+      WHERE user_id = ? AND lower(name) = lower(?)
+      LIMIT 1
+    `).get(userId, candidate);
+    if (!exists) return candidate;
+  }
+
+  let suffix = 2;
+  while (suffix < 1000) {
+    const candidate = `${base} (${suffix})`;
+    const exists = db.prepare(`
+      SELECT id
+      FROM people
+      WHERE user_id = ? AND lower(name) = lower(?)
+      LIMIT 1
+    `).get(userId, candidate);
+    if (!exists) return candidate;
+    suffix += 1;
+  }
+
+  return `${base} (${Date.now()})`;
+}
+
+function personHasStrongContactSignalsForUser(userId, personId) {
+  const usage = db.prepare(`
+    SELECT
+      EXISTS(SELECT 1 FROM person_app_links WHERE owner_user_id = ? AND person_id = ?) AS has_app_link,
+      EXISTS(SELECT 1 FROM friend_requests WHERE requester_user_id = ? AND source_person_id = ?) AS has_friend_history
+  `).get(userId, personId, userId, personId);
+
+  return Number(usage?.has_app_link || 0) !== 0 || Number(usage?.has_friend_history || 0) !== 0;
+}
+
+function findExistingSelfPersonCandidate(userId, preferredName, preferredEmail = null) {
   const safeEmail = normalizeEmail(preferredEmail);
-  if (!safeName) return;
+  const safeNameKey = normalizeNameForIdentity(preferredName || '');
+  const rows = db.prepare(`
+    SELECT id, name, email, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner, profile_kind
+    FROM people
+    WHERE user_id = ?
+    ORDER BY COALESCE(is_owner, 0) DESC, COALESCE(active, 1) DESC, id ASC
+  `).all(userId);
+
+  const existingSelf = rows.find((row) => isSelfPersonRow(row));
+  if (existingSelf) return existingSelf;
+
+  const ownerByEmail = rows.find((row) => Number(row.is_owner || 0) !== 0 && safeEmail && normalizeEmail(row.email) === safeEmail);
+  if (ownerByEmail) return ownerByEmail;
+
+  const safeOwnerByName = rows.find((row) => {
+    if (Number(row.is_owner || 0) === 0) return false;
+    if (personHasStrongContactSignalsForUser(userId, row.id)) return false;
+    return safeNameKey && normalizeNameForIdentity(row.name) === safeNameKey;
+  });
+  if (safeOwnerByName) return safeOwnerByName;
+
+  const ownerRows = rows.filter((row) => Number(row.is_owner || 0) !== 0);
+  if (ownerRows.length === 1 && !personHasStrongContactSignalsForUser(userId, ownerRows[0].id)) {
+    return ownerRows[0];
+  }
+
+  return null;
+}
+
+function ensureSelfPerson(userId, preferredName, preferredEmail = null) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return null;
+
+  const safeEmail = normalizeEmail(preferredEmail);
+  const safeName = String(preferredName || '').trim() || (safeEmail ? safeEmail.split('@')[0] : 'Meu perfil');
 
   db.transaction(() => {
-    const existingOwner = db.prepare("SELECT id FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
-    if (existingOwner) return;
+    let target = findExistingSelfPersonCandidate(safeUserId, safeName, safeEmail);
 
-    const existingPerson = db.prepare("SELECT id, email FROM people WHERE user_id = ? AND lower(name) = lower(?) LIMIT 1").get(userId, safeName);
+    if (!target) {
+      const createdAt = nowIso();
+      const targetName = buildUniqueSelfPersonName(safeUserId, safeName);
+      const inserted = db.prepare(`
+        INSERT INTO people (user_id, name, phone, email, pix_enabled, pix_key_type, pix_key_value, pix_city, pix_state, pix_label, pix_updated_at, active, is_owner, profile_kind, created_at)
+        VALUES (?, ?, NULL, ?, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, 1, 'self', ?)
+      `).run(safeUserId, targetName, safeEmail, createdAt);
 
-    if (existingPerson) {
-      db.prepare("UPDATE people SET active = 1 WHERE id = ? AND user_id = ?").run(existingPerson.id, userId);
-      if (safeEmail && !normalizeEmail(existingPerson.email)) {
-        db.prepare("UPDATE people SET email = ? WHERE id = ? AND user_id = ?").run(safeEmail, existingPerson.id, userId);
-      }
-      db.prepare("UPDATE people SET is_owner = 0 WHERE user_id = ?").run(userId);
-      db.prepare("UPDATE people SET is_owner = 1 WHERE id = ? AND user_id = ?").run(existingPerson.id, userId);
-      return;
+      target = {
+        id: Number(inserted.lastInsertRowid || 0),
+        name: targetName,
+        email: safeEmail,
+        profile_kind: 'self',
+        is_owner: 1
+      };
     }
 
     db.prepare(`
-      INSERT INTO people (user_id, name, phone, email, active, is_owner, created_at)
-      VALUES (?, ?, NULL, ?, 1, 1, ?)
-    `).run(userId, safeName, safeEmail, dayjs().toISOString());
+      UPDATE people
+      SET is_owner = 0,
+          profile_kind = 'contact'
+      WHERE user_id = ? AND id <> ?
+    `).run(safeUserId, target.id);
+
+    db.prepare(`
+      UPDATE people
+      SET active = 1,
+          is_owner = 1,
+          profile_kind = 'self',
+          email = CASE WHEN trim(COALESCE(email, '')) = '' AND ? IS NOT NULL THEN ? ELSE email END,
+          name = CASE WHEN trim(COALESCE(name, '')) = '' THEN ? ELSE name END
+      WHERE id = ? AND user_id = ?
+    `).run(safeEmail, safeEmail, safeName, target.id, safeUserId);
   })();
+
+  return getSelfPerson(safeUserId);
+}
+
+function ensureDefaultOwnerPerson(userId, preferredName, preferredEmail = null) {
+  return ensureSelfPerson(userId, preferredName, preferredEmail);
 }
 
 function renderAdmin(res, { error = null, success = null, activeSection = 'access' } = {}) {
   return res.render('admin', {
-    title: 'OrganizaPay | Administração',
+    title: 'AcerttaPay | Administração',
     users: getAllUsers(),
     error,
     success,
@@ -1670,7 +2422,7 @@ function buildSetupFormSeed(overrides = {}) {
 
 function renderSetup(res, { error = null, success = null, form = {} } = {}) {
   return res.render('setup', {
-    title: 'OrganizaPay | Primeira configuração',
+    title: 'AcerttaPay | Primeira configuração',
     error,
     success,
     form: buildSetupFormSeed(form),
@@ -1694,13 +2446,206 @@ function setImportFormSeed(req, seed) {
   req.session.importFormSeed = seed || null;
 }
 
+function normalizeErrorStatus(error, fallback = 500) {
+  const candidate = Number(error?.status || error?.statusCode || fallback);
+  return Number.isInteger(candidate) && candidate >= 400 && candidate <= 599 ? candidate : fallback;
+}
+
+function getSqliteConstraintSignature(error) {
+  const raw = String(error?.message || '').trim();
+  const match = raw.match(/constraint failed:\s*(.+)$/i);
+  return match ? match[1].trim() : null;
+}
+
+const SQLITE_UNIQUE_MESSAGE_MAP = {
+  'people.user_id, people.name': 'Já existe alguém com esse nome na sua lista. Se forem xará, vale colocar um apelido para não virar bagunça.',
+  'cards.user_id, cards.name': 'Esse cartão já está na carteira. Se quiser diferenciar, dá para usar um apelido.',
+  'users.email': 'Esse e-mail já está autorizado por aqui. Dá uma conferida antes de salvar de novo.',
+  'users.google_id': 'Essa conta do Google já está ligada a outro acesso por aqui.',
+  'allocations.transaction_id, allocations.person_id': 'Essa pessoa já entrou nessa divisão. Não precisa chamar duas vezes para a mesma compra.',
+  'card_statements.card_id, card_statements.month, card_statements.year': 'Esse resumo do cartão já estava guardado por aqui.',
+  'person_payments.person_id, person_payments.month, person_payments.year': 'Esse pagamento dessa pessoa já foi lançado neste mês.',
+  'closed_months.user_id, closed_months.month, closed_months.year': 'Esse mês já estava fechado por aqui.',
+  'person_app_links.owner_user_id, person_app_links.person_id': 'Esse vínculo com o app já estava amarrado por aqui.',
+  'shared_debt_archives.request_id, shared_debt_archives.user_id': 'Esse lembrete já estava arquivado para essa pessoa.'
+};
+
+function wantsJsonErrorResponse(req) {
+  if (!req) return false;
+  if (isAjaxLikeRequest(req)) return true;
+
+  const accept = String(req.get('accept') || '').toLowerCase();
+  const contentType = String(req.get('content-type') || '').toLowerCase();
+
+  return contentType.includes('application/json')
+    || (accept.includes('application/json') && !accept.includes('text/html'));
+}
+
+function getFriendlyErrorDetails(error, { defaultMessage = null } = {}) {
+  const rawMessage = String(error?.userMessage || error?.message || '').trim();
+  const constraintSignature = getSqliteConstraintSignature(error);
+  const details = {
+    status: normalizeErrorStatus(error, 500),
+    message: '',
+    rawMessage,
+    code: String(error?.code || '').trim() || null,
+    constraintSignature
+  };
+
+  if (String(error?.name || '') === 'MulterError') {
+    details.status = 400;
+    details.message = error?.code === 'LIMIT_FILE_SIZE'
+      ? 'Esse arquivo veio grandão demais para subir de uma vez. Dá uma enxugada e tenta de novo.'
+      : 'Não consegui ler o arquivo enviado agora. Confere o arquivo e tenta mais uma vez.';
+    return details;
+  }
+
+  if (details.code === 'SQLITE_BUSY' || details.code === 'SQLITE_LOCKED' || /database is locked/i.test(rawMessage)) {
+    details.status = 503;
+    details.message = 'Tem outra gravação correndo por aqui agora. Dá só um segundinho e tenta de novo.';
+    return details;
+  }
+
+  if (constraintSignature && SQLITE_UNIQUE_MESSAGE_MAP[constraintSignature]) {
+    details.status = 409;
+    details.message = SQLITE_UNIQUE_MESSAGE_MAP[constraintSignature];
+    return details;
+  }
+
+  if (/UNIQUE constraint failed/i.test(rawMessage)) {
+    details.status = 409;
+    details.message = 'Isso já existe por aqui. Dá uma conferida no que foi digitado e tenta de novo.';
+    return details;
+  }
+
+  if (/FOREIGN KEY constraint failed/i.test(rawMessage)) {
+    details.status = 409;
+    details.message = 'Esse item ainda está ligado a outras partes do app. Se a ideia for só tirar de cena, tenta desativar em vez de excluir.';
+    return details;
+  }
+
+  if (/NOT NULL constraint failed/i.test(rawMessage)) {
+    details.status = 422;
+    details.message = 'Faltou preencher um pedacinho obrigatório antes de salvar.';
+    return details;
+  }
+
+  if (/CHECK constraint failed/i.test(rawMessage)) {
+    details.status = 422;
+    details.message = 'Tem um detalhe fora do formato esperado. Dá uma revisada e tenta de novo.';
+    return details;
+  }
+
+  if (/too many SQL variables/i.test(rawMessage)) {
+    details.status = 422;
+    details.message = 'Essa seleção ficou grande demais para processar de uma vez. Tenta dividir em partes.';
+    return details;
+  }
+
+  if (details.status == 401) {
+    details.message = rawMessage || 'Sua sessão saiu para respirar. Faz login de novo e seguimos.';
+    return details;
+  }
+
+  if (details.status == 403) {
+    details.message = rawMessage || 'Essa ação não está liberada para o seu perfil agora.';
+    return details;
+  }
+
+  if (details.status == 404) {
+    details.message = rawMessage || 'Não encontrei esse pedaço por aqui.';
+    return details;
+  }
+
+  if (details.status == 409) {
+    details.message = rawMessage || 'Isso entrou em conflito com o que já existe por aqui.';
+    return details;
+  }
+
+  if (details.status == 423) {
+    details.message = rawMessage || 'Esse pedaço está bloqueado no momento.';
+    return details;
+  }
+
+  if (details.status >= 400 && details.status < 500) {
+    details.message = rawMessage || defaultMessage || 'Tem um ajuste pedindo atenção antes de continuar.';
+    return details;
+  }
+
+  details.message = defaultMessage || 'Algo tropeçou por aqui. Tenta de novo que eu seguro as pontas deste lado.';
+  return details;
+}
+
+function getFriendlyErrorMessage(error, options = {}) {
+  return getFriendlyErrorDetails(error, options).message;
+}
+
+function logFriendlyRouteError(req, error, details) {
+  const requestId = req?.requestId || 'sem-id';
+  const payload = {
+    requestId,
+    method: req?.method,
+    path: req?.originalUrl || req?.path,
+    userId: req?.user?.id || null,
+    status: details?.status,
+    code: details?.code || null,
+    constraint: details?.constraintSignature || null,
+    message: error?.message || details?.message
+  };
+
+  if ((details?.status || 500) >= 500) {
+    console.error('[app-error]', payload, error?.stack || error);
+  } else {
+    console.warn('[app-error]', payload);
+  }
+}
+
+function renderFriendlyErrorPage(res, { status = 500, message, actionHref = '/', actionLabel = 'Voltar para o app' } = {}) {
+  return res.status(status).render('error', {
+    title: 'AcerttaPay | Opa',
+    errorTitle: status >= 500 ? 'Deu uma tropeçada por aqui' : 'Tem um ajuste pedindo atenção',
+    errorMessage: message,
+    actionHref,
+    actionLabel
+  });
+}
+
+function handleFriendlyErrorResponse(req, res, error, { defaultMessage = null, fallbackRedirect = null } = {}) {
+  const details = getFriendlyErrorDetails(error, { defaultMessage });
+  logFriendlyRouteError(req, error, details);
+
+  if (res.headersSent) {
+    return;
+  }
+
+  if (wantsJsonErrorResponse(req)) {
+    return res.status(details.status).json({ ok: false, error: details.message, message: details.message });
+  }
+
+  if (String(req.method || 'GET').toUpperCase() !== 'GET') {
+    setFlash(req, 'error', details.message);
+    return res.redirect(redirectBackOr(req, fallbackRedirect || '/'));
+  }
+
+  return renderFriendlyErrorPage(res, {
+    status: details.status,
+    message: details.message,
+    actionHref: fallbackRedirect || res.locals.dashboardHref || '/'
+  });
+}
+
 // --- MIDDLEWARES DE BODY PARSER (DEVE VIR ANTES DAS ROTAS) ---
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // --- MIDDLEWARE DE LOGGING GLOBAL ---
 app.use((req, res, next) => {
+  req.requestId = crypto.randomBytes(6).toString('hex');
+  res.set('X-Request-Id', req.requestId);
   if (req.method === 'POST' && req.path === '/txn/manual') {
+  }
+  if (!res.locals.userAvatar) {
+    res.locals.userAvatar = getAvatarPayload(null, 'Você');
   }
   next();
 });
@@ -1718,7 +2663,9 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 function isAjaxLikeRequest(req) {
-  return String(req.get('X-Requested-With') || '').toLowerCase() === 'xmlhttprequest';
+  const requestedWith = String(req.get('X-Requested-With') || '').toLowerCase();
+  const asyncFlag = String(req.get('X-AcerttaPay-Async') || '').toLowerCase();
+  return requestedWith === 'xmlhttprequest' || requestedWith === 'fetch' || asyncFlag === '1';
 }
 
 function finishExpiredSessionResponse(req, res, redirectUrl) {
@@ -1779,12 +2726,47 @@ app.use((req, res, next) => {
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
 
+function expireDeletedAccessSession(req, res) {
+  const redirectUrl = '/login?reason=access-removed';
+  setFlash(req, 'info', 'Esse acesso saiu da área ativa do app. Se precisar voltar, é só pedir um novo convite para o admin.');
+
+  const respond = () => res.redirect(redirectUrl);
+  const destroySession = () => {
+    if (!req.session) return respond();
+    req.session.destroy(() => respond());
+  };
+
+  if (typeof req.logout === 'function' && req.user) {
+    return req.logout(() => destroySession());
+  }
+
+  return destroySession();
+}
+
 // ===== MIDDLEWARE DE AUTENTICAÇÃO =====
 function ensureAuthenticated(req, res, next) {
-  if (req.isAuthenticated()) {
-    return next();
+  if (!req.isAuthenticated()) {
+    return res.redirect(isInitialSetupRequired() ? '/setup' : '/login');
   }
-  return res.redirect(isInitialSetupRequired() ? '/setup' : '/login');
+
+  const currentUser = getUserRecord(req.user?.id, { includeDeleted: false });
+  if (!currentUser) {
+    return expireDeletedAccessSession(req, res);
+  }
+
+  req.user = {
+    ...req.user,
+    id: currentUser.id,
+    email: currentUser.email,
+    name: currentUser.name,
+    role: currentUser.role,
+    can_import: Number(currentUser.can_import ?? 1),
+    status: currentUser.status,
+    google_photo_url: currentUser.google_photo_url || '',
+    profile_photo_url: currentUser.profile_photo_url || ''
+  };
+
+  return next();
 }
 
 function ensureCanImport(req, res, next) {
@@ -1880,6 +2862,7 @@ app.post('/setup', (req, res) => {
 
       const insertCat = db.prepare('INSERT OR IGNORE INTO finance_categories (user_id, name) VALUES (?, ?)');
       DEFAULT_FINANCE_CATEGORIES.forEach((category) => insertCat.run(adminId, category));
+      ensurePurchaseCategoriesForUser(adminId);
 
       markAppSetupCompleted(true, adminId);
     })();
@@ -1888,7 +2871,7 @@ app.post('/setup', (req, res) => {
     return res.redirect('/login?setup=done');
   } catch (err) {
     return renderSetup(res, {
-      error: err.message || 'A primeira configuração tropeçou aqui. Tenta de novo que eu arrumo a passarela.',
+      error: getFriendlyErrorMessage(err, { defaultMessage: 'A primeira configuração tropeçou aqui. Tenta de novo que eu arrumo a passarela.' }),
       form: rawForm
     });
   }
@@ -1987,7 +2970,7 @@ app.use((req, res, next) => {
   res.locals.userId = null;
   res.locals.isAdmin = false;
   res.locals.canImport = false;
-  res.locals.nomeTitular = "Detalhamento Contas";
+  res.locals.nomeTitular = "Meu Detalhamento";
   res.locals.formatDateBR = formatDateBR;
   res.locals.flash = req.session?.flash || null;
   res.locals.importReport = req.session?.importReport || null;
@@ -1997,6 +2980,9 @@ app.use((req, res, next) => {
   res.locals.recentNotifications = [];
   res.locals.pushNotificationsEnabled = isPushConfigured();
   res.locals.pushPublicKey = getPushPublicKey();
+  res.locals.appVersion = APP_VERSION;
+  res.locals.cardBrandOptions = CARD_BRAND_OPTIONS;
+  res.locals.getCardBrandMeta = getCardBrandMeta;
   const now = dayjs();
   res.locals.dashboardHref = `/detalhamento/${now.year()}/${now.month() + 1}`;
 
@@ -2014,25 +3000,31 @@ app.use((req, res, next) => {
     res.locals.unreadNotificationCount = Number(getUnreadNotificationCount(req.user.id) || 0);
     res.locals.readNotificationCount = Number(getReadNotificationCount(req.user.id) || 0);
     res.locals.recentNotifications = getNotificationsForUser(req.user.id);
-    const currentUser = getUserRecord(req.user.id);
+    const currentUser = getUserRecord(req.user.id, { includeDeleted: false });
 
     if (currentUser) {
       req.user.email = currentUser.email || req.user.email;
       req.user.name = currentUser.name || req.user.name || currentUser.email;
       req.user.role = currentUser.role;
       req.user.can_import = Number(currentUser.can_import ?? 1);
+      req.user.google_photo_url = currentUser.google_photo_url || '';
+      req.user.profile_photo_url = currentUser.profile_photo_url || '';
+      req.user.profile_photo_mode = currentUser.profile_photo_mode || 'default';
+      req.user.profile_signature_text = normalizeProfileSignatureText(currentUser.profile_signature_text || '');
+      req.user.profile_signature_vibe = normalizeProfileSignatureVibe(currentUser.profile_signature_vibe || '');
     }
 
     res.locals.user = req.user;
+    res.locals.userAvatar = getAvatarPayload(req.user, req.user.name || req.user.email);
     res.locals.userId = req.user.id;
     res.locals.isAdmin = req.user.role === 'admin';
     res.locals.canImport = Number(req.user.can_import ?? 1) !== 0;
 
     try {
-      const owner = db.prepare("SELECT name FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(req.user.id);
-      res.locals.nomeTitular = owner ? `Detalhamento ${owner.name}` : "Detalhamento Contas";
+      const selfProfile = ensureSelfPerson(req.user.id, currentUser?.name || req.user.name || req.user.email, currentUser?.email || req.user.email);
+      res.locals.nomeTitular = selfProfile ? `Detalhamento ${selfProfile.name}` : "Meu Detalhamento";
     } catch (e) {
-      res.locals.nomeTitular = "Detalhamento Contas";
+      res.locals.nomeTitular = "Meu Detalhamento";
     }
 
     const dashboardTarget = getPreferredDashboardMonth(req.user.id);
@@ -2043,6 +3035,106 @@ app.use((req, res, next) => {
 });
 
 function nowIso() { return dayjs().toISOString(); }
+
+function normalizeProfilePhotoUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('/uploads/profile-photos/')) return raw;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return '';
+}
+
+function normalizeProfilePhotoMode(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'manual' || raw === 'none' || raw === 'default') return raw;
+  return 'default';
+}
+
+function looksLikeGoogleDefaultAvatar(value) {
+  const raw = normalizeProfilePhotoUrl(value);
+  if (!raw || !/googleusercontent\.com/i.test(raw)) return false;
+  return /(?:\/a\/default-user|\/a\/default-user=|\/a\/default-user-|\/a-\/|[?&]default=1\b|\/AAAAAAAAAAI\/)/i.test(raw);
+}
+
+function extractGoogleProfilePhotoUrl(profile) {
+  const candidates = [
+    profile?.photos?.[0]?.value,
+    profile?.photos?.[0]?.url,
+    profile?._json?.picture,
+    profile?._json?.picture?.data?.url,
+    profile?._json?.image?.url
+  ];
+
+  try {
+    const rawProfile = typeof profile?._raw === 'string' ? JSON.parse(profile._raw) : null;
+    candidates.push(rawProfile?.picture, rawProfile?.picture?.data?.url, rawProfile?.image?.url);
+  } catch (_error) { }
+
+  for (const candidate of candidates) {
+    const normalized = normalizeProfilePhotoUrl(candidate);
+    if (normalized) return normalized;
+  }
+  return '';
+}
+
+function getEffectiveProfilePhoto(userLike) {
+  if (!userLike || typeof userLike !== 'object') return '';
+  const mode = normalizeProfilePhotoMode(userLike.profile_photo_mode);
+  const manualPhoto = normalizeProfilePhotoUrl(userLike.profile_photo_url);
+  const googlePhoto = normalizeProfilePhotoUrl(userLike.google_photo_url);
+  const safeGooglePhoto = looksLikeGoogleDefaultAvatar(googlePhoto) ? '' : googlePhoto;
+  if (mode === 'none') return '';
+  if (manualPhoto) return manualPhoto;
+  if (mode === 'manual') return '';
+  return safeGooglePhoto || '';
+}
+
+function isManagedProfilePhotoPath(value) {
+  const normalized = normalizeProfilePhotoUrl(value);
+  return normalized.startsWith('/uploads/profile-photos/');
+}
+
+async function removeManagedProfilePhoto(value) {
+  const normalized = normalizeProfilePhotoUrl(value);
+  if (!normalized || !normalized.startsWith('/uploads/profile-photos/')) return;
+  const targetPath = path.join(__dirname, 'public', normalized.replace(/^\//, ''));
+  try {
+    await fsp.rm(targetPath, { force: true });
+  } catch (error) { }
+}
+
+function buildAvatarInitials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  if (!parts.length) return 'OP';
+  return parts.map((part) => part.charAt(0).toUpperCase()).join('');
+}
+
+function getAvatarPayload(userLike, fallbackName) {
+  const name = String((userLike && userLike.name) || fallbackName || '').trim();
+  return {
+    photo_url: getEffectiveProfilePhoto(userLike),
+    initials: buildAvatarInitials(name || 'OP')
+  };
+}
+
+const profilePhotoUploadDir = path.join(__dirname, 'public', 'uploads', 'profile-photos');
+try { fs.mkdirSync(profilePhotoUploadDir, { recursive: true }); } catch (error) { }
+const profilePhotoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, profilePhotoUploadDir),
+  filename: (req, file, cb) => {
+    const userId = Number(req.user?.id || 0) || 'user';
+    const ext = (path.extname(String(file.originalname || '')).toLowerCase() || '.jpg').replace(/[^.a-z0-9]/gi, '') || '.jpg';
+    cb(null, `user-${userId}-${Date.now()}${ext}`);
+  }
+});
+const profilePhotoUpload = multer({
+  storage: profilePhotoStorage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (/^image\//i.test(String(file.mimetype || ''))) return cb(null, true);
+    cb(new Error('Me manda uma imagem bonitinha em JPG, PNG ou WebP.'));
+  }
+});
 
 function normalizeDayNumber(value) {
   const num = Number(value);
@@ -2069,6 +3161,411 @@ function buildNoteSuffix(note, label = 'Recado') {
   return safeNote ? ` ${label}: ${safeNote}` : '';
 }
 
+function normalizePixToggle(value) {
+  return value === true || value === 1 || value === '1' || value === 'true' || value === 'on';
+}
+
+function getUserPixProfilesByUserIds(userIds = []) {
+  const cleanIds = Array.from(new Set((userIds || []).map(Number).filter(Boolean)));
+  if (!cleanIds.length) return new Map();
+
+  const placeholders = cleanIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT
+      user_id,
+      id AS person_id,
+      name,
+      email,
+      pix_enabled,
+      pix_key_type,
+      pix_key_value,
+      pix_city,
+      pix_state,
+      pix_label,
+      pix_updated_at
+    FROM people
+    WHERE COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) = 'self'
+      AND ${personNotDeletedSql('people')}
+      AND user_id IN (${placeholders})
+    ORDER BY id ASC
+  `).all(...cleanIds);
+
+  const map = new Map();
+  rows.forEach((row) => {
+    const validation = validatePixProfile({
+      enabled: row.pix_enabled,
+      keyType: row.pix_key_type,
+      keyValue: row.pix_key_value,
+      city: row.pix_city,
+      state: row.pix_state,
+      label: row.pix_label,
+      name: row.name || row.email || 'ACERTTAPAY'
+    });
+
+    map.set(Number(row.user_id || 0), {
+      userId: Number(row.user_id || 0),
+      personId: Number(row.person_id || 0) || null,
+      ownerName: row.name || null,
+      ownerEmail: normalizeEmail(row.email),
+      pixEnabled: !!validation.enabled,
+      pixValid: !!validation.valid,
+      pixReason: validation.reason || null,
+      pixErrors: Array.isArray(validation.errors) ? validation.errors : [],
+      pixKeyType: validation.keyType,
+      pixKeyTypeLabel: validation.keyTypeLabel,
+      pixKeyValue: validation.keyValue,
+      pixMaskedKey: validation.keyMasked,
+      pixCity: validation.city,
+      pixState: validation.state || guessPixStateByCity(validation.city) || null,
+      pixMerchantName: validation.merchantName,
+      pixLabel: validation.label,
+      pixUpdatedAt: row.pix_updated_at || null
+    });
+  });
+
+  return map;
+}
+
+function getUserPixProfile(userId) {
+  return getUserPixProfilesByUserIds([userId]).get(Number(userId || 0)) || null;
+}
+
+function buildManualSharedDebtPixShareText({ creditorName, amountCents, description, payload } = {}) {
+  const safeCreditorName = String(creditorName || 'quem vai receber').trim() || 'quem vai receber';
+  const safeDescription = String(description || 'o combinado').trim() || 'o combinado';
+  return [
+    `Oi! Ficou pendente ${formatBRLFromCents(amountCents)} referente a ${safeDescription}.`,
+    `Para facilitar, já deixei o Pix copia e cola de ${safeCreditorName} aqui embaixo:`,
+    String(payload || '').trim(),
+    'Depois me avisa por aqui quando pagar 💸'
+  ].filter(Boolean).join('\n\n');
+}
+
+
+function buildSharedDebtCardMonthlyPixShareText({ creditorName, amountCents, month, year, payload } = {}) {
+  const safeCreditorName = String(creditorName || 'quem vai receber').trim() || 'quem vai receber';
+  const periodLabel = month && year ? monthLabel(month, year) : 'este mês';
+  return [
+    `Oi! Separei ${formatBRLFromCents(amountCents)} para acertar ${periodLabel} por aqui.`,
+    `Para facilitar, já deixei o Pix copia e cola de ${safeCreditorName} logo abaixo:`,
+    String(payload || '').trim(),
+    'Depois me avisa no app quando fizer o Pix 💸'
+  ].filter(Boolean).join('\n\n');
+}
+
+function coerceMoneyValueToCents(rawValue, fallback = 0) {
+  if (rawValue === null || rawValue === undefined || rawValue === '') {
+    return Math.max(0, Number(fallback || 0));
+  }
+
+  if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
+    return Math.max(0, Math.round(rawValue));
+  }
+
+  const raw = String(rawValue || '').trim();
+  if (!raw) return Math.max(0, Number(fallback || 0));
+
+  if (/^-?\d+$/.test(raw)) {
+    return Math.max(0, Number(raw));
+  }
+
+  const cents = centsFromPtBrMoney(raw);
+  if (Number.isFinite(cents)) return Math.max(0, cents);
+
+  return Math.max(0, Number(fallback || 0));
+}
+
+function getSharedDebtCardMonthlySettlementRowById(settlementId) {
+  const safeSettlementId = Number(settlementId || 0);
+  if (!safeSettlementId) return null;
+  return db.prepare(`
+    SELECT *
+    FROM shared_debt_monthly_settlements
+    WHERE id = ?
+      AND request_kind = 'card'
+    LIMIT 1
+  `).get(safeSettlementId);
+}
+
+function getSharedDebtCardMonthlySettlementSnapshotById(settlementId) {
+  const settlementRow = getSharedDebtCardMonthlySettlementRowById(settlementId);
+  if (!settlementRow) return null;
+  return getSharedDebtCardMonthlySettlementSnapshot({
+    requesterUserId: settlementRow.requester_user_id,
+    receiverUserId: settlementRow.receiver_user_id,
+    month: settlementRow.month,
+    year: settlementRow.year
+  });
+}
+
+function buildSharedDebtCardMonthlyIntentPreview(snapshot, rawAmountCents, options = {}) {
+  const safeSnapshot = snapshot || null;
+  const openCents = Math.max(0, Number(safeSnapshot?.openCents || 0));
+  const maxAmountCents = options && Number.isFinite(Number(options.maxAmountCents))
+    ? Math.max(0, Number(options.maxAmountCents || 0))
+    : openCents;
+  const requestedAmount = Math.max(0, Math.min(maxAmountCents, Number(rawAmountCents || 0)));
+  const rows = (Array.isArray(safeSnapshot?.requestRows) ? safeSnapshot.requestRows : []).map((row) => {
+    const totalCents = Math.max(0, Number(row?.amount_cents || 0));
+    const paidCents = Math.min(totalCents, Math.max(0, Number(row?.amount_paid_cents || (row?.status === 'settled' ? totalCents : 0))));
+    return {
+      id: Number(row?.id || 0),
+      description: String(row?.description_snapshot || 'Cobrança do mês').trim() || 'Cobrança do mês',
+      pendingCents: Math.max(0, totalCents - paidCents),
+      totalCents,
+      paidCents,
+      txnDate: row?.source_txn_date_snapshot || row?.created_at || null
+    };
+  }).filter((row) => row.pendingCents > 0);
+
+  let remainingToAllocate = requestedAmount;
+  let fullySettledCount = 0;
+  let touchedCount = 0;
+  let partialRow = null;
+  let allocatedCents = 0;
+  const allocationRows = [];
+
+  for (const row of rows) {
+    if (remainingToAllocate <= 0) break;
+    const appliedCents = Math.min(row.pendingCents, remainingToAllocate);
+    if (appliedCents <= 0) continue;
+
+    touchedCount += 1;
+    allocatedCents += appliedCents;
+    remainingToAllocate -= appliedCents;
+
+    const resultingPendingCents = Math.max(0, row.pendingCents - appliedCents);
+    const resultingPaidCents = Math.min(row.totalCents, row.paidCents + appliedCents);
+
+    allocationRows.push({
+      id: row.id,
+      description: row.description,
+      txnDate: row.txnDate,
+      totalCents: row.totalCents,
+      beforePaidCents: row.paidCents,
+      beforePendingCents: row.pendingCents,
+      appliedCents,
+      afterPaidCents: resultingPaidCents,
+      afterPendingCents: resultingPendingCents,
+      settlesRequest: resultingPendingCents <= 0
+    });
+
+    if (appliedCents >= row.pendingCents) {
+      fullySettledCount += 1;
+      continue;
+    }
+
+    partialRow = {
+      id: row.id,
+      description: row.description,
+      beforeCents: row.pendingCents,
+      appliedCents,
+      remainingCents: resultingPendingCents,
+      txnDate: row.txnDate
+    };
+    break;
+  }
+
+  let summary = 'Escolha um valor para eu te mostrar como isso vai se espalhar nas compras do mês.';
+  if (requestedAmount > 0 && rows.length === 0) {
+    summary = 'Não encontrei compras aceitas em aberto para esse mês.';
+  } else if (requestedAmount > 0 && fullySettledCount > 0 && !partialRow && requestedAmount >= maxAmountCents) {
+    summary = `Esse valor fecha ${formatCountLabel(fullySettledCount, 'cobrança', 'cobranças')} e deixa o mês redondinho.`;
+  } else if (requestedAmount > 0 && fullySettledCount > 0 && !partialRow) {
+    summary = `Esse valor fecha ${formatCountLabel(fullySettledCount, 'cobrança', 'cobranças')} e o restante do mês continua em aberto.`;
+  } else if (requestedAmount > 0 && fullySettledCount > 0 && partialRow) {
+    summary = `Esse valor fecha ${formatCountLabel(fullySettledCount, 'cobrança', 'cobranças')} e deixa 1 com ${formatBRLFromCents(partialRow.remainingCents)} em aberto.`;
+  } else if (requestedAmount > 0 && partialRow) {
+    summary = `Esse valor entra em 1 cobrança e deixa ${formatBRLFromCents(partialRow.remainingCents)} em aberto.`;
+  } else if (requestedAmount > 0) {
+    summary = 'Esse valor começa a andar nas compras mais antigas do mês.';
+  }
+
+  return {
+    amountCents: requestedAmount,
+    openCents,
+    maxAmountCents,
+    allocatedCents,
+    remainingToAllocateCents: Math.max(0, remainingToAllocate),
+    fullySettledCount,
+    touchedCount,
+    partialRow,
+    summary,
+    rows: rows.map((row) => ({
+      id: row.id,
+      description: row.description,
+      pendingCents: row.pendingCents,
+      totalCents: row.totalCents,
+      paidCents: row.paidCents,
+      txnDate: row.txnDate
+    })),
+    allocationRows
+  };
+}
+
+function buildSharedDebtCardMonthlyIntentDisplayRows(snapshot) {
+  const safeSnapshot = snapshot || null;
+  const rows = Array.isArray(safeSnapshot?.intentRows) ? safeSnapshot.intentRows : [];
+  const maxConfirmableCents = Math.max(0, Number(safeSnapshot?.totalAcceptedCents || 0) - Number(safeSnapshot?.confirmedCents || 0));
+  const periodLabel = monthLabel(safeSnapshot?.month, safeSnapshot?.year);
+
+  return rows
+    .map((row) => {
+      const normalizedStatus = normalizeSharedDebtPaymentIntentStatus(row?.status);
+      const amountCents = Math.max(0, Number(row?.amount_cents || 0));
+      const preview = normalizedStatus === 'reported'
+        ? buildSharedDebtCardMonthlyIntentPreview(safeSnapshot, amountCents, { maxAmountCents: maxConfirmableCents })
+        : null;
+      const payerNote = String(row?.payer_note || '').trim() || null;
+      const creditorNote = String(row?.creditor_note || '').trim() || null;
+      const activityAt = normalizedStatus === 'confirmed'
+        ? (row?.confirmed_at || row?.updated_at || row?.reported_at || row?.created_at || null)
+        : normalizedStatus === 'rejected'
+          ? (row?.rejected_at || row?.updated_at || row?.reported_at || row?.created_at || null)
+          : normalizedStatus === 'reported'
+            ? (row?.reported_at || row?.updated_at || row?.created_at || null)
+            : normalizedStatus === 'cancelled'
+              ? (row?.cancelled_at || row?.updated_at || row?.generated_at || row?.created_at || null)
+              : (row?.generated_at || row?.updated_at || row?.created_at || null);
+      const historyLabel = normalizedStatus === 'reported'
+        ? 'Pix avisado'
+        : normalizedStatus === 'confirmed'
+          ? 'Recebimento confirmado'
+          : normalizedStatus === 'rejected'
+            ? 'Pix voltou para revisão'
+            : normalizedStatus === 'cancelled'
+              ? 'Tentativa substituída'
+              : 'Pix gerado';
+      const historySummary = normalizedStatus === 'reported'
+        ? (preview?.summary || 'Esse valor foi avisado e agora está aguardando confirmação nessa carteira.')
+        : normalizedStatus === 'confirmed'
+          ? `Esse valor já entrou como confirmado na carteira de ${periodLabel}.`
+          : normalizedStatus === 'rejected'
+            ? 'Esse aviso voltou para o saldo aberto dessa carteira.'
+            : normalizedStatus === 'cancelled'
+              ? 'Essa tentativa ficou para trás quando um novo código entrou em cena.'
+              : 'Essa tentativa de Pix ficou registrada nessa carteira.';
+
+      return {
+        ...row,
+        status: normalizedStatus,
+        payer_note: payerNote,
+        creditor_note: creditorNote,
+        amountCents,
+        amountFormatted: formatBRLFromCents(amountCents),
+        reportedAtLabel: row?.reported_at ? formatDateBR(row.reported_at) : null,
+        reportedAtTimeLabel: row?.reported_at ? dayjs(row.reported_at).format('HH:mm') : null,
+        confirmedAtLabel: row?.confirmed_at ? formatDateBR(row.confirmed_at) : null,
+        confirmedAtTimeLabel: row?.confirmed_at ? dayjs(row.confirmed_at).format('HH:mm') : null,
+        rejectedAtLabel: row?.rejected_at ? formatDateBR(row.rejected_at) : null,
+        rejectedAtTimeLabel: row?.rejected_at ? dayjs(row.rejected_at).format('HH:mm') : null,
+        activityAt,
+        activityAtLabel: activityAt ? formatDateBR(activityAt) : null,
+        activityAtTimeLabel: activityAt ? dayjs(activityAt).format('HH:mm') : null,
+        historyLabel,
+        historySummary,
+        historyNote: normalizedStatus === 'reported' ? payerNote : creditorNote,
+        preview,
+        canConfirm: normalizedStatus === 'reported' && !!preview && Number(preview.allocatedCents || 0) > 0,
+        isStale: normalizedStatus === 'reported' && !!preview && Number(preview.allocatedCents || 0) !== amountCents
+      };
+    })
+    .sort((a, b) => String(b?.activityAt || b?.updated_at || b?.created_at || '').localeCompare(String(a?.activityAt || a?.updated_at || a?.created_at || '')));
+}
+
+function buildSharedDebtCardMonthlyIntentResultSummary(preview) {
+  const safePreview = preview || null;
+  const allocatedCents = Math.max(0, Number(safePreview?.allocatedCents || 0));
+  if (!allocatedCents) {
+    return 'Esse Pix não encontrou saldo em aberto para distribuir agora.';
+  }
+  return safePreview?.summary || `Esse Pix entra com ${formatBRLFromCents(allocatedCents)} nessa carteira do mês.`;
+}
+
+function cancelSharedDebtGeneratedMonthlyIntents(settlementId, receiverUserId, keepIntentId = null) {
+  const safeSettlementId = Number(settlementId || 0);
+  const safeReceiverId = Number(receiverUserId || 0);
+  const safeKeepIntentId = Number(keepIntentId || 0) || null;
+  if (!safeSettlementId || !safeReceiverId) return 0;
+
+  const now = nowIso();
+  const params = [now, now, safeSettlementId, safeReceiverId];
+  let sql = `
+    UPDATE shared_debt_payment_intents
+    SET status = 'cancelled',
+        cancelled_at = COALESCE(cancelled_at, ?),
+        updated_at = ?
+    WHERE settlement_id = ?
+      AND receiver_user_id = ?
+      AND status = 'generated'
+  `;
+
+  if (safeKeepIntentId) {
+    sql += ` AND id <> ?`;
+    params.push(safeKeepIntentId);
+  }
+
+  return db.prepare(sql).run(...params).changes || 0;
+}
+
+function attachSharedDebtPixMeta(items = [], currentUserId = null) {
+  const rows = Array.isArray(items) ? items : [];
+  const requesterIds = rows.map((item) => Number(item?.requester_user_id || 0)).filter(Boolean);
+  const pixProfiles = getUserPixProfilesByUserIds(requesterIds);
+
+  return rows.map((item) => {
+    const requestKind = normalizeSharedDebtRequestKind(item?.request_kind);
+    const status = String(item?.status || 'pending').trim().toLowerCase();
+    const totalCents = Math.max(0, Number(item?.amount_cents || 0));
+    let paidCents = Math.max(0, Number(item?.amount_paid_cents || 0));
+    if (status === 'settled' && paidCents < totalCents) paidCents = totalCents;
+    if (paidCents > totalCents) paidCents = totalCents;
+    const pendingCents = Math.max(0, totalCents - paidCents);
+    const creditorProfile = pixProfiles.get(Number(item?.requester_user_id || 0)) || null;
+    const currentUserIsCreditor = Number(item?.requester_user_id || 0) === Number(currentUserId || 0);
+    const paymentWaitingConfirmation = status === 'accepted' && !!item?.payment_marked_at;
+
+    let pixAvailable = false;
+    let pixUnavailableReason = null;
+
+    if (requestKind !== 'manual') {
+      pixUnavailableReason = 'Nesta fase, o Pix mora só nos lembretes avulsos.';
+    } else if (!['pending', 'accepted'].includes(status)) {
+      pixUnavailableReason = 'Esse lembrete já saiu da fase de pagamento.';
+    } else if (paymentWaitingConfirmation) {
+      pixUnavailableReason = 'O pagamento já foi marcado como feito e agora só falta a confirmação final.';
+    } else if (!pendingCents) {
+      pixUnavailableReason = 'Esse lembrete já está com o valor fechado por aqui.';
+    } else if (!creditorProfile || !creditorProfile.pixEnabled) {
+      pixUnavailableReason = currentUserIsCreditor
+        ? 'Configure seu Pix em Amigos para liberar o copia e cola deste lembrete.'
+        : 'Quem enviou ainda não deixou um Pix prontinho por aqui.';
+    } else if (!creditorProfile.pixValid) {
+      pixUnavailableReason = currentUserIsCreditor
+        ? (creditorProfile.pixReason || 'Seu Pix ainda precisa de um ajuste em Amigos.')
+        : 'Quem enviou começou a configurar o Pix, mas ainda falta acertar um detalhe.';
+    } else {
+      pixAvailable = true;
+    }
+
+    return {
+      ...item,
+      amount_paid_cents: paidCents,
+      amount_pending_cents: pendingCents,
+      pix_available: pixAvailable,
+      pix_unavailable_reason: pixUnavailableReason,
+      pix_masked_key: creditorProfile?.pixMaskedKey || null,
+      pix_key_type_label: creditorProfile?.pixKeyTypeLabel || null,
+      pix_creditor_name: creditorProfile?.ownerName || item?.requester_name || item?.requester_email || 'Quem vai receber',
+      pix_creditor_city: creditorProfile?.pixCity || null,
+      pix_creditor_profile_ready: !!creditorProfile?.pixValid,
+      pix_creditor_has_profile: !!creditorProfile?.pixEnabled,
+      pix_is_current_user_creditor: currentUserIsCreditor,
+      pix_qr_supported: !!QRCode
+    };
+  });
+}
+
 function normalizeSharedDebtRequestKind(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (['card', 'manual'].includes(normalized)) return normalized;
@@ -2079,6 +3576,16 @@ function normalizeSharedDebtOriginKind(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (['single', 'multiple', 'installment', 'mixed', 'manual'].includes(normalized)) return normalized;
   return 'single';
+}
+
+function normalizeSharedDebtDispatchMode(value) {
+  return String(value || '').trim().toLowerCase() === 'draft' ? 'draft' : 'send_now';
+}
+
+function normalizeSharedDebtSendQueueStatus(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (['draft', 'sent', 'cancelled'].includes(normalized)) return normalized;
+  return 'draft';
 }
 
 function detectSharedDebtOriginKindFromRows(rows) {
@@ -2108,10 +3615,603 @@ function detectSharedDebtOriginKindFromRows(rows) {
   return 'multiple';
 }
 
+const SHARED_DEBT_ARCHIVABLE_STATUSES = new Set(['settled', 'cancelled', 'rejection_accepted_by_sender', 'rejection_contested_by_sender']);
+
 function normalizeSharedDebtBatchStatus(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (['pending', 'partial', 'accepted', 'rejected', 'settled'].includes(normalized)) return normalized;
   return 'pending';
+}
+
+function canArchiveSharedDebtStatus(value) {
+  return SHARED_DEBT_ARCHIVABLE_STATUSES.has(String(value || '').trim().toLowerCase());
+}
+
+const SHARED_DEBT_MONTHLY_SETTLEMENT_STATUSES = new Set(['open', 'awaiting_confirmation', 'partial', 'settled']);
+const SHARED_DEBT_PAYMENT_INTENT_STATUSES = new Set(['generated', 'reported', 'confirmed', 'rejected', 'cancelled']);
+
+function normalizeSharedDebtMonthlySettlementStatus(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return SHARED_DEBT_MONTHLY_SETTLEMENT_STATUSES.has(normalized) ? normalized : 'open';
+}
+
+function normalizeSharedDebtPaymentIntentStatus(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return SHARED_DEBT_PAYMENT_INTENT_STATUSES.has(normalized) ? normalized : 'generated';
+}
+
+function buildSharedDebtCardMonthlySettlementKey({ requesterUserId, receiverUserId, month, year, requestKind = 'card' } = {}) {
+  const requesterId = Number(requesterUserId || 0);
+  const receiverId = Number(receiverUserId || 0);
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  const kind = normalizeSharedDebtRequestKind(requestKind);
+  if (!requesterId || !receiverId || !safeMonth || !safeYear || kind !== 'card') return null;
+  return `${requesterId}:${receiverId}:${safeYear}:${String(safeMonth).padStart(2, '0')}:${kind}`;
+}
+
+function isCardSharedDebtRequestKind(value) {
+  return normalizeSharedDebtRequestKind(value) === 'card';
+}
+
+function getSharedDebtCardMonthlySettlementRow(requesterUserId, receiverUserId, month, year) {
+  return db.prepare(`
+    SELECT *
+    FROM shared_debt_monthly_settlements
+    WHERE requester_user_id = ?
+      AND receiver_user_id = ?
+      AND month = ?
+      AND year = ?
+      AND request_kind = 'card'
+    LIMIT 1
+  `).get(requesterUserId, receiverUserId, month, year);
+}
+
+function ensureSharedDebtCardMonthlySettlementRow(requesterUserId, receiverUserId, month, year) {
+  let row = getSharedDebtCardMonthlySettlementRow(requesterUserId, receiverUserId, month, year);
+  if (row) return row;
+
+  const now = nowIso();
+  db.prepare(`
+    INSERT OR IGNORE INTO shared_debt_monthly_settlements (
+      requester_user_id, receiver_user_id, month, year, request_kind, status,
+      request_count, total_accepted_cents, reserved_cents, confirmed_cents, open_cents,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, 'card', 'open', 0, 0, 0, 0, 0, ?, ?)
+  `).run(requesterUserId, receiverUserId, month, year, now, now);
+
+  return getSharedDebtCardMonthlySettlementRow(requesterUserId, receiverUserId, month, year);
+}
+
+function upsertSharedDebtCardMonthlySettlementCache(snapshot) {
+  if (!snapshot) return null;
+
+  const requesterUserId = Number(snapshot.requesterUserId || 0);
+  const receiverUserId = Number(snapshot.receiverUserId || 0);
+  const month = Number(snapshot.month || 0);
+  const year = Number(snapshot.year || 0);
+  if (!requesterUserId || !receiverUserId || !month || !year) return null;
+
+  const createdAt = snapshot.createdAt || nowIso();
+  const updatedAt = snapshot.updatedAt || nowIso();
+
+  db.prepare(`
+    INSERT INTO shared_debt_monthly_settlements (
+      requester_user_id, receiver_user_id, month, year, request_kind, status,
+      request_count, total_accepted_cents, reserved_cents, confirmed_cents, open_cents,
+      last_reported_at, last_confirmed_at, last_rejected_at, last_activity_at,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, 'card', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(requester_user_id, receiver_user_id, month, year, request_kind)
+    DO UPDATE SET
+      status = excluded.status,
+      request_count = excluded.request_count,
+      total_accepted_cents = excluded.total_accepted_cents,
+      reserved_cents = excluded.reserved_cents,
+      confirmed_cents = excluded.confirmed_cents,
+      open_cents = excluded.open_cents,
+      last_reported_at = excluded.last_reported_at,
+      last_confirmed_at = excluded.last_confirmed_at,
+      last_rejected_at = excluded.last_rejected_at,
+      last_activity_at = excluded.last_activity_at,
+      updated_at = excluded.updated_at
+  `).run(
+    requesterUserId,
+    receiverUserId,
+    month,
+    year,
+    normalizeSharedDebtMonthlySettlementStatus(snapshot.status),
+    Math.max(0, Number(snapshot.requestCount || 0)),
+    Math.max(0, Number(snapshot.totalAcceptedCents || 0)),
+    Math.max(0, Number(snapshot.reservedCents || 0)),
+    Math.max(0, Number(snapshot.confirmedCents || 0)),
+    Math.max(0, Number(snapshot.openCents || 0)),
+    snapshot.lastReportedAt || null,
+    snapshot.lastConfirmedAt || null,
+    snapshot.lastRejectedAt || null,
+    snapshot.lastActivityAt || null,
+    createdAt,
+    updatedAt
+  );
+
+  return getSharedDebtCardMonthlySettlementRow(requesterUserId, receiverUserId, month, year);
+}
+
+function getSharedDebtCardMonthlySettlementSnapshot({ requesterUserId, receiverUserId, month, year } = {}) {
+  const safeRequester = Number(requesterUserId || 0);
+  const safeReceiver = Number(receiverUserId || 0);
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+
+  if (!safeRequester || !safeReceiver || !safeMonth || !safeYear) return null;
+
+  const requestRows = db.prepare(`
+    SELECT
+      r.id,
+      r.status,
+      r.amount_cents,
+      r.amount_paid_cents,
+      r.payment_marked_at,
+      r.created_at,
+      r.updated_at,
+      r.responded_at,
+      r.resolved_at,
+      r.description_snapshot,
+      COALESCE(r.source_due_month, i.month, t.due_month) AS source_due_month,
+      COALESCE(r.source_due_year, i.year, t.due_year) AS source_due_year
+    FROM shared_debt_requests r
+    LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE r.requester_user_id = ?
+      AND r.receiver_user_id = ?
+      AND COALESCE(r.request_kind, 'card') = 'card'
+      AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
+      AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
+      AND r.status IN ('accepted', 'settled')
+    ORDER BY COALESCE(r.source_txn_date_snapshot, t.txn_date, r.created_at) ASC, r.created_at ASC, r.id ASC
+  `).all(safeRequester, safeReceiver, safeMonth, safeYear);
+
+  const existingSettlement = getSharedDebtCardMonthlySettlementRow(safeRequester, safeReceiver, safeMonth, safeYear);
+  if (!requestRows.length && !existingSettlement) return null;
+
+  const settlementRow = existingSettlement || ensureSharedDebtCardMonthlySettlementRow(safeRequester, safeReceiver, safeMonth, safeYear);
+  const intentRows = settlementRow
+    ? db.prepare(`
+        SELECT *
+        FROM shared_debt_payment_intents
+        WHERE settlement_id = ?
+        ORDER BY COALESCE(reported_at, generated_at, created_at) DESC, id DESC
+      `).all(settlementRow.id)
+    : [];
+
+  let totalAcceptedCents = 0;
+  let confirmedCents = 0;
+  let legacyReservedCents = 0;
+  let lastLegacyReportedAt = null;
+  let lastLegacyConfirmedAt = null;
+  let lastRequestActivityAt = settlementRow?.updated_at || settlementRow?.created_at || null;
+
+  requestRows.forEach((row) => {
+    const total = Math.max(0, Number(row.amount_cents || 0));
+    const confirmed = Math.min(total, Math.max(0, Number(row.amount_paid_cents || (row.status === 'settled' ? total : 0))));
+    totalAcceptedCents += total;
+    confirmedCents += confirmed;
+
+    if (row.status === 'accepted' && row.payment_marked_at && confirmed < total) {
+      legacyReservedCents += (total - confirmed);
+      if (!lastLegacyReportedAt || String(row.payment_marked_at) > String(lastLegacyReportedAt)) {
+        lastLegacyReportedAt = row.payment_marked_at;
+      }
+    }
+
+    const resolvedAt = row.resolved_at || row.updated_at || row.responded_at || null;
+    if (confirmed > 0 && resolvedAt && (!lastLegacyConfirmedAt || String(resolvedAt) > String(lastLegacyConfirmedAt))) {
+      lastLegacyConfirmedAt = resolvedAt;
+    }
+
+    const activityAt = row.updated_at || row.resolved_at || row.responded_at || row.created_at || null;
+    if (activityAt && (!lastRequestActivityAt || String(activityAt) > String(lastRequestActivityAt))) {
+      lastRequestActivityAt = activityAt;
+    }
+  });
+
+  let intentReservedCents = 0;
+  let generatedIntentCount = 0;
+  let reportedIntentCount = 0;
+  let confirmedIntentCount = 0;
+  let rejectedIntentCount = 0;
+  let lastIntentReportedAt = null;
+  let lastIntentConfirmedAt = null;
+  let lastIntentRejectedAt = null;
+  let lastIntentActivityAt = null;
+
+  intentRows.forEach((row) => {
+    const status = normalizeSharedDebtPaymentIntentStatus(row.status);
+    const amount = Math.max(0, Number(row.amount_cents || 0));
+    const activityAt = row.updated_at || row.reported_at || row.generated_at || row.created_at || null;
+    if (activityAt && (!lastIntentActivityAt || String(activityAt) > String(lastIntentActivityAt))) {
+      lastIntentActivityAt = activityAt;
+    }
+
+    if (status === 'generated') {
+      generatedIntentCount += 1;
+      return;
+    }
+
+    if (status === 'reported') {
+      reportedIntentCount += 1;
+      intentReservedCents += amount;
+      const reportedAt = row.reported_at || row.updated_at || row.created_at || null;
+      if (reportedAt && (!lastIntentReportedAt || String(reportedAt) > String(lastIntentReportedAt))) {
+        lastIntentReportedAt = reportedAt;
+      }
+      return;
+    }
+
+    if (status === 'confirmed') {
+      confirmedIntentCount += 1;
+      const confirmedAt = row.confirmed_at || row.updated_at || row.created_at || null;
+      if (confirmedAt && (!lastIntentConfirmedAt || String(confirmedAt) > String(lastIntentConfirmedAt))) {
+        lastIntentConfirmedAt = confirmedAt;
+      }
+      return;
+    }
+
+    if (status === 'rejected') {
+      rejectedIntentCount += 1;
+      const rejectedAt = row.rejected_at || row.updated_at || row.created_at || null;
+      if (rejectedAt && (!lastIntentRejectedAt || String(rejectedAt) > String(lastIntentRejectedAt))) {
+        lastIntentRejectedAt = rejectedAt;
+      }
+    }
+  });
+
+  const reservedCents = Math.max(0, legacyReservedCents + intentReservedCents);
+  const openCents = Math.max(0, totalAcceptedCents - confirmedCents - reservedCents);
+
+  let status = 'open';
+  if (totalAcceptedCents > 0 && openCents === 0 && reservedCents === 0) {
+    status = 'settled';
+  } else if (confirmedCents > 0) {
+    status = 'partial';
+  } else if (reservedCents > 0) {
+    status = 'awaiting_confirmation';
+  }
+
+  const requestCount = requestRows.length;
+  const lastReportedAt = [lastIntentReportedAt, lastLegacyReportedAt].filter(Boolean).sort().slice(-1)[0] || null;
+  const lastConfirmedAt = [lastIntentConfirmedAt, lastLegacyConfirmedAt].filter(Boolean).sort().slice(-1)[0] || null;
+  const lastRejectedAt = lastIntentRejectedAt || settlementRow?.last_rejected_at || null;
+  const lastActivityAt = [
+    lastReportedAt,
+    lastConfirmedAt,
+    lastRejectedAt,
+    lastIntentActivityAt,
+    lastRequestActivityAt,
+    settlementRow?.updated_at || null
+  ].filter(Boolean).sort().slice(-1)[0] || null;
+
+  const snapshot = {
+    id: settlementRow?.id || null,
+    settlementKey: buildSharedDebtCardMonthlySettlementKey({ requesterUserId: safeRequester, receiverUserId: safeReceiver, month: safeMonth, year: safeYear }),
+    requesterUserId: safeRequester,
+    receiverUserId: safeReceiver,
+    month: safeMonth,
+    year: safeYear,
+    requestKind: 'card',
+    status,
+    requestCount,
+    totalAcceptedCents,
+    reservedCents,
+    confirmedCents,
+    openCents,
+    legacyReservedCents,
+    intentReservedCents,
+    generatedIntentCount,
+    reportedIntentCount,
+    confirmedIntentCount,
+    rejectedIntentCount,
+    lastReportedAt,
+    lastConfirmedAt,
+    lastRejectedAt,
+    lastActivityAt,
+    hasProtectedActivity: reservedCents > 0 || confirmedCents > 0,
+    requestRows,
+    intentRows,
+    createdAt: settlementRow?.created_at || nowIso(),
+    updatedAt: nowIso()
+  };
+
+  snapshot.intentRowsDetailed = buildSharedDebtCardMonthlyIntentDisplayRows(snapshot);
+  snapshot.reportedIntentRows = snapshot.intentRowsDetailed.filter((row) => row.status === 'reported');
+
+  const persisted = upsertSharedDebtCardMonthlySettlementCache(snapshot);
+  return { ...snapshot, id: persisted?.id || snapshot.id || null };
+}
+
+function attachSharedDebtCardMonthlyMeta(items = []) {
+  const rows = Array.isArray(items) ? items : [];
+  const snapshotsByKey = new Map();
+
+  rows.forEach((item) => {
+    if (!isCardSharedDebtRequestKind(item?.request_kind)) return;
+    const month = Number(item?.source_due_month || 0);
+    const year = Number(item?.source_due_year || 0);
+    const requesterUserId = Number(item?.requester_user_id || 0);
+    const receiverUserId = Number(item?.receiver_user_id || 0);
+    const key = buildSharedDebtCardMonthlySettlementKey({ requesterUserId, receiverUserId, month, year });
+    if (!key || snapshotsByKey.has(key)) return;
+    snapshotsByKey.set(key, getSharedDebtCardMonthlySettlementSnapshot({ requesterUserId, receiverUserId, month, year }));
+  });
+
+  const enhancedItems = rows.map((item) => {
+    const month = Number(item?.source_due_month || 0);
+    const year = Number(item?.source_due_year || 0);
+    const requesterUserId = Number(item?.requester_user_id || 0);
+    const receiverUserId = Number(item?.receiver_user_id || 0);
+    const key = buildSharedDebtCardMonthlySettlementKey({ requesterUserId, receiverUserId, month, year });
+    const snapshot = key ? snapshotsByKey.get(key) : null;
+    const totalCents = Math.max(0, Number(item?.amount_cents || 0));
+    let paidCents = Math.max(0, Number(item?.amount_paid_cents || (item?.status === 'settled' ? totalCents : 0)));
+    if (paidCents > totalCents) paidCents = totalCents;
+
+    return {
+      ...item,
+      amount_paid_cents: paidCents,
+      amount_pending_cents: Math.max(0, totalCents - paidCents),
+      card_monthly_settlement_key: key,
+      card_monthly_settlement_id: snapshot?.id || null,
+      card_monthly_status: snapshot?.status || null,
+      card_monthly_total_cents: snapshot?.totalAcceptedCents || 0,
+      card_monthly_reserved_cents: snapshot?.reservedCents || 0,
+      card_monthly_confirmed_cents: snapshot?.confirmedCents || 0,
+      card_monthly_open_cents: snapshot?.openCents || 0,
+      card_monthly_request_count: snapshot?.requestCount || 0,
+      card_monthly_generated_intent_count: snapshot?.generatedIntentCount || 0,
+      card_monthly_reported_intent_count: snapshot?.reportedIntentCount || 0,
+      card_monthly_has_protected_activity: !!snapshot?.hasProtectedActivity,
+      card_monthly_last_activity_at: snapshot?.lastActivityAt || null
+    };
+  });
+
+  return {
+    items: enhancedItems,
+    snapshots: Array.from(snapshotsByKey.values()).filter(Boolean)
+  };
+}
+
+function getSharedDebtCardMutationBlockersForTransactions(userId, transactionRowsOrIds = []) {
+  const transactionIds = Array.from(new Set((Array.isArray(transactionRowsOrIds) ? transactionRowsOrIds : [transactionRowsOrIds]).map((entry) => {
+    if (entry && typeof entry === 'object') return Number(entry.id || 0);
+    return Number(entry || 0);
+  }).filter(Boolean)));
+
+  if (!transactionIds.length) return [];
+
+  const placeholders = transactionIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT DISTINCT
+      r.requester_user_id,
+      r.receiver_user_id,
+      COALESCE(r.source_due_month, i.month, t.due_month) AS source_due_month,
+      COALESCE(r.source_due_year, i.year, t.due_year) AS source_due_year,
+      u.name AS receiver_name,
+      u.email AS receiver_email
+    FROM shared_debt_requests r
+    LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN users u ON u.id = r.receiver_user_id
+    WHERE r.requester_user_id = ?
+      AND COALESCE(r.request_kind, 'card') = 'card'
+      AND r.source_transaction_id IN (${placeholders})
+      AND r.status IN ('accepted', 'settled')
+  `).all(userId, ...transactionIds);
+
+  const blockersByKey = new Map();
+  rows.forEach((row) => {
+    const month = Number(row.source_due_month || 0);
+    const year = Number(row.source_due_year || 0);
+    const key = buildSharedDebtCardMonthlySettlementKey({
+      requesterUserId: row.requester_user_id,
+      receiverUserId: row.receiver_user_id,
+      month,
+      year
+    });
+    if (!key || blockersByKey.has(key)) return;
+
+    const snapshot = getSharedDebtCardMonthlySettlementSnapshot({
+      requesterUserId: row.requester_user_id,
+      receiverUserId: row.receiver_user_id,
+      month,
+      year
+    });
+    if (!snapshot || !snapshot.hasProtectedActivity) return;
+
+    blockersByKey.set(key, {
+      ...snapshot,
+      counterpartName: row.receiver_name || row.receiver_email || 'essa pessoa'
+    });
+  });
+
+  return Array.from(blockersByKey.values()).sort((a, b) => {
+    const rankDiff = ((b.year || 0) * 100 + (b.month || 0)) - ((a.year || 0) * 100 + (a.month || 0));
+    if (rankDiff !== 0) return rankDiff;
+    return String(a.counterpartName || '').localeCompare(String(b.counterpartName || ''), 'pt-BR', { sensitivity: 'base' });
+  });
+}
+
+function buildSharedDebtCardMutationBlockerMessage(blockers = []) {
+  const items = Array.isArray(blockers) ? blockers.filter(Boolean) : [];
+  if (!items.length) return null;
+
+  const first = items[0];
+  const pieces = [];
+  if (Number(first.reservedCents || 0) > 0) pieces.push(`${formatBRLFromCents(first.reservedCents)} aguardando confirmação`);
+  if (Number(first.confirmedCents || 0) > 0) pieces.push(`${formatBRLFromCents(first.confirmedCents)} já confirmado`);
+  const stateText = pieces.length ? pieces.join(' e ') : 'movimentação em andamento';
+
+  if (items.length === 1) {
+    return `Essa compra já conversa com a liquidação de ${monthLabel(first.month, first.year)} para ${first.counterpartName}. Como já tem ${stateText}, vou segurar essa edição por enquanto para não embaralhar o saldo.`;
+  }
+
+  return `Tem ${formatCountLabel(items.length, 'mês com liquidação em andamento', 'meses com liquidação em andamento')} ligados a esse ajuste. Para não embaralhar o saldo do Pix, essa edição fica bloqueada enquanto houver valor aguardando confirmação ou já confirmado.`;
+}
+
+function resolveSharedDebtViewPath(rawPath, fallback = '/shared-debts') {
+  const normalized = String(rawPath || '').trim();
+  if (normalized === '/shared-debts' || normalized === '/shared-debts/archive') return normalized;
+  return fallback;
+}
+
+function getSharedDebtArchivedRequestIdSet(userId) {
+  const rows = db.prepare(`
+    SELECT request_id
+    FROM shared_debt_archives
+    WHERE user_id = ? AND is_archived = 1
+  `).all(userId);
+  return new Set(rows.map((row) => Number(row.request_id)).filter(Boolean));
+}
+
+function filterSharedDebtItemsByArchiveMode(items = [], archivedRequestIds = new Set(), archiveMode = false) {
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    const requestId = Number(item?.id || 0);
+    if (!requestId) return false;
+    const isArchived = archivedRequestIds.has(requestId);
+    return archiveMode ? isArchived : !isArchived;
+  });
+}
+
+function upsertSharedDebtArchiveState({ requestId, userId, isArchived, archivedFromStatus = null, timestamp = null }) {
+  const cleanRequestId = Number(requestId || 0);
+  const cleanUserId = Number(userId || 0);
+  if (!cleanRequestId || !cleanUserId) return false;
+
+  const now = timestamp || nowIso();
+  const existing = db.prepare(`
+    SELECT id, archived_at, created_at
+    FROM shared_debt_archives
+    WHERE request_id = ? AND user_id = ?
+    LIMIT 1
+  `).get(cleanRequestId, cleanUserId);
+
+  if (existing) {
+    db.prepare(`
+      UPDATE shared_debt_archives
+      SET is_archived = ?,
+          archived_at = ?,
+          restored_at = ?,
+          archived_from_status = ?,
+          updated_at = ?
+      WHERE id = ?
+    `).run(
+      isArchived ? 1 : 0,
+      isArchived ? now : existing.archived_at,
+      isArchived ? null : now,
+      archivedFromStatus,
+      now,
+      existing.id
+    );
+    return true;
+  }
+
+  db.prepare(`
+    INSERT INTO shared_debt_archives (
+      request_id, user_id, is_archived, archived_at, restored_at,
+      archived_from_status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    cleanRequestId,
+    cleanUserId,
+    isArchived ? 1 : 0,
+    isArchived ? now : null,
+    isArchived ? null : now,
+    archivedFromStatus,
+    now,
+    now
+  );
+  return true;
+}
+
+function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
+  const requestIdToHighlight = Number(query?.request) || null;
+  const batchIdToHighlight = Number(query?.batch) || null;
+  const settlementIdToHighlight = Number(query?.settlement) || null;
+  const archivedRequestIds = getSharedDebtArchivedRequestIdSet(userId);
+  const receivedWithPixMeta = attachSharedDebtPixMeta(getSharedDebtRequestsReceived(userId), userId);
+  const sentWithPixMeta = attachSharedDebtPixMeta(getSharedDebtRequestsSent(userId), userId);
+  const receivedSettlementMeta = attachSharedDebtCardMonthlyMeta(receivedWithPixMeta);
+  const sentSettlementMeta = attachSharedDebtCardMonthlyMeta(sentWithPixMeta);
+  const rawReceived = receivedSettlementMeta.items;
+  const rawSent = sentSettlementMeta.items;
+  const received = filterSharedDebtItemsByArchiveMode(rawReceived, archivedRequestIds, archiveMode);
+  const sent = filterSharedDebtItemsByArchiveMode(rawSent, archivedRequestIds, archiveMode);
+  const archivedReceivedCount = filterSharedDebtItemsByArchiveMode(rawReceived, archivedRequestIds, true).length;
+  const archivedSentCount = filterSharedDebtItemsByArchiveMode(rawSent, archivedRequestIds, true).length;
+  const sharedDebtFilters = normalizeSharedDebtTrackingFilters(query);
+  const sharedDebtFiltersActive = hasActiveSharedDebtTrackingFilters(sharedDebtFilters);
+  const receivedTracking = filterSharedDebtTrackingItems(received, sharedDebtFilters);
+  const sentTracking = filterSharedDebtTrackingItems(sent, sharedDebtFilters);
+  const receivedPendingBatches = archiveMode ? [] : buildSharedDebtBatchCards(received, 'received').filter(batch => batch.pendingCount > 0);
+  const sentPendingBatches = archiveMode ? [] : buildSharedDebtBatchCards(sent, 'sent').filter(batch => batch.pendingCount > 0);
+  const eventsByRequest = getSharedDebtEventsByRequestIds([
+    ...received.map(item => item.id),
+    ...sent.map(item => item.id)
+  ]);
+
+  return {
+    requestIdToHighlight,
+    batchIdToHighlight,
+    settlementIdToHighlight,
+    received,
+    sent,
+    receivedPendingBatches,
+    sentPendingBatches,
+    receivedTracking,
+    sentTracking,
+    sharedDebtFilters,
+    sharedDebtFiltersActive,
+    draftSendQueues: archiveMode ? [] : getSharedDebtSendQueueDraftsForUser(userId),
+    draftSendQueueSummary: archiveMode ? { queueCount: 0, itemCount: 0, totalCents: 0 } : getSharedDebtSendQueueDraftSummary(userId),
+    manualDebtEligiblePeople: archiveMode ? [] : getManualSharedDebtEligiblePeople(userId),
+    eventsByRequest,
+    archiveMode,
+    cardMonthlySettlements: Array.from(new Map([
+      ...receivedSettlementMeta.snapshots.map((snapshot) => [snapshot.settlementKey || buildSharedDebtCardMonthlySettlementKey({ requesterUserId: snapshot.requesterUserId, receiverUserId: snapshot.receiverUserId, month: snapshot.month, year: snapshot.year }), snapshot]),
+      ...sentSettlementMeta.snapshots.map((snapshot) => [snapshot.settlementKey || buildSharedDebtCardMonthlySettlementKey({ requesterUserId: snapshot.requesterUserId, receiverUserId: snapshot.receiverUserId, month: snapshot.month, year: snapshot.year }), snapshot])
+    ]).values()).filter(Boolean),
+    pagePath: archiveMode ? '/shared-debts/archive' : '/shared-debts',
+    counterpartPath: archiveMode ? '/shared-debts' : '/shared-debts/archive',
+    archiveTotalCount: archivedReceivedCount + archivedSentCount,
+    archivedReceivedCount,
+    archivedSentCount,
+    archiveEligibleStatuses: Array.from(SHARED_DEBT_ARCHIVABLE_STATUSES)
+  };
+}
+
+function renderSharedDebtsPage(req, res, { archiveMode = false } = {}) {
+  const userId = req.user.id;
+
+  if (!archiveMode) {
+    db.prepare(`
+      UPDATE notifications
+      SET is_read = 1, read_at = COALESCE(read_at, ?)
+      WHERE user_id = ?
+        AND (
+          related_type IN ('shared_debt_request', 'shared_debt_batch', 'shared_debt_payment_intent') OR
+          type IN ('shared_debt_request', 'shared_debt_batch', 'shared_debt_payment_intent')
+        )
+        AND is_read = 0
+    `).run(nowIso(), userId);
+  }
+
+  const payload = buildSharedDebtsPagePayload(userId, req.query, archiveMode);
+  return res.render('shared-debts', {
+    title: archiveMode ? 'AcerttaPay | Arquivo de cobranças' : 'AcerttaPay | Cobranças',
+    ...payload,
+    formatBRLFromCents,
+    monthLabel,
+    formatDateBR
+  });
 }
 
 function computeSharedDebtBatchSummary(rows = []) {
@@ -2471,7 +4571,247 @@ refreshAllSharedDebtBatches();
 
 function firstTwoNames(value) {
   const parts = String(value || "").trim().split(/\s+/).filter(Boolean);
-  return parts.slice(0, 2).join(" ") || "Titular";
+  return parts.slice(0, 2).join(" ") || "Você";
+}
+
+const FINANCE_TYPES = ["income", "expense"];
+const FINANCE_TYPE_SET = new Set(FINANCE_TYPES);
+const FINANCE_AMOUNT_MODES = ["fixed", "variable"];
+const FINANCE_AMOUNT_MODE_SET = new Set(FINANCE_AMOUNT_MODES);
+
+function normalizeFinanceType(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return FINANCE_TYPE_SET.has(normalized) ? normalized : null;
+}
+
+function normalizeFinanceAmountMode(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return FINANCE_AMOUNT_MODE_SET.has(normalized) ? normalized : "fixed";
+}
+
+function sanitizeFinanceDescription(value) {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    throw new Error("Dá um nome para esse item antes de salvar.");
+  }
+  return normalized.slice(0, 120);
+}
+
+function normalizeFinanceItemDate(value) {
+  const normalized = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : "";
+}
+
+function sanitizeVariableFinanceItems(items) {
+  if (!Array.isArray(items)) return [];
+
+  const normalizedItems = [];
+  for (const rawItem of items.slice(0, 120)) {
+    const itemDate = normalizeFinanceItemDate(rawItem?.item_date ?? rawItem?.date);
+    const itemSource = String(rawItem?.item_source ?? rawItem?.source ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120);
+    const rawAmount = Number(rawItem?.amount_cents ?? rawItem?.amountCents ?? rawItem?.amount ?? 0);
+    const amountCents = Number.isFinite(rawAmount) ? Math.max(0, Math.round(rawAmount)) : 0;
+
+    if (!itemDate && !itemSource && amountCents === 0) continue;
+
+    if (!itemDate || !itemSource || amountCents <= 0) {
+      throw new Error("Em vários lançamentos, preencha data, origem e valor certinhos.");
+    }
+
+    normalizedItems.push({
+      item_date: itemDate,
+      item_source: itemSource,
+      amount_cents: amountCents
+    });
+  }
+
+  return normalizedItems;
+}
+
+function sumFinanceItemCents(items) {
+  return (Array.isArray(items) ? items : []).reduce((sum, item) => sum + Number(item?.amount_cents || 0), 0);
+}
+
+function ensureMonthlyFinanceScaffold(userId, month, year) {
+  const alreadyInitialized = !!db.prepare(`
+    SELECT 1
+    FROM scratchpad
+    WHERE user_id = ? AND month = ? AND year = ?
+    LIMIT 1
+  `).get(userId, month, year);
+
+  if (alreadyInitialized) return;
+
+  let prevMonth = month - 1;
+  let prevYear = year;
+  if (prevMonth < 1) {
+    prevMonth = 12;
+    prevYear -= 1;
+  }
+
+  const currentCounts = new Map(
+    db.prepare(`
+      SELECT type, COUNT(*) AS total
+      FROM monthly_finances
+      WHERE user_id = ? AND month = ? AND year = ?
+      GROUP BY type
+    `).all(userId, month, year).map((row) => [row.type, Number(row.total || 0)])
+  );
+
+  const selectPrevious = db.prepare(`
+    SELECT type, category_id, description, amount_mode
+    FROM monthly_finances
+    WHERE user_id = ? AND month = ? AND year = ? AND type = ?
+    ORDER BY id ASC
+  `);
+
+  const insertClone = db.prepare(`
+    INSERT INTO monthly_finances (user_id, month, year, type, category_id, description, formula, amount_cents, amount_mode, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, '', 0, ?, ?)
+  `);
+
+  const nowIso = new Date().toISOString();
+
+  db.transaction(() => {
+    for (const type of FINANCE_TYPES) {
+      if ((currentCounts.get(type) || 0) > 0) continue;
+
+      const previousRows = selectPrevious.all(userId, prevMonth, prevYear, type);
+      for (const row of previousRows) {
+        insertClone.run(
+          userId,
+          month,
+          year,
+          type,
+          row.category_id ?? null,
+          row.description ?? "",
+          normalizeFinanceAmountMode(row.amount_mode),
+          nowIso
+        );
+      }
+    }
+  })();
+}
+
+function getFinanceItemsByFinanceId(userId, financeId) {
+  return db.prepare(`
+    SELECT id, finance_id, item_date, item_source, amount_cents
+    FROM monthly_finance_items
+    WHERE finance_id = ? AND user_id = ?
+    ORDER BY CASE WHEN item_date IS NULL OR item_date = '' THEN 1 ELSE 0 END, item_date ASC, id ASC
+  `).all(financeId, userId);
+}
+
+function getFinanceItemsMap(userId, financeIds) {
+  if (!Array.isArray(financeIds) || financeIds.length === 0) {
+    return new Map();
+  }
+
+  const placeholders = financeIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT id, finance_id, item_date, item_source, amount_cents
+    FROM monthly_finance_items
+    WHERE user_id = ? AND finance_id IN (${placeholders})
+    ORDER BY CASE WHEN item_date IS NULL OR item_date = '' THEN 1 ELSE 0 END, item_date ASC, id ASC
+  `).all(userId, ...financeIds);
+
+  const byFinance = new Map();
+  for (const row of rows) {
+    if (!byFinance.has(row.finance_id)) {
+      byFinance.set(row.finance_id, []);
+    }
+    byFinance.get(row.finance_id).push(row);
+  }
+
+  return byFinance;
+}
+
+function syncVariableFinanceAggregate(userId, financeId) {
+  const totalCents = Number(db.prepare(`
+    SELECT COALESCE(SUM(amount_cents), 0) AS total
+    FROM monthly_finance_items
+    WHERE finance_id = ? AND user_id = ?
+  `).get(financeId, userId)?.total || 0);
+
+  db.prepare(`
+    UPDATE monthly_finances
+    SET formula = '', amount_cents = ?
+    WHERE id = ? AND user_id = ?
+  `).run(totalCents, financeId, userId);
+
+  return totalCents;
+}
+
+function hydrateMonthlyFinances(userId, finances) {
+  const normalizedFinances = Array.isArray(finances)
+    ? finances.map((finance) => ({ ...finance, amount_mode: normalizeFinanceAmountMode(finance.amount_mode) }))
+    : [];
+
+  const itemsByFinance = getFinanceItemsMap(userId, normalizedFinances.map((finance) => finance.id));
+  const dirtyVariableRows = [];
+
+  for (const finance of normalizedFinances) {
+    const items = itemsByFinance.get(finance.id) || [];
+    finance.items = items;
+    finance.item_count = items.length;
+
+    if (finance.amount_mode === 'variable') {
+      const totalCents = sumFinanceItemCents(items);
+      if (Number(finance.amount_cents || 0) !== totalCents || String(finance.formula || '').trim()) {
+        dirtyVariableRows.push({ id: finance.id, totalCents });
+      }
+      finance.amount_cents = totalCents;
+      finance.formula = '';
+    }
+  }
+
+  if (dirtyVariableRows.length) {
+    const updateTotal = db.prepare(`
+      UPDATE monthly_finances
+      SET formula = '', amount_cents = ?
+      WHERE id = ? AND user_id = ?
+    `);
+
+    db.transaction((rows) => {
+      for (const row of rows) {
+        updateTotal.run(row.totalCents, row.id, userId);
+      }
+    })(dirtyVariableRows);
+  }
+
+  return normalizedFinances;
+}
+
+function getFinanceByIdForUser(userId, financeId) {
+  const finance = db.prepare(`
+    SELECT *
+    FROM monthly_finances
+    WHERE id = ? AND user_id = ?
+  `).get(financeId, userId);
+
+  if (!finance) return null;
+  finance.amount_mode = normalizeFinanceAmountMode(finance.amount_mode);
+  return finance;
+}
+
+function serializeFinanceForApi(userId, financeId) {
+  const finance = getFinanceByIdForUser(userId, financeId);
+  if (!finance) return null;
+
+  if (finance.amount_mode === 'variable') {
+    finance.items = getFinanceItemsByFinanceId(userId, financeId);
+    finance.item_count = finance.items.length;
+    finance.amount_cents = syncVariableFinanceAggregate(userId, financeId);
+    finance.formula = '';
+  } else {
+    finance.items = [];
+    finance.item_count = 0;
+  }
+
+  return finance;
 }
 
 function monthLabel(month, year) {
@@ -2493,6 +4833,16 @@ function getClosedMonthsSet(userId) {
 
 function getMonthLockMessage(month, year) {
   return `O mês ${monthLabel(month, year)} está fechado para edição.`;
+}
+
+function getEditDestinationMonthLockMessage(month, year, { isRecurring = false, futureScope = false } = {}) {
+  if (futureScope && isRecurring) {
+    return `A fatura de destino em ${monthLabel(month, year)} está fechada. Para não bagunçar as próximas recorrências, preciso que você escolha uma fatura aberta.`;
+  }
+  if (futureScope) {
+    return `Uma das faturas de destino em ${monthLabel(month, year)} já está fechada. Para não deixar parcelas com destino torto, escolha uma fatura aberta.`;
+  }
+  return `A fatura de destino em ${monthLabel(month, year)} está fechada. Escolha uma fatura aberta para salvar a edição.`;
 }
 
 function redirectBackOr(req, fallback) {
@@ -2608,7 +4958,7 @@ function getRecurringRules(userId, { includeEnded = false } = {}) {
   `).all(userId);
 }
 
-function syncRecurringTransactions(userId, targetYear, targetMonth) {
+function syncRecurringTransactions(userId, targetYear, targetMonth, { referenceDate = dayjs() } = {}) {
   const year = Number(targetYear);
   const month = Number(targetMonth);
   if (!year || !month) return;
@@ -2623,7 +4973,7 @@ function syncRecurringTransactions(userId, targetYear, targetMonth) {
 
   if (!rules.length) return;
 
-  const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1 ORDER BY id").all(userId);
+  const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1 AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted' AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted' ORDER BY id").all(userId);
   const findTxn = db.prepare(`
     SELECT id
     FROM transactions
@@ -2637,8 +4987,8 @@ function syncRecurringTransactions(userId, targetYear, targetMonth) {
     LIMIT 1
   `);
   const insTxn = db.prepare(`
-    INSERT INTO transactions (user_id, card_id, txn_date, description, amount_cents, due_month, due_year, recurring_rule_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO transactions (user_id, card_id, txn_date, description, amount_cents, due_month, due_year, recurring_rule_id, purchase_category_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insAlloc = db.prepare(`
     INSERT INTO allocations (user_id, transaction_id, person_id, share_cents, created_at)
@@ -2647,12 +4997,14 @@ function syncRecurringTransactions(userId, targetYear, targetMonth) {
 
   db.transaction(() => {
     rules.forEach(rule => {
-      if (compareMonthYear(rule.start_due_year, rule.start_due_month, year, month) > 0) return;
+      const syncLimit = getRecurringSyncLimitForRule(rule, year, month, referenceDate);
+      if (!syncLimit) return;
+      if (compareMonthYear(rule.start_due_year, rule.start_due_month, syncLimit.year, syncLimit.month) > 0) return;
 
       let offset = 0;
       while (true) {
         const due = shiftMonth(rule.start_due_year, rule.start_due_month, offset);
-        if (compareMonthYear(due.year, due.month, year, month) > 0) break;
+        if (compareMonthYear(due.year, due.month, syncLimit.year, syncLimit.month) > 0) break;
 
         if (compareMonthYear(due.year, due.month, rule.active_from_year, rule.active_from_month) < 0) {
           offset += 1;
@@ -2670,7 +5022,7 @@ function syncRecurringTransactions(userId, targetYear, targetMonth) {
         }
 
         const txnDate = occurrenceDateFromStart(rule.start_txn_date, offset) || rule.start_txn_date;
-        const info = insTxn.run(userId, rule.card_id, txnDate, rule.description, rule.amount_cents, due.month, due.year, rule.id, nowIso());
+        const info = insTxn.run(userId, rule.card_id, txnDate, rule.description, rule.amount_cents, due.month, due.year, rule.id, rule.purchase_category_id || null, nowIso());
 
         if (activePeople.length === 1) {
           insAlloc.run(userId, info.lastInsertRowid, activePeople[0].id, rule.amount_cents, nowIso());
@@ -2680,6 +5032,35 @@ function syncRecurringTransactions(userId, targetYear, targetMonth) {
       }
     });
   })();
+}
+
+function getRecurringSyncLimitForRule(rule, targetYear, targetMonth, referenceDate = dayjs()) {
+  const requestedYear = Number(targetYear || 0);
+  const requestedMonth = Number(targetMonth || 0);
+  if (!requestedYear || !requestedMonth) return null;
+
+  const currentDate = dayjs(referenceDate);
+  if (!currentDate.isValid()) return { year: requestedYear, month: requestedMonth };
+
+  const currentYear = currentDate.year();
+  const currentMonth = currentDate.month() + 1;
+
+  let limit = { year: requestedYear, month: requestedMonth };
+  if (compareMonthYear(limit.year, limit.month, currentYear, currentMonth) > 0) {
+    limit = { year: currentYear, month: currentMonth };
+  }
+
+  if (compareMonthYear(limit.year, limit.month, currentYear, currentMonth) === 0) {
+    const occurrenceDate = getRecurringOccurrenceDateForMonth(rule, currentYear, currentMonth);
+    if (occurrenceDate) {
+      const occurrence = dayjs(occurrenceDate);
+      if (occurrence.isValid() && currentDate.isBefore(occurrence, 'day')) {
+        limit = shiftMonth(currentYear, currentMonth, -1);
+      }
+    }
+  }
+
+  return limit;
 }
 
 function getRecurringPreview(rule) {
@@ -2694,10 +5075,24 @@ function getRecurringPreview(rule) {
       offset += 1;
       continue;
     }
-    if (compareMonthYear(due.year, due.month, currentYear, currentMonth) >= 0) {
-      return due;
+
+    const compareToCurrent = compareMonthYear(due.year, due.month, currentYear, currentMonth);
+    if (compareToCurrent < 0) {
+      offset += 1;
+      continue;
     }
-    offset += 1;
+
+    if (compareToCurrent === 0) {
+      const occurrenceDate = getRecurringOccurrenceDateForMonth(rule, currentYear, currentMonth);
+      const occurrence = occurrenceDate ? dayjs(occurrenceDate) : null;
+      if (!occurrence || !occurrence.isValid() || today.isBefore(occurrence, 'day')) {
+        return due;
+      }
+      offset += 1;
+      continue;
+    }
+
+    return due;
   }
 
   return null;
@@ -2751,7 +5146,7 @@ function removeFutureRecurringTransactions(userId, ruleId, fromYear, fromMonth, 
 
 function getCards(userId) {
   return db.prepare(`
-    SELECT id, name, due_day, close_day, holiday_scope, COALESCE(active, 1) AS active
+    SELECT id, name, due_day, close_day, holiday_scope, brand, COALESCE(active, 1) AS active
     FROM cards
     WHERE user_id = ?
     ORDER BY COALESCE(active, 1) DESC, name
@@ -2760,7 +5155,7 @@ function getCards(userId) {
 
 function getActiveCards(userId) {
   return db.prepare(`
-    SELECT id, name, due_day, close_day, holiday_scope, COALESCE(active, 1) AS active
+    SELECT id, name, due_day, close_day, holiday_scope, brand, COALESCE(active, 1) AS active
     FROM cards
     WHERE user_id = ? AND COALESCE(active, 1) = 1
     ORDER BY name
@@ -2773,7 +5168,7 @@ function getCardsByIds(userId, ids) {
 
   const placeholders = uniqueIds.map(() => "?").join(", ");
   return db.prepare(`
-    SELECT id, name, due_day, close_day, holiday_scope, COALESCE(active, 1) AS active
+    SELECT id, name, due_day, close_day, holiday_scope, brand, COALESCE(active, 1) AS active
     FROM cards
     WHERE user_id = ? AND id IN (${placeholders})
     ORDER BY COALESCE(active, 1) DESC, name
@@ -2781,7 +5176,51 @@ function getCardsByIds(userId, ids) {
 }
 
 function getPeopleActive(userId) {
-  return db.prepare("SELECT id, name, active, email FROM people WHERE user_id = ? AND active = 1 ORDER BY name").all(userId);
+  return db.prepare("SELECT id, name, active, email, COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status FROM people WHERE user_id = ? AND active = 1 AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted' ORDER BY name").all(userId);
+}
+
+function findPersonByNameForUser(userId, name, excludePersonId = null) {
+  const safeName = String(name || '').trim();
+  if (!safeName) return null;
+
+  if (excludePersonId) {
+    return db.prepare(`
+      SELECT id, name
+      FROM people
+      WHERE user_id = ? AND lower(name) = lower(?) AND id <> ?
+        AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
+      LIMIT 1
+    `).get(userId, safeName, Number(excludePersonId));
+  }
+
+  return db.prepare(`
+    SELECT id, name
+    FROM people
+    WHERE user_id = ? AND lower(name) = lower(?)
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
+    LIMIT 1
+  `).get(userId, safeName);
+}
+
+function findCardByNameForUser(userId, name, excludeCardId = null) {
+  const safeName = String(name || '').trim();
+  if (!safeName) return null;
+
+  if (excludeCardId) {
+    return db.prepare(`
+      SELECT id, name
+      FROM cards
+      WHERE user_id = ? AND lower(name) = lower(?) AND id <> ?
+      LIMIT 1
+    `).get(userId, safeName, Number(excludeCardId));
+  }
+
+  return db.prepare(`
+    SELECT id, name
+    FROM cards
+    WHERE user_id = ? AND lower(name) = lower(?)
+    LIMIT 1
+  `).get(userId, safeName);
 }
 
 function getPeopleByIds(userId, ids) {
@@ -2790,7 +5229,10 @@ function getPeopleByIds(userId, ids) {
 
   const placeholders = uniqueIds.map(() => "?").join(", ");
   return db.prepare(`
-    SELECT id, name, active, is_owner, phone, email
+    SELECT id, name, active, is_owner, profile_kind, phone, email,
+           COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status,
+           deleted_at,
+           deleted_label
     FROM people
     WHERE user_id = ? AND id IN (${placeholders})
     ORDER BY active DESC, name
@@ -2822,9 +5264,96 @@ function getVisiblePeopleForMonth(userId, month, year, { includePayments = false
     `).all(userId, month, year);
 
     paymentRows.forEach(row => visibleIds.add(row.person_id));
+
+    const autoPaymentRows = db.prepare(`
+      SELECT DISTINCT r.source_person_id AS person_id
+      FROM shared_debt_payment_allocations a
+      JOIN shared_debt_payment_intents pi ON pi.id = a.intent_id
+      JOIN shared_debt_monthly_settlements s ON s.id = a.settlement_id
+      JOIN shared_debt_requests r ON r.id = a.request_id
+      WHERE s.requester_user_id = ?
+        AND s.request_kind = 'card'
+        AND s.month = ?
+        AND s.year = ?
+        AND pi.status = 'confirmed'
+        AND COALESCE(r.request_kind, 'card') = 'card'
+        AND r.source_person_id IS NOT NULL
+    `).all(userId, month, year);
+
+    autoPaymentRows.forEach(row => visibleIds.add(row.person_id));
   }
 
-  return getPeopleByIds(userId, Array.from(visibleIds));
+  const allPeople = getPeopleAll(userId);
+  const currentUser = getUserRecord(userId, { includeDeleted: false });
+  return allPeople
+    .filter((person) => visibleIds.has(Number(person.id || 0)))
+    .map((person) => person && person.is_self ? { ...person, photo_url: getEffectiveProfilePhoto(currentUser) } : person);
+}
+
+function getManualPersonPaymentsByMonth(userId, month, year) {
+  const rows = db.prepare(`
+    SELECT person_id, paid_cents
+    FROM person_payments
+    WHERE user_id = ? AND month = ? AND year = ?
+  `).all(userId, month, year);
+
+  return new Map(rows.map((row) => [Number(row.person_id || 0), Math.max(0, Number(row.paid_cents || 0))]));
+}
+
+function getConfirmedSharedDebtCardPaymentsByPersonForMonth(userId, month, year) {
+  const rows = db.prepare(`
+    SELECT r.source_person_id AS person_id, COALESCE(SUM(a.allocated_cents), 0) AS total_cents
+    FROM shared_debt_payment_allocations a
+    JOIN shared_debt_payment_intents pi ON pi.id = a.intent_id
+    JOIN shared_debt_monthly_settlements s ON s.id = a.settlement_id
+    JOIN shared_debt_requests r ON r.id = a.request_id
+    WHERE s.requester_user_id = ?
+      AND s.request_kind = 'card'
+      AND s.month = ?
+      AND s.year = ?
+      AND pi.status = 'confirmed'
+      AND COALESCE(r.request_kind, 'card') = 'card'
+      AND r.source_person_id IS NOT NULL
+    GROUP BY r.source_person_id
+  `).all(userId, month, year);
+
+  const map = new Map();
+  rows.forEach((row) => {
+    const personId = Number(row.person_id || 0);
+    if (!personId) return;
+    map.set(personId, Math.max(0, Number(row.total_cents || 0)));
+  });
+  return map;
+}
+
+function getCombinedPersonPaymentBreakdownMap(userId, month, year) {
+  const manualMap = getManualPersonPaymentsByMonth(userId, month, year);
+  const autoMap = getConfirmedSharedDebtCardPaymentsByPersonForMonth(userId, month, year);
+  const ids = new Set([...manualMap.keys(), ...autoMap.keys()]);
+  const breakdownMap = new Map();
+
+  ids.forEach((personId) => {
+    const manualCents = Math.max(0, Number(manualMap.get(personId) || 0));
+    const autoCents = Math.max(0, Number(autoMap.get(personId) || 0));
+    breakdownMap.set(personId, {
+      personId,
+      manualCents,
+      autoCents,
+      totalPaidCents: manualCents + autoCents
+    });
+  });
+
+  return breakdownMap;
+}
+
+function getPersonPaymentBreakdownForMonth(userId, month, year, personId) {
+  const safePersonId = Number(personId || 0);
+  if (!safePersonId) {
+    return { manualCents: 0, autoCents: 0, totalPaidCents: 0 };
+  }
+
+  const breakdown = getCombinedPersonPaymentBreakdownMap(userId, month, year).get(safePersonId);
+  return breakdown || { manualCents: 0, autoCents: 0, totalPaidCents: 0 };
 }
 
 function getVisiblePeopleForTransaction(userId, txnId) {
@@ -2837,7 +5366,11 @@ function getVisiblePeopleForTransaction(userId, txnId) {
 
   selectedRows.forEach(row => visibleIds.add(row.person_id));
 
-  return getPeopleByIds(userId, Array.from(visibleIds));
+  const allPeople = getPeopleAll(userId);
+  const currentUser = getUserRecord(userId, { includeDeleted: false });
+  return allPeople
+    .filter((person) => visibleIds.has(Number(person.id || 0)))
+    .map((person) => person && person.is_self ? { ...person, photo_url: getEffectiveProfilePhoto(currentUser) } : person);
 }
 
 function getVisibleCardsForMonth(userId, month, year) {
@@ -2867,8 +5400,23 @@ function getVisibleCardsForMonth(userId, month, year) {
   return getCardsByIds(userId, Array.from(visibleIds));
 }
 
+function getSelfPerson(userId) {
+  return db.prepare(`
+    SELECT id, name, email, phone, pix_enabled, pix_key_type, pix_key_value, pix_city, pix_state, pix_label, pix_updated_at, active, is_owner, profile_kind,
+           COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status,
+           deleted_at,
+           deleted_label
+    FROM people
+    WHERE user_id = ?
+      AND COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) = 'self'
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
+    ORDER BY id ASC
+    LIMIT 1
+  `).get(userId);
+}
+
 function getOwnerPerson(userId) {
-  return db.prepare("SELECT id, name FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
+  return getSelfPerson(userId);
 }
 
 function normalizeFriendRequestStatus(value) {
@@ -2960,7 +5508,7 @@ function getPendingIncomingFriendRequestMap(userId, remoteIds) {
   const rows = db.prepare(`
     SELECT fr.*, u.name AS requester_name, u.email AS requester_email
     FROM friend_requests fr
-    JOIN users u ON u.id = fr.requester_user_id
+    JOIN users u ON u.id = fr.requester_user_id AND COALESCE(u.status, 'active') <> 'deleted'
     WHERE fr.target_user_id = ?
       AND fr.status = 'pending'
       AND fr.requester_user_id IN (${placeholders})
@@ -2986,19 +5534,32 @@ function getResolvedAppUserForPerson(userId, personId) {
       pal.linked_user_id AS stable_linked_user_id,
       stable_u.name AS stable_linked_user_name,
       stable_u.email AS stable_linked_user_email,
+      stable_u.google_photo_url AS stable_linked_user_google_photo_url,
+      stable_u.profile_photo_url AS stable_linked_user_profile_photo_url,
+      stable_u.profile_photo_mode AS stable_linked_user_profile_photo_mode,
+      stable_u.profile_signature_text AS stable_linked_user_profile_signature_text,
+      stable_u.profile_signature_vibe AS stable_linked_user_profile_signature_vibe,
       matched_u.id AS email_matched_user_id,
       matched_u.name AS email_matched_user_name,
-      matched_u.email AS email_matched_user_email
+      matched_u.email AS email_matched_user_email,
+      matched_u.google_photo_url AS email_matched_user_google_photo_url,
+      matched_u.profile_photo_url AS email_matched_user_profile_photo_url,
+      matched_u.profile_photo_mode AS email_matched_user_profile_photo_mode,
+      matched_u.profile_signature_text AS email_matched_user_profile_signature_text,
+      matched_u.profile_signature_vibe AS email_matched_user_profile_signature_vibe,
+      COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
     FROM people p
     LEFT JOIN person_app_links pal
       ON pal.owner_user_id = p.user_id AND pal.person_id = p.id
-    LEFT JOIN users stable_u ON stable_u.id = pal.linked_user_id
+    LEFT JOIN users stable_u ON stable_u.id = pal.linked_user_id AND COALESCE(stable_u.status, 'active') <> 'deleted'
     LEFT JOIN users matched_u
       ON pal.linked_user_id IS NULL
      AND p.email IS NOT NULL
      AND trim(p.email) <> ''
      AND lower(matched_u.email) = lower(p.email)
+     AND COALESCE(matched_u.status, 'active') <> 'deleted'
     WHERE p.user_id = ? AND p.id = ?
+      AND COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
     LIMIT 1
   `).get(userId, personId);
 
@@ -3011,6 +5572,7 @@ function getResolvedAppUserForPerson(userId, personId) {
   return {
     linked_user_id: linkedUserId,
     linked_user_name: row.stable_linked_user_name || row.email_matched_user_name || null,
+    linked_user_photo_url: getEffectiveProfilePhoto({ profile_photo_url: row.stable_linked_user_profile_photo_url || row.email_matched_user_profile_photo_url || '', google_photo_url: row.stable_linked_user_google_photo_url || row.email_matched_user_google_photo_url || '', profile_photo_mode: row.stable_linked_user_profile_photo_mode || row.email_matched_user_profile_photo_mode || 'default' }),
     linked_user_email: normalizeEmail(row.stable_linked_user_email || row.email_matched_user_email || null),
     via,
     person: row
@@ -3041,6 +5603,8 @@ function findLinkedPersonForRemoteUser(ownerUserId, remoteUserId) {
     SELECT p.*
     FROM person_app_links pal
     JOIN people p ON p.id = pal.person_id AND p.user_id = pal.owner_user_id
+      AND COALESCE(p.profile_kind, CASE WHEN COALESCE(p.is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) <> 'self'
+      AND COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
     WHERE pal.owner_user_id = ? AND pal.linked_user_id = ?
     ORDER BY COALESCE(p.active, 1) DESC, p.id ASC
     LIMIT 1
@@ -3066,25 +5630,27 @@ function ensureFriendPersonForUser({ ownerUserId, remoteUserId, preferredName = 
       SELECT *
       FROM people
       WHERE user_id = ? AND email IS NOT NULL AND lower(email) = lower(?)
+        AND COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) <> 'self'
+        AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
       ORDER BY COALESCE(active, 1) DESC, id ASC
       LIMIT 1
     `).get(safeOwnerUserId, normalizedEmail);
   }
 
   if (!person) {
-    const baseName = String(preferredName || '').trim() || 'Contato OrganizaPay';
+    const baseName = String(preferredName || '').trim() || 'Contato AcerttaPay';
     const now = nowIso();
-    const candidateNames = [baseName, `${baseName} (app)`, `${baseName} OrganizaPay`];
+    const candidateNames = [baseName, `${baseName} (app)`, `${baseName} AcerttaPay`];
 
     for (const candidateName of candidateNames) {
       const inserted = db.prepare(`
-        INSERT OR IGNORE INTO people (user_id, name, phone, email, active, is_owner, created_at)
-        VALUES (?, ?, '', ?, 1, 0, ?)
+        INSERT OR IGNORE INTO people (user_id, name, phone, email, active, is_owner, profile_kind, status, created_at)
+        VALUES (?, ?, '', ?, 1, 0, 'contact', 'active', ?)
       `).run(safeOwnerUserId, candidateName, normalizedEmail, now);
 
       const insertedId = Number(inserted.lastInsertRowid || 0);
       if (insertedId) {
-        person = db.prepare(`SELECT * FROM people WHERE id = ? AND user_id = ?`).get(insertedId, safeOwnerUserId);
+        person = db.prepare(`SELECT * FROM people WHERE id = ? AND user_id = ? AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'`).get(insertedId, safeOwnerUserId);
         if (person) break;
       }
     }
@@ -3214,25 +5780,44 @@ function getPeopleAll(userId) {
       p.name,
       COALESCE(p.active, 1) AS active,
       COALESCE(p.is_owner, 0) AS is_owner,
+      COALESCE(p.profile_kind, CASE WHEN COALESCE(p.is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind,
       p.phone,
       p.email,
+      COALESCE(p.pix_enabled, 0) AS pix_enabled,
+      p.pix_key_type,
+      p.pix_key_value,
+      p.pix_city,
+      p.pix_state,
+      p.pix_label,
+      p.pix_updated_at,
       pal.linked_user_id AS stable_linked_user_id,
       stable_u.name AS stable_linked_user_name,
       stable_u.email AS stable_linked_user_email,
+      stable_u.google_photo_url AS stable_linked_user_google_photo_url,
+      stable_u.profile_photo_url AS stable_linked_user_profile_photo_url,
+      stable_u.profile_photo_mode AS stable_linked_user_profile_photo_mode,
       matched_u.id AS email_matched_user_id,
       matched_u.name AS email_matched_user_name,
-      matched_u.email AS email_matched_user_email
+      matched_u.email AS email_matched_user_email,
+      matched_u.google_photo_url AS email_matched_user_google_photo_url,
+      matched_u.profile_photo_url AS email_matched_user_profile_photo_url,
+      matched_u.profile_photo_mode AS email_matched_user_profile_photo_mode,
+      COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status,
+      p.deleted_at,
+      p.deleted_label
     FROM people p
     LEFT JOIN person_app_links pal
       ON pal.owner_user_id = p.user_id AND pal.person_id = p.id
-    LEFT JOIN users stable_u ON stable_u.id = pal.linked_user_id
+    LEFT JOIN users stable_u ON stable_u.id = pal.linked_user_id AND COALESCE(stable_u.status, 'active') <> 'deleted'
     LEFT JOIN users matched_u
       ON pal.linked_user_id IS NULL
      AND p.email IS NOT NULL
      AND trim(p.email) <> ''
      AND lower(matched_u.email) = lower(p.email)
+     AND COALESCE(matched_u.status, 'active') <> 'deleted'
     WHERE p.user_id = ?
-    ORDER BY COALESCE(p.is_owner, 0) DESC, COALESCE(p.active, 1) DESC, p.name
+      AND COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
+    ORDER BY CASE WHEN COALESCE(p.profile_kind, CASE WHEN COALESCE(p.is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) = 'self' THEN 0 ELSE 1 END, COALESCE(p.active, 1) DESC, p.name
   `).all(userId);
 
   const remoteIds = rows
@@ -3242,19 +5827,59 @@ function getPeopleAll(userId) {
   const friendshipMap = getFriendshipMapForUser(userId, remoteIds);
   const outgoingMap = getPendingOutgoingFriendRequestByPersonMap(userId, personIds);
   const incomingMap = getPendingIncomingFriendRequestMap(userId, remoteIds);
+  const remotePixMap = getUserPixProfilesByUserIds(remoteIds);
 
   return rows.map((person) => {
     const linkedUserId = Number(person.stable_linked_user_id || person.email_matched_user_id || 0) || null;
     const hasAppUser = !!linkedUserId && linkedUserId !== Number(userId || 0);
     const isActive = Number(person.active || 0) !== 0;
-    const isOwner = Number(person.is_owner || 0) !== 0;
+    const isSelf = isSelfPersonRow(person);
     const friendship = hasAppUser ? friendshipMap.get(linkedUserId) : null;
     const outgoingRequest = outgoingMap.get(Number(person.id || 0)) || null;
     const incomingRequest = !outgoingRequest && hasAppUser ? (incomingMap.get(linkedUserId) || null) : null;
     const friendshipActive = !!friendship;
     const canShareCharge = isFriendshipGateEnabled()
-      ? friendshipActive && isActive && !isOwner
-      : hasAppUser && !!normalizeEmail(person.email) && isActive && !isOwner;
+      ? friendshipActive && isActive && !isSelf
+      : hasAppUser && !!normalizeEmail(person.email) && isActive && !isSelf;
+    const rawProfileSignatureText = normalizeProfileSignatureText(person.stable_linked_user_profile_signature_text || person.email_matched_user_profile_signature_text || '');
+    const rawProfileSignatureVibe = normalizeProfileSignatureVibe(person.stable_linked_user_profile_signature_vibe || person.email_matched_user_profile_signature_vibe || '');
+    const canExposeProfileSignature = isSelf || friendshipActive;
+    const visibleProfileSignatureText = canExposeProfileSignature ? rawProfileSignatureText : '';
+    const visibleProfileSignatureVibe = canExposeProfileSignature ? rawProfileSignatureVibe : '';
+    const visibleProfileSignatureMeta = getProfileSignatureVibeMeta(visibleProfileSignatureVibe);
+    const storedPixProfile = {
+      keyType: normalizePixKeyType(person.pix_key_type),
+      keyValue: normalizePixKeyValue(person.pix_key_type, person.pix_key_value),
+      city: sanitizePixText(person.pix_city, { max: 15 }) || null,
+      state: normalizePixState(person.pix_state) || guessPixStateByCity(person.pix_city) || null,
+      label: sanitizePixText(person.pix_label, { max: 25 }) || null
+    };
+    const ownPixProfile = validatePixProfile({
+      enabled: person.pix_enabled,
+      keyType: storedPixProfile.keyType,
+      keyValue: storedPixProfile.keyValue,
+      city: storedPixProfile.city,
+      state: storedPixProfile.state,
+      label: storedPixProfile.label,
+      name: person.name || person.email || 'ACERTTAPAY'
+    });
+    const linkedUserPixProfile = !isSelf && hasAppUser
+      ? (remotePixMap.get(linkedUserId) || null)
+      : null;
+
+    const effectivePixEnabled = isSelf ? !!ownPixProfile.enabled : !!linkedUserPixProfile?.pixEnabled;
+    const effectivePixValid = isSelf ? !!ownPixProfile.valid : !!linkedUserPixProfile?.pixValid;
+    const effectivePixReason = isSelf ? (ownPixProfile.reason || null) : (linkedUserPixProfile?.pixReason || null);
+    const effectivePixKeyType = isSelf ? storedPixProfile.keyType : (linkedUserPixProfile?.pixKeyType || null);
+    const effectivePixKeyTypeLabel = isSelf ? ownPixProfile.keyTypeLabel : (linkedUserPixProfile?.pixKeyTypeLabel || null);
+    const effectivePixKeyValue = isSelf ? ownPixProfile.keyValue : (linkedUserPixProfile?.pixKeyValue || null);
+    const effectivePixMaskedKey = isSelf ? ownPixProfile.keyMasked : (linkedUserPixProfile?.pixMaskedKey || null);
+    const effectivePixCity = isSelf ? ownPixProfile.city : (linkedUserPixProfile?.pixCity || null);
+    const effectivePixState = isSelf
+      ? (storedPixProfile.state || guessPixStateByCity(storedPixProfile.city) || null)
+      : (linkedUserPixProfile?.pixState || guessPixStateByCity(linkedUserPixProfile?.pixCity) || null);
+    const effectivePixLabel = isSelf ? ownPixProfile.label : (linkedUserPixProfile?.pixLabel || null);
+    const effectivePixUpdatedAt = isSelf ? (person.pix_updated_at || null) : (linkedUserPixProfile?.pixUpdatedAt || null);
 
     let friendshipState = 'none';
     if (friendshipActive) friendshipState = 'active';
@@ -3264,9 +5889,17 @@ function getPeopleAll(userId) {
 
     return {
       ...person,
+      profile_kind: isSelf ? 'self' : 'contact',
+      is_self: isSelf,
+      is_owner: isSelf ? 1 : 0,
       linked_user_id: linkedUserId,
       linked_user_name: person.stable_linked_user_name || person.email_matched_user_name || null,
       linked_user_email: normalizeEmail(person.stable_linked_user_email || person.email_matched_user_email || null),
+      linked_user_photo_url: getEffectiveProfilePhoto({
+        profile_photo_url: person.stable_linked_user_profile_photo_url || person.email_matched_user_profile_photo_url || '',
+        google_photo_url: person.stable_linked_user_google_photo_url || person.email_matched_user_google_photo_url || '',
+        profile_photo_mode: person.stable_linked_user_profile_photo_mode || person.email_matched_user_profile_photo_mode || 'default'
+      }),
       discovery_via: person.stable_linked_user_id ? 'person_link' : (hasAppUser ? 'email_match' : null),
       has_app_user: hasAppUser,
       can_share_charge: canShareCharge,
@@ -3277,14 +5910,36 @@ function getPeopleAll(userId) {
       friendship_id: friendship ? Number(friendship.id || 0) : null,
       friendship: friendship || null,
       outgoing_friend_request: outgoingRequest,
-      incoming_friend_request: incomingRequest
+      incoming_friend_request: incomingRequest,
+      pix_enabled: effectivePixEnabled,
+      pix_valid: effectivePixValid,
+      pix_reason: effectivePixReason,
+      pix_key_type: effectivePixKeyType,
+      pix_key_type_label: effectivePixKeyTypeLabel,
+      pix_key_value: effectivePixKeyValue,
+      pix_masked_key: effectivePixMaskedKey,
+      pix_city: effectivePixCity,
+      pix_state: effectivePixState,
+      pix_label: effectivePixLabel,
+      pix_key_value_input: isSelf ? formatPixKeyValueForInput(storedPixProfile.keyType, ownPixProfile.keyValue) : '',
+      pix_updated_at: effectivePixUpdatedAt,
+      linked_user_pix_enabled: !isSelf && !!linkedUserPixProfile?.pixEnabled,
+      linked_user_pix_ready: !isSelf && !!linkedUserPixProfile?.pixEnabled && !!linkedUserPixProfile?.pixValid,
+      linked_user_pix_reason: !isSelf ? (linkedUserPixProfile?.pixReason || null) : null,
+      linked_user_pix_city: !isSelf ? (linkedUserPixProfile?.pixCity || null) : null,
+      linked_user_pix_state: !isSelf ? (linkedUserPixProfile?.pixState || guessPixStateByCity(linkedUserPixProfile?.pixCity) || null) : null,
+      linked_user_pix_updated_at: !isSelf ? (linkedUserPixProfile?.pixUpdatedAt || null) : null,
+      profile_signature_text: visibleProfileSignatureText || '',
+      profile_signature_vibe: visibleProfileSignatureVibe || '',
+      profile_signature_vibe_label: visibleProfileSignatureMeta?.label || null,
+      has_profile_signature: !!(visibleProfileSignatureText || visibleProfileSignatureVibe)
     };
   });
 }
 
 function getManualSharedDebtEligiblePeople(userId) {
   return getPeopleAll(userId)
-    .filter(person => person && person.can_share_charge && person.friendship_active && Number(person.active || 0) !== 0 && Number(person.is_owner || 0) === 0)
+    .filter(person => person && person.can_share_charge && person.friendship_active && Number(person.active || 0) !== 0 && !person.is_self)
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' }));
 }
 
@@ -3516,7 +6171,7 @@ async function sendPushNotificationToUser(userId, payload) {
   if (!subscriptions.length) return { attempted: 0, sent: 0, failed: 0 };
 
   const message = JSON.stringify({
-    title: String(payload?.title || 'OrganizaPay'),
+    title: String(payload?.title || 'AcerttaPay'),
     body: payload?.body ? String(payload.body) : '',
     href: payload?.href ? String(payload.href) : '/shared-debts',
     tag: payload?.tag ? String(payload.tag) : undefined
@@ -3610,13 +6265,16 @@ function queuePushNotification(userId, payload) {
 }
 
 function createNotification({ userId, type, title, body = null, href = null, relatedType = null, relatedId = null }) {
+  const targetUser = getUserRecord(userId, { includeDeleted: false });
+  if (!targetUser) return null;
+
   const result = db.prepare(`
     INSERT INTO notifications (user_id, type, title, body, href, is_read, related_type, related_id, created_at)
     VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
-  `).run(userId, type, title, body, href, relatedType, relatedId, nowIso());
+  `).run(targetUser.id, type, title, body, href, relatedType, relatedId, nowIso());
 
   const pushTag = relatedType && relatedId ? `${relatedType}:${relatedId}` : `${type}:${result.lastInsertRowid || nowIso()}`;
-  queuePushNotification(userId, { title, body, href, tag: pushTag });
+  queuePushNotification(targetUser.id, { title, body, href, tag: pushTag });
 
   return result;
 }
@@ -3769,6 +6427,653 @@ function cancelPendingSharedDebtRequestsForTransaction(userId, txnId, note = 'La
   });
 }
 
+
+function getSharedDebtEligibleAllocationRows(userId, txnId) {
+  return (isFriendshipGateEnabled()
+    ? db.prepare(`
+      SELECT
+        a.id AS allocation_id,
+        a.person_id,
+        a.share_cents,
+        p.name AS person_name,
+        COALESCE(p.email, remote_u.email) AS person_email,
+        remote_u.id AS receiver_user_id,
+        remote_u.name AS receiver_user_name,
+        remote_u.email AS receiver_user_email
+      FROM allocations a
+      JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id AND COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
+      JOIN person_app_links pal ON pal.owner_user_id = p.user_id AND pal.person_id = p.id
+      JOIN users remote_u ON remote_u.id = pal.linked_user_id AND COALESCE(remote_u.status, 'active') <> 'deleted'
+      JOIN friendships f
+        ON f.status = 'active'
+       AND f.user_low_id = CASE WHEN p.user_id < pal.linked_user_id THEN p.user_id ELSE pal.linked_user_id END
+       AND f.user_high_id = CASE WHEN p.user_id < pal.linked_user_id THEN pal.linked_user_id ELSE p.user_id END
+      WHERE a.user_id = ?
+        AND a.transaction_id = ?
+        AND COALESCE(p.active, 1) = 1
+        AND COALESCE(p.profile_kind, CASE WHEN COALESCE(p.is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) <> 'self'
+        AND remote_u.id <> ?
+        AND a.share_cents > 0
+      ORDER BY a.id
+    `).all(userId, txnId, userId)
+    : db.prepare(`
+      SELECT
+        a.id AS allocation_id,
+        a.person_id,
+        a.share_cents,
+        p.name AS person_name,
+        p.email AS person_email,
+        u.id AS receiver_user_id,
+        u.name AS receiver_user_name,
+        u.email AS receiver_user_email
+      FROM allocations a
+      JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id AND COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
+      JOIN users u ON lower(u.email) = lower(p.email) AND COALESCE(u.status, 'active') <> 'deleted'
+      WHERE a.user_id = ?
+        AND a.transaction_id = ?
+        AND p.email IS NOT NULL
+        AND trim(p.email) <> ''
+        AND u.id <> ?
+        AND a.share_cents > 0
+      ORDER BY a.id
+    `).all(userId, txnId, userId));
+}
+
+function getSharedDebtDraftQueuedPersonIdSetForTransaction(userId, txnId) {
+  const rows = db.prepare(`
+    SELECT DISTINCT i.source_person_id
+    FROM shared_debt_send_queue_items i
+    JOIN shared_debt_send_queues q ON q.id = i.queue_id
+    WHERE q.requester_user_id = ?
+      AND q.request_kind = 'card'
+      AND q.status = 'draft'
+      AND i.cancelled_at IS NULL
+      AND i.source_transaction_id = ?
+  `).all(userId, txnId);
+  return new Set(rows.map((row) => Number(row.source_person_id || 0)).filter(Boolean));
+}
+
+function getSharedDebtDraftQueuedTxnIdSet(userId, txnIds = []) {
+  const cleanIds = Array.from(new Set((txnIds || []).map(Number).filter(Boolean)));
+  const params = [userId];
+  let where = `
+    q.requester_user_id = ?
+      AND q.request_kind = 'card'
+      AND q.status = 'draft'
+      AND i.cancelled_at IS NULL
+  `;
+
+  if (cleanIds.length) {
+    where += ` AND i.source_transaction_id IN (${cleanIds.map(() => '?').join(', ')})`;
+    params.push(...cleanIds);
+  }
+
+  const rows = db.prepare(`
+    SELECT DISTINCT i.source_transaction_id
+    FROM shared_debt_send_queue_items i
+    JOIN shared_debt_send_queues q ON q.id = i.queue_id
+    WHERE ${where}
+  `).all(...params);
+
+  return new Set(rows.map((row) => Number(row.source_transaction_id || 0)).filter(Boolean));
+}
+
+function getSharedDebtDraftQueueRow({ requesterUserId, receiverUserId, month, year, requestKind = 'card' }) {
+  return db.prepare(`
+    SELECT *
+    FROM shared_debt_send_queues
+    WHERE requester_user_id = ?
+      AND receiver_user_id = ?
+      AND source_due_month = ?
+      AND source_due_year = ?
+      AND request_kind = ?
+      AND status = 'draft'
+    ORDER BY id DESC
+    LIMIT 1
+  `).get(requesterUserId, receiverUserId, month, year, normalizeSharedDebtRequestKind(requestKind));
+}
+
+function createSharedDebtSendQueue({ requesterUserId, receiverUserId, month, year, requestKind = 'card', receiverEmailSnapshot = null, receiverNameSnapshot = null, createdAt = null }) {
+  const now = createdAt || nowIso();
+  const info = db.prepare(`
+    INSERT INTO shared_debt_send_queues (
+      requester_user_id, receiver_user_id, source_due_month, source_due_year,
+      request_kind, status, receiver_email_snapshot, receiver_name_snapshot,
+      total_cents, item_count, last_item_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, 0, 0, ?, ?, ?)
+  `).run(
+    requesterUserId,
+    receiverUserId,
+    month,
+    year,
+    normalizeSharedDebtRequestKind(requestKind),
+    receiverEmailSnapshot,
+    receiverNameSnapshot,
+    now,
+    now,
+    now
+  );
+  return Number(info.lastInsertRowid);
+}
+
+function refreshSharedDebtSendQueue(queueId, timestamp = null) {
+  const cleanId = Number(queueId || 0);
+  if (!cleanId) return null;
+
+  const queueRow = db.prepare(`SELECT * FROM shared_debt_send_queues WHERE id = ? LIMIT 1`).get(cleanId);
+  if (!queueRow) return null;
+
+  const items = db.prepare(`
+    SELECT amount_cents, updated_at, created_at
+    FROM shared_debt_send_queue_items
+    WHERE queue_id = ?
+      AND cancelled_at IS NULL
+  `).all(cleanId);
+
+  if (!items.length && normalizeSharedDebtSendQueueStatus(queueRow.status) === 'draft') {
+    db.prepare(`DELETE FROM shared_debt_send_queues WHERE id = ?`).run(cleanId);
+    return null;
+  }
+
+  const totalCents = items.reduce((sum, row) => sum + Math.max(0, Number(row.amount_cents || 0)), 0);
+  const latestItemAt = items
+    .map((row) => row?.updated_at || row?.created_at || null)
+    .filter(Boolean)
+    .sort()
+    .pop() || null;
+  const updatedAt = [timestamp || null, latestItemAt, queueRow.updated_at].filter(Boolean).sort().pop() || nowIso();
+
+  db.prepare(`
+    UPDATE shared_debt_send_queues
+    SET total_cents = ?,
+        item_count = ?,
+        last_item_at = ?,
+        updated_at = ?
+    WHERE id = ?
+  `).run(totalCents, items.length, latestItemAt, updatedAt, cleanId);
+
+  return db.prepare(`SELECT * FROM shared_debt_send_queues WHERE id = ? LIMIT 1`).get(cleanId);
+}
+
+function clearDraftSharedDebtSendQueueItemsForTransactions(userId, txnIds = []) {
+  const cleanIds = Array.from(new Set((txnIds || []).map(Number).filter(Boolean)));
+  if (!cleanIds.length) return { removedCount: 0, queueIds: [] };
+
+  const rows = db.prepare(`
+    SELECT i.id, i.queue_id
+    FROM shared_debt_send_queue_items i
+    JOIN shared_debt_send_queues q ON q.id = i.queue_id
+    WHERE q.requester_user_id = ?
+      AND q.request_kind = 'card'
+      AND q.status = 'draft'
+      AND i.cancelled_at IS NULL
+      AND i.source_transaction_id IN (${cleanIds.map(() => '?').join(', ')})
+  `).all(userId, ...cleanIds);
+
+  if (!rows.length) return { removedCount: 0, queueIds: [] };
+
+  const queueIds = Array.from(new Set(rows.map((row) => Number(row.queue_id || 0)).filter(Boolean)));
+  const removeItem = db.prepare(`DELETE FROM shared_debt_send_queue_items WHERE id = ?`);
+
+  db.transaction(() => {
+    rows.forEach((row) => removeItem.run(row.id));
+    queueIds.forEach((queueId) => refreshSharedDebtSendQueue(queueId));
+  })();
+
+  return { removedCount: rows.length, queueIds };
+}
+
+function getSharedDebtDraftHistoryBlockersForTransactions(userId, txnIds = []) {
+  const cleanIds = Array.from(new Set((txnIds || []).map(Number).filter(Boolean)));
+  if (!cleanIds.length) return [];
+
+  return db.prepare(`
+    SELECT source_transaction_id, MAX(description_snapshot) AS description_snapshot, COUNT(*) AS request_count
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND request_kind = 'card'
+      AND status <> 'cancelled'
+      AND source_transaction_id IN (${cleanIds.map(() => '?').join(', ')})
+    GROUP BY source_transaction_id
+    ORDER BY source_transaction_id ASC
+  `).all(userId, ...cleanIds);
+}
+
+function buildSharedDebtDraftHistoryBlockerMessage(rows = []) {
+  const items = Array.isArray(rows) ? rows.filter(Boolean) : [];
+  if (!items.length) return null;
+  if (items.length === 1) {
+    const label = String(items[0].description_snapshot || 'essa compra').trim() || 'essa compra';
+    return `${label} já chegou a nascer como cobrança compartilhada antes. Para não criar dívida fantasma nem reescrever envio antigo, o modo “guardar e mandar depois” fica só para compras novas.`;
+  }
+  return `Parte dessa seleção já virou cobrança em algum momento. Para não embaralhar histórico, aceite, Pix e envio antigo, a caixa de saída só guarda compras novas por aqui.`;
+}
+
+function queueSharedDebtDraftsForTransactions(userId, targetRows = []) {
+  const rows = dedupeTxnRows(targetRows);
+  const txnIds = rows.map((row) => Number(row.id || 0)).filter(Boolean);
+  if (!txnIds.length) {
+    return { queueCount: 0, itemCount: 0, totalCents: 0, shareableCount: 0 };
+  }
+
+  const blockers = getSharedDebtDraftHistoryBlockersForTransactions(userId, txnIds);
+  if (blockers.length) {
+    throw new Error(buildSharedDebtDraftHistoryBlockerMessage(blockers));
+  }
+
+  clearDraftSharedDebtSendQueueItemsForTransactions(userId, txnIds);
+
+  const queueGroups = new Map();
+  rows.forEach((targetTxn) => {
+    const dueMonth = Number(targetTxn.due_month || targetTxn.month || 0);
+    const dueYear = Number(targetTxn.due_year || targetTxn.year || 0);
+    if (!dueMonth || !dueYear) return;
+
+    getSharedDebtEligibleAllocationRows(userId, targetTxn.id).forEach((row) => {
+      const receiverUserId = Number(row.receiver_user_id || 0);
+      const sourcePersonId = Number(row.person_id || 0);
+      if (!receiverUserId || !sourcePersonId) return;
+
+      const key = `${receiverUserId}:${dueYear}:${dueMonth}`;
+      if (!queueGroups.has(key)) {
+        queueGroups.set(key, {
+          receiverUserId,
+          month: dueMonth,
+          year: dueYear,
+          receiverEmailSnapshot: normalizeEmail(row.person_email || row.receiver_user_email),
+          receiverNameSnapshot: row.person_name || row.receiver_user_name || null,
+          items: []
+        });
+      }
+
+      queueGroups.get(key).items.push({
+        requesterUserId: userId,
+        receiverUserId,
+        sourceTransactionId: Number(targetTxn.id || 0),
+        sourceAllocationId: Number(row.allocation_id || 0) || null,
+        sourcePersonId,
+        sourceDueMonth: dueMonth,
+        sourceDueYear: dueYear,
+        sourceTxnDateSnapshot: targetTxn.txn_date || null,
+        cardId: Number(targetTxn.card_id || 0) || null,
+        cardNameSnapshot: targetTxn.card_name || null,
+        descriptionSnapshot: targetTxn.description,
+        amountCents: Number(row.share_cents || 0),
+        receiverEmailSnapshot: normalizeEmail(row.person_email || row.receiver_user_email),
+        receiverNameSnapshot: row.person_name || row.receiver_user_name || null
+      });
+    });
+  });
+
+  if (!queueGroups.size) {
+    return { queueCount: 0, itemCount: 0, totalCents: 0, shareableCount: 0 };
+  }
+
+  const upsertItem = db.prepare(`
+    INSERT INTO shared_debt_send_queue_items (
+      queue_id, requester_user_id, receiver_user_id, source_transaction_id,
+      source_allocation_id, source_person_id, source_due_month, source_due_year,
+      source_txn_date_snapshot, card_id, card_name_snapshot, description_snapshot,
+      amount_cents, receiver_email_snapshot, receiver_name_snapshot,
+      sent_request_id, cancelled_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+    ON CONFLICT(queue_id, source_transaction_id, source_person_id) DO UPDATE SET
+      requester_user_id = excluded.requester_user_id,
+      receiver_user_id = excluded.receiver_user_id,
+      source_allocation_id = excluded.source_allocation_id,
+      source_due_month = excluded.source_due_month,
+      source_due_year = excluded.source_due_year,
+      source_txn_date_snapshot = excluded.source_txn_date_snapshot,
+      card_id = excluded.card_id,
+      card_name_snapshot = excluded.card_name_snapshot,
+      description_snapshot = excluded.description_snapshot,
+      amount_cents = excluded.amount_cents,
+      receiver_email_snapshot = excluded.receiver_email_snapshot,
+      receiver_name_snapshot = excluded.receiver_name_snapshot,
+      sent_request_id = NULL,
+      cancelled_at = NULL,
+      updated_at = excluded.updated_at
+  `);
+
+  const touchedQueueIds = [];
+  db.transaction(() => {
+    queueGroups.forEach((group) => {
+      const existingQueue = getSharedDebtDraftQueueRow({
+        requesterUserId: userId,
+        receiverUserId: group.receiverUserId,
+        month: group.month,
+        year: group.year,
+        requestKind: 'card'
+      });
+
+      const queueId = Number(existingQueue?.id || 0) || createSharedDebtSendQueue({
+        requesterUserId: userId,
+        receiverUserId: group.receiverUserId,
+        month: group.month,
+        year: group.year,
+        requestKind: 'card',
+        receiverEmailSnapshot: group.receiverEmailSnapshot,
+        receiverNameSnapshot: group.receiverNameSnapshot
+      });
+
+      touchedQueueIds.push(queueId);
+      group.items.forEach((item) => {
+        const now = nowIso();
+        upsertItem.run(
+          queueId,
+          item.requesterUserId,
+          item.receiverUserId,
+          item.sourceTransactionId,
+          item.sourceAllocationId,
+          item.sourcePersonId,
+          item.sourceDueMonth,
+          item.sourceDueYear,
+          item.sourceTxnDateSnapshot,
+          item.cardId,
+          item.cardNameSnapshot,
+          item.descriptionSnapshot,
+          item.amountCents,
+          item.receiverEmailSnapshot,
+          item.receiverNameSnapshot,
+          now,
+          now
+        );
+      });
+      refreshSharedDebtSendQueue(queueId);
+    });
+  })();
+
+  const draftQueues = getSharedDebtSendQueueDraftsForUser(userId).filter((queue) => touchedQueueIds.includes(Number(queue.id || 0)));
+  return draftQueues.reduce((acc, queue) => {
+    acc.queueCount += 1;
+    acc.itemCount += Number(queue.itemCount || 0);
+    acc.totalCents += Number(queue.totalCents || 0);
+    return acc;
+  }, { queueCount: 0, itemCount: 0, totalCents: 0, shareableCount: touchedQueueIds.length });
+}
+
+function getSharedDebtSendQueueDraftSummary(userId, options = {}) {
+  const where = [`requester_user_id = ?`, `request_kind = 'card'`, `status = 'draft'`];
+  const params = [userId];
+  const month = Number(options?.month || 0);
+  const year = Number(options?.year || 0);
+  if (month && year) {
+    where.push(`source_due_month = ?`, `source_due_year = ?`);
+    params.push(month, year);
+  }
+
+  const row = db.prepare(`
+    SELECT COUNT(*) AS queue_count,
+           COALESCE(SUM(item_count), 0) AS item_count,
+           COALESCE(SUM(total_cents), 0) AS total_cents
+    FROM shared_debt_send_queues
+    WHERE ${where.join(' AND ')}
+  `).get(...params) || {};
+
+  return {
+    queueCount: Number(row.queue_count || 0),
+    itemCount: Number(row.item_count || 0),
+    totalCents: Number(row.total_cents || 0)
+  };
+}
+
+function getSharedDebtSendQueueDraftsForUser(userId) {
+  const queues = db.prepare(`
+    SELECT q.*, u.name AS receiver_user_name, u.email AS receiver_user_email
+    FROM shared_debt_send_queues q
+    LEFT JOIN users u ON u.id = q.receiver_user_id
+    WHERE q.requester_user_id = ?
+      AND q.request_kind = 'card'
+      AND q.status = 'draft'
+    ORDER BY q.source_due_year DESC, q.source_due_month DESC, q.updated_at DESC, q.id DESC
+  `).all(userId);
+
+  if (!queues.length) return [];
+
+  const queueIds = queues.map((queue) => Number(queue.id || 0)).filter(Boolean);
+  const itemRows = db.prepare(`
+    SELECT *
+    FROM shared_debt_send_queue_items
+    WHERE queue_id IN (${queueIds.map(() => '?').join(', ')})
+      AND cancelled_at IS NULL
+    ORDER BY COALESCE(source_txn_date_snapshot, '') ASC, id ASC
+  `).all(...queueIds);
+
+  const itemsByQueueId = new Map();
+  itemRows.forEach((row) => {
+    const queueId = Number(row.queue_id || 0);
+    if (!queueId) return;
+    if (!itemsByQueueId.has(queueId)) itemsByQueueId.set(queueId, []);
+    itemsByQueueId.get(queueId).push({
+      ...row,
+      amountFormatted: formatBRLFromCents(Number(row.amount_cents || 0)),
+      txnDateLabel: row.source_txn_date_snapshot ? formatDateBR(row.source_txn_date_snapshot) : null
+    });
+  });
+
+  return queues.map((queue) => {
+    const queueItems = itemsByQueueId.get(Number(queue.id || 0)) || [];
+    const previewDescriptions = Array.from(new Set(queueItems.map((item) => String(item.description_snapshot || '').trim()).filter(Boolean))).slice(0, 3);
+    return {
+      ...queue,
+      status: normalizeSharedDebtSendQueueStatus(queue.status),
+      receiverDisplayName: queue.receiver_name_snapshot || queue.receiver_user_name || queue.receiver_user_email || 'essa pessoa',
+      periodLabel: monthLabel(queue.source_due_month, queue.source_due_year),
+      totalCents: Number(queue.total_cents || 0),
+      totalFormatted: formatBRLFromCents(Number(queue.total_cents || 0)),
+      itemCount: Number(queue.item_count || queueItems.length || 0),
+      updatedAtLabel: queue.updated_at ? formatDateBR(queue.updated_at) : null,
+      updatedAtTimeLabel: queue.updated_at ? dayjs(queue.updated_at).format('HH:mm') : null,
+      previewDescriptions,
+      items: queueItems
+    };
+  });
+}
+
+function sendSharedDebtDraftQueue(userId, queueId) {
+  const cleanQueueId = Number(queueId || 0);
+  if (!cleanQueueId) {
+    const error = new Error('Esse rascunho não parece válido.');
+    error.code = 'INVALID_QUEUE';
+    throw error;
+  }
+
+  const queueRow = db.prepare(`
+    SELECT *
+    FROM shared_debt_send_queues
+    WHERE id = ? AND requester_user_id = ?
+    LIMIT 1
+  `).get(cleanQueueId, userId);
+
+  if (!queueRow || normalizeSharedDebtSendQueueStatus(queueRow.status) !== 'draft') {
+    const error = new Error('Não encontrei esse rascunho para enviar agora.');
+    error.code = 'QUEUE_NOT_FOUND';
+    throw error;
+  }
+
+  const queueItems = db.prepare(`
+    SELECT *
+    FROM shared_debt_send_queue_items
+    WHERE queue_id = ?
+      AND cancelled_at IS NULL
+    ORDER BY COALESCE(source_txn_date_snapshot, '') ASC, id ASC
+  `).all(cleanQueueId);
+
+  if (!queueItems.length) {
+    refreshSharedDebtSendQueue(cleanQueueId);
+    const error = new Error('Esse rascunho ficou vazio no caminho. Dá uma conferida na caixa de saída.');
+    error.code = 'QUEUE_EMPTY';
+    throw error;
+  }
+
+  const conflictingItem = queueItems.find((item) => db.prepare(`
+    SELECT 1
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND request_kind = 'card'
+      AND status <> 'cancelled'
+      AND source_transaction_id = ?
+      AND source_person_id = ?
+    LIMIT 1
+  `).get(userId, item.source_transaction_id, item.source_person_id));
+
+  if (conflictingItem) {
+    const error = new Error('Uma dessas compras já ganhou cobrança real antes de você apertar enviar. Revise esse rascunho e tenta de novo.');
+    error.code = 'QUEUE_CONFLICT';
+    throw error;
+  }
+
+  const requesterPerson = getOwnerPerson(userId);
+  const actor = getUserRecord(userId);
+  const requesterDisplayName = requesterPerson?.name || actor?.name || actor?.email || 'Um usuário';
+  const now = nowIso();
+  const batchId = createSharedDebtBatch({
+    requesterUserId: userId,
+    receiverUserId: queueRow.receiver_user_id,
+    originKind: queueItems.length > 1 ? 'multiple' : 'single',
+    createdAt: now
+  });
+
+  const insertRequest = db.prepare(`
+    INSERT INTO shared_debt_requests (
+      requester_user_id, requester_person_id, receiver_user_id, source_person_id,
+      source_transaction_id, source_allocation_id, source_due_month, source_due_year, source_txn_date_snapshot,
+      card_id, card_name_snapshot, description_snapshot, amount_cents,
+      receiver_email_snapshot, receiver_name_snapshot, request_note, response_note,
+      status, batch_id, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'pending', ?, ?, ?)
+  `);
+  const updateQueue = db.prepare(`
+    UPDATE shared_debt_send_queues
+    SET status = 'sent',
+        sent_at = ?,
+        batch_id = ?,
+        updated_at = ?
+    WHERE id = ?
+  `);
+  const updateQueueItem = db.prepare(`
+    UPDATE shared_debt_send_queue_items
+    SET sent_request_id = ?, updated_at = ?
+    WHERE id = ?
+  `);
+
+  const createdRequestIds = [];
+  db.transaction(() => {
+    queueItems.forEach((item) => {
+      const currentAllocation = db.prepare(`
+        SELECT a.id
+        FROM allocations a
+        JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+        WHERE a.user_id = ?
+          AND a.transaction_id = ?
+          AND a.person_id = ?
+        LIMIT 1
+      `).get(userId, item.source_transaction_id, item.source_person_id);
+
+      const info = insertRequest.run(
+        userId,
+        requesterPerson?.id || null,
+        queueRow.receiver_user_id,
+        item.source_person_id,
+        item.source_transaction_id,
+        Number(currentAllocation?.id || item.source_allocation_id || 0) || null,
+        item.source_due_month,
+        item.source_due_year,
+        item.source_txn_date_snapshot || null,
+        Number(item.card_id || 0) || null,
+        item.card_name_snapshot || null,
+        item.description_snapshot,
+        Number(item.amount_cents || 0),
+        item.receiver_email_snapshot || queueRow.receiver_email_snapshot || null,
+        item.receiver_name_snapshot || queueRow.receiver_name_snapshot || null,
+        batchId,
+        now,
+        now
+      );
+
+      const requestId = Number(info.lastInsertRowid);
+      createdRequestIds.push(requestId);
+      updateQueueItem.run(requestId, now, item.id);
+      addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'created' });
+    });
+
+    updateQueue.run(now, batchId, now, cleanQueueId);
+  })();
+
+  refreshSharedDebtBatch(batchId, now);
+  createNotification({
+    userId: queueRow.receiver_user_id,
+    type: 'shared_debt_batch',
+    title: 'Chegou um novo envio compartilhado',
+    body: buildSharedDebtBatchNotificationBody({
+      requesterDisplayName,
+      actionLabel: 'enviou',
+      itemCount: queueItems.length,
+      totalCents: Number(queueRow.total_cents || 0),
+      descriptions: queueItems.map((item) => item.description_snapshot)
+    }),
+    href: `/shared-debts?batch=${batchId}`,
+    relatedType: 'shared_debt_batch',
+    relatedId: batchId
+  });
+
+  return {
+    queueRow,
+    batchId,
+    requestIds: createdRequestIds,
+    itemCount: queueItems.length,
+    totalCents: Number(queueRow.total_cents || 0)
+  };
+}
+
+function discardSharedDebtDraftQueue(userId, queueId) {
+  const cleanQueueId = Number(queueId || 0);
+  if (!cleanQueueId) return null;
+
+  const queueRow = db.prepare(`
+    SELECT *
+    FROM shared_debt_send_queues
+    WHERE id = ? AND requester_user_id = ?
+    LIMIT 1
+  `).get(cleanQueueId, userId);
+
+  if (!queueRow || normalizeSharedDebtSendQueueStatus(queueRow.status) !== 'draft') return null;
+
+  const now = nowIso();
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE shared_debt_send_queue_items
+      SET cancelled_at = ?, updated_at = ?
+      WHERE queue_id = ? AND cancelled_at IS NULL
+    `).run(now, now, cleanQueueId);
+
+    db.prepare(`
+      UPDATE shared_debt_send_queues
+      SET status = 'cancelled', updated_at = ?
+      WHERE id = ?
+    `).run(now, cleanQueueId);
+  })();
+
+  return { ...queueRow, status: 'cancelled' };
+}
+
+function applySharedDebtDispatchModeForTransactions(userId, targetRows, options = {}) {
+  const rows = dedupeTxnRows(targetRows);
+  const deliveryMode = normalizeSharedDebtDispatchMode(options?.deliveryMode);
+  if (deliveryMode === 'draft') {
+    return {
+      deliveryMode,
+      summary: queueSharedDebtDraftsForTransactions(userId, rows)
+    };
+  }
+
+  clearDraftSharedDebtSendQueueItemsForTransactions(userId, rows.map((row) => Number(row.id || 0)));
+  syncSharedDebtRequestsForTransactions(userId, rows.map((row) => row.id), {
+    originKind: options?.originKind || detectSharedDebtOriginKindFromRows(rows)
+  });
+  return { deliveryMode, summary: null };
+}
+
 function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) {
   const txn = db.prepare(`
     SELECT
@@ -3795,54 +7100,9 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
   const requesterPerson = getOwnerPerson(userId);
   const requesterDisplayName = requesterPerson?.name || context?.requesterDisplayName || getUserRecord(userId)?.name || 'Um usuário';
 
-  const eligibleRows = (isFriendshipGateEnabled()
-    ? db.prepare(`
-      SELECT
-        a.id AS allocation_id,
-        a.person_id,
-        a.share_cents,
-        p.name AS person_name,
-        COALESCE(p.email, remote_u.email) AS person_email,
-        remote_u.id AS receiver_user_id,
-        remote_u.name AS receiver_user_name,
-        remote_u.email AS receiver_user_email
-      FROM allocations a
-      JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id
-      JOIN person_app_links pal ON pal.owner_user_id = p.user_id AND pal.person_id = p.id
-      JOIN users remote_u ON remote_u.id = pal.linked_user_id
-      JOIN friendships f
-        ON f.status = 'active'
-       AND f.user_low_id = CASE WHEN p.user_id < pal.linked_user_id THEN p.user_id ELSE pal.linked_user_id END
-       AND f.user_high_id = CASE WHEN p.user_id < pal.linked_user_id THEN pal.linked_user_id ELSE p.user_id END
-      WHERE a.user_id = ?
-        AND a.transaction_id = ?
-        AND COALESCE(p.active, 1) = 1
-        AND COALESCE(p.is_owner, 0) = 0
-        AND remote_u.id <> ?
-        AND a.share_cents > 0
-      ORDER BY a.id
-    `).all(userId, txnId, userId)
-    : db.prepare(`
-      SELECT
-        a.id AS allocation_id,
-        a.person_id,
-        a.share_cents,
-        p.name AS person_name,
-        p.email AS person_email,
-        u.id AS receiver_user_id,
-        u.name AS receiver_user_name,
-        u.email AS receiver_user_email
-      FROM allocations a
-      JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id
-      JOIN users u ON lower(u.email) = lower(p.email)
-      WHERE a.user_id = ?
-        AND a.transaction_id = ?
-        AND p.email IS NOT NULL
-        AND trim(p.email) <> ''
-        AND u.id <> ?
-        AND a.share_cents > 0
-      ORDER BY a.id
-    `).all(userId, txnId, userId));
+  const queuedPersonIds = getSharedDebtDraftQueuedPersonIdSetForTransaction(userId, txnId);
+  const eligibleRows = getSharedDebtEligibleAllocationRows(userId, txnId)
+    .filter((row) => !queuedPersonIds.has(Number(row.person_id || 0)));
 
   const existingRequests = db.prepare(`
     SELECT *
@@ -4117,6 +7377,7 @@ function deleteTransactionsAndAllocations(userId, rows) {
     const importIds = new Set();
 
     items.forEach(item => {
+      clearDraftSharedDebtSendQueueItemsForTransactions(userId, [item.id]);
       detachSharedDebtRequestsFromDeletedTransaction(userId, item.id);
       deleteAllocation.run(item.id, userId);
       deleteTransaction.run(item.id, userId);
@@ -4131,7 +7392,7 @@ function deleteTransactionsAndAllocations(userId, rows) {
 
 function getTransactionScopeRow(userId, txnId) {
   return db.prepare(`
-    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id,
+    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id, t.purchase_category_id,
            COALESCE(t.due_month, i.month) AS month,
            COALESCE(t.due_year, i.year) AS year
     FROM transactions t
@@ -4178,7 +7439,7 @@ function getInstallmentScopeRows(userId, txnRow, scope = 'single') {
   }
 
   const rows = db.prepare(`
-    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id,
+    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id, t.purchase_category_id,
            COALESCE(t.due_month, i.month) AS month,
            COALESCE(t.due_year, i.year) AS year
     FROM transactions t
@@ -4193,6 +7454,43 @@ function getInstallmentScopeRows(userId, txnRow, scope = 'single') {
   `).all(userId, rootId, rootId, currentYear, currentYear, currentMonth);
 
   return rows.length ? rows : [txnRow];
+}
+
+function getRecurringCategoryScopeRows(userId, txnRow, scope = 'single') {
+  if (!txnRow) return [];
+
+  const normalizedScope = String(scope || 'single').trim().toLowerCase();
+  const recurringRuleId = Number(txnRow.recurring_rule_id || 0);
+  const currentMonth = Number(txnRow.month || 0);
+  const currentYear = Number(txnRow.year || 0);
+  if (normalizedScope !== 'future' || !recurringRuleId || !currentMonth || !currentYear) {
+    return [txnRow];
+  }
+
+  const rows = db.prepare(`
+    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id, t.purchase_category_id,
+           COALESCE(t.due_month, i.month) AS month,
+           COALESCE(t.due_year, i.year) AS year
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND t.recurring_rule_id = ?
+      AND (
+        COALESCE(t.due_year, i.year) > ? OR
+        (COALESCE(t.due_year, i.year) = ? AND COALESCE(t.due_month, i.month) >= ?)
+      )
+    ORDER BY COALESCE(t.due_year, i.year) ASC, COALESCE(t.due_month, i.month) ASC, t.id ASC
+  `).all(userId, recurringRuleId, currentYear, currentYear, currentMonth);
+
+  return rows.length ? rows : [txnRow];
+}
+
+function getPurchaseCategoryScopeRows(userId, txnRow, scope = 'single') {
+  if (!txnRow) return [];
+  if (Number(txnRow.recurring_rule_id || 0) > 0) {
+    return getRecurringCategoryScopeRows(userId, txnRow, scope);
+  }
+  return getInstallmentScopeRows(userId, txnRow, scope);
 }
 
 function normalizeTxnIds(value) {
@@ -4227,6 +7525,152 @@ function collectScopedTxnRows(userId, sourceRows, scope = 'single') {
     getInstallmentScopeRows(userId, row, scope).forEach(target => scopedRows.push(target));
   });
   return dedupeTxnRows(scopedRows);
+}
+
+function collectScopedCategoryTxnRows(userId, sourceRows, scope = 'single') {
+  const scopedRows = [];
+  (sourceRows || []).forEach((row) => {
+    getPurchaseCategoryScopeRows(userId, row, scope).forEach((target) => scopedRows.push(target));
+  });
+  return dedupeTxnRows(scopedRows);
+}
+
+function applyPurchaseCategoryToTransactions(userId, rows, purchaseCategoryId, { includeFutureRecurring = false } = {}) {
+  const safeRows = dedupeTxnRows(rows);
+  if (!safeRows.length) return 0;
+
+  const updateTxn = db.prepare(`
+    UPDATE transactions
+    SET purchase_category_id = ?
+    WHERE user_id = ? AND id = ?
+  `);
+  const updateRecurringRule = db.prepare(`
+    UPDATE recurring_rules
+    SET purchase_category_id = ?, updated_at = ?
+    WHERE user_id = ? AND id = ?
+  `);
+
+  let affected = 0;
+  db.transaction(() => {
+    safeRows.forEach((row) => {
+      affected += updateTxn.run(purchaseCategoryId, userId, row.id).changes || 0;
+    });
+
+    if (includeFutureRecurring) {
+      const recurringRuleIds = Array.from(new Set(safeRows.map((row) => Number(row.recurring_rule_id || 0)).filter((value) => Number.isInteger(value) && value > 0)));
+      recurringRuleIds.forEach((ruleId) => {
+        updateRecurringRule.run(purchaseCategoryId, nowIso(), userId, ruleId);
+      });
+    }
+  })();
+
+  return affected;
+}
+
+
+function getInstallmentChainRows(userId, txnRow) {
+  if (!txnRow) return [];
+  const rootId = Number(txnRow.parent_txn_id || txnRow.id || 0);
+  if (!rootId) return [];
+
+  return db.prepare(`
+    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id, t.purchase_category_id,
+           COALESCE(t.due_month, i.month) AS month,
+           COALESCE(t.due_year, i.year) AS year
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (t.id = ? OR t.parent_txn_id = ?)
+    ORDER BY COALESCE(t.due_year, i.year) ASC, COALESCE(t.due_month, i.month) ASC, t.id ASC
+  `).all(userId, rootId, rootId);
+}
+
+function formatInstallmentDescription(baseDescription, position, total) {
+  const cleanBase = String(baseDescription || '').trim();
+  const normalizedTotal = Math.max(1, Number(total || 1));
+  const normalizedPosition = Math.min(normalizedTotal, Math.max(1, Number(position || 1)));
+  if (normalizedTotal <= 1) return cleanBase;
+  return `${cleanBase} (${String(normalizedPosition).padStart(2, '0')}/${String(normalizedTotal).padStart(2, '0')})`;
+}
+
+function getEditableTransactionScopeRows(userId, txnRow, scope = 'single') {
+  if (!txnRow) return [];
+  if (Number(txnRow.recurring_rule_id || 0) > 0) {
+    return getRecurringCategoryScopeRows(userId, txnRow, scope);
+  }
+  return getInstallmentScopeRows(userId, txnRow, scope);
+}
+
+function getAllocationRowsByTransactionIds(userId, txnIds) {
+  const ids = normalizeTxnIds(txnIds);
+  if (!ids.length) return new Map();
+
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = db.prepare(`
+    SELECT transaction_id, person_id, share_cents
+    FROM allocations
+    WHERE user_id = ? AND transaction_id IN (${placeholders})
+    ORDER BY transaction_id ASC, id ASC
+  `).all(userId, ...ids);
+
+  const map = new Map();
+  rows.forEach((row) => {
+    const txnId = Number(row.transaction_id || 0);
+    if (!txnId) return;
+    if (!map.has(txnId)) map.set(txnId, []);
+    map.get(txnId).push({ person_id: Number(row.person_id || 0), share_cents: Number(row.share_cents || 0) });
+  });
+  return map;
+}
+
+function ensureAmountEditDoesNotBreakAllocations(userId, originalRows, nextAmountCents) {
+  const rows = dedupeTxnRows(originalRows);
+  if (!rows.length) return;
+
+  const allocationsByTxnId = getAllocationRowsByTransactionIds(userId, rows.map((row) => row.id));
+  rows.forEach((row) => {
+    const allocationRows = allocationsByTxnId.get(Number(row.id || 0)) || [];
+    if (!allocationRows.length) return;
+    if (Number(row.amount_cents || 0) === Number(nextAmountCents || 0)) return;
+
+    const participantIds = allocationRows.map((allocation) => Number(allocation.person_id || 0)).filter(Boolean);
+    if (!participantIds.length) return;
+
+    const allocationMode = inferAllocationMode(Number(row.amount_cents || 0), allocationRows);
+    if (allocationMode === 'exact' && participantIds.length > 1) {
+      throw new Error('Essa compra já tem divisão com valores definidos entre pessoas. Para trocar o valor com segurança, ajuste a divisão primeiro.');
+    }
+  });
+}
+
+function syncEqualAllocationsForEditedTransactions(userId, updatedRows) {
+  const rows = dedupeTxnRows(updatedRows);
+  if (!rows.length) return;
+
+  const allocationsByTxnId = getAllocationRowsByTransactionIds(userId, rows.map((row) => row.id));
+  const updateAllocation = db.prepare(`
+    UPDATE allocations
+    SET share_cents = ?
+    WHERE user_id = ? AND transaction_id = ? AND person_id = ?
+  `);
+
+  db.transaction(() => {
+    rows.forEach((row) => {
+      const allocationRows = allocationsByTxnId.get(Number(row.id || 0)) || [];
+      if (!allocationRows.length) return;
+
+      const participantIds = allocationRows.map((allocation) => Number(allocation.person_id || 0)).filter(Boolean);
+      if (!participantIds.length) return;
+
+      const allocationMode = inferAllocationMode(Number(row.amount_cents || 0), allocationRows);
+      if (allocationMode === 'exact' && participantIds.length > 1) return;
+
+      const shareMap = buildEqualShareMap(Number(row.amount_cents || 0), participantIds);
+      participantIds.forEach((personId) => {
+        updateAllocation.run(Number(shareMap[personId] || 0), userId, row.id, personId);
+      });
+    });
+  })();
 }
 
 function getMonthDelta(fromYear, fromMonth, toYear, toMonth) {
@@ -4279,11 +7723,8 @@ function likeParam(s) { return `%${String(s).trim()}%`; }
 app.get("/", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
 
-  // Verifica se existe um titular cadastrado para o usuário logado
-  const owner = db.prepare("SELECT id FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
-
-  // Se não houver titular, redireciona para a página de Pessoas para criar um
-  if (!owner) {
+  const selfProfile = getSelfPerson(userId) || ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
+  if (!selfProfile) {
     return res.redirect('/people');
   }
 
@@ -4299,7 +7740,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
 
   // 1. Puxamos todas as importações e transações manuais do usuário logado
   const recent = db.prepare(`
-    SELECT i.id, i.month, i.year, i.created_at, i.original_filename, c.name AS card_name, c.id AS card_id,
+    SELECT i.id, i.month, i.year, i.created_at, i.original_filename, c.name AS card_name, c.id AS card_id, c.brand AS card_brand,
            (SELECT COUNT(*) FROM transactions t WHERE t.import_id = i.id AND t.user_id = i.user_id) AS txn_count,
            (SELECT COALESCE(SUM(amount_cents), 0) FROM transactions t WHERE t.import_id = i.id AND t.user_id = i.user_id) AS import_total
     FROM imports i
@@ -4309,7 +7750,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
     UNION ALL
 
     SELECT NULL as id, t.due_month as month, t.due_year as year, t.created_at, 'Manual' as original_filename,
-           c.name AS card_name, c.id AS card_id,
+           c.name AS card_name, c.id AS card_id, c.brand AS card_brand,
            1 AS txn_count,
            t.amount_cents AS import_total
     FROM transactions t
@@ -4353,6 +7794,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
       group.cardsMap.set(r.card_id, {
         card_id: r.card_id,
         card_name: r.card_name,
+        card_brand: r.card_brand || '',
         month: r.month,
         year: r.year,
         txn_count: 0,
@@ -4378,6 +7820,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
         return {
           card_id: card.card_id,
           card_name: card.card_name,
+          card_brand: card.card_brand || '',
           month: card.month,
           year: card.year,
           txn_count: card.txn_count,
@@ -4445,13 +7888,15 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
     groupedRecentDisplay.push(...closedGroups);
   }
 
-  const cards = getActiveCards(userId).map(({ id, name, close_day, due_day }) => ({ id, name, close_day, due_day }));
+  const cards = getActiveCards(userId).map(({ id, name, close_day, due_day, brand }) => ({ id, name, close_day, due_day, brand }));
+  const purchaseCategories = getPurchaseCategories(userId);
 
   res.render("home", {
     groupedRecent: groupedRecentDisplay,
     featuredOpenGroup,
     formatBRLFromCents,
     cards,
+    purchaseCategories,
     closedMonths: Array.from(closedMonths.values()),
     user: req.user || req.session.user
   });
@@ -4495,6 +7940,12 @@ app.post("/geral/:year/:month/card/:cardId/delete", ensureAuthenticated, (req, r
     return res.redirect("/geral");
   }
 
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, txns));
+  if (settlementBlockMessage) {
+    setFlash(req, 'error', settlementBlockMessage);
+    return res.redirect('/geral');
+  }
+
   const addException = db.prepare(`
     INSERT OR IGNORE INTO recurring_exceptions (user_id, rule_id, month, year, created_at)
     VALUES (?, ?, ?, ?, ?)
@@ -4514,12 +7965,7 @@ app.post("/geral/:year/:month/card/:cardId/delete", ensureAuthenticated, (req, r
   return res.redirect("/geral");
 });
 
-app.get("/geral/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
-  const { month, year } = parsed;
-
+function sendMonthTransactionsCsv(res, userId, month, year) {
   syncRecurringTransactions(userId, year, month);
 
   const rows = db.prepare(`
@@ -4570,10 +8016,28 @@ app.get("/geral/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
     ].map(csvEscape).join(';'));
   });
 
-  const filename = `organizapay-cartoes-${year}-${String(month).padStart(2, '0')}.csv`;
+  const filename = `acerttapay-cartoes-${year}-${String(month).padStart(2, '0')}.csv`;
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.send('\uFEFF' + lines.join('\r\n'));
+}
+
+app.get("/geral/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+
+  return sendMonthTransactionsCsv(res, userId, month, year);
+});
+
+app.get("/month/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+
+  return sendMonthTransactionsCsv(res, userId, month, year);
 });
 
 function getSharedDebtRequestsReceived(userId) {
@@ -4708,80 +8172,104 @@ function getSharedDebtEventsByRequestIds(requestIds) {
 }
 
 function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
-  const owed = db.prepare(`
-    SELECT COUNT(*) AS total_requests, COALESCE(SUM(r.amount_cents), 0) AS total_cents
-    FROM shared_debt_requests r
-    LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
-    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
-    WHERE r.receiver_user_id = ?
-      AND r.status = 'accepted'
-      AND (
-        (
-          COALESCE(r.request_kind, 'card') = 'manual'
-          AND (
-            CAST(strftime('%Y', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) < ?
-            OR (
-              CAST(strftime('%Y', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) = ?
-              AND CAST(strftime('%m', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) <= ?
-            )
-          )
-        ) OR
-        (
-          COALESCE(r.source_due_month, i.month, t.due_month) = ?
-          AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
-        )
-      )
-  `).get(userId, year, year, month, month, year) || { total_requests: 0, total_cents: 0 };
+  const params = [userId, month, year];
 
-  const receivable = db.prepare(`
-    SELECT COUNT(*) AS total_requests, COALESCE(SUM(r.amount_cents), 0) AS total_cents
+  const manualOwed = db.prepare(`
+    SELECT
+      COUNT(*) AS total_requests,
+      COALESCE(SUM(CASE
+        WHEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0)) > 0 THEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0))
+        ELSE 0
+      END), 0) AS total_cents
     FROM shared_debt_requests r
-    LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
-    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
-    WHERE r.requester_user_id = ?
+    WHERE r.receiver_user_id = ?
+      AND COALESCE(r.request_kind, 'card') = 'manual'
       AND r.status = 'accepted'
-      AND (
-        (
-          COALESCE(r.request_kind, 'card') = 'manual'
-          AND (
-            CAST(strftime('%Y', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) < ?
-            OR (
-              CAST(strftime('%Y', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) = ?
-              AND CAST(strftime('%m', COALESCE(r.source_txn_date_snapshot, r.created_at)) AS INTEGER) <= ?
-            )
-          )
-        ) OR
-        (
-          COALESCE(r.source_due_month, i.month, t.due_month) = ?
-          AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
-        )
-      )
-  `).get(userId, year, year, month, month, year) || { total_requests: 0, total_cents: 0 };
+  `).get(userId) || { total_requests: 0, total_cents: 0 };
+
+  const manualReceivable = db.prepare(`
+    SELECT
+      COUNT(*) AS total_requests,
+      COALESCE(SUM(CASE
+        WHEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0)) > 0 THEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0))
+        ELSE 0
+      END), 0) AS total_cents
+    FROM shared_debt_requests r
+    WHERE r.requester_user_id = ?
+      AND COALESCE(r.request_kind, 'card') = 'manual'
+      AND r.status = 'accepted'
+  `).get(userId) || { total_requests: 0, total_cents: 0 };
+
+  const buildCardSideSummary = (scope) => {
+    const roleColumn = scope === 'owed' ? 'receiver_user_id' : 'requester_user_id';
+    const pairRows = db.prepare(`
+      SELECT DISTINCT r.requester_user_id, r.receiver_user_id
+      FROM shared_debt_requests r
+      LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
+      LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+      WHERE r.${roleColumn} = ?
+        AND COALESCE(r.request_kind, 'card') = 'card'
+        AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
+        AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
+        AND r.status IN ('accepted', 'settled')
+    `).all(...params);
+
+    return pairRows.reduce((acc, row) => {
+      const snapshot = getSharedDebtCardMonthlySettlementSnapshot({
+        requesterUserId: row.requester_user_id,
+        receiverUserId: row.receiver_user_id,
+        month,
+        year
+      });
+      if (!snapshot || Number(snapshot.openCents || 0) <= 0) return acc;
+
+      const preview = buildSharedDebtCardMonthlyIntentPreview(snapshot, snapshot.openCents, {
+        maxAmountCents: snapshot.openCents
+      });
+
+      acc.totalCents += Math.max(0, Number(snapshot.openCents || 0));
+      acc.totalCount += Math.max(1, Number(preview?.touchedCount || 0));
+      return acc;
+    }, { totalCents: 0, totalCount: 0 });
+  };
+
+  const cardOwed = buildCardSideSummary('owed');
+  const cardReceivable = buildCardSideSummary('receivable');
 
   return {
-    owedCents: Number(owed.total_cents || 0),
-    owedCount: Number(owed.total_requests || 0),
-    receivableCents: Number(receivable.total_cents || 0),
-    receivableCount: Number(receivable.total_requests || 0)
+    owedCents: Number(manualOwed.total_cents || 0) + cardOwed.totalCents,
+    owedCount: Number(manualOwed.total_requests || 0) + cardOwed.totalCount,
+    receivableCents: Number(manualReceivable.total_cents || 0) + cardReceivable.totalCents,
+    receivableCount: Number(manualReceivable.total_requests || 0) + cardReceivable.totalCount
   };
 }
 
+
+function normalizeSharedDebtSearchTerm(value = '') {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
 
 function normalizeSharedDebtTrackingFilters(query = {}) {
   const envio = String(query?.envio || 'all').trim().toLowerCase();
   const origin = String(query?.origin || 'all').trim().toLowerCase();
   const installment = String(query?.installment || 'all').trim().toLowerCase();
+  const q = String(query?.q || '').trim().slice(0, 120);
 
   return {
     envio: ['all', 'single', 'grouped'].includes(envio) ? envio : 'all',
     origin: ['all', 'single', 'multiple', 'installment', 'mixed', 'manual'].includes(origin) ? origin : 'all',
-    installment: ['all', 'yes', 'no'].includes(installment) ? installment : 'all'
+    installment: ['all', 'yes', 'no'].includes(installment) ? installment : 'all',
+    q
   };
 }
 
 function hasActiveSharedDebtTrackingFilters(filters = {}) {
   const normalized = normalizeSharedDebtTrackingFilters(filters);
-  return normalized.envio !== 'all' || normalized.origin !== 'all' || normalized.installment !== 'all';
+  return normalized.envio !== 'all' || normalized.origin !== 'all' || normalized.installment !== 'all' || !!normalized.q;
 }
 
 function isGroupedSharedDebtItem(item) {
@@ -4790,8 +8278,34 @@ function isGroupedSharedDebtItem(item) {
   return batchCount > 1 || !['single', 'manual'].includes(originKind);
 }
 
+function buildSharedDebtTrackingSearchText(item = {}) {
+  const monthText = item?.source_due_month && item?.source_due_year
+    ? monthLabel(item.source_due_month, item.source_due_year)
+    : '';
+  const txnDateText = item?.source_txn_date ? formatDateBR(item.source_txn_date) : '';
+
+  return normalizeSharedDebtSearchTerm([
+    item?.description_snapshot,
+    item?.card_name_snapshot,
+    item?.request_note,
+    item?.response_note,
+    item?.payment_note,
+    item?.requester_name,
+    item?.requester_email,
+    item?.receiver_name,
+    item?.receiver_email,
+    item?.receiver_email_snapshot,
+    item?.batch_origin_kind,
+    item?.status,
+    monthText,
+    txnDateText
+  ].filter(Boolean).join(' '));
+}
+
 function filterSharedDebtTrackingItems(items = [], filters = {}) {
   const normalized = normalizeSharedDebtTrackingFilters(filters);
+  const searchTerm = normalizeSharedDebtSearchTerm(normalized.q || '');
+
   return (Array.isArray(items) ? items : []).filter((item) => {
     const originKind = normalizeSharedDebtOriginKind(item?.batch_origin_kind);
     const isGrouped = isGroupedSharedDebtItem(item);
@@ -4802,6 +8316,7 @@ function filterSharedDebtTrackingItems(items = [], filters = {}) {
     if (normalized.origin !== 'all' && originKind !== normalized.origin) return false;
     if (normalized.installment === 'yes' && !isInstallment) return false;
     if (normalized.installment === 'no' && isInstallment) return false;
+    if (searchTerm && !buildSharedDebtTrackingSearchText(item).includes(searchTerm)) return false;
     return true;
   });
 }
@@ -4810,9 +8325,9 @@ function parseSharedDebtRequestIds(rawValue) {
   const source = Array.isArray(rawValue)
     ? rawValue
     : String(rawValue || '')
-        .split(',')
-        .map((value) => value.trim())
-        .filter(Boolean);
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
 
   return Array.from(new Set(source.map((value) => Number(value)).filter(Boolean)));
 }
@@ -4862,54 +8377,196 @@ function groupSharedDebtRowsByBatch(rows = []) {
   return Array.from(groups.values());
 }
 
-app.get("/shared-debts", ensureAuthenticated, (req, res) => {
+app.get('/shared-debts', ensureAuthenticated, (req, res) => {
+  return renderSharedDebtsPage(req, res, { archiveMode: false });
+});
+
+app.get('/shared-debts/archive', ensureAuthenticated, (req, res) => {
+  return renderSharedDebtsPage(req, res, { archiveMode: true });
+});
+
+app.post('/shared-debts/:id/archive', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const requestIdToHighlight = Number(req.query.request) || null;
-  const batchIdToHighlight = Number(req.query.batch) || null;
-  const manualDebtEligiblePeople = getManualSharedDebtEligiblePeople(userId);
+  const requestId = Number(req.params.id);
+  const fallbackRedirect = resolveSharedDebtViewPath(req.body.return_to, redirectBackOr(req, '/shared-debts'));
 
-  db.prepare(`
-    UPDATE notifications
-    SET is_read = 1, read_at = COALESCE(read_at, ?)
-    WHERE user_id = ?
-      AND (
-        related_type IN ('shared_debt_request', 'shared_debt_batch') OR
-        type IN ('shared_debt_request', 'shared_debt_batch')
-      )
-      AND is_read = 0
-  `).run(nowIso(), userId);
+  if (!requestId) {
+    setFlash(req, 'error', 'Ops, essa cobrança não parece válida.');
+    return res.redirect(fallbackRedirect);
+  }
 
-  const received = getSharedDebtRequestsReceived(userId);
-  const sent = getSharedDebtRequestsSent(userId);
-  const sharedDebtFilters = normalizeSharedDebtTrackingFilters(req.query);
-  const sharedDebtFiltersActive = hasActiveSharedDebtTrackingFilters(sharedDebtFilters);
-  const receivedTracking = filterSharedDebtTrackingItems(received, sharedDebtFilters);
-  const sentTracking = filterSharedDebtTrackingItems(sent, sharedDebtFilters);
-  const receivedPendingBatches = buildSharedDebtBatchCards(received, 'received').filter(batch => batch.pendingCount > 0);
-  const sentPendingBatches = buildSharedDebtBatchCards(sent, 'sent').filter(batch => batch.pendingCount > 0);
-  const eventsByRequest = getSharedDebtEventsByRequestIds([
-    ...received.map(item => item.id),
-    ...sent.map(item => item.id)
-  ]);
+  const requestRow = db.prepare(`
+    SELECT id, status
+    FROM shared_debt_requests
+    WHERE id = ? AND (requester_user_id = ? OR receiver_user_id = ?)
+    LIMIT 1
+  `).get(requestId, userId, userId);
 
-  return res.render("shared-debts", {
-    title: "OrganizaPay | Cobranças",
-    received,
-    sent,
-    receivedPendingBatches,
-    sentPendingBatches,
-    receivedTracking,
-    sentTracking,
-    sharedDebtFilters,
-    sharedDebtFiltersActive,
-    manualDebtEligiblePeople,
-    eventsByRequest,
-    requestIdToHighlight,
-    batchIdToHighlight,
-    formatBRLFromCents,
-    monthLabel,
-    formatDateBR
+  if (!requestRow) {
+    setFlash(req, 'error', 'Cobrança não encontrada.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (!canArchiveSharedDebtStatus(requestRow.status)) {
+    setFlash(req, 'info', 'Essa cobrança ainda tem história para acontecer por aqui, então ela fica nas ativas por enquanto.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  upsertSharedDebtArchiveState({
+    requestId,
+    userId,
+    isArchived: true,
+    archivedFromStatus: requestRow.status,
+    timestamp: nowIso()
   });
+
+  setFlash(req, 'success', 'Cobrança arquivada. A fila principal agradeceu o respiro.');
+  return res.redirect(fallbackRedirect);
+});
+
+app.post('/shared-debts/:id/unarchive', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const requestId = Number(req.params.id);
+  const fallbackRedirect = resolveSharedDebtViewPath(req.body.return_to, redirectBackOr(req, '/shared-debts/archive'));
+
+  if (!requestId) {
+    setFlash(req, 'error', 'Ops, essa cobrança não parece válida.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const requestRow = db.prepare(`
+    SELECT id, status
+    FROM shared_debt_requests
+    WHERE id = ? AND (requester_user_id = ? OR receiver_user_id = ?)
+    LIMIT 1
+  `).get(requestId, userId, userId);
+
+  if (!requestRow) {
+    setFlash(req, 'error', 'Cobrança não encontrada.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  upsertSharedDebtArchiveState({
+    requestId,
+    userId,
+    isArchived: false,
+    archivedFromStatus: requestRow.status,
+    timestamp: nowIso()
+  });
+
+  setFlash(req, 'success', 'Cobrança restaurada. Ela voltou para as ativas sem perder nadinha do histórico.');
+  return res.redirect(fallbackRedirect);
+});
+
+app.post('/shared-debts/bulk/archive', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const requestIds = parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id);
+  const fallbackRedirect = resolveSharedDebtViewPath(req.body.return_to, redirectBackOr(req, '/shared-debts'));
+
+  if (!requestIds.length) {
+    setFlash(req, 'error', 'Nenhuma cobrança válida foi escolhida para ir ao arquivo.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const placeholders = requestIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT id, status
+    FROM shared_debt_requests
+    WHERE id IN (${placeholders})
+      AND (requester_user_id = ? OR receiver_user_id = ?)
+  `).all(...requestIds, userId, userId).filter((row) => canArchiveSharedDebtStatus(row.status));
+
+  if (!rows.length) {
+    setFlash(req, 'info', 'Essas cobranças ainda não estão naquele ponto zen de irem para o arquivo.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const now = nowIso();
+  db.transaction(() => {
+    rows.forEach((row) => {
+      upsertSharedDebtArchiveState({
+        requestId: row.id,
+        userId,
+        isArchived: true,
+        archivedFromStatus: row.status,
+        timestamp: now
+      });
+    });
+  })();
+
+  setFlash(req, 'success', `Pronto! ${formatCountLabel(rows.length, 'cobrança foi arquivada', 'cobranças foram arquivadas')} sem apagar o histórico.`);
+  return res.redirect(fallbackRedirect);
+});
+
+app.post('/shared-debts/bulk/unarchive', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const requestIds = parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id);
+  const fallbackRedirect = resolveSharedDebtViewPath(req.body.return_to, redirectBackOr(req, '/shared-debts/archive'));
+
+  if (!requestIds.length) {
+    setFlash(req, 'error', 'Nenhuma cobrança válida foi escolhida para sair do arquivo.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const placeholders = requestIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT r.id, r.status
+    FROM shared_debt_requests r
+    JOIN shared_debt_archives a ON a.request_id = r.id AND a.user_id = ? AND a.is_archived = 1
+    WHERE r.id IN (${placeholders})
+      AND (r.requester_user_id = ? OR r.receiver_user_id = ?)
+  `).all(userId, ...requestIds, userId, userId)
+
+  if (!rows.length) {
+    setFlash(req, 'info', 'Não achei cobranças arquivadas válidas nessa seleção.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const now = nowIso();
+  db.transaction(() => {
+    rows.forEach((row) => {
+      upsertSharedDebtArchiveState({
+        requestId: row.id,
+        userId,
+        isArchived: false,
+        archivedFromStatus: row.status,
+        timestamp: now
+      });
+    });
+  })();
+
+  setFlash(req, 'success', `Pronto! ${formatCountLabel(rows.length, 'cobrança voltou para as ativas', 'cobranças voltaram para as ativas')}.`);
+  return res.redirect(fallbackRedirect);
+});
+
+app.post('/shared-debts/draft-queues/:id/send', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const queueId = Number(req.params.id);
+  const fallbackRedirect = '/shared-debts#draft-queues';
+
+  try {
+    const result = sendSharedDebtDraftQueue(userId, queueId);
+    setFlash(req, 'success', `Pronto! ${formatCountLabel(result.itemCount, 'cobrança saiu', 'cobranças saíram')} da caixa de saída e foram para ${formatBRLFromCents(result.totalCents)} num envio só.`);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui disparar esse rascunho agora.');
+  }
+
+  return res.redirect(fallbackRedirect);
+});
+
+app.post('/shared-debts/draft-queues/:id/discard', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const queueId = Number(req.params.id);
+  const fallbackRedirect = '/shared-debts#draft-queues';
+  const discarded = discardSharedDebtDraftQueue(userId, queueId);
+
+  if (!discarded) {
+    setFlash(req, 'info', 'Esse rascunho já tinha saído de cena ou não existe mais.');
+  } else {
+    setFlash(req, 'success', 'Rascunho descartado. A caixa de saída ficou mais leve por aqui.');
+  }
+
+  return res.redirect(fallbackRedirect);
 });
 
 app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
@@ -5254,6 +8911,684 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
   return res.redirect(`/shared-debts?request=${requestId}`);
 });
 
+app.get('/shared-debts/monthly-settlements/:id/prepare', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const settlementId = Number(req.params.id);
+
+  if (!settlementId) {
+    return res.status(400).json({ ok: false, message: 'Não consegui descobrir qual mês você quer acertar por Pix.' });
+  }
+
+  const settlementRow = getSharedDebtCardMonthlySettlementRowById(settlementId);
+  if (!settlementRow || (Number(settlementRow.requester_user_id || 0) !== Number(userId || 0) && Number(settlementRow.receiver_user_id || 0) !== Number(userId || 0))) {
+    return res.status(404).json({ ok: false, message: 'Essa carteira mensal não apareceu por aqui.' });
+  }
+
+  if (Number(settlementRow.receiver_user_id || 0) !== Number(userId || 0)) {
+    return res.status(403).json({ ok: false, message: 'Esse Pix mensal fica do lado de quem vai pagar.' });
+  }
+
+  const snapshot = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
+  if (!snapshot || !Number(snapshot.requestCount || 0)) {
+    return res.status(404).json({ ok: false, message: 'Ainda não encontrei cobranças aceitas para montar esse mês por aqui.' });
+  }
+
+  const creditorProfile = getUserPixProfile(settlementRow.requester_user_id);
+  const creditorRecord = getUserRecord(settlementRow.requester_user_id);
+  const preview = buildSharedDebtCardMonthlyIntentPreview(snapshot, snapshot.openCents);
+
+  let pixAvailable = false;
+  let pixUnavailableReason = null;
+
+  if (!creditorProfile || !creditorProfile.pixEnabled) {
+    pixUnavailableReason = 'Quem vai receber ainda não deixou um Pix prontinho por aqui.';
+  } else if (!creditorProfile.pixValid) {
+    pixUnavailableReason = creditorProfile.pixReason || 'O Pix de quem vai receber ainda precisa de um acerto.';
+  } else if (!Number(snapshot.openCents || 0)) {
+    pixUnavailableReason = 'Esse mês já está sem saldo aberto para um novo Pix agora.';
+  } else {
+    pixAvailable = true;
+  }
+
+  return res.json({
+    ok: true,
+    settlementId,
+    month: Number(snapshot.month || settlementRow.month || 0),
+    year: Number(snapshot.year || settlementRow.year || 0),
+    monthLabel: monthLabel(snapshot.month || settlementRow.month, snapshot.year || settlementRow.year),
+    counterpartName: creditorRecord?.name || creditorRecord?.email || 'quem vai receber',
+    totalAcceptedCents: Number(snapshot.totalAcceptedCents || 0),
+    totalAcceptedFormatted: formatBRLFromCents(snapshot.totalAcceptedCents || 0),
+    confirmedCents: Number(snapshot.confirmedCents || 0),
+    confirmedFormatted: formatBRLFromCents(snapshot.confirmedCents || 0),
+    reservedCents: Number(snapshot.reservedCents || 0),
+    reservedFormatted: formatBRLFromCents(snapshot.reservedCents || 0),
+    openCents: Number(snapshot.openCents || 0),
+    openFormatted: formatBRLFromCents(snapshot.openCents || 0),
+    requestCount: Number(snapshot.requestCount || 0),
+    status: snapshot.status || 'open',
+    preview,
+    pixAvailable,
+    pixUnavailableReason,
+    maskedKey: creditorProfile?.pixMaskedKey || null,
+    keyTypeLabel: creditorProfile?.pixKeyTypeLabel || null,
+    city: creditorProfile?.pixCity || null,
+    creditorName: creditorProfile?.ownerName || creditorRecord?.name || creditorRecord?.email || 'quem vai receber',
+    qrSupported: !!QRCode
+  });
+});
+
+app.post('/shared-debts/monthly-settlements/:id/pix', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  const settlementId = Number(req.params.id);
+
+  if (!settlementId) {
+    return res.status(400).json({ ok: false, message: 'Não consegui descobrir qual mês você quer acertar por Pix.' });
+  }
+
+  const settlementRow = getSharedDebtCardMonthlySettlementRowById(settlementId);
+  if (!settlementRow || Number(settlementRow.receiver_user_id || 0) !== Number(userId || 0)) {
+    return res.status(404).json({ ok: false, message: 'Essa carteira mensal não apareceu do seu lado por aqui.' });
+  }
+
+  const snapshot = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
+  if (!snapshot || !Number(snapshot.requestCount || 0)) {
+    return res.status(404).json({ ok: false, message: 'Ainda não encontrei cobranças aceitas para montar esse mês por aqui.' });
+  }
+
+  const openCents = Math.max(0, Number(snapshot.openCents || 0));
+  if (!openCents) {
+    return res.status(409).json({ ok: false, message: 'Esse mês já está sem saldo aberto para um novo Pix agora.' });
+  }
+
+  const requestedAmountCents = coerceMoneyValueToCents(req.body.amount_cents ?? req.body.amount ?? req.body.amountCents, openCents);
+  if (!requestedAmountCents) {
+    return res.status(400).json({ ok: false, message: 'Me conta quanto vai entrar nesse Pix para eu montar o código certinho.' });
+  }
+
+  if (requestedAmountCents > openCents) {
+    return res.status(409).json({ ok: false, message: `Por aqui, o máximo disponível agora é ${formatBRLFromCents(openCents)}.` });
+  }
+
+  const creditorProfile = getUserPixProfile(settlementRow.requester_user_id);
+  const creditorRecord = getUserRecord(settlementRow.requester_user_id);
+  if (!creditorProfile || !creditorProfile.pixEnabled) {
+    return res.status(409).json({ ok: false, message: 'Quem vai receber ainda não deixou um Pix prontinho por aqui.' });
+  }
+
+  if (!creditorProfile.pixValid) {
+    return res.status(409).json({ ok: false, message: creditorProfile.pixReason || 'Ainda falta um ajuste no Pix de quem vai receber.' });
+  }
+
+  try {
+    const now = nowIso();
+    let intentId = null;
+    let txid = null;
+    let payload = null;
+
+    db.transaction(() => {
+      cancelSharedDebtGeneratedMonthlyIntents(settlementId, userId);
+
+      const insert = db.prepare(`
+        INSERT INTO shared_debt_payment_intents (
+          settlement_id, requester_user_id, receiver_user_id, month, year, request_kind,
+          requested_by_user_id, amount_cents, status, created_at, updated_at, generated_at
+        ) VALUES (?, ?, ?, ?, ?, 'card', ?, ?, 'generated', ?, ?, ?)
+      `).run(
+        settlementId,
+        settlementRow.requester_user_id,
+        settlementRow.receiver_user_id,
+        settlementRow.month,
+        settlementRow.year,
+        userId,
+        requestedAmountCents,
+        now,
+        now,
+        now
+      );
+
+      intentId = Number(insert.lastInsertRowid || 0);
+      txid = buildSharedDebtCardMonthlyPixTxid(settlementId, intentId);
+      payload = buildPixPayload({
+        keyType: creditorProfile.pixKeyType,
+        keyValue: creditorProfile.pixKeyValue,
+        merchantName: creditorProfile.pixMerchantName || creditorProfile.ownerName || creditorRecord?.name,
+        merchantCity: creditorProfile.pixCity,
+        amountCents: requestedAmountCents,
+        txid,
+        description: sanitizePixText(`CARTAO ${String(settlementRow.month).padStart(2, '0')}/${settlementRow.year}`, { max: 72 })
+      });
+
+      db.prepare(`
+        UPDATE shared_debt_payment_intents
+        SET pix_payload = ?,
+            pix_txid = ?,
+            updated_at = ?,
+            generated_at = COALESCE(generated_at, ?)
+        WHERE id = ?
+      `).run(payload, txid, now, now, intentId);
+    })();
+
+    const preview = buildSharedDebtCardMonthlyIntentPreview(snapshot, requestedAmountCents);
+    const qrDataUrl = QRCode
+      ? await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', margin: 1, width: 320 })
+      : null;
+    const shareText = buildSharedDebtCardMonthlyPixShareText({
+      creditorName: creditorProfile.ownerName || creditorRecord?.name || creditorRecord?.email || 'quem vai receber',
+      amountCents: requestedAmountCents,
+      month: settlementRow.month,
+      year: settlementRow.year,
+      payload
+    });
+
+    return res.json({
+      ok: true,
+      settlementId,
+      intentId,
+      payload,
+      txid,
+      qrDataUrl,
+      qrSupported: !!QRCode,
+      amountCents: requestedAmountCents,
+      amountFormatted: formatBRLFromCents(requestedAmountCents),
+      creditorName: creditorProfile.ownerName || creditorRecord?.name || creditorRecord?.email || 'Quem vai receber',
+      maskedKey: creditorProfile.pixMaskedKey,
+      keyType: creditorProfile.pixKeyType,
+      keyTypeLabel: creditorProfile.pixKeyTypeLabel,
+      city: creditorProfile.pixCity,
+      shareText,
+      keyValue: creditorProfile.pixKeyValue,
+      monthLabel: monthLabel(settlementRow.month, settlementRow.year),
+      preview,
+      settlement: {
+        totalAcceptedCents: Number(snapshot.totalAcceptedCents || 0),
+        confirmedCents: Number(snapshot.confirmedCents || 0),
+        reservedCents: Number(snapshot.reservedCents || 0),
+        openCents,
+        requestCount: Number(snapshot.requestCount || 0)
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, message: error?.message || 'O Pix do mês quase saiu, mas ainda tropeçou num detalhe aqui.' });
+  }
+});
+
+app.post('/shared-debts/monthly-settlements/:id/report-payment', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const settlementId = Number(req.params.id);
+  const intentId = Number(req.body.intent_id || req.body.intentId || 0);
+  const note = String(req.body.note || '').trim() || null;
+
+  if (!settlementId || !intentId) {
+    return res.status(400).json({ ok: false, message: 'Ainda falta me dizer qual Pix do mês você acabou de informar.' });
+  }
+
+  const settlementRow = getSharedDebtCardMonthlySettlementRowById(settlementId);
+  if (!settlementRow || Number(settlementRow.receiver_user_id || 0) !== Number(userId || 0)) {
+    return res.status(404).json({ ok: false, message: 'Essa carteira mensal não apareceu do seu lado por aqui.' });
+  }
+
+  const intentRow = db.prepare(`
+    SELECT *
+    FROM shared_debt_payment_intents
+    WHERE id = ?
+      AND settlement_id = ?
+      AND receiver_user_id = ?
+      AND request_kind = 'card'
+    LIMIT 1
+  `).get(intentId, settlementId, userId);
+
+  if (!intentRow) {
+    return res.status(404).json({ ok: false, message: 'Não encontrei esse Pix do mês para confirmar o envio agora.' });
+  }
+
+  const intentStatus = normalizeSharedDebtPaymentIntentStatus(intentRow.status);
+  if (intentStatus === 'reported') {
+    return res.status(409).json({ ok: false, message: 'Esse Pix do mês já foi informado e agora só está esperando a confirmação final.' });
+  }
+
+  if (intentStatus !== 'generated') {
+    return res.status(409).json({ ok: false, message: 'Esse Pix do mês já saiu da fase de aviso por aqui.' });
+  }
+
+  const snapshotBefore = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
+  const openCents = Math.max(0, Number(snapshotBefore?.openCents || 0));
+  const intentAmountCents = Math.max(0, Number(intentRow.amount_cents || 0));
+
+  if (!openCents) {
+    return res.status(409).json({ ok: false, message: 'Esse mês já não tem saldo aberto para receber esse Pix agora.' });
+  }
+
+  if (intentAmountCents > openCents) {
+    return res.status(409).json({ ok: false, message: `Enquanto você estava por aqui, o saldo do mês mudou. Agora o máximo disponível é ${formatBRLFromCents(openCents)}.` });
+  }
+
+  const actor = getUserRecord(userId);
+  const actorName = actor?.name || actor?.email || 'Quem vai pagar';
+  const now = nowIso();
+
+  db.transaction(() => {
+    const result = db.prepare(`
+      UPDATE shared_debt_payment_intents
+      SET status = 'reported',
+          payer_note = ?,
+          reported_at = ?,
+          updated_at = ?
+      WHERE id = ?
+        AND settlement_id = ?
+        AND receiver_user_id = ?
+        AND status = 'generated'
+    `).run(note, now, now, intentId, settlementId, userId);
+
+    if (!result.changes) {
+      throw new Error('Esse Pix do mês já mudou de estado enquanto você estava por aqui.');
+    }
+
+    cancelSharedDebtGeneratedMonthlyIntents(settlementId, userId);
+
+    createNotification({
+      userId: settlementRow.requester_user_id,
+      type: 'shared_debt_request',
+      title: 'Pix do mês informado',
+      body: `${actorName} avisou um Pix de ${formatBRLFromCents(intentAmountCents)} para ${monthLabel(settlementRow.month, settlementRow.year)}.${buildNoteSuffix(note)}`,
+      href: `/shared-debts?settlement=${settlementId}`,
+      relatedType: 'shared_debt_payment_intent',
+      relatedId: intentId
+    });
+  })();
+
+  const snapshotAfter = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
+
+  return res.json({
+    ok: true,
+    settlementId,
+    message: 'Pronto! Agora é só aguardar a confirmação de quem vai receber.',
+    redirectTo: `/shared-debts?settlement=${settlementId}`,
+    snapshot: snapshotAfter ? {
+      status: snapshotAfter.status,
+      totalAcceptedCents: Number(snapshotAfter.totalAcceptedCents || 0),
+      confirmedCents: Number(snapshotAfter.confirmedCents || 0),
+      reservedCents: Number(snapshotAfter.reservedCents || 0),
+      openCents: Number(snapshotAfter.openCents || 0)
+    } : null
+  });
+});
+
+app.post('/shared-debts/monthly-settlements/:id/confirm-payment', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const settlementId = Number(req.params.id);
+  const intentId = Number(req.body.intent_id || req.body.intentId || 0);
+  const note = String(req.body.note || '').trim() || null;
+  const fallbackRedirect = settlementId ? `/shared-debts?settlement=${settlementId}` : '/shared-debts';
+
+  if (!settlementId || !intentId) {
+    setFlash(req, 'error', 'Ainda falta me dizer qual Pix do mês você quer conferir por aqui.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const settlementRow = getSharedDebtCardMonthlySettlementRowById(settlementId);
+  if (!settlementRow || Number(settlementRow.requester_user_id || 0) !== Number(userId || 0)) {
+    setFlash(req, 'error', 'Essa carteira mensal não apareceu do seu lado para confirmar.');
+    return res.redirect('/shared-debts');
+  }
+
+  const intentRow = db.prepare(`
+    SELECT *
+    FROM shared_debt_payment_intents
+    WHERE id = ?
+      AND settlement_id = ?
+      AND requester_user_id = ?
+      AND request_kind = 'card'
+    LIMIT 1
+  `).get(intentId, settlementId, userId);
+
+  if (!intentRow) {
+    setFlash(req, 'error', 'Não encontrei esse Pix do mês para conferir agora.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const intentStatus = normalizeSharedDebtPaymentIntentStatus(intentRow.status);
+  if (intentStatus === 'confirmed') {
+    setFlash(req, 'info', 'Esse Pix do mês já foi confirmado antes.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (intentStatus === 'rejected') {
+    setFlash(req, 'info', 'Esse Pix do mês já foi devolvido para o saldo aberto antes.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (intentStatus !== 'reported') {
+    setFlash(req, 'info', 'Esse Pix do mês ainda não foi marcado como pago do outro lado.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const snapshotBefore = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
+  if (!snapshotBefore) {
+    setFlash(req, 'error', 'Não consegui abrir a carteira desse mês para confirmar o recebimento agora.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const preview = buildSharedDebtCardMonthlyIntentPreview(snapshotBefore, intentRow.amount_cents, {
+    maxAmountCents: Math.max(0, Number(snapshotBefore.totalAcceptedCents || 0) - Number(snapshotBefore.confirmedCents || 0))
+  });
+
+  if (!Number(preview.allocatedCents || 0)) {
+    setFlash(req, 'info', 'Enquanto você estava por aqui, esse mês mudou e não sobrou saldo em aberto para esse Pix. Abre a carteira de novo para conferir a foto atual.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (Number(preview.allocatedCents || 0) !== Math.max(0, Number(intentRow.amount_cents || 0))) {
+    setFlash(req, 'info', `Enquanto você estava por aqui, o saldo desse mês mudou. Agora esse Pix não encaixa inteiro (${formatBRLFromCents(preview.allocatedCents || 0)} ainda cabem). Melhor gerar um novo retrato antes de confirmar.`);
+    return res.redirect(fallbackRedirect);
+  }
+
+  const actor = getUserRecord(userId);
+  const actorName = actor?.name || actor?.email || 'Quem vai receber';
+  const monthText = monthLabel(settlementRow.month, settlementRow.year);
+  const now = nowIso();
+  const allocationRows = Array.isArray(preview.allocationRows) ? preview.allocationRows.filter((row) => Number(row?.id || 0) && Number(row?.appliedCents || 0) > 0) : [];
+  const requestRowById = new Map((Array.isArray(snapshotBefore.requestRows) ? snapshotBefore.requestRows : []).map((row) => [Number(row?.id || 0), row]));
+  const insertAllocation = db.prepare(`
+    INSERT OR REPLACE INTO shared_debt_payment_allocations (settlement_id, intent_id, request_id, allocated_cents, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  const updateRequest = db.prepare(`
+    UPDATE shared_debt_requests
+    SET amount_paid_cents = ?,
+        status = ?,
+        payment_marked_at = NULL,
+        payment_note = NULL,
+        updated_at = ?,
+        resolved_at = ?
+    WHERE id = ?
+      AND requester_user_id = ?
+      AND receiver_user_id = ?
+      AND COALESCE(request_kind, 'card') = 'card'
+  `);
+  const updateIntent = db.prepare(`
+    UPDATE shared_debt_payment_intents
+    SET status = 'confirmed',
+        creditor_note = ?,
+        confirmed_at = ?,
+        updated_at = ?
+    WHERE id = ?
+      AND settlement_id = ?
+      AND requester_user_id = ?
+      AND status = 'reported'
+  `);
+
+  db.transaction(() => {
+    const result = updateIntent.run(note, now, now, intentId, settlementId, userId);
+    if (!result.changes) {
+      throw new Error('Esse Pix do mês já mudou de estado enquanto você estava por aqui.');
+    }
+
+    allocationRows.forEach((allocation) => {
+      const requestRow = requestRowById.get(Number(allocation.id || 0)) || null;
+      const totalCents = Math.max(0, Number(requestRow?.amount_cents || allocation.totalCents || 0));
+      const nextPaidCents = Math.min(totalCents, Math.max(0, Number(allocation.afterPaidCents || 0)));
+      const nextPendingCents = Math.max(0, totalCents - nextPaidCents);
+      const nextStatus = nextPendingCents <= 0 ? 'settled' : 'accepted';
+      const resolvedAt = nextStatus === 'settled'
+        ? (requestRow?.resolved_at || now)
+        : null;
+
+      insertAllocation.run(settlementId, intentId, allocation.id, Math.max(0, Number(allocation.appliedCents || 0)), now);
+      updateRequest.run(
+        nextPaidCents,
+        nextStatus,
+        now,
+        resolvedAt,
+        allocation.id,
+        settlementRow.requester_user_id,
+        settlementRow.receiver_user_id
+      );
+
+      addSharedDebtEvent({
+        requestId: allocation.id,
+        actorUserId: userId,
+        eventType: nextStatus === 'settled' ? 'settled_via_monthly_pix' : 'partial_payment_confirmed_via_monthly_pix',
+        note
+      });
+    });
+
+    Array.from(new Set(
+      allocationRows
+        .map((allocation) => requestRowById.get(Number(allocation.id || 0))?.batch_id)
+        .map((value) => Number(value || 0))
+        .filter(Boolean)
+    )).forEach((batchId) => {
+      touchSharedDebtBatch(batchId, now);
+    });
+
+    createNotification({
+      userId: settlementRow.receiver_user_id,
+      type: 'shared_debt_request',
+      title: 'Pix do mês confirmado',
+      body: `${actorName} confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. ${buildSharedDebtCardMonthlyIntentResultSummary(preview)}${buildNoteSuffix(note)}`,
+      href: `/shared-debts?settlement=${settlementId}`,
+      relatedType: 'shared_debt_payment_intent',
+      relatedId: intentId
+    });
+  })();
+
+  const snapshotAfter = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
+  const successPieces = [
+    `Recebimento confirmado de ${formatBRLFromCents(intentRow.amount_cents)}.`,
+    buildSharedDebtCardMonthlyIntentResultSummary(preview)
+  ];
+  if (snapshotAfter) {
+    successPieces.push(`Agora ainda ficam ${formatBRLFromCents(snapshotAfter.openCents || 0)} em aberto nessa carteira.`);
+  }
+  setFlash(req, 'success', successPieces.join(' '));
+  return res.redirect(fallbackRedirect);
+});
+
+app.post('/shared-debts/monthly-settlements/:id/reject-payment', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const settlementId = Number(req.params.id);
+  const intentId = Number(req.body.intent_id || req.body.intentId || 0);
+  const note = String(req.body.note || '').trim() || null;
+  const fallbackRedirect = settlementId ? `/shared-debts?settlement=${settlementId}` : '/shared-debts';
+
+  if (!settlementId || !intentId) {
+    setFlash(req, 'error', 'Ainda falta me dizer qual Pix do mês não encaixou por aqui.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const settlementRow = getSharedDebtCardMonthlySettlementRowById(settlementId);
+  if (!settlementRow || Number(settlementRow.requester_user_id || 0) !== Number(userId || 0)) {
+    setFlash(req, 'error', 'Essa carteira mensal não apareceu do seu lado para revisar.');
+    return res.redirect('/shared-debts');
+  }
+
+  const intentRow = db.prepare(`
+    SELECT *
+    FROM shared_debt_payment_intents
+    WHERE id = ?
+      AND settlement_id = ?
+      AND requester_user_id = ?
+      AND request_kind = 'card'
+    LIMIT 1
+  `).get(intentId, settlementId, userId);
+
+  if (!intentRow) {
+    setFlash(req, 'error', 'Não encontrei esse Pix do mês para revisar agora.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const intentStatus = normalizeSharedDebtPaymentIntentStatus(intentRow.status);
+  if (intentStatus === 'rejected') {
+    setFlash(req, 'info', 'Esse Pix do mês já tinha voltado para o saldo aberto antes.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (intentStatus === 'confirmed') {
+    setFlash(req, 'info', 'Esse Pix do mês já foi confirmado antes, então não dá para voltar atrás por aqui.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (intentStatus !== 'reported') {
+    setFlash(req, 'info', 'Esse Pix do mês ainda não foi marcado como pago do outro lado.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const actor = getUserRecord(userId);
+  const actorName = actor?.name || actor?.email || 'Quem vai receber';
+  const monthText = monthLabel(settlementRow.month, settlementRow.year);
+  const now = nowIso();
+
+  db.transaction(() => {
+    const result = db.prepare(`
+      UPDATE shared_debt_payment_intents
+      SET status = 'rejected',
+          creditor_note = ?,
+          rejected_at = ?,
+          updated_at = ?
+      WHERE id = ?
+        AND settlement_id = ?
+        AND requester_user_id = ?
+        AND status = 'reported'
+    `).run(note, now, now, intentId, settlementId, userId);
+
+    if (!result.changes) {
+      throw new Error('Esse Pix do mês já mudou de estado enquanto você estava por aqui.');
+    }
+
+    createNotification({
+      userId: settlementRow.receiver_user_id,
+      type: 'shared_debt_request',
+      title: 'Pix do mês voltou para revisão',
+      body: `${actorName} não confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. O valor voltou para o saldo aberto dessa carteira.${buildNoteSuffix(note)}`,
+      href: `/shared-debts?settlement=${settlementId}`,
+      relatedType: 'shared_debt_payment_intent',
+      relatedId: intentId
+    });
+  })();
+
+  const snapshotAfter = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
+  const infoPieces = [
+    `Pronto. ${formatBRLFromCents(intentRow.amount_cents)} voltou para o saldo aberto desse mês.`
+  ];
+  if (snapshotAfter) {
+    infoPieces.push(`Agora a carteira mostra ${formatBRLFromCents(snapshotAfter.openCents || 0)} em aberto.`);
+  }
+  setFlash(req, 'success', infoPieces.join(' '));
+  return res.redirect(fallbackRedirect);
+});
+
+app.get('/shared-debts/:id/pix', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  const requestId = Number(req.params.id);
+
+  if (!requestId) {
+    return res.status(400).json({ ok: false, message: 'Não consegui descobrir qual cobrança avulsa você quer abrir no Pix.' });
+  }
+
+  const requestRow = db.prepare(`
+    SELECT
+      r.*,
+      ru.name AS requester_name,
+      ru.email AS requester_email,
+      uu.name AS receiver_name,
+      uu.email AS receiver_email
+    FROM shared_debt_requests r
+    JOIN users ru ON ru.id = r.requester_user_id
+    JOIN users uu ON uu.id = r.receiver_user_id
+    WHERE r.id = ?
+      AND (r.requester_user_id = ? OR r.receiver_user_id = ?)
+    LIMIT 1
+  `).get(requestId, userId, userId);
+
+  if (!requestRow) {
+    return res.status(404).json({ ok: false, message: 'Essa cobrança avulsa não apareceu por aqui.' });
+  }
+
+  if (normalizeSharedDebtRequestKind(requestRow.request_kind) !== 'manual') {
+    return res.status(400).json({ ok: false, message: 'Nesta fase, o Pix vive só nas cobranças avulsas.' });
+  }
+
+  const status = String(requestRow.status || 'pending').trim().toLowerCase();
+  const totalCents = Math.max(0, Number(requestRow.amount_cents || 0));
+  const alreadyPaidCents = Math.min(totalCents, Math.max(0, Number(requestRow.amount_paid_cents || (status === 'settled' ? totalCents : 0))));
+  const pendingCents = Math.max(0, totalCents - alreadyPaidCents);
+
+  if (!['pending', 'accepted'].includes(status)) {
+    return res.status(409).json({ ok: false, message: 'Esse lembrete já saiu da fase de pagamento.' });
+  }
+
+  if (requestRow.payment_marked_at) {
+    return res.status(409).json({ ok: false, message: 'Esse pagamento já foi marcado como feito e agora só está esperando a confirmação final.' });
+  }
+
+  if (!pendingCents) {
+    return res.status(409).json({ ok: false, message: 'Esse lembrete já está com o valor fechado por aqui.' });
+  }
+
+  const creditorProfile = getUserPixProfile(requestRow.requester_user_id);
+  if (!creditorProfile || !creditorProfile.pixEnabled) {
+    return res.status(409).json({ ok: false, message: 'Quem vai receber ainda não deixou um Pix prontinho aqui.' });
+  }
+
+  if (!creditorProfile.pixValid) {
+    return res.status(409).json({ ok: false, message: creditorProfile.pixReason || 'Ainda falta um ajuste no Pix de quem vai receber.' });
+  }
+
+  try {
+    const txid = buildSharedDebtPixTxid(requestRow.id, Number(requestRow.pix_version || 0));
+    const payload = buildPixPayload({
+      keyType: creditorProfile.pixKeyType,
+      keyValue: creditorProfile.pixKeyValue,
+      merchantName: creditorProfile.pixMerchantName || creditorProfile.ownerName || requestRow.requester_name,
+      merchantCity: creditorProfile.pixCity,
+      amountCents: pendingCents,
+      txid,
+      description: sanitizePixText(requestRow.description_snapshot, { max: 72 })
+    });
+    const qrDataUrl = QRCode
+      ? await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', margin: 1, width: 320 })
+      : null;
+    const shareText = buildManualSharedDebtPixShareText({
+      creditorName: creditorProfile.ownerName || requestRow.requester_name || requestRow.requester_email || 'quem vai receber',
+      amountCents: pendingCents,
+      description: requestRow.description_snapshot,
+      payload
+    });
+
+    db.prepare(`
+      UPDATE shared_debt_requests
+      SET last_pix_payload = ?,
+          last_pix_txid = ?,
+          last_pix_generated_at = ?,
+          last_pix_amount_cents = ?
+      WHERE id = ?
+    `).run(payload, txid, nowIso(), pendingCents, requestId);
+
+    return res.json({
+      ok: true,
+      requestId,
+      payload,
+      txid,
+      qrDataUrl,
+      qrSupported: !!QRCode,
+      amountCents: pendingCents,
+      amountFormatted: formatBRLFromCents(pendingCents),
+      creditorName: creditorProfile.ownerName || requestRow.requester_name || requestRow.requester_email || 'Quem vai receber',
+      maskedKey: creditorProfile.pixMaskedKey,
+      keyType: creditorProfile.pixKeyType,
+      keyTypeLabel: creditorProfile.pixKeyTypeLabel,
+      city: creditorProfile.pixCity,
+      shareText,
+      keyValue: creditorProfile.pixKeyValue,
+      description: requestRow.description_snapshot,
+      isCreditor: Number(requestRow.requester_user_id || 0) === Number(userId || 0)
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, message: error?.message || 'O Pix quase saiu, mas ainda tropeçou num detalhe aqui.' });
+  }
+});
+
 app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const requestId = Number(req.params.id);
@@ -5277,6 +9612,19 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
     return res.redirect('/shared-debts');
   }
 
+  const requestKind = normalizeSharedDebtRequestKind(requestRow.request_kind);
+  if (requestKind === 'card') {
+    const snapshot = getSharedDebtCardMonthlySettlementSnapshot({
+      requesterUserId: requestRow.requester_user_id,
+      receiverUserId: requestRow.receiver_user_id,
+      month: requestRow.source_due_month,
+      year: requestRow.source_due_year
+    });
+    const redirectHref = snapshot?.id ? `/shared-debts?settlement=${snapshot.id}` : `/shared-debts?request=${requestId}`;
+    setFlash(req, 'info', 'Agora o pagamento do cartão anda pela carteira do mês. Abre a competência e usa “Pagar este mês”.');
+    return res.redirect(redirectHref);
+  }
+
   if (requestRow.status === 'settled') {
     setFlash(req, 'info', 'Essa cobrança já foi encerrada antes.');
     return res.redirect(`/shared-debts?request=${requestId}`);
@@ -5295,7 +9643,6 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
   const actor = getUserRecord(userId);
   const actorName = actor?.name || requestRow.receiver_name_snapshot || actor?.email || 'O destinatário';
   const now = nowIso();
-  const requestKind = normalizeSharedDebtRequestKind(requestRow.request_kind);
   const isManualRequest = requestKind === 'manual';
   const baseBody = `${actorName} avisou que já pagou ${isManualRequest ? 'o lembrete avulso' : 'a cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
@@ -5374,7 +9721,10 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
   db.transaction(() => {
     db.prepare(`
       UPDATE shared_debt_requests
-      SET status = 'settled', updated_at = ?, resolved_at = ?
+      SET status = 'settled',
+          amount_paid_cents = amount_cents,
+          updated_at = ?,
+          resolved_at = ?
       WHERE id = ? AND requester_user_id = ? AND status = 'accepted' AND payment_marked_at IS NOT NULL
     `).run(now, now, requestId, userId);
 
@@ -5638,44 +9988,593 @@ app.get("/notifications/:id/open", ensureAuthenticated, (req, res) => {
   return res.redirect('/geral');
 });
 
+function getOpenBalanceMonthsForPerson(userId, personId) {
+  const totals = db.prepare(`
+    SELECT
+      COALESCE(${EFFECTIVE_DUE_MONTH_SQL}, 0) AS month,
+      COALESCE(${EFFECTIVE_DUE_YEAR_SQL}, 0) AS year,
+      COALESCE(SUM(a.share_cents), 0) AS total_cents
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND a.person_id = ?
+    GROUP BY COALESCE(${EFFECTIVE_DUE_YEAR_SQL}, 0), COALESCE(${EFFECTIVE_DUE_MONTH_SQL}, 0)
+  `).all(userId, personId).filter((row) => Number(row.month || 0) > 0 && Number(row.year || 0) > 0);
+
+  const manualMap = new Map(db.prepare(`
+    SELECT month, year, paid_cents
+    FROM person_payments
+    WHERE user_id = ? AND person_id = ?
+  `).all(userId, personId).map((row) => [`${row.year}-${row.month}`, Math.max(0, Number(row.paid_cents || 0))]));
+
+  const autoMap = new Map(db.prepare(`
+    SELECT s.month, s.year, COALESCE(SUM(a.allocated_cents), 0) AS total_cents
+    FROM shared_debt_payment_allocations a
+    JOIN shared_debt_payment_intents pi ON pi.id = a.intent_id
+    JOIN shared_debt_monthly_settlements s ON s.id = a.settlement_id
+    JOIN shared_debt_requests r ON r.id = a.request_id
+    WHERE s.requester_user_id = ?
+      AND r.source_person_id = ?
+      AND pi.status = 'confirmed'
+    GROUP BY s.year, s.month
+  `).all(userId, personId).map((row) => [`${row.year}-${row.month}`, Math.max(0, Number(row.total_cents || 0))]));
+
+  return totals
+    .map((row) => {
+      const key = `${row.year}-${row.month}`;
+      const totalCents = Math.max(0, Number(row.total_cents || 0));
+      const manualPaidCents = Math.max(0, Number(manualMap.get(key) || 0));
+      const autoPaidCents = Math.max(0, Number(autoMap.get(key) || 0));
+      const paidCents = Math.min(totalCents, manualPaidCents + autoPaidCents);
+      return {
+        month: Number(row.month || 0),
+        year: Number(row.year || 0),
+        totalCents,
+        paidCents,
+        openCents: Math.max(0, totalCents - paidCents)
+      };
+    })
+    .filter((row) => row.openCents > 0);
+}
+
+function getContactDeletionBlockers(userId, personId) {
+  const openBalanceMonths = getOpenBalanceMonthsForPerson(userId, personId);
+  const hasDraftQueue = !!db.prepare(`
+    SELECT 1
+    FROM shared_debt_send_queue_items qi
+    JOIN shared_debt_send_queues q ON q.id = qi.queue_id
+    WHERE qi.requester_user_id = ?
+      AND qi.source_person_id = ?
+      AND COALESCE(q.status, 'draft') = 'draft'
+      AND qi.cancelled_at IS NULL
+    LIMIT 1
+  `).get(userId, personId);
+
+  const hasOpenRequests = !!db.prepare(`
+    SELECT 1
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND source_person_id = ?
+      AND status NOT IN ('settled', 'rejected', 'cancelled')
+    LIMIT 1
+  `).get(userId, personId);
+
+  const hasOpenPixIntent = !!db.prepare(`
+    SELECT 1
+    FROM shared_debt_payment_intents pi
+    JOIN shared_debt_payment_allocations a ON a.intent_id = pi.id
+    JOIN shared_debt_requests r ON r.id = a.request_id
+    WHERE pi.requester_user_id = ?
+      AND r.source_person_id = ?
+      AND pi.status IN ('generated', 'reported')
+    LIMIT 1
+  `).get(userId, personId);
+
+  return {
+    openBalanceMonths,
+    hasDraftQueue,
+    hasOpenRequests,
+    hasOpenPixIntent,
+    hasBlockingIssue: openBalanceMonths.length > 0 || hasDraftQueue || hasOpenRequests || hasOpenPixIntent
+  };
+}
+
+function getUserDeletionBlockers(targetUserId) {
+  const hasOpenRequests = !!db.prepare(`
+    SELECT 1
+    FROM shared_debt_requests
+    WHERE (requester_user_id = ? OR receiver_user_id = ?)
+      AND status NOT IN ('settled', 'rejected', 'cancelled')
+    LIMIT 1
+  `).get(targetUserId, targetUserId);
+
+  const hasOpenPixIntent = !!db.prepare(`
+    SELECT 1
+    FROM shared_debt_payment_intents
+    WHERE (requester_user_id = ? OR receiver_user_id = ?)
+      AND status IN ('generated', 'reported')
+    LIMIT 1
+  `).get(targetUserId, targetUserId);
+
+  const hasDraftQueue = !!db.prepare(`
+    SELECT 1
+    FROM shared_debt_send_queues
+    WHERE (requester_user_id = ? OR receiver_user_id = ?)
+      AND COALESCE(status, 'draft') = 'draft'
+    LIMIT 1
+  `).get(targetUserId, targetUserId);
+
+  return {
+    hasOpenRequests,
+    hasOpenPixIntent,
+    hasDraftQueue,
+    hasBlockingIssue: hasOpenRequests || hasOpenPixIntent || hasDraftQueue
+  };
+}
+
+function archivePendingFriendRequestsBetweenUsers(userAId, userBId, status = 'archived_by_contact_delete') {
+  const pair = getFriendPair(userAId, userBId);
+  if (!pair) return;
+
+  const now = nowIso();
+  db.prepare(`
+    UPDATE friend_requests
+    SET status = ?, updated_at = ?, responded_at = COALESCE(responded_at, ?), resolved_at = COALESCE(resolved_at, ?)
+    WHERE status = 'pending'
+      AND (
+        (requester_user_id = ? AND target_user_id = ?) OR
+        (requester_user_id = ? AND target_user_id = ?)
+      )
+  `).run(String(status || 'archived_by_contact_delete'), now, now, now, pair.low, pair.high, pair.high, pair.low);
+}
+
+function archivePendingFriendRequestsForSourcePerson(ownerUserId, personId, status = 'archived_by_contact_delete') {
+  const now = nowIso();
+  db.prepare(`
+    UPDATE friend_requests
+    SET status = ?, updated_at = ?, responded_at = COALESCE(responded_at, ?), resolved_at = COALESCE(resolved_at, ?)
+    WHERE requester_user_id = ?
+      AND source_person_id = ?
+      AND status = 'pending'
+  `).run(String(status || 'archived_by_contact_delete'), now, now, now, ownerUserId, personId);
+}
+
+function archivePendingFriendRequestsForUser(targetUserId, status = 'archived_by_user_delete') {
+  const now = nowIso();
+  db.prepare(`
+    UPDATE friend_requests
+    SET status = ?, updated_at = ?, responded_at = COALESCE(responded_at, ?), resolved_at = COALESCE(resolved_at, ?)
+    WHERE status = 'pending'
+      AND (requester_user_id = ? OR target_user_id = ?)
+  `).run(String(status || 'archived_by_user_delete'), now, now, now, targetUserId, targetUserId);
+}
+
+function endActiveFriendshipBetweenUsers(userAId, userBId, endedByUserId = userAId) {
+  const friendship = getActiveFriendshipBetweenUsers(userAId, userBId);
+  if (!friendship) return false;
+  const now = nowIso();
+  db.prepare(`
+    UPDATE friendships
+    SET status = 'ended', updated_at = ?, ended_at = ?, ended_by_user_id = ?
+    WHERE id = ? AND status = 'active'
+  `).run(now, now, Number(endedByUserId || 0) || null, friendship.id);
+  return true;
+}
+
+function tombstonePersonRecord(userId, personId) {
+  const deletedLabel = buildDeletedPersonLabel(personId);
+  db.prepare(`
+    UPDATE people
+    SET active = 0,
+        status = 'deleted',
+        deleted_at = ?,
+        deleted_label = ?,
+        name = ?,
+        phone = NULL,
+        email = NULL,
+        pix_enabled = 0,
+        pix_key_type = NULL,
+        pix_key_value = NULL,
+        pix_city = NULL,
+        pix_state = NULL,
+        pix_label = NULL,
+        pix_updated_at = NULL
+    WHERE id = ? AND user_id = ?
+  `).run(nowIso(), deletedLabel, deletedLabel, personId, userId);
+
+  return deletedLabel;
+}
+
+function tombstoneUserRecord(targetUserId) {
+  const deletedLabel = buildDeletedUserLabel(targetUserId);
+  const deletedEmail = buildDeletedUserEmail(targetUserId);
+  db.prepare(`
+    UPDATE users
+    SET status = 'deleted',
+        deleted_at = ?,
+        deleted_label = ?,
+        name = ?,
+        email = ?,
+        google_id = NULL,
+        role = 'user',
+        can_import = 0
+    WHERE id = ?
+  `).run(nowIso(), deletedLabel, deletedLabel, deletedEmail, targetUserId);
+
+  return deletedLabel;
+}
+
+function offboardContactFromActiveExperience(ownerUserId, personId) {
+  const resolved = getResolvedAppUserForPerson(ownerUserId, personId);
+  db.transaction(() => {
+    if (resolved?.linked_user_id) {
+      endActiveFriendshipBetweenUsers(ownerUserId, resolved.linked_user_id, ownerUserId);
+      archivePendingFriendRequestsBetweenUsers(ownerUserId, resolved.linked_user_id, 'archived_by_contact_delete');
+    }
+
+    archivePendingFriendRequestsForSourcePerson(ownerUserId, personId, 'archived_by_contact_delete');
+    db.prepare(`DELETE FROM person_app_links WHERE owner_user_id = ? AND person_id = ?`).run(ownerUserId, personId);
+    tombstonePersonRecord(ownerUserId, personId);
+  })();
+}
+
+function offboardUserAccess(actorUserId, targetUserId) {
+  db.transaction(() => {
+    archivePendingFriendRequestsForUser(targetUserId, 'archived_by_user_delete');
+    const now = nowIso();
+    db.prepare(`
+      UPDATE friendships
+      SET status = 'ended', updated_at = ?, ended_at = ?, ended_by_user_id = ?
+      WHERE status = 'active'
+        AND (user_low_id = ? OR user_high_id = ?)
+    `).run(now, now, Number(actorUserId || 0) || null, targetUserId, targetUserId);
+
+    db.prepare(`DELETE FROM person_app_links WHERE owner_user_id = ? OR linked_user_id = ?`).run(targetUserId, targetUserId);
+    db.prepare(`DELETE FROM push_subscriptions WHERE user_id = ?`).run(targetUserId);
+    db.prepare(`DELETE FROM scheduled_push_logs WHERE user_id = ?`).run(targetUserId);
+    db.prepare(`DELETE FROM notifications WHERE user_id = ?`).run(targetUserId);
+    tombstoneUserRecord(targetUserId);
+  })();
+}
+
 // People
+app.post('/purchase-categories/:id/archive', ensureAuthenticated, (req, res) => {
+  try {
+    const category = setPurchaseCategoryActiveState(req.user.id, req.params.id, false);
+    setFlash(req, 'success', `${category.name} saiu dos seletores, mas continua viva no histórico.`);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui arquivar essa categoria agora.');
+  }
+  return res.redirect(redirectBackOr(req, '/month'));
+});
+
+app.post('/purchase-categories/:id/restore', ensureAuthenticated, (req, res) => {
+  try {
+    const category = setPurchaseCategoryActiveState(req.user.id, req.params.id, true);
+    setFlash(req, 'success', `${category.name} voltou para os seletores.`);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui reativar essa categoria agora.');
+  }
+  return res.redirect(redirectBackOr(req, '/month'));
+});
+
+app.post('/people/profile-photo', ensureAuthenticated, (req, res) => {
+  profilePhotoUpload.single('profile_photo')(req, res, async (error) => {
+    const userId = req.user.id;
+    const uploadedPath = req.file ? `/uploads/profile-photos/${req.file.filename}` : '';
+    if (error) {
+      if (uploadedPath) await removeManagedProfilePhoto(uploadedPath);
+      setFlash(req, 'error', error.message || 'Não consegui salvar sua foto agora.');
+      return res.redirect('/people');
+    }
+
+    if (!uploadedPath) {
+      setFlash(req, 'error', 'Escolha uma imagem antes de salvar a foto do perfil.');
+      return res.redirect('/people');
+    }
+
+    try {
+      const currentUser = getUserRecord(userId, { includeDeleted: false });
+      db.prepare("UPDATE users SET profile_photo_url = ?, profile_photo_mode = 'manual' WHERE id = ?").run(uploadedPath, userId);
+      req.user.profile_photo_url = uploadedPath;
+      req.user.profile_photo_mode = 'manual';
+      if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
+      setFlash(req, 'success', 'Foto nova no crachá! Já deixei seu perfil mais reconhecível por aqui.');
+    } catch (err) {
+      await removeManagedProfilePhoto(uploadedPath);
+      setFlash(req, 'error', 'A foto tropeçou no caminho. Tenta de novo daqui a pouquinho.');
+    }
+
+    return res.redirect('/people#profile-photo');
+  });
+});
+
+app.post('/people/profile-photo/use-default', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const currentUser = getUserRecord(userId, { includeDeleted: false });
+    db.prepare("UPDATE users SET profile_photo_url = NULL, profile_photo_mode = 'default' WHERE id = ?").run(userId);
+    req.user.profile_photo_url = '';
+    req.user.profile_photo_mode = 'default';
+    if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
+    setFlash(req, 'success', currentUser?.google_photo_url && !looksLikeGoogleDefaultAvatar(currentUser.google_photo_url) ? 'Voltei para sua foto do Google aqui no app.' : 'Voltei para o visual padrão com o ícone do app no cabeçalho.');
+  } catch (error) {
+    setFlash(req, 'error', 'Não consegui voltar para o padrão agora.');
+  }
+  return res.redirect('/people#profile-photo');
+});
+
+app.post('/people/profile-photo/remove', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const currentUser = getUserRecord(userId, { includeDeleted: false });
+    db.prepare("UPDATE users SET profile_photo_url = NULL, profile_photo_mode = 'none' WHERE id = ?").run(userId);
+    req.user.profile_photo_url = '';
+    req.user.profile_photo_mode = 'none';
+    if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
+    setFlash(req, 'success', 'Pronto, escondi sua foto por aqui e deixei o app no modo sem avatar.');
+  } catch (error) {
+    setFlash(req, 'error', 'Não consegui remover a foto agora.');
+  }
+  return res.redirect('/people#profile-photo');
+});
+
 app.get("/people", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const people = getPeopleAll(userId);
+  ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
+  const allPeople = getPeopleAll(userId).map((person) => decoratePersonPhoneForView(person, { fallbackCountry: DEFAULT_PHONE_COUNTRY }));
+  const selfPerson = allPeople.find((person) => person && person.is_self) || null;
+  if (selfPerson) {
+    const currentUser = getUserRecord(userId, { includeDeleted: false }) || req.user || {};
+    selfPerson.photo_url = getEffectiveProfilePhoto(currentUser);
+    selfPerson.google_photo_url = normalizeProfilePhotoUrl(currentUser?.google_photo_url || '');
+    selfPerson.profile_photo_url = normalizeProfilePhotoUrl(currentUser?.profile_photo_url || '');
+    selfPerson.profile_photo_mode = normalizeProfilePhotoMode(currentUser?.profile_photo_mode || 'default');
+    selfPerson.profile_signature_text = normalizeProfileSignatureText(currentUser?.profile_signature_text || selfPerson.profile_signature_text || '');
+    selfPerson.profile_signature_vibe = normalizeProfileSignatureVibe(currentUser?.profile_signature_vibe || selfPerson.profile_signature_vibe || '');
+    selfPerson.profile_signature_vibe_label = getProfileSignatureVibeMeta(selfPerson.profile_signature_vibe)?.label || null;
+    selfPerson.has_profile_signature = !!(selfPerson.profile_signature_text || selfPerson.profile_signature_vibe);
+  }
+  const contacts = allPeople.filter((person) => person && !person.is_self);
   const pendingFriendRequests = getPendingReceivedFriendRequests(userId);
   const highlightedFriendRequestId = Number(req.query.friendRequest || req.query.friend_request || 0) || null;
 
   res.render("people", {
-    people,
+    selfPerson,
+    contacts,
+    people: contacts,
     pendingFriendRequests,
     highlightedFriendRequestId,
+    pixStateOptions: PIX_STATE_OPTIONS,
+    pixCitySuggestionsByState: PIX_CITY_SUGGESTIONS_BY_STATE,
+    pixAllCitySuggestions: PIX_ALL_CITY_SUGGESTIONS,
+    pixDefaultState: PIX_DEFAULT_STATE,
+    pixDefaultCity: PIX_DEFAULT_CITY,
+    phoneCountryOptions: buildPhoneCountryOptions(),
+    phoneDefaultCountry: DEFAULT_PHONE_COUNTRY,
+    profileSignatureVibeOptions: PROFILE_SIGNATURE_VIBE_OPTIONS,
+    profileSignatureMaxLength: PROFILE_SIGNATURE_MAX_LENGTH,
     title: "Amigos"
   });
 });
 
 app.post("/people", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const name = (req.body.name || "").trim();
-  const phone = (req.body.phone || "").trim().replace(/\D/g, "");
-  const email = normalizeEmail(req.body.email);
   const id = Number(req.body.id) || null;
+  const targetPerson = id
+    ? db.prepare(`
+        SELECT id, name, phone, email,
+               COALESCE(pix_enabled, 0) AS pix_enabled,
+               pix_key_type,
+               pix_key_value,
+               pix_city,
+               pix_state,
+               pix_label,
+               COALESCE(is_owner, 0) AS is_owner,
+               COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind,
+               COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
+        FROM people
+        WHERE id = ? AND user_id = ?
+          AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
+        LIMIT 1
+      `).get(id, userId)
+    : null;
+  const isSelfTarget = isSelfPersonRow(targetPerson);
+  const requestedSection = isSelfTarget ? String(req.body.profile_section || '').trim().toLowerCase() : '';
+  const redirectTarget = isSelfTarget
+    ? (requestedSection === 'pix' ? '/people#self-pix-config' : requestedSection === 'signature' ? '/people#profile-signature' : '/people#my-profile')
+    : '/people#network-lounge';
 
-  if (id) {
-    db.prepare("UPDATE people SET name = ?, phone = ?, email = ? WHERE id = ? AND user_id = ?").run(name, phone, email, id, userId);
-  } else if (name) {
-    db.prepare("INSERT OR IGNORE INTO people(user_id, name, phone, email, active) VALUES (?, ?, ?, ?, 1)").run(userId, name, phone, email);
+  const currentName = targetPerson ? String(targetPerson.name || '').trim() : '';
+  const currentPhone = targetPerson ? String(targetPerson.phone || '').trim() : '';
+  const currentEmail = targetPerson ? normalizeEmail(targetPerson.email) : null;
+  const requestedPhoneCountry = String(req.body.phone_country || DEFAULT_PHONE_COUNTRY).trim().toUpperCase() || DEFAULT_PHONE_COUNTRY;
+
+  const name = isSelfTarget && requestedSection === 'pix'
+    ? currentName
+    : String(req.body.name || '').trim();
+  const rawPhoneInput = isSelfTarget && requestedSection === 'pix'
+    ? currentPhone
+    : String(req.body.phone || '').trim();
+  const normalizedPhone = isSelfTarget && requestedSection === 'pix'
+    ? { ok: true, value: currentPhone, countryCode: requestedPhoneCountry }
+    : normalizePhoneForStorage(rawPhoneInput, requestedPhoneCountry, { allowEmpty: true });
+  const phone = normalizedPhone.ok ? normalizedPhone.value : rawPhoneInput;
+  const email = isSelfTarget && requestedSection === 'pix'
+    ? currentEmail
+    : normalizeEmail(req.body.email);
+
+  const currentPixEnabled = isSelfTarget ? normalizePixToggle(targetPerson?.pix_enabled) : false;
+  const currentPixKeyType = isSelfTarget ? normalizePixKeyType(targetPerson?.pix_key_type) : null;
+  const currentPixKeyValue = isSelfTarget ? normalizePixKeyValue(targetPerson?.pix_key_type, targetPerson?.pix_key_value) : null;
+  const currentPixStateRaw = isSelfTarget
+    ? (normalizePixState(targetPerson?.pix_state) || guessPixStateByCity(targetPerson?.pix_city) || null)
+    : null;
+  const currentPixCityRaw = isSelfTarget ? String(targetPerson?.pix_city || '').trim() : '';
+  const currentPixLabelRaw = isSelfTarget ? String(targetPerson?.pix_label || '').trim() : '';
+
+  const pixEnabled = isSelfTarget
+    ? normalizePixToggle(requestedSection === 'identity' ? currentPixEnabled : req.body.pix_enabled)
+    : false;
+  const pixKeyType = isSelfTarget
+    ? normalizePixKeyType(requestedSection === 'identity' ? currentPixKeyType : req.body.pix_key_type)
+    : null;
+  const pixKeyValue = isSelfTarget
+    ? normalizePixKeyValue(pixKeyType, requestedSection === 'identity' ? currentPixKeyValue : req.body.pix_key_value)
+    : null;
+  const pixStateRaw = isSelfTarget
+    ? (
+        requestedSection === 'identity'
+          ? currentPixStateRaw
+          : (normalizePixState(req.body.pix_state) || guessPixStateByCity(req.body.pix_city) || null)
+      )
+    : null;
+  const pixCityRaw = isSelfTarget
+    ? (requestedSection === 'identity' ? currentPixCityRaw : String(req.body.pix_city || '').trim())
+    : '';
+  const pixLabelRaw = isSelfTarget
+    ? (requestedSection === 'identity' ? currentPixLabelRaw : String(req.body.pix_label || '').trim())
+    : '';
+  const duplicatedPerson = findPersonByNameForUser(userId, name, id);
+  const pixProfile = isSelfTarget
+    ? validatePixProfile({
+        enabled: pixEnabled,
+        keyType: pixKeyType,
+        keyValue: pixKeyValue,
+        city: pixCityRaw,
+        state: pixStateRaw,
+        label: pixLabelRaw,
+        name: name || email || 'ACERTTAPAY'
+      })
+    : { valid: true, enabled: false, keyType: null, keyValue: null, city: null, state: null, label: null };
+  const storedPixProfile = pixEnabled
+    ? pixProfile
+    : { keyType: null, keyValue: null, city: null, state: null, label: null };
+
+  if (id && !targetPerson) {
+    setFlash(req, 'error', 'Não encontrei essa pessoa por aqui para atualizar.');
+    return res.redirect('/people');
   }
 
-  res.redirect("/people");
-});
+  if (isSelfTarget && requestedSection === 'signature') {
+    const signatureText = normalizeProfileSignatureText(req.body.profile_signature_text);
+    const signatureVibe = normalizeProfileSignatureVibe(req.body.profile_signature_vibe);
+    db.prepare(`
+      UPDATE users
+      SET profile_signature_text = ?,
+          profile_signature_vibe = ?,
+          profile_signature_updated_at = ?
+      WHERE id = ?
+    `).run(signatureText || null, signatureVibe || null, (signatureText || signatureVibe) ? nowIso() : null, userId);
+    req.user.profile_signature_text = signatureText;
+    req.user.profile_signature_vibe = signatureVibe;
+    setFlash(req, 'success', signatureText || signatureVibe
+      ? 'Sua assinatura no app ficou salva do seu jeitinho.'
+      : 'Sua assinatura voltou para o modo discreto por aqui.');
+    return res.redirect(redirectTarget);
+  }
 
+  if (!name) {
+    setFlash(req, 'error', id && isSelfPersonRow(targetPerson)
+      ? 'Me passa pelo menos como você quer aparecer no app para eu salvar seu perfil direitinho.'
+      : 'Me dá pelo menos o nome dessa pessoa para eu conseguir salvar direitinho.');
+    return res.redirect(redirectTarget);
+  }
+
+  if (duplicatedPerson) {
+    setFlash(req, 'error', 'Já existe alguém com esse nome na sua lista. Se forem xará, vale colocar um apelido para não virar bagunça.');
+    return res.redirect(redirectTarget);
+  }
+
+  if (!normalizedPhone.ok) {
+    setFlash(req, 'error', normalizedPhone.reason || 'Não consegui entender esse telefone ainda. Confere o país e o número e tenta de novo.');
+    return res.redirect(redirectTarget);
+  }
+
+  if (pixEnabled && requestedSection !== 'identity' && !pixProfile.valid) {
+    setFlash(req, 'error', pixProfile.reason || 'Faltou acertar um detalhe do Pix antes de salvar.');
+    return res.redirect(redirectTarget);
+  }
+
+  const pixUpdatedAt = pixEnabled ? nowIso() : null;
+
+  if (id) {
+    db.prepare(`
+      UPDATE people
+      SET name = ?,
+          phone = ?,
+          email = ?,
+          pix_enabled = ?,
+          pix_key_type = ?,
+          pix_key_value = ?,
+          pix_city = ?,
+          pix_state = ?,
+          pix_label = ?,
+          pix_updated_at = ?
+      WHERE id = ? AND user_id = ?
+    `).run(
+      name,
+      phone,
+      email,
+      pixEnabled ? 1 : 0,
+      storedPixProfile.keyType,
+      storedPixProfile.keyValue || null,
+      storedPixProfile.city || null,
+      storedPixProfile.state || guessPixStateByCity(storedPixProfile.city) || null,
+      storedPixProfile.label || null,
+      pixUpdatedAt,
+      id,
+      userId
+    );
+  } else {
+    db.prepare(`
+      INSERT INTO people(
+        user_id, name, phone, email, pix_enabled, pix_key_type,
+        pix_key_value, pix_city, pix_state, pix_label, pix_updated_at, active, is_owner, profile_kind, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 'contact', 'active')
+    `).run(
+      userId,
+      name,
+      phone,
+      email,
+      pixEnabled ? 1 : 0,
+      storedPixProfile.keyType,
+      storedPixProfile.keyValue || null,
+      storedPixProfile.city || null,
+      storedPixProfile.state || guessPixStateByCity(storedPixProfile.city) || null,
+      storedPixProfile.label || null,
+      pixUpdatedAt
+    );
+  }
+
+  let successMessage = 'Contato salvo direitinho por aqui. Quando rolar amizade e pagamento, o Pix vem do perfil da própria pessoa.';
+  if (isSelfTarget) {
+    if (requestedSection === 'identity') {
+      successMessage = 'Seu perfil por aqui foi salvo direitinho.';
+    } else if (requestedSection === 'pix') {
+      successMessage = pixEnabled
+        ? 'Seu Pix ficou salvo e prontinho para entrar em cena nas cobranças.'
+        : 'Seu Pix foi desligado por aqui. Quando quiser, é só ligar de novo.';
+    } else {
+      successMessage = pixEnabled
+        ? 'Seu perfil foi salvo com o Pix prontinho para entrar em cena.'
+        : 'Seu perfil foi atualizado direitinho por aqui.';
+    }
+  }
+
+  setFlash(req, 'success', successMessage);
+  return res.redirect(redirectTarget);
+});
 app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const personId = Number(req.params.id);
   const person = db.prepare(`
-    SELECT id, name, email, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner
+    SELECT id, name, email, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner, COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind,
+           COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
     FROM people
     WHERE id = ? AND user_id = ?
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
     LIMIT 1
   `).get(personId, userId);
 
@@ -5684,8 +10583,8 @@ app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
     return res.redirect('/people');
   }
 
-  if (Number(person.is_owner || 0) !== 0) {
-    setFlash(req, 'info', 'Você já está no seu próprio time. Esse pedido não precisa existir.');
+  if (isSelfPersonRow(person)) {
+    setFlash(req, 'info', 'Seu perfil já está no comando por aqui. Esse pedido não precisa existir.');
     return res.redirect('/people');
   }
 
@@ -5696,7 +10595,7 @@ app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
 
   const resolved = getResolvedAppUserForPerson(userId, personId);
   if (!resolved?.linked_user_id) {
-    setFlash(req, 'info', 'Essa pessoa ainda não apareceu como usuária do OrganizaPay. Quando isso rolar, o botão vem pra festa.');
+    setFlash(req, 'info', 'Essa pessoa ainda não apareceu como usuária do AcerttaPay. Quando isso rolar, o botão vem pra festa.');
     return res.redirect('/people');
   }
 
@@ -5749,7 +10648,7 @@ app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
     userId: resolved.linked_user_id,
     type: 'friend_request',
     title: 'Chegou um pedido de amizade',
-    body: `${requester?.name || person.name || 'Alguém'} quer virar seu contato de confiança no OrganizaPay.`,
+    body: `${requester?.name || person.name || 'Alguém'} quer virar seu contato de confiança no AcerttaPay.`,
     href: `/people?friendRequest=${requestId}`,
     relatedType: 'friend_request',
     relatedId: requestId
@@ -5872,14 +10771,22 @@ app.post('/people/:id/unfriend', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const personId = Number(req.params.id);
   const person = db.prepare(`
-    SELECT id, name
+    SELECT id, name, COALESCE(is_owner, 0) AS is_owner,
+           COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind,
+           COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
     FROM people
     WHERE id = ? AND user_id = ?
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
     LIMIT 1
   `).get(personId, userId);
 
   if (!person) {
     setFlash(req, 'error', 'Não encontrei essa pessoa por aqui.');
+    return res.redirect('/people');
+  }
+
+  if (isSelfPersonRow(person)) {
+    setFlash(req, 'info', 'Seu perfil não entra nessa dança de amizade. Ele já é você por definição.');
     return res.redirect('/people');
   }
 
@@ -5909,7 +10816,7 @@ app.post('/people/:id/unfriend', ensureAuthenticated, (req, res) => {
     userId: resolved.linked_user_id,
     type: 'friendship_update',
     title: 'Amizade desfeita',
-    body: `${actor?.name || 'Um contato'} desfez a amizade no OrganizaPay. O histórico continua, mas novos envios automáticos param por aqui.`,
+    body: `${actor?.name || 'Um contato'} desfez a amizade no AcerttaPay. O histórico continua, mas novos envios automáticos param por aqui.`,
     href: '/people',
     relatedType: 'friendship',
     relatedId: friendship.id
@@ -5921,37 +10828,102 @@ app.post('/people/:id/unfriend', ensureAuthenticated, (req, res) => {
 
 app.post("/people/:id/toggle", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  db.prepare("UPDATE people SET active = CASE active WHEN 1 THEN 0 ELSE 1 END WHERE id = ? AND user_id = ?")
-    .run(Number(req.params.id), userId);
-  res.redirect("/people");
+  const personId = Number(req.params.id);
+  const person = db.prepare(`
+    SELECT id, name, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner,
+           COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind,
+           COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
+    FROM people
+    WHERE id = ? AND user_id = ?
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
+    LIMIT 1
+  `).get(personId, userId);
+
+  if (!person) {
+    setFlash(req, 'error', 'Não encontrei essa pessoa por aqui.');
+    return res.redirect('/people');
+  }
+
+  if (isSelfPersonRow(person)) {
+    setFlash(req, 'info', 'Seu perfil fica sempre ativo por aqui. O que dá para ajustar nele são seus dados e seu Pix.');
+    return res.redirect('/people');
+  }
+
+  const becameActive = Number(person.active || 0) === 0;
+  db.prepare(`
+    UPDATE people
+    SET active = ?,
+        status = ?,
+        deleted_at = CASE WHEN ? = 1 THEN NULL ELSE deleted_at END
+    WHERE id = ? AND user_id = ?
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
+  `).run(becameActive ? 1 : 0, becameActive ? 'active' : 'inactive', becameActive ? 1 : 0, personId, userId);
+
+  setFlash(req, 'success', becameActive
+    ? `${person.name} voltou para sua lista ativa.`
+    : `${person.name} foi tirado(a) de cena sem mexer no histórico.`);
+  return res.redirect('/people');
 });
 
 app.post("/people/:id/delete", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const personId = Number(req.params.id);
-  const person = db.prepare("SELECT id, name FROM people WHERE id = ? AND user_id = ?").get(personId, userId);
+  const person = db.prepare(`
+    SELECT id, name, COALESCE(is_owner, 0) AS is_owner,
+           COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind,
+           COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
+    FROM people
+    WHERE id = ? AND user_id = ?
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
+    LIMIT 1
+  `).get(personId, userId);
 
   if (!person) {
     setFlash(req, "error", "Pessoa não encontrada.");
     return res.redirect("/people");
   }
 
-  const usage = db.prepare(`
-    SELECT
-      EXISTS(SELECT 1 FROM allocations WHERE user_id = ? AND person_id = ?) AS has_allocations,
-      EXISTS(SELECT 1 FROM person_payments WHERE user_id = ? AND person_id = ?) AS has_payments,
-      EXISTS(SELECT 1 FROM person_app_links WHERE owner_user_id = ? AND person_id = ?) AS has_app_link,
-      EXISTS(SELECT 1 FROM friend_requests WHERE requester_user_id = ? AND source_person_id = ?) AS has_friend_history
-  `).get(userId, personId, userId, personId, userId, personId, userId, personId);
-
-  if (usage.has_allocations || usage.has_payments || usage.has_app_link || usage.has_friend_history) {
-    setFlash(req, "info", `Não foi possível excluir ${person.name} porque já existe histórico ou vínculo ligado a essa pessoa. Use Desativar para tirar de cena sem perder o passado.`);
-    return res.redirect("/people");
+  if (isSelfPersonRow(person)) {
+    setFlash(req, "info", "Seu perfil não pode ser excluído daqui. Ele é a base da sua conta e das suas cobranças.");
+    return res.redirect('/people');
   }
 
-  db.prepare("DELETE FROM people WHERE id = ? AND user_id = ?").run(personId, userId);
-  setFlash(req, "success", `${person.name} foi removido(a) com sucesso.`);
-  return res.redirect("/people");
+  const blockers = getContactDeletionBlockers(userId, personId);
+  if (blockers.openBalanceMonths.length > 0) {
+    const firstOpenMonth = blockers.openBalanceMonths[0];
+    const extraMonths = blockers.openBalanceMonths.length - 1;
+    const monthText = monthLabel(firstOpenMonth.month, firstOpenMonth.year);
+    setFlash(
+      req,
+      'info',
+      `${person.name} ainda tem valor em aberto em ${monthText}${extraMonths > 0 ? ` e em mais ${extraMonths} ${extraMonths === 1 ? 'mês' : 'meses'}` : ''}. Antes de excluir da sua lista, precisamos fechar essas pendências.`
+    );
+    return res.redirect('/people');
+  }
+
+  if (blockers.hasDraftQueue) {
+    setFlash(req, 'info', `${person.name} ainda está em uma caixa de saída de cobranças. Envie ou descarte esse rascunho antes de excluir da sua lista.`);
+    return res.redirect('/people');
+  }
+
+  if (blockers.hasOpenPixIntent) {
+    setFlash(req, 'info', `${person.name} ainda tem um Pix do mês aguardando andamento. Fecha esse fluxo primeiro e depois a exclusão fica liberada.`);
+    return res.redirect('/people');
+  }
+
+  if (blockers.hasOpenRequests) {
+    setFlash(req, 'info', `${person.name} ainda participa de cobranças em aberto. Resolve isso primeiro e depois eu libero a exclusão sem apagar o passado.`);
+    return res.redirect('/people');
+  }
+
+  try {
+    offboardContactFromActiveExperience(userId, personId);
+    setFlash(req, 'success', `${person.name} saiu da sua lista ativa. O histórico ficou salvo, e se um dia voltar pode entrar como novo contato.`);
+  } catch (err) {
+    setFlash(req, 'error', getFriendlyErrorMessage(err, { defaultMessage: `Não consegui excluir ${person.name} agora.` }));
+  }
+
+  return res.redirect('/people');
 });
 
 // Cards
@@ -5962,23 +10934,69 @@ app.get("/cards", ensureAuthenticated, (req, res) => {
 
 app.post("/cards", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
+  const editId = Number(req.body.edit_id || 0) || null;
   const name = (req.body.name || "").trim();
   const dueDay = normalizeDayNumber(req.body.due_day);
   const closeDay = normalizeDayNumber(req.body.close_day);
+  const brand = normalizeCardBrand(req.body.brand) || null;
 
-  if (name) {
-    db.prepare("INSERT OR IGNORE INTO cards(user_id, name, due_day, close_day, holiday_scope) VALUES (?, ?, ?, ?, ?)")
-      .run(userId, name, dueDay, closeDay, "BR");
+  if (!name) {
+    setFlash(req, 'error', 'Me conta o nome do cartão antes de salvar.');
+    return res.redirect("/cards");
   }
 
-  res.redirect("/cards");
+  if (editId) {
+    const existingCard = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ?").get(editId, userId);
+    if (!existingCard) {
+      setFlash(req, 'error', 'Não achei esse cartão por aqui.');
+      return res.redirect("/cards");
+    }
+
+    if (findCardByNameForUser(userId, name, editId)) {
+      setFlash(req, 'error', 'Esse nome já está na carteira. Se quiser diferenciar, dá para usar um apelido.');
+      return res.redirect("/cards");
+    }
+
+    db.prepare("UPDATE cards SET name = ?, due_day = ?, close_day = ?, brand = ? WHERE id = ? AND user_id = ?")
+      .run(name, dueDay, closeDay, brand, editId, userId);
+
+    setFlash(req, 'success', `${name} ficou atualizado direitinho.`);
+    return res.redirect("/cards");
+  }
+
+  if (findCardByNameForUser(userId, name)) {
+    setFlash(req, 'error', 'Esse cartão já está na carteira. Se quiser diferenciar, dá para usar um apelido.');
+    return res.redirect("/cards");
+  }
+
+  db.prepare("INSERT INTO cards(user_id, name, due_day, close_day, holiday_scope, brand) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(userId, name, dueDay, closeDay, "BR", brand);
+
+  setFlash(req, 'success', `${name} entrou na carteira direitinho.`);
+  return res.redirect("/cards");
 });
 
 app.post("/cards/:id/update", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  db.prepare("UPDATE cards SET due_day = ?, close_day = ? WHERE id = ? AND user_id = ?")
-    .run(normalizeDayNumber(req.body.due_day), normalizeDayNumber(req.body.close_day), Number(req.params.id), userId);
-  res.redirect("/cards");
+  const cardId = Number(req.params.id);
+  const currentCard = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ?").get(cardId, userId);
+
+  if (!currentCard) {
+    setFlash(req, 'error', 'Não achei esse cartão por aqui.');
+    return res.redirect("/cards");
+  }
+
+  const name = (req.body.name || currentCard.name || '').trim() || currentCard.name;
+  if (findCardByNameForUser(userId, name, cardId)) {
+    setFlash(req, 'error', 'Esse nome já está na carteira. Se quiser diferenciar, dá para usar um apelido.');
+    return res.redirect('/cards');
+  }
+
+  db.prepare("UPDATE cards SET name = ?, due_day = ?, close_day = ?, brand = ? WHERE id = ? AND user_id = ?")
+    .run(name, normalizeDayNumber(req.body.due_day), normalizeDayNumber(req.body.close_day), normalizeCardBrand(req.body.brand) || null, cardId, userId);
+
+  setFlash(req, 'success', `${name} ficou atualizado direitinho.`);
+  return res.redirect("/cards");
 });
 
 app.post("/cards/:id/toggle", ensureAuthenticated, (req, res) => {
@@ -6371,17 +11389,9 @@ function resolveChronologicalDirection(order, fallback = "recent") {
   return normalized === "oldest" ? "asc" : "desc";
 }
 
-// Rota para definir o Titular
 app.post("/people/:id/set-owner", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const id = Number(req.params.id);
-
-  db.transaction(() => {
-    db.prepare("UPDATE people SET is_owner = 0 WHERE user_id = ?").run(userId);
-    db.prepare("UPDATE people SET is_owner = 1 WHERE id = ? AND user_id = ?").run(id, userId);
-  })();
-
-  res.redirect("/people");
+  setFlash(req, 'info', 'Agora seu perfil já é fixo por aqui. Não precisa mais trocar quem é você.');
+  return res.redirect('/people');
 });
 
 // Rota Principal do detalhamento
@@ -6407,40 +11417,10 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const currentYear = parseInt(year);
 
   syncRecurringTransactions(userId, currentYear, currentMonth);
+  ensureMonthlyFinanceScaffold(userId, currentMonth, currentYear);
 
-  const existingExpenses = db.prepare(`
-    SELECT COUNT(*) as count
-    FROM monthly_finances
-    WHERE user_id = ? AND month = ? AND year = ? AND type = 'expense'
-  `).get(userId, currentMonth, currentYear);
-
-  if (existingExpenses.count === 0) {
-    let prevM = currentMonth - 1;
-    let prevY = currentYear;
-    if (prevM < 1) { prevM = 12; prevY--; }
-
-    const prevExpenses = db.prepare(`
-      SELECT *
-      FROM monthly_finances
-      WHERE user_id = ? AND month = ? AND year = ? AND type = 'expense'
-    `).all(userId, prevM, prevY);
-
-    if (prevExpenses.length > 0) {
-      const insertClone = db.prepare(`
-        INSERT INTO monthly_finances (user_id, month, year, type, description, category_id, formula, amount_cents, created_at)
-        VALUES (?, ?, ?, 'expense', ?, ?, '', 0, ?)
-      `);
-
-      db.transaction(() => {
-        for (const exp of prevExpenses) {
-          insertClone.run(userId, currentMonth, currentYear, exp.description, exp.category_id, new Date().toISOString());
-        }
-      })();
-    }
-  }
-
-  const owner = db.prepare("SELECT * FROM people WHERE user_id = ? AND is_owner = 1 LIMIT 1").get(userId);
-  if (!owner) return res.status(400).send("Defina um titular na aba Amigos primeiro.");
+  const owner = getSelfPerson(userId) || ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
+  if (!owner) return res.status(400).send("Ajuste seu perfil em Amigos antes de seguir por aqui.");
 
   const cardTotal = db.prepare(`
     SELECT COALESCE(SUM(a.share_cents), 0) as total
@@ -6455,11 +11435,12 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       )
   `).get(userId, owner.id, currentMonth, currentYear, currentMonth, currentYear);
 
-  const finances = db.prepare(`
+  const finances = hydrateMonthlyFinances(userId, db.prepare(`
     SELECT *
     FROM monthly_finances
     WHERE user_id = ? AND month = ? AND year = ?
-  `).all(userId, currentMonth, currentYear);
+    ORDER BY CASE type WHEN 'income' THEN 0 ELSE 1 END, id ASC
+  `).all(userId, currentMonth, currentYear));
 
   const categories = db.prepare("SELECT * FROM finance_categories WHERE user_id = ? AND is_active = 1").all(userId);
 
@@ -6472,7 +11453,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 
   const isClosed = isMonthClosed(userId, currentMonth, currentYear);
   const visibleCards = getVisibleCardsForMonth(userId, currentMonth, currentYear);
-  const cards = getActiveCards(userId).map(({ id, name, close_day, due_day }) => ({ id, name, close_day, due_day }));
+  const cards = getActiveCards(userId).map(({ id, name, close_day, due_day, brand }) => ({ id, name, close_day, due_day, brand }));
+  const purchaseCategories = getPurchaseCategories(userId);
 
   const cardTotalsRows = db.prepare(`
     SELECT t.card_id, SUM(t.amount_cents) AS total_cents
@@ -6536,7 +11518,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       type: 'info',
       icon: '💌',
       title: newestFriendNotification.title || 'Tem novidade na sua rede',
-      description: newestFriendNotification.body || 'Seu espaço de amizades ganhou novidade no OrganizaPay.',
+      description: newestFriendNotification.body || 'Seu espaço de amizades ganhou novidade no AcerttaPay.',
       href: newestFriendNotification.href || '/people'
     });
   }
@@ -6545,8 +11527,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     SELECT title, body, href, created_at
     FROM notifications
     WHERE user_id = ? AND is_read = 0 AND (
-      related_type IN ('shared_debt_request', 'shared_debt_batch') OR
-      type IN ('shared_debt_request', 'shared_debt_batch')
+      related_type IN ('shared_debt_request', 'shared_debt_batch', 'shared_debt_payment_intent') OR
+      type IN ('shared_debt_request', 'shared_debt_batch', 'shared_debt_payment_intent')
     )
     ORDER BY created_at DESC
     LIMIT 5
@@ -6579,6 +11561,17 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
         href: '/shared-debts#received'
       });
     }
+  }
+
+  const draftSendQueueSummary = getSharedDebtSendQueueDraftSummary(userId);
+  if (draftSendQueueSummary.queueCount > 0) {
+    alerts.push({
+      type: 'info',
+      icon: '📤',
+      title: draftSendQueueSummary.queueCount === 1 ? 'Tem 1 envio guardado na caixa de saída' : 'Tem envios guardados na caixa de saída',
+      description: `${formatCountLabel(draftSendQueueSummary.itemCount, 'cobrança está', 'cobranças estão')} prontas para disparar, somando ${formatBRLFromCents(draftSendQueueSummary.totalCents)}.`,
+      href: '/shared-debts#draft-queues'
+    });
   }
 
   const today = dayjs();
@@ -6636,7 +11629,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     });
   }
 
-  const pendingReceiptConfirmationCount = db.prepare(`
+  const legacyPendingReceiptConfirmationCount = db.prepare(`
     SELECT COUNT(*) AS total
     FROM shared_debt_requests
     WHERE requester_user_id = ?
@@ -6644,12 +11637,35 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       AND payment_marked_at IS NOT NULL
   `).get(userId)?.total || 0;
 
+  const monthlyPendingReceiptConfirmationCount = db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM shared_debt_payment_intents
+    WHERE requester_user_id = ?
+      AND request_kind = 'card'
+      AND status = 'reported'
+  `).get(userId)?.total || 0;
+
+  const pendingReceiptConfirmationCount = legacyPendingReceiptConfirmationCount + monthlyPendingReceiptConfirmationCount;
+
   if (pendingReceiptConfirmationCount > 0) {
+    let title = 'Pagamentos aguardando sua confirmação';
+    let description = `${formatCountLabel(pendingReceiptConfirmationCount, 'pagamento', 'pagamentos')} já ${pendingReceiptConfirmationCount === 1 ? 'foi marcado como feito e está' : 'foram marcados como feitos e estão'} esperando seu ok final.`;
+
+    if (monthlyPendingReceiptConfirmationCount > 0 && legacyPendingReceiptConfirmationCount === 0) {
+      title = monthlyPendingReceiptConfirmationCount === 1 ? 'Pix do mês aguardando seu ok' : 'Pix do mês aguardando seu ok';
+      description = `${formatCountLabel(monthlyPendingReceiptConfirmationCount, 'Pix do mês', 'Pix do mês')} já ${monthlyPendingReceiptConfirmationCount === 1 ? 'foi avisado e está' : 'foram avisados e estão'} esperando sua confirmação na carteira mensal.`;
+    } else if (monthlyPendingReceiptConfirmationCount > 0) {
+      const monthlyHint = monthlyPendingReceiptConfirmationCount === 1
+        ? '1 deles é Pix do mês.'
+        : `${monthlyPendingReceiptConfirmationCount} deles são Pix do mês.`;
+      description = `${description} ${monthlyHint}`;
+    }
+
     alerts.push({
       type: 'warning',
       icon: '✅',
-      title: 'Pagamentos aguardando sua confirmação',
-      description: `${formatCountLabel(pendingReceiptConfirmationCount, 'pagamento', 'pagamentos')} já ${pendingReceiptConfirmationCount === 1 ? 'foi marcado como feito e está' : 'foram marcados como feitos e estão'} esperando seu ok final.`,
+      title,
+      description,
       href: '/shared-debts#sent'
     });
   }
@@ -6723,6 +11739,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     isClosed,
     alerts,
     cards,
+    purchaseCategories,
     sharedDebtSummary
   });
 });
@@ -6750,6 +11767,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   const filters = {
     f_date: (req.query.f_date || "").toString().trim(),
     f_desc: (req.query.f_desc || "").toString().trim(),
+    f_category: (req.query.f_category || "").toString().trim(),
     f_card: (req.query.f_card || "").toString().trim(),
     f_number: (req.query.f_number || "").toString().trim(),
     f_amount: (req.query.f_amount || "").toString().trim(),
@@ -6767,6 +11785,20 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   if (filters.f_desc) {
     where.push("t.description LIKE ?");
     params.push(`%${filters.f_desc}%`);
+  }
+
+  if (filters.f_category) {
+    if (filters.f_category === 'none') {
+      where.push('t.purchase_category_id IS NULL');
+    } else {
+      const categoryId = Number(filters.f_category);
+      if (categoryId > 0) {
+        where.push('t.purchase_category_id = ?');
+        params.push(categoryId);
+      } else {
+        filters.f_category = '';
+      }
+    }
   }
 
   if (filters.f_card) {
@@ -6809,8 +11841,9 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   }
 
   const txns = db.prepare(`
-    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
+    SELECT t.id, t.import_id, t.card_id, t.txn_date, t.description, t.amount_cents, t.card_number, c.name AS card_name,
            t.parent_txn_id, t.recurring_rule_id, t.due_month, t.due_year,
+           t.purchase_category_id, pc.name AS purchase_category_name, COALESCE(pc.active, 0) AS purchase_category_active,
            COALESCE(t.due_month, i.month) AS month,
            COALESCE(t.due_year, i.year) AS year,
            ${allocCountExpr} AS alloc_count,
@@ -6819,6 +11852,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     FROM transactions t
     LEFT JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
     WHERE t.user_id = ? AND ${where.join(" AND ")}
     ORDER BY ${orderBy}
   `).all(userId, ...params);
@@ -6838,6 +11872,8 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   const people = getVisiblePeopleForMonth(userId, month, year);
   const cards = getActiveCards(userId);
+  const purchaseCategories = getPurchaseCategories(userId, { includeInactive: true });
+  const activePurchaseCategories = purchaseCategories.filter((category) => Number(category.active || 0) !== 0);
   const recurringRules = getRecurringRules(userId).map(rule => {
     const preview = getRecurringPreview(rule);
     const startDate = dayjs(rule.start_txn_date);
@@ -6862,7 +11898,26 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     return `/month/${year}/${month}${qs ? `?${qs}` : ""}`;
   };
 
-  res.render("month", { month, year, txns, people, cards, recurringRules, formatBRLFromCents, sort, dir, sortLink, filters, isClosed, listOrder });
+  const draftQueueSummaryForMonth = getSharedDebtSendQueueDraftSummary(userId, { month, year });
+
+  res.render("month", {
+    month,
+    year,
+    txns,
+    people,
+    cards,
+    recurringRules,
+    purchaseCategories,
+    activePurchaseCategories,
+    formatBRLFromCents,
+    sort,
+    dir,
+    sortLink,
+    filters,
+    isClosed,
+    listOrder,
+    draftQueueSummaryForMonth
+  });
 });
 
 app.post("/txn/manual", ensureAuthenticated, (req, res) => {
@@ -6872,6 +11927,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
   const assignToOwner = ["1", "true", "on", "sim"].includes(String(req.body.assign_to_owner || "").toLowerCase());
 
   try {
+    const purchaseCategoryId = resolvePurchaseCategorySelection(userId, req.body.purchase_category_id, req.body.purchase_category_custom);
     const cardIdNum = Number(card_id);
     if (!cardIdNum || isNaN(cardIdNum)) {
       return res.status(400).send("Cartao invalido. Selecione um cartao valido.");
@@ -6891,7 +11947,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
 
     const ownerPerson = assignToOwner ? getOwnerPerson(userId) : null;
     if (assignToOwner && !ownerPerson) {
-      setFlash(req, "error", "Defina um titular na aba Amigos antes de usar 'Atribuir esse item a mim'.");
+      setFlash(req, "error", "Ajuste seu perfil em Amigos antes de usar 'Atribuir esse item a mim'.");
       return res.redirect(redirectBackOr(req, "/geral"));
     }
 
@@ -6922,25 +11978,25 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
     const createdTxnIds = [];
 
     db.transaction(() => {
-      const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1").all(userId);
+      const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1 AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'").all(userId);
       const autoAssignPersonId = assignToOwner
         ? Number(ownerPerson.id)
         : (activePeople.length === 1 ? Number(activePeople[0].id) : null);
       const insTxn = db.prepare(`
-        INSERT INTO transactions (user_id, card_id, txn_date, description, amount_cents, due_month, due_year, parent_txn_id, recurring_rule_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO transactions (user_id, card_id, txn_date, description, amount_cents, due_month, due_year, parent_txn_id, recurring_rule_id, purchase_category_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const insAlloc = db.prepare(`
         INSERT INTO allocations (user_id, transaction_id, person_id, share_cents, created_at)
         VALUES (?, ?, ?, ?, ?)
       `);
       const insRecurring = db.prepare(`
-        INSERT INTO recurring_rules (user_id, card_id, description, amount_cents, start_txn_date, start_due_month, start_due_year, active_from_month, active_from_year, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+        INSERT INTO recurring_rules (user_id, card_id, description, amount_cents, purchase_category_id, start_txn_date, start_due_month, start_due_year, active_from_month, active_from_year, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
       `);
 
       if (isRecurring) {
-        const info = insRecurring.run(userId, cardIdNum, description, totalCents, date, startMonth, startYear, startMonth, startYear, nowIso(), nowIso());
+        const info = insRecurring.run(userId, cardIdNum, description, totalCents, purchaseCategoryId, date, startMonth, startYear, startMonth, startYear, nowIso(), nowIso());
         recurringRuleId = Number(info.lastInsertRowid);
       }
 
@@ -6959,7 +12015,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
         const currentRecurringRuleId = isRecurring ? recurringRuleId : null;
         const currentParentTxnId = (numInstallments > 1 && installmentRootTxnId) ? installmentRootTxnId : null;
 
-        const info = insTxn.run(userId, cardIdNum, date, finalDesc, currentAmount, currentMonth, currentYear, currentParentTxnId, currentRecurringRuleId, nowIso());
+        const info = insTxn.run(userId, cardIdNum, date, finalDesc, currentAmount, currentMonth, currentYear, currentParentTxnId, currentRecurringRuleId, purchaseCategoryId, nowIso());
         const txnIdCreated = Number(info.lastInsertRowid);
         if (!installmentRootTxnId) installmentRootTxnId = txnIdCreated;
 
@@ -6980,7 +12036,10 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
 
     res.redirect(`/month/${startYear}/${startMonth}`);
   } catch (err) {
-    res.status(500).send("Erro ao processar transacao manual: " + err.message);
+    return handleFriendlyErrorResponse(req, res, err, {
+      defaultMessage: 'Não consegui salvar esse lançamento manual agora.',
+      fallbackRedirect: '/geral'
+    });
   }
 });
 
@@ -7041,6 +12100,10 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
 
   const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
   const targetRows = getInstallmentScopeRows(userId, txn, applyScope);
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, targetRows));
+  if (settlementBlockMessage) {
+    return res.status(409).send(settlementBlockMessage);
+  }
   const lockedTarget = targetRows.find(row => isMonthClosed(userId, row.month, row.year));
   if (lockedTarget) {
     return res.status(423).send(getMonthLockMessage(lockedTarget.month, lockedTarget.year));
@@ -7060,9 +12123,17 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
 
     replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
 
-    syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
+    const dispatchResult = applySharedDebtDispatchModeForTransactions(userId, targetRows, {
+      deliveryMode: req.body.delivery_mode,
       originKind: detectSharedDebtOriginKindFromRows(targetRows)
     });
+
+    if (dispatchResult.deliveryMode === 'draft') {
+      const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
+      setFlash(req, 'success', summary.itemCount > 0
+        ? `Divisão salva e ${formatCountLabel(summary.itemCount, 'cobrança ficou guardada', 'cobranças ficaram guardadas')} na caixa de saída.`
+        : 'Divisão salva. Como ainda não encontrei amizade pronta nessa seleção, nada ficou pendente de envio.');
+    }
 
     res.redirect(`/month/${txn.year}/${txn.month}`);
   } catch (error) {
@@ -7075,12 +12146,14 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const id = Number(req.params.id);
   const txn = db.prepare(`
-    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_number, t.parent_txn_id, c.name AS card_name,
+    SELECT t.id, t.txn_date, t.description, t.amount_cents, t.card_id, t.import_id, t.card_number, t.parent_txn_id, t.recurring_rule_id, t.purchase_category_id,
+           c.name AS card_name, pc.name AS purchase_category_name, COALESCE(pc.active, 0) AS purchase_category_active,
            COALESCE(t.due_month, i.month) as month,
            COALESCE(t.due_year, i.year) as year
     FROM transactions t
     LEFT JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
     WHERE t.id = ? AND t.user_id = ?
   `).get(id, userId);
 
@@ -7098,8 +12171,358 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
   const isClosed = isMonthClosed(userId, txn.month, txn.year);
   const hasFutureInstallmentsForTxn = hasFutureInstallments(userId, txn);
   const initialSplitMode = inferAllocationMode(Number(txn.amount_cents || 0), allocationRows);
+  const purchaseCategories = getPurchaseCategories(userId, {
+    includeIds: txn.purchase_category_id ? [txn.purchase_category_id] : []
+  });
+  const cards = getCardsByIds(userId, [
+    ...(getActiveCards(userId) || []).map((card) => Number(card.id || 0)),
+    Number(txn.card_id || 0)
+  ]);
 
-  res.render("txn", { txn, people, selected, selectedShares, initialSplitMode, formatBRLFromCents, isClosed, hasFutureInstallments: hasFutureInstallmentsForTxn });
+  res.render("txn", {
+    txn,
+    people,
+    selected,
+    selectedShares,
+    initialSplitMode,
+    purchaseCategories,
+    cards,
+    formatBRLFromCents,
+    isClosed,
+    hasFutureInstallments: hasFutureInstallmentsForTxn
+  });
+});
+
+app.post("/txn/:id/edit", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const id = Number(req.params.id);
+  const txn = getTransactionScopeRow(userId, id);
+
+  const respondError = (status, message, fallbackRedirect = txn ? `/month/${txn.year}/${txn.month}` : '/month') => {
+    if (isAjaxLikeRequest(req)) {
+      return res.status(status).json({ ok: false, error: message });
+    }
+    setFlash(req, 'error', message);
+    return res.redirect(fallbackRedirect);
+  };
+
+  const respondSuccess = (message, payload = {}) => {
+    const redirectUrl = `/month/${payload.redirect_year || txn.year}/${payload.redirect_month || txn.month}`;
+    if (isAjaxLikeRequest(req)) {
+      return res.json({ ok: true, message, redirect: redirectUrl, ...payload });
+    }
+    setFlash(req, 'success', message);
+    return res.redirect(redirectUrl);
+  };
+
+  if (!txn) return res.status(404).send("Transação não encontrada.");
+  if (Number(txn.import_id || 0) > 0) {
+    return respondError(409, 'Compras importadas ainda não entram na edição completa. Por enquanto, esse ajuste segue no combo excluir e lançar de novo.');
+  }
+  if (isMonthClosed(userId, txn.month, txn.year)) {
+    return respondError(423, getMonthLockMessage(txn.month, txn.year));
+  }
+
+  const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
+  const targetRows = getEditableTransactionScopeRows(userId, txn, applyScope);
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, targetRows));
+  if (settlementBlockMessage) {
+    return respondError(409, settlementBlockMessage, `/txn/${txn.id}`);
+  }
+
+  const lockedTarget = targetRows.find((row) => isMonthClosed(userId, row.month, row.year));
+  if (lockedTarget) {
+    return respondError(423, getMonthLockMessage(lockedTarget.month, lockedTarget.year));
+  }
+
+  const date = String(req.body.date || '').trim();
+  const description = String(req.body.description || '').trim();
+  const amountRaw = String(req.body.amount || '').trim();
+  const firstDueRaw = String(req.body.first_due || '').trim();
+  const cardIdNum = Number(req.body.card_id || 0);
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !dayjs(date).isValid()) {
+    return respondError(400, 'Me passa uma data válida para a compra seguir no trilho.');
+  }
+  if (!description) {
+    return respondError(400, 'A descrição da compra não pode ficar em branco.');
+  }
+  if (!cardIdNum || Number.isNaN(cardIdNum)) {
+    return respondError(400, 'Cartão inválido. Escolha um cartão válido.');
+  }
+
+  const card = db.prepare("SELECT id, name, close_day, due_day FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(cardIdNum, userId);
+  if (!card) {
+    return respondError(400, 'Cartão não encontrado ou desativado.');
+  }
+
+  const amountCents = centsFromPtBrMoney(amountRaw);
+  if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    return respondError(400, 'Me conta um valor válido para salvar essa compra.');
+  }
+
+  let purchaseCategoryId = null;
+  try {
+    const allowedInactiveIds = Array.from(new Set(targetRows.map((row) => Number(row.purchase_category_id || 0)).filter((value) => Number.isInteger(value) && value > 0)));
+    purchaseCategoryId = resolvePurchaseCategorySelection(userId, req.body.purchase_category_id, req.body.purchase_category_custom, {
+      allowInactiveIds: allowedInactiveIds
+    });
+  } catch (error) {
+    return respondError(400, error.message || 'Não consegui entender a categoria dessa compra.');
+  }
+
+  const resolvedFirstDue = resolveFirstDueMonth({
+    firstDue: firstDueRaw,
+    purchaseDate: date,
+    closeDay: card.close_day,
+    dueDay: card.due_day
+  });
+
+  if (!resolvedFirstDue) {
+    return respondError(400, 'Não consegui descobrir a fatura dessa compra.');
+  }
+
+  const [targetDueYear, targetDueMonth] = resolvedFirstDue.split('-').map(Number);
+  if (!parseMonthYear(targetDueMonth, targetDueYear)) {
+    return respondError(400, 'A fatura escolhida não parece válida.');
+  }
+
+  const dueShiftDelta = getMonthDelta(txn.year, txn.month, targetDueYear, targetDueMonth);
+  const futureScope = applyScope === 'future';
+  const isRecurring = Number(txn.recurring_rule_id || 0) > 0;
+
+  let invalidDestination = null;
+  targetRows.some((row) => {
+    let nextDueMonth = targetDueMonth;
+    let nextDueYear = targetDueYear;
+    if (futureScope) {
+      if (isRecurring) {
+        const offset = getMonthDelta(txn.year, txn.month, row.year, row.month);
+        const shiftedDue = shiftMonth(targetDueYear, targetDueMonth, offset);
+        nextDueMonth = shiftedDue.month;
+        nextDueYear = shiftedDue.year;
+      } else {
+        const shiftedDue = shiftMonth(row.year, row.month, dueShiftDelta);
+        nextDueMonth = shiftedDue.month;
+        nextDueYear = shiftedDue.year;
+      }
+    }
+    if (!isMonthClosed(userId, nextDueMonth, nextDueYear)) return false;
+    invalidDestination = {
+      row,
+      target_month: nextDueMonth,
+      target_year: nextDueYear
+    };
+    return true;
+  });
+  if (invalidDestination) {
+    return respondError(423, getEditDestinationMonthLockMessage(invalidDestination.target_month, invalidDestination.target_year, {
+      futureScope,
+      isRecurring
+    }));
+  }
+  const installmentChain = txn.parent_txn_id || txn.id ? getInstallmentChainRows(userId, txn) : [];
+  const installmentMetaByTxnId = new Map(installmentChain.map((row, index) => [Number(row.id), { position: index + 1, total: installmentChain.length || 1 }]));
+
+  const hasEditMutations = targetRows.some((row) => {
+    let nextDueMonth = targetDueMonth;
+    let nextDueYear = targetDueYear;
+    let nextTxnDate = date;
+
+    if (futureScope) {
+      if (isRecurring) {
+        const offset = getMonthDelta(txn.year, txn.month, row.year, row.month);
+        const shiftedDue = shiftMonth(targetDueYear, targetDueMonth, offset);
+        nextDueMonth = shiftedDue.month;
+        nextDueYear = shiftedDue.year;
+        nextTxnDate = occurrenceDateFromStart(date, offset) || date;
+      } else {
+        const shiftedDue = shiftMonth(row.year, row.month, dueShiftDelta);
+        nextDueMonth = shiftedDue.month;
+        nextDueYear = shiftedDue.year;
+      }
+    }
+
+    let nextDescription = description;
+    const installmentMeta = installmentMetaByTxnId.get(Number(row.id || 0));
+    if (installmentMeta && Number(installmentMeta.total || 1) > 1) {
+      nextDescription = formatInstallmentDescription(description, installmentMeta.position, installmentMeta.total);
+    }
+
+    return String(row.txn_date || '') !== String(nextTxnDate || '')
+      || String(row.description || '') !== String(nextDescription || '')
+      || Number(row.amount_cents || 0) !== Number(amountCents || 0)
+      || Number(row.card_id || 0) !== Number(cardIdNum || 0)
+      || Number(row.month || 0) !== Number(nextDueMonth || 0)
+      || Number(row.year || 0) !== Number(nextDueYear || 0)
+      || Number(row.purchase_category_id || 0) !== Number(purchaseCategoryId || 0);
+  });
+
+  const recurringRuleNeedsUpdate = isRecurring && futureScope
+    ? (() => {
+        const rule = db.prepare(`
+          SELECT card_id, description, amount_cents, purchase_category_id, start_txn_date, start_due_month, start_due_year, active_from_month, active_from_year
+          FROM recurring_rules
+          WHERE id = ? AND user_id = ?
+        `).get(txn.recurring_rule_id, userId);
+        if (!rule) return false;
+        return Number(rule.card_id || 0) !== Number(cardIdNum || 0)
+          || String(rule.description || '') !== String(description || '')
+          || Number(rule.amount_cents || 0) !== Number(amountCents || 0)
+          || Number(rule.purchase_category_id || 0) !== Number(purchaseCategoryId || 0)
+          || String(rule.start_txn_date || '') !== String(date || '')
+          || Number(rule.start_due_month || 0) !== Number(targetDueMonth || 0)
+          || Number(rule.start_due_year || 0) !== Number(targetDueYear || 0)
+          || Number(rule.active_from_month || 0) !== Number(targetDueMonth || 0)
+          || Number(rule.active_from_year || 0) !== Number(targetDueYear || 0);
+      })()
+    : false;
+
+  if (!hasEditMutations && !recurringRuleNeedsUpdate) {
+    return respondSuccess('Nenhuma mudança detectada. Essa compra já está redondinha do jeitinho atual.', {
+      affected_count: 0,
+      redirect_month: txn.month,
+      redirect_year: txn.year
+    });
+  }
+
+  try {
+    ensureAmountEditDoesNotBreakAllocations(userId, targetRows, amountCents);
+  } catch (error) {
+    return respondError(409, error.message || 'A divisão dessa compra precisa de uma revisão antes de trocar o valor.');
+  }
+
+  const draftQueuedTxnIdSet = getSharedDebtDraftQueuedTxnIdSet(userId, targetRows.map((row) => row.id));
+  const updateTxn = db.prepare(`
+    UPDATE transactions
+    SET txn_date = ?, description = ?, amount_cents = ?, card_id = ?, due_month = ?, due_year = ?, purchase_category_id = ?
+    WHERE id = ? AND user_id = ?
+  `);
+  const updateRule = db.prepare(`
+    UPDATE recurring_rules
+    SET card_id = ?, description = ?, amount_cents = ?, purchase_category_id = ?,
+        start_txn_date = ?, start_due_month = ?, start_due_year = ?, active_from_month = ?, active_from_year = ?, updated_at = ?
+    WHERE id = ? AND user_id = ?
+  `);
+
+  db.transaction(() => {
+    targetRows.forEach((row) => {
+      let nextDueMonth = targetDueMonth;
+      let nextDueYear = targetDueYear;
+      let nextTxnDate = date;
+
+      if (futureScope) {
+        if (isRecurring) {
+          const offset = getMonthDelta(txn.year, txn.month, row.year, row.month);
+          const shiftedDue = shiftMonth(targetDueYear, targetDueMonth, offset);
+          nextDueMonth = shiftedDue.month;
+          nextDueYear = shiftedDue.year;
+          nextTxnDate = occurrenceDateFromStart(date, offset) || date;
+        } else {
+          const shiftedDue = shiftMonth(row.year, row.month, dueShiftDelta);
+          nextDueMonth = shiftedDue.month;
+          nextDueYear = shiftedDue.year;
+        }
+      }
+
+      let nextDescription = description;
+      const installmentMeta = installmentMetaByTxnId.get(Number(row.id || 0));
+      if (installmentMeta && Number(installmentMeta.total || 1) > 1) {
+        nextDescription = formatInstallmentDescription(description, installmentMeta.position, installmentMeta.total);
+      }
+
+      updateTxn.run(nextTxnDate, nextDescription, amountCents, cardIdNum, nextDueMonth, nextDueYear, purchaseCategoryId, row.id, userId);
+    });
+
+    if (isRecurring && futureScope) {
+      updateRule.run(
+        cardIdNum,
+        description,
+        amountCents,
+        purchaseCategoryId,
+        date,
+        targetDueMonth,
+        targetDueYear,
+        targetDueMonth,
+        targetDueYear,
+        nowIso(),
+        txn.recurring_rule_id,
+        userId
+      );
+    }
+  })();
+
+  const refreshedRows = getTransactionScopeRowsByIds(userId, targetRows.map((row) => row.id));
+  syncEqualAllocationsForEditedTransactions(userId, refreshedRows);
+
+  const draftRows = refreshedRows.filter((row) => draftQueuedTxnIdSet.has(Number(row.id || 0)));
+  const liveRows = refreshedRows.filter((row) => !draftQueuedTxnIdSet.has(Number(row.id || 0)));
+
+  if (draftRows.length) {
+    queueSharedDebtDraftsForTransactions(userId, draftRows);
+  }
+
+  if (liveRows.length) {
+    syncSharedDebtRequestsForTransactions(userId, liveRows.map((row) => row.id), {
+      originKind: detectSharedDebtOriginKindFromRows(liveRows)
+    });
+  }
+
+  const movedMonth = futureScope && dueShiftDelta !== 0;
+  const message = futureScope
+    ? (isRecurring
+        ? `Compra atualizada nesta compra e nas próximas recorrências${movedMonth ? ', com a nova fatura já alinhada.' : '.'}`
+        : `Compra atualizada nesta parcela e nas próximas${movedMonth ? ', com a fatura reencaixada junto.' : '.'}`)
+    : 'Compra atualizada com sucesso.';
+
+  return respondSuccess(message, {
+    affected_count: refreshedRows.length,
+    redirect_month: targetDueMonth,
+    redirect_year: targetDueYear
+  });
+});
+
+app.post("/txn/:id/category", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const id = Number(req.params.id);
+  const txn = getTransactionScopeRow(userId, id);
+
+  if (!txn) return res.status(404).send("Transação não encontrada.");
+  if (isMonthClosed(userId, txn.month, txn.year)) {
+    setFlash(req, 'error', getMonthLockMessage(txn.month, txn.year));
+    return res.redirect(`/month/${txn.year}/${txn.month}`);
+  }
+
+  const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
+  const targetRows = getPurchaseCategoryScopeRows(userId, txn, applyScope);
+  const lockedTarget = targetRows.find((row) => isMonthClosed(userId, row.month, row.year));
+  if (lockedTarget) {
+    setFlash(req, 'error', getMonthLockMessage(lockedTarget.month, lockedTarget.year));
+    return res.redirect(`/month/${txn.year}/${txn.month}`);
+  }
+
+  try {
+    const allowedInactiveIds = Array.from(new Set(targetRows.map((row) => Number(row.purchase_category_id || 0)).filter((value) => Number.isInteger(value) && value > 0)));
+    const purchaseCategoryId = resolvePurchaseCategorySelection(userId, req.body.purchase_category_id, req.body.purchase_category_custom, {
+      allowInactiveIds: allowedInactiveIds
+    });
+
+    applyPurchaseCategoryToTransactions(userId, targetRows, purchaseCategoryId, { includeFutureRecurring: applyScope === 'future' });
+
+    const categoryLabel = purchaseCategoryId
+      ? (getPurchaseCategoryById(userId, purchaseCategoryId, { includeInactive: true })?.name || 'categoria escolhida')
+      : 'sem categoria';
+    const updatedRecurring = Number(txn.recurring_rule_id || 0) > 0 && applyScope === 'future';
+    setFlash(req, 'success', applyScope === 'future'
+      ? (updatedRecurring
+          ? `Categoria atualizada para ${categoryLabel} nesta compra e nas próximas recorrências.`
+          : `Categoria atualizada para ${categoryLabel} nesta compra e nas próximas parcelas.`)
+      : `Categoria atualizada para ${categoryLabel}.`);
+    return res.redirect(`/txn/${txn.id}`);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui salvar a categoria dessa compra agora.');
+    return res.redirect(`/txn/${txn.id}`);
+  }
 });
 
 app.post("/txn/:id", ensureAuthenticated, (req, res) => {
@@ -7116,6 +12539,11 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
 
   const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
   const targetRows = getInstallmentScopeRows(userId, txn, applyScope);
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, targetRows));
+  if (settlementBlockMessage) {
+    setFlash(req, 'error', settlementBlockMessage);
+    return res.redirect(`/txn/${txn.id}`);
+  }
   const lockedTarget = targetRows.find(row => isMonthClosed(userId, row.month, row.year));
   if (lockedTarget) {
     setFlash(req, "error", getMonthLockMessage(lockedTarget.month, lockedTarget.year));
@@ -7136,9 +12564,17 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
 
     replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
 
-    syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
+    const dispatchResult = applySharedDebtDispatchModeForTransactions(userId, targetRows, {
+      deliveryMode: req.body.delivery_mode,
       originKind: detectSharedDebtOriginKindFromRows(targetRows)
     });
+
+    if (dispatchResult.deliveryMode === 'draft') {
+      const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
+      setFlash(req, 'success', summary.itemCount > 0
+        ? `Divisão salva e ${formatCountLabel(summary.itemCount, 'cobrança ficou guardada', 'cobranças ficaram guardadas')} na caixa de saída.`
+        : 'Divisão salva. Como ainda não encontrei amizade pronta nessa seleção, nada ficou pendente de envio.');
+    }
 
     res.redirect(`/month/${txn.year}/${txn.month}`);
   } catch (error) {
@@ -7164,6 +12600,11 @@ app.post("/txn/:id/delete", ensureAuthenticated, (req, res) => {
 
   const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
   const targetRows = getInstallmentScopeRows(userId, txn, applyScope);
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, targetRows));
+  if (settlementBlockMessage) {
+    setFlash(req, 'error', settlementBlockMessage);
+    return res.redirect(`/month/${txn.year}/${txn.month}`);
+  }
   const lockedTarget = targetRows.find(row => isMonthClosed(userId, row.month, row.year));
   if (lockedTarget) {
     setFlash(req, "error", getMonthLockMessage(lockedTarget.month, lockedTarget.year));
@@ -7204,6 +12645,10 @@ app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
 
   const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
   const targetRows = collectScopedTxnRows(userId, sourceRows, applyScope);
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, targetRows));
+  if (settlementBlockMessage) {
+    return res.status(409).json({ ok: false, error: settlementBlockMessage });
+  }
   const lockedTarget = targetRows.find(row => isMonthClosed(userId, row.month, row.year));
   if (lockedTarget) {
     return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedTarget.month, lockedTarget.year) });
@@ -7223,20 +12668,79 @@ app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
 
     replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
 
-    syncSharedDebtRequestsForTransactions(userId, targetRows.map(targetTxn => targetTxn.id), {
+    const dispatchResult = applySharedDebtDispatchModeForTransactions(userId, targetRows, {
+      deliveryMode: req.body.delivery_mode,
       originKind: detectSharedDebtOriginKindFromRows(targetRows)
     });
+
+    const baseMessage = targetRows.length > 1
+      ? `${targetRows.length} lançamento(s) tiveram a distribuição atualizada.`
+      : 'Distribuição atualizada com sucesso.';
+
+    let message = baseMessage;
+    if (dispatchResult.deliveryMode === 'draft') {
+      const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
+      message = summary.itemCount > 0
+        ? `${baseMessage} ${formatCountLabel(summary.itemCount, 'cobrança ficou guardada', 'cobranças ficaram guardadas')} na caixa de saída.`
+        : `${baseMessage} Não achei amizade pronta nessa seleção, então nada ficou pendente de envio.`;
+    }
 
     return res.json({
       ok: true,
       affected_count: targetRows.length,
       source_count: sourceRows.length,
-      message: targetRows.length > 1
-        ? `${targetRows.length} lançamento(s) tiveram a distribuição atualizada.`
-        : 'Distribuição atualizada com sucesso.'
+      delivery_mode: dispatchResult.deliveryMode,
+      message
     });
   } catch (error) {
     return res.status(400).json({ ok: false, error: error.message || 'Não foi possível atualizar a distribuição agora.' });
+  }
+});
+
+app.post("/month/:year/:month/bulk/category", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
+
+  const sourceRows = getTransactionScopeRowsByIds(userId, req.body.txn_ids);
+  if (!sourceRows.length) {
+    return res.status(400).json({ ok: false, error: 'Selecione pelo menos uma compra.' });
+  }
+
+  const lockedSource = sourceRows.find((row) => isMonthClosed(userId, row.month, row.year));
+  if (lockedSource) {
+    return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedSource.month, lockedSource.year) });
+  }
+
+  const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
+  const targetRows = collectScopedCategoryTxnRows(userId, sourceRows, applyScope);
+  const lockedTarget = targetRows.find((row) => isMonthClosed(userId, row.month, row.year));
+  if (lockedTarget) {
+    return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedTarget.month, lockedTarget.year) });
+  }
+
+  try {
+    const allowedInactiveIds = Array.from(new Set(targetRows.map((row) => Number(row.purchase_category_id || 0)).filter((value) => Number.isInteger(value) && value > 0)));
+    const purchaseCategoryId = resolvePurchaseCategorySelection(userId, req.body.purchase_category_id, req.body.purchase_category_custom, {
+      allowInactiveIds: allowedInactiveIds
+    });
+
+    const affectedCount = applyPurchaseCategoryToTransactions(userId, targetRows, purchaseCategoryId, { includeFutureRecurring: applyScope === 'future' });
+    const categoryLabel = purchaseCategoryId
+      ? (getPurchaseCategoryById(userId, purchaseCategoryId, { includeInactive: true })?.name || 'categoria escolhida')
+      : 'sem categoria';
+
+    return res.json({
+      ok: true,
+      affected_count: affectedCount,
+      source_count: sourceRows.length,
+      purchase_category_id: purchaseCategoryId,
+      message: affectedCount > 1
+        ? `${affectedCount} compra(s) ficaram com ${categoryLabel}.`
+        : `Categoria atualizada para ${categoryLabel}.`
+    });
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error.message || 'Não consegui atualizar a categoria dessas compras agora.' });
   }
 });
 
@@ -7257,6 +12761,10 @@ app.post("/month/:year/:month/bulk/delete", ensureAuthenticated, (req, res) => {
 
   const applyScope = String(req.body.apply_scope || 'single').trim().toLowerCase();
   const targetRows = collectScopedTxnRows(userId, sourceRows, applyScope);
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, targetRows));
+  if (settlementBlockMessage) {
+    return res.status(409).json({ ok: false, error: settlementBlockMessage });
+  }
   const lockedTarget = targetRows.find(row => isMonthClosed(userId, row.month, row.year));
   if (lockedTarget) {
     return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedTarget.month, lockedTarget.year) });
@@ -7302,6 +12810,11 @@ app.post("/month/:year/:month/bulk/move", ensureAuthenticated, (req, res) => {
     return res.status(400).json({ ok: false, error: "Selecione pelo menos um lançamento." });
   }
 
+  const settlementBlockMessage = buildSharedDebtCardMutationBlockerMessage(getSharedDebtCardMutationBlockersForTransactions(userId, sourceRows));
+  if (settlementBlockMessage) {
+    return res.status(409).json({ ok: false, error: settlementBlockMessage });
+  }
+
   const lockedSource = sourceRows.find(row => isMonthClosed(userId, row.month, row.year));
   if (lockedSource) {
     return res.status(423).json({ ok: false, error: getMonthLockMessage(lockedSource.month, lockedSource.year) });
@@ -7335,6 +12848,7 @@ app.post("/month/:year/:month/bulk/move", ensureAuthenticated, (req, res) => {
     SET due_month = ?, due_year = ?
     WHERE id = ? AND user_id = ?
   `);
+  const draftQueuedTxnIdSet = getSharedDebtDraftQueuedTxnIdSet(userId, moveTargets.map((targetTxn) => targetTxn.id));
 
   db.transaction(() => {
     moveTargets.forEach(targetTxn => {
@@ -7342,9 +12856,19 @@ app.post("/month/:year/:month/bulk/move", ensureAuthenticated, (req, res) => {
     });
   })();
 
-  syncSharedDebtRequestsForTransactions(userId, moveTargets.map(targetTxn => targetTxn.id), {
-    originKind: detectSharedDebtOriginKindFromRows(moveTargets)
-  });
+  const refreshedRows = getTransactionScopeRowsByIds(userId, moveTargets.map((targetTxn) => targetTxn.id));
+  const draftRows = refreshedRows.filter((row) => draftQueuedTxnIdSet.has(Number(row.id || 0)));
+  const liveRows = refreshedRows.filter((row) => !draftQueuedTxnIdSet.has(Number(row.id || 0)));
+
+  if (draftRows.length) {
+    queueSharedDebtDraftsForTransactions(userId, draftRows);
+  }
+
+  if (liveRows.length) {
+    syncSharedDebtRequestsForTransactions(userId, liveRows.map((targetTxn) => targetTxn.id), {
+      originKind: detectSharedDebtOriginKindFromRows(liveRows)
+    });
+  }
 
   return res.json({
     ok: true,
@@ -7424,11 +12948,1170 @@ function upsertPersonPaymentsForMonth(userId, month, year, entries) {
   })(entries);
 }
 
-app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
-  const { month, year } = parsed;
+function getSummaryCategoryDistribution(userId, month, year) {
+  const rows = db.prepare(`
+    SELECT
+      t.purchase_category_id AS category_id,
+      COALESCE(NULLIF(TRIM(pc.name), ''), 'Sem categoria') AS label,
+      SUM(t.amount_cents) AS total_cents,
+      COUNT(*) AS txn_count,
+      CASE WHEN t.purchase_category_id IS NULL THEN 1 ELSE 0 END AS is_uncategorized
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+    GROUP BY CASE WHEN t.purchase_category_id IS NULL THEN 0 ELSE t.purchase_category_id END, label
+    HAVING SUM(t.amount_cents) > 0
+    ORDER BY total_cents DESC, label COLLATE NOCASE ASC
+  `).all(userId, month, year, month, year);
+
+  return rows.map((row) => ({
+    id: row.category_id ? Number(row.category_id) : null,
+    label: row.label,
+    total_cents: row.total_cents || 0,
+    txn_count: row.txn_count || 0,
+    is_uncategorized: Number(row.is_uncategorized || 0) === 1
+  }));
+}
+
+
+function getPersonShareCategoryDistribution(userId, personId, month, year) {
+  const safePersonId = Number(personId || 0);
+  if (!safePersonId) return [];
+
+  const rows = db.prepare(`
+    SELECT
+      t.purchase_category_id AS category_id,
+      COALESCE(NULLIF(TRIM(pc.name), ''), 'Sem categoria') AS label,
+      SUM(a.share_cents) AS total_cents,
+      COUNT(*) AS txn_count,
+      CASE WHEN t.purchase_category_id IS NULL THEN 1 ELSE 0 END AS is_uncategorized
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND a.person_id = ?
+      AND a.share_cents > 0
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+    GROUP BY CASE WHEN t.purchase_category_id IS NULL THEN 0 ELSE t.purchase_category_id END, label
+    HAVING SUM(a.share_cents) > 0
+    ORDER BY total_cents DESC, label COLLATE NOCASE ASC
+  `).all(userId, safePersonId, month, year, month, year);
+
+  return rows.map((row) => ({
+    id: row.category_id ? Number(row.category_id) : null,
+    label: row.label,
+    total_cents: row.total_cents || 0,
+    txn_count: row.txn_count || 0,
+    is_uncategorized: Number(row.is_uncategorized || 0) === 1
+  }));
+}
+
+const MERCHANT_KEYWORD_RULES = [
+  { label: 'iFood', searchTerm: 'ifood', keywords: ['ifood', 'ifd*ifood', 'ifood mercado'] },
+  { label: 'Uber', searchTerm: 'uber', keywords: ['uber', 'uber trip', 'uber eats'] },
+  { label: '99', searchTerm: '99', keywords: ['99app', '99 pop', '99pay', '99*'] },
+  { label: 'Amazon', searchTerm: 'amazon', keywords: ['amazon', 'amzn', 'amazon br'] },
+  { label: 'Mercado Livre', searchTerm: 'mercado livre', keywords: ['mercado livre', 'mercadolivre', 'ml mercado livre', 'merc libre'] },
+  { label: 'Shopee', searchTerm: 'shopee', keywords: ['shopee'] },
+  { label: 'Magalu', searchTerm: 'magalu', keywords: ['magazine luiza', 'magalu'] },
+  { label: 'Shein', searchTerm: 'shein', keywords: ['shein'] },
+  { label: 'AliExpress', searchTerm: 'aliexpress', keywords: ['aliexpress', 'ali express'] },
+  { label: 'Mercado Pago', searchTerm: 'mercado pago', keywords: ['mercado pago', 'mercadopago', 'mp*'] },
+  { label: 'PicPay', searchTerm: 'picpay', keywords: ['picpay'] },
+  { label: 'PayPal', searchTerm: 'paypal', keywords: ['paypal'] },
+  { label: 'Nubank', searchTerm: 'nubank', keywords: ['nubank', 'nu pagamentos'] },
+  { label: 'Netflix', searchTerm: 'netflix', keywords: ['netflix'] },
+  { label: 'Spotify', searchTerm: 'spotify', keywords: ['spotify'] },
+  { label: 'YouTube', searchTerm: 'youtube', keywords: ['youtube', 'google youtube'] },
+  { label: 'Google', searchTerm: 'google', keywords: ['google', 'google play'] },
+  { label: 'Apple', searchTerm: 'apple', keywords: ['apple', 'apple com bill', 'itunes'] },
+  { label: 'Steam', searchTerm: 'steam', keywords: ['steam'] },
+  { label: 'PlayStation', searchTerm: 'playstation', keywords: ['playstation', 'psn'] },
+  { label: 'Xbox', searchTerm: 'xbox', keywords: ['xbox', 'microsoft xbox'] },
+  { label: 'McDonald\'s', searchTerm: 'mcdonald', keywords: ['mcdonald', 'mcdonalds', 'mc donald'] },
+  { label: 'Burger King', searchTerm: 'burger king', keywords: ['burger king', 'bk brasil'] },
+  { label: 'Habib\'s', searchTerm: 'habibs', keywords: ['habibs', 'habib'] },
+  { label: 'Outback', searchTerm: 'outback', keywords: ['outback'] },
+  { label: 'Starbucks', searchTerm: 'starbucks', keywords: ['starbucks'] },
+  { label: 'Rappi', searchTerm: 'rappi', keywords: ['rappi'] },
+  { label: 'Zé Delivery', searchTerm: 'ze delivery', keywords: ['ze delivery', 'zedelivery'] },
+  { label: 'Airbnb', searchTerm: 'airbnb', keywords: ['airbnb'] },
+  { label: 'Booking', searchTerm: 'booking', keywords: ['booking'] },
+  { label: 'Decolar', searchTerm: 'decolar', keywords: ['decolar'] },
+  { label: 'Localiza', searchTerm: 'localiza', keywords: ['localiza'] },
+  { label: 'Shell', searchTerm: 'shell', keywords: ['shell'] },
+  { label: 'Ipiranga', searchTerm: 'ipiranga', keywords: ['ipiranga'] },
+  { label: 'Petrobras', searchTerm: 'petrobras', keywords: ['petrobras', 'br mania', 'posto br'] },
+  { label: 'Drogasil', searchTerm: 'drogasil', keywords: ['drogasil'] },
+  { label: 'Droga Raia', searchTerm: 'droga raia', keywords: ['droga raia'] },
+  { label: 'Pague Menos', searchTerm: 'pague menos', keywords: ['pague menos'] },
+  { label: 'Carrefour', searchTerm: 'carrefour', keywords: ['carrefour'] },
+  { label: 'Assaí', searchTerm: 'assai', keywords: ['assai', 'assai atacadista'] },
+  { label: 'Atacadão', searchTerm: 'atacadao', keywords: ['atacadao', 'atacadão'] },
+  { label: 'Extra', searchTerm: 'extra', keywords: ['extra hiper', 'extra mercado', 'extra'] },
+  { label: 'Pão de Açúcar', searchTerm: 'pao de acucar', keywords: ['pao de acucar', 'pão de açúcar', 'paodeacucar'] },
+  { label: 'Americanas', searchTerm: 'americanas', keywords: ['americanas'] }
+];
+
+function normalizeMerchantText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\(\d{2}\/\d{2}\)\s*$/g, ' ')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function humanizeMerchantLabel(value) {
+  return String(value || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+    .trim();
+}
+
+function buildMerchantTextTokens(normalized) {
+  if (!normalized) return [];
+  const cleaned = normalized
+    .replace(/compra(?:\s+no)?/g, ' ')
+    .replace(/debito/g, ' ')
+    .replace(/credito/g, ' ')
+    .replace(/parcela(?:do)?/g, ' ')
+    .replace(/pagamento/g, ' ')
+    .replace(/transacao/g, ' ')
+    .replace(/pix/g, ' ')
+    .replace(/elo/g, ' ')
+    .replace(/mastercard/g, ' ')
+    .replace(/visa/g, ' ')
+    .replace(/deb/g, ' ')
+    .replace(/cred/g, ' ')
+    .replace(/online/g, ' ')
+    .replace(/app/g, ' ')
+    .replace(/marketplace/g, ' ')
+    .replace(/brasil/g, ' ')
+    .replace(/sao/g, ' ')
+    .replace(/paulo/g, ' ')
+    .replace(/sp/g, ' ')
+    .replace(/rj/g, ' ')
+    .replace(/mg/g, ' ')
+    .replace(/curitiba/g, ' ')
+    .replace(/belo\s+horizonte/g, ' ')
+    .replace(/porto\s+alegre/g, ' ')
+    .replace(/recife/g, ' ')
+    .replace(/fortaleza/g, ' ')
+    .replace(/salvador/g, ' ')
+    .replace(/\d+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const stopwords = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'para', 'na', 'no', 'com', 'sem', 'por', 'via']);
+  return cleaned.split(' ').filter((token) => token.length >= 2 && !stopwords.has(token));
+}
+
+function buildMerchantPatternFromDescription(description) {
+  const normalized = normalizeMerchantText(description);
+  const tokens = buildMerchantTextTokens(normalized);
+  return tokens.slice(0, 2).join(' ').trim();
+}
+
+function getMerchantLearningRules(userId) {
+  return db.prepare(`
+    SELECT normalized_pattern, merchant_label, search_term, source_sample, status, updated_at
+    FROM merchant_learning_feedback
+    WHERE user_id = ?
+    ORDER BY updated_at DESC, id DESC
+  `).all(userId).map((row) => ({
+    normalizedPattern: normalizeMerchantText(row.normalized_pattern),
+    merchantLabel: String(row.merchant_label || '').trim(),
+    searchTerm: String(row.search_term || '').trim(),
+    sourceSample: String(row.source_sample || '').trim(),
+    status: String(row.status || 'confirmed').trim().toLowerCase(),
+    updatedAt: row.updated_at
+  })).filter((row) => row.normalizedPattern && row.merchantLabel);
+}
+
+function upsertMerchantLearningFeedback(userId, { normalizedPattern, merchantLabel, searchTerm = '', sourceSample = '', status = 'confirmed' }) {
+  const pattern = normalizeMerchantText(normalizedPattern);
+  const label = humanizeMerchantLabel(merchantLabel) || 'Estabelecimento sugerido';
+  const safeSearchTerm = normalizeMerchantText(searchTerm).split(' ').slice(0, 3).join(' ');
+  if (!pattern) {
+    const error = new Error('Padrão de agrupamento inválido.');
+    error.status = 400;
+    throw error;
+  }
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO merchant_learning_feedback (
+      user_id, normalized_pattern, merchant_label, search_term, source_sample, status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, normalized_pattern) DO UPDATE SET
+      merchant_label = excluded.merchant_label,
+      search_term = excluded.search_term,
+      source_sample = excluded.source_sample,
+      status = excluded.status,
+      updated_at = excluded.updated_at
+  `).run(userId, pattern, label, safeSearchTerm, String(sourceSample || '').trim(), String(status || 'confirmed'), now, now);
+}
+
+function resolveMerchantFromDescription(description, userRules = []) {
+  const raw = String(description || '').trim();
+  const normalized = normalizeMerchantText(raw);
+  if (!normalized) {
+    return {
+      label: 'Sem estabelecimento definido',
+      normalizedLabel: 'sem estabelecimento definido',
+      searchTerm: '',
+      confidence: 'empty',
+      raw,
+      source: 'empty'
+    };
+  }
+
+  for (const rule of userRules) {
+    if (rule.status !== 'confirmed') continue;
+    const normalizedPattern = normalizeMerchantText(rule.normalizedPattern || rule.normalized_pattern);
+    if (normalizedPattern && normalized.includes(normalizedPattern)) {
+      return {
+        label: rule.merchantLabel,
+        normalizedLabel: normalizeMerchantText(rule.merchantLabel),
+        searchTerm: rule.searchTerm || normalizedPattern,
+        confidence: 'high',
+        raw,
+        source: 'user-rule'
+      };
+    }
+  }
+
+  for (const rule of MERCHANT_KEYWORD_RULES) {
+    const matched = rule.keywords.some((keyword) => {
+      const normalizedKeyword = normalizeMerchantText(keyword).replace(/\*/g, '');
+      return normalizedKeyword && normalized.includes(normalizedKeyword);
+    });
+    if (matched) {
+      return {
+        label: rule.label,
+        normalizedLabel: normalizeMerchantText(rule.label),
+        searchTerm: rule.searchTerm,
+        confidence: 'high',
+        raw,
+        source: 'keyword-rule'
+      };
+    }
+  }
+
+  const tokens = buildMerchantTextTokens(normalized);
+  const baseTokens = tokens.slice(0, 3);
+  const fallbackLabel = humanizeMerchantLabel(baseTokens.join(' ')) || humanizeMerchantLabel(normalized.split(' ').slice(0, 3).join(' ')) || 'Estabelecimento variado';
+  const searchTerm = baseTokens.slice(0, 2).join(' ') || normalized.split(' ').slice(0, 2).join(' ');
+
+  return {
+    label: fallbackLabel,
+    normalizedLabel: normalizeMerchantText(fallbackLabel),
+    searchTerm,
+    confidence: baseTokens.length >= 1 ? 'medium' : 'low',
+    raw,
+    source: 'fallback'
+  };
+}
+
+function getRelativeMonthYear(month, year, offset) {
+  const baseMonth = Number(month || 1);
+  const baseYear = Number(year || 1970);
+  const date = new Date(Date.UTC(baseYear, Math.max(0, baseMonth - 1) + Number(offset || 0), 1));
+  return {
+    month: date.getUTCMonth() + 1,
+    year: date.getUTCFullYear()
+  };
+}
+
+function getSummaryMerchantRanking(userId, month, year, limit = 6) {
+  const rows = db.prepare(`
+    SELECT t.id, t.description, t.amount_cents
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+      AND t.amount_cents > 0
+    ORDER BY t.amount_cents DESC, t.id DESC
+  `).all(userId, month, year, month, year);
+
+  const userRules = getMerchantLearningRules(userId);
+  const grouped = new Map();
+
+  rows.forEach((row) => {
+    const merchant = resolveMerchantFromDescription(row.description, userRules);
+    const key = merchant.normalizedLabel || normalizeMerchantText(merchant.label) || 'sem estabelecimento definido';
+    const current = grouped.get(key) || {
+      id: key,
+      label: merchant.label,
+      search_term: merchant.searchTerm || '',
+      total_cents: 0,
+      txn_count: 0,
+      confidence: merchant.confidence,
+      source: merchant.source,
+      sample_descriptions: []
+    };
+    current.total_cents += Number(row.amount_cents || 0);
+    current.txn_count += 1;
+    const sample = String(row.description || '').trim();
+    if (sample && current.sample_descriptions.length < 2 && !current.sample_descriptions.includes(sample)) {
+      current.sample_descriptions.push(sample);
+    }
+    if (!current.search_term && merchant.searchTerm) current.search_term = merchant.searchTerm;
+    if (current.confidence !== 'high' && merchant.confidence === 'high') current.confidence = 'high';
+    if (current.source !== 'user-rule' && merchant.source === 'user-rule') current.source = 'user-rule';
+    grouped.set(key, current);
+  });
+
+  const ranking = Array.from(grouped.values())
+    .sort((a, b) => {
+      const totalDiff = Number(b.total_cents || 0) - Number(a.total_cents || 0);
+      if (totalDiff !== 0) return totalDiff;
+      return String(a.label || '').localeCompare(String(b.label || ''), 'pt-BR', { sensitivity: 'base' });
+    });
+
+  const recognizedCount = ranking.filter((item) => item.confidence === 'high').length;
+  const learnedCount = ranking.filter((item) => item.source === 'user-rule').length;
+  const totalCents = ranking.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
+  const visible = ranking.slice(0, Math.max(1, Number(limit || 6)));
+  const previousRef = getRelativeMonthYear(month, year, -1);
+  const previousRows = db.prepare(`
+    SELECT t.id, t.description, t.amount_cents
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+      AND t.amount_cents > 0
+    ORDER BY t.amount_cents DESC, t.id DESC
+  `).all(userId, previousRef.month, previousRef.year, previousRef.month, previousRef.year);
+  const previousGrouped = new Map();
+  previousRows.forEach((row) => {
+    const merchant = resolveMerchantFromDescription(row.description, userRules);
+    const key = merchant.normalizedLabel || normalizeMerchantText(merchant.label) || 'sem estabelecimento definido';
+    previousGrouped.set(key, (previousGrouped.get(key) || 0) + Number(row.amount_cents || 0));
+  });
+
+  return {
+    ranking: visible.map((item, index) => {
+      const previousTotalCents = Number(previousGrouped.get(item.id) || 0);
+      const deltaCents = Number(item.total_cents || 0) - previousTotalCents;
+      const deltaPct = previousTotalCents > 0 ? Math.round((deltaCents / previousTotalCents) * 100) : null;
+      return {
+        ...item,
+        position: index + 1,
+        share_pct: totalCents > 0 ? Math.round((Number(item.total_cents || 0) / totalCents) * 100) : 0,
+        avg_ticket_cents: Number(item.txn_count || 0) > 0 ? Math.round(Number(item.total_cents || 0) / Number(item.txn_count || 1)) : 0,
+        previous_total_cents: previousTotalCents,
+        delta_cents: deltaCents,
+        delta_pct: deltaPct
+      };
+    }),
+    totalCents,
+    merchantCount: ranking.length,
+    recognizedCount,
+    learnedCount,
+    totalTransactions: rows.length,
+    topMerchant: ranking[0]
+      ? {
+          ...ranking[0],
+          share_pct: totalCents > 0 ? Math.round((Number(ranking[0].total_cents || 0) / totalCents) * 100) : 0,
+          avg_ticket_cents: Number(ranking[0].txn_count || 0) > 0 ? Math.round(Number(ranking[0].total_cents || 0) / Number(ranking[0].txn_count || 1)) : 0
+        }
+      : null
+  };
+}
+
+function getSummaryMerchantSuggestions(userId, month, year, limit = 4) {
+  const rows = db.prepare(`
+    SELECT t.id, t.description, t.amount_cents
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+      AND t.amount_cents > 0
+    ORDER BY t.amount_cents DESC, t.id DESC
+  `).all(userId, month, year, month, year);
+
+  const userRules = getMerchantLearningRules(userId);
+  const blockedPatterns = new Set(
+    userRules
+      .filter((rule) => rule.status !== 'confirmed')
+      .map((rule) => normalizeMerchantText(rule.normalizedPattern || rule.normalized_pattern))
+      .filter(Boolean)
+  );
+  const confirmedPatterns = new Set(
+    userRules
+      .filter((rule) => rule.status === 'confirmed')
+      .map((rule) => normalizeMerchantText(rule.normalizedPattern || rule.normalized_pattern))
+      .filter(Boolean)
+  );
+
+  const grouped = new Map();
+  rows.forEach((row) => {
+    const merchant = resolveMerchantFromDescription(row.description, userRules);
+    if (merchant.source !== 'fallback' || merchant.confidence !== 'medium') return;
+    const pattern = buildMerchantPatternFromDescription(row.description);
+    if (!pattern || pattern.length < 4 || blockedPatterns.has(pattern) || confirmedPatterns.has(pattern)) return;
+    const key = `${pattern}::${merchant.normalizedLabel}`;
+    const current = grouped.get(key) || {
+      pattern,
+      label: merchant.label,
+      normalizedLabel: merchant.normalizedLabel,
+      search_term: merchant.searchTerm || pattern,
+      total_cents: 0,
+      txn_count: 0,
+      sample_descriptions: []
+    };
+    current.total_cents += Number(row.amount_cents || 0);
+    current.txn_count += 1;
+    const sample = String(row.description || '').trim();
+    if (sample && current.sample_descriptions.length < 3 && !current.sample_descriptions.includes(sample)) {
+      current.sample_descriptions.push(sample);
+    }
+    grouped.set(key, current);
+  });
+
+  return Array.from(grouped.values())
+    .filter((item) => item.txn_count >= 2 || item.total_cents >= 5000)
+    .sort((a, b) => {
+      const totalDiff = Number(b.total_cents || 0) - Number(a.total_cents || 0);
+      if (totalDiff !== 0) return totalDiff;
+      return Number(b.txn_count || 0) - Number(a.txn_count || 0);
+    })
+    .slice(0, Math.max(1, Number(limit || 4)))
+    .map((item, index) => ({
+      ...item,
+      position: index + 1,
+      preview_label: humanizeMerchantLabel(item.pattern),
+      sample_description: item.sample_descriptions[0] || ''
+    }));
+}
+
+function buildMerchantRankingOverviewFromRows({ rows = [], previousRows = [], userRules = [], limit = 6 } = {}) {
+  const grouped = new Map();
+
+  rows.forEach((row) => {
+    const merchant = resolveMerchantFromDescription(row.description, userRules);
+    const key = merchant.normalizedLabel || normalizeMerchantText(merchant.label) || 'sem estabelecimento definido';
+    const current = grouped.get(key) || {
+      id: key,
+      label: merchant.label,
+      search_term: merchant.searchTerm || '',
+      total_cents: 0,
+      txn_count: 0,
+      confidence: merchant.confidence,
+      source: merchant.source,
+      sample_descriptions: []
+    };
+    current.total_cents += Number(row.amount_cents || 0);
+    current.txn_count += 1;
+    const sample = String(row.description || '').trim();
+    if (sample && current.sample_descriptions.length < 2 && !current.sample_descriptions.includes(sample)) {
+      current.sample_descriptions.push(sample);
+    }
+    if (!current.search_term && merchant.searchTerm) current.search_term = merchant.searchTerm;
+    if (current.confidence !== 'high' && merchant.confidence === 'high') current.confidence = 'high';
+    if (current.source !== 'user-rule' && merchant.source === 'user-rule') current.source = 'user-rule';
+    grouped.set(key, current);
+  });
+
+  const ranking = Array.from(grouped.values())
+    .sort((a, b) => {
+      const totalDiff = Number(b.total_cents || 0) - Number(a.total_cents || 0);
+      if (totalDiff !== 0) return totalDiff;
+      return String(a.label || '').localeCompare(String(b.label || ''), 'pt-BR', { sensitivity: 'base' });
+    });
+
+  const recognizedCount = ranking.filter((item) => item.confidence === 'high').length;
+  const learnedCount = ranking.filter((item) => item.source === 'user-rule').length;
+  const totalCents = ranking.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
+  const visible = ranking.slice(0, Math.max(1, Number(limit || 6)));
+  const previousGrouped = new Map();
+  previousRows.forEach((row) => {
+    const merchant = resolveMerchantFromDescription(row.description, userRules);
+    const key = merchant.normalizedLabel || normalizeMerchantText(merchant.label) || 'sem estabelecimento definido';
+    previousGrouped.set(key, (previousGrouped.get(key) || 0) + Number(row.amount_cents || 0));
+  });
+
+  return {
+    ranking: visible.map((item, index) => {
+      const previousTotalCents = Number(previousGrouped.get(item.id) || 0);
+      const deltaCents = Number(item.total_cents || 0) - previousTotalCents;
+      const deltaPct = previousTotalCents > 0 ? Math.round((deltaCents / previousTotalCents) * 100) : null;
+      return {
+        ...item,
+        position: index + 1,
+        share_pct: totalCents > 0 ? Math.round((Number(item.total_cents || 0) / totalCents) * 100) : 0,
+        avg_ticket_cents: Number(item.txn_count || 0) > 0 ? Math.round(Number(item.total_cents || 0) / Number(item.txn_count || 1)) : 0,
+        previous_total_cents: previousTotalCents,
+        delta_cents: deltaCents,
+        delta_pct: deltaPct
+      };
+    }),
+    totalCents,
+    merchantCount: ranking.length,
+    recognizedCount,
+    learnedCount,
+    totalTransactions: rows.length,
+    topMerchant: ranking[0]
+      ? {
+          ...ranking[0],
+          share_pct: totalCents > 0 ? Math.round((Number(ranking[0].total_cents || 0) / totalCents) * 100) : 0,
+          avg_ticket_cents: Number(ranking[0].txn_count || 0) > 0 ? Math.round(Number(ranking[0].total_cents || 0) / Number(ranking[0].txn_count || 1)) : 0
+        }
+      : null
+  };
+}
+
+function getPersonMerchantRanking(userId, personId, month, year, limit = 6) {
+  const safePersonId = Number(personId || 0);
+  if (!safePersonId) {
+    return {
+      ranking: [],
+      totalCents: 0,
+      merchantCount: 0,
+      recognizedCount: 0,
+      learnedCount: 0,
+      totalTransactions: 0,
+      topMerchant: null
+    };
+  }
+
+  const rows = db.prepare(`
+    SELECT t.id, t.description, a.share_cents AS amount_cents
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND a.person_id = ?
+      AND a.share_cents > 0
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+    ORDER BY a.share_cents DESC, t.id DESC
+  `).all(userId, safePersonId, month, year, month, year);
+
+  const previousRef = getRelativeMonthYear(month, year, -1);
+  const previousRows = db.prepare(`
+    SELECT t.id, t.description, a.share_cents AS amount_cents
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND a.person_id = ?
+      AND a.share_cents > 0
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+    ORDER BY a.share_cents DESC, t.id DESC
+  `).all(userId, safePersonId, previousRef.month, previousRef.year, previousRef.month, previousRef.year);
+
+  return buildMerchantRankingOverviewFromRows({
+    rows,
+    previousRows,
+    userRules: getMerchantLearningRules(userId),
+    limit
+  });
+}
+
+function getPersonMerchantSuggestions(userId, personId, month, year, limit = 4) {
+  const safePersonId = Number(personId || 0);
+  if (!safePersonId) return [];
+
+  const rows = db.prepare(`
+    SELECT t.id, t.description, a.share_cents AS amount_cents
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND a.person_id = ?
+      AND a.share_cents > 0
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+    ORDER BY a.share_cents DESC, t.id DESC
+  `).all(userId, safePersonId, month, year, month, year);
+
+  const userRules = getMerchantLearningRules(userId);
+  const blockedPatterns = new Set(
+    userRules
+      .filter((rule) => rule.status !== 'confirmed')
+      .map((rule) => normalizeMerchantText(rule.normalizedPattern || rule.normalized_pattern))
+      .filter(Boolean)
+  );
+  const confirmedPatterns = new Set(
+    userRules
+      .filter((rule) => rule.status === 'confirmed')
+      .map((rule) => normalizeMerchantText(rule.normalizedPattern || rule.normalized_pattern))
+      .filter(Boolean)
+  );
+
+  const grouped = new Map();
+  rows.forEach((row) => {
+    const merchant = resolveMerchantFromDescription(row.description, userRules);
+    if (merchant.source !== 'fallback' || merchant.confidence !== 'medium') return;
+    const pattern = buildMerchantPatternFromDescription(row.description);
+    if (!pattern || pattern.length < 4 || blockedPatterns.has(pattern) || confirmedPatterns.has(pattern)) return;
+    const key = `${pattern}::${merchant.normalizedLabel}`;
+    const current = grouped.get(key) || {
+      pattern,
+      label: merchant.label,
+      normalizedLabel: merchant.normalizedLabel,
+      search_term: merchant.searchTerm || pattern,
+      total_cents: 0,
+      txn_count: 0,
+      sample_descriptions: []
+    };
+    current.total_cents += Number(row.amount_cents || 0);
+    current.txn_count += 1;
+    const sample = String(row.description || '').trim();
+    if (sample && current.sample_descriptions.length < 3 && !current.sample_descriptions.includes(sample)) {
+      current.sample_descriptions.push(sample);
+    }
+    grouped.set(key, current);
+  });
+
+  return Array.from(grouped.values())
+    .filter((item) => item.txn_count >= 2 || item.total_cents >= 5000)
+    .sort((a, b) => {
+      const totalDiff = Number(b.total_cents || 0) - Number(a.total_cents || 0);
+      if (totalDiff !== 0) return totalDiff;
+      return Number(b.txn_count || 0) - Number(a.txn_count || 0);
+    })
+    .slice(0, Math.max(1, Number(limit || 4)))
+    .map((item, index) => ({
+      ...item,
+      position: index + 1,
+      preview_label: humanizeMerchantLabel(item.pattern),
+      sample_description: item.sample_descriptions[0] || ''
+    }));
+}
+
+function getPersonShareMonthlyTrend(userId, personId, month, year, monthsBack = 5) {
+  const safePersonId = Number(personId || 0);
+  const points = [];
+  if (!safePersonId) return points;
+
+  const selectTotal = db.prepare(`
+    SELECT COALESCE(SUM(a.share_cents), 0) AS total_cents
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND a.person_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+  `);
+
+  for (let offset = Number(monthsBack || 0) * -1; offset <= 0; offset += 1) {
+    const ref = shiftMonth(year, month, offset);
+    const row = selectTotal.get(userId, safePersonId, ref.month, ref.year, ref.month, ref.year);
+    points.push({
+      month: ref.month,
+      year: ref.year,
+      key: `${ref.year}-${String(ref.month).padStart(2, '0')}`,
+      label: `${String(ref.month).padStart(2, '0')}/${ref.year}`,
+      total_cents: row?.total_cents || 0,
+      is_current: ref.month === Number(month) && ref.year === Number(year)
+    });
+  }
+
+  return points;
+}
+
+function getSummaryMonthlyTrend(userId, month, year, monthsBack = 5) {
+  const points = [];
+  const selectTotal = db.prepare(`
+    SELECT COALESCE(SUM(t.amount_cents), 0) AS total_cents
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+  `);
+
+  for (let offset = Number(monthsBack || 0) * -1; offset <= 0; offset += 1) {
+    const ref = shiftMonth(year, month, offset);
+    const row = selectTotal.get(userId, ref.month, ref.year, ref.month, ref.year);
+    points.push({
+      month: ref.month,
+      year: ref.year,
+      key: `${ref.year}-${String(ref.month).padStart(2, '0')}`,
+      label: `${String(ref.month).padStart(2, '0')}/${ref.year}`,
+      total_cents: row?.total_cents || 0,
+      is_current: ref.month === Number(month) && ref.year === Number(year)
+    });
+  }
+
+  return points;
+}
+
+function getSummaryMerchantLearningOverview(userId, month, year, activeLimit = 6, pausedLimit = 3) {
+  const rules = getMerchantLearningRules(userId);
+  const confirmedRules = rules.filter((rule) => rule.status === 'confirmed');
+  const dismissedRules = rules.filter((rule) => rule.status !== 'confirmed');
+  const monthRows = db.prepare(`
+    SELECT t.description, t.amount_cents
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+      AND t.amount_cents > 0
+  `).all(userId, month, year, month, year);
+
+  const activeRules = confirmedRules
+    .map((rule) => {
+      const normalizedPattern = normalizeMerchantText(rule.normalizedPattern || rule.normalized_pattern);
+      let appliedTxnCount = 0;
+      let appliedTotalCents = 0;
+      let latestSample = rule.sourceSample || '';
+      monthRows.forEach((row) => {
+        const normalizedDescription = normalizeMerchantText(row.description);
+        if (!normalizedPattern || !normalizedDescription.includes(normalizedPattern)) return;
+        appliedTxnCount += 1;
+        appliedTotalCents += Number(row.amount_cents || 0);
+        if (!latestSample && row.description) latestSample = String(row.description || '').trim();
+      });
+      return {
+        normalizedPattern,
+        label: humanizeMerchantLabel(rule.merchantLabel),
+        search_term: rule.searchTerm || normalizedPattern,
+        source_sample: latestSample,
+        applied_txn_count: appliedTxnCount,
+        applied_total_cents: appliedTotalCents,
+        updated_at: rule.updatedAt || null
+      };
+    })
+    .sort((a, b) => {
+      const appliedDiff = Number(b.applied_txn_count || 0) - Number(a.applied_txn_count || 0);
+      if (appliedDiff !== 0) return appliedDiff;
+      const centsDiff = Number(b.applied_total_cents || 0) - Number(a.applied_total_cents || 0);
+      if (centsDiff !== 0) return centsDiff;
+      return String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
+    });
+
+  const pausedRules = dismissedRules
+    .slice(0, Math.max(0, Number(pausedLimit || 3)))
+    .map((rule) => ({
+      normalizedPattern: normalizeMerchantText(rule.normalizedPattern || rule.normalized_pattern),
+      label: humanizeMerchantLabel(rule.merchantLabel),
+      search_term: rule.searchTerm || '',
+      source_sample: rule.sourceSample || '',
+      updated_at: rule.updatedAt || null
+    }));
+
+  const appliedRuleTxnCount = activeRules.reduce((acc, item) => acc + Number(item.applied_txn_count || 0), 0);
+  const appliedRuleTotalCents = activeRules.reduce((acc, item) => acc + Number(item.applied_total_cents || 0), 0);
+  const mostAppliedRule = activeRules.find((item) => Number(item.applied_txn_count || 0) > 0) || activeRules[0] || null;
+
+  return {
+    activeCount: activeRules.length,
+    pausedCount: dismissedRules.length,
+    appliedRuleTxnCount,
+    appliedRuleTotalCents,
+    mostAppliedRule: mostAppliedRule ? {
+      label: mostAppliedRule.label,
+      applied_txn_count: mostAppliedRule.applied_txn_count,
+      applied_total_cents: mostAppliedRule.applied_total_cents,
+      search_term: mostAppliedRule.search_term || '',
+      source_sample: mostAppliedRule.source_sample || ''
+    } : null,
+    activeRules: activeRules.slice(0, Math.max(0, Number(activeLimit || 6))),
+    pausedRules,
+    lastLearnedAt: confirmedRules.length ? confirmedRules[0].updatedAt || null : null
+  };
+}
+
+function buildSummaryChartsPayload({ userId, month, year, cardsPanel = [], personPanel = [], unassigned = [] }) {
+  const categories = getSummaryCategoryDistribution(userId, month, year);
+  const monthlyTrend = getSummaryMonthlyTrend(userId, month, year, 5);
+  const merchantIntel = getSummaryMerchantRanking(userId, month, year, 6);
+  const merchantSuggestions = getSummaryMerchantSuggestions(userId, month, year, 4);
+  const merchantLearning = getSummaryMerchantLearningOverview(userId, month, year, 6, 3);
+  const totalSpentCents = cardsPanel.reduce((acc, item) => acc + Number(item?.total_cents || 0), 0);
+  const totalPaidCardsCents = cardsPanel.reduce((acc, item) => acc + Number(item?.paid_cents || 0), 0);
+  const totalRemainingCardsCents = cardsPanel.reduce((acc, item) => acc + (Number(item?.total_cents || 0) - Number(item?.paid_cents || 0)), 0);
+  const totalPeopleAssignedCents = personPanel.reduce((acc, item) => acc + Number(item?.total_cents || 0), 0);
+  const totalUnassignedCents = unassigned.reduce((acc, item) => acc + Number(item?.total_cents || 0), 0);
+  const categorizedCents = categories
+    .filter((item) => !item.is_uncategorized)
+    .reduce((acc, item) => acc + Number(item?.total_cents || 0), 0);
+  const categoryCoveragePct = totalSpentCents > 0 ? Math.round((categorizedCents / totalSpentCents) * 100) : 0;
+  const topCategory = categories.find((item) => Number(item?.total_cents || 0) > 0) || null;
+  const previousPoint = monthlyTrend.length > 1 ? monthlyTrend[monthlyTrend.length - 2] : null;
+  const currentPoint = monthlyTrend.length > 0 ? monthlyTrend[monthlyTrend.length - 1] : null;
+  const deltaCents = previousPoint ? Number(currentPoint?.total_cents || 0) - Number(previousPoint?.total_cents || 0) : 0;
+  const deltaPct = previousPoint && Number(previousPoint.total_cents || 0) > 0
+    ? Math.round((deltaCents / Number(previousPoint.total_cents || 0)) * 100)
+    : null;
+  const averageMonthlySpendCents = monthlyTrend.length
+    ? Math.round(monthlyTrend.reduce((acc, point) => acc + Number(point?.total_cents || 0), 0) / monthlyTrend.length)
+    : 0;
+  const peakPoint = monthlyTrend.reduce((best, point) => {
+    if (!best) return point;
+    return Number(point?.total_cents || 0) > Number(best?.total_cents || 0) ? point : best;
+  }, null);
+  const monthsWithSpend = monthlyTrend.filter((point) => Number(point?.total_cents || 0) > 0).length;
+
+  return {
+    categories,
+    monthlyTrend,
+    kpis: {
+      totalSpentCents,
+      totalPaidCardsCents,
+      totalRemainingCardsCents,
+      totalPeopleAssignedCents,
+      totalUnassignedCents,
+      uncategorizedCents: Math.max(0, totalSpentCents - categorizedCents),
+      categorizedCents,
+      categoryCoveragePct,
+      deltaCents,
+      deltaPct,
+      topCategory: topCategory ? {
+        label: topCategory.label,
+        total_cents: topCategory.total_cents,
+        share_pct: totalSpentCents > 0 ? Math.round((Number(topCategory.total_cents || 0) / totalSpentCents) * 100) : 0
+      } : null
+    },
+    insights: {
+      averageMonthlySpendCents,
+      peakPoint: peakPoint ? {
+        month: peakPoint.month,
+        year: peakPoint.year,
+        label: peakPoint.label,
+        total_cents: peakPoint.total_cents
+      } : null,
+      monthsWithSpend,
+      currentVsAveragePct: averageMonthlySpendCents > 0
+        ? Math.round(((Number(currentPoint?.total_cents || 0) - averageMonthlySpendCents) / averageMonthlySpendCents) * 100)
+        : null,
+      trackedCategories: categories.length,
+      merchantCount: merchantIntel.merchantCount,
+      recognizedMerchantCount: merchantIntel.recognizedCount,
+      learnedMerchantCount: merchantIntel.learnedCount,
+      merchantSuggestionCount: merchantSuggestions.length,
+      merchantLearning: merchantLearning,
+      topMerchant: merchantIntel.topMerchant
+        ? {
+            label: merchantIntel.topMerchant.label,
+            total_cents: merchantIntel.topMerchant.total_cents,
+            txn_count: merchantIntel.topMerchant.txn_count,
+            share_pct: merchantIntel.topMerchant.share_pct,
+            avg_ticket_cents: merchantIntel.topMerchant.avg_ticket_cents,
+            search_term: merchantIntel.topMerchant.search_term || ''
+          }
+        : null
+    },
+    establishments: merchantIntel.ranking,
+    establishmentSuggestions: merchantSuggestions
+  };
+}
+
+
+function buildAnalyticsBreakdown(items, { idKey = 'id', labelKey = 'label', totalKey = 'total_cents', paidKey = 'paid_cents', activeKey = null } = {}) {
+  const rows = Array.isArray(items) ? items : [];
+  const normalized = rows
+    .map((item) => {
+      const totalCents = Math.max(0, Number(item?.[totalKey] || 0));
+      const paidCents = Math.max(0, Number(item?.[paidKey] || 0));
+      return {
+        id: Number(item?.[idKey] || 0),
+        label: String(item?.[labelKey] || '').trim(),
+        total_cents: totalCents,
+        paid_cents: paidCents,
+        remaining_cents: Math.max(0, totalCents - paidCents),
+        active: activeKey ? Number(item?.[activeKey] || 0) !== 0 : true
+      };
+    })
+    .filter((item) => item.label && item.total_cents > 0)
+    .sort((a, b) => {
+      const diff = Number(b.total_cents || 0) - Number(a.total_cents || 0);
+      if (diff !== 0) return diff;
+      return String(a.label || '').localeCompare(String(b.label || ''), 'pt-BR', { sensitivity: 'base' });
+    });
+
+  const totalAllCents = normalized.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
+  const maxCents = normalized.reduce((best, item) => Math.max(best, Number(item.total_cents || 0)), 0);
+
+  return normalized.map((item, index) => ({
+    ...item,
+    position: index + 1,
+    share_pct: totalAllCents > 0 ? Math.round((Number(item.total_cents || 0) / totalAllCents) * 100) : 0,
+    paid_pct: Number(item.total_cents || 0) > 0 ? Math.round((Number(item.paid_cents || 0) / Number(item.total_cents || 0)) * 100) : 0,
+    intensity_pct: maxCents > 0 ? Math.max(8, Math.round((Number(item.total_cents || 0) / maxCents) * 100)) : 0
+  }));
+}
+
+function normalizeFinanceAnalyticsLabel(rawLabel, fallback) {
+  const label = String(rawLabel || '').trim();
+  return label || fallback;
+}
+
+function aggregateFinanceAnalyticsRows(rows, type) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const fallbackLabel = type === 'income' ? 'Outras entradas' : 'Outras saídas';
+  const grouped = new Map();
+
+  safeRows.forEach((row) => {
+    const amountCents = Math.max(0, Number(row?.amount_cents || 0));
+    if (amountCents <= 0) return;
+    const label = normalizeFinanceAnalyticsLabel(row?.description || row?.category_name, fallbackLabel);
+    const key = label.toLocaleLowerCase('pt-BR');
+    const current = grouped.get(key) || {
+      label,
+      total_cents: 0,
+      row_count: 0,
+      item_count: 0,
+      amount_mode: normalizeFinanceAmountMode(row?.amount_mode)
+    };
+    current.total_cents += amountCents;
+    current.row_count += 1;
+    current.item_count += normalizeFinanceAmountMode(row?.amount_mode) === 'variable'
+      ? Math.max(1, Number(row?.item_count || 0))
+      : 1;
+    grouped.set(key, current);
+  });
+
+  const normalized = Array.from(grouped.values()).sort((a, b) => {
+    const centsDiff = Number(b.total_cents || 0) - Number(a.total_cents || 0);
+    if (centsDiff !== 0) return centsDiff;
+    return String(a.label || '').localeCompare(String(b.label || ''), 'pt-BR', { sensitivity: 'base' });
+  });
+
+  const totalAllCents = normalized.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
+  const maxCents = normalized.reduce((best, item) => Math.max(best, Number(item.total_cents || 0)), 0);
+
+  return normalized.map((item, index) => ({
+    ...item,
+    position: index + 1,
+    share_pct: totalAllCents > 0 ? Math.round((Number(item.total_cents || 0) / totalAllCents) * 100) : 0,
+    intensity_pct: maxCents > 0 ? Math.max(8, Math.round((Number(item.total_cents || 0) / maxCents) * 100)) : 0
+  }));
+}
+
+function getCardMonthlyTrend(userId, month, year, span = 6, { personId = null } = {}) {
+  const refs = [];
+  for (let offset = Math.max(0, Number(span || 6)) - 1; offset >= 0; offset -= 1) {
+    refs.push(shiftMonth(year, month, -offset));
+  }
+  if (!refs.length) return { refs: [], cards: [] };
+
+  const conditions = refs.map(() => `(${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)`).join(' OR ');
+  const params = refs.flatMap((ref) => [ref.month, ref.year]);
+  const safePersonId = Number(personId || 0);
+
+  const rows = safePersonId
+    ? db.prepare(`
+        SELECT
+          t.card_id,
+          c.name AS card_name,
+          ${EFFECTIVE_DUE_MONTH_SQL} AS ref_month,
+          ${EFFECTIVE_DUE_YEAR_SQL} AS ref_year,
+          SUM(a.share_cents) AS total_cents
+        FROM allocations a
+        JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+        JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
+        LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+        WHERE a.user_id = ?
+          AND a.person_id = ?
+          AND a.share_cents > 0
+          AND (${conditions})
+        GROUP BY t.card_id, c.name, ref_year, ref_month
+      `).all(userId, safePersonId, ...params)
+    : db.prepare(`
+        SELECT
+          t.card_id,
+          c.name AS card_name,
+          ${EFFECTIVE_DUE_MONTH_SQL} AS ref_month,
+          ${EFFECTIVE_DUE_YEAR_SQL} AS ref_year,
+          SUM(t.amount_cents) AS total_cents
+        FROM transactions t
+        JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
+        LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+        WHERE t.user_id = ?
+          AND t.amount_cents > 0
+          AND (${conditions})
+        GROUP BY t.card_id, c.name, ref_year, ref_month
+      `).all(userId, ...params);
+
+  const refKeys = refs.map((ref) => `${ref.year}-${String(ref.month).padStart(2, '0')}`);
+  const cardsById = new Map();
+
+  rows.forEach((row) => {
+    const cardId = Number(row.card_id || 0);
+    if (!cardId) return;
+    const key = `${row.ref_year}-${String(row.ref_month).padStart(2, '0')}`;
+    if (!cardsById.has(cardId)) {
+      cardsById.set(cardId, {
+        card_id: cardId,
+        label: String(row.card_name || '').trim() || 'Cartão sem nome',
+        seriesMap: new Map(refKeys.map((refKey, index) => [
+          refKey,
+          {
+            month: refs[index].month,
+            year: refs[index].year,
+            label: `${String(refs[index].month).padStart(2, '0')}/${refs[index].year}`,
+            total_cents: 0,
+            is_current: refs[index].month === Number(month) && refs[index].year === Number(year)
+          }
+        ]))
+      });
+    }
+    const card = cardsById.get(cardId);
+    const point = card.seriesMap.get(key);
+    if (!point) return;
+    point.total_cents = Number(row.total_cents || 0);
+  });
+
+  const cards = Array.from(cardsById.values())
+    .map((card) => {
+      const series = refKeys.map((key) => card.seriesMap.get(key)).filter(Boolean);
+      const totalCents = series.reduce((acc, point) => acc + Number(point.total_cents || 0), 0);
+      const currentPoint = series.find((point) => point.is_current) || series[series.length - 1] || null;
+      const peakCents = series.reduce((best, point) => Math.max(best, Number(point.total_cents || 0)), 0);
+      return {
+        card_id: card.card_id,
+        label: card.label,
+        total_cents: totalCents,
+        current_cents: Number(currentPoint?.total_cents || 0),
+        peak_cents: peakCents,
+        series
+      };
+    })
+    .filter((card) => Number(card.total_cents || 0) > 0)
+    .sort((a, b) => {
+      const currentDiff = Number(b.current_cents || 0) - Number(a.current_cents || 0);
+      if (currentDiff !== 0) return currentDiff;
+      const totalDiff = Number(b.total_cents || 0) - Number(a.total_cents || 0);
+      if (totalDiff !== 0) return totalDiff;
+      return String(a.label || '').localeCompare(String(b.label || ''), 'pt-BR', { sensitivity: 'base' });
+    });
+
+  return { refs, cards };
+}
+
+function getMonthlyFinanceAnalytics(userId, month, year, span = 6) {
+  const currentRows = hydrateMonthlyFinances(userId, db.prepare(`
+    SELECT mf.*, fc.name AS category_name
+    FROM monthly_finances mf
+    LEFT JOIN finance_categories fc ON fc.id = mf.category_id AND fc.user_id = mf.user_id
+    WHERE mf.user_id = ? AND mf.month = ? AND mf.year = ?
+    ORDER BY CASE mf.type WHEN 'income' THEN 0 ELSE 1 END, mf.id ASC
+  `).all(userId, month, year));
+
+  const incomeRows = currentRows.filter((row) => row?.type === 'income' && Number(row?.amount_cents || 0) > 0);
+  const expenseRows = currentRows.filter((row) => row?.type === 'expense' && Number(row?.amount_cents || 0) > 0);
+
+  const incomeCents = incomeRows.reduce((acc, row) => acc + Number(row?.amount_cents || 0), 0);
+  const expenseCents = expenseRows.reduce((acc, row) => acc + Number(row?.amount_cents || 0), 0);
+
+  const refs = [];
+  for (let offset = Math.max(0, Number(span || 6)) - 1; offset >= 0; offset -= 1) {
+    refs.push(shiftMonth(year, month, -offset));
+  }
+
+  let trendRows = [];
+  if (refs.length > 0) {
+    const conditions = refs.map(() => '(mf.month = ? AND mf.year = ?)').join(' OR ');
+    const params = refs.flatMap((ref) => [ref.month, ref.year]);
+    trendRows = hydrateMonthlyFinances(userId, db.prepare(`
+      SELECT mf.*, fc.name AS category_name
+      FROM monthly_finances mf
+      LEFT JOIN finance_categories fc ON fc.id = mf.category_id AND fc.user_id = mf.user_id
+      WHERE mf.user_id = ? AND (${conditions})
+    `).all(userId, ...params));
+  }
+
+  const buckets = new Map(refs.map((ref) => [
+    `${ref.year}-${String(ref.month).padStart(2, '0')}`,
+    {
+      month: ref.month,
+      year: ref.year,
+      label: `${String(ref.month).padStart(2, '0')}/${ref.year}`,
+      income_cents: 0,
+      expense_cents: 0,
+      net_cents: 0,
+      is_current: ref.month === Number(month) && ref.year === Number(year)
+    }
+  ]));
+
+  trendRows.forEach((row) => {
+    const key = `${row.year}-${String(row.month).padStart(2, '0')}`;
+    const bucket = buckets.get(key);
+    if (!bucket) return;
+    const amountCents = Math.max(0, Number(row?.amount_cents || 0));
+    if (row?.type === 'income') bucket.income_cents += amountCents;
+    if (row?.type === 'expense') bucket.expense_cents += amountCents;
+  });
+
+  const trend = refs.map((ref) => {
+    const key = `${ref.year}-${String(ref.month).padStart(2, '0')}`;
+    const point = buckets.get(key) || {
+      month: ref.month,
+      year: ref.year,
+      label: `${String(ref.month).padStart(2, '0')}/${ref.year}`,
+      income_cents: 0,
+      expense_cents: 0,
+      net_cents: 0,
+      is_current: ref.month === Number(month) && ref.year === Number(year)
+    };
+    point.net_cents = Number(point.income_cents || 0) - Number(point.expense_cents || 0);
+    return point;
+  });
+
+  const topIncome = aggregateFinanceAnalyticsRows(incomeRows, 'income');
+  const topExpense = aggregateFinanceAnalyticsRows(expenseRows, 'expense');
+  const positiveNetMonths = trend.filter((point) => Number(point.net_cents || 0) >= 0 && (Number(point.income_cents || 0) > 0 || Number(point.expense_cents || 0) > 0)).length;
+
+  return {
+    totals: {
+      incomeCents,
+      expenseCents,
+      netCents: incomeCents - expenseCents,
+      incomeRowCount: incomeRows.length,
+      expenseRowCount: expenseRows.length,
+      positiveNetMonths
+    },
+    incomeSources: topIncome,
+    expenseSources: topExpense,
+    trend,
+    topIncome: topIncome[0] || null,
+    topExpense: topExpense[0] || null
+  };
+}
+
+function buildMonthlyReviewViewModel(userId, month, year) {
   syncRecurringTransactions(userId, year, month);
   const isClosed = isMonthClosed(userId, month, year);
 
@@ -7528,22 +14211,304 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
       return a.card_name.localeCompare(b.card_name, "pt-BR", { sensitivity: "base" });
     });
 
-  const payRows = db.prepare(`
-    SELECT person_id, paid_cents
-    FROM person_payments
-    WHERE user_id = ? AND month = ? AND year = ?
-  `).all(userId, month, year);
-  const payByPerson = new Map(payRows.map(row => [row.person_id, row.paid_cents]));
+  const personPaymentBreakdown = getCombinedPersonPaymentBreakdownMap(userId, month, year);
 
-  const personPanel = people.map(person => ({
-    person_id: person.id,
-    person_name: person.name,
-    total_cents: personTotalsMap.get(person.id) || 0,
-    paid_cents: payByPerson.get(person.id) || 0,
-    active: person.active
-  }));
+  const personPanel = people.map(person => {
+    const breakdown = personPaymentBreakdown.get(person.id) || { manualCents: 0, autoCents: 0, totalPaidCents: 0 };
+    return {
+      person_id: person.id,
+      person_name: person.name,
+      total_cents: personTotalsMap.get(person.id) || 0,
+      paid_cents: breakdown.totalPaidCents,
+      manual_paid_cents: breakdown.manualCents,
+      auto_paid_cents: breakdown.autoCents,
+      active: person.active
+    };
+  });
 
-  res.render("summary", { month, year, people, cards, rows, unassigned, cardsPanel, personPanel, formatBRLFromCents, isClosed });
+  const financeAnalytics = getMonthlyFinanceAnalytics(userId, month, year, 6);
+  const peopleBreakdown = buildAnalyticsBreakdown(personPanel, {
+    idKey: 'person_id',
+    labelKey: 'person_name',
+    totalKey: 'total_cents',
+    paidKey: 'paid_cents',
+    activeKey: 'active'
+  });
+  const cardBreakdown = buildAnalyticsBreakdown(cardsPanel, {
+    idKey: 'card_id',
+    labelKey: 'card_name',
+    totalKey: 'total_cents',
+    paidKey: 'paid_cents'
+  });
+  const summaryCharts = buildSummaryChartsPayload({ userId, month, year, cardsPanel, personPanel, unassigned });
+  const selfPerson = people.find((person) => isSelfPersonRow(person)) || getSelfPerson(userId) || null;
+  const selfPersonId = Number(selfPerson?.id || 0);
+  const selfPersonPanel = selfPersonId
+    ? personPanel.find((item) => Number(item.person_id || 0) === selfPersonId) || null
+    : null;
+  const personalCategories = getPersonShareCategoryDistribution(userId, selfPersonId, month, year);
+  const personalMonthlyTrend = getPersonShareMonthlyTrend(userId, selfPersonId, month, year, 5);
+  const personalMerchantRanking = getPersonMerchantRanking(userId, selfPersonId, month, year, 6);
+  const personalMerchantSuggestions = getPersonMerchantSuggestions(userId, selfPersonId, month, year, 4);
+  const cardMonthlyTrend = getCardMonthlyTrend(userId, month, year, 6);
+  const personalCardShareCents = Number(selfPersonPanel?.total_cents || 0);
+  const personalPaidCents = Number(selfPersonPanel?.paid_cents || 0);
+  const personalRemainingCents = Math.max(0, personalCardShareCents - personalPaidCents);
+  const personalCategorizedCents = personalCategories
+    .filter((item) => !item.is_uncategorized)
+    .reduce((acc, item) => acc + Number(item?.total_cents || 0), 0);
+  const personalCoveragePct = personalCardShareCents > 0 ? Math.round((personalCategorizedCents / personalCardShareCents) * 100) : 0;
+  const personalTopCategory = personalCategories.find((item) => Number(item?.total_cents || 0) > 0) || null;
+  const personalPreviousPoint = personalMonthlyTrend.length > 1 ? personalMonthlyTrend[personalMonthlyTrend.length - 2] : null;
+  const personalCurrentPoint = personalMonthlyTrend.length > 0 ? personalMonthlyTrend[personalMonthlyTrend.length - 1] : null;
+  const personalDeltaCents = personalPreviousPoint ? Number(personalCurrentPoint?.total_cents || 0) - Number(personalPreviousPoint?.total_cents || 0) : 0;
+  const personalDeltaPct = personalPreviousPoint && Number(personalPreviousPoint.total_cents || 0) > 0
+    ? Math.round((personalDeltaCents / Number(personalPreviousPoint.total_cents || 0)) * 100)
+    : null;
+  const personalAverageMonthlySpendCents = personalMonthlyTrend.length
+    ? Math.round(personalMonthlyTrend.reduce((acc, point) => acc + Number(point?.total_cents || 0), 0) / personalMonthlyTrend.length)
+    : 0;
+  const personalPeakPoint = personalMonthlyTrend.reduce((best, point) => {
+    if (!best) return point;
+    return Number(point?.total_cents || 0) > Number(best?.total_cents || 0) ? point : best;
+  }, null);
+  const personalTrendMap = new Map(personalMonthlyTrend.map((point) => [point.key, point]));
+  const flowTrend = (financeAnalytics?.trend || []).map((point) => {
+    const key = `${point.year}-${String(point.month).padStart(2, '0')}`;
+    const personalPoint = personalTrendMap.get(key);
+    const cardCents = Number(personalPoint?.total_cents || 0);
+    const outsideExpenseCents = Number(point.expense_cents || 0);
+    const totalOutflowCents = outsideExpenseCents + cardCents;
+    return {
+      ...point,
+      card_cents: cardCents,
+      total_outflow_cents: totalOutflowCents,
+      net_cents: Number(point.income_cents || 0) - totalOutflowCents
+    };
+  });
+  const analyticsCharts = {
+    categories: personalCategories,
+    monthlyTrend: personalMonthlyTrend,
+    flowTrend,
+    kpis: {
+      totalSpentCents: personalCardShareCents,
+      totalPaidCardsCents: personalPaidCents,
+      totalRemainingCardsCents: personalRemainingCents,
+      categorizedCents: personalCategorizedCents,
+      uncategorizedCents: Math.max(0, personalCardShareCents - personalCategorizedCents),
+      categoryCoveragePct: personalCoveragePct,
+      deltaCents: personalDeltaCents,
+      deltaPct: personalDeltaPct,
+      topCategory: personalTopCategory ? {
+        label: personalTopCategory.label,
+        total_cents: personalTopCategory.total_cents,
+        share_pct: personalCardShareCents > 0 ? Math.round((Number(personalTopCategory.total_cents || 0) / personalCardShareCents) * 100) : 0
+      } : null
+    },
+    insights: {
+      averageMonthlySpendCents: personalAverageMonthlySpendCents,
+      peakPoint: personalPeakPoint ? {
+        month: personalPeakPoint.month,
+        year: personalPeakPoint.year,
+        label: personalPeakPoint.label,
+        total_cents: personalPeakPoint.total_cents
+      } : null,
+      currentVsAveragePct: personalAverageMonthlySpendCents > 0
+        ? Math.round(((Number(personalCurrentPoint?.total_cents || 0) - personalAverageMonthlySpendCents) / personalAverageMonthlySpendCents) * 100)
+        : null,
+      trackedCategories: personalCategories.length,
+      merchantCount: personalMerchantRanking.merchantCount,
+      recognizedMerchantCount: personalMerchantRanking.recognizedCount,
+      learnedMerchantCount: personalMerchantRanking.learnedCount,
+      merchantSuggestionCount: personalMerchantSuggestions.length,
+      merchantLearning: summaryCharts?.insights?.merchantLearning || { activeRules: [], pausedRules: [] },
+      topMerchant: personalMerchantRanking.topMerchant
+        ? {
+            label: personalMerchantRanking.topMerchant.label,
+            total_cents: personalMerchantRanking.topMerchant.total_cents,
+            txn_count: personalMerchantRanking.topMerchant.txn_count,
+            share_pct: personalMerchantRanking.topMerchant.share_pct,
+            avg_ticket_cents: personalMerchantRanking.topMerchant.avg_ticket_cents,
+            search_term: personalMerchantRanking.topMerchant.search_term || ''
+          }
+        : null
+    },
+    establishments: personalMerchantRanking.ranking,
+    establishmentSuggestions: personalMerchantSuggestions.length ? personalMerchantSuggestions : (summaryCharts?.establishmentSuggestions || []),
+    cardTrendByCard: cardMonthlyTrend.cards
+  };
+
+  return {
+    month,
+    year,
+    people,
+    cards,
+    rows,
+    unassigned,
+    cardsPanel,
+    personPanel,
+    peopleBreakdown,
+    cardBreakdown,
+    financeAnalytics,
+    analyticsCharts,
+    cardMonthlyTrend,
+    selfPerson,
+    isClosed,
+    summaryCharts,
+    previousSummaryRef: shiftMonth(year, month, -1),
+    nextSummaryRef: shiftMonth(year, month, 1)
+  };
+}
+
+app.get("/analytics/:year/:month", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+
+  const viewModel = buildMonthlyReviewViewModel(userId, month, year);
+  res.render("analytics", {
+    ...viewModel,
+    formatBRLFromCents
+  });
+});
+
+app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+
+  const viewModel = buildMonthlyReviewViewModel(userId, month, year);
+  res.render("summary", {
+    ...viewModel,
+    formatBRLFromCents
+  });
+});
+
+app.post(["/summary/:year/:month/merchant-suggestions/confirm", "/analytics/:year/:month/merchant-suggestions/confirm"], ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+  const normalizedPattern = buildMerchantPatternFromDescription(req.body.pattern || req.body.sample_description || '');
+  const merchantLabel = humanizeMerchantLabel(req.body.label || req.body.preview_label || '');
+  const searchTerm = normalizeMerchantText(req.body.search_term || normalizedPattern).split(' ').slice(0, 3).join(' ');
+  const sourceSample = String(req.body.sample_description || '').trim();
+
+  if (!normalizedPattern || !merchantLabel) {
+    setFlash(req, 'error', 'A sugestão veio meio sem molho. Tenta de novo que a gente organiza.');
+    return res.redirect(`/analytics/${year}/${month}`);
+  }
+
+  try {
+    upsertMerchantLearningFeedback(userId, {
+      normalizedPattern,
+      merchantLabel,
+      searchTerm,
+      sourceSample,
+      status: 'confirmed'
+    });
+    setFlash(req, 'success', `Fechou! Agora "${merchantLabel}" entra no radar desse jeitinho.`);
+  } catch (error) {
+    setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui salvar essa confirmação agora.' }).message);
+  }
+
+  return res.redirect(`/analytics/${year}/${month}`);
+});
+
+app.post(["/summary/:year/:month/merchant-suggestions/dismiss", "/analytics/:year/:month/merchant-suggestions/dismiss"], ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+  const normalizedPattern = buildMerchantPatternFromDescription(req.body.pattern || req.body.sample_description || '');
+  const merchantLabel = humanizeMerchantLabel(req.body.label || req.body.preview_label || 'Agrupamento adiado');
+  const searchTerm = normalizeMerchantText(req.body.search_term || normalizedPattern).split(' ').slice(0, 3).join(' ');
+  const sourceSample = String(req.body.sample_description || '').trim();
+
+  if (!normalizedPattern) {
+    setFlash(req, 'error', 'Essa sugestão escapou sem pista suficiente para ser adiada.');
+    return res.redirect(`/analytics/${year}/${month}`);
+  }
+
+  try {
+    upsertMerchantLearningFeedback(userId, {
+      normalizedPattern,
+      merchantLabel,
+      searchTerm,
+      sourceSample,
+      status: 'dismissed'
+    });
+    setFlash(req, 'success', 'Sugestão guardada na geladeira. A gente não insiste nela por enquanto.');
+  } catch (error) {
+    setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui guardar essa decisão agora.' }).message);
+  }
+
+  return res.redirect(`/analytics/${year}/${month}`);
+});
+
+
+app.post(["/summary/:year/:month/merchant-learning/pause", "/analytics/:year/:month/merchant-learning/pause"], ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+  const normalizedPattern = normalizeMerchantText(req.body.pattern || '');
+  const merchantLabel = humanizeMerchantLabel(req.body.label || 'Agrupamento pausado');
+  const searchTerm = normalizeMerchantText(req.body.search_term || normalizedPattern).split(' ').slice(0, 3).join(' ');
+  const sourceSample = String(req.body.source_sample || '').trim();
+
+  if (!normalizedPattern) {
+    setFlash(req, 'error', 'Faltou a pista principal desse agrupamento para pausar com segurança.');
+    return res.redirect(`/analytics/${year}/${month}`);
+  }
+
+  try {
+    upsertMerchantLearningFeedback(userId, {
+      normalizedPattern,
+      merchantLabel,
+      searchTerm,
+      sourceSample,
+      status: 'dismissed'
+    });
+    setFlash(req, 'success', `Beleza! Dei uma pausa no agrupamento de "${merchantLabel}".`);
+  } catch (error) {
+    setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui pausar esse agrupamento agora.' }).message);
+  }
+
+  return res.redirect(`/analytics/${year}/${month}`);
+});
+
+app.post(["/summary/:year/:month/merchant-learning/resume", "/analytics/:year/:month/merchant-learning/resume"], ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  const { month, year } = parsed;
+  const normalizedPattern = normalizeMerchantText(req.body.pattern || '');
+  const merchantLabel = humanizeMerchantLabel(req.body.label || req.body.preview_label || 'Agrupamento retomado');
+  const searchTerm = normalizeMerchantText(req.body.search_term || normalizedPattern).split(' ').slice(0, 3).join(' ');
+  const sourceSample = String(req.body.source_sample || '').trim();
+
+  if (!normalizedPattern) {
+    setFlash(req, 'error', 'Esse agrupamento veio sem rastro suficiente para voltar ao jogo.');
+    return res.redirect(`/analytics/${year}/${month}`);
+  }
+
+  try {
+    upsertMerchantLearningFeedback(userId, {
+      normalizedPattern,
+      merchantLabel,
+      searchTerm,
+      sourceSample,
+      status: 'confirmed'
+    });
+    setFlash(req, 'success', `Pronto! "${merchantLabel}" voltou para a memória ativa.`);
+  } catch (error) {
+    setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui reativar esse agrupamento agora.' }).message);
+  }
+
+  return res.redirect(`/analytics/${year}/${month}`);
 });
 
 app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {
@@ -7659,20 +14624,231 @@ function getPersonStatementExportData(userId, month, year, personId, itemOrder =
 
   const total = totalsByCard.reduce((acc, r) => acc + r.total_cents, 0);
 
-  const paymentRow = db.prepare(`
-    SELECT paid_cents
-    FROM person_payments
-    WHERE user_id = ? AND person_id = ? AND month = ? AND year = ?
-  `).get(userId, personId, month, year);
-
-  const paid_cents = paymentRow ? paymentRow.paid_cents : 0;
+  const paymentBreakdown = getPersonPaymentBreakdownForMonth(userId, month, year, personId);
+  const paid_cents = paymentBreakdown.totalPaidCents;
   const remaining_cents = Math.max(0, total - paid_cents);
 
-  return { person, items, totalsByCard, total, paid_cents, remaining_cents };
+  return {
+    person,
+    items,
+    totalsByCard,
+    total,
+    paid_cents,
+    manual_paid_cents: paymentBreakdown.manualCents,
+    auto_paid_cents: paymentBreakdown.autoCents,
+    remaining_cents
+  };
+}
+
+function resolveStatementShareState({ paidCents = 0, remainingCents = 0 } = {}) {
+  const safePaid = Math.max(0, Number(paidCents || 0));
+  const safeRemaining = Math.max(0, Number(remainingCents || 0));
+
+  if (safeRemaining <= 0) return 'settled';
+  if (safePaid > 0) return 'partial_due';
+  return 'full_due';
+}
+
+function buildStatementSharePixTxid(userId, personId, month, year, remainingCents = 0) {
+  const safeUserId = Math.max(0, Number(userId || 0)).toString(36).toUpperCase();
+  const safePersonId = Math.max(0, Number(personId || 0)).toString(36).toUpperCase();
+  const safeYear = Math.max(0, Number(year || 0)).toString(36).toUpperCase();
+  const safeMonth = Math.max(0, Number(month || 0)).toString(36).toUpperCase();
+  const safeAmount = Math.max(0, Math.round(Number(remainingCents || 0) / 100)).toString(36).toUpperCase();
+  return sanitizeTxid(`OPSH${safeUserId}${safePersonId}${safeYear}${safeMonth}${safeAmount}`);
+}
+
+function buildStatementShareMessageContext({ state, personName, periodLabel, totalCents, paidCents, remainingCents, pixPayload } = {}) {
+  const safeState = String(state || 'full_due').trim().toLowerCase();
+  const safePersonName = String(personName || 'por aí').trim() || 'por aí';
+  const totalLabel = formatBRLFromCents(totalCents);
+  const paidLabel = formatBRLFromCents(paidCents);
+  const remainingLabel = formatBRLFromCents(remainingCents);
+  const hasPix = !!String(pixPayload || '').trim();
+
+  let nativeShareText = '';
+  let whatsappCaption = '';
+  let whatsappFollowUpMessage = '';
+
+  if (safeState === 'settled') {
+    nativeShareText = [
+      `Separei o resumo de ${periodLabel} só para registro.`,
+      'Já ficou tudo certinho por aqui. Obrigado por fechar essa com a gente.',
+      '',
+      `Total do período: ${totalLabel}.`,
+      `Valor pago: ${paidLabel}.`
+    ].join('\n');
+
+    whatsappCaption = [
+      `*Oi, ${safePersonName}!* ✨`,
+      '',
+      `Separei o resumo de *${periodLabel}* só para registro.`,
+      'Já ficou tudo certinho por aqui.',
+      '',
+      'A imagem com os detalhes foi logo abaixo 👇'
+    ].join('\n');
+  } else if (safeState === 'partial_due') {
+    nativeShareText = [
+      `Separei o resumo de ${periodLabel}. Já entrou ${paidLabel} e ainda falta ${remainingLabel} para fechar tudo.`,
+      'A imagem vai junto com os detalhes.'
+    ].join('\n\n');
+
+    whatsappCaption = [
+      `*Oi, ${safePersonName}!* 💳`,
+      '',
+      `Separei o resumo de *${periodLabel}*. Já entrou *${paidLabel}* e ainda falta *${remainingLabel}* para fechar tudo.`,
+      '',
+      'A imagem com os detalhes foi logo abaixo 👇'
+    ].join('\n');
+
+    if (hasPix) {
+      nativeShareText = [
+        nativeShareText,
+        'Pix copia e cola do saldo restante:',
+        String(pixPayload || '').trim()
+      ].join('\n\n');
+
+      whatsappFollowUpMessage = [
+        `Pix copia e cola do saldo restante (${remainingLabel}):`,
+        '',
+        String(pixPayload || '').trim(),
+        '',
+        'Quando pagar, me manda o comprovante por aqui 💸'
+      ].join('\n');
+    }
+  } else {
+    nativeShareText = [
+      `Separei o resumo de ${periodLabel}. O total em aberto ficou em ${remainingLabel}.`,
+      'A imagem vai junto com os detalhes.'
+    ].join('\n\n');
+
+    whatsappCaption = [
+      `*Oi, ${safePersonName}!* 💳`,
+      '',
+      `Separei o resumo de *${periodLabel}*. O total em aberto ficou em *${remainingLabel}*.`,
+      '',
+      'A imagem com os detalhes foi logo abaixo 👇'
+    ].join('\n');
+
+    if (hasPix) {
+      nativeShareText = [
+        nativeShareText,
+        'Pix copia e cola para facilitar o acerto:',
+        String(pixPayload || '').trim()
+      ].join('\n\n');
+
+      whatsappFollowUpMessage = [
+        `Pix copia e cola para fechar esse resumo (${remainingLabel}):`,
+        '',
+        String(pixPayload || '').trim(),
+        '',
+        'Quando pagar, me manda o comprovante por aqui 💸'
+      ].join('\n');
+    }
+  }
+
+  return {
+    nativeShareText,
+    whatsappCaption,
+    whatsappFollowUpMessage
+  };
+}
+
+async function buildSharePixContext({ userId, month, year, person, totalCents, paidCents, remainingCents } = {}) {
+  const safeRemainingCents = Math.max(0, Number(remainingCents || 0));
+  const safePaidCents = Math.max(0, Number(paidCents || 0));
+  const safeTotalCents = Math.max(0, Number(totalCents || 0));
+  const periodLabel = `${String(month).padStart(2, '0')}/${year}`;
+  const state = resolveStatementShareState({ paidCents: safePaidCents, remainingCents: safeRemainingCents });
+  const ownerPixProfile = getUserPixProfile(userId);
+
+  const pix = {
+    available: false,
+    qrSupported: !!QRCode,
+    reason: null,
+    amountCents: safeRemainingCents,
+    payload: '',
+    qrDataUrl: null,
+    keyTypeLabel: ownerPixProfile?.pixKeyTypeLabel || null,
+    maskedKey: ownerPixProfile?.pixMaskedKey || null,
+    ownerName: ownerPixProfile?.ownerName || 'quem vai receber',
+    city: ownerPixProfile?.pixCity || null,
+    helperText: safePaidCents > 0
+      ? 'O QR já vai no saldo restante, e o código completo segue no texto para copiar sem aperto.'
+      : 'No banco, é só escanear ou usar o código que segue no texto.'
+  };
+
+  if (safeRemainingCents > 0) {
+    if (!ownerPixProfile || !ownerPixProfile.pixEnabled) {
+      pix.reason = 'Salve o Pix do seu perfil em Amigos para este resumo já sair com copia e cola.';
+    } else if (!ownerPixProfile.pixValid) {
+      pix.reason = ownerPixProfile.pixReason || 'Seu Pix ainda precisa de um ajuste em Amigos.';
+    } else {
+      try {
+        const txid = buildStatementSharePixTxid(userId, person?.id, month, year, safeRemainingCents);
+        const description = sanitizePixText(`RESUMO ${periodLabel} ${person?.name || ''}`, { max: 72 })
+          || sanitizePixText(`RESUMO ${periodLabel}`, { max: 72 });
+        const payload = buildPixPayload({
+          keyType: ownerPixProfile.pixKeyType,
+          keyValue: ownerPixProfile.pixKeyValue,
+          merchantName: ownerPixProfile.pixMerchantName || ownerPixProfile.ownerName || 'ACERTTAPAY',
+          merchantCity: ownerPixProfile.pixCity || PIX_DEFAULT_CITY,
+          amountCents: safeRemainingCents,
+          txid,
+          description
+        });
+
+        let qrDataUrl = null;
+        if (QRCode) {
+          try {
+            qrDataUrl = await QRCode.toDataURL(payload, {
+              errorCorrectionLevel: 'M',
+              margin: 1,
+              width: 220,
+              color: { dark: '#0f172a', light: '#FFFFFF' }
+            });
+          } catch (_) {
+            qrDataUrl = null;
+          }
+        }
+
+        pix.available = true;
+        pix.payload = payload;
+        pix.qrDataUrl = qrDataUrl;
+        pix.keyTypeLabel = ownerPixProfile.pixKeyTypeLabel || null;
+        pix.maskedKey = ownerPixProfile.pixMaskedKey || null;
+        pix.ownerName = ownerPixProfile.ownerName || pix.ownerName;
+        pix.city = ownerPixProfile.pixCity || pix.city;
+        pix.reason = null;
+      } catch (error) {
+        pix.reason = error.message || 'Não consegui montar o Pix deste resumo agora.';
+      }
+    }
+  }
+
+  const messages = buildStatementShareMessageContext({
+    state,
+    personName: person?.name,
+    periodLabel,
+    totalCents: safeTotalCents,
+    paidCents: safePaidCents,
+    remainingCents: safeRemainingCents,
+    pixPayload: pix.available ? pix.payload : ''
+  });
+
+  return {
+    state,
+    periodLabel,
+    shareTitle: `Resumo ${periodLabel} — ${person?.name || 'AcerttaPay'}`,
+    nativeShareText: messages.nativeShareText,
+    whatsappCaption: messages.whatsappCaption,
+    whatsappFollowUpMessage: messages.whatsappFollowUpMessage,
+    pix
+  };
 }
 
 // WhatsApp e compartilhamento
-app.get("/share/:year/:month/:personId", ensureAuthenticated, (req, res) => {
+app.get("/share/:year/:month/:personId", ensureAuthenticated, async (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
   const personId = Number(req.params.personId);
@@ -7683,10 +14859,20 @@ app.get("/share/:year/:month/:personId", ensureAuthenticated, (req, res) => {
   const exportData = getPersonStatementExportData(userId, month, year, personId, itemOrder);
   if (!exportData) return res.status(400).send("Pessoa inválida.");
 
-  res.render("share", { month, year, itemOrder, ...exportData, formatBRLFromCents });
+  const shareContext = await buildSharePixContext({
+    userId,
+    month,
+    year,
+    person: exportData.person,
+    totalCents: exportData.total,
+    paidCents: exportData.paid_cents,
+    remainingCents: exportData.remaining_cents
+  });
+
+  res.render("share", { month, year, itemOrder, shareContext, ...exportData, formatBRLFromCents });
 });
 
-app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
+app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, async (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
   const personId = Number(req.params.personId);
@@ -7704,7 +14890,18 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, (req, res) => {
   const exportData = getPersonStatementExportData(userId, month, year, personId, itemOrder);
   if (!exportData) return res.status(400).send("Pessoa inválida.");
 
-  res.render("whatsapp", { month, year, itemOrder, ...exportData, formatBRLFromCents });
+  const decoratedPerson = decoratePersonPhoneForView(exportData.person, { fallbackCountry: DEFAULT_PHONE_COUNTRY });
+  const shareContext = await buildSharePixContext({
+    userId,
+    month,
+    year,
+    person: decoratedPerson,
+    totalCents: exportData.total,
+    paidCents: exportData.paid_cents,
+    remainingCents: exportData.remaining_cents
+  });
+
+  res.render("whatsapp", { month, year, itemOrder, shareContext, ...exportData, person: decoratedPerson, formatBRLFromCents });
 });
 
 function maskPhoneForLog(rawPhone) {
@@ -7714,8 +14911,44 @@ function maskPhoneForLog(rawPhone) {
   return `${'*'.repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
 }
 
+function findEvolutionMissingRecipient(payload, depth = 0) {
+  if (!payload || depth > 8) return null;
+
+  if (Array.isArray(payload)) {
+    for (const entry of payload) {
+      const found = findEvolutionMissingRecipient(entry, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  if (typeof payload !== 'object') return null;
+
+  if (payload.exists === false && (payload.number || payload.jid)) {
+    return payload;
+  }
+
+  for (const value of Object.values(payload)) {
+    const found = findEvolutionMissingRecipient(value, depth + 1);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+function getEvolutionRecipientIssueMessage(error) {
+  const payload = error && error.response && error.response.data;
+  const missingRecipient = findEvolutionMissingRecipient(payload);
+  if (!missingRecipient) return '';
+  return 'Esse número não apareceu no WhatsApp. Confere se o DDI e o celular estão certinhos?';
+}
+
 function summarizeAxiosError(error) {
   if (!error) return 'Erro desconhecido.';
+
+  if (error.evolutionDebugSummary) {
+    return error.evolutionDebugSummary;
+  }
 
   const status = error.response && error.response.status;
   const payload = error.response && error.response.data;
@@ -7737,19 +14970,111 @@ function summarizeAxiosError(error) {
   return status ? `HTTP ${status}` : 'Erro desconhecido.';
 }
 
+function normalizeEvolutionMediaBase64(rawBase64) {
+  return String(rawBase64 || '')
+    .replace(/^data:[^;]+;base64,/i, '')
+    .replace(/\s+/g, '')
+    .trim();
+}
+
+function shouldRetryEvolutionMediaAsLegacy(error) {
+  if (!(error && error.response && [400, 404, 415, 422].includes(error.response.status))) {
+    return false;
+  }
+
+  const summary = summarizeAxiosError(error).toLowerCase();
+  if (!summary) return false;
+
+  if (summary.includes('requires property "mediatype"') || summary.includes("requires property 'mediatype'")) {
+    return false;
+  }
+
+  return summary.includes('mediamessage') || summary.includes('media type');
+}
+
+async function postToEvolution(endpoint, headers, payload) {
+  return axios.post(endpoint, payload, {
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...headers
+    },
+    timeout: 30000,
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity
+  });
+}
+
 async function sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNumber, message, base64Data) {
-  const endpoint = `${apiUrl.replace(/\/$/, '')}/message/sendMedia/${instance}`;
-  const headers = { apikey: apiKey };
-  const fileName = `OrganizaPay_${new Date().toISOString().slice(0, 10)}.png`;
+  const endpoint = `${String(apiUrl || '').trim().replace(/\/$/, '')}/message/sendMedia/${String(instance || '').trim()}`;
+  const headers = { apikey: String(apiKey || '').trim() };
+  const fileName = `AcerttaPay_${new Date().toISOString().slice(0, 10)}.png`;
+  const safeCaption = String(message || '').trim();
+  const normalizedBase64 = normalizeEvolutionMediaBase64(base64Data);
 
   const v2Payload = {
     number: cleanNumber,
     mediatype: 'image',
     mimetype: 'image/png',
-    media: base64Data,
+    media: normalizedBase64,
     fileName,
-    caption: message,
-    delay: 1200
+    filename: fileName,
+    caption: safeCaption || ' ',
+    delay: 1200,
+    linkPreview: false
+  };
+
+  try {
+    return await postToEvolution(endpoint, headers, v2Payload);
+  } catch (v2Error) {
+    if (!shouldRetryEvolutionMediaAsLegacy(v2Error)) {
+      throw v2Error;
+    }
+
+    const v1Payload = {
+      number: cleanNumber,
+      mediaMessage: {
+        mediatype: 'image',
+        mediaType: 'image',
+        mimetype: 'image/png',
+        fileName,
+        filename: fileName,
+        caption: safeCaption || ' ',
+        media: normalizedBase64
+      },
+      options: {
+        delay: 1200,
+        presence: 'composing',
+        linkPreview: false
+      }
+    };
+
+    try {
+      return await postToEvolution(endpoint, headers, v1Payload);
+    } catch (legacyError) {
+      legacyError.evolutionDebugSummary = [
+        'Envio em schema v2 falhou.',
+        summarizeAxiosError(v2Error),
+        'Fallback legado também falhou.',
+        summarizeAxiosError(legacyError)
+      ].join(' ');
+      throw legacyError;
+    }
+  }
+}
+
+async function sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, message) {
+  const safeMessage = String(message || '').trim();
+  if (!safeMessage) return null;
+
+  const endpoint = `${apiUrl.replace(/\/$/, '')}/message/sendText/${instance}`;
+  const headers = { apikey: apiKey };
+
+  const v2Payload = {
+    number: cleanNumber,
+    text: safeMessage,
+    delay: 2200,
+    linkPreview: false
   };
 
   try {
@@ -7763,15 +15088,13 @@ async function sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNum
 
     const v1Payload = {
       number: cleanNumber,
-      mediaMessage: {
-        mediaType: 'image',
-        fileName,
-        caption: message,
-        media: base64Data
+      textMessage: {
+        text: safeMessage
       },
       options: {
-        delay: 1200,
-        presence: 'composing'
+        delay: 2200,
+        presence: 'composing',
+        linkPreview: false
       }
     };
 
@@ -7785,7 +15108,7 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
   }
 
   try {
-    const { personPhone, message, imageBase64 } = req.body;
+    const { personPhone, personPhoneCountry, message, followUpMessage, pixPayload, imageBase64 } = req.body;
 
     const apiUrl = getSettingText('EVOLUTION_API_URL');
     const apiKey = getSettingText('EVOLUTION_API_KEY');
@@ -7795,27 +15118,46 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
       return res.status(400).json({ error: "O envio automático no WhatsApp ainda não foi configurado." });
     }
 
-    const cleanNumber = String(personPhone || '').replace(/\D/g, '');
-    if (!cleanNumber) {
-      return res.status(400).json({ error: "Essa pessoa ainda não tem um telefone válido para envio." });
+    const normalizedRecipient = normalizePhoneForWhatsapp(personPhone, { fallbackCountry: personPhoneCountry || DEFAULT_PHONE_COUNTRY });
+    if (!normalizedRecipient.ok || !normalizedRecipient.number) {
+      return res.status(400).json({ error: normalizedRecipient.reason || "Essa pessoa ainda não tem um telefone válido para envio." });
     }
 
-    const base64Data = String(imageBase64 || '').split(',')[1];
+    const cleanNumber = normalizedRecipient.number;
+    const base64Data = String(imageBase64 || '').includes(',')
+      ? String(imageBase64 || '').split(',')[1]
+      : String(imageBase64 || '').trim();
     if (!base64Data) {
       return res.status(400).json({ error: "Não consegui montar a imagem do resumo para enviar." });
     }
 
     await sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNumber, message, base64Data);
+
+    const pixCopyPaste = String(pixPayload || '').trim();
+    const fallbackText = String(followUpMessage || '').trim();
+    if (pixCopyPaste) {
+      await sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, pixCopyPaste);
+    } else if (fallbackText) {
+      await sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, fallbackText);
+    }
+
     res.json({ success: true });
   } catch (e) {
+    const recipientIssueMessage = getEvolutionRecipientIssueMessage(e);
     const summarized = summarizeAxiosError(e);
     console.error('[whatsapp/send-automation] Falha no envio', {
       userId: req.user && req.user.id,
       phone: maskPhoneForLog(req.body && req.body.personPhone),
       messageLength: req.body && req.body.message ? String(req.body.message).length : 0,
       hasImage: Boolean(req.body && req.body.imageBase64),
-      details: summarized
+      hasPixPayload: Boolean(req.body && String(req.body.pixPayload || '').trim()),
+      details: summarized,
+      recipientIssueMessage: recipientIssueMessage || null
     });
+
+    if (recipientIssueMessage) {
+      return res.status(400).json({ error: recipientIssueMessage });
+    }
 
     const status = e && e.response && e.response.status ? 502 : 500;
     res.status(status).json({ error: `Não consegui enviar esse resumo no WhatsApp agora. ${summarized}`.trim() });
@@ -7823,23 +15165,127 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
 });
 // --- ROTAS DO detalhamento ---
 
-// 1. Adiciona nova linha (Tanto para Entradas quanto para Contas)
+app.get("/finances/details/:id", ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const finance = serializeFinanceForApi(userId, req.params.id);
+
+  if (!finance) {
+    return res.status(404).json({ error: "Item não encontrado." });
+  }
+
+  return res.json({
+    success: true,
+    finance,
+    isClosed: isMonthClosed(userId, Number(finance.month), Number(finance.year))
+  });
+});
+
+// 1. Adiciona nova linha (Tanto para Entradas quanto para Saídas)
 app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) => {
   const userId = req.user.id;
 
   try {
-    const { month, year, type, description } = req.body;
-    if (isMonthClosed(userId, Number(month), Number(year))) {
-      return res.status(423).json({ error: getMonthLockMessage(Number(month), Number(year)) });
-    }
-    db.prepare(`
-      INSERT INTO monthly_finances (user_id, month, year, type, description, formula, amount_cents, created_at)
-      VALUES (?, ?, ?, ?, ?, '', 0, ?)
-    `).run(userId, month, year, type, description, new Date().toISOString());
+    const month = Number(req.body.month);
+    const year = Number(req.body.year);
+    const type = normalizeFinanceType(req.body.type);
+    const amountMode = normalizeFinanceAmountMode(req.body.amount_mode);
+    const description = sanitizeFinanceDescription(req.body.description);
+    const items = amountMode === 'variable' ? sanitizeVariableFinanceItems(req.body.items) : [];
 
-    res.json({ success: true });
+    if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 2000) {
+      return res.status(400).json({ error: "Mês ou ano inválido." });
+    }
+
+    if (!type) {
+      return res.status(400).json({ error: "Tipo de lançamento inválido." });
+    }
+
+    if (isMonthClosed(userId, month, year)) {
+      return res.status(423).json({ error: getMonthLockMessage(month, year) });
+    }
+
+    const nowIso = new Date().toISOString();
+    const totalCents = amountMode === 'variable' ? sumFinanceItemCents(items) : 0;
+
+    const insertFinance = db.prepare(`
+      INSERT INTO monthly_finances (user_id, month, year, type, description, formula, amount_cents, amount_mode, created_at)
+      VALUES (?, ?, ?, ?, ?, '', ?, ?, ?)
+    `);
+
+    const insertItem = db.prepare(`
+      INSERT INTO monthly_finance_items (finance_id, user_id, item_date, item_source, amount_cents, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const financeId = db.transaction(() => {
+      const result = insertFinance.run(userId, month, year, type, description, totalCents, amountMode, nowIso);
+      const createdFinanceId = Number(result.lastInsertRowid);
+
+      if (amountMode === 'variable') {
+        for (const item of items) {
+          insertItem.run(createdFinanceId, userId, item.item_date, item.item_source, item.amount_cents, nowIso, nowIso);
+        }
+      }
+
+      return createdFinanceId;
+    })();
+
+    return res.json({ success: true, finance: serializeFinanceForApi(userId, financeId) });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    const status = /certinhos|nome para esse item/i.test(String(e.message || '')) ? 400 : 500;
+    return res.status(status).json({ error: getFriendlyErrorMessage(e, { defaultMessage: 'Não consegui salvar esse item agora.' }) });
+  }
+});
+
+app.post("/finances/variable/:id", ensureAuthenticated, express.json(), (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const id = Number(req.params.id);
+    const finance = getFinanceByIdForUser(userId, id);
+    if (!finance) {
+      return res.status(404).json({ error: "Item não encontrado." });
+    }
+
+    if (finance.amount_mode !== 'variable') {
+      return res.status(400).json({ error: "Esse item não usa vários lançamentos." });
+    }
+
+    if (isMonthClosed(userId, Number(finance.month), Number(finance.year))) {
+      return res.status(423).json({ error: getMonthLockMessage(Number(finance.month), Number(finance.year)) });
+    }
+
+    const description = sanitizeFinanceDescription(req.body.description);
+    const items = sanitizeVariableFinanceItems(req.body.items);
+    const totalCents = sumFinanceItemCents(items);
+    const nowIso = new Date().toISOString();
+
+    const updateFinance = db.prepare(`
+      UPDATE monthly_finances
+      SET description = ?, formula = '', amount_cents = ?, amount_mode = 'variable'
+      WHERE id = ? AND user_id = ?
+    `);
+    const deleteItems = db.prepare(`
+      DELETE FROM monthly_finance_items
+      WHERE finance_id = ? AND user_id = ?
+    `);
+    const insertItem = db.prepare(`
+      INSERT INTO monthly_finance_items (finance_id, user_id, item_date, item_source, amount_cents, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    db.transaction(() => {
+      updateFinance.run(description, totalCents, id, userId);
+      deleteItems.run(id, userId);
+      for (const item of items) {
+        insertItem.run(id, userId, item.item_date, item.item_source, item.amount_cents, nowIso, nowIso);
+      }
+    })();
+
+    return res.json({ success: true, finance: serializeFinanceForApi(userId, id) });
+  } catch (e) {
+    const status = /certinhos|nome para esse item/i.test(String(e.message || '')) ? 400 : 500;
+    return res.status(status).json({ error: getFriendlyErrorMessage(e, { defaultMessage: 'Não consegui salvar esses lançamentos agora.' }) });
   }
 });
 
@@ -7848,40 +15294,59 @@ app.post("/finances/update/:id", ensureAuthenticated, express.json(), (req, res)
   const userId = req.user.id;
 
   try {
-    const id = req.params.id;
+    const id = Number(req.params.id);
     const { field, value, formula, amount_cents } = req.body;
-    const row = db.prepare("SELECT month, year FROM monthly_finances WHERE id = ? AND user_id = ?").get(id, userId);
+    const row = getFinanceByIdForUser(userId, id);
+
     if (!row) {
       return res.status(404).json({ error: "Linha não encontrada." });
     }
+
     if (isMonthClosed(userId, Number(row.month), Number(row.year))) {
       return res.status(423).json({ error: getMonthLockMessage(Number(row.month), Number(row.year)) });
     }
 
     if (field === 'description') {
-      db.prepare("UPDATE monthly_finances SET description = ? WHERE id = ? AND user_id = ?").run(value, id, userId);
+      db.prepare("UPDATE monthly_finances SET description = ? WHERE id = ? AND user_id = ?")
+        .run(sanitizeFinanceDescription(value), id, userId);
     } else if (field === 'formula_and_value') {
-      db.prepare("UPDATE monthly_finances SET formula = ?, amount_cents = ? WHERE id = ? AND user_id = ?").run(formula, amount_cents, id, userId);
+      if (row.amount_mode !== 'fixed') {
+        return res.status(400).json({ error: "Esse item usa vários lançamentos. Abra a lista dele para editar os lançamentos." });
+      }
+
+      const parsedAmountCents = Number.isFinite(Number(amount_cents)) ? Math.max(0, Math.round(Number(amount_cents))) : 0;
+      db.prepare("UPDATE monthly_finances SET formula = ?, amount_cents = ? WHERE id = ? AND user_id = ?")
+        .run(String(formula || '').trim(), parsedAmountCents, id, userId);
+    } else {
+      return res.status(400).json({ error: "Campo de atualização inválido." });
     }
 
-    res.json({ success: true });
+    return res.json({ success: true, finance: serializeFinanceForApi(userId, id) });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    const status = /nome para esse item/i.test(String(e.message || '')) ? 400 : 500;
+    return res.status(status).json({ error: getFriendlyErrorMessage(e, { defaultMessage: 'Não consegui atualizar esse item agora.' }) });
   }
 });
 
-// 3. Deleta uma linha (Entrada ou Conta)
+// 3. Deleta uma linha (Entrada ou Saída)
 app.post("/finances/delete/:id", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const row = db.prepare("SELECT month, year FROM monthly_finances WHERE id = ? AND user_id = ?").get(req.params.id, userId);
+  const row = getFinanceByIdForUser(userId, req.params.id);
+
   if (!row) {
     return res.status(404).json({ error: "Linha não encontrada." });
   }
+
   if (isMonthClosed(userId, Number(row.month), Number(row.year))) {
     return res.status(423).json({ error: getMonthLockMessage(Number(row.month), Number(row.year)) });
   }
-  db.prepare("DELETE FROM monthly_finances WHERE id = ? AND user_id = ?").run(req.params.id, userId);
-  res.json({ success: true });
+
+  db.transaction(() => {
+    db.prepare("DELETE FROM monthly_finance_items WHERE finance_id = ? AND user_id = ?").run(req.params.id, userId);
+    db.prepare("DELETE FROM monthly_finances WHERE id = ? AND user_id = ?").run(req.params.id, userId);
+  })();
+
+  return res.json({ success: true });
 });
 
 // 4. Salva Lembretes e Calculadora
@@ -7907,7 +15372,8 @@ app.post("/finances/notes/:year/:month", ensureAuthenticated, express.json(), (r
 
     res.json({ success: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    const details = getFriendlyErrorDetails(e, { defaultMessage: 'Não consegui salvar esse rascunho agora.' });
+    res.status(details.status).json({ error: details.message });
   }
 });
 
@@ -7924,7 +15390,8 @@ app.post("/finances/toggle-close", ensureAuthenticated, express.json(), (req, re
     }
     res.json({ success: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    const details = getFriendlyErrorDetails(e, { defaultMessage: 'Não consegui mexer no cadeado desse mês agora.' });
+    res.status(details.status).json({ error: details.message });
   }
 });
 
@@ -8008,26 +15475,8 @@ app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
 
     return renderAdmin(res, { success, activeSection: sectionKey });
   } catch (err) {
-    return renderAdmin(res, { error: err.message || 'Não consegui salvar essa seção agora.', activeSection: sectionKey });
+    return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui salvar essa seção agora.' }), activeSection: sectionKey });
   }
-});
-
-function downloadAdminGuide(res, activeSection = 'access') {
-  const guidePath = path.join(__dirname, 'public', 'docs', 'guia-central-admin-organizapay.pdf');
-  if (!fs.existsSync(guidePath)) {
-    return renderAdmin(res, { error: 'O guia em PDF ainda não está disponível neste servidor.', activeSection });
-  }
-
-  return res.download(guidePath, 'guia-central-admin-organizapay.pdf');
-}
-
-app.get('/admin/guide', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  return downloadAdminGuide(res, 'access');
 });
 
 app.get('/admin/backup/guide', ensureAuthenticated, (req, res) => {
@@ -8036,7 +15485,12 @@ app.get('/admin/backup/guide', ensureAuthenticated, (req, res) => {
     return res.status(403).send('Acesso negado.');
   }
 
-  return downloadAdminGuide(res, 'backup');
+  const guidePath = path.join(__dirname, 'public', 'docs', 'guia-backup-acerttapay.pdf');
+  if (!fs.existsSync(guidePath)) {
+    return renderAdmin(res, { error: 'O guia em PDF ainda não está disponível neste servidor.', activeSection: 'backup' });
+  }
+
+  return res.download(guidePath, 'guia-backup-acerttapay.pdf');
 });
 
 app.get('/admin/backup/google/connect', ensureAuthenticated, (req, res) => {
@@ -8049,7 +15503,7 @@ app.get('/admin/backup/google/connect', ensureAuthenticated, (req, res) => {
     const authUrl = buildGoogleBackupAuthUrl(req);
     return res.redirect(authUrl);
   } catch (error) {
-    return renderAdmin(res, { error: error.message || 'Não consegui preparar a conexão com o Google Drive agora.', activeSection: 'backup' });
+    return renderAdmin(res, { error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui preparar a conexão com o Google Drive agora.' }), activeSection: 'backup' });
   }
 });
 
@@ -8148,7 +15602,7 @@ app.post('/admin/backup/run', ensureAuthenticated, async (req, res) => {
     });
   } catch (error) {
     return renderAdmin(res, {
-      error: error.message || 'Não consegui criar o backup manual agora.',
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui criar o backup manual agora.' }),
       activeSection: 'backup'
     });
   }
@@ -8183,12 +15637,12 @@ app.post('/admin/backup/restore', ensureAuthenticated, backupRestoreUpload.singl
     });
   } catch (error) {
     return renderAdmin(res, {
-      error: error.message || 'Não consegui restaurar o backup agora.',
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui restaurar o backup agora.' }),
       activeSection: 'backup'
     });
   } finally {
     if (uploadedPath) {
-      await fsp.rm(uploadedPath, { force: true }).catch(() => {});
+      await fsp.rm(uploadedPath, { force: true }).catch(() => { });
     }
   }
 });
@@ -8217,28 +15671,36 @@ app.get('/admin/backup/download/:backupId/:slot', ensureAuthenticated, (req, res
 
 app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const { email, name, role } = req.body;
+  const safeEmail = normalizeEmail(req.body.email);
+  const safeName = String(req.body.name || '').trim();
+  const safeRole = String(req.body.role || 'user') === 'admin' ? 'admin' : 'user';
   const canImport = req.body.can_import ? 1 : 0;
 
   if (!isAdminUser(userId)) {
     return res.status(403).send('Acesso negado.');
   }
 
-  if (!email || !email.includes('@')) {
+  if (!safeEmail || !safeEmail.includes('@')) {
     return renderAdmin(res, { error: 'Email inválido' });
+  }
+
+  const duplicatedUser = db.prepare('SELECT id FROM users WHERE email = ?').get(safeEmail);
+  if (duplicatedUser) {
+    return renderAdmin(res, { error: 'Esse e-mail já está autorizado por aqui. Dá uma conferida antes de convidar de novo.' });
   }
 
   try {
     db.prepare("INSERT INTO users (email, name, role, can_import, created_at) VALUES (?, ?, ?, ?, ?)")
-      .run(email, name || email.split('@')[0], role || 'user', canImport, dayjs().toISOString());
+      .run(safeEmail, safeName || safeEmail.split('@')[0], safeRole, canImport, dayjs().toISOString());
 
-    const newUser = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+    const newUser = db.prepare("SELECT id FROM users WHERE email = ?").get(safeEmail);
     const insertCat = db.prepare("INSERT OR IGNORE INTO finance_categories (user_id, name) VALUES (?, ?)");
     DEFAULT_FINANCE_CATEGORIES.forEach(cat => insertCat.run(newUser.id, cat));
+    ensurePurchaseCategoriesForUser(newUser.id);
 
-    return renderAdmin(res, { success: `Usuário ${email} adicionado com sucesso!` });
+    return renderAdmin(res, { success: `Usuário ${safeEmail} adicionado com sucesso!` });
   } catch (err) {
-    return renderAdmin(res, { error: err.message });
+    return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui adicionar esse usuário agora.' }) });
   }
 });
 
@@ -8297,35 +15759,73 @@ app.post("/admin/update-user/:id", ensureAuthenticated, (req, res) => {
 
     return renderAdmin(res, { success: 'Usuário atualizado com sucesso!' });
   } catch (err) {
-    return renderAdmin(res, { error: err.message });
+    return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui atualizar esse usuário agora.' }) });
   }
 });
 
 app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const targetUserId = req.params.id;
+  const targetUserId = Number(req.params.id);
 
   if (!isAdminUser(userId)) {
     return res.status(403).send('Acesso negado.');
   }
 
   if (String(userId) === String(targetUserId)) {
-    return renderAdmin(res, { error: 'Você não pode remover sua própria conta' });
+    return renderAdmin(res, { error: 'Você não pode remover sua própria conta.' });
+  }
+
+  const targetUser = getUserRecord(targetUserId, { includeDeleted: true });
+  if (!targetUser) {
+    return renderAdmin(res, { error: 'Usuário não encontrado.' });
+  }
+
+  if (isDeletedUserRow(targetUser)) {
+    return renderAdmin(res, { success: 'Esse acesso já tinha sido removido antes.' });
+  }
+
+  const blockers = getUserDeletionBlockers(targetUserId);
+  if (blockers.hasDraftQueue) {
+    return renderAdmin(res, { error: 'Esse acesso ainda tem caixa de saída com cobrança guardada. Envie ou descarte esses rascunhos antes de excluir.' });
+  }
+
+  if (blockers.hasOpenPixIntent) {
+    return renderAdmin(res, { error: 'Esse acesso ainda participa de um Pix do mês em andamento. Fecha esse fluxo primeiro e depois a exclusão fica liberada.' });
+  }
+
+  if (blockers.hasOpenRequests) {
+    return renderAdmin(res, { error: 'Esse acesso ainda está ligado a cobranças em aberto. Resolve essas pendências antes de excluir.' });
   }
 
   try {
-    const tables = ['allocations', 'transactions', 'imports', 'person_payments', 'card_statements', 'people', 'cards', 'monthly_finances', 'scratchpad', 'finance_categories', 'closed_months'];
-
-    for (const table of tables) {
-      db.prepare(`DELETE FROM ${table} WHERE user_id = ?`).run(targetUserId);
-    }
-
-    db.prepare("DELETE FROM users WHERE id = ?").run(targetUserId);
-
-    return renderAdmin(res, { success: 'Usuário removido com sucesso!' });
+    offboardUserAccess(userId, targetUserId);
+    return renderAdmin(res, { success: 'Acesso removido da área ativa com histórico preservado. Mais tarde, o mesmo e-mail pode ser autorizado de novo como um novo acesso.' });
   } catch (err) {
-    return renderAdmin(res, { error: err.message });
+    return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui remover esse acesso agora.' }) });
   }
+});
+
+app.use((req, res, next) => {
+  if (res.headersSent) return next();
+  res.status(404);
+  return res.render('error', {
+    title: 'AcerttaPay | Opa',
+    errorTitle: 'Deu uma tropeçadinha no caminho',
+    errorMessage: 'Essa página não apareceu por aqui. Bora voltar para um cantinho conhecido do app?',
+    actionHref: req?.isAuthenticated?.() ? (res.locals.dashboardHref || '/') : '/login',
+    actionLabel: req?.isAuthenticated?.() ? 'Voltar para o app' : 'Ir para o login'
+  });
+});
+
+app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  return handleFriendlyErrorResponse(req, res, err, {
+    defaultMessage: 'Algo tropeçou por aqui. Tenta de novo que eu seguro as pontas deste lado.',
+    fallbackRedirect: req?.isAuthenticated?.() ? (res.locals.dashboardHref || '/') : '/login'
+  });
 });
 
 const PORT = BOOTSTRAP_PORT || 3001;

@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>AcerttaPay · Como usar cobranças</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f8fafc;
+      --surface: rgba(255,255,255,0.92);
+      --surface-strong: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --line: rgba(148,163,184,0.28);
+      --brand: #059669;
+      --brand-soft: rgba(5,150,105,0.10);
+      --sky: #0284c7;
+      --sky-soft: rgba(2,132,199,0.10);
+      --amber: #d97706;
+      --amber-soft: rgba(217,119,6,0.10);
+      --rose: #e11d48;
+      --rose-soft: rgba(225,29,72,0.10);
+      --shadow: 0 18px 48px rgba(15, 23, 42, 0.10);
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #020617;
+        --surface: rgba(15,23,42,0.88);
+        --surface-strong: #0f172a;
+        --text: #e2e8f0;
+        --muted: #cbd5e1;
+        --line: rgba(100,116,139,0.35);
+        --brand-soft: rgba(16,185,129,0.16);
+        --sky-soft: rgba(14,165,233,0.16);
+        --amber-soft: rgba(245,158,11,0.16);
+        --rose-soft: rgba(244,63,94,0.16);
+        --shadow: 0 22px 60px rgba(2, 6, 23, 0.45);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(5,150,105,0.10), transparent 34%),
+        radial-gradient(circle at top right, rgba(14,165,233,0.10), transparent 28%),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    a { color: inherit; }
+    .shell {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 56px;
+    }
+    .hero,
+    .card,
+    .step,
+    .faq,
+    .tip,
+    .status-grid article {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+    .hero {
+      padding: 28px;
+      display: grid;
+      gap: 18px;
+      grid-template-columns: 1.2fr .95fr;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--brand-soft);
+      color: var(--brand);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+    h1, h2, h3 { margin: 0; line-height: 1.15; }
+    h1 {
+      font-size: clamp(2rem, 4vw, 3rem);
+      margin-top: 12px;
+      letter-spacing: -0.04em;
+    }
+    h2 {
+      font-size: clamp(1.35rem, 2.8vw, 1.9rem);
+      letter-spacing: -0.03em;
+    }
+    h3 {
+      font-size: 1.05rem;
+      letter-spacing: -0.02em;
+    }
+    p { margin: 0; color: var(--muted); }
+    .lead {
+      font-size: 1rem;
+      max-width: 58ch;
+    }
+    .badge-row,
+    .status-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .badge,
+    .status-tag {
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: var(--surface-strong);
+      border: 1px solid var(--line);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .hero-side {
+      display: grid;
+      gap: 14px;
+    }
+    .mini-card {
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--line);
+      background: var(--surface-strong);
+      padding: 18px;
+    }
+    .mini-card strong {
+      display: block;
+      font-size: 1rem;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    .grid {
+      display: grid;
+      gap: 16px;
+      margin-top: 22px;
+    }
+    .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card,
+    .faq,
+    .tip,
+    .step,
+    .status-grid article {
+      padding: 22px;
+    }
+    .kicker {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--sky);
+      margin-bottom: 8px;
+    }
+    .card ul,
+    .step ol,
+    .tip ul,
+    .faq ul {
+      margin: 14px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+    }
+    li + li { margin-top: 8px; }
+    .section-title {
+      margin: 26px 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--sky);
+    }
+    .step.total .pill { background: var(--brand-soft); color: var(--brand); }
+    .step.parcial .pill { background: var(--amber-soft); color: var(--amber); }
+    .step.lote .pill { background: var(--sky-soft); color: var(--sky); }
+    .step.receber .pill { background: var(--rose-soft); color: var(--rose); }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .muted-box {
+      margin-top: 14px;
+      padding: 16px 18px;
+      border-radius: var(--radius-md);
+      background: var(--surface-strong);
+      border: 1px solid var(--line);
+      color: var(--muted);
+    }
+    .status-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-top: 18px;
+    }
+    .status-grid strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    footer {
+      margin-top: 28px;
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+    }
+    @media (max-width: 960px) {
+      .hero,
+      .grid.cols-2,
+      .grid.cols-3,
+      .status-grid {
+        grid-template-columns: 1fr;
+      }
+      .shell {
+        width: min(100% - 24px, 1120px);
+        padding-top: 24px;
+      }
+      .hero,
+      .card,
+      .faq,
+      .tip,
+      .step,
+      .status-grid article {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <span class="eyebrow">AcerttaPay · Guia de uso</span>
+        <h1>Como usar as cobranças sem virar novela</h1>
+        <p class="lead">Aqui vai o mapa completo das cobranças do AcerttaPay: quando usar cobrança avulsa, quando usar cobrança no cartão, quando vale guardar para mandar depois e como pagar ou confirmar um Pix sem tropeço no caminho.</p>
+        <div class="badge-row">
+          <span class="badge">Cobrança avulsa</span>
+          <span class="badge">Cobrança no cartão</span>
+          <span class="badge">Pix do mês</span>
+          <span class="badge">Guardar e mandar depois</span>
+        </div>
+      </div>
+      <div class="hero-side">
+        <div class="mini-card">
+          <strong>Use cobrança avulsa quando...</strong>
+          <p>foi um gasto solto, um valor emprestado, um reembolso ou qualquer cobrança que não faz parte do cartão.</p>
+        </div>
+        <div class="mini-card">
+          <strong>Use cobrança no cartão quando...</strong>
+          <p>você passou uma compra no cartão no nome de outra pessoa e quer acompanhar aquilo junto com as demais compras daquele mês.</p>
+        </div>
+        <div class="mini-card">
+          <strong>Use “mandar depois” quando...</strong>
+          <p>você está dividindo várias compras aos poucos e quer evitar uma chuva de avisos para a outra pessoa.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-title">Escolhendo o caminho certo</div>
+    <section class="grid cols-3">
+      <article class="card">
+        <div class="kicker">1 · Cobrança avulsa</div>
+        <h2>Para um valor pontual</h2>
+        <ul>
+          <li>Ideal para um gasto único, sem ligação com cartão.</li>
+          <li>Normalmente faz mais sentido mandar na hora.</li>
+          <li>Depois que a outra pessoa aceita, ela pode pagar e te avisar pelo próprio app.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="kicker">2 · Cobrança no cartão</div>
+        <h2>Para compras lançadas no cartão</h2>
+        <ul>
+          <li>As compras continuam existindo uma a uma.</li>
+          <li>Na hora de pagar por Pix, o app junta o que está aberto naquele mês.</li>
+          <li>Quem vai pagar pode quitar tudo ou só uma parte do mês.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="kicker">3 · Mandar depois</div>
+        <h2>Para não lotar o outro lado</h2>
+        <ul>
+          <li>Guarda as cobranças numa caixa de saída.</li>
+          <li>Você revisa com calma antes de disparar.</li>
+          <li>Na hora do envio, o app agrupa por pessoa e mês para deixar tudo mais limpo.</li>
+        </ul>
+      </article>
+    </section>
+
+    <div class="section-title">Passo a passo de quem está cobrando</div>
+    <section class="grid cols-2">
+      <article class="step total">
+        <span class="pill">Mandar na hora</span>
+        <h2>Quando você quer cobrar agora</h2>
+        <ol>
+          <li>Abra a compra, escolha quem vai participar e faça a divisão do jeito que preferir.</li>
+          <li>Toque em <strong>Salvar</strong> ou em <strong>Salvar e cobrar agora</strong>, conforme a tela mostrar.</li>
+          <li>A cobrança já aparece para a outra pessoa na área de cobranças.</li>
+          <li>Depois disso, o fluxo segue normal: a pessoa aceita, paga e te avisa.</li>
+        </ol>
+        <div class="muted-box"><strong>Dica esperta:</strong> para uma compra única e isolada, esse costuma ser o caminho mais rápido e mais natural.</div>
+      </article>
+
+      <article class="step lote">
+        <span class="pill">Guardar e mandar depois</span>
+        <h2>Quando você está dividindo várias compras</h2>
+        <ol>
+          <li>Faça a divisão normalmente.</li>
+          <li>No final, escolha <strong>Salvar e mandar depois</strong>.</li>
+          <li>Essas cobranças ficam guardadas na sua <strong>caixa de saída</strong>.</li>
+          <li>Quando estiver tudo pronto, abra a área de cobranças, revise o resumo e toque em <strong>Enviar agora</strong>.</li>
+        </ol>
+        <div class="muted-box"><strong>Quando isso brilha:</strong> importou uma fatura gigante, foi atribuindo aos poucos e não quer virar DJ de notificação no celular alheio.</div>
+      </article>
+    </section>
+
+    <div class="section-title">Passo a passo de quem vai pagar</div>
+    <section class="grid cols-2">
+      <article class="step parcial">
+        <span class="pill">Cobrança avulsa</span>
+        <h2>Pagando um valor solto</h2>
+        <ol>
+          <li>Abra a cobrança recebida.</li>
+          <li>Confirme que faz sentido e aceite.</li>
+          <li>Depois do pagamento, use o botão para avisar que já pagou.</li>
+          <li>O valor só fecha de vez quando o outro lado confirmar o recebimento.</li>
+        </ol>
+        <div class="muted-box"><strong>Importante:</strong> avisar que pagou não é o mesmo que encerrar sozinho. O app ainda espera o ok final de quem recebeu.</div>
+      </article>
+
+      <article class="step total">
+        <span class="pill">Cobrança no cartão</span>
+        <h2>Pagando por Pix no mês do cartão</h2>
+        <ol>
+          <li>Abra a carteira do mês na área de cobranças.</li>
+          <li>Escolha <strong>pagar tudo</strong> ou <strong>outro valor</strong>.</li>
+          <li>Gere o Pix, copie o código ou use o QR e faça o pagamento no banco.</li>
+          <li>Depois volte e toque em <strong>Já fiz o Pix</strong>.</li>
+        </ol>
+        <div class="muted-box"><strong>Boa notícia:</strong> se você pagar só uma parte, o app guarda direitinho o que já entrou e mostra o que ainda falta naquele mês.</div>
+      </article>
+    </section>
+
+    <div class="section-title">Passo a passo de quem recebe</div>
+    <section class="grid cols-2">
+      <article class="step receber">
+        <span class="pill">Confirmar recebimento</span>
+        <h2>Quando a outra pessoa avisa que pagou</h2>
+        <ol>
+          <li>Abra a notificação ou o alerta na área de detalhamento.</li>
+          <li>Confira o valor e veja se o dinheiro realmente entrou.</li>
+          <li>Se entrou, confirme o recebimento.</li>
+          <li>Se ainda não entrou, você pode informar isso e o valor volta para ficar em aberto.</li>
+        </ol>
+        <div class="muted-box"><strong>O app te ajuda:</strong> no cartão, ele entende quanto daquele mês já foi pago e quanto ainda continua pendente.</div>
+      </article>
+
+      <article class="faq">
+        <div class="kicker">Jeito AcerttaPay de ver a situação</div>
+        <h2>O que cada aviso quer dizer</h2>
+        <div class="status-tags">
+          <span class="status-tag">Esperando resposta</span>
+          <span class="status-tag">Pagamento informado</span>
+          <span class="status-tag">Parcial</span>
+          <span class="status-tag">Liquidada</span>
+        </div>
+        <ul>
+          <li><strong>Esperando resposta:</strong> a cobrança foi enviada, mas a outra pessoa ainda não deu o primeiro ok.</li>
+          <li><strong>Pagamento informado:</strong> a pessoa já avisou que pagou, mas você ainda precisa confirmar.</li>
+          <li><strong>Parcial:</strong> entrou só uma parte do valor e ainda ficou um pedacinho em aberto.</li>
+          <li><strong>Liquidada:</strong> pronto, essa parte da história acabou bem e pode descansar.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="kicker">Resumo rápido para não errar a mão</div>
+      <h2>Boas práticas que deixam as cobranças redondinhas</h2>
+      <div class="status-grid">
+        <article>
+          <strong>Mandar agora</strong>
+          <p>Use quando for uma cobrança simples, pontual e que já está pronta para seguir viagem.</p>
+        </article>
+        <article>
+          <strong>Mandar depois</strong>
+          <p>Use quando estiver organizando várias compras do cartão e quiser revisar antes de avisar a outra pessoa.</p>
+        </article>
+        <article>
+          <strong>Pix do mês</strong>
+          <p>Use para cartão. Ele foi feito justamente para evitar bagunça quando existem várias compras abertas no mesmo mês.</p>
+        </article>
+        <article>
+          <strong>Confirmar com calma</strong>
+          <p>Só confirme recebimento quando o dinheiro realmente tiver chegado. O app não vai ficar magoado, prometo.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="tip">
+      <div class="kicker">Perguntas que aparecem bastante</div>
+      <h2>Dúvidas rápidas</h2>
+      <ul>
+        <li><strong>Posso pagar só uma parte do cartão?</strong> Pode. O app mostra o que já entrou e o que ainda ficou faltando naquele mês.</li>
+        <li><strong>Guardar para mandar depois aparece para quem vai pagar?</strong> Não. Enquanto estiver guardado, fica só na sua caixa de saída.</li>
+        <li><strong>Se eu mandar várias cobranças juntas, elas somem nas compras?</strong> Não. As compras continuam registradas certinhas; o que muda é só a forma de enviar.</li>
+        <li><strong>Recebi um aviso, cliquei e fui para Cobranças. E agora?</strong> Abra o card destacado, confira o contexto e siga a ação sugerida pelo próprio app.</li>
+      </ul>
+    </section>
+
+    <footer>
+      AcerttaPay · Guia de uso das cobranças · avulsa, cartão, Pix do mês e caixa de saída, tudo no papo reto.
+    </footer>
+  </main>
+</body>
+</html>

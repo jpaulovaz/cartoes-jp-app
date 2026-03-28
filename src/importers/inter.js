@@ -1,16 +1,3 @@
-function decodeCsvBuffer(buffer) {
-  const utf8 = buffer.toString("utf8");
-  const latin1 = buffer.toString("latin1");
-
-  const score = (text) => {
-    const replacementCount = (text.match(/\uFFFD/g) || []).length;
-    const controlCount = (text.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
-    return (replacementCount * 10) + controlCount;
-  };
-
-  return score(latin1) < score(utf8) ? latin1 : utf8;
-}
-
 function normalizeHeader(value) {
   return String(value || "")
     .normalize("NFD")
@@ -109,35 +96,111 @@ function parseSemicolonCsv(text) {
   return records;
 }
 
-// Espera cabeçalho: Cartão;Data;Descrição;Valor
-function parseInterCSV(buffer) {
-  const text = decodeCsvBuffer(buffer);
-  const records = parseSemicolonCsv(text);
-
-  if (!records.length) {
-    throw new Error("O CSV está vazio ou não segue o formato esperado.");
-  }
-
-  const header = records[0].map(normalizeHeader);
-  const columnIndex = {
+function buildColumnIndex(header) {
+  return {
     card: header.findIndex((h) => ["cartao", "cartão", "cartao final", "cartao numero"].includes(h)),
     date: header.findIndex((h) => ["data", "data compra", "data da compra"].includes(h)),
     description: header.findIndex((h) => ["descricao", "descrição", "historico", "histórico", "estabelecimento"].includes(h)),
     value: header.findIndex((h) => ["valor", "valor final", "valor da compra"].includes(h))
   };
+}
+
+function getDecodePenalty(text) {
+  const replacementCount = (String(text || "").match(/\uFFFD/g) || []).length;
+  const controlCount = (String(text || "").match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
+  return (replacementCount * 10) + controlCount;
+}
+
+function decodeCsvBuffer(buffer) {
+  if (!Buffer.isBuffer(buffer)) {
+    return {
+      chosenRecords: parseSemicolonCsv(String(buffer || "")),
+      fallbackRecords: [],
+      header: [],
+      columnIndex: buildColumnIndex([])
+    };
+  }
+
+  const utf8Text = buffer.toString("utf8");
+  const latin1Text = buffer.toString("latin1");
+  const utf8Records = parseSemicolonCsv(utf8Text);
+  const latin1Records = parseSemicolonCsv(latin1Text);
+  const utf8Header = (utf8Records[0] || []).map(normalizeHeader);
+  const latin1Header = (latin1Records[0] || []).map(normalizeHeader);
+  const utf8Columns = buildColumnIndex(utf8Header);
+  const latin1Columns = buildColumnIndex(latin1Header);
+  const utf8Score = Object.values(utf8Columns).filter((idx) => idx !== -1).length;
+  const latin1Score = Object.values(latin1Columns).filter((idx) => idx !== -1).length;
+
+  if (utf8Score > latin1Score) {
+    return {
+      chosenRecords: utf8Records,
+      fallbackRecords: latin1Records,
+      header: utf8Header,
+      columnIndex: utf8Columns
+    };
+  }
+
+  if (latin1Score > utf8Score) {
+    return {
+      chosenRecords: latin1Records,
+      fallbackRecords: utf8Records,
+      header: latin1Header,
+      columnIndex: latin1Columns
+    };
+  }
+
+  const utf8Penalty = getDecodePenalty(utf8Text);
+  const latin1Penalty = getDecodePenalty(latin1Text);
+  if (latin1Penalty < utf8Penalty) {
+    return {
+      chosenRecords: latin1Records,
+      fallbackRecords: utf8Records,
+      header: latin1Header,
+      columnIndex: latin1Columns
+    };
+  }
+
+  return {
+    chosenRecords: utf8Records,
+    fallbackRecords: latin1Records,
+    header: utf8Header,
+    columnIndex: utf8Columns
+  };
+}
+
+function pickField(row, fallbackRow, index) {
+  const primary = index >= 0 && index < row.length ? row[index] : "";
+  const fallback = index >= 0 && fallbackRow && index < fallbackRow.length ? fallbackRow[index] : "";
+
+  if (String(primary || "").includes("\uFFFD") && !String(fallback || "").includes("\uFFFD")) {
+    return fallback;
+  }
+
+  return primary;
+}
+
+// Espera cabeçalho: Cartão;Data;Descrição;Valor
+function parseInterCSV(buffer) {
+  const { chosenRecords, fallbackRecords, header, columnIndex } = decodeCsvBuffer(buffer);
+  const records = chosenRecords;
+
+  if (!records.length) {
+    throw new Error("O CSV está vazio ou não segue o formato esperado.");
+  }
 
   if (columnIndex.date === -1 || columnIndex.description === -1 || columnIndex.value === -1) {
     throw new Error("Formato de CSV não reconhecido. Use o arquivo modelo como referência.");
   }
 
   const txns = [];
-  for (const row of records.slice(1)) {
-    const get = (idx) => (idx >= 0 && idx < row.length ? row[idx] : "");
+  records.slice(1).forEach((row, rowIndex) => {
+    const fallbackRow = fallbackRecords[rowIndex + 1] || [];
 
-    const cardNumber = String(get(columnIndex.card) || "").trim() || null;
-    const date = String(get(columnIndex.date) || "").trim();
-    const description = String(get(columnIndex.description) || "").trim() || "(sem descrição)";
-    const valorRaw = String(get(columnIndex.value) || "").trim();
+    const cardNumber = String(pickField(row, fallbackRow, columnIndex.card) || "").trim() || null;
+    const date = String(pickField(row, fallbackRow, columnIndex.date) || "").trim();
+    const description = String(pickField(row, fallbackRow, columnIndex.description) || "").trim() || "(sem descrição)";
+    const valorRaw = String(pickField(row, fallbackRow, columnIndex.value) || "").trim();
 
     const cleaned = valorRaw
       .replace(/\s+/g, "")
@@ -149,16 +212,16 @@ function parseInterCSV(buffer) {
       .replace(/[–—−]/g, "-");
 
     const amount = Number(cleaned);
-    if (!date || Number.isNaN(amount)) continue;
+    if (!date || Number.isNaN(amount)) return;
 
     txns.push({
       card_number: cardNumber,
       txn_date: date,
       description,
       amount_cents: Math.round(amount * 100),
-      raw: Object.fromEntries(header.map((key, index) => [key || `col_${index + 1}`, row[index] ?? ""]))
+      raw: Object.fromEntries(header.map((key, index) => [key || `col_${index + 1}`, pickField(row, fallbackRow, index) ?? ""]))
     });
-  }
+  });
 
   if (!txns.length) {
     throw new Error("Não foi possível ler lançamentos válidos no CSV. Use o arquivo modelo como referência.");

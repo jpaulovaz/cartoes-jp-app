@@ -1,37 +1,60 @@
-<%- include("partials/header", { title: "OrganizaPay | 👑 Meu Controle" }) %>
+<%- include("partials/header", { title: "AcerttaPay | 👑 Meu Controle" }) %>
 
-    <% /* Calculo de saldo */ let incCents=0; let expCents=0; finances.forEach(f=> {
-        if(f.type === 'income') incCents += f.amount_cents;
-        if(f.type === 'expense') expCents += f.amount_cents;
+    <% 
+        let incCents = 0;
+        let expCents = 0;
+        finances.forEach((f) => {
+            if (f.type === 'income') incCents += f.amount_cents;
+            if (f.type === 'expense') expCents += f.amount_cents;
         });
 
-        const sharedDebtOwedCents = Number(sharedDebtSummary?.owedCents || 0);
-        const sharedDebtReceivableCents = Number(sharedDebtSummary?.receivableCents || 0);
-        let saldoCents = incCents + sharedDebtReceivableCents - expCents - cardTotalCents - sharedDebtOwedCents;
+        const sharedDebtOwedCents = Number((sharedDebtSummary && sharedDebtSummary.owedCents) || 0);
+        const sharedDebtReceivableCents = Number((sharedDebtSummary && sharedDebtSummary.receivableCents) || 0);
+        const saldoCents = incCents + sharedDebtReceivableCents - expCents - cardTotalCents - sharedDebtOwedCents;
 
-        /* Lógica para botões de Mês Anterior / Próximo */
-        let prevM = parseInt(month) - 1; let prevY = parseInt(year);
-        if (prevM < 1) { prevM=12; prevY--; } let nextM=parseInt(month) + 1; let nextY=parseInt(year); if (nextM> 12) {
-            nextM = 1; nextY++; }
+        let prevM = parseInt(month, 10) - 1;
+        let prevY = parseInt(year, 10);
+        if (prevM < 1) { prevM = 12; prevY--; }
+        let nextM = parseInt(month, 10) + 1;
+        let nextY = parseInt(year, 10);
+        if (nextM > 12) { nextM = 1; nextY++; }
 
-            /* Funções visuais para os campos */
-            function getDisplayValue(fin) {
+        const heroOwnerName = String((owner && owner.name) || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).join(' ') || 'Seu painel';
+        const incomeFinances = finances.filter((f) => f.type === 'income');
+        const expenseFinances = finances.filter((f) => f.type === 'expense');
+
+        function isVariable(fin) {
+            return (fin.amount_mode || 'fixed') === 'variable';
+        }
+
+        function getDisplayValue(fin) {
+            if (isVariable(fin)) return formatBRLFromCents(fin.amount_cents);
             const hasMath = fin.formula && /[-+*/]/.test(fin.formula);
             if (hasMath) return fin.formula;
             return formatBRLFromCents(fin.amount_cents);
-            }
+        }
 
-            function getDesc(fin) {
+        function getDesc(fin) {
             if (fin.description) return fin.description;
             if (fin.category_id) {
-            const cat = categories.find(c => c.id === fin.category_id);
-            return cat ? cat.name : 'Conta Fixa';
+                const cat = categories.find((c) => c.id === fin.category_id);
+                return cat ? cat.name : 'Item de valor único';
             }
             return '';
-            }
-            %>
+        }
 
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+        function getItemCount(fin) {
+            return Array.isArray(fin.items) ? fin.items.length : 0;
+        }
+
+        function getVariableHint(fin) {
+            const totalItems = getItemCount(fin);
+            if (!totalItems) return 'Ainda sem lançamentos por aqui';
+            return totalItems === 1 ? '1 lançamento somando esse total' : `${totalItems} lançamentos somando esse total`;
+        }
+    %>
+
+            <div class="op-screen op-screen--detalhamento max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
                 data-month-swipe-area
                 data-month-swipe-prev="/detalhamento/<%= prevY %>/<%= prevM %>"
                 data-month-swipe-next="/detalhamento/<%= nextY %>/<%= nextM %>"
@@ -41,25 +64,25 @@
                     <div>
                         <span class="op-page-hero__eyebrow">Painel principal</span>
                         <h1 class="op-page-hero__title mt-4">👑 Meu Controle</h1>
-                        <p class="op-page-hero__subtitle mt-3">Titular: <span class="font-bold text-blue-600 dark:text-blue-300"><%= owner.name %></span>. Acompanhe contas, cartões, saldo e próximos passos do mês sem precisar abrir mil telas.</p>
+                        <p class="op-page-hero__subtitle mt-3"><span class="font-bold text-blue-600 dark:text-blue-300"><%= heroOwnerName %></span>, aqui você vê o que entrou, o que saiu, os cartões e o respiro do mês sem ficar abrindo mil telas.</p>
                     </div>
 
                     <div class="op-page-hero__actions w-full lg:max-w-[32rem]">
                         <% if (isClosed) { %>
                             <button onclick="toggleLock('open')"
-                                class="w-full inline-flex items-center justify-center rounded-2xl bg-rose-100 px-4 py-3 text-sm font-bold text-rose-700 shadow-sm transition-colors hover:bg-rose-200 dark:bg-rose-900/30 dark:text-rose-300">
+                                class="op-btn op-btn-danger-soft op-btn--block">
                                 🔒 Mês Fechado
                             </button>
                         <% } else { %>
                             <button onclick="toggleLock('close')"
-                                class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-100 px-4 py-3 text-sm font-bold text-emerald-700 shadow-sm transition-colors hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                class="op-btn op-btn-success op-btn--block">
                                 🔓 Fechar Mês
                             </button>
                         <% } %>
 
                         <button type="button" data-manual-modal-open
                             <%= (isClosed || !cards || !cards.length) ? 'disabled' : '' %>
-                            class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 <%= (isClosed || !cards || !cards.length) ? 'opacity-60 cursor-not-allowed hover:bg-emerald-600' : 'hover:bg-emerald-700' %>">
+                            class="op-btn op-btn-success op-btn--block <%= (isClosed || !cards || !cards.length) ? 'opacity-60 cursor-not-allowed' : '' %>">
                             <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                             </svg>
@@ -68,28 +91,29 @@
 
                         <div class="col-span-2 w-full flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 p-1 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/70">
                             <a href="/detalhamento/<%= prevY %>/<%= prevM %>"
-                                class="flex-1 rounded-xl bg-slate-50 px-3 py-3 text-center text-sm font-bold text-slate-600 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">&larr; Anterior</a>
+                                class="op-btn op-btn-ghost flex-1">&larr; Anterior</a>
                             <a href="/month/<%= year %>/<%= month %>"
-                                class="inline-flex items-center justify-center whitespace-nowrap rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-inner transition-colors hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 dark:bg-slate-950 dark:hover:bg-slate-900 dark:focus:ring-slate-600 dark:focus:ring-offset-slate-900">
+                                class="op-btn op-btn-primary whitespace-nowrap px-4">
                                 <%= String(month).padStart(2, '0' ) %> / <%= year %>
                             </a>
                             <a href="/detalhamento/<%= nextY %>/<%= nextM %>"
-                                class="flex-1 rounded-xl bg-slate-50 px-3 py-3 text-center text-sm font-bold text-slate-600 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">Próximo &rarr;</a>
+                                class="op-btn op-btn-ghost flex-1">Próximo &rarr;</a>
                         </div>
                     </div>
                 </section>
 
                 <div id="modalManualDetalhamento" data-manual-modal aria-hidden="true"
-                    class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
-                        <div class="flex justify-between items-center mb-6">
+                    class="hidden fixed inset-0 z-[10020] bg-slate-900/60 backdrop-blur-sm px-3 py-3 sm:px-4 sm:py-6">
+                    <div class="pointer-events-none flex min-h-full items-end justify-center sm:items-center">
+                      <div class="pointer-events-auto flex w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 lg:max-w-4xl xl:max-w-5xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]">
+                        <div class="flex shrink-0 justify-between items-center border-b border-slate-200 px-4 py-4 sm:px-6 dark:border-slate-700">
                             <h2 class="text-xl font-black text-slate-800 dark:text-white">Adicionar compra</h2>
                             <button type="button" data-manual-modal-close
                                 class="op-icon-btn" aria-label="Fechar janela">✕</button>
                         </div>
 
-                        <form action="/txn/manual" method="POST" class="space-y-4" data-auto-first-due-form>
-                            <div class="grid grid-cols-2 gap-4">
+                        <div class="op-manual-modal__scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6"><form action="/txn/manual" method="POST" class="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0" data-auto-first-due-form>
+                            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
                                     <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data da Compra</label>
                                     <input type="date" name="date" required data-manual-date-input <%= isClosed ? 'disabled' : '' %>
@@ -108,7 +132,7 @@
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-2 gap-4">
+                            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
                                     <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
                                     <input type="text" name="amount" placeholder="0,00" required data-money-mask data-manual-amount-input inputmode="decimal" enterkeyhint="next" autocapitalize="off" autocomplete="off" <%= isClosed ? 'disabled' : '' %>
@@ -134,12 +158,32 @@
                                     class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                             </div>
 
+                            <div data-purchase-category-control class="space-y-3 lg:col-span-2">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Categoria (opcional)</label>
+                                    <select name="purchase_category_id" data-purchase-category-select <%= isClosed ? 'disabled' : '' %>
+                                        class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
+                                        <option value="">Sem categoria por enquanto</option>
+                                        <% (purchaseCategories || []).forEach(category => { %>
+                                            <option value="<%= category.id %>"><%= category.name %></option>
+                                        <% }) %>
+                                        <option value="__new__">Criar categoria nova</option>
+                                    </select>
+                                    <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Se quiser, você já organiza agora. Se não quiser, tudo bem também.</p>
+                                </div>
+                                <div data-purchase-category-custom-shell hidden>
+                                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nome da nova categoria</label>
+                                    <input type="text" name="purchase_category_custom" maxlength="60" placeholder="Ex: Feira de sábado" data-purchase-category-custom-input disabled <%= isClosed ? 'disabled' : '' %>
+                                        class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
+                                </div>
+                            </div>
+
                             <label class="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 <%= typeof isClosed !== 'undefined' && isClosed ? 'opacity-60' : '' %>">
           <input type="checkbox" name="assign_to_owner" value="1" <%= typeof isClosed !== 'undefined' && isClosed ? 'disabled' : '' %>
             class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
           <span>
-            <span class="block text-sm font-bold text-slate-800 dark:text-white">Essa compra é minha</span>
-            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque para jogar esta compra direto no seu nome — e isso também vale para próximas parcelas ou repetições.</span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Essa ficou comigo</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque aqui quando essa compra for só sua. Se tiver parcela ou repetição, a ideia segue junto.</span>
           </span>
         </label>
 
@@ -153,47 +197,47 @@
                             </label>
 
                             <% if (isClosed) { %>
-                                <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                                <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200 lg:col-span-2">
                                     Este mês está fechado. Abra o mês para lançar novos itens nele.
                                 </div>
                             <% } else { %>
                                 <button type="submit"
-                                    class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all">
+                                    class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all lg:col-span-2">
                                     Salvar compra
                                 </button>
                             <% } %>
-                        </form>
+                        </form></div>
+                      </div>
                     </div>
                 </div>
 
                 <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     <div class="bg-emerald-500 p-5 rounded-3xl text-white shadow-sm border border-emerald-600">
-                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Total Recebido</p>
+                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Grana que entrou</p>
                         <h3 class="text-xl xl:text-2xl font-black mt-1">
                             <%= formatBRLFromCents(incCents) %>
                         </h3>
                     </div>
                     <div class="bg-violet-500 p-5 rounded-3xl text-white shadow-sm border border-violet-600">
-                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Contas Fixas</p>
+                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Saiu no mês</p>
                         <h3 class="text-xl xl:text-2xl font-black mt-1">
                             <%= formatBRLFromCents(expCents) %>
                         </h3>
                     </div>
                     <div class="bg-amber-500 p-5 rounded-3xl text-white shadow-sm border border-amber-600">
-                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Meus Cartões</p>
+                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Ficou nos cartões</p>
                         <h3 class="text-xl xl:text-2xl font-black mt-1">
                             <%= formatBRLFromCents(cardTotalCents) %>
                         </h3>
                     </div>
                     <div class="bg-rose-500 p-5 rounded-3xl text-white shadow-sm border border-rose-600">
-                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Contas+Cartões</p>
+                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Tudo comprometido</p>
                         <h3 class="text-xl xl:text-2xl font-black mt-1">
                             <%= formatBRLFromCents(expCents + cardTotalCents) %>
                         </h3>
                     </div>
-                    <div
-                        class="bg-blue-600 p-5 rounded-3xl text-white shadow-sm border border-blue-700 col-span-2 lg:col-span-1">
-                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Saldo Final</p>
+                    <div class="bg-blue-600 p-5 rounded-3xl text-white shadow-sm border border-blue-700 col-span-2 lg:col-span-1">
+                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Quanto sobra</p>
                         <h3 class="text-xl xl:text-2xl font-black mt-1">
                             <%= formatBRLFromCents(saldoCents) %>
                         </h3>
@@ -209,7 +253,7 @@
                                     <%= formatBRLFromCents(sharedDebtOwedCents) %>
                                 </h3>
                                 <p class="mt-2 text-xs font-semibold opacity-85">
-                                    <%= Number(sharedDebtSummary?.owedCount || 0) %> cobrança(s) ativa(s) neste mês
+                                    <%= Number(sharedDebtSummary?.owedCount || 0) %> cobrança(s) em aberto por aqui
                                 </p>
                                 <p class="mt-3 text-xs font-bold uppercase tracking-[0.18em] opacity-90">Abrir cobranças recebidas</p>
                             </div>
@@ -224,7 +268,7 @@
                                     <%= formatBRLFromCents(sharedDebtReceivableCents) %>
                                 </h3>
                                 <p class="mt-2 text-xs font-semibold opacity-85">
-                                    <%= Number(sharedDebtSummary?.receivableCount || 0) %> cobrança(s) ativa(s) neste mês
+                                    <%= Number(sharedDebtSummary?.receivableCount || 0) %> cobrança(s) em aberto por aqui
                                 </p>
                                 <p class="mt-3 text-xs font-bold uppercase tracking-[0.18em] opacity-90">Abrir cobranças enviadas</p>
                             </div>
@@ -248,7 +292,7 @@
                                             <div class="text-sm text-slate-600 dark:text-slate-300 mt-1"><%= alert.description %></div>
                                         </div>
                                         <% if (alert.href) { %>
-                                            <a href="<%= alert.href %>" class="inline-flex items-center justify-center px-4 py-2 rounded-xl text-sm font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">Abrir</a>
+                                            <a href="<%= alert.href %>" class="op-btn op-btn-ghost px-4 py-2 text-sm">Abrir</a>
                                         <% } %>
                                     </div>
                                 </div>
@@ -260,200 +304,884 @@
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
                     <div class="space-y-8">
-                        <div
-                            class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                            <div class="bg-slate-900 px-6 py-4 flex justify-between items-center">
-                                <h5 class="text-white font-bold">📥 Entradas (Caixa)</h5>
-                                <button onclick="addRow('income', 'Nome da nova entrada (ex: Venda, Pix):')" <%=isClosed
-                                    ? 'hidden' : '' %> class="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1
-                                    rounded-lg transition-colors">+ Nova Entrada</button>
+                        <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            <div class="bg-slate-900 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <h5 class="text-white font-bold">✨ Grana que entra</h5>
+                                    <p class="text-xs font-medium text-white/70 mt-1">Valor único segue no toque rápido. Vários lançamentos abrem a listinha completinha.</p>
+                                </div>
+                                <button type="button" onclick="openFinanceCreator('income')" <%= isClosed ? 'hidden' : '' %> class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition-colors hover:bg-white/20 sm:min-w-[10.5rem]">
+                                    <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                    </svg>
+                                    <span>Nova entrada</span>
+                                </button>
                             </div>
-                            <div class="p-6">
-                                <table class="w-full text-left">
-                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                                        <% finances.filter(f=> f.type === 'income').forEach(fin => { %>
-                                            <tr>
-                                                <td class="py-3">
-                                                    <input type="text" <%=isClosed ? 'disabled' : '' %> class="w-full
-                                                    bg-transparent border-b border-transparent focus:border-blue-500
-                                                    outline-none dark:text-slate-200 disabled:opacity-60" value="<%=
-                                                        getDesc(fin) %>" onchange="updateRow(<%= fin.id %>,
-                                                            'description', this.value)">
-                                                </td>
-                                                <td class="py-3 w-40">
-                                                    <input type="text" data-money-mask inputmode="numeric" <%=isClosed ? 'disabled' : '' %> class="w-full
-                                                    font-mono font-bold text-right text-emerald-700
-                                                    dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30
-                                                    rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none
-                                                    disabled:opacity-60" value="<%= getDisplayValue(fin) %>"
-                                                        onblur="saveMath(<%= fin.id %>, this.value)">
-                                                </td>
-                                                <td class="py-3 pl-2 text-right">
-                                                    <button onclick="deleteRow(<%= fin.id %>)" <%=isClosed ? 'hidden'
-                                                        : '' %> class="text-slate-300 hover:text-rose-500 font-bold
-                                                        transition-colors">×</button>
-                                                </td>
-                                            </tr>
+                            <div class="p-4 sm:p-6">
+                                <% if (!incomeFinances.length) { %>
+                                    <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/60 px-4 py-6 text-sm font-medium text-slate-500 dark:text-slate-400">
+                                        Ainda não caiu nada por aqui. Quando pintar uma entrada, ela aparece nessa vitrine.
+                                    </div>
+                                <% } else { %>
+                                    <div data-no-month-swipe>
+                                        <div class="divide-y divide-slate-100 dark:divide-slate-700">
+                                            <% incomeFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); %>
+                                                <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-2 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:gap-x-3">
+                                                    <div class="min-w-0 space-y-2">
+                                                        <input type="text" <%= isClosed ? 'disabled' : '' %> class="w-full min-w-0 bg-transparent border-b border-transparent text-sm font-semibold text-slate-800 focus:border-blue-500 outline-none dark:text-slate-200 disabled:opacity-60 sm:text-base sm:font-medium" value="<%= getDesc(fin) %>" onchange="updateRow(<%= fin.id %>, 'description', this.value)">
+                                                        <% if (variable) { %>
+                                                            <div class="flex flex-wrap items-center gap-2">
+                                                                <span class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                                                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10"></path></svg>
+                                                                    Vários lançamentos
+                                                                </span>
+                                                                <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400"><%= getVariableHint(fin) %></span>
+                                                            </div>
+                                                        <% } %>
+                                                    </div>
+                                                    <div class="w-40 min-w-[10rem] max-w-[10rem] self-start sm:w-48 sm:min-w-[12rem] sm:max-w-[12rem]">
+                                                        <% if (variable) { %>
+                                                            <button type="button" onclick="openVariableEditor(<%= fin.id %>)" class="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-right transition hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 sm:px-3">
+                                                                <span class="block font-mono text-[13px] font-black text-emerald-700 dark:text-emerald-300 sm:text-sm"><%= formatBRLFromCents(fin.amount_cents) %></span>
+                                                                <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${itemCount} lançamento${itemCount === 1 ? '' : 's'}` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
+                                                            </button>
+                                                        <% } else { %>
+                                                            <input type="text" data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-mono text-[13px] font-black text-right text-emerald-700 outline-none transition hover:border-emerald-300 focus:border-emerald-400 focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:border-emerald-900/40 dark:bg-emerald-900/30 dark:text-emerald-400 sm:text-sm" value="<%= getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>, this.value)">
+                                                        <% } %>
+                                                    </div>
+                                                    <div class="self-start pt-0.5 text-right sm:pt-1">
+                                                        <button type="button" onclick="deleteRow(<%= fin.id %>, '<%= variable ? 'variable' : 'fixed' %>')" <%= isClosed ? 'hidden' : '' %> class="inline-flex h-8 w-8 items-center justify-center rounded-full text-lg font-bold text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-900/20">×</button>
+                                                    </div>
+                                                </div>
                                             <% }) %>
-                                    </tbody>
-                                </table>
+                                        </div>
+                                    </div>
+                                <% } %>
                             </div>
                         </div>
 
-                        <div
-                            class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                            <div class="bg-slate-800 dark:bg-slate-900 px-6 py-4 flex justify-between items-center">
-                                <h5 class="text-white font-bold">🏠 Contas Domésticas</h5>
-                                <button onclick="addRow('expense', 'Nome da nova conta (ex: Luz, Internet):')"
-                                    <%=isClosed ? 'hidden' : '' %> class="text-xs bg-white/10 hover:bg-white/20
-                                    text-white px-3 py-1 rounded-lg transition-colors">+ Nova Conta</button>
+                        <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            <div class="bg-slate-800 dark:bg-slate-900 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <h5 class="text-white font-bold">🧾 Grana que sai</h5>
+                                    <p class="text-xs font-medium text-white/70 mt-1">Vale para rotina, corre do trabalho, combustível e tudo que aperta o mês.</p>
+                                </div>
+                                <button type="button" onclick="openFinanceCreator('expense')" <%= isClosed ? 'hidden' : '' %> class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition-colors hover:bg-white/20 sm:min-w-[10.5rem]">
+                                    <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                    </svg>
+                                    <span>Nova saída</span>
+                                </button>
                             </div>
-                            <div class="p-6">
-                                <table class="w-full text-left">
-                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                                        <% finances.filter(f=> f.type === 'expense').forEach(fin => { %>
-                                            <tr>
-                                                <td class="py-3">
-                                                    <input type="text" <%=isClosed ? 'disabled' : '' %> class="w-full
-                                                    bg-transparent border-b border-transparent focus:border-rose-500
-                                                    outline-none dark:text-slate-200 disabled:opacity-60" value="<%=
-                                                        getDesc(fin) %>" onchange="updateRow(<%= fin.id %>,
-                                                            'description', this.value)">
-                                                </td>
-                                                <td class="py-3 w-40">
-                                                    <input type="text" data-money-mask inputmode="numeric" <%=isClosed ? 'disabled' : '' %> class="w-full
-                                                    font-mono font-bold text-right text-rose-700 dark:text-rose-400
-                                                    bg-rose-50 dark:bg-rose-900/30 rounded-lg px-2 py-1 focus:ring-2
-                                                    focus:ring-rose-500 outline-none disabled:opacity-60" value="<%=
-                                                        getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>,
-                                                            this.value)">
-                                                </td>
-                                                <td class="py-3 pl-2 text-right">
-                                                    <button onclick="deleteRow(<%= fin.id %>)" <%=isClosed ? 'hidden'
-                                                        : '' %> class="text-slate-300 hover:text-rose-500 font-bold
-                                                        transition-colors">×</button>
-                                                </td>
-                                            </tr>
+                            <div class="p-4 sm:p-6">
+                                <% if (!expenseFinances.length) { %>
+                                    <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/60 px-4 py-6 text-sm font-medium text-slate-500 dark:text-slate-400">
+                                        Ainda não saiu nada por aqui. Quando pintar uma saída, ela entra nessa lista.
+                                    </div>
+                                <% } else { %>
+                                    <div data-no-month-swipe>
+                                        <div class="divide-y divide-slate-100 dark:divide-slate-700">
+                                            <% expenseFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); %>
+                                                <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-2 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:gap-x-3">
+                                                    <div class="min-w-0 space-y-2">
+                                                        <input type="text" <%= isClosed ? 'disabled' : '' %> class="w-full min-w-0 bg-transparent border-b border-transparent text-sm font-semibold text-slate-800 focus:border-rose-500 outline-none dark:text-slate-200 disabled:opacity-60 sm:text-base sm:font-medium" value="<%= getDesc(fin) %>" onchange="updateRow(<%= fin.id %>, 'description', this.value)">
+                                                        <% if (variable) { %>
+                                                            <div class="flex flex-wrap items-center gap-2">
+                                                                <span class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                                                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10"></path></svg>
+                                                                    Vários lançamentos
+                                                                </span>
+                                                                <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400"><%= getVariableHint(fin) %></span>
+                                                            </div>
+                                                        <% } %>
+                                                    </div>
+                                                    <div class="w-40 min-w-[10rem] max-w-[10rem] self-start sm:w-48 sm:min-w-[12rem] sm:max-w-[12rem]">
+                                                        <% if (variable) { %>
+                                                            <button type="button" onclick="openVariableEditor(<%= fin.id %>)" class="w-full rounded-2xl border border-rose-200 bg-rose-50 px-2.5 py-2 text-right transition hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900/40 dark:bg-rose-900/20 dark:hover:bg-rose-900/30 sm:px-3">
+                                                                <span class="block font-mono text-[13px] font-black text-rose-700 dark:text-rose-300 sm:text-sm"><%= formatBRLFromCents(fin.amount_cents) %></span>
+                                                                <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${itemCount} lançamento${itemCount === 1 ? '' : 's'}` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
+                                                            </button>
+                                                        <% } else { %>
+                                                            <input type="text" data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 font-mono text-[13px] font-black text-right text-rose-700 outline-none transition hover:border-rose-300 focus:border-rose-400 focus:ring-2 focus:ring-rose-500 disabled:opacity-60 dark:border-rose-900/40 dark:bg-rose-900/30 dark:text-rose-400 sm:text-sm" value="<%= getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>, this.value)">
+                                                        <% } %>
+                                                    </div>
+                                                    <div class="self-start pt-0.5 text-right sm:pt-1">
+                                                        <button type="button" onclick="deleteRow(<%= fin.id %>, '<%= variable ? 'variable' : 'fixed' %>')" <%= isClosed ? 'hidden' : '' %> class="inline-flex h-8 w-8 items-center justify-center rounded-full text-lg font-bold text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-900/20">×</button>
+                                                    </div>
+                                                </div>
                                             <% }) %>
-                                    </tbody>
-                                </table>
+                                        </div>
+                                    </div>
+                                <% } %>
                             </div>
                         </div>
                     </div>
 
                     <div class="space-y-8">
-                        <div
-                            class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                             <div class="bg-blue-700 dark:bg-blue-800 px-6 py-4">
-                                <h5 class="text-white font-bold">🧮 Calculadora de Rascunho</h5>
+                                <h5 class="text-white font-bold">🧮 Conta rápida</h5>
                             </div>
                             <div class="p-6">
-                                <textarea id="calc-pad" <%=isClosed ? 'disabled' : ''
-                                    %> class="w-full font-mono text-sm bg-slate-50 dark:bg-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-60" rows="5" placeholder="Ex: 50 + 20" oninput="calculatePad()" onchange="saveNotes('math', this.value)"><%= notes.content_math %></textarea>
-                                <div class="mt-3 text-right text-lg font-black text-blue-700 dark:text-blue-400"
-                                    id="calc-result">Soma Total: R$ 0,00</div>
+                                <textarea id="calc-pad" <%= isClosed ? 'disabled' : '' %> class="w-full font-mono text-sm bg-slate-50 dark:bg-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-60" rows="5" placeholder="Ex: 50 + 20" oninput="calculatePad()" onchange="saveNotes('math', this.value)"><%= notes.content_math %></textarea>
+                                <div class="mt-3 text-right text-lg font-black text-blue-700 dark:text-blue-400" id="calc-result">Fechou em: R$ 0,00</div>
                             </div>
                         </div>
 
-                        <div
-                            class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                             <div class="bg-slate-600 dark:bg-slate-700 px-6 py-4">
-                                <h5 class="text-white font-bold">📝 Lembretes</h5>
+                                <h5 class="text-white font-bold">📝 Anotações que ajudam</h5>
                             </div>
                             <div class="p-6">
-                                <textarea <%=isClosed ? 'disabled' : ''
-                                    %> class="w-full text-sm bg-slate-50 dark:bg-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-60" rows="8" placeholder="Notas do mês..." onchange="saveNotes('text', this.value)"><%= notes.content_text %></textarea>
+                                <textarea <%= isClosed ? 'disabled' : '' %> class="w-full text-sm bg-slate-50 dark:bg-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-60" rows="8" placeholder="Pode jogar recados, ideias e lembretes do mês aqui..." onchange="saveNotes('text', this.value)"><%= notes.content_text %></textarea>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <div id="financeModal" aria-hidden="true" class="hidden fixed inset-0 z-[10030] bg-slate-950/60 backdrop-blur-sm px-3 py-3 sm:px-4 sm:py-8">
+                    <div class="pointer-events-none flex min-h-full items-end justify-center sm:items-center">
+                        <section class="pointer-events-auto w-full max-w-3xl overflow-hidden rounded-[30px] border border-slate-200 bg-white/95 shadow-2xl ring-1 ring-slate-200 backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95 dark:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="finance-modal-title">
+                            <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 dark:border-slate-800 sm:px-6">
+                                <div>
+                                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300" id="finance-modal-eyebrow">Nova entrada</div>
+                                    <h2 id="finance-modal-title" class="mt-1 text-xl font-black text-slate-900 dark:text-white">Criar item</h2>
+                                    <p id="finance-modal-subtitle" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Escolha o jeito certo e deixe a conta redondinha.</p>
+                                </div>
+                                <button type="button" class="op-icon-btn shrink-0" data-finance-close aria-label="Fechar janela">✕</button>
+                            </div>
+
+                            <div class="max-h-[72vh] space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+                                <div id="finance-mode-group" class="grid grid-cols-2 gap-2">
+                                    <button type="button" data-finance-mode-btn data-finance-mode="fixed" class="rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors">Valor único</button>
+                                    <button type="button" data-finance-mode-btn data-finance-mode="variable" class="rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors">Vários lançamentos</button>
+                                </div>
+
+                                <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-start">
+                                    <div>
+                                        <label for="finance-description-input" id="finance-description-label" class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Nome da entrada</label>
+                                        <input id="finance-description-input" type="text" class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950" placeholder="Ex: Shows, Salário, Freelas">
+                                    </div>
+                                    <div class="rounded-[24px] border border-slate-200 bg-slate-50/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/70">
+                                        <div class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Total que vai pra tela</div>
+                                        <div id="finance-total-preview" class="mt-2 text-2xl font-black text-slate-900 dark:text-white">R$ 0,00</div>
+                                        <p id="finance-total-caption" class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">O valor você ajusta direto na lista depois.</p>
+                                    </div>
+                                </div>
+
+                                <div id="finance-fixed-panel" class="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/60">
+                                    <div class="text-sm font-bold text-slate-800 dark:text-white">Modo rápido na área</div>
+                                    <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Esse item vai nascer como valor único. Você salva o nome agora e ajusta o valor direto na lista, sem novela.</p>
+                                </div>
+
+                                <div id="finance-variable-panel" class="hidden space-y-4">
+                                    <div class="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/60 sm:flex-row sm:items-center sm:justify-between">
+                                        <div>
+                                            <div class="text-sm font-bold text-slate-800 dark:text-white">Listinha dos lançamentos</div>
+                                            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Cada linha soma no total do lado de fora. Data, origem e valor — sem mistério.</p>
+                                        </div>
+                                        <button type="button" id="finance-add-item-btn" class="op-btn op-btn-primary px-4 py-2 text-sm">+ Adicionar linha</button>
+                                    </div>
+
+                                    <div id="finance-variable-empty" class="rounded-[24px] border border-dashed border-slate-300 bg-slate-50/80 px-4 py-6 text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-400">
+                                        Ainda não tem lançamento aqui. Adicione uma linha para começar a somar.
+                                    </div>
+
+                                    <div id="finance-items-list" class="space-y-3"></div>
+                                </div>
+
+                                <div id="finance-readonly-note" class="hidden rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                                    Este mês está fechado. Pode conferir a listinha numa boa, mas editar fica pra quando ele for reaberto.
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col-reverse gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                                <button type="button" class="op-btn op-btn-ghost" data-finance-close>Fechar</button>
+                                <button type="button" id="finance-save-btn" class="op-btn op-btn-success">Salvar Item</button>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <div id="financeDeleteModal" aria-hidden="true" class="hidden fixed inset-0 z-[10031] bg-slate-950/60 backdrop-blur-sm px-3 py-3 sm:px-4 sm:py-8">
+                    <div class="pointer-events-none flex min-h-full items-end justify-center sm:items-center">
+                        <section class="pointer-events-auto w-full max-w-xl overflow-hidden rounded-[30px] border border-slate-200 bg-white/95 shadow-2xl ring-1 ring-slate-200 backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95 dark:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="finance-delete-title">
+                            <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 dark:border-slate-800 sm:px-6">
+                                <div>
+                                    <div id="finance-delete-eyebrow" class="text-[11px] font-black uppercase tracking-[0.18em] text-rose-600 dark:text-rose-300">Apagar item</div>
+                                    <h2 id="finance-delete-title" class="mt-1 text-xl font-black text-slate-900 dark:text-white">Tem certeza mesmo?</h2>
+                                    <p id="finance-delete-subtitle" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Se você confirmar, esse item sai da lista sem dar meia-volta.</p>
+                                </div>
+                                <button type="button" class="op-icon-btn shrink-0" data-finance-delete-close aria-label="Fechar janela">✕</button>
+                            </div>
+
+                            <div class="max-h-[65vh] space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
+                                <div class="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-4 dark:border-rose-900/40 dark:bg-rose-900/20">
+                                    <div class="text-[11px] font-black uppercase tracking-[0.16em] text-rose-700 dark:text-rose-300">Total desse item</div>
+                                    <div id="finance-delete-total" class="mt-2 text-2xl font-black text-rose-700 dark:text-rose-300">R$ 0,00</div>
+                                </div>
+                                <div id="finance-delete-items" class="space-y-3"></div>
+                            </div>
+
+                            <div class="flex flex-col-reverse gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                                <button type="button" class="op-btn op-btn-ghost" data-finance-delete-close>Voltar</button>
+                                <button type="button" id="finance-delete-confirm" class="op-btn op-btn-danger">Apagar Item</button>
+                            </div>
+                        </section>
                     </div>
                 </div>
             </div>
 
             <script>
+                const detailMonth = <%- JSON.stringify(Number(month)) %>;
+                const detailYear = <%- JSON.stringify(Number(year)) %>;
+                const detailMonthIsClosed = <%- JSON.stringify(!!isClosed) %>;
+                const financeModalState = {
+                    action: 'create',
+                    financeType: 'income',
+                    amountMode: 'fixed',
+                    financeId: null,
+                    readOnly: false
+                };
+                const financeDeleteState = {
+                    financeId: null,
+                    amountMode: 'fixed'
+                };
+                const financeRefs = {
+                    modal: document.getElementById('financeModal'),
+                    eyebrow: document.getElementById('finance-modal-eyebrow'),
+                    title: document.getElementById('finance-modal-title'),
+                    subtitle: document.getElementById('finance-modal-subtitle'),
+                    modeGroup: document.getElementById('finance-mode-group'),
+                    modeButtons: Array.from(document.querySelectorAll('[data-finance-mode-btn]')),
+                    descriptionLabel: document.getElementById('finance-description-label'),
+                    descriptionInput: document.getElementById('finance-description-input'),
+                    totalPreview: document.getElementById('finance-total-preview'),
+                    totalCaption: document.getElementById('finance-total-caption'),
+                    fixedPanel: document.getElementById('finance-fixed-panel'),
+                    variablePanel: document.getElementById('finance-variable-panel'),
+                    variableEmpty: document.getElementById('finance-variable-empty'),
+                    itemsList: document.getElementById('finance-items-list'),
+                    addItemButton: document.getElementById('finance-add-item-btn'),
+                    readonlyNote: document.getElementById('finance-readonly-note'),
+                    saveButton: document.getElementById('finance-save-btn'),
+                    closeButtons: Array.from(document.querySelectorAll('[data-finance-close]')),
+                    deleteModal: document.getElementById('financeDeleteModal'),
+                    deleteEyebrow: document.getElementById('finance-delete-eyebrow'),
+                    deleteTitle: document.getElementById('finance-delete-title'),
+                    deleteSubtitle: document.getElementById('finance-delete-subtitle'),
+                    deleteItems: document.getElementById('finance-delete-items'),
+                    deleteTotal: document.getElementById('finance-delete-total'),
+                    deleteConfirm: document.getElementById('finance-delete-confirm'),
+                    deleteCloseButtons: Array.from(document.querySelectorAll('[data-finance-delete-close]'))
+                };
+                const brlFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
                 function evaluateFormula(str) {
                     try {
-                        let clean = str.replace(/R\$\s?/g, '').replace(/\s/g, '');
+                        let clean = String(str || '').replace(/R\$\s?/g, '').replace(/\s/g, '');
                         if (clean.includes(',')) {
                             clean = clean.replace(/\./g, '');
                             clean = clean.replace(/,/g, '.');
                         }
                         clean = clean.replace(/[^-+*/().0-9]/g, '');
                         return Function(`'use strict'; return (${clean || 0})`)();
-                    } catch (e) { return 0; }
+                    } catch (e) {
+                        return 0;
+                    }
+                }
+
+                function formatCurrency(cents) {
+                    return brlFormatter.format((Number(cents) || 0) / 100);
+                }
+
+                function getMoneyMaskApi() {
+                    if (window.OPMoneyMask) return window.OPMoneyMask;
+                    return {
+                        bind() { },
+                        toCents(value) {
+                            const digits = String(value || '').replace(/\D/g, '');
+                            return digits ? Number(digits) : 0;
+                        },
+                        formatFromCents(cents) {
+                            const amount = (Number(cents) || 0) / 100;
+                            return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+                        }
+                    };
+                }
+
+                function getDefaultItemDate() {
+                    const today = new Date();
+                    const currentMonthIndex = detailMonth - 1;
+                    const targetMonth = String(detailMonth).padStart(2, '0');
+                    if (today.getFullYear() === detailYear && today.getMonth() === currentMonthIndex) {
+                        return today.toISOString().slice(0, 10);
+                    }
+                    return `${detailYear}-${targetMonth}-01`;
+                }
+
+                function getFinanceTypeLabel(type) {
+                    return type === 'expense' ? 'saída' : 'entrada';
+                }
+
+                function formatFinanceItemDate(value) {
+                    if (!value) return 'Sem data';
+                    const parsed = new Date(`${value}T12:00:00`);
+                    return Number.isNaN(parsed.getTime()) ? 'Sem data' : parsed.toLocaleDateString('pt-BR');
+                }
+
+                function createDeletePreviewCard({ title, meta, amountCents }) {
+                    const row = document.createElement('div');
+                    row.className = 'rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-950/60';
+
+                    const top = document.createElement('div');
+                    top.className = 'flex items-start justify-between gap-3';
+
+                    const details = document.createElement('div');
+                    const heading = document.createElement('div');
+                    heading.className = 'text-sm font-bold text-slate-800 dark:text-white';
+                    heading.textContent = title || 'Sem detalhe';
+                    const metaNode = document.createElement('div');
+                    metaNode.className = 'mt-1 text-xs font-medium text-slate-500 dark:text-slate-400';
+                    metaNode.textContent = meta || 'Sem detalhe extra';
+                    details.appendChild(heading);
+                    details.appendChild(metaNode);
+
+                    const amount = document.createElement('div');
+                    amount.className = 'text-sm font-black text-rose-700 dark:text-rose-300';
+                    amount.textContent = formatCurrency(amountCents || 0);
+
+                    top.appendChild(details);
+                    top.appendChild(amount);
+                    row.appendChild(top);
+                    return row;
+                }
+
+                function updateBodyLockState() {
+                    const hasOpenModal = (financeRefs.modal && !financeRefs.modal.classList.contains('hidden')) || (financeRefs.deleteModal && !financeRefs.deleteModal.classList.contains('hidden'));
+                    document.body.classList.toggle('overflow-hidden', !!hasOpenModal);
+                }
+
+                function showFinanceModal() {
+                    if (!financeRefs.modal) return;
+                    financeRefs.modal.classList.remove('hidden');
+                    financeRefs.modal.setAttribute('aria-hidden', 'false');
+                    updateBodyLockState();
+                }
+
+                function closeFinanceModal() {
+                    if (!financeRefs.modal) return;
+                    financeRefs.modal.classList.add('hidden');
+                    financeRefs.modal.setAttribute('aria-hidden', 'true');
+                    updateBodyLockState();
+                }
+
+                function showDeleteModal() {
+                    if (!financeRefs.deleteModal) return;
+                    financeRefs.deleteModal.classList.remove('hidden');
+                    financeRefs.deleteModal.setAttribute('aria-hidden', 'false');
+                    updateBodyLockState();
+                }
+
+                function closeDeleteModal() {
+                    if (!financeRefs.deleteModal) return;
+                    financeRefs.deleteModal.classList.add('hidden');
+                    financeRefs.deleteModal.setAttribute('aria-hidden', 'true');
+                    updateBodyLockState();
+                }
+
+                function createVariableItemRow(item = {}) {
+                    const row = document.createElement('div');
+                    row.className = 'rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900';
+                    row.dataset.variableItemRow = '1';
+                    row.innerHTML = `
+                        <div class="grid gap-3 md:grid-cols-[170px_minmax(0,1fr)_170px_auto] md:items-end">
+                            <div>
+                                <label class="block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 mb-2">Data</label>
+                                <input type="date" data-variable-item-date class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:bg-slate-900">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 mb-2">Origem ou detalhe</label>
+                                <input type="text" data-variable-item-source class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:bg-slate-900" placeholder="Ex: Festa do Pijama, posto, almoço no evento">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 mb-2">Valor</label>
+                                <input type="text" data-variable-item-amount class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-right text-sm font-black text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:bg-slate-900" inputmode="numeric" autocomplete="off" placeholder="0,00">
+                            </div>
+                            <div class="md:pb-[1px]">
+                                <button type="button" data-variable-item-remove class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 px-3 py-2 text-sm font-bold text-rose-600 transition hover:bg-rose-50 dark:border-rose-900/40 dark:text-rose-300 dark:hover:bg-rose-900/20">Remover</button>
+                            </div>
+                        </div>
+                    `;
+
+                    const dateInput = row.querySelector('[data-variable-item-date]');
+                    const sourceInput = row.querySelector('[data-variable-item-source]');
+                    const amountInput = row.querySelector('[data-variable-item-amount]');
+                    const removeButton = row.querySelector('[data-variable-item-remove]');
+                    const moneyMask = getMoneyMaskApi();
+
+                    if (dateInput) dateInput.value = item.item_date || item.date || getDefaultItemDate();
+                    if (sourceInput) sourceInput.value = item.item_source || item.source || '';
+                    if (amountInput) {
+                        amountInput.value = moneyMask.formatFromCents(Number(item.amount_cents || item.amountCents || 0));
+                        moneyMask.bind(amountInput);
+                        amountInput.addEventListener('input', refreshFinanceTotalPreview);
+                        amountInput.addEventListener('change', refreshFinanceTotalPreview);
+                    }
+                    if (dateInput) {
+                        dateInput.disabled = financeModalState.readOnly;
+                        dateInput.addEventListener('input', refreshFinanceTotalPreview);
+                        dateInput.addEventListener('change', refreshFinanceTotalPreview);
+                    }
+                    if (sourceInput) {
+                        sourceInput.disabled = financeModalState.readOnly;
+                        sourceInput.addEventListener('input', refreshFinanceTotalPreview);
+                        sourceInput.addEventListener('change', refreshFinanceTotalPreview);
+                    }
+                    if (removeButton) {
+                        removeButton.hidden = financeModalState.readOnly;
+                        removeButton.addEventListener('click', () => {
+                            row.remove();
+                            syncVariableEmptyState();
+                            refreshFinanceTotalPreview();
+                        });
+                    }
+
+                    return row;
+                }
+
+                function syncVariableEmptyState() {
+                    if (!financeRefs.variableEmpty || !financeRefs.itemsList) return;
+                    const totalRows = financeRefs.itemsList.querySelectorAll('[data-variable-item-row]').length;
+                    financeRefs.variableEmpty.classList.toggle('hidden', totalRows > 0);
+                }
+
+                function renderVariableItems(items = []) {
+                    if (!financeRefs.itemsList) return;
+                    financeRefs.itemsList.innerHTML = '';
+                    items.forEach((item) => {
+                        financeRefs.itemsList.appendChild(createVariableItemRow(item));
+                    });
+                    syncVariableEmptyState();
+                    refreshFinanceTotalPreview();
+                }
+
+                function readVariableItems({ validate = false } = {}) {
+                    if (!financeRefs.itemsList) return [];
+                    const moneyMask = getMoneyMaskApi();
+                    const rows = Array.from(financeRefs.itemsList.querySelectorAll('[data-variable-item-row]'));
+                    const items = [];
+
+                    rows.forEach((row) => {
+                        const dateValue = (row.querySelector('[data-variable-item-date]')?.value || '').trim();
+                        const sourceValue = (row.querySelector('[data-variable-item-source]')?.value || '').trim();
+                        const amountValue = row.querySelector('[data-variable-item-amount]')?.value || '';
+                        const amountCents = moneyMask.toCents(amountValue);
+                        const hasAnyValue = !!dateValue || !!sourceValue || amountCents > 0;
+
+                        if (!hasAnyValue) return;
+
+                        if (validate && (!dateValue || !sourceValue || amountCents <= 0)) {
+                            throw new Error('Em vários lançamentos, preencha data, origem e valor certinhos.');
+                        }
+
+                        items.push({ item_date: dateValue, item_source: sourceValue, amount_cents: amountCents });
+                    });
+
+                    return items;
+                }
+
+                function refreshFinanceTotalPreview() {
+                    if (!financeRefs.totalPreview || !financeRefs.totalCaption) return;
+
+                    if (financeModalState.amountMode !== 'variable') {
+                        financeRefs.totalPreview.textContent = 'R$ 0,00';
+                        financeRefs.totalCaption.textContent = 'O valor você ajusta direto na lista depois.';
+                        return;
+                    }
+
+                    const items = readVariableItems();
+                    const totalCents = items.reduce((sum, item) => sum + Number(item.amount_cents || 0), 0);
+                    financeRefs.totalPreview.textContent = formatCurrency(totalCents);
+
+                    if (!items.length) {
+                        financeRefs.totalCaption.textContent = 'Sem lançamentos ainda. A linha principal pode ficar de prontidão.';
+                    } else if (items.length === 1) {
+                        financeRefs.totalCaption.textContent = '1 lançamento entrando nesse total.';
+                    } else {
+                        financeRefs.totalCaption.textContent = `${items.length} lançamentos entrando nesse total.`;
+                    }
+                }
+
+                function setModeButtonState(activeMode) {
+                    financeRefs.modeButtons.forEach((button) => {
+                        const isActive = button.dataset.financeMode === activeMode;
+                        button.className = `rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors ${isActive
+                            ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
+                            : 'border-slate-300 bg-slate-50 text-slate-600 hover:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'}`;
+                        button.disabled = financeModalState.readOnly || financeModalState.action !== 'create';
+                    });
+                }
+
+                function applyFinanceModalState() {
+                    const isCreate = financeModalState.action === 'create';
+                    const isVariableMode = financeModalState.amountMode === 'variable';
+                    const isIncome = financeModalState.financeType === 'income';
+
+                    if (financeRefs.modeGroup) {
+                        financeRefs.modeGroup.classList.toggle('hidden', !isCreate);
+                    }
+                    if (financeRefs.fixedPanel) {
+                        financeRefs.fixedPanel.classList.toggle('hidden', isVariableMode);
+                    }
+                    if (financeRefs.variablePanel) {
+                        financeRefs.variablePanel.classList.toggle('hidden', !isVariableMode);
+                    }
+                    if (financeRefs.readonlyNote) {
+                        financeRefs.readonlyNote.classList.toggle('hidden', !financeModalState.readOnly);
+                    }
+                    if (financeRefs.addItemButton) {
+                        financeRefs.addItemButton.hidden = !isVariableMode || financeModalState.readOnly;
+                    }
+                    if (financeRefs.saveButton) {
+                        financeRefs.saveButton.classList.toggle('hidden', financeModalState.readOnly);
+                    }
+                    if (financeRefs.descriptionInput) {
+                        financeRefs.descriptionInput.disabled = financeModalState.readOnly;
+                    }
+
+                    setModeButtonState(financeModalState.amountMode);
+                    syncVariableEmptyState();
+                    refreshFinanceTotalPreview();
+
+                    if (isCreate) {
+                        financeRefs.eyebrow.textContent = isIncome ? 'Nova entrada' : 'Nova saída';
+                        financeRefs.title.textContent = isVariableMode
+                            ? (isIncome ? 'Montar uma entrada em vários lançamentos' : 'Montar uma saída em vários lançamentos')
+                            : (isIncome ? 'Criar uma entrada de valor único' : 'Criar uma saída de valor único');
+                        financeRefs.subtitle.textContent = isVariableMode
+                            ? 'Você dá um nome principal e soma cada pedacinho na listinha abaixo.'
+                            : 'Salva o nome agora e o valor fica no toque rápido lá na lista.';
+                        financeRefs.descriptionLabel.textContent = isIncome ? 'Nome da entrada' : 'Nome da saída';
+                        financeRefs.descriptionInput.placeholder = isIncome ? 'Ex: Shows, Salário, Freelas' : 'Ex: Combustível, Alimentação, Operação';
+                        financeRefs.saveButton.textContent = 'Salvar item';
+                    } else {
+                        const baseName = (financeRefs.descriptionInput.value || 'item com vários lançamentos').trim();
+                        financeRefs.eyebrow.textContent = financeModalState.readOnly ? 'Listinha em modo leitura' : 'Editar lançamentos';
+                        financeRefs.title.textContent = financeModalState.readOnly ? `Conferir ${baseName}` : `Ajustar ${baseName}`;
+                        financeRefs.subtitle.textContent = financeModalState.readOnly
+                            ? 'Pode dar aquela conferida. Para mexer, é só reabrir o mês.'
+                            : 'Tudo que você mexer aqui já recalcula o total que aparece na tela.';
+                        financeRefs.descriptionLabel.textContent = 'Nome principal';
+                        financeRefs.descriptionInput.placeholder = 'Ex: Shows';
+                        financeRefs.saveButton.textContent = 'Salvar listinha';
+                    }
+                }
+
+                function resetFinanceModalState() {
+                    financeModalState.action = 'create';
+                    financeModalState.financeType = 'income';
+                    financeModalState.amountMode = 'fixed';
+                    financeModalState.financeId = null;
+                    financeModalState.readOnly = false;
+                }
+
+                async function fetchJson(url, options = {}) {
+                    const fetchOptions = { ...options };
+                    fetchOptions.headers = { ...(options.headers || {}) };
+                    if (fetchOptions.body && !fetchOptions.headers['Content-Type']) {
+                        fetchOptions.headers['Content-Type'] = 'application/json';
+                    }
+
+                    const response = await fetch(url, fetchOptions);
+                    let data = {};
+                    try {
+                        data = await response.json();
+                    } catch (e) {
+                        data = {};
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Não consegui concluir essa parte agora.');
+                    }
+
+                    return data;
+                }
+
+                async function saveFinanceModal() {
+                    if (financeModalState.readOnly) return;
+                    const description = (financeRefs.descriptionInput?.value || '').trim();
+                    if (!description) {
+                        alert('Dá um nome para esse item antes de salvar.');
+                        financeRefs.descriptionInput?.focus();
+                        return;
+                    }
+
+                    try {
+                        const payload = {
+                            description,
+                            items: financeModalState.amountMode === 'variable' ? readVariableItems({ validate: true }) : []
+                        };
+
+                        if (financeModalState.action === 'create') {
+                            payload.month = detailMonth;
+                            payload.year = detailYear;
+                            payload.type = financeModalState.financeType;
+                            payload.amount_mode = financeModalState.amountMode;
+                            await fetchJson('/finances/add-row', {
+                                method: 'POST',
+                                body: JSON.stringify(payload)
+                            });
+                        } else {
+                            await fetchJson(`/finances/variable/${financeModalState.financeId}`, {
+                                method: 'POST',
+                                body: JSON.stringify(payload)
+                            });
+                        }
+
+                        location.reload();
+                    } catch (error) {
+                        alert(error.message || 'Não consegui salvar esse item agora.');
+                    }
                 }
 
                 function calculatePad() {
-                    const text = document.getElementById('calc-pad').value;
+                    const text = document.getElementById('calc-pad')?.value || '';
                     let sum = 0;
-                    text.split('\n').forEach(line => {
-                        try {
-                            const val = evaluateFormula(line);
-                            if (val) sum += val;
-                        } catch (e) { }
+                    text.split('\n').forEach((line) => {
+                        const val = evaluateFormula(line);
+                        if (val) sum += val;
                     });
-                    document.getElementById('calc-result').innerText = `Soma Total: ` + sum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    const resultNode = document.getElementById('calc-result');
+                    if (resultNode) {
+                        resultNode.innerText = `Fechou em: ${sum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+                    }
                 }
 
-                async function addRow(type, promptMsg) {
-                    const desc = prompt(promptMsg);
-                    if (!desc) return;
-                    await fetch('/finances/add-row', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ month: <%= month %>, year: <%= year %>, type: type, description: desc })
-                });
-                location.reload(); 
-    }
-
                 async function updateRow(id, field, value) {
-                    await fetch(`/finances/update/${id}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ field, value })
-                    });
+                    try {
+                        await fetchJson(`/finances/update/${id}`, {
+                            method: 'POST',
+                            body: JSON.stringify({ field, value })
+                        });
+                    } catch (error) {
+                        alert(error.message || 'Não consegui atualizar esse item agora.');
+                        location.reload();
+                    }
                 }
 
                 async function saveMath(id, inputStr) {
                     const result = evaluateFormula(inputStr);
-                    await fetch(`/finances/update/${id}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ field: 'formula_and_value', formula: inputStr, amount_cents: Math.round(result * 100) })
-                    });
-                    location.reload();
-                }
-
-                async function deleteRow(id) {
-                    if (!confirm("Deseja mesmo apagar esta linha?")) return;
-                    await fetch(`/finances/delete/${id}`, { method: 'POST' });
-                    location.reload();
+                    try {
+                        await fetchJson(`/finances/update/${id}`, {
+                            method: 'POST',
+                            body: JSON.stringify({ field: 'formula_and_value', formula: inputStr, amount_cents: Math.round(result * 100) })
+                        });
+                        location.reload();
+                    } catch (error) {
+                        alert(error.message || 'Não consegui salvar esse valor agora.');
+                        location.reload();
+                    }
                 }
 
                 async function saveNotes(type, content) {
-                    await fetch(`/finances/notes/<%= year %>/<%= month %>`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ type, content })
-                    });
+                    try {
+                        await fetchJson(`/finances/notes/<%= year %>/<%= month %>`, {
+                            method: 'POST',
+                            body: JSON.stringify({ type, content })
+                        });
+                    } catch (error) {
+                        alert(error.message || 'Não consegui salvar essa anotação agora.');
+                    }
                 }
 
-                // NOVA FUNÇÃO DO CADEADO
                 async function toggleLock(status) {
                     const msg = status === 'close'
-                        ? "Deseja FECHAR este mês? Você não poderá mais editar os valores até reabrir."
-                        : "Deseja REABRIR este mês para edições?";
+                        ? 'Deseja FECHAR este mês? Você não poderá mais editar os valores até reabrir.'
+                        : 'Deseja REABRIR este mês para edições?';
 
                     if (!confirm(msg)) return;
 
-                    await fetch('/finances/toggle-close', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ month: <%= month %>, year: <%= year %>, status })
-                });
-                location.reload(); 
-    }
+                    try {
+                        await fetchJson('/finances/toggle-close', {
+                            method: 'POST',
+                            body: JSON.stringify({ month: <%= month %>, year: <%= year %>, status })
+                        });
+                        location.reload();
+                    } catch (error) {
+                        alert(error.message || 'Não consegui mudar o cadeado agora.');
+                    }
+                }
 
-                window.onload = () => { calculatePad(); };
+                async function deleteRow(id, amountMode) {
+                    try {
+                        const data = await fetchJson(`/finances/details/${id}`);
+                        const finance = data.finance || {};
+                        const resolvedAmountMode = (finance.amount_mode || amountMode || 'fixed') === 'variable' ? 'variable' : 'fixed';
+                        const financeLabel = getFinanceTypeLabel(finance.type);
+                        const items = Array.isArray(finance.items) ? finance.items : [];
+
+                        financeDeleteState.financeId = finance.id;
+                        financeDeleteState.amountMode = resolvedAmountMode;
+
+                        if (financeRefs.deleteEyebrow) {
+                            financeRefs.deleteEyebrow.textContent = resolvedAmountMode === 'variable'
+                                ? `Apagar ${financeLabel} em vários lançamentos`
+                                : `Apagar ${financeLabel} de valor único`;
+                        }
+                        if (financeRefs.deleteTitle) {
+                            financeRefs.deleteTitle.textContent = resolvedAmountMode === 'variable'
+                                ? 'Tem certeza mesmo?'
+                                : 'Vai tirar esse item da lista?';
+                        }
+                        if (financeRefs.deleteSubtitle) {
+                            financeRefs.deleteSubtitle.textContent = resolvedAmountMode === 'variable'
+                                ? (items.length
+                                    ? `Ao apagar ${finance.description || 'esse item'}, vai tudo isso junto no pacote:`
+                                    : `Ao apagar ${finance.description || 'esse item'}, o nome principal também some da lista.`)
+                                : `Ao apagar ${finance.description || 'esse item'}, ele sai da lista na hora. Se bater dúvida, ainda dá tempo de voltar.`;
+                        }
+                        if (financeRefs.deleteConfirm) {
+                            financeRefs.deleteConfirm.textContent = resolvedAmountMode === 'variable' ? 'Apagar tudo' : 'Apagar item';
+                        }
+                        if (financeRefs.deleteTotal) {
+                            financeRefs.deleteTotal.textContent = formatCurrency(finance.amount_cents || 0);
+                        }
+                        if (financeRefs.deleteItems) {
+                            financeRefs.deleteItems.innerHTML = '';
+                        }
+
+                        if (!financeRefs.deleteItems) {
+                            showDeleteModal();
+                            return;
+                        }
+
+                        if (resolvedAmountMode === 'variable') {
+                            if (!items.length) {
+                                const emptyState = document.createElement('div');
+                                emptyState.className = 'rounded-[22px] border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-400';
+                                emptyState.textContent = 'Esse item está zerado agora, mas apagar remove o nome principal da tela também.';
+                                financeRefs.deleteItems.appendChild(emptyState);
+                            } else {
+                                items.forEach((item) => {
+                                    financeRefs.deleteItems.appendChild(createDeletePreviewCard({
+                                        title: item.item_source || 'Sem detalhe',
+                                        meta: formatFinanceItemDate(item.item_date),
+                                        amountCents: item.amount_cents || 0
+                                    }));
+                                });
+                            }
+                        } else {
+                            const formulaText = String(finance.formula || '').trim();
+                            financeRefs.deleteItems.appendChild(createDeletePreviewCard({
+                                title: finance.description || `Essa ${financeLabel}`,
+                                meta: formulaText ? `Conta guardada: ${formulaText}` : 'Valor único salvo para este mês.',
+                                amountCents: finance.amount_cents || 0
+                            }));
+                        }
+
+                        showDeleteModal();
+                    } catch (error) {
+                        alert(error.message || 'Não consegui abrir os detalhes desse item agora.');
+                    }
+                }
+
+                async function openVariableEditor(id) {
+                    try {
+                        const data = await fetchJson(`/finances/details/${id}`);
+                        const finance = data.finance || {};
+                        financeModalState.action = 'edit';
+                        financeModalState.financeType = finance.type || 'income';
+                        financeModalState.amountMode = 'variable';
+                        financeModalState.financeId = finance.id;
+                        financeModalState.readOnly = !!data.isClosed;
+                        financeRefs.descriptionInput.value = finance.description || '';
+                        renderVariableItems(Array.isArray(finance.items) ? finance.items : []);
+                        applyFinanceModalState();
+                        showFinanceModal();
+                        if (!financeModalState.readOnly) {
+                            requestAnimationFrame(() => financeRefs.descriptionInput?.focus());
+                        }
+                    } catch (error) {
+                        alert(error.message || 'Não consegui abrir essa listinha agora.');
+                    }
+                }
+
+                function openFinanceCreator(type) {
+                    resetFinanceModalState();
+                    financeModalState.financeType = type === 'expense' ? 'expense' : 'income';
+                    financeRefs.descriptionInput.value = '';
+                    renderVariableItems([]);
+                    applyFinanceModalState();
+                    showFinanceModal();
+                    requestAnimationFrame(() => financeRefs.descriptionInput?.focus());
+                }
+
+                financeRefs.modeButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        financeModalState.amountMode = button.dataset.financeMode === 'variable' ? 'variable' : 'fixed';
+                        applyFinanceModalState();
+                    });
+                });
+
+                financeRefs.closeButtons.forEach((button) => {
+                    button.addEventListener('click', closeFinanceModal);
+                });
+
+                financeRefs.deleteCloseButtons.forEach((button) => {
+                    button.addEventListener('click', closeDeleteModal);
+                });
+
+                financeRefs.addItemButton?.addEventListener('click', () => {
+                    financeRefs.itemsList.appendChild(createVariableItemRow());
+                    syncVariableEmptyState();
+                    refreshFinanceTotalPreview();
+                });
+
+                financeRefs.saveButton?.addEventListener('click', saveFinanceModal);
+                financeRefs.descriptionInput?.addEventListener('input', () => {
+                    if (financeModalState.action === 'edit') {
+                        applyFinanceModalState();
+                    }
+                });
+
+                financeRefs.deleteConfirm?.addEventListener('click', async () => {
+                    if (!financeDeleteState.financeId) return;
+                    try {
+                        await fetchJson(`/finances/delete/${financeDeleteState.financeId}`, { method: 'POST' });
+                        location.reload();
+                    } catch (error) {
+                        alert(error.message || 'Não consegui apagar esse item agora.');
+                    }
+                });
+
+                financeRefs.modal?.addEventListener('click', (event) => {
+                    if (event.target === financeRefs.modal) {
+                        closeFinanceModal();
+                    }
+                });
+
+                financeRefs.deleteModal?.addEventListener('click', (event) => {
+                    if (event.target === financeRefs.deleteModal) {
+                        closeDeleteModal();
+                    }
+                });
+
+                document.addEventListener('keydown', (event) => {
+                    if (event.key !== 'Escape') return;
+                    if (financeRefs.deleteModal && !financeRefs.deleteModal.classList.contains('hidden')) {
+                        closeDeleteModal();
+                        return;
+                    }
+                    if (financeRefs.modal && !financeRefs.modal.classList.contains('hidden')) {
+                        closeFinanceModal();
+                    }
+                });
+
+                document.addEventListener('DOMContentLoaded', () => {
+                    calculatePad();
+                    applyFinanceModalState();
+                });
             </script>
 
             <%- include('partials/footer') %>

@@ -1,17 +1,63 @@
-<%- include("partials/header", { title: "OrganizaPay | Amigos" }) %>
+
+<%- include("partials/header", { title: "AcerttaPay | Amigos" }) %>
 
 <%
   const pendingRequests = Array.isArray(pendingFriendRequests) ? pendingFriendRequests : [];
-  const activeFriendCount = Array.isArray(people) ? people.filter(p => p && p.friendship_active).length : 0;
-  const discoverableCount = Array.isArray(people) ? people.filter(p => p && p.has_app_user && !p.friendship_active).length : 0;
+  const selfProfile = selfPerson || null;
+  const contactList = Array.isArray(contacts) ? contacts : (Array.isArray(people) ? people : []);
+  const activeFriendCount = contactList.filter(p => p && p.friendship_active).length;
+  const discoverableCount = contactList.filter(p => p && p.friendship_state === 'discoverable').length;
+  const pendingContactCount = contactList.filter(p => p && (p.friendship_state === 'pending_sent' || p.friendship_state === 'pending_received')).length;
+  const localOnlyCount = contactList.filter(p => p && !p.has_app_user).length;
+  const readyPixNetworkCount = contactList.filter(p => p && p.friendship_active && p.linked_user_pix_ready).length;
+  const pixStateList = Array.isArray(pixStateOptions) ? pixStateOptions : [];
+  const getPixStateCode = (entry) => entry && typeof entry === 'object' ? String(entry.code || entry.sigla || '').trim() : String(entry || '').trim();
+  const getPixStateName = (entry) => entry && typeof entry === 'object' ? String(entry.name || entry.nome || '').trim() : '';
+  const getPixStateLabel = (entry) => {
+    const code = getPixStateCode(entry);
+    const name = getPixStateName(entry);
+    if (code && name) return `${code} · ${name}`;
+    return code || name || '';
+  };
+  const pixStateDefault = pixDefaultState || 'RJ';
+  const pixCityDefault = pixDefaultCity || 'Rio de Janeiro';
+  const phoneCountryOptionsList = Array.isArray(phoneCountryOptions) ? phoneCountryOptions : [];
+  const preferredPhoneCountryOptions = phoneCountryOptionsList.filter((option) => option && option.preferred);
+  const otherPhoneCountryOptions = phoneCountryOptionsList.filter((option) => option && !option.preferred);
+  const phoneDefaultCountryCode = String(phoneDefaultCountry || 'BR').trim().toUpperCase() || 'BR';
+  const selfName = selfProfile?.name || '';
+  const selfPhoneCountry = selfProfile?.phone_ui_country || phoneDefaultCountryCode;
+  const selfPhone = selfProfile?.phone_ui_national || '';
+  const selfPhoneDisplay = selfProfile?.phone_display || '';
+  const selfPhoneStored = selfProfile?.phone_e164 || selfPhoneDisplay || '';
+  const selfEmail = selfProfile?.email || '';
+  const selfPixEnabled = !!selfProfile?.pix_enabled;
+  const selfPixKeyType = selfProfile?.pix_key_type || '';
+  const selfPixKeyValueInput = selfProfile?.pix_key_value_input || selfProfile?.pix_key_value || '';
+  const selfPixState = selfProfile?.pix_state || pixStateDefault;
+  const selfPixCity = selfProfile?.pix_city || pixCityDefault;
+  const selfPixLabel = selfProfile?.pix_label || '';
+  const signatureMaxLength = Number(profileSignatureMaxLength || 60) || 60;
+  const signatureVibeOptions = Array.isArray(profileSignatureVibeOptions) ? profileSignatureVibeOptions : [];
+  const signatureVibeMap = new Map(signatureVibeOptions.map((option) => [String(option?.code || '').trim(), option]));
+  const getSignatureVibeMeta = (value) => signatureVibeMap.get(String(value || '').trim()) || null;
+  const selfSignatureText = String(selfProfile?.profile_signature_text || '').trim();
+  const selfSignatureVibe = String(selfProfile?.profile_signature_vibe || '').trim();
+  const selfSignatureMeta = getSignatureVibeMeta(selfSignatureVibe);
+  const getAvatarUrl = (person) => person && person.photo_url ? String(person.photo_url) : (person && person.linked_user_photo_url && person.friendship_active ? String(person.linked_user_photo_url) : '');
+  const getAvatarInitials = (person) => {
+    const source = String((person && person.name) || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    return source.length ? source.map((part) => part.charAt(0).toUpperCase()).join('') : 'OP';
+  };
+
   const renderPersonStatusChips = (person) => {
     const chips = [];
     const addChip = (classes, label) => {
       chips.push(`<span class="inline-flex items-center whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-bold ${classes}">${label}</span>`);
     };
 
-    if (person.is_owner) {
-      addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Titular');
+    if (person.is_self) {
+      addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Seu perfil');
     }
 
     if (person.active) {
@@ -20,374 +66,1780 @@
       addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Inativo');
     }
 
-    if (person.has_app_user) {
+    if (!person.is_self && person.has_app_user) {
       addChip('border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200', 'Também usa o app');
+      addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix fica com a pessoa');
     }
 
     if (!person.email) {
       addChip('border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-200', 'Sem e-mail');
     }
 
-    if (person.friendship_active) {
+    if (person.is_self) {
+      if (person.pix_enabled && person.pix_valid) {
+        addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix pronto');
+      } else if (person.pix_enabled && !person.pix_valid) {
+        addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pix pedindo ajuste');
+      }
+    }
+
+    if (!person.is_self && person.friendship_active) {
       addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Amizade ativa');
       if (person.can_share_charge) {
-        addChip('border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200', 'Cobrança automática liberada');
+        addChip('border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200', 'Cobrança liberada');
       } else if (!person.active) {
         addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Cobrança pausada');
       }
-    } else if (person.friendship_state === 'pending_sent') {
+      if (person.linked_user_pix_ready) {
+        addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix pronto');
+      } else if (person.linked_user_pix_enabled) {
+        addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pix pedindo ajuste');
+      } else if (person.has_app_user) {
+        addChip('border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300', 'Pix ainda não pronto');
+      }
+    } else if (!person.is_self && person.friendship_state === 'pending_sent') {
       addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pedido enviado');
-    } else if (person.friendship_state === 'pending_received') {
+    } else if (!person.is_self && person.friendship_state === 'pending_received') {
       addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Pedido recebido');
     }
 
     return chips.join('');
   };
+
+  const getNetworkState = (person) => {
+    if (person && person.friendship_state === 'active') {
+      return {
+        key: 'friend',
+        label: 'Amizade ativa',
+        summary: 'Vocês já podem dividir e cobrar por aqui.',
+        badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
+        barClasses: 'from-emerald-400 via-cyan-400 to-sky-500'
+      };
+    }
+
+    if (person && person.friendship_state === 'pending_received') {
+      return {
+        key: 'pending',
+        label: 'Te chamou no app',
+        summary: 'Só falta você aceitar.',
+        badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
+        barClasses: 'from-emerald-400 via-amber-300 to-orange-400'
+      };
+    }
+
+    if (person && person.friendship_state === 'pending_sent') {
+      return {
+        key: 'pending',
+        label: 'Convite enviado',
+        summary: 'O convite já foi. Agora é esperar a resposta.',
+        badgeClasses: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200',
+        barClasses: 'from-amber-300 via-orange-400 to-rose-400'
+      };
+    }
+
+    if (person && person.friendship_state === 'discoverable') {
+      return {
+        key: 'discover',
+        label: 'Já está no app',
+        summary: 'Dá para mandar convite e virar amizade por aqui.',
+        badgeClasses: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200',
+        barClasses: 'from-sky-400 via-cyan-400 to-violet-400'
+      };
+    }
+
+    return {
+      key: 'local',
+      label: 'Só na sua lista',
+      summary: 'Por enquanto essa pessoa aparece só na sua lista.',
+      badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300',
+      barClasses: 'from-slate-300 via-slate-200 to-slate-400 dark:from-slate-600 dark:via-slate-500 dark:to-slate-700'
+    };
+  };
+
+  const getPixStateMeta = (person) => {
+    if (person && person.friendship_active && person.linked_user_pix_ready) {
+      return {
+        label: 'Pix pronto',
+        summary: 'Quando rolar pagamento, o app usa o Pix que essa pessoa deixou no perfil.',
+        badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200'
+      };
+    }
+
+    if (person && person.friendship_active && person.linked_user_pix_enabled) {
+      return {
+        label: 'Falta ajuste',
+        summary: 'Essa pessoa já ligou o Pix, mas ainda falta terminar.',
+        badgeClasses: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
+      };
+    }
+
+    if (person && person.friendship_active && person.has_app_user) {
+      return {
+        label: 'Ainda não deixou pronto',
+        summary: 'A amizade já está valendo, só falta a pessoa deixar o Pix pronto.',
+        badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300'
+      };
+    }
+
+    if (person && person.has_app_user) {
+      return {
+        label: 'Depois da amizade',
+        summary: 'Depois que a amizade for aceita, o Pix vem do perfil da pessoa.',
+        badgeClasses: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200'
+      };
+    }
+
+    return {
+      label: 'Só na sua lista',
+      summary: 'Sem Pix por aqui. Se a pessoa entrar no app, ela mesma cadastra do lado de lá.',
+      badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300'
+    };
+  };
 %>
 
-  <div class="max-w-5xl mx-auto">
-    <section class="op-page-hero op-fade-up mb-8">
-      <div>
-        <span class="op-page-hero__eyebrow">Sua rede no OrganizaPay</span>
-        <h1 class="op-page-hero__title mt-4">Amigos</h1>
-        <p class="op-page-hero__subtitle mt-3">Aqui mora seu círculo de confiança: quem entra nas divisões, quem já usa o app e quem topou abrir a porta para cobranças automáticas com um ok dos dois lados.</p>
-        <div class="op-page-hero__meta mt-4">
-          <span class="badge">Rede, convites e vínculo em um só lugar</span>
-          <span class="badge">Cobranças automáticas só com amizade ativa</span>
-        </div>
-      </div>
+<div class="mx-auto max-w-7xl">
+  <section class="op-page-hero op-fade-up mb-8">
+    <div>
+      <span class="op-page-hero__eyebrow">Seu perfil + sua rede</span>
+      <h1 class="op-page-hero__title mt-4">Amigos</h1>
+      <p class="op-page-hero__subtitle mt-3">Aqui você cuida do seu perfil, acompanha seus convites e vê sua turma de um jeito bem mais simples.</p>
+    </div>
+  </section>
 
-      <div class="op-kpi-strip xl:max-w-[30rem]">
-        <div class="op-kpi-card text-center">
-          <div class="op-kpi-card__label">Na sua rede</div>
-          <div class="op-kpi-card__value"><%= people ? people.length : 0 %></div>
-          <div class="op-kpi-card__hint">contato(s) salvos</div>
-        </div>
-        <div class="op-kpi-card text-center">
-          <div class="op-kpi-card__label text-emerald-600 dark:text-emerald-300">Amizades</div>
-          <div class="op-kpi-card__value text-emerald-700 dark:text-emerald-200"><%= activeFriendCount %></div>
-          <div class="op-kpi-card__hint text-emerald-700/80 dark:text-emerald-200/80">vínculo(s) ativo(s)</div>
-        </div>
-        <div class="op-kpi-card text-center">
-          <div class="op-kpi-card__label text-sky-600 dark:text-sky-300"><%= pendingRequests.length ? 'Convites' : 'Também usam' %></div>
-          <div class="op-kpi-card__value text-sky-700 dark:text-sky-200"><%= pendingRequests.length ? pendingRequests.length : discoverableCount %></div>
-          <div class="op-kpi-card__hint text-sky-700/80 dark:text-sky-200/80"><%= pendingRequests.length ? 'te esperando' : 'já estão no app' %></div>
-        </div>
-      </div>
-    </section>
-
+  <div class="mb-8 flex flex-wrap gap-3">
+    <a href="#my-profile" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
+      <span>👑</span>
+      Seu perfil
+    </a>
     <% if (pendingRequests.length) { %>
-      <section id="friend-requests" class="mb-8 op-surface-card rounded-3xl border border-emerald-200 bg-emerald-50/80 p-6 shadow-sm dark:border-emerald-900/60 dark:bg-emerald-950/20 sm:p-7">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Convites que chegaram</div>
-            <h2 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Tem amizade batendo na porta</h2>
-            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Aceitando, vocês passam a poder trocar cobranças automáticas entre si. Recusando, fica tudo como está — sem climão e sem bagunça.</p>
+      <a href="#friend-requests" class="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-100/80 dark:border-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:bg-emerald-900/35">
+        <span>💌</span>
+        Convites recebidos
+      </a>
+    <% } %>
+    <a href="#network-lounge" class="inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-bold text-sky-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-100/80 dark:border-sky-900 dark:bg-sky-900/20 dark:text-sky-200 dark:hover:bg-sky-900/35">
+      <span>➕</span>
+      Adicionar alguém
+    </a>
+    <a href="#network-list" class="inline-flex items-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-bold text-violet-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-violet-100/80 dark:border-violet-900 dark:bg-violet-900/20 dark:text-violet-200 dark:hover:bg-violet-900/35">
+      <span>🫶</span>
+      Explorar sua rede
+    </a>
+  </div>
+
+  <% if (selfProfile) { %>
+    <section id="my-profile" class="scroll-mt-28 mb-8 grid gap-6 xl:grid-cols-[minmax(0,1.03fr)_minmax(360px,0.97fr)] xl:items-stretch">
+
+      <div class="h-full overflow-hidden rounded-[32px] border border-amber-200 bg-white shadow-sm dark:border-amber-900/50 dark:bg-slate-800">
+        <div class="relative overflow-hidden border-b border-amber-100 bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,0.24),transparent_45%),radial-gradient(circle_at_right,rgba(56,189,248,0.18),transparent_35%)] px-5 py-5 dark:border-amber-900/40 sm:px-6 sm:py-6">
+          <div class="pointer-events-none absolute inset-0 opacity-70 dark:opacity-40">
+            <div class="absolute -left-10 top-0 h-28 w-28 rounded-full bg-amber-200/60 blur-3xl dark:bg-amber-500/20"></div>
+            <div class="absolute right-0 top-6 h-24 w-24 rounded-full bg-sky-200/60 blur-3xl dark:bg-sky-500/20"></div>
           </div>
-          <div class="rounded-2xl border border-emerald-200 bg-white/90 px-4 py-3 text-sm font-semibold text-emerald-700 shadow-sm dark:border-emerald-900/70 dark:bg-slate-900/60 dark:text-emerald-200">
-            <%= pendingRequests.length === 1 ? '1 pedido pendente' : `${pendingRequests.length} pedidos pendentes` %>
+          <div class="relative flex flex-col gap-5">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div class="flex min-w-0 flex-1 gap-4">
+                <div class="relative h-20 w-20 shrink-0">
+                  <% if (getAvatarUrl(selfProfile)) { %>
+                    <img src="<%= getAvatarUrl(selfProfile) %>" alt="<%= selfProfile.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-20 w-20 rounded-full object-cover ring-4 ring-white shadow-xl shadow-amber-500/10 dark:ring-slate-800">
+                  <% } else { %>
+                    <div class="flex h-20 w-20 items-center justify-center rounded-full bg-white text-2xl font-black text-amber-700 shadow-xl shadow-amber-500/10 dark:bg-slate-900 dark:text-amber-200"><%= getAvatarInitials(selfProfile) %></div>
+                  <% } %>
+                  <span class="absolute -bottom-1 -right-1 inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200 bg-white text-lg shadow-sm dark:border-amber-900 dark:bg-slate-900" title="Seu perfil">👑</span>
+                </div>
+
+                <div class="min-w-0 flex-1">
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Seu perfil oficial</div>
+                  <h2 class="mt-2 truncate text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= selfProfile.name %></h2>
+                  <div class="mt-3 space-y-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+                    <div class="flex items-start gap-2.5">
+                      <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white/90 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a2 2 0 011.897 1.368l1.516 4.547a2 2 0 01-.45 2.11l-2.07 2.07a16 16 0 006.364 6.364l2.07-2.07a2 2 0 012.11-.45l4.547 1.516A2 2 0 0121 15.72V19a2 2 0 01-2 2h-1C9.163 21 3 14.837 3 7V5z"></path></svg>
+                      </span>
+                      <span class="min-w-0 flex-1 leading-6"><%= selfPhoneDisplay ? selfPhoneDisplay : 'Telefone não informado por aqui ainda.' %></span>
+                    </div>
+                    <div class="flex items-start gap-2.5">
+                      <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white/90 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-16 8h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+                      </span>
+                      <span class="min-w-0 flex-1 break-all leading-6"><%= selfEmail ? selfEmail : 'E-mail não informado por aqui ainda.' %></span>
+                    </div>
+                  </div>
+                  <div class="mt-4 flex flex-wrap gap-2">
+                    <%- renderPersonStatusChips(selfProfile) %>
+                  </div>
+                  <p class="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Esse é o seu espaço dentro do AcerttaPay. É daqui que saem suas informações quando você participa de cobranças e divisões.</p>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3 sm:w-[17rem] lg:shrink-0">
+                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Amizades</div>
+                  <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= activeFriendCount %></div>
+                </div>
+                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Contatos</div>
+                  <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= contactList.length %></div>
+                </div>
+                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Convites</div>
+                  <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= pendingContactCount %></div>
+                </div>
+                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Pix pronto</div>
+                  <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= selfProfile.pix_enabled && selfProfile.pix_valid ? 'Sim' : 'Não' %></div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="mt-6 grid gap-4">
-          <% pendingRequests.forEach((request) => {
-               const isHighlighted = highlightedFriendRequestId && Number(highlightedFriendRequestId) === Number(request.id);
-          %>
-            <div id="friend-request-<%= request.id %>" class="rounded-[26px] border px-4 py-4 shadow-sm transition-all sm:px-5 <%= isHighlighted ? 'border-emerald-400 bg-white dark:border-emerald-500 dark:bg-slate-900 ring-2 ring-emerald-200 dark:ring-emerald-900/70' : 'border-emerald-200 bg-white/90 dark:border-slate-700 dark:bg-slate-900/70' %>">
-              <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div id="selfIdentityShell" class="border-t border-amber-100 p-5 dark:border-amber-900/40 sm:p-6">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Como você aparece</div>
+              <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seus dados por aqui</h3>
+              <p class="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Telefone e e-mail já ficam logo abaixo do seu nome. Quando quiser mexer, é só tocar em editar.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span id="selfIdentityEditingBadge" class="hidden inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Modo edição</span>
+              <button type="button" id="selfIdentityEditButton" onclick="toggleSelfIdentityEdit()" class="inline-flex w-full items-center justify-center rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-black text-amber-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-amber-50 dark:border-amber-900 dark:bg-slate-900 dark:text-amber-200 dark:hover:bg-amber-900/20 sm:w-auto" aria-expanded="false" aria-controls="selfIdentityForm">
+                <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                Editar
+              </button>
+            </div>
+          </div>
+
+          <form method="post" action="/people" id="selfIdentityForm" class="mt-5 hidden space-y-4" autocomplete="on">
+            <input type="hidden" name="id" id="selfPersonId" value="<%= selfProfile.id %>">
+            <input type="hidden" name="profile_section" value="identity">
+
+            <label class="block">
+              <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nome exibido</span>
+              <input name="name" id="selfName" value="<%- selfName %>" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 font-medium text-slate-900 shadow-sm transition-all outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-amber-500 dark:focus:ring-amber-500/20" placeholder="Seu nome no app" required>
+            </label>
+
+            <div class="grid gap-4">
+              <div class="min-w-0">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">País e telefone</span>
+                <div class="grid gap-3 sm:grid-cols-3">
+                  <div class="sm:col-span-1">
+                    <select name="phone_country" id="selfPhoneCountry" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-bold text-slate-900 shadow-sm transition-all outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-amber-500 dark:focus:ring-amber-500/20" autocomplete="tel-country-code">
+                      <% if (preferredPhoneCountryOptions.length) { %>
+                        <optgroup label="Mais usados">
+                          <% preferredPhoneCountryOptions.forEach((option) => { %>
+                            <option value="<%= option.code %>" <%= option.code === selfPhoneCountry ? 'selected' : '' %>><%= option.label %></option>
+                          <% }) %>
+                        </optgroup>
+                      <% } %>
+                      <% if (otherPhoneCountryOptions.length) { %>
+                        <optgroup label="Todos os países">
+                          <% otherPhoneCountryOptions.forEach((option) => { %>
+                            <option value="<%= option.code %>" <%= option.code === selfPhoneCountry ? 'selected' : '' %>><%= option.label %></option>
+                          <% }) %>
+                        </optgroup>
+                      <% } %>
+                    </select>
+                  </div>
+                  <div class="sm:col-span-2">
+                    <div class="relative min-w-0">
+                      <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                      </div>
+                      <input name="phone" id="selfPhone" value="<%- selfPhone %>" class="w-full rounded-2xl border border-slate-300 bg-white py-3.5 pl-11 pr-4 font-medium text-slate-900 shadow-sm transition-all outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-amber-500 dark:focus:ring-amber-500/20" placeholder="(21) 99999-9999" inputmode="tel" autocomplete="tel-national">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">E-mail visível</span>
+                <div class="relative min-w-0">
+                  <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-16 8h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+                  </div>
+                  <input name="email" id="selfEmail" type="email" value="<%- selfEmail %>" class="w-full rounded-2xl border border-slate-300 bg-white py-3.5 pl-11 pr-4 font-medium text-slate-900 shadow-sm transition-all outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-amber-500 dark:focus:ring-amber-500/20" placeholder="email@exemplo.com">
+                </div>
+              </label>
+            </div>
+
+            <div class="rounded-[24px] border border-sky-100 bg-sky-50/80 px-4 py-3.5 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20 dark:text-slate-300">
+              Essas infos aparecem no clima de perfil: ajudam você a ser reconhecido nas divisões e deixam a conversa das cobranças com mais cara de gente de verdade, não de cadastro perdido no rolê.
+            </div>
+
+            <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button type="button" id="selfIdentityCancel" onclick="resetSelfIdentityForm()" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto">Cancelar</button>
+              <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400 sm:w-auto">Salvar alterações</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="h-full">
+        <section id="profile-photo" class="flex h-full flex-col rounded-[32px] border border-sky-200 bg-white p-5 shadow-sm dark:border-sky-900/50 dark:bg-slate-800 sm:p-6">
+          <div>
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Sua fotinha por aqui</div>
+            <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seu rosto no crachá do app</h3>
+            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Ela aparece no topo do app e nas divisões de compra. Sem foto, o ícone do AcerttaPay segura a bronca bonitinho.</p>
+          </div>
+
+          <% const hasGoogleDefaultPhoto = !!(selfProfile && selfProfile.google_photo_url); %>
+          <% const photoMode = (selfProfile && selfProfile.profile_photo_mode) || 'default'; %>
+          <% const hasManualPhoto = photoMode === 'manual' && !!(selfProfile && selfProfile.profile_photo_url); %>
+          <% const showUseDefaultButton = hasManualPhoto || (photoMode === 'none' && hasGoogleDefaultPhoto); %>
+          <% const showRemoveButton = !!(selfProfile && selfProfile.photo_url); %>
+
+          <div class="mt-4 flex flex-1 flex-col">
+            <form method="post" action="/people/profile-photo" enctype="multipart/form-data" class="flex flex-col gap-3" id="profilePhotoForm">
+              <input id="profilePhotoInput" type="file" name="profile_photo" accept="image/png,image/jpeg,image/webp,image/gif" class="block w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm file:mr-3 file:rounded-xl file:border-0 file:bg-sky-100 file:px-3 file:py-2 file:font-bold file:text-sky-700 hover:file:bg-sky-200 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-200 dark:file:bg-sky-900/40 dark:file:text-sky-200">
+              <div id="profilePhotoPreviewWrap" class="hidden w-full items-center gap-3 rounded-2xl border border-sky-200/80 bg-sky-50/70 px-4 py-3 dark:border-sky-900/60 dark:bg-sky-950/20">
+                <img id="profilePhotoPreview" alt="Prévia da sua foto" class="h-14 w-14 rounded-full object-cover ring-2 ring-sky-200 dark:ring-sky-800/70">
                 <div class="min-w-0 flex-1">
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Prévia da fotinha</div>
+                  <p id="profilePhotoHint" class="mt-1 text-sm font-medium leading-5 text-slate-600 dark:text-slate-300">Escolheu? Aí é só salvar que ela sobe lindona.</p>
+                </div>
+              </div>
+              <div class="w-full rounded-2xl border border-sky-200/80 bg-white/80 p-3 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-slate-300">
+                Escolha com calma, ajuste do seu jeitinho e salve quando estiver curtindo o resultado.
+              </div>
+            </form>
+
+            <div class="flex flex-wrap items-stretch justify-end gap-3 pt-4">
+              <% if (showUseDefaultButton) { %>
+                <form method="post" action="/people/profile-photo/use-default" class="shrink-0">
+                  <button type="submit" class="inline-flex min-h-[46px] items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Usar foto padrão</button>
+                </form>
+              <% } %>
+              <% if (showRemoveButton) { %>
+                <form method="post" action="/people/profile-photo/remove" class="shrink-0">
+                  <button type="submit" class="inline-flex min-h-[46px] items-center justify-center rounded-2xl border border-rose-200 bg-rose-50/70 px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-100/80 dark:border-rose-900/70 dark:bg-rose-950/20 dark:text-rose-200 dark:hover:bg-rose-950/35">Excluir foto</button>
+                </form>
+              <% } %>
+              <button form="profilePhotoForm" id="profilePhotoSubmit" type="submit" class="inline-flex min-h-[46px] items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60 shrink-0">Salvar foto</button>
+            </div>
+
+            <form method="post" action="/people" id="profileSignatureForm" class="mt-5 border-t border-sky-100 pt-5 dark:border-sky-900/40">
+              <input type="hidden" name="id" value="<%= selfProfile.id %>">
+              <input type="hidden" name="profile_section" value="signature">
+              <input type="hidden" name="profile_signature_vibe" id="profileSignatureVibe" value="<%= selfSignatureVibe %>">
+
+              <div id="profile-signature" class="scroll-mt-28">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Sua assinatura no app</div>
+                <h4 class="mt-2 text-lg font-black text-slate-900 dark:text-white">O toque que seus amigos enxergam por aqui</h4>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Escreva um recado curtinho, escolha um status e deixe seu perfil com mais a sua cara.</p>
+              </div>
+
+              <div class="mt-4 grid gap-4">
+                <label class="block">
+                  <div class="mb-2 flex items-center justify-between gap-3">
+                    <span class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Recado rápido</span>
+                    <span id="profileSignatureCount" class="text-[11px] font-bold text-slate-400 dark:text-slate-500"><%= selfSignatureText.length %>/<%= signatureMaxLength %></span>
+                  </div>
+                  <input type="text" name="profile_signature_text" id="profileSignatureText" value="<%- selfSignatureText %>" maxlength="<%= signatureMaxLength %>" autocomplete="off" class="w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20" placeholder="Ex.: Pix ligado e coração tranquilo 😄">
+                  <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Até <%= signatureMaxLength %> caracteres, em uma linha só. Só quem já é seu amigo por aqui vê isso.</p>
+                </label>
+
+                <div>
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Seu status por aqui</div>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <% signatureVibeOptions.forEach((option) => { const selected = option.code === selfSignatureVibe; %>
+                      <button type="button" data-signature-vibe-option data-vibe-code="<%= option.code %>" class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-bold transition-all <%= selected ? 'border-sky-600 bg-sky-600 text-white shadow-lg shadow-sky-500/15 dark:border-sky-400 dark:bg-sky-400 dark:text-slate-950' : 'border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-800 dark:hover:bg-sky-900/20 dark:hover:text-sky-200' %>"><%= option.label %></button>
+                    <% }) %>
+                  </div>
+                </div>
+
+                <div class="rounded-[26px] border border-sky-200/80 bg-sky-50/70 px-4 py-4 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/20">
                   <div class="flex flex-wrap items-center gap-2">
-                    <span class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-lg font-black text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Prévia para amizades ativas</div>
+                    <span id="profileSignaturePreviewVibe" class="<%= selfSignatureMeta ? '' : 'hidden ' %>inline-flex items-center rounded-full border border-sky-200 bg-white px-3 py-1 text-[11px] font-bold text-sky-700 dark:border-sky-800 dark:bg-slate-900 dark:text-sky-200"><%= selfSignatureMeta ? selfSignatureMeta.label : '' %></span>
+                  </div>
+                  <p id="profileSignaturePreviewText" class="mt-2 text-sm font-medium leading-6 text-slate-700 dark:text-slate-200"><%= selfSignatureText ? selfSignatureText : 'Quando você escrever um recado aqui, ele aparece para seus amigos na sua rede.' %></p>
+                  <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Por enquanto, isso aparece só para quem já é seu amigo por aqui.</p>
+                </div>
+              </div>
+
+              <div class="mt-4 flex flex-wrap justify-end gap-3">
+                <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Salvar assinatura</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <div id="profilePhotoCropModal" class="fixed inset-0 z-[120] hidden items-center justify-center overflow-y-auto p-4 sm:p-6" aria-hidden="true">
+          <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" data-profile-photo-modal-close></div>
+          <div class="relative my-auto w-full max-w-3xl rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Ajuste sua fotinha</div>
+                <h4 class="mt-2 text-lg font-black text-slate-900 dark:text-white">Escolha o melhor enquadramento</h4>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Arraste para posicionar, puxe o zoom se quiser e deixe seu rosto bem no centro do crachá.</p>
+              </div>
+              <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800" data-profile-photo-modal-close>Fechar</button>
+            </div>
+            <div class="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
+              <div>
+                <div id="profilePhotoCropStage" class="relative mx-auto aspect-square w-full max-w-[26rem] overflow-hidden rounded-[28px] border border-slate-200 bg-slate-950 shadow-inner dark:border-slate-700 touch-none select-none">
+                  <img id="profilePhotoCropImage" alt="Ajuste da foto" class="absolute left-1/2 top-1/2 max-w-none will-change-transform pointer-events-none select-none" draggable="false">
+                  <div class="pointer-events-none absolute inset-0 rounded-[28px] ring-1 ring-inset ring-white/35"></div>
+                  <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0,transparent_56%,rgba(15,23,42,0.42)_100%)]"></div>
+                </div>
+                <p class="mt-3 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Dica amiga: se tiver mais gente na foto, arraste até deixar você no centro. A moldura redonda é só a prévia — o recorte sai certinho daqui.</p>
+              </div>
+              <div class="rounded-[24px] border border-sky-200/80 bg-sky-50/70 p-4 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/20">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Como vai ficar</div>
+                <div class="mt-4 flex items-center justify-center">
+                  <div class="relative h-28 w-28 overflow-hidden rounded-full border-4 border-white bg-slate-200 shadow-lg ring-1 ring-sky-200 dark:border-slate-900 dark:bg-slate-800 dark:ring-sky-900/70">
+                    <img id="profilePhotoCropPreview" alt="Prévia circular da foto" class="absolute left-1/2 top-1/2 max-w-none will-change-transform pointer-events-none select-none" draggable="false">
+                  </div>
+                </div>
+                <label class="mt-5 block">
+                  <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Zoom</span>
+                  <input id="profilePhotoCropZoom" type="range" min="1" max="3" step="0.01" value="1" class="h-2 w-full cursor-pointer appearance-none rounded-full bg-sky-100 accent-sky-600 dark:bg-slate-800">
+                </label>
+                <div class="mt-5 flex flex-col gap-3">
+                  <button type="button" id="profilePhotoCropApply" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Usar essa foto</button>
+                  <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800" data-profile-photo-modal-close>Escolher outra depois</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <form method="post" action="/people" id="self-pix-config" class="xl:col-span-2 rounded-[32px] border border-violet-200 bg-white p-5 shadow-sm dark:border-violet-900/50 dark:bg-slate-800 sm:p-6">
+          <input type="hidden" name="id" value="<%= selfProfile.id %>">
+          <input type="hidden" name="profile_section" value="pix">
+
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Receber por Pix</div>
+              <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seu Pix pronto para receber</h3>
+              <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Aqui você decide se quer deixar seu Pix pronto para quando alguém for te pagar.</p>
+            </div>
+            <% if (selfProfile.pix_enabled && selfProfile.pix_valid) { %>
+              <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pronto para uso</span>
+            <% } else if (selfProfile.pix_enabled) { %>
+              <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Pedindo um ajuste</span>
+            <% } else { %>
+              <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">Ainda desligado</span>
+            <% } %>
+          </div>
+
+          <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(280px,0.82fr)_minmax(0,1.18fr)] xl:items-start">
+            <div class="grid gap-4">
+              <div class="rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+                <label class="flex cursor-pointer items-start gap-3">
+                  <input type="checkbox" name="pix_enabled" id="selfPixEnabled" value="1" class="mt-1 h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" <%= selfPixEnabled ? 'checked' : '' %>>
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-sm font-black text-slate-900 dark:text-white">Deixar Pix pronto por aqui</span>
+                    <span class="mt-1 block text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Sua chave fica escondidinha na lista e só aparece inteira na hora de copiar.</span>
+                  </span>
+                </label>
+              </div>
+
+              <div class="rounded-[26px] border border-violet-200/70 bg-violet-50/80 px-4 py-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20 sm:px-5">
+                <div class="flex items-start gap-3">
+                  <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-violet-600 shadow-sm ring-1 ring-violet-100 dark:bg-slate-800 dark:text-violet-300 dark:ring-violet-900/50" aria-hidden="true">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1zm7 4h.01"></path></svg>
+                  </span>
+                  <div class="min-w-0 flex-1">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600/80 dark:text-violet-300/80">Resumo atual</div>
+                    <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
+                      <% if (selfProfile.pix_enabled) { %>
+                        <strong class="font-semibold text-slate-700 dark:text-slate-100"><%= (selfProfile.pix_key_type_label || 'Chave Pix') + ' · ' + (selfProfile.pix_masked_key || 'aguardando preenchimento') %></strong>.
+                        <% if (selfProfile.pix_city) { %>
+                          Cidade do Pix: <strong class="font-semibold text-slate-700 dark:text-slate-100"><%= selfProfile.pix_city %><%= selfProfile.pix_state ? ' / ' + selfProfile.pix_state : '' %></strong>.
+                        <% } %>
+                        Esse é o Pix que aparece quando alguém precisa te pagar.
+                      <% } else { %>
+                        Nenhuma chave salva por aqui ainda. Quando você ligar isso, quem for te pagar já encontra seu Pix sem correria.
+                      <% } %>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid gap-4">
+              <div class="grid gap-4 lg:grid-cols-2" data-self-pix-field>
+                <label class="block">
+                  <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Tipo da chave</span>
+                  <select name="pix_key_type" id="selfPixKeyType" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
+                    <option value="">Escolha um tipo</option>
+                    <option value="cpf" <%= selfPixKeyType === 'cpf' ? 'selected' : '' %>>CPF</option>
+                    <option value="cnpj" <%= selfPixKeyType === 'cnpj' ? 'selected' : '' %>>CNPJ</option>
+                    <option value="email" <%= selfPixKeyType === 'email' ? 'selected' : '' %>>E-mail</option>
+                    <option value="phone" <%= selfPixKeyType === 'phone' ? 'selected' : '' %>>Celular</option>
+                    <option value="evp" <%= selfPixKeyType === 'evp' ? 'selected' : '' %>>Chave aleatória</option>
+                  </select>
+                </label>
+
+                <label class="block">
+                  <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Chave Pix</span>
+                  <input name="pix_key_value" id="selfPixKeyValue" value="<%- selfPixKeyValueInput %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: 21999999999" inputmode="text" autocomplete="off">
+                  <p id="selfPixKeyHelp" class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.</p>
+                </label>
+              </div>
+
+              <div class="grid gap-4 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)]" data-self-pix-field>
+                <label class="block">
+                  <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estado</span>
+                  <select name="pix_state" id="selfPixState" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
+                    <% pixStateList.forEach((stateEntry) => { const stateCode = getPixStateCode(stateEntry); const stateLabel = getPixStateLabel(stateEntry); if (!stateCode) return; %>
+                      <option value="<%= stateCode %>" <%= selfPixState === stateCode ? 'selected' : '' %>><%= stateLabel %></option>
+                    <% }) %>
+                  </select>
+                </label>
+
+                <label class="block">
+                  <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Cidade</span>
+                  <input name="pix_city" id="selfPixCity" value="<%- selfPixCity %>" list="selfPixCitySuggestions" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Cidade do recebedor">
+                  <datalist id="selfPixCitySuggestions"></datalist>
+                </label>
+              </div>
+
+              <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                <label class="block" data-self-pix-field>
+                  <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nome que aparece no Pix</span>
+                  <input name="pix_label" id="selfPixLabel" value="<%- selfPixLabel %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: João - AcerttaPay">
+                </label>
+
+                <div class="grid gap-3 lg:justify-items-end">
+                  <div id="selfPixDormantHint" class="rounded-[24px] border border-dashed border-violet-200 bg-violet-50/70 px-4 py-4 text-sm font-medium leading-6 text-slate-600 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-slate-300 lg:max-w-[24rem] <%= selfPixEnabled ? 'hidden' : '' %>">
+                    <div class="font-black text-slate-900 dark:text-white">Pode deixar desligado sem problema.</div>
+                    <p class="mt-2">Quando quiser, é só ligar, preencher e salvar.</p>
+                  </div>
+                  <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 sm:w-auto">Salvar meu Pix</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+    </section>
+  <% } %>
+
+  <% if (pendingRequests.length) { %>
+    <section id="friend-requests" class="scroll-mt-28 mb-8 rounded-[32px] border border-emerald-200 bg-white p-6 shadow-sm dark:border-emerald-900/50 dark:bg-slate-800 sm:p-7">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Convites que chegaram</div>
+          <h2 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Tem gente batendo na porta da sua rede</h2>
+          <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Aceitando, vocês podem usar cobranças entre si com mais facilidade. Se não quiser, é só recusar.</p>
+        </div>
+        <div class="rounded-2xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-sm font-semibold text-emerald-700 shadow-sm dark:border-emerald-900/70 dark:bg-emerald-900/20 dark:text-emerald-200">
+          <%= pendingRequests.length === 1 ? '1 convite esperando você' : `${pendingRequests.length} convites esperando você` %>
+        </div>
+      </div>
+
+      <div class="mt-6 grid gap-4">
+        <% pendingRequests.forEach((request) => {
+             const isHighlighted = highlightedFriendRequestId && Number(highlightedFriendRequestId) === Number(request.id);
+        %>
+          <article id="friend-request-<%= request.id %>" class="overflow-hidden rounded-[28px] border bg-slate-50/70 shadow-sm transition-all dark:bg-slate-900/60 <%= isHighlighted ? 'border-emerald-400 ring-2 ring-emerald-200 dark:border-emerald-500 dark:ring-emerald-900/70' : 'border-emerald-200 dark:border-slate-700' %>">
+            <div class="h-1.5 bg-gradient-to-r from-emerald-400 via-sky-400 to-violet-400"></div>
+            <div class="p-5 sm:p-6">
+              <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-3">
+                    <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-lg font-black text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
                       <%= (request.requester_name || 'A').charAt(0).toUpperCase() %>
                     </span>
                     <div class="min-w-0">
-                      <div class="text-lg font-black text-slate-900 dark:text-white"><%= request.requester_name || 'Usuário OrganizaPay' %></div>
-                      <div class="text-sm font-medium text-slate-500 dark:text-slate-400">Quer virar seu contato de confiança no app.</div>
+                      <div class="text-lg font-black text-slate-900 dark:text-white"><%= request.requester_name || 'Usuário AcerttaPay' %></div>
+                      <div class="text-sm font-medium text-slate-500 dark:text-slate-400">Quer entrar na sua rede por aqui.</div>
                     </div>
                   </div>
-                  <div class="mt-3 flex flex-wrap gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+
+                  <div class="mt-4 flex flex-wrap gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                     <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200">Também usa o app</span>
                     <% if (request.linked_person_name) { %>
-                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Já apareceu como <%= request.linked_person_name %></span>
+                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">Já apareceu como <%= request.linked_person_name %></span>
                     <% } %>
                     <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pedido pendente</span>
                   </div>
                 </div>
-                <div class="grid gap-2 sm:min-w-[17rem] sm:grid-cols-2 lg:w-auto">
+
+                <div class="grid gap-2 sm:min-w-[18rem] sm:grid-cols-2 xl:w-auto">
                   <form method="post" action="/friend-requests/<%= request.id %>/respond">
                     <input type="hidden" name="action" value="accept">
-                    <button type="submit" class="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
-                      Aceitar amizade
-                    </button>
+                    <button type="submit" class="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">Aceitar</button>
                   </form>
                   <form method="post" action="/friend-requests/<%= request.id %>/respond">
                     <input type="hidden" name="action" value="reject">
-                    <button type="submit" class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">
-                      Recusar
-                    </button>
+                    <button type="submit" class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Recusar</button>
                   </form>
                 </div>
               </div>
             </div>
-          <% }) %>
-        </div>
-      </section>
-    <% } %>
-
-    <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
-      <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Monte sua rede</div>
-          <h2 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Cadastre alguém novo</h2>
-          <p class="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Começa pelo básico. Se a pessoa também usar o OrganizaPay, a amizade pode nascer daqui com um convite.</p>
-        </div>
-        <div class="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
-          Seu titular também mora aqui na rede.
-        </div>
+          </article>
+        <% }) %>
       </div>
+    </section>
+  <% } %>
 
-      <form method="post" action="/people" id="personForm"
-        class="flex flex-col gap-4 mb-8 pb-8 border-b border-slate-100 dark:border-slate-700">
-        <div class="text-sm font-medium text-slate-500 dark:text-slate-400 -mb-1">
-          O e-mail é opcional, mas ajuda o app a descobrir se esse contato também usa o OrganizaPay.
+  <section id="network-lounge" class="scroll-mt-28 mb-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
+    <div class="grid gap-6 xl:grid-cols-[minmax(0,1.02fr)_minmax(340px,0.98fr)] xl:items-stretch">
+
+      <div id="contactComposerCard" class="flex h-full flex-col rounded-[30px] border border-sky-200 bg-sky-50/70 p-5 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/20 sm:p-6">
+        <div class="flex flex-wrap items-center gap-2">
+          <div id="contactFormEyebrow" class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Adicionar à sua rede</div>
+          <span id="contactEditingBadge" class="hidden inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-bold text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">Modo edição</span>
         </div>
-        <input type="hidden" name="id" id="personId">
+        <h2 id="contactFormTitle" class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Quem vai entrar nessa roda?</h2>
+        <p id="contactFormHint" class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Salve nome, telefone e e-mail. Se essa pessoa também usa o app, você pode mandar o convite depois. O Pix fica por conta dela.</p>
 
-        <div class="w-full relative">
-          <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-            </svg>
-          </div>
-          <input name="name" id="inputName"
-            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
-            placeholder="Nome do amigo ou contato" required />
-        </div>
+        <form method="post" action="/people" id="contactForm" class="mt-5 flex flex-col gap-3">
+          <input type="hidden" name="id" id="contactPersonId">
 
-        <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] items-start">
-          <div class="relative min-w-0">
+          <div class="w-full relative">
             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-              </svg>
+              <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
             </div>
-            <input name="phone" id="inputPhone"
-              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
-              placeholder="5511999999999" />
+            <input name="name" id="contactName" class="w-full rounded-2xl border border-slate-300 bg-white py-3.5 pl-11 pr-4 font-medium text-slate-900 shadow-sm transition-all outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-sky-500 dark:focus:ring-sky-500/20" placeholder="Nome do amigo ou contato" required>
           </div>
 
-          <div class="relative min-w-0">
-            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12H8m8-4H8m12 8H4a2 2 0 01-2-2V6a2 2 0 012-2h16a2 2 0 012 2v8a2 2 0 01-2 2z"></path>
-              </svg>
-            </div>
-            <input name="email" id="inputEmail" type="email"
-              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
-              placeholder="email@exemplo.com" />
-          </div>
-
-          <button type="submit" id="btnSubmit"
-            class="w-full md:w-auto inline-flex items-center justify-center px-6 py-3 rounded-xl font-bold text-white bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 dark:hover:bg-blue-700 shadow-sm transition-all hover:-translate-y-0.5 whitespace-nowrap">
-            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-            </svg>
-            Salvar pessoa
-          </button>
-          <button type="button" id="btnCancel" onclick="resetForm()"
-            class="hidden w-full md:w-auto px-4 py-3 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-all whitespace-nowrap">Cancelar</button>
-        </div>
-      </form>
-
-      <div class="grid gap-4 lg:grid-cols-2">
-        <% if (people && people.length) { %>
-          <% people.forEach((p) => {
-               const isHighlighted = highlightedFriendRequestId && Number(p.incoming_friend_request_id || 0) === Number(highlightedFriendRequestId);
-               let personHintText = '';
-               if (p.is_owner) {
-                 personHintText = 'Você é o titular desta conta. Aqui o crachá já vem no bolso.';
-               } else if (!p.email) {
-                 personHintText = 'Quer descobrir se essa pessoa também usa o app? Um e-mail aqui já ajuda a abrir essa porta.';
-               } else if (!p.has_app_user) {
-                 personHintText = 'Por enquanto o app não achou uma conta OrganizaPay com esse e-mail. Se a pessoa entrar depois, o convite aparece.';
-               } else if (p.friendship_active && !p.active) {
-                 personHintText = 'A amizade segue ativa, mas este contato está inativo na sua lista. Novos envios automáticos ficam pausados até você reativar.';
-               } else if (p.friendship_active) {
-                 personHintText = 'Vocês já estão conectados. Daqui pra frente, cobranças automáticas podem circular entre vocês com o ok dos dois lados.';
-               } else if (p.friendship_state === 'pending_sent') {
-                 personHintText = 'O convite já foi enviado. Agora é aquele momento clássico de esperar o joinha chegar.';
-               } else if (p.friendship_state === 'pending_received') {
-                 personHintText = 'Essa pessoa já te chamou. É só aceitar aqui e pronto: amizade ativa, com autorização dos dois lados.';
-               } else if (!p.active) {
-                 personHintText = 'Esse contato usa o app, mas está desativado na sua lista. Reative quando quiser colocar em jogo de novo.';
-               } else {
-                 personHintText = 'O app já reconheceu essa pessoa. Se fizer sentido, mande um pedido de amizade para liberar cobranças automáticas com o ok dos dois lados.';
-               }
-          %>
-            <div class="group rounded-[28px] border p-5 transition-all bg-white dark:bg-slate-800 shadow-sm <%= isHighlighted ? 'border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-900/70' : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500 hover:shadow-md' %>">
-              <div class="flex flex-col gap-5">
-                <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                  <div class="flex min-w-0 flex-1 gap-4 xl:pr-4">
-                    <div class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-600 transition-colors group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:bg-blue-900/40">
-                      <%= p.name.charAt(0).toUpperCase() %>
-                      <% if (p.is_owner) { %>
-                        <span class="absolute -top-2 -right-2 text-xl drop-shadow-sm" title="Titular">👑</span>
-                      <% } else if (p.friendship_active) { %>
-                        <span class="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-200 bg-emerald-500 text-[13px] text-white shadow-sm dark:border-emerald-700" title="Amizade ativa">🔗</span>
-                      <% } %>
-                    </div>
-
-                    <div class="min-w-0 flex-1">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <div class="text-lg font-extrabold text-slate-800 dark:text-white"><%= p.name %></div>
-                        <button type="button" data-id="<%= p.id %>" data-name="<%= p.name %>" data-phone="<%= p.phone || '' %>" data-email="<%= p.email || '' %>" onclick="editPersonFromButton(this)"
-                          class="text-slate-400 hover:text-blue-500 transition-colors" aria-label="Editar pessoa" title="Editar pessoa">
-                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
-                          </svg>
-                        </button>
-                      </div>
-
-                      <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-                        <%= p.phone ? '📱 ' + p.phone : '📱 Telefone não informado' %>
-                      </div>
-                      <div class="mt-1 break-all text-xs font-medium text-slate-500 dark:text-slate-400">
-                        <%= p.email ? '✉️ ' + p.email : '— E-mail não informado' %>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="flex w-full flex-col gap-2 xl:w-[15rem] xl:shrink-0">
-                    <% if (!p.is_owner) { %>
-                      <% if (p.friendship_state === 'active') { %>
-                        <form method="post" action="/people/<%= p.id %>/unfriend" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novos envios automáticos entre vocês param na hora.">
-                          <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">
-                            Desfazer amizade
-                          </button>
-                        </form>
-                      <% } else if (p.friendship_state === 'pending_sent') { %>
-                        <form method="post" action="/friend-requests/<%= p.outgoing_friend_request_id %>/cancel">
-                          <button class="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-700 transition-all hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">
-                            Cancelar pedido
-                          </button>
-                        </form>
-                      <% } else if (p.friendship_state === 'pending_received') { %>
-                        <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
-                          <input type="hidden" name="action" value="accept">
-                          <button class="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
-                            Aceitar amizade
-                          </button>
-                        </form>
-                        <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
-                          <input type="hidden" name="action" value="reject">
-                          <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">
-                            Recusar
-                          </button>
-                        </form>
-                      <% } else if (p.has_app_user && p.active) { %>
-                        <form method="post" action="/people/<%= p.id %>/send-friend-request">
-                          <button class="w-full rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">
-                            Enviar pedido de amizade
-                          </button>
-                        </form>
-                      <% } else { %>
-                        <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">
-                          Convite indisponível
-                        </div>
-                      <% } %>
+          <div class="grid gap-3 md:grid-cols-2">
+            <div class="min-w-0 md:col-span-2">
+              <div class="grid gap-3 sm:grid-cols-3">
+                <div class="sm:col-span-1">
+                  <select name="phone_country" id="contactPhoneCountry" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-bold text-slate-900 shadow-sm transition-all outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-sky-500 dark:focus:ring-sky-500/20" autocomplete="tel-country-code">
+                    <% if (preferredPhoneCountryOptions.length) { %>
+                      <optgroup label="Mais usados">
+                        <% preferredPhoneCountryOptions.forEach((option) => { %>
+                          <option value="<%= option.code %>" <%= option.code === phoneDefaultCountryCode ? 'selected' : '' %>><%= option.label %></option>
+                        <% }) %>
+                      </optgroup>
                     <% } %>
-
-                    <div class="grid gap-2 pt-1">
-                      <% if (!p.is_owner) { %>
-                        <form method="post" action="/people/<%= p.id %>/set-owner">
-                          <button class="w-full px-3 py-2.5 text-xs font-bold rounded-xl border bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 shadow-sm transition-colors">
-                            Marcar como você
-                          </button>
-                        </form>
-                      <% } %>
-                      <form method="post" action="/people/<%= p.id %>/toggle">
-                        <button class="w-full px-3 py-2.5 text-xs font-bold rounded-xl border <%= p.active ? 'border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20' : 'border-green-200 dark:border-green-900 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20' %> transition-colors bg-white dark:bg-slate-700 shadow-sm">
-                          <%= p.active ? "Desativar" : "Reativar" %>
-                        </button>
-                      </form>
-                      <form method="post" action="/people/<%= p.id %>/delete"
-                        data-confirm-prompt="Excluir <%= p.name %>? A exclusão só acontece se não houver histórico nem vínculo ligado a essa pessoa."
-                        data-confirm-phrase="Eu confirmo">
-                        <button class="w-full px-3 py-2.5 text-xs font-bold rounded-xl border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors bg-white dark:bg-slate-700 shadow-sm">
-                          Excluir
-                        </button>
-                      </form>
-                    </div>
-                  </div>
+                    <% if (otherPhoneCountryOptions.length) { %>
+                      <optgroup label="Todos os países">
+                        <% otherPhoneCountryOptions.forEach((option) => { %>
+                          <option value="<%= option.code %>" <%= option.code === phoneDefaultCountryCode ? 'selected' : '' %>><%= option.label %></option>
+                        <% }) %>
+                      </optgroup>
+                    <% } %>
+                  </select>
                 </div>
-
-                <div class="flex flex-col gap-3">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <%- renderPersonStatusChips(p) %>
-                  </div>
-
-                  <div class="w-full rounded-[24px] border border-sky-100/70 bg-slate-50/90 px-4 py-4 shadow-sm shadow-sky-100/10 dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
-                    <div class="flex items-start gap-3">
-                      <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-sky-600 shadow-sm ring-1 ring-sky-100 dark:bg-slate-800 dark:text-sky-300 dark:ring-slate-700" aria-hidden="true">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                      </span>
-                      <div class="min-w-0 flex-1">
-                        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/70 dark:text-sky-300/80">Recadinho do app</div>
-                        <p class="mt-1 max-w-none text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= personHintText %></p>
-                      </div>
+                <div class="sm:col-span-2">
+                  <div class="relative min-w-0">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
                     </div>
+                    <input name="phone" id="contactPhone" class="w-full rounded-2xl border border-slate-300 bg-white py-3.5 pl-11 pr-4 font-medium text-slate-900 shadow-sm transition-all outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-sky-500 dark:focus:ring-sky-500/20" placeholder="(21) 99999-9999" inputmode="tel" autocomplete="tel-national">
                   </div>
                 </div>
               </div>
             </div>
-          <% }) %>
-        <% } else { %>
-          <div class="rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 px-6 py-10 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">
-            Ainda não tem ninguém na sua rede por aqui. Comece pelo titular e depois vá adicionando quem entra nas divisões e nas amizades.
+
+            <div class="relative min-w-0 md:col-span-2">
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12H8m8-4H8m12 8H4a2 2 0 01-2-2V6a2 2 0 012-2h16a2 2 0 012 2v8a2 2 0 01-2 2z"></path></svg>
+              </div>
+              <input name="email" id="contactEmail" type="email" class="w-full rounded-2xl border border-slate-300 bg-white py-3.5 pl-11 pr-4 font-medium text-slate-900 shadow-sm transition-all outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-sky-500 dark:focus:ring-sky-500/20" placeholder="email@exemplo.com">
+            </div>
           </div>
-        <% } %>
+
+          <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <button type="button" id="contactBtnCancel" onclick="resetContactForm()" class="hidden w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto">Cancelar</button>
+            <button type="submit" id="contactBtnSubmit" class="inline-flex w-full items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 sm:w-auto">
+              <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              Salvar contato
+            </button>
+          </div>
+
+          <div class="rounded-[24px] border border-violet-200 bg-violet-50/70 px-4 py-3.5 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/20 sm:px-5">
+            <div class="flex items-start gap-3">
+              <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-violet-600 shadow-sm ring-1 ring-violet-100 dark:bg-slate-800 dark:text-violet-300 dark:ring-violet-900/50" aria-hidden="true">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1zm7 4h.01"></path></svg>
+              </span>
+              <div class="min-w-0 flex-1">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Pix da outra pessoa</div>
+                <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Você não precisa guardar o Pix de ninguém aqui. Quando a amizade estiver valendo e rolar pagamento, o app usa o Pix que a própria pessoa deixou no perfil.</p>
+              </div>
+            </div>
+          </div>
+        </form>
       </div>
+
+      <div class="h-full">
+        <section class="flex h-full flex-col justify-between rounded-[30px] border border-slate-200 bg-slate-50/80 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:p-6">
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Radar da rede</div>
+          <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Como está sua turma hoje</h3>
+          <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Um resumo rápido para ver quem já está com você e quem ainda está só na sua lista.</p>
+
+          <div class="mt-5 grid gap-3 sm:grid-cols-2">
+            <div class="rounded-[24px] border border-emerald-200 bg-white px-4 py-4 shadow-sm dark:border-emerald-900/50 dark:bg-slate-950/70">
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Amizades</div>
+              <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= activeFriendCount %></div>
+              <div class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">já podem dividir e cobrar por aqui</div>
+            </div>
+            <div class="rounded-[24px] border border-amber-200 bg-white px-4 py-4 shadow-sm dark:border-amber-900/50 dark:bg-slate-950/70">
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Convites</div>
+              <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= pendingContactCount %></div>
+              <div class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">esperando resposta</div>
+            </div>
+            <div class="rounded-[24px] border border-sky-200 bg-white px-4 py-4 shadow-sm dark:border-sky-900/50 dark:bg-slate-950/70">
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Já no app</div>
+              <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= discoverableCount %></div>
+              <div class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">prontos para virar amizade</div>
+            </div>
+            <div class="rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/70">
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Só contato</div>
+              <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= localOnlyCount %></div>
+              <div class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">só na sua lista</div>
+            </div>
+          </div>
+          <div class="mt-4 rounded-[24px] border border-violet-200/70 bg-violet-50/70 px-4 py-3.5 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20">
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Pix pronto na turma</div>
+            <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Você já tem <strong class="font-black text-slate-900 dark:text-white"><%= readyPixNetworkCount %></strong> amizade<%= readyPixNetworkCount === 1 ? "" : "s" %> com Pix pronto para quando pintar pagamento.</p>
+          </div>
+        </section>
+      </div>
+
+      <section class="xl:col-span-2 rounded-[30px] border border-violet-200 bg-violet-50/70 p-5 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/20 sm:p-6">
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Como essa rede funciona</div>
+          <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Três passos, sem enrolação</h3>
+          <div class="mt-5 grid gap-3 lg:grid-cols-3">
+            <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+              <div class="text-sm font-black text-slate-900 dark:text-white">1. Salve o contato</div>
+              <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Nome, telefone e e-mail já dão conta do recado para essa pessoa entrar na sua rede.</p>
+            </div>
+            <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+              <div class="text-sm font-black text-slate-900 dark:text-white">2. Virem amigos por aqui</div>
+              <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando os dois aceitam, vocês conseguem usar cobranças entre si.</p>
+            </div>
+            <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+              <div class="text-sm font-black text-slate-900 dark:text-white">3. Pix vem do perfil da pessoa</div>
+              <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Você não precisa guardar a chave dos outros. Quando chegar a hora, o app usa o Pix que a própria pessoa deixou no perfil.</p>
+            </div>
+          </div>
+        </section>
     </div>
-  </div>
+  </section>
 
-  <script>
-    function editPersonFromButton(button) {
-      editPerson(button.dataset.id, button.dataset.name || "", button.dataset.phone || "", button.dataset.email || "");
+  <section id="network-list" class="scroll-mt-28 mb-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
+    <div>
+      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Sua rede ativa</div>
+      <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Amigos e contatos</h2>
+      <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Use a busca, filtre do seu jeito e ache alguém rapidinho.</p>
+    </div>
+
+    <% if (contactList.length) { %>
+      <div class="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+        <label class="relative block">
+          <span class="sr-only">Buscar na rede</span>
+          <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          </span>
+          <input type="search" id="networkSearch" class="w-full rounded-2xl border border-slate-300 bg-slate-50 py-3.5 pl-11 pr-4 text-sm font-medium text-slate-900 shadow-sm transition outline-none focus:border-slate-500 focus:bg-white focus:ring-2 focus:ring-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-slate-400 dark:focus:bg-slate-950 dark:focus:ring-slate-500/20" placeholder="Buscar por nome, e-mail ou telefone">
+        </label>
+
+        <div class="flex flex-wrap gap-2">
+          <button type="button" data-network-filter="all" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Todos <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= contactList.length %></span></button>
+          <button type="button" data-network-filter="friend" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Amizades <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= activeFriendCount %></span></button>
+          <button type="button" data-network-filter="pending" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Convites <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= pendingContactCount %></span></button>
+          <button type="button" data-network-filter="discover" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Já no app <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= discoverableCount %></span></button>
+          <button type="button" data-network-filter="local" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Só na sua lista <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= localOnlyCount %></span></button>
+        </div>
+      </div>
+
+      <div class="mt-6 grid gap-4 lg:grid-cols-2">
+        <% contactList.forEach((p) => {
+             const isHighlighted = highlightedFriendRequestId && Number(p.incoming_friend_request_id || 0) === Number(highlightedFriendRequestId);
+             const personState = getNetworkState(p);
+             const pixState = getPixStateMeta(p);
+             const profileSignatureMeta = getSignatureVibeMeta(p.profile_signature_vibe);
+             const profileSignatureVisible = p.friendship_active && !!(p.profile_signature_text || p.profile_signature_vibe);
+             let personHintText = '';
+             if (!p.email) {
+               personHintText = 'Quer descobrir se essa pessoa também usa o app? Colocar um e-mail aqui já ajuda.';
+             } else if (!p.has_app_user) {
+               personHintText = 'Ainda não encontramos essa pessoa no AcerttaPay com esse e-mail. Se ela entrar depois, o Pix continua sendo cadastrado por ela.';
+             } else if (p.friendship_active && !p.active) {
+               personHintText = 'A amizade continua valendo, mas esse contato está desativado na sua lista. Se quiser usar de novo, é só reativar.';
+             } else if (p.friendship_active && p.linked_user_pix_ready) {
+               personHintText = 'Vocês já são amigos por aqui. Quando pintar pagamento, o app usa o Pix que essa pessoa deixou no perfil.';
+             } else if (p.friendship_active && p.linked_user_pix_enabled && !p.linked_user_pix_ready) {
+               personHintText = 'A amizade já está valendo, mas essa pessoa ainda está terminando o Pix no perfil.';
+             } else if (p.friendship_active) {
+               personHintText = 'A amizade já está valendo. Agora só falta essa pessoa deixar o Pix pronto no perfil.';
+             } else if (p.friendship_state === 'pending_sent') {
+               personHintText = 'O convite já foi enviado. Agora é esperar a resposta.';
+             } else if (p.friendship_state === 'pending_received') {
+               personHintText = 'Essa pessoa já te chamou. É só aceitar e pronto.';
+             } else if (!p.active) {
+               personHintText = 'Esse contato usa o app, mas está desativado na sua lista. Reative quando quiser.';
+             } else {
+               personHintText = 'O app já encontrou essa pessoa. Se fizer sentido, mande um pedido de amizade.';
+             }
+        %>
+          <article
+            data-person-card
+            data-filter-state="<%= personState.key %>"
+            data-search-text="<%= [p.name, p.phone_search_text, p.email, personState.label, personHintText, p.profile_signature_text, profileSignatureMeta?.label].filter(Boolean).join(' ') %>"
+            class="group relative overflow-hidden rounded-[30px] border bg-white shadow-sm transition-all dark:bg-slate-800 <%= isHighlighted ? 'border-emerald-400 ring-2 ring-emerald-200 dark:border-emerald-500 dark:ring-emerald-900/70' : 'border-slate-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md dark:border-slate-700 dark:hover:border-slate-600' %>">
+            <div class="h-1.5 bg-gradient-to-r <%= personState.barClasses %>"></div>
+            <div class="flex flex-col gap-5 p-5 sm:p-6">
+              <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                <div class="flex min-w-0 flex-1 gap-4 xl:pr-4">
+                  <div class="relative h-14 w-14 shrink-0">
+                    <% if (getAvatarUrl(p)) { %>
+                      <img src="<%= getAvatarUrl(p) %>" alt="<%= p.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-14 w-14 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700">
+                    <% } else { %>
+                      <div class="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-lg font-black text-slate-600 transition-colors group-hover:bg-sky-50 group-hover:text-sky-600 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:bg-sky-900/40"><%= getAvatarInitials(p) %></div>
+                    <% } %>
+                    <% if (p.friendship_active) { %>
+                      <span class="absolute -bottom-1 -right-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-emerald-200 bg-emerald-500 text-[13px] text-white shadow-sm dark:border-emerald-700" title="Amizade ativa">🔗</span>
+                    <% } %>
+                  </div>
+
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h3 class="truncate text-xl font-black text-slate-900 dark:text-white"><%= p.name %></h3>
+                      <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= personState.badgeClasses %>"><%= personState.label %></span>
+                      <button type="button"
+                        data-id="<%= p.id %>"
+                        data-name="<%= p.name %>"
+                        data-phone="<%= p.phone_ui_national || '' %>"
+                        data-phone-country="<%= p.phone_ui_country || phoneDefaultCountryCode %>"
+                        data-email="<%= p.email || '' %>"
+                        onclick="editContactFromButton(this)"
+                        class="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-800 dark:hover:bg-sky-900/20 dark:hover:text-sky-200"
+                        aria-label="Editar contato"
+                        title="Editar contato">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                      </button>
+                    </div>
+                    <div class="mt-3 space-y-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+                      <div class="flex items-start gap-2.5">
+                        <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50/80 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
+                          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a2 2 0 011.897 1.368l1.516 4.547a2 2 0 01-.45 2.11l-2.07 2.07a16 16 0 006.364 6.364l2.07-2.07a2 2 0 012.11-.45l4.547 1.516A2 2 0 0121 15.72V19a2 2 0 01-2 2h-1C9.163 21 3 14.837 3 7V5z"></path></svg>
+                        </span>
+                        <span class="min-w-0 flex-1 leading-6"><%= p.phone_display ? p.phone_display : 'Telefone não informado ainda.' %></span>
+                      </div>
+                      <div class="flex items-start gap-2.5">
+                        <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50/80 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
+                          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-16 8h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+                        </span>
+                        <span class="min-w-0 flex-1 break-all leading-6"><%= p.email ? p.email : 'E-mail não informado ainda.' %></span>
+                      </div>
+                    </div>
+                    <p class="mt-3 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= personState.summary %></p>
+                    <div class="mt-4 flex flex-wrap gap-2">
+                      <%- renderPersonStatusChips(p) %>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex w-full flex-col gap-2 xl:w-[15rem] xl:shrink-0">
+                  <% if (p.friendship_state === 'active') { %>
+                    <form method="post" action="/people/<%= p.id %>/unfriend" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novas cobranças entre vocês param na hora.">
+                      <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Desfazer amizade</button>
+                    </form>
+                  <% } else if (p.friendship_state === 'pending_sent') { %>
+                    <form method="post" action="/friend-requests/<%= p.outgoing_friend_request_id %>/cancel">
+                      <button class="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-700 transition-all hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">Cancelar pedido</button>
+                    </form>
+                  <% } else if (p.friendship_state === 'pending_received') { %>
+                    <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
+                      <input type="hidden" name="action" value="accept">
+                      <button class="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">Aceitar amizade</button>
+                    </form>
+                    <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
+                      <input type="hidden" name="action" value="reject">
+                      <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Recusar</button>
+                    </form>
+                  <% } else if (p.has_app_user && p.active) { %>
+                    <form method="post" action="/people/<%= p.id %>/send-friend-request">
+                      <button class="w-full rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Enviar pedido de amizade</button>
+                    </form>
+                  <% } else { %>
+                    <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">Convite indisponível</div>
+                  <% } %>
+
+                  <div class="grid gap-2 pt-1">
+                    <form method="post" action="/people/<%= p.id %>/toggle">
+                      <button class="w-full rounded-xl border bg-white px-3 py-2.5 text-xs font-bold shadow-sm transition-colors dark:bg-slate-900 <%= p.active ? 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20' : 'border-green-200 text-green-700 hover:bg-green-50 dark:border-green-900 dark:text-green-400 dark:hover:bg-green-900/20' %>"><%= p.active ? 'Desativar' : 'Reativar' %></button>
+                    </form>
+                    <form method="post" action="/people/<%= p.id %>/delete" data-confirm-prompt="Excluir <%= p.name %> da sua lista ativa? O passado continua salvo, mas a exclusão trava se ainda houver valor em aberto, Pix do mês em andamento ou cobrança guardada para enviar depois." data-confirm-phrase="Eu confirmo">
+                      <button class="w-full rounded-xl border border-red-200 bg-white px-3 py-2.5 text-xs font-bold text-red-700 shadow-sm transition-colors hover:bg-red-50 dark:border-red-900 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-900/20">Excluir da lista</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+
+              <div class="rounded-[24px] border border-violet-200/70 bg-violet-50/80 px-4 py-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20">
+                <div class="flex flex-wrap items-center gap-2">
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600/80 dark:text-violet-300/80">Pix nas cobranças</div>
+                  <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= pixState.badgeClasses %>"><%= pixState.label %></span>
+                </div>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= pixState.summary %></p>
+              </div>
+
+              <div class="rounded-[24px] border border-sky-100/70 bg-slate-50/90 px-4 py-4 shadow-sm shadow-sky-100/10 dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+                <div class="flex items-start gap-3">
+                  <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-sky-600 shadow-sm ring-1 ring-sky-100 dark:bg-slate-800 dark:text-sky-300 dark:ring-slate-700" aria-hidden="true">
+                    <% if (profileSignatureVisible) { %>
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h6m5 8H6a2 2 0 01-2-2V6a2 2 0 012-2h7.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V18a2 2 0 01-2 2z"></path></svg>
+                    <% } else { %>
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <% } %>
+                  </span>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/70 dark:text-sky-300/80"><%= profileSignatureVisible ? 'Assinatura da pessoa' : 'Recadinho do app' %></div>
+                      <% if (profileSignatureVisible && profileSignatureMeta) { %>
+                        <span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-3 py-1 text-[11px] font-bold text-sky-700 dark:border-sky-800 dark:bg-slate-900 dark:text-sky-200"><%= profileSignatureMeta.label %></span>
+                      <% } %>
+                    </div>
+                    <% if (profileSignatureVisible) { %>
+                      <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= p.profile_signature_text || 'Essa pessoa preferiu mostrar só o status por aqui.' %></p>
+                    <% } else { %>
+                      <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= personHintText %></p>
+                    <% } %>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+        <% }) %>
+
+        <div id="networkFilteredEmpty" class="hidden rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 px-6 py-10 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400 lg:col-span-2">Nada apareceu com esse filtro agora. Limpa a busca ou troque o filtro para ver mais gente.</div>
+      </div>
+    <% } else { %>
+      <div class="mt-6 rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 px-6 py-12 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">Sua rede ainda está vazia por aqui. Quando quiser, comece adicionando quem participa das suas divisões e cobranças.</div>
+    <% } %>
+  </section>
+</div>
+
+<script>
+  const PIX_CITY_SUGGESTIONS_BY_STATE = <%- JSON.stringify(pixCitySuggestionsByState || {}) %>;
+  const PIX_ALL_CITY_SUGGESTIONS = <%- JSON.stringify(pixAllCitySuggestions || []) %>;
+  const PIX_DEFAULT_STATE = <%- JSON.stringify(pixStateDefault) %>;
+  const PIX_DEFAULT_CITY = <%- JSON.stringify(pixCityDefault) %>;
+  const PHONE_COUNTRY_OPTIONS = <%- JSON.stringify(phoneCountryOptionsList || []) %>;
+  const PHONE_DEFAULT_COUNTRY = <%- JSON.stringify(phoneDefaultCountryCode) %>;
+  const PHONE_PLACEHOLDERS = {
+    BR: '(21) 99999-9999',
+    PT: '912 345 678',
+    US: '(201) 555-0123',
+    AR: '11 2345-6789',
+    MX: '55 1234 5678',
+    default: 'Número local ou completo com +'
+  };
+
+  function normalizeText(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  }
+
+  function getField(prefix, suffix) {
+    return document.getElementById(`${prefix}${suffix}`);
+  }
+
+  function suggestionText(entry) {
+    if (entry && typeof entry === 'object') {
+      return String(entry.name || entry.label || entry.value || entry.code || '').trim();
+    }
+    return String(entry || '').trim();
+  }
+
+  function findPixStateByCity(city) {
+    const safeCity = normalizeText(city);
+    if (!safeCity) return '';
+    return Object.entries(PIX_CITY_SUGGESTIONS_BY_STATE).find(([, cities]) =>
+      (cities || []).some((entry) => normalizeText(suggestionText(entry)) === safeCity)
+    )?.[0] || '';
+  }
+
+  function fillPixCitySuggestions(prefix, stateCode) {
+    const datalist = document.getElementById(`${prefix}PixCitySuggestions`);
+    if (!datalist) return;
+    const entries = (stateCode && PIX_CITY_SUGGESTIONS_BY_STATE[stateCode])
+      ? PIX_CITY_SUGGESTIONS_BY_STATE[stateCode]
+      : PIX_ALL_CITY_SUGGESTIONS;
+    datalist.innerHTML = (entries || []).map((city) => {
+      const safeCity = suggestionText(city);
+      if (!safeCity) return '';
+      const option = document.createElement('option');
+      option.value = safeCity;
+      return option.outerHTML;
+    }).join('');
+  }
+
+  function updatePixKeyUi(prefix) {
+    const typeInput = getField(prefix, 'PixKeyType');
+    const keyInput = getField(prefix, 'PixKeyValue');
+    const help = getField(prefix, 'PixKeyHelp');
+    if (!typeInput || !keyInput || !help) return;
+
+    const type = String(typeInput.value || '').trim();
+    keyInput.removeAttribute('maxlength');
+    keyInput.inputMode = 'text';
+    keyInput.autocapitalize = 'off';
+
+    if (type === 'phone') {
+      keyInput.placeholder = 'Ex.: 21999999999';
+      keyInput.inputMode = 'numeric';
+      keyInput.maxLength = 15;
+      help.textContent = 'Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.';
+      return;
     }
 
-    function editPerson(id, name, phone, email) {
-      document.getElementById('personId').value = id;
-      document.getElementById('inputName').value = name;
-      document.getElementById('inputPhone').value = phone;
-      document.getElementById('inputEmail').value = email;
-      document.getElementById('btnSubmit').innerHTML = 'Salvar mudanças';
-      document.getElementById('btnSubmit').classList.replace('bg-slate-900', 'bg-blue-600');
-      document.getElementById('btnCancel').classList.remove('hidden');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (type === 'cpf') {
+      keyInput.placeholder = 'Ex.: 12345678900';
+      keyInput.inputMode = 'numeric';
+      keyInput.maxLength = 14;
+      help.textContent = 'Pode colar com pontuação ou só os números. A gente limpa por trás.';
+      return;
     }
 
-    function resetForm() {
-      document.getElementById('personId').value = '';
-      document.getElementById('inputName').value = '';
-      document.getElementById('inputPhone').value = '';
-      document.getElementById('inputEmail').value = '';
-      document.getElementById('btnSubmit').innerHTML = `<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>Salvar pessoa`;
-      document.getElementById('btnSubmit').classList.remove('bg-blue-600');
-      document.getElementById('btnSubmit').classList.add('bg-slate-900');
-      document.getElementById('btnCancel').classList.add('hidden');
+    if (type === 'cnpj') {
+      keyInput.placeholder = 'Ex.: 12345678000190';
+      keyInput.inputMode = 'numeric';
+      keyInput.maxLength = 18;
+      help.textContent = 'Pode colar com pontuação ou só os números. A gente limpa por trás.';
+      return;
     }
 
-    window.addEventListener('load', () => {
-      const highlighted = document.querySelector('[id^="friend-request-"][class*="ring-2"]');
-      if (highlighted) {
-        highlighted.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (type === 'email') {
+      keyInput.placeholder = 'Ex.: joao@email.com';
+      help.textContent = 'Aqui vale o e-mail completinho, do jeitinho que está cadastrado no banco.';
+      return;
+    }
+
+    if (type === 'evp') {
+      keyInput.placeholder = 'Ex.: 123e4567-e89b-12d3-a456-426614174000';
+      help.textContent = 'Se for chave aleatória, cole ela inteira e pronto.';
+      return;
+    }
+
+    keyInput.placeholder = 'Ex.: 21999999999';
+    help.textContent = 'Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.';
+  }
+
+  function updatePixCityUi(prefix, forceCity = false) {
+    const stateInput = getField(prefix, 'PixState');
+    const cityInput = getField(prefix, 'PixCity');
+    if (!stateInput || !cityInput) return;
+
+    const stateCode = String(stateInput.value || '').trim();
+    fillPixCitySuggestions(prefix, stateCode);
+
+    const suggestions = (PIX_CITY_SUGGESTIONS_BY_STATE[stateCode] || []).map(suggestionText).filter(Boolean);
+    const currentCity = String(cityInput.value || '').trim();
+    if (!currentCity) {
+      if (forceCity) {
+        cityInput.value = suggestions[0] || PIX_DEFAULT_CITY;
+      }
+      return;
+    }
+
+    if (forceCity && suggestions.length && !suggestions.includes(currentCity)) {
+      cityInput.value = suggestions[0] || PIX_DEFAULT_CITY;
+    }
+  }
+
+  function getPhoneUi(prefix) {
+    return {
+      country: getField(prefix, 'PhoneCountry'),
+      phone: getField(prefix, 'Phone'),
+      hint: getField(prefix, 'PhoneHint')
+    };
+  }
+
+  function getSelectedPhoneCountryOption(countryCode) {
+    return PHONE_COUNTRY_OPTIONS.find((option) => String(option?.code || '') === String(countryCode || '')) || null;
+  }
+
+  function formatBrazilPhoneInput(value) {
+    const digits = String(value || '').replace(/\D/g, '').slice(0, 11);
+    if (!digits) return '';
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+
+  function sanitizePhoneInputValue(countryCode, value) {
+    const raw = String(value || '');
+    if (!raw.trim()) return '';
+    if (raw.trim().startsWith('+')) {
+      return raw.replace(/[^\d+\s()-]/g, '').replace(/\s{2,}/g, ' ').trimStart();
+    }
+    if (String(countryCode || '').toUpperCase() === 'BR') {
+      return formatBrazilPhoneInput(raw);
+    }
+    return raw.replace(/[^\d\s()-]/g, '').replace(/\s{2,}/g, ' ').trimStart();
+  }
+
+  function updatePhoneUi(prefix) {
+    const { country, phone, hint } = getPhoneUi(prefix);
+    if (!country || !phone) return;
+
+    const countryCode = String(country.value || PHONE_DEFAULT_COUNTRY).trim().toUpperCase() || PHONE_DEFAULT_COUNTRY;
+    const option = getSelectedPhoneCountryOption(countryCode);
+    const countryLabel = option ? `${option.flag} +${option.callingCode}` : '🌍';
+
+    phone.placeholder = PHONE_PLACEHOLDERS[countryCode] || PHONE_PLACEHOLDERS.default;
+    phone.inputMode = 'tel';
+    phone.autocomplete = 'tel-national';
+    phone.value = sanitizePhoneInputValue(countryCode, phone.value);
+
+    if (hint) {
+      hint.textContent = countryCode === 'BR'
+        ? `DDI ${countryLabel} já fica com você. Aqui entra DDD + celular, com ou sem máscara.`
+        : `O DDI ${countryLabel} vai pelo seletor. Aqui você pode digitar só o número local ou colar o telefone completo com +.`;
+    }
+  }
+
+  function bindPhoneField(prefix) {
+    const { country, phone } = getPhoneUi(prefix);
+    if (!country || !phone || country.dataset.phoneBound === 'true') return;
+
+    country.dataset.phoneBound = 'true';
+    phone.addEventListener('input', () => updatePhoneUi(prefix));
+    country.addEventListener('change', () => updatePhoneUi(prefix));
+    updatePhoneUi(prefix);
+  }
+
+  const SELF_IDENTITY_DEFAULT = {
+    name: <%- JSON.stringify(selfName || '') %>,
+    phoneCountry: <%- JSON.stringify(selfPhoneCountry || phoneDefaultCountryCode) %>,
+    phone: <%- JSON.stringify(selfPhone || '') %>,
+    email: <%- JSON.stringify(selfEmail || '') %>
+  };
+
+  function populateSelfIdentityForm(values = SELF_IDENTITY_DEFAULT) {
+    const name = getField('self', 'Name');
+    const phoneCountry = getField('self', 'PhoneCountry');
+    const phone = getField('self', 'Phone');
+    const email = getField('self', 'Email');
+
+    if (name) name.value = values.name || '';
+    if (phoneCountry) phoneCountry.value = values.phoneCountry || PHONE_DEFAULT_COUNTRY;
+    if (phone) phone.value = values.phone || '';
+    if (email) email.value = values.email || '';
+    updatePhoneUi('self');
+  }
+
+  function setSelfIdentityEditMode(isEditing, { resetValues = false, focusName = false } = {}) {
+    const shell = document.getElementById('selfIdentityShell');
+    const panel = document.getElementById('selfIdentityForm');
+    const trigger = document.getElementById('selfIdentityEditButton');
+    const badge = document.getElementById('selfIdentityEditingBadge');
+    if (!panel || !trigger) return;
+
+    if (resetValues) {
+      populateSelfIdentityForm();
+    }
+
+    panel.classList.toggle('hidden', !isEditing);
+    badge?.classList.toggle('hidden', !isEditing);
+    shell?.classList.toggle('ring-2', isEditing);
+    shell?.classList.toggle('ring-amber-200', isEditing);
+    shell?.classList.toggle('dark:ring-amber-900/60', isEditing);
+
+    trigger.innerHTML = isEditing
+      ? `<svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>Fechar edição`
+      : `<svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>Editar`;
+      trigger.setAttribute('aria-expanded', isEditing ? 'true' : 'false');
+
+    if (isEditing && focusName) {
+      requestAnimationFrame(() => {
+        const name = getField('self', 'Name');
+        name?.focus();
+        name?.select?.();
+      });
+    }
+  }
+
+  function toggleSelfIdentityEdit() {
+    const panel = document.getElementById('selfIdentityForm');
+    const isEditing = !!panel && !panel.classList.contains('hidden');
+    if (isEditing) {
+      setSelfIdentityEditMode(false, { resetValues: true });
+      return;
+    }
+    populateSelfIdentityForm();
+    setSelfIdentityEditMode(true, { focusName: true });
+  }
+
+  function resetSelfIdentityForm() {
+    setSelfIdentityEditMode(false, { resetValues: true });
+  }
+
+function editContactFromButton(button) {
+  const personId = getField('contact', 'PersonId');
+  const name = getField('contact', 'Name');
+  const phoneCountry = getField('contact', 'PhoneCountry');
+  const phone = getField('contact', 'Phone');
+  const email = getField('contact', 'Email');
+  const submit = document.getElementById('contactBtnSubmit');
+  const cancel = document.getElementById('contactBtnCancel');
+  const eyebrow = document.getElementById('contactFormEyebrow');
+  const title = document.getElementById('contactFormTitle');
+  const hint = document.getElementById('contactFormHint');
+  const badge = document.getElementById('contactEditingBadge');
+  const composer = document.getElementById('contactComposerCard');
+
+  if (personId) personId.value = button.dataset.id || '';
+  if (name) name.value = button.dataset.name || '';
+  if (phoneCountry) phoneCountry.value = button.dataset.phoneCountry || PHONE_DEFAULT_COUNTRY;
+  if (phone) phone.value = button.dataset.phone || '';
+  if (email) email.value = button.dataset.email || '';
+  updatePhoneUi('contact');
+
+  if (submit) {
+    submit.innerHTML = `<svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>Salvar mudanças`;
+    submit.classList.remove('bg-sky-600', 'hover:bg-sky-700');
+    submit.classList.add('bg-blue-600', 'hover:bg-blue-700');
+  }
+
+  if (cancel) cancel.classList.remove('hidden');
+  if (eyebrow) eyebrow.textContent = 'Editando contato';
+  if (title) title.textContent = `Ajustando ${button.dataset.name || 'esse contato'}`;
+  if (hint) hint.textContent = 'Mude só o que precisar e salve. O resto continua como está.';
+  if (badge) badge.classList.remove('hidden');
+  if (composer) {
+    composer.classList.add('ring-2', 'ring-sky-200', 'dark:ring-sky-900/60');
+  }
+
+  const target = document.getElementById('contactForm');
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function resetContactForm() {
+  const personId = getField('contact', 'PersonId');
+  const name = getField('contact', 'Name');
+  const phoneCountry = getField('contact', 'PhoneCountry');
+  const phone = getField('contact', 'Phone');
+  const email = getField('contact', 'Email');
+  const submit = document.getElementById('contactBtnSubmit');
+  const cancel = document.getElementById('contactBtnCancel');
+  const eyebrow = document.getElementById('contactFormEyebrow');
+  const title = document.getElementById('contactFormTitle');
+  const hint = document.getElementById('contactFormHint');
+  const badge = document.getElementById('contactEditingBadge');
+  const composer = document.getElementById('contactComposerCard');
+
+  if (personId) personId.value = '';
+  if (name) name.value = '';
+  if (phoneCountry) phoneCountry.value = PHONE_DEFAULT_COUNTRY;
+  if (phone) phone.value = '';
+  if (email) email.value = '';
+  updatePhoneUi('contact');
+
+  if (submit) {
+    submit.innerHTML = `<svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>Salvar contato`;
+    submit.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+    submit.classList.add('bg-sky-600', 'hover:bg-sky-700');
+  }
+
+  if (cancel) cancel.classList.add('hidden');
+  if (eyebrow) eyebrow.textContent = 'Adicionar à sua rede';
+  if (title) title.textContent = 'Quem vai entrar nessa roda?';
+  if (hint) hint.textContent = 'Salve nome, telefone e e-mail. Se essa pessoa também usa o app, você pode mandar o convite depois. O Pix fica por conta dela.';
+  if (badge) badge.classList.add('hidden');
+  if (composer) {
+    composer.classList.remove('ring-2', 'ring-sky-200', 'dark:ring-sky-900/60');
+  }
+}
+
+function bindSelfPixToggle() {
+  const toggle = document.getElementById('selfPixEnabled');
+  const groups = Array.from(document.querySelectorAll('[data-self-pix-field]'));
+  const dormantHint = document.getElementById('selfPixDormantHint');
+  if (!toggle) return;
+
+  const sync = () => {
+    const enabled = !!toggle.checked;
+    groups.forEach((group) => {
+      group.style.opacity = enabled ? '' : '0.6';
+      group.style.pointerEvents = enabled ? '' : 'none';
+      Array.from(group.querySelectorAll('input, select, textarea')).forEach((field) => {
+        field.disabled = !enabled;
+      });
+    });
+
+    if (dormantHint) {
+      dormantHint.classList.toggle('hidden', enabled);
+    }
+  };
+
+  toggle.addEventListener('change', sync);
+  sync();
+}
+
+function updateNetworkFilterButtonState(button, isActive) {
+  if (!button) return;
+  button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  button.classList.toggle('border-slate-900', isActive);
+  button.classList.toggle('bg-slate-900', isActive);
+  button.classList.toggle('text-white', isActive);
+  button.classList.toggle('shadow-lg', isActive);
+  button.classList.toggle('dark:border-slate-100', isActive);
+  button.classList.toggle('dark:bg-slate-100', isActive);
+  button.classList.toggle('dark:text-slate-950', isActive);
+
+  button.classList.toggle('border-slate-200', !isActive);
+  button.classList.toggle('bg-white', !isActive);
+  button.classList.toggle('text-slate-600', !isActive);
+  button.classList.toggle('dark:border-slate-700', !isActive);
+  button.classList.toggle('dark:bg-slate-900', !isActive);
+  button.classList.toggle('dark:text-slate-300', !isActive);
+}
+
+function bindNetworkDiscoveryControls() {
+  const cards = Array.from(document.querySelectorAll('[data-person-card]'));
+  const searchInput = document.getElementById('networkSearch');
+  const filterButtons = Array.from(document.querySelectorAll('[data-network-filter]'));
+  const counter = document.getElementById('networkVisibleCounter');
+  const emptyState = document.getElementById('networkFilteredEmpty');
+  if (!cards.length) return;
+
+  let activeFilter = 'all';
+
+  const render = () => {
+    const searchTerm = normalizeText(searchInput?.value || '');
+    let visibleCount = 0;
+
+    cards.forEach((card) => {
+      const filterState = String(card.dataset.filterState || 'all');
+      const searchableText = normalizeText(card.dataset.searchText || '');
+      const matchesFilter = activeFilter === 'all' || filterState === activeFilter;
+      const matchesSearch = !searchTerm || searchableText.includes(searchTerm);
+      const isVisible = matchesFilter && matchesSearch;
+      card.classList.toggle('hidden', !isVisible);
+      if (isVisible) visibleCount += 1;
+    });
+
+    filterButtons.forEach((button) => {
+      updateNetworkFilterButtonState(button, String(button.dataset.networkFilter || '') === activeFilter);
+    });
+
+    if (counter) {
+      counter.textContent = visibleCount === 1 ? '1 pessoa aparecendo' : `${visibleCount} pessoas aparecendo`;
+    }
+
+    if (emptyState) {
+      emptyState.classList.toggle('hidden', visibleCount !== 0);
+    }
+  };
+
+  filterButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      activeFilter = String(button.dataset.networkFilter || 'all');
+      render();
+    });
+  });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', render);
+  }
+
+  render();
+}
+
+function bindProfileSignatureForm() {
+  const textInput = document.getElementById('profileSignatureText');
+  const vibeInput = document.getElementById('profileSignatureVibe');
+  const counter = document.getElementById('profileSignatureCount');
+  const previewText = document.getElementById('profileSignaturePreviewText');
+  const previewVibe = document.getElementById('profileSignaturePreviewVibe');
+  const vibeButtons = Array.from(document.querySelectorAll('[data-signature-vibe-option]'));
+  if (!textInput || !vibeInput || !previewText || !previewVibe || !vibeButtons.length) return;
+
+  const selectedClasses = ['border-sky-600', 'bg-sky-600', 'text-white', 'shadow-lg', 'shadow-sky-500/15', 'dark:border-sky-400', 'dark:bg-sky-400', 'dark:text-slate-950'];
+  const idleClasses = ['border-slate-200', 'bg-white', 'text-slate-600', 'dark:border-slate-700', 'dark:bg-slate-900', 'dark:text-slate-300'];
+
+  const sanitizeTextLive = (value) => String(value || '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/[ 	]{2,}/g, ' ')
+    .replace(/^\s+/g, '');
+  const sanitizeTextSubmit = (value) => sanitizeTextLive(value).trim();
+
+  const render = () => {
+    textInput.value = sanitizeTextLive(textInput.value).slice(0, Number(textInput.maxLength || 60));
+    if (counter) {
+      counter.textContent = `${textInput.value.length}/${textInput.maxLength || 60}`;
+    }
+
+    const activeVibeCode = String(vibeInput.value || '').trim();
+    const activeButton = vibeButtons.find((button) => String(button.dataset.vibeCode || '') === activeVibeCode) || null;
+
+    vibeButtons.forEach((button) => {
+      const isActive = button === activeButton;
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      button.classList.toggle('hover:border-sky-200', !isActive);
+      button.classList.toggle('hover:bg-sky-50', !isActive);
+      button.classList.toggle('hover:text-sky-700', !isActive);
+      button.classList.toggle('dark:hover:border-sky-800', !isActive);
+      button.classList.toggle('dark:hover:bg-sky-900/20', !isActive);
+      button.classList.toggle('dark:hover:text-sky-200', !isActive);
+      selectedClasses.forEach((className) => button.classList.toggle(className, isActive));
+      idleClasses.forEach((className) => button.classList.toggle(className, !isActive));
+    });
+
+    if (activeButton) {
+      previewVibe.textContent = activeButton.textContent.trim();
+      previewVibe.classList.remove('hidden');
+    } else {
+      previewVibe.textContent = '';
+      previewVibe.classList.add('hidden');
+    }
+
+    previewText.textContent = textInput.value || 'Quando você escrever um recado aqui, ele aparece para seus amigos na sua rede.';
+  };
+
+  vibeButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const nextCode = String(button.dataset.vibeCode || '').trim();
+      vibeInput.value = vibeInput.value === nextCode ? '' : nextCode;
+      render();
+    });
+  });
+
+
+  textInput.addEventListener('input', render);
+  const form = document.getElementById('profileSignatureForm');
+  if (form) {
+    form.addEventListener('submit', () => {
+      textInput.value = sanitizeTextSubmit(textInput.value).slice(0, Number(textInput.maxLength || 60));
+    });
+  }
+
+  render();
+}
+
+function bindPixForm(prefix, options = {}) {
+    const stateInput = getField(prefix, 'PixState');
+    const keyTypeInput = getField(prefix, 'PixKeyType');
+    const cityInput = getField(prefix, 'PixCity');
+
+    if (stateInput) {
+      stateInput.addEventListener('change', () => updatePixCityUi(prefix, true));
+    }
+
+    if (keyTypeInput) {
+      keyTypeInput.addEventListener('change', () => updatePixKeyUi(prefix));
+    }
+
+    if (cityInput) {
+      cityInput.addEventListener('blur', () => {
+        const guessedState = findPixStateByCity(cityInput.value);
+        if (guessedState && stateInput && !stateInput.value) {
+          stateInput.value = guessedState;
+          updatePixCityUi(prefix, false);
+        }
+      });
+    }
+
+    updatePixKeyUi(prefix);
+    updatePixCityUi(prefix, !!options.forceCity);
+  }
+
+  async function readFileAsDataUrl(sourceFile) {
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Não consegui ler essa imagem.'));
+      reader.readAsDataURL(sourceFile);
+    });
+  }
+
+  function loadImageElement(src) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('A imagem não abriu direitinho.'));
+      image.src = src;
+    });
+  }
+
+  function clampPhotoCropOffset(state) {
+    if (!state || !state.image) return;
+    const stageSize = Math.max(1, state.stageSize || 1);
+    const displayedWidth = (state.image.naturalWidth || state.image.width || 1) * state.scale;
+    const displayedHeight = (state.image.naturalHeight || state.image.height || 1) * state.scale;
+    const maxOffsetX = Math.max(0, (displayedWidth - stageSize) / 2);
+    const maxOffsetY = Math.max(0, (displayedHeight - stageSize) / 2);
+    state.offsetX = Math.max(-maxOffsetX, Math.min(maxOffsetX, state.offsetX || 0));
+    state.offsetY = Math.max(-maxOffsetY, Math.min(maxOffsetY, state.offsetY || 0));
+  }
+
+  function applyPhotoCropTransforms(state) {
+    if (!state || !state.stage || !state.imageElement || !state.previewElement || !state.image) return;
+    const stageSize = Math.max(1, state.stage.clientWidth || state.stageSize || 1);
+    state.stageSize = stageSize;
+    clampPhotoCropOffset(state);
+    const stageTransform = `translate(-50%, -50%) translate(${state.offsetX}px, ${state.offsetY}px) scale(${state.scale})`;
+    state.imageElement.style.transform = stageTransform;
+    const previewBox = Math.max(1, state.previewElement.parentElement?.clientWidth || 112);
+    const previewRatio = previewBox / stageSize;
+    const previewTransform = `translate(-50%, -50%) translate(${state.offsetX * previewRatio}px, ${state.offsetY * previewRatio}px) scale(${state.scale * previewRatio})`;
+    state.previewElement.style.transform = previewTransform;
+  }
+
+  async function createPreparedPhotoFromCrop(state) {
+    const stageSize = Math.max(1, state.stageSize || state.stage.clientWidth || 1);
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    const factor = 512 / stageSize;
+    ctx.scale(factor, factor);
+    const naturalWidth = state.image.naturalWidth || state.image.width || 1;
+    const naturalHeight = state.image.naturalHeight || state.image.height || 1;
+    const displayedWidth = naturalWidth * state.scale;
+    const displayedHeight = naturalHeight * state.scale;
+    const x = (stageSize / 2) + state.offsetX - (displayedWidth / 2);
+    const y = (stageSize / 2) + state.offsetY - (displayedHeight / 2);
+    ctx.drawImage(state.image, x, y, displayedWidth, displayedHeight);
+
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Não consegui preparar a foto.')), 'image/jpeg', 0.9);
+    });
+
+    return {
+      file: new File([blob], ((state.originalFile?.name || 'perfil').replace(/\.[^.]+$/, '') || 'perfil') + '.jpg', { type: 'image/jpeg' }),
+      previewUrl: canvas.toDataURL('image/jpeg', 0.9)
+    };
+  }
+
+  function bindProfilePhotoForm() {
+    const form = document.getElementById('profilePhotoForm');
+    const input = document.getElementById('profilePhotoInput');
+    const submit = document.getElementById('profilePhotoSubmit');
+    const previewWrap = document.getElementById('profilePhotoPreviewWrap');
+    const preview = document.getElementById('profilePhotoPreview');
+    const hint = document.getElementById('profilePhotoHint');
+    const modal = document.getElementById('profilePhotoCropModal');
+    const stage = document.getElementById('profilePhotoCropStage');
+    const stageImage = document.getElementById('profilePhotoCropImage');
+    const previewCircle = document.getElementById('profilePhotoCropPreview');
+    const zoom = document.getElementById('profilePhotoCropZoom');
+    const applyButton = document.getElementById('profilePhotoCropApply');
+    const modalCloseButtons = Array.from(document.querySelectorAll('[data-profile-photo-modal-close]'));
+    if (!form || !input || !submit || !previewWrap || !preview || !hint || !modal || !stage || !stageImage || !previewCircle || !zoom || !applyButton) return;
+
+    let cropState = null;
+    let activeObjectUrl = '';
+    let previewObjectUrl = '';
+
+    if (modal.parentElement !== document.body) {
+      document.body.appendChild(modal);
+    }
+
+    const releaseObjectUrls = () => {
+      if (activeObjectUrl) {
+        URL.revokeObjectURL(activeObjectUrl);
+        activeObjectUrl = '';
+      }
+      if (previewObjectUrl) {
+        URL.revokeObjectURL(previewObjectUrl);
+        previewObjectUrl = '';
+      }
+    };
+
+    const closeModal = () => {
+      if (!cropState) return;
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('overflow-hidden');
+      if (cropState.stagePointerId !== undefined && cropState.stagePointerId !== null && stage.hasPointerCapture?.(cropState.stagePointerId)) {
+        try { stage.releasePointerCapture(cropState.stagePointerId); } catch (_error) {}
+      }
+      cropState = null;
+      releaseObjectUrls();
+      stageImage.removeAttribute('src');
+      previewCircle.removeAttribute('src');
+      zoom.value = '1';
+    };
+
+    const openModalForFile = async (file) => {
+      if (!file) return;
+      releaseObjectUrls();
+      activeObjectUrl = URL.createObjectURL(file);
+      const image = await loadImageElement(activeObjectUrl);
+      stageImage.src = activeObjectUrl;
+      previewCircle.src = activeObjectUrl;
+      const stageSize = Math.max(1, stage.clientWidth || 320);
+      const naturalWidth = image.naturalWidth || image.width || 1;
+      const naturalHeight = image.naturalHeight || image.height || 1;
+      const baseScale = Math.max(stageSize / naturalWidth, stageSize / naturalHeight);
+      cropState = {
+        originalFile: file,
+        image,
+        stage,
+        imageElement: stageImage,
+        previewElement: previewCircle,
+        stageSize,
+        baseScale,
+        scale: baseScale,
+        offsetX: 0,
+        offsetY: 0,
+        dragStartX: 0,
+        dragStartY: 0,
+        dragOriginX: 0,
+        dragOriginY: 0,
+        stagePointerId: null
+      };
+      zoom.value = '1';
+      applyPhotoCropTransforms(cropState);
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('overflow-hidden');
+    };
+
+    const showPreview = (previewUrl, message) => {
+      preview.src = previewUrl;
+      previewWrap.classList.remove('hidden');
+      previewWrap.classList.add('flex');
+      hint.textContent = message || 'Escolheu? Agora é só salvar.';
+    };
+
+    input.addEventListener('change', async () => {
+      const selected = input.files && input.files[0];
+      if (!selected) return;
+      submit.disabled = true;
+      submit.textContent = 'Preparando foto...';
+      hint.textContent = 'Abrindo o ajuste da sua fotinha...';
+      try {
+        await openModalForFile(selected);
+        submit.textContent = 'Salvar foto';
+      } catch (_error) {
+        releaseObjectUrls();
+        previewWrap.classList.add('hidden');
+        previewWrap.classList.remove('flex');
+        hint.textContent = 'Essa foto tropeçou aqui. Tenta outra imagem rapidinho.';
+        input.value = '';
+        submit.textContent = 'Salvar foto';
+      } finally {
+        submit.disabled = false;
       }
     });
-  </script>
 
-  <%- include("partials/footer") %>
+    zoom.addEventListener('input', () => {
+      if (!cropState) return;
+      const zoomFactor = Math.max(1, Number(zoom.value || 1));
+      cropState.scale = cropState.baseScale * zoomFactor;
+      applyPhotoCropTransforms(cropState);
+    });
+
+    stage.addEventListener('pointerdown', (event) => {
+      if (!cropState) return;
+      cropState.stagePointerId = event.pointerId;
+      cropState.dragStartX = event.clientX;
+      cropState.dragStartY = event.clientY;
+      cropState.dragOriginX = cropState.offsetX || 0;
+      cropState.dragOriginY = cropState.offsetY || 0;
+      stage.setPointerCapture?.(event.pointerId);
+    });
+
+    stage.addEventListener('pointermove', (event) => {
+      if (!cropState || cropState.stagePointerId !== event.pointerId) return;
+      cropState.offsetX = cropState.dragOriginX + (event.clientX - cropState.dragStartX);
+      cropState.offsetY = cropState.dragOriginY + (event.clientY - cropState.dragStartY);
+      applyPhotoCropTransforms(cropState);
+    });
+
+    const releaseDrag = (event) => {
+      if (!cropState || cropState.stagePointerId !== event.pointerId) return;
+      if (stage.hasPointerCapture?.(event.pointerId)) {
+        try { stage.releasePointerCapture(event.pointerId); } catch (_error) {}
+      }
+      cropState.stagePointerId = null;
+    };
+    stage.addEventListener('pointerup', releaseDrag);
+    stage.addEventListener('pointercancel', releaseDrag);
+    stage.addEventListener('lostpointercapture', () => {
+      if (cropState) cropState.stagePointerId = null;
+    });
+
+    applyButton.addEventListener('click', async () => {
+      if (!cropState) return;
+      applyButton.disabled = true;
+      applyButton.textContent = 'Preparando...';
+      try {
+        const prepared = await createPreparedPhotoFromCrop(cropState);
+        const transfer = new DataTransfer();
+        transfer.items.add(prepared.file);
+        input.files = transfer.files;
+        if (previewObjectUrl) {
+          URL.revokeObjectURL(previewObjectUrl);
+          previewObjectUrl = '';
+        }
+        showPreview(prepared.previewUrl, 'Boa! Agora ela já está pronta para salvar.');
+        closeModal();
+      } catch (_error) {
+        hint.textContent = 'A foto tropeçou no corte. Tenta de novo rapidinho.';
+      } finally {
+        applyButton.disabled = false;
+        applyButton.textContent = 'Usar essa foto';
+        submit.disabled = false;
+        submit.textContent = 'Salvar foto';
+      }
+    });
+
+    modalCloseButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        input.value = '';
+        closeModal();
+        submit.disabled = false;
+        submit.textContent = 'Salvar foto';
+      });
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && cropState) {
+        input.value = '';
+        closeModal();
+        submit.disabled = false;
+        submit.textContent = 'Salvar foto';
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (!cropState) return;
+      const nextStageSize = Math.max(1, stage.clientWidth || cropState.stageSize || 1);
+      if (nextStageSize === cropState.stageSize) return;
+      const ratio = nextStageSize / Math.max(1, cropState.stageSize || 1);
+      cropState.stageSize = nextStageSize;
+      cropState.baseScale = Math.max(nextStageSize / (cropState.image.naturalWidth || cropState.image.width || 1), nextStageSize / (cropState.image.naturalHeight || cropState.image.height || 1));
+      const zoomFactor = Math.max(1, Number(zoom.value || 1));
+      cropState.scale = cropState.baseScale * zoomFactor;
+      cropState.offsetX *= ratio;
+      cropState.offsetY *= ratio;
+      applyPhotoCropTransforms(cropState);
+    });
+
+    form.addEventListener('submit', () => {
+      submit.disabled = true;
+      submit.textContent = 'Subindo foto...';
+    });
+  }
+
+  window.addEventListener('load', () => {
+    bindPhoneField('self');
+    bindPhoneField('contact');
+    resetSelfIdentityForm();
+    bindPixForm('self');
+    bindSelfPixToggle();
+    resetContactForm();
+    bindNetworkDiscoveryControls();
+    bindProfilePhotoForm();
+    bindProfileSignatureForm();
+
+    const highlighted = document.querySelector('[id^="friend-request-"][class*="ring-2"]');
+    if (highlighted) {
+      highlighted.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+</script>
+
+<%- include("partials/footer") %>

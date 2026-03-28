@@ -14,6 +14,11 @@ CREATE TABLE IF NOT EXISTS users (
   google_id TEXT UNIQUE,
   role TEXT DEFAULT 'user',
   can_import INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL DEFAULT 'active',
+  deleted_at TEXT,
+  deleted_label TEXT,
+  google_photo_url TEXT,
+  profile_photo_url TEXT,
   created_at TEXT NOT NULL,
   last_login TEXT
 );
@@ -21,6 +26,30 @@ CREATE TABLE IF NOT EXISTS users (
 
 if (!columnExists("users", "can_import")) {
   db.exec("ALTER TABLE users ADD COLUMN can_import INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("users", "status")) {
+  db.exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active';");
+}
+
+if (!columnExists("users", "deleted_at")) {
+  db.exec("ALTER TABLE users ADD COLUMN deleted_at TEXT;");
+}
+
+if (!columnExists("users", "deleted_label")) {
+  db.exec("ALTER TABLE users ADD COLUMN deleted_label TEXT;");
+}
+
+if (!columnExists("users", "profile_photo_url")) {
+  db.exec("ALTER TABLE users ADD COLUMN profile_photo_url TEXT;");
+}
+
+if (!columnExists("users", "google_photo_url")) {
+  db.exec("ALTER TABLE users ADD COLUMN google_photo_url TEXT;");
+}
+
+if (!columnExists("users", "profile_photo_mode")) {
+  db.exec("ALTER TABLE users ADD COLUMN profile_photo_mode TEXT NOT NULL DEFAULT 'default';");
 }
 
 // ===== TABELAS EXISTENTES COM user_id =====
@@ -32,6 +61,7 @@ CREATE TABLE IF NOT EXISTS cards (
   due_day INTEGER,
   close_day INTEGER,
   holiday_scope TEXT,
+  brand TEXT,
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT,
   UNIQUE(user_id, name),
@@ -43,8 +73,20 @@ CREATE TABLE IF NOT EXISTS people (
   user_id INTEGER NOT NULL,
   name TEXT NOT NULL,
   phone TEXT,
+  email TEXT,
+  pix_enabled INTEGER NOT NULL DEFAULT 0,
+  pix_key_type TEXT,
+  pix_key_value TEXT,
+  pix_city TEXT,
+  pix_state TEXT,
+  pix_label TEXT,
+  pix_updated_at TEXT,
   active INTEGER NOT NULL DEFAULT 1,
   is_owner INTEGER DEFAULT 0,
+  profile_kind TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  deleted_at TEXT,
+  deleted_label TEXT,
   created_at TEXT,
   UNIQUE(user_id, name),
   FOREIGN KEY (user_id) REFERENCES users(id)
@@ -76,10 +118,12 @@ CREATE TABLE IF NOT EXISTS transactions (
   due_year INTEGER,
   parent_txn_id INTEGER,
   recurring_rule_id INTEGER,
+  purchase_category_id INTEGER,
   created_at TEXT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (import_id) REFERENCES imports(id),
-  FOREIGN KEY (card_id) REFERENCES cards(id)
+  FOREIGN KEY (card_id) REFERENCES cards(id),
+  FOREIGN KEY (purchase_category_id) REFERENCES purchase_categories(id)
 );
 
 CREATE TABLE IF NOT EXISTS allocations (
@@ -134,6 +178,20 @@ CREATE TABLE IF NOT EXISTS finance_categories (
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS purchase_categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  normalized_name TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'default',
+  active INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(user_id, normalized_name),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS monthly_finances (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -144,10 +202,27 @@ CREATE TABLE IF NOT EXISTS monthly_finances (
   description TEXT,
   formula TEXT,
   amount_cents INTEGER DEFAULT 0,
+  amount_mode TEXT NOT NULL DEFAULT 'fixed',
   created_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (category_id) REFERENCES finance_categories(id)
 );
+
+CREATE TABLE IF NOT EXISTS monthly_finance_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  finance_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  item_date TEXT,
+  item_source TEXT,
+  amount_cents INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (finance_id) REFERENCES monthly_finances(id),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_finance_user ON monthly_finance_items(finance_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_user_date ON monthly_finance_items(user_id, item_date);
 
 CREATE TABLE IF NOT EXISTS scratchpad (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -174,6 +249,7 @@ CREATE TABLE IF NOT EXISTS recurring_rules (
   card_id INTEGER NOT NULL,
   description TEXT NOT NULL,
   amount_cents INTEGER NOT NULL,
+  purchase_category_id INTEGER,
   start_txn_date TEXT NOT NULL,
   start_due_month INTEGER NOT NULL,
   start_due_year INTEGER NOT NULL,
@@ -184,7 +260,8 @@ CREATE TABLE IF NOT EXISTS recurring_rules (
   updated_at TEXT NOT NULL,
   ended_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id),
-  FOREIGN KEY (card_id) REFERENCES cards(id)
+  FOREIGN KEY (card_id) REFERENCES cards(id),
+  FOREIGN KEY (purchase_category_id) REFERENCES purchase_categories(id)
 );
 
 CREATE TABLE IF NOT EXISTS recurring_exceptions (
@@ -214,12 +291,19 @@ CREATE TABLE IF NOT EXISTS shared_debt_requests (
   card_name_snapshot TEXT,
   description_snapshot TEXT NOT NULL,
   amount_cents INTEGER NOT NULL,
+  amount_paid_cents INTEGER NOT NULL DEFAULT 0,
   receiver_email_snapshot TEXT,
   receiver_name_snapshot TEXT,
   request_note TEXT,
   response_note TEXT,
   payment_marked_at TEXT,
   payment_note TEXT,
+  settlement_mode TEXT NOT NULL DEFAULT 'manual',
+  last_pix_payload TEXT,
+  last_pix_txid TEXT,
+  last_pix_generated_at TEXT,
+  last_pix_amount_cents INTEGER NOT NULL DEFAULT 0,
+  pix_version INTEGER NOT NULL DEFAULT 0,
   request_kind TEXT NOT NULL DEFAULT 'card',
   status TEXT NOT NULL DEFAULT 'pending',
   created_at TEXT NOT NULL,
@@ -249,6 +333,21 @@ CREATE TABLE IF NOT EXISTS shared_debt_batches (
   FOREIGN KEY (receiver_user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS shared_debt_archives (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  request_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  is_archived INTEGER NOT NULL DEFAULT 1,
+  archived_at TEXT,
+  restored_at TEXT,
+  archived_from_status TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(request_id, user_id),
+  FOREIGN KEY (request_id) REFERENCES shared_debt_requests(id),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS shared_debt_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   request_id INTEGER NOT NULL,
@@ -258,6 +357,126 @@ CREATE TABLE IF NOT EXISTS shared_debt_events (
   created_at TEXT NOT NULL,
   FOREIGN KEY (request_id) REFERENCES shared_debt_requests(id),
   FOREIGN KEY (actor_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS shared_debt_monthly_settlements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  requester_user_id INTEGER NOT NULL,
+  receiver_user_id INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  request_kind TEXT NOT NULL DEFAULT 'card',
+  status TEXT NOT NULL DEFAULT 'open',
+  request_count INTEGER NOT NULL DEFAULT 0,
+  total_accepted_cents INTEGER NOT NULL DEFAULT 0,
+  reserved_cents INTEGER NOT NULL DEFAULT 0,
+  confirmed_cents INTEGER NOT NULL DEFAULT 0,
+  open_cents INTEGER NOT NULL DEFAULT 0,
+  last_reported_at TEXT,
+  last_confirmed_at TEXT,
+  last_rejected_at TEXT,
+  last_activity_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(requester_user_id, receiver_user_id, month, year, request_kind),
+  FOREIGN KEY (requester_user_id) REFERENCES users(id),
+  FOREIGN KEY (receiver_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS shared_debt_payment_intents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  settlement_id INTEGER NOT NULL,
+  requester_user_id INTEGER NOT NULL,
+  receiver_user_id INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  request_kind TEXT NOT NULL DEFAULT 'card',
+  requested_by_user_id INTEGER,
+  amount_cents INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'generated',
+  pix_payload TEXT,
+  pix_txid TEXT,
+  payer_note TEXT,
+  creditor_note TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  generated_at TEXT,
+  reported_at TEXT,
+  confirmed_at TEXT,
+  rejected_at TEXT,
+  cancelled_at TEXT,
+  FOREIGN KEY (settlement_id) REFERENCES shared_debt_monthly_settlements(id),
+  FOREIGN KEY (requester_user_id) REFERENCES users(id),
+  FOREIGN KEY (receiver_user_id) REFERENCES users(id),
+  FOREIGN KEY (requested_by_user_id) REFERENCES users(id),
+  UNIQUE(pix_txid)
+);
+
+CREATE TABLE IF NOT EXISTS shared_debt_payment_allocations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  settlement_id INTEGER NOT NULL,
+  intent_id INTEGER NOT NULL,
+  request_id INTEGER NOT NULL,
+  allocated_cents INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(intent_id, request_id),
+  FOREIGN KEY (settlement_id) REFERENCES shared_debt_monthly_settlements(id),
+  FOREIGN KEY (intent_id) REFERENCES shared_debt_payment_intents(id),
+  FOREIGN KEY (request_id) REFERENCES shared_debt_requests(id)
+);
+
+CREATE TABLE IF NOT EXISTS shared_debt_send_queues (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  requester_user_id INTEGER NOT NULL,
+  receiver_user_id INTEGER NOT NULL,
+  source_due_month INTEGER NOT NULL,
+  source_due_year INTEGER NOT NULL,
+  request_kind TEXT NOT NULL DEFAULT 'card',
+  status TEXT NOT NULL DEFAULT 'draft',
+  receiver_email_snapshot TEXT,
+  receiver_name_snapshot TEXT,
+  total_cents INTEGER NOT NULL DEFAULT 0,
+  item_count INTEGER NOT NULL DEFAULT 0,
+  last_item_at TEXT,
+  sent_at TEXT,
+  batch_id INTEGER,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (requester_user_id) REFERENCES users(id),
+  FOREIGN KEY (receiver_user_id) REFERENCES users(id),
+  FOREIGN KEY (batch_id) REFERENCES shared_debt_batches(id)
+);
+
+CREATE TABLE IF NOT EXISTS shared_debt_send_queue_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  queue_id INTEGER NOT NULL,
+  requester_user_id INTEGER NOT NULL,
+  receiver_user_id INTEGER NOT NULL,
+  source_transaction_id INTEGER NOT NULL,
+  source_allocation_id INTEGER,
+  source_person_id INTEGER NOT NULL,
+  source_due_month INTEGER NOT NULL,
+  source_due_year INTEGER NOT NULL,
+  source_txn_date_snapshot TEXT,
+  card_id INTEGER,
+  card_name_snapshot TEXT,
+  description_snapshot TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  receiver_email_snapshot TEXT,
+  receiver_name_snapshot TEXT,
+  sent_request_id INTEGER,
+  cancelled_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(queue_id, source_transaction_id, source_person_id),
+  FOREIGN KEY (queue_id) REFERENCES shared_debt_send_queues(id),
+  FOREIGN KEY (requester_user_id) REFERENCES users(id),
+  FOREIGN KEY (receiver_user_id) REFERENCES users(id),
+  FOREIGN KEY (source_transaction_id) REFERENCES transactions(id),
+  FOREIGN KEY (source_allocation_id) REFERENCES allocations(id),
+  FOREIGN KEY (source_person_id) REFERENCES people(id),
+  FOREIGN KEY (card_id) REFERENCES cards(id),
+  FOREIGN KEY (sent_request_id) REFERENCES shared_debt_requests(id)
 );
 
 CREATE TABLE IF NOT EXISTS notifications (
@@ -361,6 +580,31 @@ CREATE TABLE IF NOT EXISTS app_settings (
 db.exec(`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id);`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_scheduled_push_logs_event_date ON scheduled_push_logs(event_type, date_key, user_id, sequence_no);`);
 
+db.exec("UPDATE users SET status = CASE WHEN trim(COALESCE(status, '')) = '' THEN 'active' ELSE lower(trim(status)) END;");
+db.exec("UPDATE people SET status = CASE WHEN trim(COALESCE(status, '')) = '' THEN CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END ELSE lower(trim(status)) END;");
+db.exec("UPDATE users SET deleted_label = 'Acesso removido' WHERE COALESCE(status, 'active') = 'deleted' AND trim(COALESCE(deleted_label, '')) = '';");
+db.exec("UPDATE people SET deleted_label = 'Contato removido' WHERE COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) = 'deleted' AND trim(COALESCE(deleted_label, '')) = '';");
+
+if (!columnExists("people", "pix_state")) {
+  db.exec("ALTER TABLE people ADD COLUMN pix_state TEXT;");
+}
+
+if (!columnExists("people", "profile_kind")) {
+  db.exec("ALTER TABLE people ADD COLUMN profile_kind TEXT;");
+}
+
+if (!columnExists("people", "status")) {
+  db.exec("ALTER TABLE people ADD COLUMN status TEXT NOT NULL DEFAULT 'active';");
+}
+
+if (!columnExists("people", "deleted_at")) {
+  db.exec("ALTER TABLE people ADD COLUMN deleted_at TEXT;");
+}
+
+if (!columnExists("people", "deleted_label")) {
+  db.exec("ALTER TABLE people ADD COLUMN deleted_label TEXT;");
+}
+
 if (!columnExists("cards", "active")) {
   db.exec("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1;");
 }
@@ -369,12 +613,48 @@ if (!columnExists("cards", "close_day")) {
   db.exec("ALTER TABLE cards ADD COLUMN close_day INTEGER;");
 }
 
+if (!columnExists("cards", "brand")) {
+  db.exec("ALTER TABLE cards ADD COLUMN brand TEXT;");
+}
+
 if (!columnExists("people", "email")) {
   db.exec("ALTER TABLE people ADD COLUMN email TEXT;");
 }
 
+if (!columnExists("people", "pix_enabled")) {
+  db.exec("ALTER TABLE people ADD COLUMN pix_enabled INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("people", "pix_key_type")) {
+  db.exec("ALTER TABLE people ADD COLUMN pix_key_type TEXT;");
+}
+
+if (!columnExists("people", "pix_key_value")) {
+  db.exec("ALTER TABLE people ADD COLUMN pix_key_value TEXT;");
+}
+
+if (!columnExists("people", "pix_city")) {
+  db.exec("ALTER TABLE people ADD COLUMN pix_city TEXT;");
+}
+
+if (!columnExists("people", "pix_label")) {
+  db.exec("ALTER TABLE people ADD COLUMN pix_label TEXT;");
+}
+
+if (!columnExists("people", "pix_updated_at")) {
+  db.exec("ALTER TABLE people ADD COLUMN pix_updated_at TEXT;");
+}
+
 if (!columnExists("transactions", "recurring_rule_id")) {
   db.exec("ALTER TABLE transactions ADD COLUMN recurring_rule_id INTEGER;");
+}
+
+if (!columnExists("transactions", "purchase_category_id")) {
+  db.exec("ALTER TABLE transactions ADD COLUMN purchase_category_id INTEGER;");
+}
+
+if (!columnExists("recurring_rules", "purchase_category_id")) {
+  db.exec("ALTER TABLE recurring_rules ADD COLUMN purchase_category_id INTEGER;");
 }
 
 if (!columnExists("shared_debt_requests", "source_person_id")) {
@@ -401,6 +681,38 @@ if (!columnExists("shared_debt_requests", "request_kind")) {
   db.exec("ALTER TABLE shared_debt_requests ADD COLUMN request_kind TEXT NOT NULL DEFAULT 'card';");
 }
 
+if (!columnExists("shared_debt_requests", "amount_paid_cents")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN amount_paid_cents INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("shared_debt_requests", "settlement_mode")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN settlement_mode TEXT NOT NULL DEFAULT 'manual';");
+}
+
+if (!columnExists("shared_debt_requests", "last_pix_payload")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_payload TEXT;");
+}
+
+if (!columnExists("shared_debt_requests", "last_pix_txid")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_txid TEXT;");
+}
+
+if (!columnExists("shared_debt_requests", "last_pix_generated_at")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_generated_at TEXT;");
+}
+
+if (!columnExists("shared_debt_requests", "last_pix_amount_cents")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN last_pix_amount_cents INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("shared_debt_requests", "pix_version")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN pix_version INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("shared_debt_payment_intents", "creditor_note")) {
+  db.exec("ALTER TABLE shared_debt_payment_intents ADD COLUMN creditor_note TEXT;");
+}
+
 if (!columnExists("shared_debt_batches", "status_summary")) {
   db.exec("ALTER TABLE shared_debt_batches ADD COLUMN status_summary TEXT NOT NULL DEFAULT 'pending';");
 }
@@ -413,14 +725,160 @@ if (!columnExists("shared_debt_batches", "resolved_at")) {
   db.exec("ALTER TABLE shared_debt_batches ADD COLUMN resolved_at TEXT;");
 }
 
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase() || null;
+}
+
+function normalizeName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeProfileKind(value, isOwner = false) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'self') return 'self';
+  if (normalized === 'contact') return 'contact';
+  return isOwner ? 'self' : 'contact';
+}
+
+function buildUniqueSelfName(userId, preferredName) {
+  const base = String(preferredName || '').trim() || 'Meu perfil';
+  const candidates = [base, `${base} (perfil)`, `${base} AcerttaPay`, `${base} Minha conta`];
+
+  for (const candidate of candidates) {
+    const exists = db.prepare(`
+      SELECT id
+      FROM people
+      WHERE user_id = ? AND lower(name) = lower(?)
+      LIMIT 1
+    `).get(userId, candidate);
+    if (!exists) return candidate;
+  }
+
+  let suffix = 2;
+  while (suffix < 1000) {
+    const candidate = `${base} (${suffix})`;
+    const exists = db.prepare(`
+      SELECT id
+      FROM people
+      WHERE user_id = ? AND lower(name) = lower(?)
+      LIMIT 1
+    `).get(userId, candidate);
+    if (!exists) return candidate;
+    suffix += 1;
+  }
+
+  return `${base} (${Date.now()})`;
+}
+
+function personHasStrongContactSignals(userId, personId) {
+  const usage = db.prepare(`
+    SELECT
+      EXISTS(SELECT 1 FROM person_app_links WHERE owner_user_id = ? AND person_id = ?) AS has_app_link,
+      EXISTS(SELECT 1 FROM friend_requests WHERE requester_user_id = ? AND source_person_id = ?) AS has_friend_history
+  `).get(userId, personId, userId, personId);
+
+  return Number(usage?.has_app_link || 0) !== 0 || Number(usage?.has_friend_history || 0) !== 0;
+}
+
+function pickSelfCandidateForUser(user) {
+  const rows = db.prepare(`
+    SELECT id, name, email, COALESCE(active, 1) AS active, COALESCE(is_owner, 0) AS is_owner, profile_kind, COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS status
+    FROM people
+    WHERE user_id = ?
+      AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
+    ORDER BY COALESCE(is_owner, 0) DESC, COALESCE(active, 1) DESC, id ASC
+  `).all(user.id);
+
+  const existingSelf = rows.find((row) => normalizeProfileKind(row.profile_kind, Number(row.is_owner || 0) !== 0) === 'self');
+  if (existingSelf) return existingSelf.id;
+
+  const userEmail = normalizeEmail(user.email);
+  const ownerEmailMatch = rows.find((row) => Number(row.is_owner || 0) !== 0 && userEmail && normalizeEmail(row.email) === userEmail);
+  if (ownerEmailMatch) return ownerEmailMatch.id;
+
+  const userName = normalizeName(user.name || user.email || '');
+  const safeOwnerByName = rows.find((row) => {
+    if (Number(row.is_owner || 0) === 0) return false;
+    if (personHasStrongContactSignals(user.id, row.id)) return false;
+    return userName && normalizeName(row.name) === userName;
+  });
+  if (safeOwnerByName) return safeOwnerByName.id;
+
+  const ownerRows = rows.filter((row) => Number(row.is_owner || 0) !== 0);
+  if (ownerRows.length === 1 && !personHasStrongContactSignals(user.id, ownerRows[0].id)) {
+    return ownerRows[0].id;
+  }
+
+  const now = new Date().toISOString();
+  const name = buildUniqueSelfName(user.id, user.name || (user.email ? user.email.split('@')[0] : 'Meu perfil'));
+  const result = db.prepare(`
+    INSERT INTO people (user_id, name, phone, email, pix_enabled, pix_key_type, pix_key_value, pix_city, pix_state, pix_label, pix_updated_at, active, is_owner, profile_kind, created_at)
+    VALUES (?, ?, NULL, ?, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, 1, 'self', ?)
+  `).run(user.id, name, userEmail, now);
+
+  return Number(result.lastInsertRowid || 0) || null;
+}
+
+function reconcileSelfProfiles() {
+  const users = db.prepare(`
+    SELECT id, email, name
+    FROM users
+    WHERE COALESCE(status, 'active') <> 'deleted'
+    ORDER BY id ASC
+  `).all();
+
+  const updateTargetStmt = db.prepare(`
+    UPDATE people
+    SET active = 1,
+        is_owner = 1,
+        profile_kind = 'self',
+        email = CASE WHEN trim(COALESCE(email, '')) = '' AND ? IS NOT NULL THEN ? ELSE email END,
+        name = CASE WHEN trim(COALESCE(name, '')) = '' THEN ? ELSE name END
+    WHERE id = ? AND user_id = ?
+  `);
+
+  const downgradeStmt = db.prepare(`
+    UPDATE people
+    SET is_owner = 0,
+        profile_kind = 'contact'
+    WHERE user_id = ? AND id <> ?
+  `);
+
+  db.transaction(() => {
+    users.forEach((user) => {
+      const targetId = pickSelfCandidateForUser(user);
+      if (!targetId) return;
+
+      downgradeStmt.run(user.id, targetId);
+      updateTargetStmt.run(normalizeEmail(user.email), normalizeEmail(user.email), String(user.name || '').trim() || (normalizeEmail(user.email) || 'Meu perfil'), targetId, user.id);
+    });
+  })();
+}
+
+reconcileSelfProfiles();
+
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_people_user_self_unique ON people(user_id) WHERE profile_kind = 'self';");
+
 // ===== ÍNDICES =====
 db.exec(`
 CREATE INDEX IF NOT EXISTS idx_cards_user ON cards(user_id);
 CREATE INDEX IF NOT EXISTS idx_people_user ON people(user_id);
+CREATE INDEX IF NOT EXISTS idx_people_user_profile_kind ON people(user_id, profile_kind);
+CREATE INDEX IF NOT EXISTS idx_people_user_status_active ON people(user_id, status, active);
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 CREATE INDEX IF NOT EXISTS idx_imports_user ON imports(user_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_categories_user_active ON purchase_categories(user_id, active, sort_order, name);
+CREATE INDEX IF NOT EXISTS idx_purchase_categories_user_kind ON purchase_categories(user_id, kind, active);
 CREATE INDEX IF NOT EXISTS idx_txn_user ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_txn_card ON transactions(card_id);
 CREATE INDEX IF NOT EXISTS idx_txn_import ON transactions(import_id);
+CREATE INDEX IF NOT EXISTS idx_txn_purchase_category ON transactions(user_id, purchase_category_id);
 CREATE INDEX IF NOT EXISTS idx_alloc_user ON allocations(user_id);
 CREATE INDEX IF NOT EXISTS idx_alloc_txn ON allocations(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_statements_user ON card_statements(user_id);
@@ -436,7 +894,19 @@ CREATE INDEX IF NOT EXISTS idx_shared_debts_source_allocation ON shared_debt_req
 CREATE INDEX IF NOT EXISTS idx_shared_debts_source_person ON shared_debt_requests(requester_user_id, source_transaction_id, source_person_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_receiver ON shared_debt_batches(receiver_user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batches(requester_user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_user_archived ON shared_debt_archives(user_id, is_archived, updated_at);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_request_user ON shared_debt_archives(request_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_events_request ON shared_debt_events(request_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_pair ON shared_debt_monthly_settlements(requester_user_id, receiver_user_id, year, month, request_kind);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_receiver ON shared_debt_monthly_settlements(receiver_user_id, year, month, request_kind);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_settlement_status ON shared_debt_payment_intents(settlement_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_pair ON shared_debt_payment_intents(requester_user_id, receiver_user_id, year, month, request_kind, status);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_allocations_intent ON shared_debt_payment_allocations(intent_id, request_id);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_allocations_request ON shared_debt_payment_allocations(request_id);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_requester_status ON shared_debt_send_queues(requester_user_id, status, source_due_year DESC, source_due_month DESC, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_receiver_period ON shared_debt_send_queues(receiver_user_id, source_due_year DESC, source_due_month DESC);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_queue ON shared_debt_send_queue_items(queue_id, source_txn_date_snapshot, id);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_txn_person ON shared_debt_send_queue_items(requester_user_id, source_transaction_id, source_person_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_status ON friend_requests(requester_user_id, status, created_at);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_target_status ON friend_requests(target_user_id, status, created_at);
@@ -446,10 +916,78 @@ CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_person ON person_app_links
 CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_linked ON person_app_links(owner_user_id, linked_user_id);
 `);
 
-// ===== CATEGORIAS PADRÃO =====
-// Nota: Categorias agora são por usuário, então não inserimos padrão aqui
-// Cada usuário terá suas categorias criadas na primeira vez que acessar
+if (!columnExists("monthly_finances", "amount_mode")) {
+  db.exec("ALTER TABLE monthly_finances ADD COLUMN amount_mode TEXT NOT NULL DEFAULT 'fixed';");
+}
+
+const DEFAULT_PURCHASE_CATEGORIES = [
+  'Mercado',
+  'Açougue',
+  'Padaria',
+  'Restaurante',
+  'Lanche / Café',
+  'Farmácia',
+  'Saúde',
+  'Transporte',
+  'Combustível',
+  'Casa',
+  'Assinaturas',
+  'Educação',
+  'Vestuário',
+  'Trabalho',
+  'Lazer',
+  'Pets',
+  'Presentes',
+  'Serviços',
+  'Viagem',
+  'Outros'
+];
+
+function normalizePurchaseCategoryName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function ensurePurchaseCategoriesForUser(userId) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return;
+
+  const existing = new Set(db.prepare(`
+    SELECT normalized_name
+    FROM purchase_categories
+    WHERE user_id = ?
+  `).all(safeUserId).map((row) => normalizePurchaseCategoryName(row.normalized_name || '')));
+
+  const insertCategory = db.prepare(`
+    INSERT OR IGNORE INTO purchase_categories (user_id, name, normalized_name, kind, active, sort_order, created_at, updated_at)
+    VALUES (?, ?, ?, 'default', 1, ?, ?, ?)
+  `);
+
+  const now = new Date().toISOString();
+  DEFAULT_PURCHASE_CATEGORIES.forEach((categoryName, index) => {
+    const normalized = normalizePurchaseCategoryName(categoryName);
+    if (!normalized || existing.has(normalized)) return;
+    insertCategory.run(safeUserId, categoryName, normalized, index + 1, now, now);
+  });
+}
+
+const userRowsForPurchaseSeed = db.prepare(`
+  SELECT id
+  FROM users
+  ORDER BY id ASC
+`).all();
+
+db.transaction(() => {
+  userRowsForPurchaseSeed.forEach((user) => {
+    ensurePurchaseCategoriesForUser(user.id);
+  });
+})();
 
 console.log("✅ Migração Multi-Usuário concluída!");
 console.log("✅ Tabela de usuários criada");
 console.log("✅ user_id adicionado a todas as tabelas");
+console.log("✅ Categorias de compra opcionais preparadas");

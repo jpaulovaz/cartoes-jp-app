@@ -39,6 +39,70 @@
 })();
 
 (function () {
+  function detectIOS() {
+    const ua = navigator.userAgent || '';
+    const platform = navigator.platform || '';
+    const maxTouchPoints = navigator.maxTouchPoints || 0;
+    return /iPad|iPhone|iPod/.test(ua) || (platform === 'MacIntel' && maxTouchPoints > 1);
+  }
+
+  function detectStandalone() {
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  }
+
+  function syncPlatformState() {
+    const root = document.documentElement;
+    const body = document.body;
+    const isIOS = detectIOS();
+    const isStandalone = detectStandalone();
+    const visualViewport = window.visualViewport;
+    const viewportHeight = Math.round((visualViewport && visualViewport.height) || window.innerHeight || document.documentElement.clientHeight || 0);
+    const viewportWidth = Math.round((visualViewport && visualViewport.width) || window.innerWidth || document.documentElement.clientWidth || 0);
+    const offsetTop = Math.round((visualViewport && visualViewport.offsetTop) || 0);
+    const keyboardInset = Math.max(0, Math.round((window.innerHeight || viewportHeight) - viewportHeight - offsetTop));
+    const keyboardOpen = keyboardInset > 120;
+
+    root.classList.toggle('op-ios', isIOS);
+    root.classList.toggle('op-standalone', isStandalone);
+    root.classList.toggle('op-ios-standalone', isIOS && isStandalone);
+    root.dataset.opPlatform = isIOS ? 'ios' : 'default';
+    root.dataset.opDisplayMode = isStandalone ? 'standalone' : 'browser';
+    root.style.setProperty('--op-app-height', `${Math.max(viewportHeight, 1)}px`);
+    root.style.setProperty('--op-visual-viewport-height', `${Math.max(viewportHeight, 1)}px`);
+    root.style.setProperty('--op-visual-viewport-width', `${Math.max(viewportWidth, 1)}px`);
+    root.style.setProperty('--op-keyboard-inset', `${Math.max(keyboardInset, 0)}px`);
+
+    if (body) {
+      body.classList.toggle('op-ios', isIOS);
+      body.classList.toggle('op-standalone', isStandalone);
+      body.classList.toggle('op-ios-standalone', isIOS && isStandalone);
+      body.classList.toggle('op-virtual-keyboard-open', isIOS && keyboardOpen);
+    }
+  }
+
+  syncPlatformState();
+  document.addEventListener('DOMContentLoaded', syncPlatformState);
+  window.addEventListener('load', syncPlatformState);
+  window.addEventListener('pageshow', syncPlatformState);
+  window.addEventListener('resize', syncPlatformState, { passive: true });
+  window.addEventListener('orientationchange', () => window.setTimeout(syncPlatformState, 120), { passive: true });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', syncPlatformState, { passive: true });
+    window.visualViewport.addEventListener('scroll', syncPlatformState, { passive: true });
+  }
+
+  if (window.matchMedia) {
+    const standaloneQuery = window.matchMedia('(display-mode: standalone)');
+    if (typeof standaloneQuery.addEventListener === 'function') {
+      standaloneQuery.addEventListener('change', syncPlatformState);
+    } else if (typeof standaloneQuery.addListener === 'function') {
+      standaloneQuery.addListener(syncPlatformState);
+    }
+  }
+})();
+
+(function () {
   function copyAlloc(btn) {
     // Encontra o widget cinza (o container da distribuição rápida)
     const container = btn.closest('.bg-slate-50\\/50');
@@ -104,6 +168,7 @@
   function toneClasses(tone) {
     const base = 'w-full rounded-2xl px-4 py-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-900';
     if (tone === 'danger') return `${base} bg-red-600 text-white hover:bg-red-700 focus:ring-red-500`;
+    if (tone === 'cancel') return `${base} border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 focus:ring-red-400 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200 dark:hover:bg-red-900/35 dark:focus:ring-red-500`;
     if (tone === 'primary') return `${base} bg-slate-900 text-white hover:bg-slate-800 focus:ring-slate-500 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white dark:focus:ring-slate-300`;
     return `${base} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:ring-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus:ring-slate-500`;
   }
@@ -223,8 +288,8 @@
       title: 'Confirma a exclusão?',
       message,
       options: [
-        { label: 'Cancelar', value: false, tone: 'secondary' },
-        { label: 'Excluir', value: true, tone: 'danger' }
+        { label: 'Excluir', value: true, tone: 'danger' },
+        { label: 'Cancelar', value: false, tone: 'cancel' }
       ]
     });
 
@@ -285,6 +350,8 @@
 
     return `${year}-${String(month).padStart(2, '0')}`;
   }
+
+  window.OPComputeSuggestedFirstDue = computeSuggestedFirstDue;
 
   function bindAutoFirstDue(form) {
     const dateInput = form.querySelector('[data-manual-date-input]');
@@ -369,6 +436,7 @@
     const closeButtons = Array.from(modal.querySelectorAll('[data-manual-modal-close]')).filter((element) => element instanceof HTMLElement);
 
     const openModal = () => {
+      document.body.classList.add('op-manual-modal-open');
       modal.classList.remove('hidden');
       modal.setAttribute('aria-hidden', 'false');
       syncManualPurchaseDefaults(modal);
@@ -380,6 +448,7 @@
     const closeModal = () => {
       modal.classList.add('hidden');
       modal.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('op-manual-modal-open');
     };
 
     openButtons.forEach((button) => {
@@ -582,21 +651,29 @@
 
   function syncPeopleSummary(root) {
     let paidTotal = 0;
+    let manualTotal = 0;
     let remainingTotal = 0;
     root.querySelectorAll('[data-summary-person-row]').forEach((row) => {
       const totalCents = Number(row.getAttribute('data-total-cents') || 0);
+      const autoPaidCents = Number(row.getAttribute('data-auto-paid-cents') || 0);
       const personId = row.getAttribute('data-person-id');
       const paidInput = root.querySelector(`[data-summary-person-paid][data-person-id="${personId}"]`);
-      const paidCents = centsFromValue(paidInput ? paidInput.value : '');
+      const manualPaidCents = centsFromValue(paidInput ? paidInput.value : '');
+      const paidCents = autoPaidCents + manualPaidCents;
       const remainingCents = totalCents - paidCents;
       paidTotal += paidCents;
+      manualTotal += manualPaidCents;
       remainingTotal += remainingCents;
+      const combinedCell = root.querySelector(`[data-summary-person-combined][data-person-id="${personId}"]`);
+      if (combinedCell) combinedCell.textContent = formatCents(paidCents);
       syncRemainingCell(root.querySelector(`[data-summary-person-remaining][data-person-id="${personId}"]`), remainingCents);
     });
 
     const paidCell = root.querySelector('[data-summary-people-total-paid]');
+    const manualCell = root.querySelector('[data-summary-people-total-manual]');
     const remainingCell = root.querySelector('[data-summary-people-total-remaining]');
     if (paidCell) paidCell.textContent = formatCents(paidTotal);
+    if (manualCell) manualCell.textContent = formatCents(manualTotal);
     syncRemainingCell(remainingCell, remainingTotal);
   }
 
@@ -686,6 +763,556 @@
 
     syncCardsSummary(root);
     syncPeopleSummary(root);
+  });
+})();
+
+(function () {
+  const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+  const donutPalette = ['#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#14b8a6', '#f97316'];
+  const prefersReducedMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+
+  function formatMoney(cents) {
+    return currency.format(Number(cents || 0) / 100);
+  }
+
+  function formatCompactMonthSummary(point) {
+    return `${point.label} · ${formatMoney(point.total_cents)}`;
+  }
+
+  function buildMonthUrl(year, month, extra = {}) {
+    const params = new URLSearchParams();
+    Object.entries(extra || {}).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== '') params.set(key, String(value));
+    });
+    const qs = params.toString();
+    return `/month/${year}/${month}${qs ? `?${qs}` : ''}`;
+  }
+
+  function buildSummaryUrl(year, month, base = 'summary') {
+    const cleanBase = String(base || 'summary').replace(/[^a-z-]/gi, '') || 'summary';
+    return `/${cleanBase}/${year}/${month}`;
+  }
+
+  function setInteractionHint(root, message) {
+    const node = root.querySelector('[data-summary-interaction-hint]');
+    if (node && message) node.textContent = message;
+    const status = root.querySelector('[data-summary-graphs-status]');
+    if (status && message) status.textContent = message;
+  }
+
+  function setGraphsReady(root, ready) {
+    if (root) root.setAttribute('data-summary-graphs-ready', ready ? 'true' : 'false');
+  }
+
+  function readSummaryGraphs(root) {
+    if (root.__summaryGraphsPayload) return root.__summaryGraphsPayload;
+    const node = root.querySelector('[data-summary-graphs-json]');
+    if (!node) return null;
+    try {
+      root.__summaryGraphsPayload = JSON.parse(node.textContent || '{}');
+      return root.__summaryGraphsPayload;
+    } catch (error) {
+      console.error('Nao consegui ler os dados dos gráficos do summary.', error);
+      return null;
+    }
+  }
+
+  function bindSummaryDisclosure({ button, panel, label, openLabel, closeLabel, onOpen = null }) {
+    if (!button || !panel || !label) return;
+
+    function applyState(expanded) {
+      button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      panel.hidden = !expanded;
+      label.textContent = expanded ? closeLabel : openLabel;
+      if (expanded && typeof onOpen === 'function') {
+        window.requestAnimationFrame(() => onOpen());
+      }
+    }
+
+    button.addEventListener('click', () => {
+      const expanded = button.getAttribute('aria-expanded') === 'true';
+      applyState(!expanded);
+    });
+
+    applyState(button.getAttribute('aria-expanded') === 'true');
+  }
+
+  function buildPageScrollStorageKey(prefix) {
+    return `${prefix}:${window.location.pathname}${window.location.search}`;
+  }
+
+  function storePageScrollState(prefix, state) {
+    try {
+      window.sessionStorage.setItem(buildPageScrollStorageKey(prefix), JSON.stringify({ ...state, savedAt: Date.now() }));
+    } catch (_) {}
+  }
+
+  function restorePageScrollState(prefix, beforeRestore = null) {
+    try {
+      const key = buildPageScrollStorageKey(prefix);
+      const raw = window.sessionStorage.getItem(key);
+      if (!raw) return null;
+      window.sessionStorage.removeItem(key);
+      const state = JSON.parse(raw || '{}');
+      if (typeof beforeRestore === 'function') beforeRestore(state);
+      const attemptRestore = () => {
+        if (state && state.selector) {
+          const target = document.querySelector(state.selector);
+          if (target) {
+            target.scrollIntoView({ block: 'center', behavior: 'auto' });
+            return;
+          }
+        }
+        if (state && Number.isFinite(Number(state.y))) {
+          window.scrollTo({ top: Math.max(0, Number(state.y)), behavior: 'auto' });
+        }
+      };
+      window.requestAnimationFrame(() => {
+        attemptRestore();
+        window.setTimeout(attemptRestore, 180);
+      });
+      return state;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function foldCategoryItems(items) {
+    const filtered = Array.isArray(items)
+      ? items.filter((item) => Number(item && item.total_cents || 0) > 0)
+      : [];
+
+    if (filtered.length <= 5) return filtered;
+
+    const visible = filtered.slice(0, 5);
+    const others = filtered.slice(5).reduce((acc, item) => {
+      acc.total_cents += Number(item.total_cents || 0);
+      acc.txn_count += Number(item.txn_count || 0);
+      return acc;
+    }, { id: null, label: 'Outras categorias', total_cents: 0, txn_count: 0, is_uncategorized: false, is_aggregate: true });
+
+    if (others.total_cents > 0) visible.push(others);
+    return visible;
+  }
+
+
+  function renderDonutChart(root, items) {
+    const chartNode = root.querySelector('[data-summary-donut-chart]');
+    const legendNode = root.querySelector('[data-summary-donut-legend]');
+    const summaryNode = root.querySelector('[data-summary-donut-summary]');
+    if (!chartNode || !legendNode || !summaryNode) return;
+
+    const filtered = foldCategoryItems(items);
+    const total = filtered.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
+
+    if (!filtered.length || total <= 0) {
+      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda falta categoria suficiente para montar esse retrato. Quando o mês ganhar mais cara, esse gráfico entra no jogo.</div>';
+      legendNode.innerHTML = '';
+      summaryNode.innerHTML = '';
+      return;
+    }
+
+    const isNarrowScreen = window.matchMedia('(max-width: 767px)').matches;
+    const radius = isNarrowScreen ? 82 : 92;
+    const strokeWidth = isNarrowScreen ? 28 : 30;
+    const circumference = 2 * Math.PI * radius;
+    let offset = 0;
+    const segments = filtered.map((item, index) => {
+      const ratio = Number(item.total_cents || 0) / total;
+      const segmentLength = Math.max(ratio * circumference, 0);
+      const dashOffset = circumference - offset;
+      offset += segmentLength;
+      const color = donutPalette[index % donutPalette.length];
+      const share = Math.max(1, Math.round(ratio * 100));
+      return {
+        ...item,
+        color,
+        share,
+        dashArray: `${segmentLength.toFixed(2)} ${(circumference - segmentLength).toFixed(2)}`,
+        dashOffset: dashOffset.toFixed(2)
+      };
+    });
+
+    const topCategory = segments[0] || null;
+    const totalPurchases = segments.reduce((acc, item) => acc + Number(item.txn_count || 0), 0);
+
+    chartNode.innerHTML = `
+      <div class="op-analytics-donut-shell">
+        <div class="op-analytics-donut-figure">
+          <svg viewBox="0 0 220 220" class="op-analytics-donut-svg" role="img" aria-label="Distribuição por categoria">
+            <circle cx="110" cy="110" r="${radius}" fill="none" stroke="rgba(148,163,184,0.16)" stroke-width="${strokeWidth}"></circle>
+            ${segments.map((segment, index) => `
+              <circle
+                cx="110"
+                cy="110"
+                r="${radius}"
+                fill="none"
+                stroke="${segment.color}"
+                stroke-width="${strokeWidth}"
+                stroke-linecap="round"
+                class="transition-all duration-300"
+                data-summary-donut-segment
+                data-segment-index="${index}"
+                data-segment-focus="false"
+                stroke-dasharray="${segment.dashArray}"
+                stroke-dashoffset="${segment.dashOffset}"></circle>
+            `).join('')}
+          </svg>
+          <div class="op-analytics-donut-center">
+            <span class="op-analytics-donut-center__eyebrow">Total</span>
+            <span class="op-analytics-donut-center__value">${formatMoney(total)}</span>
+            <span class="op-analytics-donut-center__copy" data-summary-donut-center-copy>${filtered.length} categorias no mapa</span>
+          </div>
+        </div>
+      </div>`;
+
+    legendNode.innerHTML = `
+      <div class="op-analytics-category-list">
+        ${segments.map((segment, index) => {
+          const canOpen = !segment.is_aggregate && !segment.is_uncategorized && Number(segment.id || 0) > 0;
+          return `
+            <button type="button" class="op-analytics-category-item group" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}" data-segment-index="${index}" ${canOpen ? '' : 'data-category-disabled="true"'}>
+              <span class="op-analytics-category-item__body">
+                <span class="op-analytics-category-item__top">
+                  <span class="op-analytics-category-item__title">
+                    <span class="op-analytics-category-item__swatch" style="background:${segment.color}"></span>
+                    <span class="op-analytics-category-item__label">${segment.label || 'Sem nome'}</span>
+                  </span>
+                  <span class="op-analytics-category-item__share">${segment.share}%</span>
+                </span>
+                <span class="op-analytics-category-item__meta-row">
+                  <span class="op-analytics-category-item__meta">${segment.txn_count || 0} compra(s)</span>
+                  <span class="op-analytics-category-item__amount">${formatMoney(segment.total_cents)}</span>
+                </span>
+                <span class="op-analytics-category-item__bar"><span style="width:${Math.max(8, Number(segment.share || 0))}%;background:${segment.color}"></span></span>
+              </span>
+            </button>`;
+        }).join('')}
+      </div>`;
+
+    summaryNode.innerHTML = `
+      <div class="op-analytics-donut-summary op-analytics-donut-summary--below">
+        <div class="op-analytics-donut-summary-card">
+          <span class="op-analytics-donut-summary-card__label">Campeã</span>
+          <strong class="op-analytics-donut-summary-card__value">${topCategory ? topCategory.label : 'Ainda sem líder'}</strong>
+          <span class="op-analytics-donut-summary-card__sub">${topCategory ? `${topCategory.share}% do seu pedaço` : 'Quando pintar gasto, a campeã aparece.'}</span>
+        </div>
+        <div class="op-analytics-donut-summary-card">
+          <span class="op-analytics-donut-summary-card__label">Compras lidas</span>
+          <strong class="op-analytics-donut-summary-card__value">${totalPurchases}</strong>
+          <span class="op-analytics-donut-summary-card__sub">só no que entrou no mapa</span>
+        </div>
+        <div class="op-analytics-donut-summary-card">
+          <span class="op-analytics-donut-summary-card__label">Categorias</span>
+          <strong class="op-analytics-donut-summary-card__value">${filtered.length}</strong>
+          <span class="op-analytics-donut-summary-card__sub">aparecendo por aqui</span>
+        </div>
+      </div>`;
+
+    const centerCopy = chartNode.querySelector('[data-summary-donut-center-copy]');
+    const segmentNodes = Array.from(chartNode.querySelectorAll('[data-summary-donut-segment]'));
+    const legendButtons = Array.from(legendNode.querySelectorAll('[data-summary-category-link]'));
+
+    function highlightSegment(index = null) {
+      segmentNodes.forEach((segmentNode, segmentIndex) => {
+        const active = index !== null && Number(index) === segmentIndex;
+        segmentNode.style.opacity = active || index === null ? '1' : '0.28';
+        segmentNode.style.transformOrigin = '110px 110px';
+        segmentNode.style.transform = active && !(prefersReducedMotion && prefersReducedMotion.matches) ? 'scale(1.03)' : 'scale(1)';
+      });
+      if (!centerCopy) return;
+      if (index === null) {
+        centerCopy.textContent = `${filtered.length} categorias no mapa`;
+        return;
+      }
+      const activeSegment = segments[Number(index)];
+      if (!activeSegment) return;
+      centerCopy.textContent = `${activeSegment.label} · ${activeSegment.share}% do seu pedaço`;
+    }
+
+    legendButtons.forEach((button) => {
+      const index = Number(button.getAttribute('data-segment-index') || -1);
+      const disabled = button.hasAttribute('data-category-disabled');
+      const handleEnter = () => highlightSegment(index);
+      const handleLeave = () => highlightSegment(null);
+      button.addEventListener('mouseenter', handleEnter);
+      button.addEventListener('focus', handleEnter);
+      button.addEventListener('mouseleave', handleLeave);
+      button.addEventListener('blur', handleLeave);
+      button.addEventListener('click', () => {
+        const categoryId = Number(button.getAttribute('data-category-id') || 0);
+        const categoryLabel = button.getAttribute('data-category-label') || 'essa categoria';
+        const year = Number(root.getAttribute('data-summary-year') || 0);
+        const month = Number(root.getAttribute('data-summary-month') || 0);
+        if (disabled || !categoryId) {
+          setInteractionHint(root, `${categoryLabel} ficou só na vitrine por enquanto, porque esse pedaço é um agrupado rápido.`);
+          return;
+        }
+        setInteractionHint(root, `Abrindo ${categoryLabel} para você ver onde essa grana apareceu.`);
+        window.location.href = buildMonthUrl(year, month, { f_category: categoryId });
+      });
+    });
+  }
+
+
+
+  function renderLineChart(root, points) {
+    const chartNode = root.querySelector('[data-summary-line-chart]');
+    if (!chartNode) return;
+
+    const filtered = Array.isArray(points) ? points : [];
+    if (!filtered.length) {
+      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não deu para desenhar essa linha direitinho.</div>';
+      return;
+    }
+
+    const isNarrowScreen = window.matchMedia('(max-width: 767px)').matches;
+    const pointSpacing = isNarrowScreen ? 110 : 88;
+    const width = Math.max((filtered.length - 1) * pointSpacing + 96, isNarrowScreen ? 560 : 520);
+    const height = isNarrowScreen ? 240 : 250;
+    const padding = isNarrowScreen ? { top: 24, right: 24, bottom: 42, left: 24 } : { top: 24, right: 18, bottom: 38, left: 18 };
+    const values = filtered.map((point) => Number(point.total_cents || 0));
+    const maxValue = Math.max(...values, 0);
+    const safeMax = maxValue <= 0 ? 1 : maxValue;
+    const stepX = filtered.length === 1 ? 0 : (width - padding.left - padding.right) / (filtered.length - 1);
+
+    const coords = filtered.map((point, index) => {
+      const x = padding.left + (stepX * index);
+      const y = padding.top + ((safeMax - Number(point.total_cents || 0)) / safeMax) * (height - padding.top - padding.bottom);
+      return {
+        ...point,
+        x: Number(x.toFixed(2)),
+        y: Number(y.toFixed(2))
+      };
+    });
+
+    const polyline = coords.map((point) => `${point.x},${point.y}`).join(' ');
+    const areaPolyline = `${padding.left},${height - padding.bottom} ${polyline} ${coords[coords.length - 1].x},${height - padding.bottom}`;
+    const pointCardsMarkup = coords.map((point, index) => `
+          <button type="button" class="rounded-2xl border ${point.is_current ? 'border-violet-300 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/20' : 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/70'} px-3 py-2.5 text-left transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-month-point data-point-index="${index}" data-point-year="${point.year}" data-point-month="${point.month}" data-point-label="${point.label}">
+            <div class="text-[11px] font-bold uppercase tracking-[0.18em] ${point.is_current ? 'text-violet-700 dark:text-violet-300' : 'text-slate-500 dark:text-slate-400'}">${point.label}</div>
+            <div class="mt-1 text-sm font-black ${point.is_current ? 'text-violet-700 dark:text-violet-200' : 'text-slate-900 dark:text-white'}">${formatMoney(point.total_cents)}</div>
+          </button>
+        `).join('');
+
+    chartNode.innerHTML = `
+      <div class="op-analytics-line-layout${isNarrowScreen ? '' : ' op-analytics-line-layout--desktop'}">
+        <div class="op-analytics-line-shell">
+          <div class="op-analytics-line-scroller" data-summary-chart-scroller>
+            <div class="op-analytics-line-stage" style="min-width:${width}px">
+              <svg viewBox="0 0 ${width} ${height}" class="op-analytics-line-svg" role="img" aria-label="Seu pedaço no cartão, mês a mês">
+                <defs>
+                  <linearGradient id="summaryLineFill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.30"></stop>
+                    <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.02"></stop>
+                  </linearGradient>
+                </defs>
+                ${[0.25, 0.5, 0.75, 1].map((step) => {
+                  const y = padding.top + ((height - padding.top - padding.bottom) * step);
+                  return `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="rgba(148,163,184,0.22)" stroke-dasharray="4 6"></line>`;
+                }).join('')}
+                <polygon points="${areaPolyline}" fill="url(#summaryLineFill)"></polygon>
+                <polyline points="${polyline}" fill="none" stroke="#8b5cf6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+                ${coords.map((point) => `
+                  <g>
+                    <circle cx="${point.x}" cy="${point.y}" r="${point.is_current ? 6.5 : 5}" fill="#ffffff" stroke="#8b5cf6" stroke-width="${point.is_current ? 4 : 3}"></circle>
+                    <text x="${point.x}" y="${height - 12}" text-anchor="middle" class="fill-slate-500 text-[11px] font-bold">${point.label}</text>
+                  </g>
+                `).join('')}
+              </svg>
+              ${isNarrowScreen ? '' : coords.map((point, index) => `
+                <button
+                  type="button"
+                  class="absolute h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-transparent bg-transparent outline-none transition focus:border-violet-400"
+                  style="left:${((point.x / width) * 100).toFixed(3)}%;top:${((point.y / height) * 100).toFixed(3)}%"
+                  aria-label="Abrir detalhes de ${point.label}"
+                  data-summary-month-hotspot
+                  data-point-index="${index}"
+                  data-point-year="${point.year}"
+                  data-point-month="${point.month}"
+                  data-point-label="${point.label}"></button>
+              `).join('')}
+            </div>
+          </div>
+          ${isNarrowScreen ? '<div class="op-analytics-line-hint">Arraste para os lados para passear pelos meses.</div>' : ''}
+        </div>
+        <div class="op-analytics-line-points grid grid-cols-2 gap-3 sm:grid-cols-3">
+          ${pointCardsMarkup}
+        </div>
+      </div>`;
+
+    const scroller = chartNode.querySelector('[data-summary-chart-scroller]');
+    if (scroller && isNarrowScreen) {
+      const activePoint = coords.find((point) => point.is_current) || coords[coords.length - 1];
+      if (activePoint) {
+        window.requestAnimationFrame(() => {
+          const targetLeft = Math.max(0, activePoint.x - (scroller.clientWidth / 2));
+          scroller.scrollLeft = targetLeft;
+        });
+      }
+    }
+
+    const hotspots = Array.from(chartNode.querySelectorAll('[data-summary-month-hotspot]'));
+    const pointButtons = Array.from(chartNode.querySelectorAll('[data-summary-month-point]'));
+
+    function handlePreview(index) {
+      const point = coords[Number(index)];
+      if (!point) return;
+      setInteractionHint(root, `${formatCompactMonthSummary(point)}. Toque de novo para abrir esse mês.`);
+    }
+
+    function bindNavigation(button) {
+      button.addEventListener('mouseenter', () => handlePreview(button.getAttribute('data-point-index')));
+      button.addEventListener('focus', () => handlePreview(button.getAttribute('data-point-index')));
+      button.addEventListener('click', () => {
+        const year = Number(button.getAttribute('data-point-year') || 0);
+        const month = Number(button.getAttribute('data-point-month') || 0);
+        const label = button.getAttribute('data-point-label') || 'esse mês';
+        setInteractionHint(root, `Indo para ${label}. Bora comparar esse capítulo da novela financeira.`);
+        const detailBase = root.getAttribute('data-summary-detail-base') || 'summary';
+        window.location.href = buildSummaryUrl(year, month, detailBase);
+      });
+    }
+
+    hotspots.forEach(bindNavigation);
+    pointButtons.forEach(bindNavigation);
+  }
+
+
+  function scheduleRender(callback) {
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(callback, { timeout: 400 });
+      return;
+    }
+    window.setTimeout(callback, 30);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const summaryRoot = document.querySelector('[data-summary-graphs-root]');
+    if (summaryRoot) {
+      const payload = readSummaryGraphs(summaryRoot);
+      let hasRendered = false;
+      let graphPanelSeen = false;
+
+      const renderCharts = () => {
+        if (!payload || hasRendered) return;
+        hasRendered = true;
+        scheduleRender(() => {
+          renderDonutChart(summaryRoot, payload.categories || []);
+          renderLineChart(summaryRoot, payload.monthlyTrend || []);
+          setGraphsReady(summaryRoot, true);
+          setInteractionHint(summaryRoot, 'Gráficos prontos. Agora é só tocar e seguir o fio da meada.');
+        });
+      };
+
+      const graphButton = summaryRoot.querySelector('[data-summary-graphs-toggle]');
+      const graphPanel = summaryRoot.querySelector('[data-summary-graphs-panel]');
+      const graphLabel = summaryRoot.querySelector('[data-summary-graphs-toggle-label]');
+      if (graphButton && graphPanel && graphLabel) {
+        bindSummaryDisclosure({
+          button: graphButton,
+          panel: graphPanel,
+          label: graphLabel,
+          openLabel: 'Mostrar gráficos',
+          closeLabel: 'Esconder gráficos',
+          onOpen: () => {
+            if (graphPanelSeen) return renderCharts();
+            graphPanelSeen = true;
+            if ('IntersectionObserver' in window && graphPanel) {
+              const observer = new IntersectionObserver((entries) => {
+                entries.forEach((entry) => {
+                  if (!entry.isIntersecting) return;
+                  renderCharts();
+                  observer.disconnect();
+                });
+              }, { rootMargin: '140px 0px' });
+              observer.observe(graphPanel);
+            } else {
+              renderCharts();
+            }
+          }
+        });
+      } else {
+        graphPanelSeen = true;
+        renderCharts();
+      }
+
+      const intelRoot = document.querySelector('[data-summary-intel-root]');
+      if (intelRoot) {
+        bindSummaryDisclosure({
+          button: intelRoot.querySelector('[data-summary-intel-toggle]'),
+          panel: intelRoot.querySelector('[data-summary-intel-panel]'),
+          label: intelRoot.querySelector('[data-summary-intel-toggle-label]'),
+          openLabel: 'Mostrar inteligência',
+          closeLabel: 'Esconder inteligência'
+        });
+      }
+
+      const rankingRoot = document.querySelector('[data-summary-ranking-root]');
+      if (rankingRoot) {
+        bindSummaryDisclosure({
+          button: rankingRoot.querySelector('[data-summary-ranking-toggle]'),
+          panel: rankingRoot.querySelector('[data-summary-ranking-panel]'),
+          label: rankingRoot.querySelector('[data-summary-ranking-toggle-label]'),
+          openLabel: 'Mostrar ranking',
+          closeLabel: 'Esconder ranking'
+        });
+      }
+
+      restorePageScrollState('op-summary-scroll', (state) => {
+        if (!state) return;
+        if (state.expandIntel) {
+          const btn = document.querySelector('[data-summary-intel-toggle]');
+          if (btn && btn.getAttribute('aria-expanded') !== 'true') btn.click();
+        }
+        if (state.expandRanking) {
+          const rankBtn = document.querySelector('[data-summary-ranking-toggle]');
+          if (rankBtn && rankBtn.getAttribute('aria-expanded') !== 'true') rankBtn.click();
+        }
+      });
+      document.querySelectorAll('[data-scroll-preserve-form]').forEach((form) => {
+        form.addEventListener('submit', () => {
+          const preferredSelector = form.getAttribute('data-scroll-restore-target');
+          const selector = preferredSelector || '[data-summary-intel-root]';
+          storePageScrollState('op-summary-scroll', {
+            selector,
+            y: window.scrollY || 0,
+            expandIntel: Boolean(form.closest('[data-summary-intel-root]')),
+            expandRanking: Boolean(form.closest('[data-summary-ranking-root]'))
+          });
+        });
+      });
+    }
+
+    const monthRoot = document.querySelector('.op-screen--month');
+    if (monthRoot) {
+      restorePageScrollState('op-month-scroll');
+      let activeTxnSelector = '';
+
+      document.querySelectorAll('[data-month-row][data-txn-id]').forEach((row) => {
+        row.addEventListener('click', () => {
+          const txnId = String(row.getAttribute('data-txn-id') || '').trim();
+          if (!txnId) return;
+          activeTxnSelector = `[data-month-row][data-txn-id="${txnId.replace(/"/g, '\"')}"]`;
+          storePageScrollState('op-month-scroll', { selector: activeTxnSelector, y: window.scrollY || 0 });
+        }, { capture: true });
+      });
+
+      document.addEventListener('submit', (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        if (!form.closest('.op-screen--month')) return;
+        storePageScrollState('op-month-scroll', { selector: activeTxnSelector, y: window.scrollY || 0 });
+      }, true);
+
+      const nativeAssign = window.location.assign.bind(window.location);
+      window.location.assign = (url) => {
+        if (document.querySelector('.op-screen--month')) {
+          storePageScrollState('op-month-scroll', { selector: activeTxnSelector, y: window.scrollY || 0 });
+        }
+        return nativeAssign(url);
+      };
+    }
   });
 })();
 
@@ -1110,7 +1737,8 @@
   }
 
   async function resolveInstallmentScope(form, { actionLabel = 'ajustar a divisão', destructive = false } = {}) {
-    const hasFuture = String(form?.dataset?.hasFutureInstallments || '') === '1';
+    const scopeKind = String(form?.dataset?.futureScopeKind || 'installment').trim().toLowerCase();
+    const hasFuture = String(form?.dataset?.hasFutureCategoryScope || form?.dataset?.hasFutureInstallments || '') === '1';
     const field = ensureHiddenScopeField(form);
 
     if (!hasFuture) {
@@ -1125,26 +1753,30 @@
     }
 
     const label = String(form?.dataset?.installmentLabel || '').trim();
+    const isRecurring = scopeKind === 'recurring';
+    const entityLabel = isRecurring ? 'compra recorrente' : 'compra parcelada';
     const message = [
       destructive
-        ? 'Este item faz parte de uma compra parcelada. Escolha o alcance da exclusão.'
-        : `Este item faz parte de uma compra parcelada. Escolha se deseja ${actionLabel} só nesta parcela ou também nas próximas.`,
+        ? `Este item faz parte de uma ${entityLabel}. Escolha o alcance da exclusão.`
+        : isRecurring
+          ? `Este item faz parte de uma ${entityLabel}. Escolha se deseja ${actionLabel} só nesta compra ou também nas próximas recorrências.`
+          : `Este item faz parte de uma ${entityLabel}. Escolha se deseja ${actionLabel} só nesta parcela ou também nas próximas.`,
       label ? `Compra: ${label}` : ''
     ].filter(Boolean).join('\n\n');
 
     const result = await window.showActionDialog({
-      title: destructive ? 'Excluir compra parcelada' : 'Aplicar em compra parcelada',
+      title: destructive ? `Excluir ${entityLabel}` : `Aplicar em ${entityLabel}`,
       message,
       options: destructive
         ? [
-            { label: 'Cancelar', value: null, tone: 'secondary' },
-            { label: 'Excluir só esta parcela', value: 'single', tone: 'danger' },
-            { label: 'Excluir esta e próximas', value: 'future', tone: 'danger' }
+            { label: `Excluir Só ${isRecurring ? 'Esta Compra' : 'Esta Parcela'}`, value: 'single', tone: 'danger' },
+            { label: `Excluir ${isRecurring ? 'Esta Compra e Próximas Recorrências' : 'Esta e Próximas'}`, value: 'future', tone: 'danger' },
+            { label: 'Cancelar', value: null, tone: 'cancel' }
           ]
         : [
-            { label: 'Cancelar', value: null, tone: 'secondary' },
-            { label: 'Aplicar só nesta parcela', value: 'single', tone: 'primary' },
-            { label: 'Aplicar nesta e nas próximas', value: 'future', tone: 'primary' }
+            { label: `Aplicar Só ${isRecurring ? 'Nesta Compra' : 'Nesta Parcela'}`, value: 'single', tone: 'primary' },
+            { label: `Aplicar ${isRecurring ? 'Nesta Compra e nas Próximas Recorrências' : 'Nesta e nas Próximas'}`, value: 'future', tone: 'primary' },
+            { label: 'Cancelar', value: null, tone: 'cancel' }
           ]
     });
 
@@ -1171,7 +1803,13 @@
 
     (async () => {
       if (needsScope) {
-        const actionLabel = formType === 'delete' ? 'excluir esta compra' : 'ajustar a divisão';
+        const actionLabel = formType === 'delete'
+          ? 'excluir esta compra'
+          : formType === 'category'
+            ? 'mudar a categoria'
+            : formType === 'edit'
+              ? 'salvar essa edição'
+              : 'ajustar a divisão';
         const chosenScope = await resolveInstallmentScope(form, {
           actionLabel,
           destructive: formType === 'delete'
@@ -1604,14 +2242,14 @@
 })();
 
 (function () {
-  const LAST_VISIT_STORAGE_KEY = 'organizapay:last-visit';
-  const STATUS_STYLE_ID = 'organizapay-network-pill-style';
+  const LAST_VISIT_STORAGE_KEY = 'acerttapay:last-visit';
+  const STATUS_STYLE_ID = 'acerttapay-network-pill-style';
 
   function rememberLastVisit() {
     if (window.location.pathname === '/offline.html') return;
 
     const payload = {
-      title: document.title || 'OrganizaPay',
+      title: document.title || 'AcerttaPay',
       path: `${window.location.pathname}${window.location.search}${window.location.hash}`,
       timestamp: new Date().toISOString()
     };
@@ -1752,5 +2390,349 @@
   } else {
     initLastVisitMemory();
     initConnectivityFeedback();
+  }
+})();
+
+
+(function () {
+  function sortPurchaseCategoryOptions(select) {
+    if (!(select instanceof HTMLSelectElement)) return;
+
+    const options = Array.from(select.options || []);
+    if (!options.length) return;
+
+    const firstOption = options.find((option) => String(option.value || '') === '') || null;
+    const customOption = options.find((option) => String(option.value || '') === '__new__') || null;
+    const sortableOptions = options.filter((option) => option !== firstOption && option !== customOption);
+
+    sortableOptions.sort((a, b) => String(a.textContent || '').localeCompare(String(b.textContent || ''), 'pt-BR', { sensitivity: 'base' }));
+
+    const orderedOptions = [];
+    if (firstOption) orderedOptions.push(firstOption);
+    orderedOptions.push(...sortableOptions);
+    if (customOption) orderedOptions.push(customOption);
+
+    orderedOptions.forEach((option) => {
+      select.appendChild(option);
+    });
+  }
+
+  function bindPurchaseCategoryControl(root) {
+    if (!(root instanceof HTMLElement)) return;
+    const select = root.querySelector('[data-purchase-category-select]');
+    const customShell = root.querySelector('[data-purchase-category-custom-shell]');
+    const customInput = root.querySelector('[data-purchase-category-custom-input]');
+    if (!(select instanceof HTMLSelectElement)) return;
+
+    sortPurchaseCategoryOptions(select);
+
+    const sync = () => {
+      const wantsCustom = String(select.value || '') === '__new__';
+      if (customShell instanceof HTMLElement) {
+        customShell.hidden = !wantsCustom;
+      }
+      if (customInput instanceof HTMLInputElement) {
+        customInput.disabled = !wantsCustom;
+        if (!wantsCustom) {
+          customInput.value = '';
+        } else {
+          window.requestAnimationFrame(() => customInput.focus());
+        }
+      }
+    };
+
+    select.addEventListener('change', sync);
+    sync();
+  }
+
+  function initPurchaseCategoryControls(scope = document) {
+    if (!(scope instanceof Document) && !(scope instanceof HTMLElement) && !(scope instanceof DocumentFragment)) {
+      scope = document;
+    }
+    scope.querySelectorAll('[data-purchase-category-control]').forEach((root) => {
+      bindPurchaseCategoryControl(root);
+    });
+  }
+
+  window.OPInitPurchaseCategoryControls = initPurchaseCategoryControls;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => initPurchaseCategoryControls(document));
+  } else {
+    initPurchaseCategoryControls(document);
+  }
+})();
+
+(function () {
+  const STYLE_STORAGE_KEY = 'op-theme-style';
+  const VALID_STYLES = new Set(['classic', 'confete', 'orgulho']);
+  const root = document.documentElement;
+  const body = document.body;
+
+  function getCurrentStyle() {
+    const style = root.dataset.themeStyle;
+    return VALID_STYLES.has(style) ? style : 'classic';
+  }
+
+  function getCurrentAppearance() {
+    return root.classList.contains('dark') ? 'dark' : 'light';
+  }
+
+  function getThemeColor(style, appearance) {
+    if (style === 'confete') {
+      return appearance === 'dark' ? '#221531' : '#fff1f7';
+    }
+    if (style === 'orgulho') {
+      return appearance === 'dark' ? '#34173a' : '#f75f70';
+    }
+    return appearance === 'dark' ? '#020617' : '#eaf2ff';
+  }
+
+  function syncThemeChrome() {
+    const style = getCurrentStyle();
+    const appearance = getCurrentAppearance();
+    root.dataset.themeStyle = style;
+
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeColorMeta) {
+      themeColorMeta.setAttribute('content', getThemeColor(style, appearance));
+    }
+
+    document.querySelectorAll('[data-theme-style-choice]').forEach((button) => {
+      const isActive = button.getAttribute('data-theme-style-choice') === style;
+      button.classList.toggle('is-active', isActive);
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+
+    const styleLabels = {
+      classic: 'Visual Clássico ativo',
+      confete: 'Visual Confete ativo',
+      orgulho: 'Visual Orgulho ativo'
+    };
+    const styleCaptions = {
+      classic: 'Clássico ativo',
+      confete: 'Confete ativo',
+      orgulho: 'Orgulho ativo'
+    };
+
+    document.querySelectorAll('[data-theme-style-open]').forEach((button) => {
+      const label = styleLabels[style] || styleLabels.classic;
+      button.setAttribute('title', `${label}. Toque para trocar.`);
+      button.setAttribute('aria-label', `${label}. Toque para trocar.`);
+    });
+
+    document.querySelectorAll('[data-mobile-theme-style-caption]').forEach((node) => {
+      node.textContent = styleCaptions[style] || styleCaptions.classic;
+    });
+
+    const nextAppearanceLabel = appearance === 'dark' ? 'Modo claro' : 'Modo escuro';
+    const nextAppearanceHelper = appearance === 'dark'
+      ? 'Clareia a tela e deixa tudo mais aberto.'
+      : 'Deixa a tela mais confortável quando a luz abaixa.';
+
+    document.querySelectorAll('[data-mobile-appearance-mode-label]').forEach((node) => {
+      node.textContent = nextAppearanceLabel;
+    });
+    document.querySelectorAll('[data-mobile-appearance-mode-helper]').forEach((node) => {
+      node.textContent = nextAppearanceHelper;
+    });
+    document.querySelectorAll('[data-mobile-appearance-mode-button]').forEach((button) => {
+      button.setAttribute('title', nextAppearanceLabel);
+      button.setAttribute('aria-label', nextAppearanceLabel);
+    });
+  }
+
+  function setThemeStyle(style) {
+    const nextStyle = VALID_STYLES.has(style) ? style : 'classic';
+    root.dataset.themeStyle = nextStyle;
+    try {
+      localStorage.setItem(STYLE_STORAGE_KEY, nextStyle);
+    } catch (error) {
+      // ignore storage issues
+    }
+    syncThemeChrome();
+  }
+
+  function initMobileAppearanceMenu() {
+    const menu = document.querySelector('[data-mobile-appearance-menu]');
+    if (!(menu instanceof HTMLElement)) return;
+
+    const panel = menu.querySelector('.op-mobile-appearance-menu__panel');
+    const openButtons = document.querySelectorAll('[data-mobile-appearance-open]');
+    const backdrop = menu.querySelector('[data-mobile-appearance-backdrop]');
+    const actionButtons = menu.querySelectorAll('[data-mobile-appearance-action]');
+    let isOpen = false;
+
+    function setVisibility(visible) {
+      isOpen = visible;
+      menu.classList.toggle('hidden', !visible);
+      menu.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+
+    openButtons.forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setVisibility(!isOpen);
+      });
+    });
+
+    if (backdrop instanceof HTMLElement) {
+      backdrop.addEventListener('click', () => setVisibility(false));
+    }
+
+    actionButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        window.setTimeout(() => setVisibility(false), 0);
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!isOpen) return;
+      if (!(event.target instanceof Node)) return;
+      if (panel instanceof HTMLElement && panel.contains(event.target)) return;
+      if (Array.from(openButtons).some((button) => button.contains(event.target))) return;
+      setVisibility(false);
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && isOpen) {
+        setVisibility(false);
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 768 && isOpen) {
+        setVisibility(false);
+      }
+    });
+  }
+
+  function initThemeStyleCenter() {
+    const center = document.querySelector('[data-theme-style-center]');
+    if (!(center instanceof HTMLElement)) {
+      syncThemeChrome();
+      return;
+    }
+
+    const openButtons = document.querySelectorAll('[data-theme-style-open]');
+    const closeButtons = center.querySelectorAll('[data-theme-style-close]');
+    const backdrop = center.querySelector('[data-theme-style-backdrop]');
+    const choiceButtons = center.querySelectorAll('[data-theme-style-choice]');
+    let isOpen = false;
+
+    function setVisibility(visible) {
+      isOpen = visible;
+      center.classList.toggle('hidden', !visible);
+      center.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      if (body) {
+        body.classList.toggle('overflow-hidden', visible);
+      }
+    }
+
+    openButtons.forEach((button) => {
+      button.addEventListener('click', () => setVisibility(true));
+    });
+
+    closeButtons.forEach((button) => {
+      button.addEventListener('click', () => setVisibility(false));
+    });
+
+    if (backdrop instanceof HTMLElement) {
+      backdrop.addEventListener('click', () => setVisibility(false));
+    }
+
+    center.addEventListener('click', (event) => {
+      const panel = center.querySelector('.op-style-center-panel');
+      if (!(panel instanceof HTMLElement)) return;
+      if (event.target === center && !panel.contains(event.target)) {
+        setVisibility(false);
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && isOpen) {
+        setVisibility(false);
+      }
+    });
+
+    choiceButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const style = button.getAttribute('data-theme-style-choice') || 'classic';
+        setThemeStyle(style);
+        window.setTimeout(() => setVisibility(false), 120);
+      });
+    });
+
+    syncThemeChrome();
+  }
+
+  window.OPSyncThemeChrome = syncThemeChrome;
+  window.OPSetThemeStyle = setThemeStyle;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      initMobileAppearanceMenu();
+      initThemeStyleCenter();
+    });
+  } else {
+    initMobileAppearanceMenu();
+    initThemeStyleCenter();
+  }
+})();
+
+
+(function () {
+  function initAnalyticsTabs() {
+    document.querySelectorAll('[data-op-tabs]').forEach((root) => {
+      const buttons = Array.from(root.querySelectorAll('[data-op-tab-target]'));
+      const panels = Array.from(root.querySelectorAll('[data-op-tab-panel]'));
+      if (!buttons.length || !panels.length) return;
+
+      const tabStrip = root.querySelector('.op-tab-strip');
+
+      const activate = (targetId, { focus = false } = {}) => {
+        buttons.forEach((button) => {
+          const isActive = button.getAttribute('data-op-tab-target') === targetId;
+          button.classList.toggle('is-active', isActive);
+          button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+          button.setAttribute('tabindex', isActive ? '0' : '-1');
+          if (isActive && focus) button.focus();
+          if (isActive && tabStrip && tabStrip.scrollWidth > tabStrip.clientWidth + 4) {
+            button.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: focus ? 'smooth' : 'auto' });
+          }
+        });
+
+        panels.forEach((panel) => {
+          const isActive = panel.getAttribute('data-op-tab-panel') === targetId;
+          panel.hidden = !isActive;
+        });
+      };
+
+      buttons.forEach((button, index) => {
+        button.addEventListener('click', () => activate(button.getAttribute('data-op-tab-target') || ''));
+        button.addEventListener('keydown', (event) => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+          event.preventDefault();
+          let nextIndex = index;
+          if (event.key === 'ArrowRight') nextIndex = (index + 1) % buttons.length;
+          if (event.key === 'ArrowLeft') nextIndex = (index - 1 + buttons.length) % buttons.length;
+          if (event.key === 'Home') nextIndex = 0;
+          if (event.key === 'End') nextIndex = buttons.length - 1;
+          const nextButton = buttons[nextIndex];
+          if (!nextButton) return;
+          activate(nextButton.getAttribute('data-op-tab-target') || '', { focus: true });
+        });
+      });
+
+      const initialButton = buttons.find((button) => button.getAttribute('aria-selected') === 'true') || buttons[0];
+      activate(initialButton.getAttribute('data-op-tab-target') || '');
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAnalyticsTabs);
+  } else {
+    initAnalyticsTabs();
   }
 })();

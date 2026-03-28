@@ -1,6 +1,17 @@
 <%- include("partials/header", { title: "Dividir compra" }) %>
 
-<div class="mx-auto max-w-5xl space-y-6">
+<%
+  function isSelfParticipant(person) {
+    return !!person && (String(person.profile_kind || "").toLowerCase() === "self" || Number(person.is_owner || 0) !== 0 || !!person.is_self);
+  }
+
+  function getParticipantDisplayName(person) {
+    if (!person) return "";
+    return isSelfParticipant(person) ? "Eu" : String(person.name || "").trim();
+  }
+%>
+
+<div class="op-screen op-screen--txn mx-auto max-w-5xl space-y-6">
   <section class="op-page-hero op-fade-up">
     <div>
       <span class="op-page-hero__eyebrow">Divisão da compra</span>
@@ -22,12 +33,17 @@
         Voltar para o mês
       </a>
       <% if (!isClosed) { %>
-        <button type="submit" form="txn-alloc-form" data-txn-save-button class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
-          <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-          </svg>
-          Salvar divisão
-        </button>
+        <div class="flex flex-wrap gap-2 sm:justify-end">
+          <button type="submit" form="txn-alloc-form" data-txn-save-button data-delivery-mode-button data-delivery-mode="send_now" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
+            <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            Salvar Divisão
+          </button>
+          <button type="submit" form="txn-alloc-form" data-txn-save-button data-delivery-mode-button data-delivery-mode="draft" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
+            Salvar e Mandar Depois
+          </button>
+        </div>
       <% } %>
     </div>
   </section>
@@ -55,6 +71,7 @@
           data-txn-amount-cents="<%= Number(txn.amount_cents || 0) %>"
           data-is-closed="<%= isClosed ? '1' : '0' %>"
         >
+          <input type="hidden" name="delivery_mode" value="send_now" data-delivery-mode-input />
           <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-txn-people-grid>
             <% people.forEach(p => { %>
               <label class="group <%= isClosed ? 'cursor-default' : 'cursor-pointer' %>">
@@ -68,7 +85,7 @@
                   <%= isClosed ? 'disabled' : '' %>
                 />
                 <span class="flex min-h-[74px] items-center gap-3 rounded-[22px] border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-blue-300 group-hover:shadow-md peer-checked:border-blue-400 peer-checked:bg-blue-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-blue-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/40 <%= isClosed ? 'opacity-70' : '' %>">
-                  <span class="flex-1 text-sm font-bold text-slate-800 dark:text-slate-100"><%= p.name %></span>
+                  <span class="flex-1 text-sm font-bold text-slate-800 dark:text-slate-100"><%= getParticipantDisplayName(p) %></span>
                   <span class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 transition-all peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 dark:peer-checked:text-white">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
@@ -129,9 +146,14 @@
           <% } %>
 
           <% if (!isClosed) { %>
+            <div class="rounded-[22px] border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm font-medium text-sky-900 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200">
+              Quer evitar flood quando estiver atribuindo muita compra? Salve agora e mande depois. A cobrança fica na sua caixa de saída até você disparar por pessoa e por mês.
+            </div>
             <div class="flex flex-col gap-3 pt-1 sm:flex-row sm:flex-wrap">
-              <button type="submit" data-txn-save-button class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Salvar</button>
-              <button type="submit" form="delete-txn-form" class="inline-flex items-center justify-center rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-bold text-red-700 transition-all hover:-translate-y-0.5 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200 dark:hover:bg-red-900/35">Excluir compra</button>
+              <button type="submit" data-txn-save-button data-delivery-mode-button data-delivery-mode="send_now" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Salvar e Cobrar Agora</button>
+              <button type="submit" data-txn-save-button data-delivery-mode-button data-delivery-mode="draft" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Salvar e Mandar Depois</button>
+              <% if (!txn.import_id) { %><button type="button" data-edit-txn-open class="inline-flex items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-bold text-emerald-700 transition-all hover:-translate-y-0.5 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:bg-emerald-900/35">Editar Compra</button><% } %>
+              <button type="submit" form="delete-txn-form" class="inline-flex items-center justify-center rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-bold text-red-700 transition-all hover:-translate-y-0.5 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200 dark:hover:bg-red-900/35">Excluir Compra</button>
             </div>
           <% } else { %>
             <span class="inline-flex rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Mês fechado</span>
@@ -140,7 +162,78 @@
       </div>
 
       <% if (!isClosed) { %>
-        <form id="delete-txn-form" method="post" action="/txn/<%= txn.id %>/delete" data-confirm-prompt="Excluir esta compra? Isso apaga o item e a divisão associada." data-confirm-phrase="Eu confirmo" data-installment-scope-form="delete" data-has-future-installments="<%= hasFutureInstallments ? '1' : '0' %>" data-installment-label="<%= txn.description %>"></form>
+        <form id="delete-txn-form" method="post" action="/txn/<%= txn.id %>/delete" data-confirm-prompt="Excluir esta compra? Isso apaga o item e a divisão associada." data-confirm-phrase="Eu confirmo" data-installment-scope-form="delete" data-has-future-installments="<%= (hasFutureInstallments || txn.recurring_rule_id) ? '1' : '0' %>" data-future-scope-kind="<%= txn.recurring_rule_id ? 'recurring' : 'installment' %>" data-installment-label="<%= txn.description %>"></form>
+
+        <div id="txn-edit-modal" class="fixed inset-0 z-[90] hidden" aria-hidden="true">
+          <div data-edit-modal-backdrop class="absolute inset-0 bg-slate-950/55 backdrop-blur-sm"></div>
+          <div class="absolute inset-x-0 bottom-0 top-auto flex max-h-[92vh] flex-col overflow-hidden rounded-t-[32px] border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-h-[88vh] sm:w-full sm:max-w-3xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[32px]">
+            <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+              <div>
+                <div class="text-xs font-black uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-300">Editar compra</div>
+                <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">Sem excluir e lançar de novo, ufa.</div>
+                <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Ajuste os dados da compra e, se houver parcelas ou recorrência, o app pergunta o alcance antes de salvar.</p>
+              </div>
+              <button type="button" data-edit-txn-close class="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-slate-100">✕</button>
+            </div>
+            <div class="flex-1 overflow-y-auto px-5 py-5">
+              <div id="txn-edit-feedback" class="hidden rounded-[22px] border px-4 py-3 text-sm font-semibold"></div>
+              <form id="txn-edit-form" class="mt-4 space-y-4" data-has-future-installments="<%= (hasFutureInstallments || txn.recurring_rule_id) ? '1' : '0' %>" data-future-scope-kind="<%= txn.recurring_rule_id ? 'recurring' : 'installment' %>" data-installment-label="<%= txn.description %>">
+                <div id="txn-edit-summary" class="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/50"></div>
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <label class="block">
+                    <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Data da compra</span>
+                    <input type="date" name="date" value="<%= txn.txn_date %>" required class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-950/70 dark:text-slate-100">
+                  </label>
+                  <label class="block">
+                    <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartão</span>
+                    <select name="card_id" required class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-950/70 dark:text-slate-100">
+                      <% (cards || []).forEach(card => { %>
+                        <option value="<%= card.id %>" data-close-day="<%= card.close_day || '' %>" data-due-day="<%= card.due_day || '' %>" <%= Number(card.id) === Number(txn.card_id || 0) ? 'selected' : '' %>><%= card.name %></option>
+                      <% }) %>
+                    </select>
+                  </label>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <label class="block">
+                    <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Valor total (R$)</span>
+                    <input type="text" name="amount" value="<%= formatBRLFromCents(txn.amount_cents).replace('R$','').trim() %>" required inputmode="decimal" data-money-mask="1" class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-950/70 dark:text-slate-100">
+                  </label>
+                  <label class="block">
+                    <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400"><%= txn.recurring_rule_id ? 'Próxima fatura desta recorrência' : 'Vai cair em qual fatura?' %></span>
+                    <input type="month" name="first_due" value="<%= String(txn.year).padStart(4, '0') %>-<%= String(txn.month).padStart(2, '0') %>" required class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-950/70 dark:text-slate-100">
+                  </label>
+                </div>
+                <label class="block">
+                  <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Descrição</span>
+                  <input type="text" name="description" value="<%= txn.description %>" required class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-950/70 dark:text-slate-100">
+                </label>
+                <div data-purchase-category-control class="space-y-3">
+                  <label class="block">
+                    <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Categoria</span>
+                    <select name="purchase_category_id" data-purchase-category-select class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-950/70 dark:text-slate-100">
+                      <option value="" <%= !txn.purchase_category_id ? 'selected' : '' %>>Sem categoria por enquanto</option>
+                      <% (purchaseCategories || []).forEach(category => { %>
+                        <option value="<%= category.id %>" <%= Number(category.id) === Number(txn.purchase_category_id || 0) ? 'selected' : '' %>><%= category.name %><%= category.active ? '' : ' (arquivada)' %></option>
+                      <% }) %>
+                      <option value="__new__">Criar categoria nova</option>
+                    </select>
+                  </label>
+                  <div data-purchase-category-custom-shell hidden>
+                    <label class="block">
+                      <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nome da nova categoria</span>
+                      <input type="text" name="purchase_category_custom" maxlength="60" placeholder="Ex: Feira de sábado" data-purchase-category-custom-input disabled class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-950/70 dark:text-slate-100">
+                    </label>
+                  </div>
+                </div>
+                <div id="txn-edit-insights" class="space-y-3"></div>
+              </form>
+            </div>
+            <div class="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-800 sm:flex-row sm:justify-end">
+              <button type="button" data-edit-txn-close class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Cancelar</button>
+              <button type="submit" form="txn-edit-form" data-edit-txn-submit class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Salvar alterações</button>
+            </div>
+          </div>
+        </div>
       <% } %>
     </div>
 
@@ -162,9 +255,59 @@
             </div>
             <div class="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/55">
               <div class="op-field-label">Tipo de compra</div>
-              <div class="text-sm font-bold text-slate-700 dark:text-slate-200"><%= hasFutureInstallments ? 'Parcelada' : 'À vista' %></div>
+              <div class="text-sm font-bold text-slate-700 dark:text-slate-200"><%= txn.recurring_rule_id ? 'Recorrente' : (hasFutureInstallments ? 'Parcelada' : 'À vista') %></div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section class="op-form-card">
+        <div class="relative z-10 space-y-4">
+          <div>
+            <div class="op-form-card__title">Categoria da compra</div>
+            <p class="op-form-card__subtitle">Opcional, mas uma mão na roda para organizar depois sem mudar o valor da compra.</p>
+          </div>
+
+          <div class="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/55">
+            <div class="op-field-label">Categoria atual</div>
+            <% if (txn.purchase_category_name) { %>
+              <span class="mt-2 inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200"><%= txn.purchase_category_name %><% if (!txn.purchase_category_active) { %> · arquivada<% } %></span>
+            <% } else { %>
+              <div class="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Sem categoria por enquanto</div>
+            <% } %>
+          </div>
+
+          <% if (!isClosed) { %>
+            <form method="post" action="/txn/<%= txn.id %>/category" class="space-y-3" data-installment-scope-form="category" data-has-future-category-scope="<%= (hasFutureInstallments || txn.recurring_rule_id) ? '1' : '0' %>" data-future-scope-kind="<%= txn.recurring_rule_id ? 'recurring' : 'installment' %>" data-installment-label="<%= txn.description %>">
+              <div data-purchase-category-control class="space-y-3">
+                <div>
+                  <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Escolha a categoria</label>
+                  <select name="purchase_category_id" data-purchase-category-select
+                    class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">
+                    <option value="" <%= !txn.purchase_category_id ? 'selected' : '' %>>Sem categoria por enquanto</option>
+                    <% (purchaseCategories || []).forEach(category => { %>
+                      <option value="<%= category.id %>" <%= Number(txn.purchase_category_id || 0) === Number(category.id) ? 'selected' : '' %>><%= category.name %><%= category.active ? '' : ' (arquivada)' %></option>
+                    <% }) %>
+                    <option value="__new__">Criar categoria nova</option>
+                  </select>
+                </div>
+                <div data-purchase-category-custom-shell hidden>
+                  <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nome da nova categoria</label>
+                  <input type="text" name="purchase_category_custom" maxlength="60" placeholder="Ex: Feira de sábado" data-purchase-category-custom-input disabled
+                    class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">
+                </div>
+              </div>
+              <p class="text-xs font-medium text-slate-500 dark:text-slate-400">A categoria ajuda a organizar a leitura do mês e prepara o terreno para relatórios mais bonitos depois.</p>
+              <% if (txn.recurring_rule_id) { %>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Como essa compra é recorrente, ao salvar você pode decidir se a mudança vale só neste mês ou também nas próximas recorrências.</p>
+              <% } else if (hasFutureInstallments) { %>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Como essa compra é parcelada, ao salvar você pode decidir se a mudança vale só aqui ou também nas próximas parcelas.</p>
+              <% } %>
+              <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Salvar categoria</button>
+            </form>
+          <% } else { %>
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Mês fechado: a categoria aparece aqui, mas qualquer ajuste fica para quando o mês estiver aberto.</p>
+          <% } %>
         </div>
       </section>
 
@@ -189,8 +332,8 @@
             <div class="op-step-item">
               <div class="op-step-item__index">3</div>
               <div>
-                <div class="op-step-item__title">Salve e siga o fluxo normal</div>
-                <div class="op-step-item__text">Cobranças automáticas, resumo do mês e detalhamento continuam funcionando em cima dos valores que você definiu.</div>
+                <div class="op-step-item__title">Escolha se envia agora ou depois</div>
+                <div class="op-step-item__text">Pode cobrar na hora ou guardar na caixa de saída para disparar em lote por pessoa e por mês. O restante do app continua seguindo o mesmo combinado.</div>
               </div>
             </div>
           </div>
@@ -207,7 +350,7 @@
 
     const amountCents = Number(form.dataset.txnAmountCents || 0);
     const isClosed = form.dataset.isClosed === '1';
-    const people = <%- JSON.stringify((people || []).map(p => ({ id: Number(p.id), name: p.name }))).replace(/</g, '\\u003c') %>;
+    const people = <%- JSON.stringify((people || []).map(p => ({ id: Number(p.id), name: p.name, is_self: !!p.is_self, is_owner: !!p.is_owner, profile_kind: p.profile_kind || '' }))).replace(/</g, '\\u003c') %>;
     const selectedIdsSeed = <%- JSON.stringify((selected || []).map(Number)).replace(/</g, '\\u003c') %>;
     const selectedSharesSeed = <%- JSON.stringify(selectedShares || {}).replace(/</g, '\\u003c') %>;
 
@@ -219,6 +362,8 @@
     const errorBox = form.querySelector('[data-split-error]');
     const modeInputs = Array.from(form.querySelectorAll('[data-split-mode-input]'));
     const saveButtons = Array.from(document.querySelectorAll('[data-txn-save-button]'));
+    const deliveryModeInput = form.querySelector('[data-delivery-mode-input]');
+    const deliveryModeButtons = Array.from(document.querySelectorAll('[data-delivery-mode-button]'));
     const draftShares = {};
 
     function formatMoney(cents) {
@@ -337,7 +482,10 @@
 
         const header = document.createElement('div');
         header.className = 'mb-2 flex items-center justify-between gap-3';
-        header.innerHTML = `<span class=\"text-sm font-black text-slate-900 dark:text-slate-100\">${escapeHtml(person.name)}</span><span class=\"text-xs font-semibold text-slate-500 dark:text-slate-400\">Digite a parte dessa pessoa</span>`;
+        const isSelfPerson = person.is_self || String(person.profile_kind || '').toLowerCase() === 'self' || person.is_owner;
+        const personTitle = isSelfPerson ? 'Minha parte' : person.name;
+        const personHint = isSelfPerson ? 'Minha parte' : 'Digite a parte dessa pessoa';
+        header.innerHTML = `<span class=\"text-sm font-black text-slate-900 dark:text-slate-100\">${escapeHtml(personTitle)}</span><span class=\"text-xs font-semibold text-slate-500 dark:text-slate-400\">${escapeHtml(personHint)}</span>`;
         row.appendChild(header);
 
         const input = document.createElement('input');
@@ -403,9 +551,241 @@
     modeInputs.forEach((input) => {
       input.addEventListener('change', syncUi);
     });
+    deliveryModeButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        if (deliveryModeInput) deliveryModeInput.value = button.getAttribute('data-delivery-mode') || 'send_now';
+      });
+    });
 
     syncUi();
 
+
+    const editModal = document.getElementById('txn-edit-modal');
+    const editForm = document.getElementById('txn-edit-form');
+    const editFeedback = document.getElementById('txn-edit-feedback');
+    const editInsights = document.getElementById('txn-edit-insights');
+    const editSummary = document.getElementById('txn-edit-summary');
+    const editOpenButtons = Array.from(document.querySelectorAll('[data-edit-txn-open]'));
+    const editCloseButtons = Array.from(document.querySelectorAll('[data-edit-txn-close]'));
+    const editBackdrop = editModal ? editModal.querySelector('[data-edit-modal-backdrop]') : null;
+    const editTxnSeed = <%- JSON.stringify({
+      id: Number(txn.id || 0),
+      txn_date: txn.txn_date || '',
+      description: txn.description || '',
+      amount_cents: Number(txn.amount_cents || 0),
+      card_id: Number(txn.card_id || 0),
+      card_name: txn.card_name || '',
+      month: Number(txn.month || 0),
+      year: Number(txn.year || 0),
+      purchase_category_id: Number(txn.purchase_category_id || 0),
+      recurring_rule_id: Number(txn.recurring_rule_id || 0),
+      import_id: Number(txn.import_id || 0),
+      has_future_installments: <%= hasFutureInstallments ? 'true' : 'false' %>,
+      selected_ids: (selected || []).map(Number),
+      selected_shares: selectedShares || {}
+    }).replace(/</g, '\u003c') %>;
+
+    function bindMoneyMask(input) {
+      if (!(input instanceof HTMLInputElement)) return;
+      if (window.OPMoneyMask && typeof window.OPMoneyMask.bind === 'function') {
+        window.OPMoneyMask.bind(input);
+      }
+    }
+
+    function formatMonthLabel(month, year) {
+      const date = new Date(Number(year || 0), Math.max(Number(month || 1) - 1, 0), 1);
+      return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    }
+
+    function buildImpactPanel({ tone = 'info', title = '', body = '' } = {}) {
+      const palette = {
+        info: 'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-100',
+        warning: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100',
+        success: 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-100'
+      };
+      const panel = document.createElement('div');
+      panel.className = `rounded-[22px] border px-4 py-3 text-sm ${palette[tone] || palette.info}`;
+      panel.innerHTML = `<div class="text-sm font-black">${escapeHtml(title)}</div><p class="mt-1 leading-6 opacity-90">${escapeHtml(body)}</p>`;
+      return panel;
+    }
+
+    function inferEditSplitMode(item) {
+      const ids = Array.isArray(item?.selected_ids) ? item.selected_ids.map((value) => Number(value || 0)).filter(Boolean) : [];
+      if (ids.length <= 1) return ids.length ? 'single' : 'none';
+      const shares = item?.selected_shares && typeof item.selected_shares === 'object' ? item.selected_shares : {};
+      const amount = Number(item?.amount_cents || 0);
+      const values = ids.map((personId) => Number(shares[personId] || shares[String(personId)] || 0));
+      if (values.reduce((sum, value) => sum + value, 0) !== amount) return 'exact';
+      const base = Math.floor(amount / ids.length);
+      let remainder = amount - (base * ids.length);
+      const expected = ids.map(() => {
+        const next = base + (remainder > 0 ? 1 : 0);
+        if (remainder > 0) remainder -= 1;
+        return next;
+      });
+      return expected.every((value, index) => value === values[index]) ? 'equal' : 'exact';
+    }
+
+    function syncEditSummary() {
+      if (!(editSummary instanceof HTMLElement) || !(editForm instanceof HTMLFormElement)) return;
+      const currentType = editTxnSeed.recurring_rule_id ? 'Recorrente' : (editTxnSeed.has_future_installments ? 'Parcelada' : 'Única');
+      editSummary.innerHTML = `<div class="flex flex-wrap items-center gap-2"><span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Edição segura</span><span class="inline-flex items-center rounded-full bg-slate-900/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:bg-slate-100/10 dark:text-slate-300">${escapeHtml(currentType)}</span></div><div class="mt-2 text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(formatMoney(editTxnSeed.amount_cents))} · ${escapeHtml(formatMonthLabel(editTxnSeed.month, editTxnSeed.year))}</div><p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Cartão atual: ${escapeHtml(editTxnSeed.card_name || 'Sem cartão')}</p>`;
+    }
+
+    function refreshEditInsights() {
+      if (!(editInsights instanceof HTMLElement) || !(editForm instanceof HTMLFormElement)) return;
+      const amountInput = editForm.querySelector('input[name="amount"]');
+      const dateInput = editForm.querySelector('input[name="date"]');
+      const firstDueInput = editForm.querySelector('input[name="first_due"]');
+      const descriptionInput = editForm.querySelector('input[name="description"]');
+      const cardSelect = editForm.querySelector('select[name="card_id"]');
+      editInsights.innerHTML = '';
+
+      if (editTxnSeed.recurring_rule_id) {
+        editInsights.appendChild(buildImpactPanel({ tone: 'info', title: 'Compra recorrente', body: 'Se você aplicar no futuro, a compra atual, as futuras já materializadas e a regra da recorrência andam juntas.' }));
+      } else if (editTxnSeed.has_future_installments) {
+        editInsights.appendChild(buildImpactPanel({ tone: 'info', title: 'Compra parcelada', body: 'Se você aplicar no futuro, a parcela atual e as próximas acompanham a mudança sem perder a ordem.' }));
+      } else {
+        editInsights.appendChild(buildImpactPanel({ tone: 'success', title: 'Compra única', body: 'Aqui a edição vale só para esta compra. Ajustou, salvou e partiu.' }));
+      }
+
+      const splitMode = inferEditSplitMode(editTxnSeed);
+      if (splitMode === 'equal') {
+        editInsights.appendChild(buildImpactPanel({ tone: 'success', title: 'Divisão em partes iguais detectada', body: 'Se o valor mudar, o app recalcula as partes automaticamente para manter tudo redondinho.' }));
+      } else if (splitMode === 'exact') {
+        editInsights.appendChild(buildImpactPanel({ tone: 'warning', title: 'Divisão com valores definidos', body: 'Se o valor mudar, o app pode travar o salvamento até a divisão ser revisada. Melhor evitar surpresa no acerto.' }));
+      }
+
+      const originalDue = `${String(editTxnSeed.year || 0).padStart(4, '0')}-${String(editTxnSeed.month || 0).padStart(2, '0')}`;
+      if (descriptionInput instanceof HTMLInputElement && editTxnSeed.has_future_installments && descriptionInput.value.trim() !== String(editTxnSeed.description || '').trim()) {
+        editInsights.appendChild(buildImpactPanel({ tone: 'info', title: 'Nome das parcelas continua organizado', body: 'Ao aplicar no futuro, o novo nome-base vai junto e o contador das parcelas continua em ordem.' }));
+      }
+      if (firstDueInput instanceof HTMLInputElement && /^\d{4}-\d{2}$/.test(firstDueInput.value) && firstDueInput.value !== originalDue) {
+        editInsights.appendChild(buildImpactPanel({ tone: 'warning', title: 'Fatura de destino alterada', body: editTxnSeed.recurring_rule_id ? 'A base da recorrência passa a olhar para a nova fatura escolhida.' : 'Se você aplicar no futuro, as próximas parcelas reencaixam nessa fatura também.' }));
+      }
+      if (cardSelect instanceof HTMLSelectElement && Number(cardSelect.value || 0) !== Number(editTxnSeed.card_id || 0)) {
+        editInsights.appendChild(buildImpactPanel({ tone: 'warning', title: 'Cartão novo na jogada', body: 'Trocar o cartão também mexe na fatura de destino e respeita bloqueios de mês fechado.' }));
+      }
+      if (dateInput instanceof HTMLInputElement && dateInput.value && dateInput.value !== String(editTxnSeed.txn_date || '')) {
+        editInsights.appendChild(buildImpactPanel({ tone: 'info', title: 'Data da compra mudou', body: 'O app recalcula a sugestão de fatura com base no cartão escolhido. Se você travar a fatura manualmente, a gente respeita.' }));
+      }
+      if (amountInput instanceof HTMLInputElement && amountInput.value && amountInput.value !== formatInputFromCents(editTxnSeed.amount_cents)) {
+        editInsights.appendChild(buildImpactPanel({ tone: splitMode === 'exact' ? 'warning' : 'info', title: 'Valor alterado', body: splitMode === 'exact' ? 'Esse é o ponto mais sensível porque a divisão já foi desenhada no detalhe.' : 'Se não houver trava de liquidação ou mês fechado, o valor novo segue normalmente.' }));
+      }
+    }
+
+    function setEditFeedback(message, tone = 'error') {
+      if (!(editFeedback instanceof HTMLElement)) return;
+      if (!message) {
+        editFeedback.className = 'hidden rounded-[22px] border px-4 py-3 text-sm font-semibold';
+        editFeedback.textContent = '';
+        return;
+      }
+      const palette = {
+        error: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200',
+        success: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
+        warning: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
+      };
+      editFeedback.className = `rounded-[22px] border px-4 py-3 text-sm font-semibold ${palette[tone] || palette.error}`;
+      editFeedback.textContent = message;
+    }
+
+    function openEditModal() {
+      if (!(editModal instanceof HTMLElement)) return;
+      editModal.classList.remove('hidden');
+      editModal.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('overflow-hidden');
+      syncEditSummary();
+      refreshEditInsights();
+      if (window.OPInitPurchaseCategoryControls) {
+        const shell = editForm?.querySelector('[data-purchase-category-control]');
+        if (shell) window.OPInitPurchaseCategoryControls(shell);
+      }
+      const amountInput = editForm?.querySelector('input[name="amount"]');
+      if (amountInput instanceof HTMLInputElement) bindMoneyMask(amountInput);
+      setEditFeedback('');
+    }
+
+    function closeEditModal() {
+      if (!(editModal instanceof HTMLElement)) return;
+      editModal.classList.add('hidden');
+      editModal.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('overflow-hidden');
+      setEditFeedback('');
+    }
+
+    if (editForm instanceof HTMLFormElement) {
+      const amountInput = editForm.querySelector('input[name="amount"]');
+      const dateInput = editForm.querySelector('input[name="date"]');
+      const firstDueInput = editForm.querySelector('input[name="first_due"]');
+      const descriptionInput = editForm.querySelector('input[name="description"]');
+      const cardSelect = editForm.querySelector('select[name="card_id"]');
+      const syncSuggestedDue = () => {
+        if (!(dateInput instanceof HTMLInputElement) || !(firstDueInput instanceof HTMLInputElement) || !(cardSelect instanceof HTMLSelectElement)) return;
+        const selectedOption = cardSelect.options[cardSelect.selectedIndex];
+        const suggested = (window.OPComputeSuggestedFirstDue || (() => ''))(dateInput.value, selectedOption?.dataset.closeDay || '', selectedOption?.dataset.dueDay || '');
+        if (suggested && !firstDueInput.dataset.touched) firstDueInput.value = suggested;
+      };
+      [amountInput, dateInput, firstDueInput, descriptionInput, cardSelect].forEach((field) => {
+        if (!field) return;
+        field.addEventListener('input', refreshEditInsights);
+        field.addEventListener('change', () => {
+          if (field === dateInput || field === cardSelect) syncSuggestedDue();
+          if (field === firstDueInput) firstDueInput.dataset.touched = '1';
+          refreshEditInsights();
+        });
+      });
+      bindMoneyMask(amountInput);
+      syncSuggestedDue();
+      editForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setEditFeedback('');
+        const descriptionField = editForm.querySelector('input[name="description"]');
+        if (descriptionField instanceof HTMLInputElement && !descriptionField.value.trim()) {
+          setEditFeedback('A descrição da compra não pode ficar em branco.', 'warning');
+          descriptionField.focus();
+          return;
+        }
+        let scope = 'single';
+        if (String(editForm.dataset.hasFutureInstallments || '') === '1') {
+          scope = await window.resolveInstallmentScope(editForm, { actionLabel: 'salvar essa edição' });
+          if (!scope) return;
+        }
+        const payload = new URLSearchParams(new FormData(editForm));
+        payload.set('apply_scope', scope);
+        const submitButton = document.querySelector('[data-edit-txn-submit]');
+        if (submitButton instanceof HTMLButtonElement) submitButton.disabled = true;
+        try {
+          const response = await fetch(`/txn/${editTxnSeed.id}/edit`, {
+            method: 'POST',
+            body: payload.toString(),
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-AcerttaPay-Async': '1'
+            }
+          });
+          const data = await response.json().catch(() => null);
+          if (!response.ok || !data || data.ok === false) throw new Error((data && (data.error || data.message)) || 'Não consegui salvar essa edição agora.');
+          setEditFeedback(data.message || 'Compra atualizada com sucesso.', 'success');
+          window.setTimeout(() => { window.location.href = `/txn/${editTxnSeed.id}`; }, 280);
+        } catch (error) {
+          console.error(error);
+          setEditFeedback(error.message || 'Não consegui salvar essa edição agora.', 'error');
+        } finally {
+          if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
+        }
+      });
+    }
+
+    editOpenButtons.forEach((button) => button.addEventListener('click', openEditModal));
+    editCloseButtons.forEach((button) => button.addEventListener('click', closeEditModal));
+    if (editBackdrop instanceof HTMLElement) editBackdrop.addEventListener('click', closeEditModal);
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && editModal instanceof HTMLElement && !editModal.classList.contains('hidden')) {
+        closeEditModal();
+      }
+    });
     if (!isClosed) {
       form.addEventListener('submit', (event) => {
         const selectedIds = getSelectedIds();

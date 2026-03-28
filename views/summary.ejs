@@ -1,12 +1,12 @@
-<%- include("partials/header", { title: `OrganizaPay | Resumo ${String(month).padStart(2,'0')}/${year}` }) %>
+<%- include("partials/header", { title: `AcerttaPay | Fechamento ${String(month).padStart(2,'0')}/${year}` }) %>
 
-  <div class="w-full" data-summary-autosave-root data-year="<%= year %>" data-month="<%= month %>">
+  <div class="op-screen op-screen--summary w-full" data-summary-autosave-root data-year="<%= year %>" data-month="<%= month %>">
 
     <section class="op-page-hero op-fade-up mb-8">
       <div>
-        <span class="op-page-hero__eyebrow">Fechamento inteligente</span>
-        <h1 class="op-page-hero__title mt-4">Resumo — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
-        <p class="op-page-hero__subtitle mt-3">Veja cartões, pessoas e pagamentos do mês sem precisar caçar informação em várias telas.</p>
+        <span class="op-page-hero__eyebrow">Conferência do mês</span>
+        <h1 class="op-page-hero__title mt-4">Fechamento do mês — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
+        <p class="op-page-hero__subtitle mt-3">Confira cartões, pessoas e pagamentos do mês sem misturar isso com os gráficos.</p>
       </div>
       <div class="op-page-hero__actions">
         <a href="/month/<%= year %>/<%= month %>"
@@ -16,12 +16,15 @@
           </svg>
           Ver compras
         </a>
+        <a href="/analytics/<%= year %>/<%= month %>"
+          class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
+          <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6m4 6V7m4 10v-3M5 19h14"></path>
+          </svg>
+          Ver análises
+        </a>
       </div>
     </section>
-
-    <div class="mb-6 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold leading-6 text-sky-900 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100 lg:hidden">
-      💡 Dica amiga: no celular, esse resumo respira melhor na horizontal. Na vertical também funciona, mas de lado os números ficam bem mais confortáveis.
-    </div>
 
     <% if (isClosed) { %>
       <div class="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
@@ -148,9 +151,17 @@
               <% const personPanelTotals = personPanel.reduce((acc, pp) => {
                    acc.total_cents += pp.total_cents || 0;
                    acc.paid_cents += pp.paid_cents || 0;
+                   acc.manual_paid_cents += pp.manual_paid_cents || 0;
+                   acc.auto_paid_cents += pp.auto_paid_cents || 0;
                    acc.remaining_cents += (pp.total_cents || 0) - (pp.paid_cents || 0);
                    return acc;
-                 }, { total_cents: 0, paid_cents: 0, remaining_cents: 0 }); %>
+                 }, { total_cents: 0, paid_cents: 0, manual_paid_cents: 0, auto_paid_cents: 0, remaining_cents: 0 });
+                 const hasAutoPersonPayments = personPanel.some((pp) => Number(pp.auto_paid_cents || 0) > 0); %>
+              <% if (hasAutoPersonPayments) { %>
+                <div class="border-b border-indigo-100 bg-indigo-50/80 px-5 py-4 text-sm font-medium leading-6 text-indigo-900 dark:border-indigo-900/40 dark:bg-indigo-950/20 dark:text-indigo-100">
+                  💡 O Pix confirmado do cartão entra sozinho nessa conta. O campo editável continua sendo só o ajuste manual do mês.
+                </div>
+              <% } %>
               <div data-summary-people-panel>
                 <div class="overflow-x-auto op-summary-scroll-shell">
                   <table class="w-full text-sm text-left">
@@ -159,7 +170,8 @@
                       <tr>
                         <th class="px-4 py-4">Pessoa</th>
                         <th class="px-4 py-4 text-right">Total (Deve)</th>
-                        <th class="px-4 py-4 text-right">Já Pagou</th>
+                        <th class="px-4 py-4 text-right">Já entrou</th>
+                        <th class="px-4 py-4 text-right">Ajuste manual</th>
                         <th class="px-4 py-4 text-right">Falta</th>
                       </tr>
                     </thead>
@@ -167,18 +179,32 @@
                       <% personPanel.forEach(pp=> {
                         const falta = (pp.total_cents || 0) - (pp.paid_cents || 0);
                         %>
-                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors" data-summary-person-row data-person-id="<%= pp.person_id %>" data-total-cents="<%= pp.total_cents || 0 %>">
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors" data-summary-person-row data-person-id="<%= pp.person_id %>" data-total-cents="<%= pp.total_cents || 0 %>" data-auto-paid-cents="<%= pp.auto_paid_cents || 0 %>">
                           <td class="px-4 py-3 font-bold text-slate-800 dark:text-white">
                             <%= pp.person_name %>
                           </td>
                           <td class="px-4 py-3 text-right font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap op-summary-amount-cell">
                             <%= formatBRLFromCents(pp.total_cents) %>
                           </td>
-                          <td class="px-4 py-3 text-right">
+                          <td class="px-4 py-3 text-right align-top">
+                            <div data-summary-person-combined data-person-id="<%= pp.person_id %>" class="font-black text-indigo-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(pp.paid_cents || 0) %></div>
+                            <div class="mt-1 flex flex-wrap justify-end gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                              <% if (Number(pp.auto_paid_cents || 0) > 0) { %>
+                                <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pix <%= formatBRLFromCents(pp.auto_paid_cents || 0) %></span>
+                              <% } %>
+                              <% if (Number(pp.manual_paid_cents || 0) > 0) { %>
+                                <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">Ajuste <%= formatBRLFromCents(pp.manual_paid_cents || 0) %></span>
+                              <% } else { %>
+                                <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">Sem ajuste manual</span>
+                              <% } %>
+                            </div>
+                          </td>
+                          <td class="px-4 py-3 text-right align-top">
                             <input name="paid" inputmode="numeric" type="text"
-                              value="<%= formatBRLFromCents(pp.paid_cents || 0) %>" <%= isClosed ? 'disabled' : '' %>
+                              value="<%= formatBRLFromCents(pp.manual_paid_cents || 0) %>" <%= isClosed ? 'disabled' : '' %>
                               data-money-mask data-summary-person-paid data-person-id="<%= pp.person_id %>"
                               class="op-summary-money-input text-right border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+                            <p class="mt-2 text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400">Aqui entra só o ajuste manual. O Pix confirmado soma sozinho.</p>
                           </td>
                           <td data-summary-person-remaining data-person-id="<%= pp.person_id %>"
                             class="px-4 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">
@@ -192,8 +218,16 @@
                         <td class="px-4 py-3 font-black text-slate-800 dark:text-white">Total</td>
                         <td class="px-4 py-3 text-right font-black text-slate-900 dark:text-white whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(personPanelTotals.total_cents) %></td>
                         <td data-summary-people-total-paid class="px-4 py-3 text-right font-black text-indigo-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(personPanelTotals.paid_cents) %></td>
+                        <td data-summary-people-total-manual class="px-4 py-3 text-right font-black text-slate-700 dark:text-slate-200 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(personPanelTotals.manual_paid_cents) %></td>
                         <td data-summary-people-total-remaining class="px-4 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= personPanelTotals.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(personPanelTotals.remaining_cents) %></td>
                       </tr>
+                      <% if (personPanelTotals.auto_paid_cents > 0) { %>
+                        <tr>
+                          <td colspan="5" class="px-4 pb-4 text-right text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                            Desses <span class="font-bold text-emerald-600 dark:text-emerald-300"><%= formatBRLFromCents(personPanelTotals.auto_paid_cents) %></span> já vieram automaticamente do Pix confirmado do cartão.
+                          </td>
+                        </tr>
+                      <% } %>
                     </tfoot>
                   </table>
                 </div>
@@ -274,6 +308,7 @@
 
   </div>
 
-  
+
+  </div>
 
   <%- include("partials/footer") %>

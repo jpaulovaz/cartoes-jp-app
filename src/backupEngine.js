@@ -8,9 +8,9 @@ const { execFile } = require('child_process');
 const fsp = fs.promises;
 const execFileAsync = promisify(execFile);
 
-const BACKUP_FILE_PREFIX = 'organizapay-backup';
+const BACKUP_FILE_PREFIX = 'acerttapay-backup';
 const BACKUP_MANIFEST_FILENAME = 'manifest.json';
-const BACKUP_SIGNATURE = 'organizapay-backup-v1';
+const BACKUP_SIGNATURE = 'acerttapay-backup-v1';
 const DEFAULT_PRIMARY_BACKUP_DIR = 'data/backups/local-principal';
 const DEFAULT_SECONDARY_BACKUP_DIR = 'data/backups/local-espelho';
 
@@ -74,7 +74,7 @@ function backupStatusTone(status) {
   return 'muted';
 }
 
-function createTempWorkspace(prefix = 'organizapay-backup-') {
+function createTempWorkspace(prefix = 'acerttapay-backup-') {
   return fsp.mkdtemp(path.join(os.tmpdir(), prefix));
 }
 
@@ -145,7 +145,7 @@ function validateZipEntries(entries) {
   });
 
   if (!safeEntries.includes(BACKUP_MANIFEST_FILENAME)) {
-    throw new Error('Esse zip não parece ter sido criado pelo OrganizaPay: faltou o manifest.json oficial.');
+    throw new Error('Esse zip não parece ter sido criado pelo AcerttaPay: faltou o manifest.json oficial.');
   }
 }
 

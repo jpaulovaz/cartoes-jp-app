@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="96" viewBox="0 0 160 96" role="img" aria-label="Aura">
+  <rect width="160" height="96" rx="24" fill="#ffffff"/>
+  <rect x="4" y="4" width="152" height="88" rx="20" fill="#f5f3ff" stroke="#ddd6fe"/>
+  <circle cx="80" cy="48" r="27" fill="none" stroke="#8b5cf6" stroke-width="10"/>
+  <circle cx="80" cy="48" r="10" fill="#c4b5fd"/>
+  <text x="80" y="85" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="800" fill="#6d28d9" letter-spacing="2">AURA</text>
+</svg>

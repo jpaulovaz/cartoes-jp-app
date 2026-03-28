@@ -5,24 +5,41 @@
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
   const monthNames = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho',
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ];
-  const selectedMonth = currentMonth;
-  const selectedYear = currentYear;
+  const seed = formSeed || (importPreview && importPreview.formSeed) || {};
+  const selectedMonth = Number(seed.month || currentMonth);
+  const selectedYear = Number(seed.year || currentYear);
+  const selectedCardId = Number(seed.cardId || 0);
   const years = [];
   for (let year = currentYear - 1; year <= currentYear + 3; year += 1) years.push(year);
+
+  const preview = importPreview || null;
+  const previewItems = Array.isArray(preview?.items) ? preview.items.slice() : [];
+  const previewItemMap = new Map(previewItems.map((item) => [item.id, item]));
+  const previewAutoItems = Array.isArray(preview?.autoItemIds)
+    ? preview.autoItemIds.map((itemId) => previewItemMap.get(itemId)).filter(Boolean)
+    : [];
+  const previewAppCandidates = Array.isArray(preview?.appDuplicateCandidates) ? preview.appDuplicateCandidates : [];
+  const previewCsvGroups = Array.isArray(preview?.csvDuplicateGroups) ? preview.csvDuplicateGroups : [];
+  const previewSummary = preview?.summary || {};
+  const defaultReviewTab = previewAppCandidates.length > 0 ? 'app' : (previewCsvGroups.length > 0 ? 'csv' : 'final');
+  const reviewReady = Boolean(preview);
 %>
 
-<div class="mx-auto max-w-5xl space-y-6 pb-24">
+<div class="mx-auto max-w-6xl space-y-6 pb-24">
   <section class="op-page-hero op-fade-up">
     <div>
       <span class="op-page-hero__eyebrow">Trazer fatura pro app</span>
       <h1 class="op-page-hero__title mt-4">Importar fatura em CSV</h1>
-      <p class="op-page-hero__subtitle mt-3">Envie o CSV do cartão e diga em qual mês essa fatura deve cair por aqui.</p>
+      <p class="op-page-hero__subtitle mt-3">Agora o fluxo ganhou um pit-stop: antes de gravar, voce revisa o que entrou no arquivo, confere suspeitas de duplicidade e decide o que realmente vai pousar por aqui.</p>
       <div class="op-page-hero__meta mt-4">
-        <span class="badge"><%= cards.length %> cartão(ões) disponível(is)</span>
-        <span class="badge">Disponível conforme sua permissão</span>
+        <span class="badge"><%= cards.length %> cartao(oes) disponivel(is)</span>
+        <span class="badge">Disponivel conforme sua permissao</span>
+        <% if (reviewReady) { %>
+          <span class="badge">Previa pronta para revisao</span>
+        <% } %>
       </div>
     </div>
   </section>
@@ -31,33 +48,56 @@
     <div class="op-inline-alert op-inline-alert--danger">
       <div class="op-inline-alert__icon">⚠️</div>
       <div>
-        <div class="op-inline-alert__title">Não foi possível importar o arquivo</div>
+        <div class="op-inline-alert__title">Nao foi possivel analisar o arquivo</div>
         <div class="op-inline-alert__text"><%= error %></div>
       </div>
     </div>
   <% } %>
 
-  <div class="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(300px,0.85fr)]">
+  <% if (reviewReady) { %>
+    <section class="rounded-[30px] border border-violet-200 bg-violet-50/90 p-5 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/25">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div class="text-xs font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Previa pronta</div>
+          <h2 class="mt-2 text-lg font-black text-slate-900 dark:text-slate-100"><%= preview.cardName %> · <%= preview.periodLabel %></h2>
+          <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Arquivo <span class="font-bold"><%= preview.originalFilename %></span> analisado. Agora voce confere o pente-fino e decide com calma o que entra.</p>
+        </div>
+        <div class="flex flex-col gap-3 sm:flex-row">
+          <button type="button" data-open-import-review class="inline-flex items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700">
+            Abrir revisao
+          </button>
+          <form id="import-review-cancel-form" method="post" action="/import/preview/cancel">
+            <input type="hidden" name="preview_id" value="<%= preview.id %>">
+            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
+              Descartar previa
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+  <% } %>
+
+  <div class="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
     <section class="op-surface-card rounded-[32px] border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-700 dark:bg-slate-800">
       <div class="mb-5">
         <h2 class="text-lg font-black text-slate-900 dark:text-slate-100">Trazer nova fatura</h2>
-        <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">Escolha o cartão, diga em qual mês ela entra e envie o CSV original da operadora.</p>
+        <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">Escolha o cartao, diga em qual mes essa fatura entra e envie o CSV original da operadora. Em seguida, o app abre a revisao antes de gravar.</p>
       </div>
 
       <form method="post" action="/import" enctype="multipart/form-data" class="space-y-5">
         <div>
-          <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartão</label>
+          <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartao</label>
           <select name="card_id" required class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">
-            <option value="">Selecione um cartão</option>
-            <% cards.forEach(card => { %>
-              <option value="<%= card.id %>"><%= card.name %></option>
+            <option value="">Selecione um cartao</option>
+            <% cards.forEach((card) => { %>
+              <option value="<%= card.id %>" <%= Number(card.id) === selectedCardId ? 'selected' : '' %>><%= card.name %></option>
             <% }) %>
           </select>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
-            <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Vai entrar em qual mês?</label>
+            <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Vai entrar em qual mes?</label>
             <select name="month" required class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">
               <% monthNames.forEach((label, index) => { %>
                 <option value="<%= index + 1 %>" <%= (index + 1) === selectedMonth ? 'selected' : '' %>><%= label %></option>
@@ -67,7 +107,7 @@
           <div>
             <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ano</label>
             <select name="year" required class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">
-              <% years.forEach(year => { %>
+              <% years.forEach((year) => { %>
                 <option value="<%= year %>" <%= year === selectedYear ? 'selected' : '' %>><%= year %></option>
               <% }) %>
             </select>
@@ -87,16 +127,16 @@
             </span>
             <span>
               <span class="block text-sm font-black text-slate-900 dark:text-slate-100">Escolher CSV</span>
-              <span class="mt-1 block text-sm font-medium text-slate-500 dark:text-slate-400">Use o arquivo exportado da operadora do cartão. Formatos aceitos: .csv</span>
+              <span data-import-file-label class="mt-1 block text-sm font-medium text-slate-500 dark:text-slate-400">Use o arquivo exportado da operadora do cartao. Formatos aceitos: .csv</span>
             </span>
-            <input type="file" name="csvfile" accept=".csv,text/csv" required class="sr-only">
+            <input type="file" name="csvfile" accept=".csv,text/csv" required class="sr-only" data-import-file-input>
           </label>
-          <p class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">O exemplo ajuda a conferir o formato antes de enviar o arquivo real.</p>
+          <p class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">Depois do upload, o app monta a revisao com as suspeitas no app, repeticoes no CSV e o que realmente vai entrar.</p>
         </div>
 
         <div class="flex flex-col gap-3 pt-2 sm:flex-row">
           <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
-            Trazer fatura
+            Analisar fatura
           </button>
         </div>
       </form>
@@ -104,22 +144,522 @@
 
     <aside class="space-y-4">
       <section class="op-surface-card rounded-[32px] border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-700 dark:bg-slate-800">
-        <h2 class="text-sm font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Antes de importar</h2>
+        <h2 class="text-sm font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Como a revisao funciona</h2>
         <ul class="mt-4 space-y-3 text-sm font-medium text-slate-600 dark:text-slate-300">
-          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">1</span><span>Confirme se o CSV pertence ao cartão escolhido.</span></li>
-          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">2</span><span>Escolha o mês em que essa fatura deve entrar no app.</span></li>
-          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">3</span><span>Se precisar, baixe o <strong>CSV modelo</strong> para conferir a estrutura esperada antes de enviar o arquivo real.</span></li>
-          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">4</span><span>O app faz um pente-fino básico contra duplicidade: o que já existir igualzinho ou vier repetido no próprio CSV fica de fora.</span></li>
-          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">5</span><span>Depois da importação, revise as compras do mês para distribuir e ajustar participantes.</span></li>
+          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">1</span><span>O CSV eh lido sem gravar nada primeiro. O app so monta a previa.</span></li>
+          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">2</span><span>Compras com mesmo dia e valor no mes escolhido aparecem na aba de suspeitas do app.</span></li>
+          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">3</span><span>Linhas identicas dentro do proprio CSV ganham uma aba propria para voce decidir quantas entram.</span></li>
+          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">4</span><span>A ultima aba mostra o total final selecionado, comparando com o valor do arquivo para voce bater o olho antes do ok.</span></li>
+          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">5</span><span>So depois da confirmacao a importacao de verdade acontece.</span></li>
         </ul>
       </section>
 
       <section class="rounded-[28px] border border-amber-200 bg-amber-50/90 p-5 text-sm font-medium text-amber-900 shadow-sm dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
-        <div class="text-xs font-black uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">Importante</div>
-        <p class="mt-3 leading-6">Se o mesmo arquivo voltar para a pista, o app tenta segurar linhas idênticas para evitar duplicidade. O que estiver certinho entra; o que parecer repetido fica de fora e vira recado claro pra você.</p>
+        <div class="text-xs font-black uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">Dica de uso</div>
+        <p class="mt-3 leading-6">Se o total final selecionado nao bater com o arquivo, vale checar se parte da fatura ja foi lancada manualmente por aqui. A diferenca aparece na tela justamente para evitar pegadinha.</p>
       </section>
     </aside>
   </div>
 </div>
+
+<% if (reviewReady) { %>
+  <div data-import-review-modal data-initial-open="1" class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/70 p-0 sm:items-center sm:p-6">
+    <div class="absolute inset-0" data-import-review-backdrop></div>
+    <section class="relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-slate-900 sm:h-auto sm:max-h-[92vh] sm:max-w-7xl sm:rounded-[32px] sm:border sm:border-slate-200 sm:ring-1 sm:ring-slate-200 dark:sm:border-slate-700 dark:sm:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="import-review-title">
+      <form id="import-review-form" method="post" action="/import/confirm" class="flex min-h-0 flex-1 flex-col">
+        <input type="hidden" name="preview_id" value="<%= preview.id %>">
+        <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800 sm:px-8 sm:py-6">
+          <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div>
+              <div class="text-xs font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Revisao antes de importar</div>
+              <h2 id="import-review-title" class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100"><%= preview.cardName %> · <%= preview.periodLabel %></h2>
+              <p class="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Arquivo <span class="font-bold text-slate-800 dark:text-slate-100"><%= preview.originalFilename %></span> com <span class="font-bold"><%= previewSummary.parsedCount || 0 %></span> compra(s), somando <span class="font-bold"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></span>.</p>
+            </div>
+            <div class="flex flex-wrap gap-3">
+              <button type="button" data-import-review-close class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800">
+                Fechar modal
+              </button>
+              <button type="submit" data-import-review-confirm class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+                Confirmar importacao
+              </button>
+            </div>
+          </div>
+
+          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div class="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/70">
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">No arquivo</div>
+              <div class="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></div>
+              <div class="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.parsedCount || 0 %> linha(s) lida(s)</div>
+            </div>
+            <div class="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Suspeitas no app</div>
+              <div class="mt-2 text-2xl font-black text-amber-900 dark:text-amber-100"><%= previewSummary.appDuplicateTotalLabel || formatBRLFromCents(0) %></div>
+              <div class="mt-1 text-sm font-semibold text-amber-700/80 dark:text-amber-200/80"><%= previewSummary.appDuplicateCount || 0 %> compra(s) para revisar</div>
+            </div>
+            <div class="rounded-[24px] border border-sky-200 bg-sky-50 px-4 py-4 dark:border-sky-900/60 dark:bg-sky-950/20">
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Repetidas no CSV</div>
+              <div class="mt-2 text-2xl font-black text-sky-900 dark:text-sky-100"><%= previewSummary.csvDuplicateTotalLabel || formatBRLFromCents(0) %></div>
+              <div class="mt-1 text-sm font-semibold text-sky-700/80 dark:text-sky-200/80"><%= previewSummary.csvDuplicateGroupCount || 0 %> grupo(s) em revisao</div>
+            </div>
+            <div class="rounded-[24px] border border-emerald-200 bg-emerald-50 px-4 py-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Selecionado agora</div>
+              <div class="mt-2 text-2xl font-black text-emerald-900 dark:text-emerald-100" data-final-total><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
+              <div class="mt-1 text-sm font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultFinalCount || 0 %></span> compra(s) vao entrar</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-b border-slate-200 px-5 py-3 dark:border-slate-800 sm:px-8">
+          <div class="flex gap-3 overflow-x-auto pb-1">
+            <button type="button" data-review-tab-trigger="app" class="min-w-max rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800">
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">1. Suspeitas no app</div>
+              <div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100"><%= previewSummary.appDuplicateCount || 0 %> item(ns)</div>
+              <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.appDuplicateTotalLabel || formatBRLFromCents(0) %></div>
+            </button>
+            <button type="button" data-review-tab-trigger="csv" class="min-w-max rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800">
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">2. Repetidas no CSV</div>
+              <div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100"><%= previewSummary.csvDuplicateGroupCount || 0 %> grupo(s)</div>
+              <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.csvDuplicateTotalLabel || formatBRLFromCents(0) %></div>
+            </button>
+            <button type="button" data-review-tab-trigger="final" class="min-w-max rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800">
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">3. O que vai entrar</div>
+              <div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100"><span data-final-count><%= previewSummary.defaultFinalCount || 0 %></span> item(ns)</div>
+              <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400" data-final-total-secondary><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
+            </button>
+          </div>
+        </div>
+
+        <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8 sm:py-6" data-review-tab-container data-default-tab="<%= defaultReviewTab %>" data-file-total-cents="<%= previewSummary.parsedTotalCents || 0 %>">
+          <section data-review-tab-panel="app" class="space-y-4">
+            <% if (!previewAppCandidates.length) { %>
+              <div class="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
+                Nenhuma compra do arquivo bateu com mesmo dia e valor no mes escolhido. Aqui o app ficou tranquilinho.
+              </div>
+            <% } %>
+
+            <% previewAppCandidates.forEach((candidate) => {
+              const item = previewItemMap.get(candidate.itemId);
+              if (!item) return;
+            %>
+              <article class="rounded-[28px] border border-amber-200 bg-amber-50/70 p-4 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/15 sm:p-5">
+                <div class="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                  <div class="rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Veio do arquivo</div>
+                    <div class="mt-3 text-base font-black text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                    <div class="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70"><%= item.dateLabel %></span>
+                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70"><%= item.cardNumberLabel %></span>
+                    </div>
+                    <div class="mt-3 text-2xl font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                    <p class="mt-3 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
+                      <% if (candidate.exactMatchCount > 0) { %>
+                        Ja existe <span class="font-bold"><%= candidate.exactMatchCount %></span> item(ns) praticamente igual(is) no app.
+                      <% } else { %>
+                        O alerta apareceu porque ja existe compra no mesmo dia e com o mesmo valor.
+                      <% } %>
+                    </p>
+                  </div>
+
+                  <div class="rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Ja esta no app</div>
+                      <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[11px] font-black text-amber-700 dark:border-amber-900/70 dark:bg-amber-900/30 dark:text-amber-200"><%= candidate.existingMatchCount %> coincidencia(s)</span>
+                    </div>
+                    <div class="mt-3 grid gap-3 lg:grid-cols-2">
+                      <% candidate.existingMatches.forEach((match) => { %>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-700 dark:bg-slate-900/70">
+                          <div class="flex items-start justify-between gap-3">
+                            <div>
+                              <div class="text-sm font-black text-slate-900 dark:text-slate-100"><%= match.description %></div>
+                              <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= match.dateLabel %> · <%= match.cardNumberLabel %></div>
+                            </div>
+                            <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= match.originLabel %></span>
+                          </div>
+                          <div class="mt-3 text-sm font-black text-slate-900 dark:text-slate-100"><%= match.amountLabel %></div>
+                        </div>
+                      <% }) %>
+                    </div>
+                  </div>
+                </div>
+
+                <label class="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm dark:border-amber-900/60 dark:bg-slate-900/80 dark:text-slate-200">
+                  <input type="checkbox" name="keep_app_<%= candidate.id %>" value="1" data-app-keep data-item-id="<%= item.id %>" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                  <span>
+                    <span class="block font-black text-slate-900 dark:text-slate-100">Importar mesmo assim</span>
+                    <span class="mt-1 block text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Deixe desmarcado se for a mesma compra. Marque so quando voce tiver certeza de que esse item do arquivo precisa entrar tambem.</span>
+                  </span>
+                </label>
+              </article>
+            <% }) %>
+          </section>
+
+          <section data-review-tab-panel="csv" class="hidden space-y-4">
+            <% if (!previewCsvGroups.length) { %>
+              <div class="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
+                O arquivo nao trouxe grupos identicos repetidos. Aqui esta tudo liso e sem eco.
+              </div>
+            <% } %>
+
+            <% previewCsvGroups.forEach((group) => {
+              const representative = previewItemMap.get(group.representativeItemId);
+              const groupItems = (group.itemIds || []).map((itemId) => previewItemMap.get(itemId)).filter(Boolean);
+              if (!representative) return;
+            %>
+              <article class="rounded-[28px] border border-sky-200 bg-sky-50/70 p-4 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/15 sm:p-5">
+                <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                  <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Grupo repetido no CSV</div>
+                      <span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[11px] font-black text-sky-700 dark:border-sky-900/70 dark:bg-slate-900/80 dark:text-sky-200"><%= group.occurrenceCount %> linha(s)</span>
+                      <% if (group.existingMatchCount > 0) { %>
+                        <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[11px] font-black text-amber-700 dark:border-amber-900/70 dark:bg-amber-900/30 dark:text-amber-200"><%= group.existingMatchCount %> com mesmo dia e valor no app</span>
+                      <% } %>
+                    </div>
+
+                    <div class="mt-3 rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                      <div class="text-base font-black text-slate-900 dark:text-slate-100"><%= representative.description %></div>
+                      <div class="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70"><%= representative.dateLabel %></span>
+                        <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70"><%= representative.cardNumberLabel %></span>
+                        <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70">Cada linha vale <%= group.amountLabel %></span>
+                      </div>
+                      <div class="mt-3 text-2xl font-black text-slate-900 dark:text-slate-100"><%= group.groupTotalLabel %></div>
+                      <p class="mt-3 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">O arquivo repetiu esse lancamento <span class="font-bold"><%= group.occurrenceCount %></span> vez(es). Se ja existe algo parecido no app, a sugestao automatica diminui a quantidade para ajudar a evitar dobra sem querer.</p>
+                    </div>
+
+                    <div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <% groupItems.forEach((item, index) => { %>
+                        <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-900/80">
+                          <div class="flex items-center justify-between gap-3">
+                            <div class="text-xs font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Linha <%= index + 1 %></div>
+                            <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= item.amountLabel %></span>
+                          </div>
+                          <div class="mt-2 text-sm font-black text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                          <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= item.dateLabel %> · <%= item.cardNumberLabel %></div>
+                        </div>
+                      <% }) %>
+                    </div>
+
+                    <% if (group.existingMatches && group.existingMatches.length) { %>
+                      <div class="mt-4 rounded-[24px] border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+                        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Coincidencias no app para o mesmo dia e valor</div>
+                        <div class="mt-3 grid gap-3 lg:grid-cols-2">
+                          <% group.existingMatches.forEach((match) => { %>
+                            <div class="rounded-2xl border border-amber-200 bg-white px-3 py-3 dark:border-amber-900/60 dark:bg-slate-900/80">
+                              <div class="text-sm font-black text-slate-900 dark:text-slate-100"><%= match.description %></div>
+                              <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= match.dateLabel %> · <%= match.cardNumberLabel %></div>
+                              <div class="mt-2 flex items-center justify-between gap-3">
+                                <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= match.originLabel %></span>
+                                <span class="text-sm font-black text-slate-900 dark:text-slate-100"><%= match.amountLabel %></span>
+                              </div>
+                            </div>
+                          <% }) %>
+                        </div>
+                      </div>
+                    <% } %>
+                  </div>
+
+                  <div class="rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Quantas linhas entram?</div>
+                    <label class="mt-3 block">
+                      <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Escolha a quantidade</span>
+                      <select name="keep_csv_<%= group.id %>" data-csv-keep data-group-id="<%= group.id %>" class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:bg-slate-900">
+                        <% for (let keepCount = 0; keepCount <= group.occurrenceCount; keepCount += 1) { %>
+                          <option value="<%= keepCount %>" <%= keepCount === Number(group.defaultKeepCount || 0) ? 'selected' : '' %>>
+                            <% if (keepCount === 0) { %>
+                              Pular todas as <%= group.occurrenceCount %> linhas
+                            <% } else if (keepCount === group.occurrenceCount) { %>
+                              Importar todas as <%= group.occurrenceCount %> linhas
+                            <% } else { %>
+                              Importar <%= keepCount %> de <%= group.occurrenceCount %> linhas
+                            <% } %>
+                          </option>
+                        <% } %>
+                      </select>
+                    </label>
+                    <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/70">
+                      <div class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Sugestao automatica</div>
+                      <div class="mt-2 text-lg font-black text-slate-900 dark:text-slate-100"><span data-csv-current-count="<%= group.id %>"><%= group.defaultKeepCount %></span> linha(s)</div>
+                      <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">O app sugeriu essa quantidade porque ja encontrou <span class="font-bold"><%= group.existingMatchCount %></span> coincidencia(s) com mesmo dia e valor no mes.</p>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            <% }) %>
+          </section>
+
+          <section data-review-tab-panel="final" class="hidden space-y-4">
+            <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.8fr)]">
+              <div class="rounded-[28px] border border-emerald-200 bg-emerald-50/80 p-5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Vai ser importado</div>
+                <div class="mt-2 text-3xl font-black text-emerald-900 dark:text-emerald-100" data-final-total><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
+                <div class="mt-1 text-sm font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultFinalCount || 0 %></span> compra(s) vao entrar nessa confirmacao.</div>
+              </div>
+              <div class="rounded-[28px] border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-950/70">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Comparacao com o arquivo</div>
+                <div class="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></div>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300" data-final-diff-text>Esse total compara o que voce selecionou agora com o valor completo do arquivo.</p>
+              </div>
+            </div>
+
+            <div class="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/70 sm:p-5">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Lista final</div>
+                  <h3 class="mt-2 text-lg font-black text-slate-900 dark:text-slate-100">Esses sao os itens que vao pousar no app</h3>
+                </div>
+                <div class="text-sm font-semibold text-slate-500 dark:text-slate-400">As compras unicas entram sozinhas. O resto segue exatamente as escolhas das abas anteriores.</div>
+              </div>
+
+              <div class="mt-4 space-y-3" data-final-item-list>
+                <% previewAutoItems.forEach((item) => { %>
+                  <article data-final-item data-amount-cents="<%= item.amountCents %>" class="rounded-[24px] border border-emerald-200 bg-emerald-50/70 px-4 py-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700 dark:border-emerald-900/60 dark:bg-slate-900/70 dark:text-emerald-200">Unica no arquivo</span>
+                        </div>
+                        <div class="mt-2 text-sm font-black text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                        <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= item.dateLabel %> · <%= item.cardNumberLabel %></div>
+                      </div>
+                      <div class="text-lg font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                    </div>
+                  </article>
+                <% }) %>
+
+                <% previewAppCandidates.forEach((candidate) => {
+                  const item = previewItemMap.get(candidate.itemId);
+                  if (!item) return;
+                %>
+                  <article data-final-item data-final-app-item="<%= item.id %>" data-amount-cents="<%= item.amountCents %>" class="hidden rounded-[24px] border border-amber-200 bg-amber-50/70 px-4 py-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900/70 dark:text-amber-200">Confirmada apesar da suspeita</span>
+                        </div>
+                        <div class="mt-2 text-sm font-black text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                        <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= item.dateLabel %> · <%= item.cardNumberLabel %></div>
+                      </div>
+                      <div class="text-lg font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                    </div>
+                  </article>
+                <% }) %>
+
+                <% previewCsvGroups.forEach((group) => {
+                  const groupItems = (group.itemIds || []).map((itemId) => previewItemMap.get(itemId)).filter(Boolean);
+                  groupItems.forEach((item, index) => {
+                %>
+                  <article data-final-item data-final-csv-group="<%= group.id %>" data-final-csv-position="<%= index + 1 %>" data-amount-cents="<%= item.amountCents %>" class="<%= index < Number(group.defaultKeepCount || 0) ? '' : 'hidden ' %>rounded-[24px] border border-sky-200 bg-sky-50/70 px-4 py-4 dark:border-sky-900/60 dark:bg-sky-950/20">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-sky-700 dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-sky-200">Linha repetida no CSV</span>
+                          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">Ocorrencia <%= index + 1 %> de <%= group.occurrenceCount %></span>
+                        </div>
+                        <div class="mt-2 text-sm font-black text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                        <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= item.dateLabel %> · <%= item.cardNumberLabel %></div>
+                      </div>
+                      <div class="text-lg font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                    </div>
+                  </article>
+                <% }) }) %>
+              </div>
+
+              <div data-final-empty-state class="hidden rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
+                Nada ficou selecionado para importar por enquanto. Ajuste as escolhas nas abas anteriores e volte aqui para conferir o resultado.
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="border-t border-slate-200 px-5 py-4 dark:border-slate-800 sm:px-8 sm:py-5">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Se o total final nao bater com o arquivo, tudo bem quando parte da fatura ja foi lancada manualmente. O objetivo aqui eh te dar o espelho antes de gravar.</div>
+            <div class="flex flex-col gap-3 sm:flex-row">
+              <button type="button" data-import-review-close class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800">
+                Voltar ao formulario
+              </button>
+              <button type="submit" data-import-review-confirm class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+                Confirmar importacao
+              </button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </section>
+  </div>
+<% } %>
+
+<script>
+  (function() {
+    const fileInput = document.querySelector('[data-import-file-input]');
+    const fileLabel = document.querySelector('[data-import-file-label]');
+    if (fileInput && fileLabel) {
+      fileInput.addEventListener('change', function() {
+        const fileName = fileInput.files && fileInput.files[0] ? fileInput.files[0].name : 'Use o arquivo exportado da operadora do cartao. Formatos aceitos: .csv';
+        fileLabel.textContent = fileName;
+      });
+    }
+
+    const modal = document.querySelector('[data-import-review-modal]');
+    if (!modal) return;
+
+    const modalBackdrop = modal.querySelector('[data-import-review-backdrop]');
+    const reviewForm = document.getElementById('import-review-form');
+    const openButtons = document.querySelectorAll('[data-open-import-review]');
+    const closeButtons = document.querySelectorAll('[data-import-review-close]');
+    const tabContainer = modal.querySelector('[data-review-tab-container]');
+    const tabButtons = modal.querySelectorAll('[data-review-tab-trigger]');
+    const tabPanels = modal.querySelectorAll('[data-review-tab-panel]');
+    const finalItems = Array.from(modal.querySelectorAll('[data-final-item]'));
+    const appCheckboxes = Array.from(modal.querySelectorAll('[data-app-keep]'));
+    const csvSelects = Array.from(modal.querySelectorAll('[data-csv-keep]'));
+    const finalCountTargets = Array.from(modal.querySelectorAll('[data-final-count]'));
+    const finalTotalTargets = Array.from(modal.querySelectorAll('[data-final-total]'));
+    const finalTotalSecondaryTargets = Array.from(modal.querySelectorAll('[data-final-total-secondary]'));
+    const diffText = modal.querySelector('[data-final-diff-text]');
+    const emptyState = modal.querySelector('[data-final-empty-state]');
+    const confirmButtons = Array.from(modal.querySelectorAll('[data-import-review-confirm]'));
+    const fileTotalCents = Number(tabContainer?.dataset.fileTotalCents || 0);
+    const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    function formatMoney(cents) {
+      return moneyFormatter.format((Number(cents || 0)) / 100);
+    }
+
+    function lockBody(locked) {
+      if (locked) {
+        document.body.classList.add('overflow-hidden');
+      } else {
+        document.body.classList.remove('overflow-hidden');
+      }
+    }
+
+    function openModal() {
+      modal.classList.remove('hidden');
+      lockBody(true);
+    }
+
+    function closeModal() {
+      modal.classList.add('hidden');
+      lockBody(false);
+    }
+
+    function setActiveTab(tabName) {
+      tabButtons.forEach((button) => {
+        const isActive = button.getAttribute('data-review-tab-trigger') === tabName;
+        button.classList.toggle('border-violet-300', isActive);
+        button.classList.toggle('bg-violet-50', isActive);
+        button.classList.toggle('dark:border-violet-700', isActive);
+        button.classList.toggle('dark:bg-violet-950/30', isActive);
+      });
+      tabPanels.forEach((panel) => {
+        panel.classList.toggle('hidden', panel.getAttribute('data-review-tab-panel') !== tabName);
+      });
+    }
+
+    function updateCsvKeepCounters() {
+      csvSelects.forEach((select) => {
+        const groupId = select.dataset.groupId;
+        const target = modal.querySelector('[data-csv-current-count="' + groupId + '"]');
+        if (target) target.textContent = String(Number(select.value || 0));
+      });
+    }
+
+    function updateFinalPreview() {
+      appCheckboxes.forEach((checkbox) => {
+        const itemId = checkbox.dataset.itemId;
+        const target = modal.querySelector('[data-final-app-item="' + itemId + '"]');
+        if (!target) return;
+        target.classList.toggle('hidden', !checkbox.checked);
+      });
+
+      csvSelects.forEach((select) => {
+        const groupId = select.dataset.groupId;
+        const keepCount = Number(select.value || 0);
+        const groupItems = Array.from(modal.querySelectorAll('[data-final-csv-group="' + groupId + '"]'));
+        groupItems.forEach((item) => {
+          const position = Number(item.getAttribute('data-final-csv-position') || 0);
+          item.classList.toggle('hidden', position > keepCount);
+        });
+      });
+
+      let selectedCount = 0;
+      let selectedTotalCents = 0;
+      finalItems.forEach((item) => {
+        if (item.classList.contains('hidden')) return;
+        selectedCount += 1;
+        selectedTotalCents += Number(item.getAttribute('data-amount-cents') || 0);
+      });
+
+      finalCountTargets.forEach((target) => {
+        target.textContent = String(selectedCount);
+      });
+      finalTotalTargets.forEach((target) => {
+        target.textContent = formatMoney(selectedTotalCents);
+      });
+      finalTotalSecondaryTargets.forEach((target) => {
+        target.textContent = formatMoney(selectedTotalCents);
+      });
+
+      const diff = selectedTotalCents - fileTotalCents;
+      if (diffText) {
+        if (diff === 0) {
+          diffText.textContent = 'Boa! O total selecionado bate certinho com o valor do arquivo.';
+          diffText.className = 'mt-2 text-sm font-medium leading-6 text-emerald-700 dark:text-emerald-300';
+        } else if (diff < 0) {
+          diffText.textContent = 'O total selecionado ficou ' + formatMoney(Math.abs(diff)) + ' abaixo do arquivo. Isso pode fazer sentido se parte da fatura ja estava no app.';
+          diffText.className = 'mt-2 text-sm font-medium leading-6 text-amber-700 dark:text-amber-300';
+        } else {
+          diffText.textContent = 'O total selecionado passou ' + formatMoney(diff) + ' do arquivo. Vale revisar para nao deixar compra em dobro.';
+          diffText.className = 'mt-2 text-sm font-medium leading-6 text-rose-700 dark:text-rose-300';
+        }
+      }
+
+      if (emptyState) {
+        emptyState.classList.toggle('hidden', selectedCount > 0);
+      }
+
+      confirmButtons.forEach((button) => {
+        button.disabled = selectedCount <= 0;
+        button.classList.toggle('opacity-60', selectedCount <= 0);
+        button.classList.toggle('cursor-not-allowed', selectedCount <= 0);
+      });
+
+      updateCsvKeepCounters();
+    }
+
+    openButtons.forEach((button) => button.addEventListener('click', openModal));
+    closeButtons.forEach((button) => button.addEventListener('click', closeModal));
+    if (modalBackdrop) modalBackdrop.addEventListener('click', closeModal);
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+        closeModal();
+      }
+    });
+
+    tabButtons.forEach((button) => {
+      button.addEventListener('click', function() {
+        setActiveTab(button.getAttribute('data-review-tab-trigger'));
+      });
+    });
+    appCheckboxes.forEach((checkbox) => checkbox.addEventListener('change', updateFinalPreview));
+    csvSelects.forEach((select) => select.addEventListener('change', updateFinalPreview));
+    if (reviewForm) {
+      reviewForm.addEventListener('submit', function() {
+        confirmButtons.forEach((button) => {
+          button.disabled = true;
+          button.classList.add('opacity-60', 'cursor-not-allowed');
+        });
+      });
+    }
+
+    setActiveTab(tabContainer?.dataset.defaultTab || 'final');
+    updateFinalPreview();
+    if (modal.dataset.initialOpen === '1') {
+      openModal();
+    }
+  })();
+</script>
 
 <%- include("partials/footer") %>

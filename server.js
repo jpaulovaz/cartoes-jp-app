@@ -2446,6 +2446,16 @@ function setImportFormSeed(req, seed) {
   req.session.importFormSeed = seed || null;
 }
 
+function setImportPreview(req, preview) {
+  if (!req.session) return;
+  req.session.importPreview = preview || null;
+}
+
+function clearImportPreview(req) {
+  if (!req.session) return;
+  delete req.session.importPreview;
+}
+
 function normalizeErrorStatus(error, fallback = 500) {
   const candidate = Number(error?.status || error?.statusCode || fallback);
   return Number.isInteger(candidate) && candidate >= 400 && candidate <= 599 ? candidate : fallback;
@@ -11200,14 +11210,344 @@ function buildImportReport(month, year, importedCount, skippedExistingGroups, re
   };
 }
 
+function formatImportPreviewDateLabel(value) {
+  const safeValue = String(value || '').trim();
+  if (!safeValue) return 'Sem data';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(safeValue)) return formatDateBR(safeValue);
+  return safeValue;
+}
+
+function buildImportDayAmountKey({ txnDate, amountCents }) {
+  return [String(txnDate || '').trim(), Number(amountCents) || 0].join('::');
+}
+
+function formatImportPreviewCardNumberLabel(cardNumber) {
+  const normalized = normalizeImportCardNumber(cardNumber).replace(/\D/g, '');
+  if (!normalized) return 'Final nao informado';
+  if (normalized.length <= 4) return `Final ${normalized}`;
+  return `Final ${normalized.slice(-4)}`;
+}
+
+function compareImportPreviewItems(a, b) {
+  const dateA = String(a?.isoDate || '');
+  const dateB = String(b?.isoDate || '');
+  if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+  const amountA = Number(a?.amountCents || 0);
+  const amountB = Number(b?.amountCents || 0);
+  if (amountA !== amountB) return amountB - amountA;
+
+  const descA = normalizeImportDuplicateText(a?.description);
+  const descB = normalizeImportDuplicateText(b?.description);
+  if (descA !== descB) return descA.localeCompare(descB, 'pt-BR');
+
+  return Number(a?.sourceIndex || 0) - Number(b?.sourceIndex || 0);
+}
+
+function buildImportPreviewItem(txn, sourceIndex) {
+  const isoDate = toISOFromBRDate(txn.txn_date) || String(txn.txn_date || '').trim() || null;
+  const description = String(txn.description || '').trim() || '(sem descricao)';
+  const amountCents = Number(txn.amount_cents) || 0;
+  const cardNumber = normalizeImportCardNumber(txn.card_number) || null;
+
+  return {
+    id: `item_${sourceIndex + 1}`,
+    sourceIndex: Number(sourceIndex) || 0,
+    isoDate,
+    dateLabel: formatImportPreviewDateLabel(isoDate || txn.txn_date),
+    description,
+    amountCents,
+    amountLabel: formatBRLFromCents(amountCents),
+    cardNumber,
+    cardNumberLabel: formatImportPreviewCardNumberLabel(cardNumber),
+    raw: txn.raw || {}
+  };
+}
+
+function getExistingImportMonthRows(userId, cardId, month, year) {
+  const rows = db.prepare(`
+    SELECT t.id, t.import_id, t.txn_date, t.description, t.amount_cents, t.card_number
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND t.card_id = ?
+      AND ${EFFECTIVE_DUE_MONTH_SQL} = ?
+      AND ${EFFECTIVE_DUE_YEAR_SQL} = ?
+    ORDER BY t.txn_date IS NULL ASC, t.txn_date ASC, t.amount_cents DESC, t.id ASC
+  `).all(userId, cardId, month, year);
+
+  return rows.map((row) => ({
+    id: Number(row.id),
+    txnDate: String(row.txn_date || '').trim() || null,
+    dateLabel: formatImportPreviewDateLabel(row.txn_date),
+    description: String(row.description || '').trim() || '(sem descricao)',
+    amountCents: Number(row.amount_cents) || 0,
+    amountLabel: formatBRLFromCents(Number(row.amount_cents) || 0),
+    cardNumber: normalizeImportCardNumber(row.card_number) || null,
+    cardNumberLabel: formatImportPreviewCardNumberLabel(row.card_number),
+    originLabel: Number(row.import_id || 0) > 0 ? 'Ja importada' : 'Lancada manualmente'
+  }));
+}
+
+function countExactExistingMatchesForImportItem(item, matches, cardId, month, year) {
+  if (!Array.isArray(matches) || !matches.length) return 0;
+
+  const fingerprint = buildImportDuplicateFingerprint({
+    cardId,
+    month,
+    year,
+    txnDate: item.isoDate,
+    description: item.description,
+    amountCents: item.amountCents,
+    cardNumber: item.cardNumber
+  });
+
+  return matches.reduce((total, row) => {
+    const candidateFingerprint = buildImportDuplicateFingerprint({
+      cardId,
+      month,
+      year,
+      txnDate: row.txnDate,
+      description: row.description,
+      amountCents: row.amountCents,
+      cardNumber: row.cardNumber
+    });
+    return total + (candidateFingerprint === fingerprint ? 1 : 0);
+  }, 0);
+}
+
+function buildImportPreviewSummary({ parsedCount, parsedTotalCents, autoCount, autoTotalCents, appDuplicateCandidates, csvDuplicateGroups }) {
+  const appDuplicateCount = appDuplicateCandidates.length;
+  const appDuplicateTotalCents = appDuplicateCandidates.reduce((sum, candidate) => sum + Number(candidate.amountCents || 0), 0);
+  const csvDuplicateGroupCount = csvDuplicateGroups.length;
+  const csvDuplicateLineCount = csvDuplicateGroups.reduce((sum, group) => sum + Number(group.occurrenceCount || 0), 0);
+  const csvDuplicateTotalCents = csvDuplicateGroups.reduce((sum, group) => sum + Number(group.groupTotalCents || 0), 0);
+  const defaultCsvCount = csvDuplicateGroups.reduce((sum, group) => sum + Number(group.defaultKeepCount || 0), 0);
+  const defaultCsvTotalCents = csvDuplicateGroups.reduce((sum, group) => sum + (Number(group.amountCents || 0) * Number(group.defaultKeepCount || 0)), 0);
+  const defaultFinalCount = autoCount + defaultCsvCount;
+  const defaultFinalTotalCents = autoTotalCents + defaultCsvTotalCents;
+
+  return {
+    parsedCount,
+    parsedTotalCents,
+    parsedTotalLabel: formatBRLFromCents(parsedTotalCents),
+    autoCount,
+    autoTotalCents,
+    autoTotalLabel: formatBRLFromCents(autoTotalCents),
+    appDuplicateCount,
+    appDuplicateTotalCents,
+    appDuplicateTotalLabel: formatBRLFromCents(appDuplicateTotalCents),
+    csvDuplicateGroupCount,
+    csvDuplicateLineCount,
+    csvDuplicateTotalCents,
+    csvDuplicateTotalLabel: formatBRLFromCents(csvDuplicateTotalCents),
+    defaultFinalCount,
+    defaultFinalTotalCents,
+    defaultFinalTotalLabel: formatBRLFromCents(defaultFinalTotalCents)
+  };
+}
+
+function buildImportPreviewData({ userId, cardId, cardName, month, year, originalFilename, txns }) {
+  const items = txns.map((txn, index) => buildImportPreviewItem(txn, index));
+  const itemMap = new Map(items.map((item) => [item.id, item]));
+  const existingRows = getExistingImportMonthRows(userId, cardId, month, year);
+  const existingByDayAmount = new Map();
+
+  for (const row of existingRows) {
+    const key = buildImportDayAmountKey({ txnDate: row.txnDate, amountCents: row.amountCents });
+    if (!existingByDayAmount.has(key)) existingByDayAmount.set(key, []);
+    existingByDayAmount.get(key).push(row);
+  }
+
+  const csvGroupsByFingerprint = new Map();
+  for (const item of items) {
+    const fingerprint = buildImportDuplicateFingerprint({
+      cardId,
+      month,
+      year,
+      txnDate: item.isoDate,
+      description: item.description,
+      amountCents: item.amountCents,
+      cardNumber: item.cardNumber
+    });
+    if (!csvGroupsByFingerprint.has(fingerprint)) csvGroupsByFingerprint.set(fingerprint, []);
+    csvGroupsByFingerprint.get(fingerprint).push(item.id);
+  }
+
+  const csvDuplicateGroups = [];
+  const csvGroupIdByItemId = new Map();
+
+  for (const itemIds of csvGroupsByFingerprint.values()) {
+    if (itemIds.length <= 1) continue;
+    const groupItems = itemIds.map((itemId) => itemMap.get(itemId)).filter(Boolean).sort(compareImportPreviewItems);
+    if (!groupItems.length) continue;
+
+    const representative = groupItems[0];
+    const existingMatches = existingByDayAmount.get(buildImportDayAmountKey({ txnDate: representative.isoDate, amountCents: representative.amountCents })) || [];
+    const defaultKeepCount = Math.max(0, Math.min(groupItems.length, groupItems.length - existingMatches.length));
+    const exactMatchCount = countExactExistingMatchesForImportItem(representative, existingMatches, cardId, month, year);
+    const groupId = `csv_group_${csvDuplicateGroups.length + 1}`;
+
+    groupItems.forEach((item) => csvGroupIdByItemId.set(item.id, groupId));
+
+    csvDuplicateGroups.push({
+      id: groupId,
+      representativeItemId: representative.id,
+      itemIds: groupItems.map((item) => item.id),
+      occurrenceCount: groupItems.length,
+      defaultKeepCount,
+      amountCents: representative.amountCents,
+      amountLabel: representative.amountLabel,
+      groupTotalCents: representative.amountCents * groupItems.length,
+      groupTotalLabel: formatBRLFromCents(representative.amountCents * groupItems.length),
+      existingMatchCount: existingMatches.length,
+      exactMatchCount,
+      existingMatches
+    });
+  }
+
+  const appDuplicateCandidates = [];
+  const autoItemIds = [];
+
+  const sortedItems = items.slice().sort(compareImportPreviewItems);
+  for (const item of sortedItems) {
+    if (csvGroupIdByItemId.has(item.id)) continue;
+
+    const existingMatches = existingByDayAmount.get(buildImportDayAmountKey({ txnDate: item.isoDate, amountCents: item.amountCents })) || [];
+    if (existingMatches.length) {
+      const exactMatchCount = countExactExistingMatchesForImportItem(item, existingMatches, cardId, month, year);
+      appDuplicateCandidates.push({
+        id: `app_group_${appDuplicateCandidates.length + 1}`,
+        itemId: item.id,
+        amountCents: item.amountCents,
+        amountLabel: item.amountLabel,
+        existingMatchCount: existingMatches.length,
+        exactMatchCount,
+        existingMatches
+      });
+      continue;
+    }
+
+    autoItemIds.push(item.id);
+  }
+
+  const autoItems = autoItemIds.map((itemId) => itemMap.get(itemId)).filter(Boolean);
+  const parsedCount = items.length;
+  const parsedTotalCents = items.reduce((sum, item) => sum + Number(item.amountCents || 0), 0);
+  const autoCount = autoItems.length;
+  const autoTotalCents = autoItems.reduce((sum, item) => sum + Number(item.amountCents || 0), 0);
+
+  return {
+    id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex'),
+    createdAt: nowIso(),
+    originalFilename: originalFilename || 'fatura.csv',
+    cardId,
+    cardName,
+    month,
+    year,
+    periodLabel: monthLabel(month, year),
+    formSeed: { cardId, month, year },
+    items,
+    autoItemIds,
+    appDuplicateCandidates,
+    csvDuplicateGroups,
+    summary: buildImportPreviewSummary({
+      parsedCount,
+      parsedTotalCents,
+      autoCount,
+      autoTotalCents,
+      appDuplicateCandidates,
+      csvDuplicateGroups
+    })
+  };
+}
+
+function resolveImportPreviewSelection(preview, body) {
+  const safeBody = body || {};
+  const selectedIds = [];
+  const seenIds = new Set();
+  const itemMap = new Map((preview?.items || []).map((item) => [item.id, item]));
+
+  const pushItemId = (itemId) => {
+    if (!itemId || seenIds.has(itemId)) return;
+    if (!itemMap.has(itemId)) return;
+    seenIds.add(itemId);
+    selectedIds.push(itemId);
+  };
+
+  for (const itemId of preview?.autoItemIds || []) {
+    pushItemId(itemId);
+  }
+
+  for (const candidate of preview?.appDuplicateCandidates || []) {
+    if (String(safeBody[`keep_app_${candidate.id}`] || '') === '1') {
+      pushItemId(candidate.itemId);
+    }
+  }
+
+  for (const group of preview?.csvDuplicateGroups || []) {
+    const rawKeepCount = safeBody[`keep_csv_${group.id}`];
+    const fallbackKeepCount = Number(group.defaultKeepCount || 0);
+    let keepCount = Number(rawKeepCount);
+    if (!Number.isInteger(keepCount)) keepCount = fallbackKeepCount;
+    keepCount = Math.max(0, Math.min(Number(group.occurrenceCount || 0), keepCount));
+
+    for (const itemId of (group.itemIds || []).slice(0, keepCount)) {
+      pushItemId(itemId);
+    }
+  }
+
+  return selectedIds
+    .map((itemId) => itemMap.get(itemId))
+    .filter(Boolean)
+    .sort((a, b) => Number(a.sourceIndex || 0) - Number(b.sourceIndex || 0));
+}
+
+function buildImportConfirmationMessage(preview, importedCount) {
+  const periodLabel = preview?.periodLabel || monthLabel(preview?.month, preview?.year);
+  if (importedCount <= 0) {
+    return {
+      type: 'info',
+      message: `Nada ficou marcado para entrar em ${periodLabel}. A previa continua aberta para voce ajustar.`
+    };
+  }
+
+  const summary = preview?.summary || {};
+  const reviewedParts = [];
+  if (Number(summary.appDuplicateCount || 0) > 0) {
+    reviewedParts.push(formatCountLabel(summary.appDuplicateCount, 'suspeita no app', 'suspeitas no app'));
+  }
+  if (Number(summary.csvDuplicateGroupCount || 0) > 0) {
+    reviewedParts.push(formatCountLabel(summary.csvDuplicateGroupCount, 'grupo repetido no CSV', 'grupos repetidos no CSV'));
+  }
+
+  const baseMessage = importedCount === 1
+    ? `1 compra entrou em ${periodLabel}.`
+    : `${importedCount} compras entraram em ${periodLabel}.`;
+
+  if (!reviewedParts.length) {
+    return { type: 'success', message: `${baseMessage} Tudo certinho por aqui.` };
+  }
+
+  return {
+    type: 'success',
+    message: `${baseMessage} Revisei ${reviewedParts.join(' e ')} com voce antes de confirmar.`
+  };
+}
+
 // Import
 app.get("/import", ensureAuthenticated, ensureCanImport, (req, res) => {
   const userId = req.user.id;
+  const preview = req.session?.importPreview || null;
+  const formSeed = preview?.formSeed || res.locals.importFormSeed || null;
+
   res.render("import", {
     cards: getActiveCards(userId),
     error: null,
-    formSeed: res.locals.importFormSeed || null,
-    importReport: res.locals.importReport || null
+    formSeed,
+    importReport: res.locals.importReport || null,
+    importPreview: preview,
+    formatBRLFromCents
   });
 });
 
@@ -11216,82 +11556,79 @@ app.post("/import", ensureAuthenticated, ensureCanImport, upload.single("csvfile
   const cards = getActiveCards(userId);
 
   try {
+    clearImportPreview(req);
+
     const cardId = Number(req.body.card_id);
     const month = Number(req.body.month);
     const year = Number(req.body.year);
     const formSeed = { cardId, month, year };
 
     if (!req.file) throw new Error("Envie um arquivo CSV.");
-    if (!cardId) throw new Error("Selecione o cartão.");
-    if (!month || month < 1 || month > 12) throw new Error("Mês inválido.");
-    if (!year || year < 2000 || year > 2100) throw new Error("Ano inválido.");
+    if (!cardId) throw new Error("Selecione o cartao.");
+    if (!month || month < 1 || month > 12) throw new Error("Mes invalido.");
+    if (!year || year < 2000 || year > 2100) throw new Error("Ano invalido.");
 
     const card = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(cardId, userId);
-    if (!card) throw new Error("Cartão inválido ou desativado.");
+    if (!card) throw new Error("Cartao invalido ou desativado.");
 
     const txns = parseCsvByCardName(card.name, req.file.buffer);
-    const existingCounts = getExistingImportFingerprintCounts(userId, cardId, month, year);
-    const csvCounts = new Map();
-    const repeatedCsvGroups = new Map();
-    const skippedExistingGroups = new Map();
-    const itemsToInsert = [];
+    const preview = buildImportPreviewData({
+      userId,
+      cardId,
+      cardName: card.name,
+      month,
+      year,
+      originalFilename: req.file.originalname,
+      txns
+    });
 
-    for (const txn of txns) {
-      const isoDate = toISOFromBRDate(txn.txn_date) || String(txn.txn_date || "").trim() || null;
-      const fingerprint = buildImportDuplicateFingerprint({
-        cardId,
-        month,
-        year,
-        txnDate: isoDate,
-        description: txn.description,
-        amountCents: txn.amount_cents,
-        cardNumber: txn.card_number
-      });
+    setImportPreview(req, preview);
+    setImportFormSeed(req, formSeed);
+    setFlash(req, 'info', `Analisei ${formatCountLabel(preview.summary.parsedCount, 'compra', 'compras')} de ${preview.periodLabel}. Agora e so revisar e confirmar.`);
+    return res.redirect('/import');
+  } catch (e) {
+    clearImportPreview(req);
+    res.status(400).render("import", {
+      cards,
+      error: e.message || String(e),
+      formSeed: {
+        cardId: Number(req.body.card_id) || null,
+        month: Number(req.body.month) || null,
+        year: Number(req.body.year) || null
+      },
+      importReport: null,
+      importPreview: null,
+      formatBRLFromCents
+    });
+  }
+});
 
-      const nextCsvCount = (csvCounts.get(fingerprint) || 0) + 1;
-      csvCounts.set(fingerprint, nextCsvCount);
+app.post('/import/confirm', ensureAuthenticated, ensureCanImport, (req, res) => {
+  const userId = req.user.id;
+  const preview = req.session?.importPreview || null;
+  const previewId = String(req.body.preview_id || '').trim();
 
-      if (nextCsvCount > 1) {
-        const repeatedGroup = repeatedCsvGroups.get(fingerprint) || buildImportDuplicateGroupItem({
-          txnDate: isoDate,
-          description: txn.description,
-          amountCents: txn.amount_cents,
-          cardNumber: txn.card_number,
-          csvCount: nextCsvCount
-        });
-        repeatedGroup.csvCount = nextCsvCount;
-        repeatedCsvGroups.set(fingerprint, repeatedGroup);
-      }
+  if (!preview || !previewId || preview.id !== previewId) {
+    clearImportPreview(req);
+    setFlash(req, 'error', 'A revisao dessa fatura nao esta mais disponivel. Manda o CSV de novo e a gente refaz o pente-fino.');
+    return res.redirect('/import');
+  }
 
-      const existingCount = existingCounts.get(fingerprint) || 0;
-      if (nextCsvCount <= existingCount) {
-        const skippedGroup = skippedExistingGroups.get(fingerprint) || buildImportDuplicateGroupItem({
-          txnDate: isoDate,
-          description: txn.description,
-          amountCents: txn.amount_cents,
-          cardNumber: txn.card_number,
-          existingCount,
-          csvCount: nextCsvCount,
-          count: 0
-        });
-        skippedGroup.count += 1;
-        skippedGroup.existingCount = existingCount;
-        skippedGroup.csvCount = nextCsvCount;
-        skippedExistingGroups.set(fingerprint, skippedGroup);
-        continue;
-      }
+  try {
+    const card = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(preview.cardId, userId);
+    if (!card) throw new Error('Esse cartao nao esta mais disponivel para receber a importacao.');
 
-      itemsToInsert.push({
-        ...txn,
-        isoDate
-      });
+    const selectedItems = resolveImportPreviewSelection(preview, req.body);
+    if (!selectedItems.length) {
+      setFlash(req, 'info', 'Nenhuma compra ficou marcada para entrar. Ajuste a revisao e confirme de novo.');
+      return res.redirect('/import');
     }
 
     const createImportWithTransactions = db.transaction((items) => {
       const info = db.prepare(`
         INSERT INTO imports(user_id, card_id, month, year, created_at, original_filename)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run(userId, cardId, month, year, nowIso(), req.file.originalname);
+      `).run(userId, preview.cardId, preview.month, preview.year, nowIso(), preview.originalFilename || 'fatura.csv');
 
       const insTxn = db.prepare(`
         INSERT INTO transactions(user_id, import_id, card_id, txn_date, description, amount_cents, card_number, raw_json, created_at)
@@ -11302,64 +11639,42 @@ app.post("/import", ensureAuthenticated, ensureCanImport, upload.single("csvfile
         insTxn.run(
           userId,
           info.lastInsertRowid,
-          cardId,
+          preview.cardId,
           item.isoDate || null,
           item.description,
-          item.amount_cents,
-          item.card_number || null,
+          item.amountCents,
+          item.cardNumber || null,
           JSON.stringify(item.raw || {}),
           nowIso()
         );
       }
     });
 
-    if (itemsToInsert.length) {
-      createImportWithTransactions(itemsToInsert);
-    }
-
-    const skippedExistingList = Array.from(skippedExistingGroups.values()).map((group) => ({
-      ...group,
-      csvCount: csvCounts.get(buildImportDuplicateFingerprint({
-        cardId,
-        month,
-        year,
-        txnDate: group.txnDate,
-        description: group.description,
-        amountCents: group.amountCents,
-        cardNumber: group.cardNumber
-      })) || group.csvCount || group.count,
-      existingCount: group.existingCount || 0
-    }));
-    const repeatedCsvList = Array.from(repeatedCsvGroups.values());
-    const skippedExistingCount = skippedExistingList.reduce((sum, item) => sum + Number(item.count || 0), 0);
-    const feedback = buildImportFeedbackMessage(month, year, itemsToInsert.length, skippedExistingCount, repeatedCsvList.length);
-
+    createImportWithTransactions(selectedItems);
+    const feedback = buildImportConfirmationMessage(preview, selectedItems.length);
+    clearImportPreview(req);
+    setImportFormSeed(req, preview.formSeed || null);
     setFlash(req, feedback.type, feedback.message);
-    setImportFormSeed(req, formSeed);
-
-    if (skippedExistingCount > 0) {
-      setImportReport(req, buildImportReport(month, year, itemsToInsert.length, skippedExistingList, repeatedCsvList));
-      return res.redirect("/import");
-    }
-
-    setImportReport(req, null);
-    if (itemsToInsert.length > 0) {
-      return res.redirect(`/month/${year}/${month}`);
-    }
-
-    return res.redirect("/import");
-  } catch (e) {
-    res.status(400).render("import", {
-      cards,
-      error: e.message || String(e),
-      formSeed: {
-        cardId: Number(req.body.card_id) || null,
-        month: Number(req.body.month) || null,
-        year: Number(req.body.year) || null
-      },
-      importReport: null
-    });
+    return res.redirect(`/month/${preview.year}/${preview.month}`);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Nao consegui confirmar essa importacao agora.');
+    return res.redirect('/import');
   }
+});
+
+app.post('/import/preview/cancel', ensureAuthenticated, ensureCanImport, (req, res) => {
+  const preview = req.session?.importPreview || null;
+  const previewId = String(req.body.preview_id || '').trim();
+
+  if (!preview || !previewId || preview.id !== previewId) {
+    clearImportPreview(req);
+    return res.redirect('/import');
+  }
+
+  setImportFormSeed(req, preview.formSeed || null);
+  clearImportPreview(req);
+  setFlash(req, 'info', 'Fechei essa previa. O formulario continua preenchido para voce ajustar o que quiser.');
+  return res.redirect('/import');
 });
 
 function buildOrder(sort, dir) {

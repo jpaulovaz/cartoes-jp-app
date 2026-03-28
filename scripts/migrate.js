@@ -224,7 +224,6 @@ CREATE TABLE IF NOT EXISTS monthly_finance_items (
 
 CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_finance_user ON monthly_finance_items(finance_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_user_date ON monthly_finance_items(user_id, item_date);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_monthly_finances_user_period_carry_key ON monthly_finances(user_id, month, year, carry_key) WHERE carry_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS monthly_finance_carry_exceptions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

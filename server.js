@@ -14919,29 +14919,21 @@ async function sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNum
   const headers = { apikey: apiKey };
   const fileName = `AcerttaPay_${new Date().toISOString().slice(0, 10)}.png`;
 
-  const v2Payload = {
-    number: cleanNumber,
-    mediatype: 'image',
-    mimetype: 'image/png',
-    media: base64Data,
-    fileName,
-    caption: message,
-    delay: 1200
-  };
-
-  try {
-    return await axios.post(endpoint, v2Payload, { headers, timeout: 30000 });
-  } catch (v2Error) {
-    const status = v2Error.response && v2Error.response.status;
-    const canRetryAsV1 = Boolean(v2Error.response) && [400, 404, 415, 422].includes(status);
-    if (!canRetryAsV1) {
-      throw v2Error;
-    }
-
-    const v1Payload = {
+  const payloadCandidates = [
+    {
+      number: cleanNumber,
+      mediatype: 'image',
+      mimetype: 'image/png',
+      media: base64Data,
+      fileName,
+      caption: message,
+      delay: 1200
+    },
+    {
       number: cleanNumber,
       mediaMessage: {
-        mediaType: 'image',
+        mediatype: 'image',
+        mimetype: 'image/png',
         fileName,
         caption: message,
         media: base64Data
@@ -14950,10 +14942,40 @@ async function sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNum
         delay: 1200,
         presence: 'composing'
       }
-    };
+    },
+    {
+      number: cleanNumber,
+      mediaMessage: {
+        mediaType: 'image',
+        mimetype: 'image/png',
+        fileName,
+        caption: message,
+        media: base64Data
+      },
+      options: {
+        delay: 1200,
+        presence: 'composing'
+      }
+    }
+  ];
 
-    return axios.post(endpoint, v1Payload, { headers, timeout: 30000 });
+  let lastError = null;
+
+  for (let index = 0; index < payloadCandidates.length; index += 1) {
+    const payload = payloadCandidates[index];
+    try {
+      return await axios.post(endpoint, payload, { headers, timeout: 30000 });
+    } catch (error) {
+      lastError = error;
+      const status = error.response && error.response.status;
+      const canRetryNextPayload = Boolean(error.response) && [400, 404, 415, 422].includes(status) && index < payloadCandidates.length - 1;
+      if (!canRetryNextPayload) {
+        throw error;
+      }
+    }
   }
+
+  throw lastError || new Error('Não consegui enviar a imagem pelo Evolution agora.');
 }
 
 async function sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, message) {
@@ -15001,7 +15023,7 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
   }
 
   try {
-    const { personPhone, message, followUpMessage, imageBase64 } = req.body;
+    const { personPhone, message, followUpMessage, pixPayload, imageBase64 } = req.body;
 
     const apiUrl = getSettingText('EVOLUTION_API_URL');
     const apiKey = getSettingText('EVOLUTION_API_KEY');
@@ -15023,8 +15045,12 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
 
     await sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNumber, message, base64Data);
 
-    if (String(followUpMessage || '').trim()) {
-      await sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, followUpMessage);
+    const pixCopyPaste = String(pixPayload || '').trim();
+    const fallbackText = String(followUpMessage || '').trim();
+    if (pixCopyPaste) {
+      await sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, pixCopyPaste);
+    } else if (fallbackText) {
+      await sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, fallbackText);
     }
 
     res.json({ success: true });
@@ -15035,6 +15061,7 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
       phone: maskPhoneForLog(req.body && req.body.personPhone),
       messageLength: req.body && req.body.message ? String(req.body.message).length : 0,
       hasImage: Boolean(req.body && req.body.imageBase64),
+      hasPixPayload: Boolean(req.body && String(req.body.pixPayload || '').trim()),
       details: summarized
     });
 

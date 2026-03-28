@@ -612,6 +612,7 @@
           personPhone: '<%= person.phone || "" %>',
           message: whatsappCaptionMessage,
           followUpMessage: whatsappFollowUpMessage,
+          pixPayload: whatsappPixPayload,
           imageBase64
         })
       });
@@ -621,8 +622,8 @@
         throw new Error(result.error || 'Falha na API de envio.');
       }
 
-      alert(whatsappFollowUpMessage
-        ? 'Prontinho! O resumo foi enviado com a imagem e o Pix foi logo atrás para facilitar a vida.'
+      alert(whatsappPixPayload
+        ? 'Prontinho! O resumo foi com a imagem primeiro e o Pix copia e cola foi logo atrás.'
         : 'Prontinho! O resumo foi enviado no WhatsApp com a imagem.');
     } catch (error) {
       console.error('[whatsapp] send failure', error);

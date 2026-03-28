@@ -5519,6 +5519,12 @@ html.dark .op-card-brand-preview {
   align-items: start;
 }
 
+@media (min-width: 1280px) {
+  .op-analytics-graph-grid--overview {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
 .op-analytics-graph-card {
   min-width: 0;
 }
@@ -5824,9 +5830,28 @@ html.dark .op-analytics-category-item__hint--active {
   color: #c4b5fd;
 }
 
+.op-analytics-line-layout {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.op-analytics-line-layout--desktop {
+  grid-template-columns: minmax(0, 1fr) 18rem;
+  align-items: start;
+}
+
 .op-analytics-line-shell {
   display: grid;
   gap: 0.65rem;
+}
+
+.op-analytics-line-points {
+  min-width: 0;
+}
+
+.op-analytics-line-layout--desktop .op-analytics-line-points {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
 }
 
 .op-analytics-line-scroller {

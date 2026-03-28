@@ -1086,54 +1086,57 @@
 
     const polyline = coords.map((point) => `${point.x},${point.y}`).join(' ');
     const areaPolyline = `${padding.left},${height - padding.bottom} ${polyline} ${coords[coords.length - 1].x},${height - padding.bottom}`;
-
-    chartNode.innerHTML = `
-      <div class="op-analytics-line-shell">
-        <div class="op-analytics-line-scroller" data-summary-chart-scroller>
-          <div class="op-analytics-line-stage" style="min-width:${width}px">
-            <svg viewBox="0 0 ${width} ${height}" class="op-analytics-line-svg" role="img" aria-label="Seu pedaço no cartão, mês a mês">
-              <defs>
-                <linearGradient id="summaryLineFill" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.30"></stop>
-                  <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.02"></stop>
-                </linearGradient>
-              </defs>
-              ${[0.25, 0.5, 0.75, 1].map((step) => {
-                const y = padding.top + ((height - padding.top - padding.bottom) * step);
-                return `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="rgba(148,163,184,0.22)" stroke-dasharray="4 6"></line>`;
-              }).join('')}
-              <polygon points="${areaPolyline}" fill="url(#summaryLineFill)"></polygon>
-              <polyline points="${polyline}" fill="none" stroke="#8b5cf6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
-              ${coords.map((point) => `
-                <g>
-                  <circle cx="${point.x}" cy="${point.y}" r="${point.is_current ? 6.5 : 5}" fill="#ffffff" stroke="#8b5cf6" stroke-width="${point.is_current ? 4 : 3}"></circle>
-                  <text x="${point.x}" y="${height - 12}" text-anchor="middle" class="fill-slate-500 text-[11px] font-bold">${point.label}</text>
-                </g>
-              `).join('')}
-            </svg>
-            ${isNarrowScreen ? '' : coords.map((point, index) => `
-              <button
-                type="button"
-                class="absolute h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-transparent bg-transparent outline-none transition focus:border-violet-400"
-                style="left:${((point.x / width) * 100).toFixed(3)}%;top:${((point.y / height) * 100).toFixed(3)}%"
-                aria-label="Abrir detalhes de ${point.label}"
-                data-summary-month-hotspot
-                data-point-index="${index}"
-                data-point-year="${point.year}"
-                data-point-month="${point.month}"
-                data-point-label="${point.label}"></button>
-            `).join('')}
-          </div>
-        </div>
-        ${isNarrowScreen ? '<div class="op-analytics-line-hint">Arraste para os lados para passear pelos meses.</div>' : ''}
-      </div>
-      <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        ${coords.map((point, index) => `
+    const pointCardsMarkup = coords.map((point, index) => `
           <button type="button" class="rounded-2xl border ${point.is_current ? 'border-violet-300 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/20' : 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/70'} px-3 py-2.5 text-left transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-month-point data-point-index="${index}" data-point-year="${point.year}" data-point-month="${point.month}" data-point-label="${point.label}">
             <div class="text-[11px] font-bold uppercase tracking-[0.18em] ${point.is_current ? 'text-violet-700 dark:text-violet-300' : 'text-slate-500 dark:text-slate-400'}">${point.label}</div>
             <div class="mt-1 text-sm font-black ${point.is_current ? 'text-violet-700 dark:text-violet-200' : 'text-slate-900 dark:text-white'}">${formatMoney(point.total_cents)}</div>
           </button>
-        `).join('')}
+        `).join('');
+
+    chartNode.innerHTML = `
+      <div class="op-analytics-line-layout${isNarrowScreen ? '' : ' op-analytics-line-layout--desktop'}">
+        <div class="op-analytics-line-shell">
+          <div class="op-analytics-line-scroller" data-summary-chart-scroller>
+            <div class="op-analytics-line-stage" style="min-width:${width}px">
+              <svg viewBox="0 0 ${width} ${height}" class="op-analytics-line-svg" role="img" aria-label="Seu pedaço no cartão, mês a mês">
+                <defs>
+                  <linearGradient id="summaryLineFill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.30"></stop>
+                    <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.02"></stop>
+                  </linearGradient>
+                </defs>
+                ${[0.25, 0.5, 0.75, 1].map((step) => {
+                  const y = padding.top + ((height - padding.top - padding.bottom) * step);
+                  return `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="rgba(148,163,184,0.22)" stroke-dasharray="4 6"></line>`;
+                }).join('')}
+                <polygon points="${areaPolyline}" fill="url(#summaryLineFill)"></polygon>
+                <polyline points="${polyline}" fill="none" stroke="#8b5cf6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+                ${coords.map((point) => `
+                  <g>
+                    <circle cx="${point.x}" cy="${point.y}" r="${point.is_current ? 6.5 : 5}" fill="#ffffff" stroke="#8b5cf6" stroke-width="${point.is_current ? 4 : 3}"></circle>
+                    <text x="${point.x}" y="${height - 12}" text-anchor="middle" class="fill-slate-500 text-[11px] font-bold">${point.label}</text>
+                  </g>
+                `).join('')}
+              </svg>
+              ${isNarrowScreen ? '' : coords.map((point, index) => `
+                <button
+                  type="button"
+                  class="absolute h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-transparent bg-transparent outline-none transition focus:border-violet-400"
+                  style="left:${((point.x / width) * 100).toFixed(3)}%;top:${((point.y / height) * 100).toFixed(3)}%"
+                  aria-label="Abrir detalhes de ${point.label}"
+                  data-summary-month-hotspot
+                  data-point-index="${index}"
+                  data-point-year="${point.year}"
+                  data-point-month="${point.month}"
+                  data-point-label="${point.label}"></button>
+              `).join('')}
+            </div>
+          </div>
+          ${isNarrowScreen ? '<div class="op-analytics-line-hint">Arraste para os lados para passear pelos meses.</div>' : ''}
+        </div>
+        <div class="op-analytics-line-points grid grid-cols-2 gap-3 sm:grid-cols-3">
+          ${pointCardsMarkup}
+        </div>
       </div>`;
 
     const scroller = chartNode.querySelector('[data-summary-chart-scroller]');

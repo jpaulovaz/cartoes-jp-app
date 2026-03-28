@@ -1,4 +1,4 @@
-<%- include("partials/header", { title: `AcerttaPay | Análises ${String(month).padStart(2,'0')}/${year}` }) %>
+<%- include("partials/header", { title: `OrganizaPay | Análises ${String(month).padStart(2,'0')}/${year}` }) %>
 <%
   const totalKpis = summaryCharts && summaryCharts.kpis ? summaryCharts.kpis : {};
   const analyticsSource = analyticsCharts || {};
@@ -13,9 +13,22 @@
   const merchantRankingDefaultOpen = true;
   const financeTotals = financeAnalytics && financeAnalytics.totals ? financeAnalytics.totals : { incomeCents: 0, expenseCents: 0, netCents: 0, incomeRowCount: 0, expenseRowCount: 0, positiveNetMonths: 0 };
   const financeTrend = analyticsSource && Array.isArray(analyticsSource.flowTrend) ? analyticsSource.flowTrend : [];
+  const financeTrendDisplay = [...financeTrend].sort((a, b) => {
+    const aKey = (Number(a.year || 0) * 100) + Number(a.month || 0);
+    const bKey = (Number(b.year || 0) * 100) + Number(b.month || 0);
+    return bKey - aKey;
+  });
   const financeIncomeSources = financeAnalytics && Array.isArray(financeAnalytics.incomeSources) ? financeAnalytics.incomeSources : [];
   const financeExpenseSources = financeAnalytics && Array.isArray(financeAnalytics.expenseSources) ? financeAnalytics.expenseSources : [];
-  const financeTrendMax = Math.max(1, ...financeTrend.map((point) => Math.max(Number(point.income_cents || 0), Number(point.expense_cents || 0), Number(point.card_cents || 0))));
+  const financeTrendMax = Math.max(1, ...financeTrendDisplay.map((point) => Math.max(Number(point.income_cents || 0), Number(point.expense_cents || 0), Number(point.card_cents || 0))));
+  const cardTrendByCardDisplay = cardTrendByCard.map((cardTrend) => ({
+    ...cardTrend,
+    series: [...(Array.isArray(cardTrend.series) ? cardTrend.series : [])].sort((a, b) => {
+      const aKey = (Number(a.year || 0) * 100) + Number(a.month || 0);
+      const bKey = (Number(b.year || 0) * 100) + Number(b.month || 0);
+      return bKey - aKey;
+    })
+  }));
   const cardSpendCents = Number(graphKpis.totalSpentCents || 0);
   const outsideExpenseCents = Number(financeTotals.expenseCents || 0);
   const totalOutflowCents = outsideExpenseCents + cardSpendCents;
@@ -75,9 +88,9 @@
     </div>
 
     <div class="mt-5 op-tab-strip" role="tablist" aria-label="Blocos das análises">
-      <button type="button" class="op-tab-btn is-active" role="tab" aria-selected="true" data-op-tab-target="overview"><span class="sm:hidden">Resumão</span><span class="hidden sm:inline">Visão geral</span></button>
-      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="flow"><span class="sm:hidden">Entra e sai</span><span class="hidden sm:inline">Entradas e saídas</span></button>
-      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="split"><span class="sm:hidden">Turma e cartões</span><span class="hidden sm:inline">Pessoas e cartões</span></button>
+      <button type="button" class="op-tab-btn is-active" role="tab" aria-selected="true" data-op-tab-target="overview">Visão geral</button>
+      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="flow">Entradas e saídas</button>
+      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="split">Pessoas e cartões</button>
       <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="places">Lugares</button>
     </div>
 
@@ -144,30 +157,30 @@
             <span data-summary-interaction-hint class="font-medium text-slate-500 dark:text-slate-400">Toque para fuçar sem medo.</span>
           </div>
 
-          <div class="mt-6 grid gap-4 xl:grid-cols-2 op-analytics-graph-grid">
-            <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 op-analytics-graph-card">
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div class="min-w-0">
+          <div class="mt-6 grid gap-4">
+            <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+              <div class="flex items-start justify-between gap-3">
+                <div>
                   <h3 class="text-lg font-black text-slate-900 dark:text-white">Seu pedaço por categoria</h3>
-                  <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">Mostra para onde foi o seu pedaço do cartão neste mês.</p>
+                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Mostra para onde foi o seu pedaço do cartão neste mês.</p>
                 </div>
-                <span class="inline-flex items-center self-start rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Categorias</span>
+                <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Categorias</span>
               </div>
-              <div class="mt-4 op-analytics-donut-layout">
-                <div class="op-analytics-donut-stage" data-summary-donut-chart><div class="flex min-h-[260px] animate-pulse items-center justify-center rounded-[24px] border border-slate-200 bg-slate-50/80 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-400 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-500">Assando a pizza financeira...</div></div>
-                <div class="op-analytics-donut-legend min-w-0 flex-1" data-summary-donut-legend><div class="grid gap-3 sm:grid-cols-2 2xl:grid-cols-1"><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div></div></div>
+              <div class="mt-4 flex flex-col gap-4 xl:flex-row xl:items-center">
+                <div class="w-full xl:max-w-[290px]" data-summary-donut-chart><div class="flex min-h-[260px] animate-pulse items-center justify-center rounded-[24px] border border-slate-200 bg-slate-50/80 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-400 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-500">Assando a pizza financeira...</div></div>
+                <div class="min-w-0 flex-1" data-summary-donut-legend><div class="grid gap-3 sm:grid-cols-2"><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div></div></div>
               </div>
             </div>
 
-            <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 op-analytics-graph-card">
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div class="min-w-0">
+            <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+              <div class="flex items-start justify-between gap-3">
+                <div>
                   <h3 class="text-lg font-black text-slate-900 dark:text-white">Seu cartão, mês a mês</h3>
-                  <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">Bom para ver quando o seu pedaço no cartão engrossou ou deu uma respirada.</p>
+                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Bom para ver quando o seu pedaço no cartão engrossou ou deu uma respirada.</p>
                 </div>
-                <span class="inline-flex items-center self-start rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
+                <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
               </div>
-              <div class="mt-4 op-analytics-line-wrap" data-summary-line-chart><div class="flex min-h-[260px] animate-pulse items-center justify-center rounded-[24px] border border-slate-200 bg-slate-50/80 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-400 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-500">Afinando a linha do tempo das compras...</div></div>
+              <div class="mt-4" data-summary-line-chart><div class="flex min-h-[260px] animate-pulse items-center justify-center rounded-[24px] border border-slate-200 bg-slate-50/80 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-400 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-500">Afinando a linha do tempo das compras...</div></div>
               <div class="mt-4 grid gap-3 sm:grid-cols-2">
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
                   <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Comparação com o mês anterior</div>
@@ -236,7 +249,7 @@
                 <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
               </div>
               <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                <% financeTrend.forEach((point) => { 
+                <% financeTrendDisplay.forEach((point) => { 
                      const incomePct = financeTrendMax > 0 ? Math.max(8, Math.round((Number(point.income_cents || 0) / financeTrendMax) * 100)) : 0;
                      const expensePct = financeTrendMax > 0 ? Math.max(8, Math.round((Number(point.expense_cents || 0) / financeTrendMax) * 100)) : 0;
                      const cardPct = financeTrendMax > 0 ? Math.max(8, Math.round((Number(point.card_cents || 0) / financeTrendMax) * 100)) : 0;
@@ -356,7 +369,7 @@
           </div>
         </div>
 
-        <div class="mt-6 grid gap-4 xl:grid-cols-2 op-analytics-graph-grid">
+        <div class="mt-6 grid gap-4 xl:grid-cols-2">
           <section class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
             <div class="flex items-start justify-between gap-3">
               <div>
@@ -428,9 +441,9 @@
             </div>
             <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
           </div>
-          <% if (cardTrendByCard.length > 0) { %>
+          <% if (cardTrendByCardDisplay.length > 0) { %>
             <div class="mt-4 grid gap-4 xl:grid-cols-2">
-              <% cardTrendByCard.forEach((cardTrend) => { const cardPeak = Math.max(1, Number(cardTrend.peak_cents || 0)); %>
+              <% cardTrendByCardDisplay.forEach((cardTrend) => { const cardPeak = Math.max(1, Number(cardTrend.peak_cents || 0)); %>
                 <section class="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/60">
                   <div class="flex items-start justify-between gap-3">
                     <div>

@@ -456,6 +456,21 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_linked O
 try { db.prepare("ALTER TABLE closed_months ADD COLUMN user_id INTEGER").run(); } catch (e) { /* Coluna já existe ou tabela ainda não precisava de ajuste */ }
 try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_closed_months_user_month_year ON closed_months(user_id, month, year)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN amount_mode TEXT NOT NULL DEFAULT 'fixed'").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN carry_key TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_monthly_finances_user_period_carry_key ON monthly_finances(user_id, month, year, carry_key) WHERE carry_key IS NOT NULL").run(); } catch (e) { /* Índice já existe */ }
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS monthly_finance_carry_exceptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    carry_key TEXT NOT NULL,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(user_id, carry_key, month, year),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_monthly_finance_carry_exceptions_user_period ON monthly_finance_carry_exceptions(user_id, year, month)").run(); } catch (e) { /* Índice já existe */ }
 db.prepare(`
   CREATE TABLE IF NOT EXISTS monthly_finance_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -4645,6 +4660,104 @@ function sumFinanceItemCents(items) {
   return (Array.isArray(items) ? items : []).reduce((sum, item) => sum + Number(item?.amount_cents || 0), 0);
 }
 
+function normalizeMonthlyFinanceCarryKey(value) {
+  const normalized = String(value || '').trim();
+  return normalized ? normalized.slice(0, 64) : '';
+}
+
+function createMonthlyFinanceCarryKey() {
+  if (typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return crypto.randomBytes(16).toString('hex');
+}
+
+function getPreviousMonthYear(month, year) {
+  let prevMonth = Number(month) - 1;
+  let prevYear = Number(year);
+  if (prevMonth < 1) {
+    prevMonth = 12;
+    prevYear -= 1;
+  }
+  return { month: prevMonth, year: prevYear };
+}
+
+function syncMonthlyFinanceCarryForward(userId, month, year) {
+  const { month: prevMonth, year: prevYear } = getPreviousMonthYear(month, year);
+
+  const previousRows = db.prepare(`
+    SELECT id, type, category_id, description, amount_mode, carry_key
+    FROM monthly_finances
+    WHERE user_id = ? AND month = ? AND year = ?
+      AND carry_key IS NOT NULL AND TRIM(carry_key) <> ''
+    ORDER BY id ASC
+  `).all(userId, prevMonth, prevYear).map((row) => ({
+    ...row,
+    amount_mode: normalizeFinanceAmountMode(row.amount_mode),
+    carry_key: normalizeMonthlyFinanceCarryKey(row.carry_key)
+  })).filter((row) => row.carry_key);
+
+  if (!previousRows.length) {
+    return 0;
+  }
+
+  const currentCarryKeys = new Set(
+    db.prepare(`
+      SELECT carry_key
+      FROM monthly_finances
+      WHERE user_id = ? AND month = ? AND year = ?
+        AND carry_key IS NOT NULL AND TRIM(carry_key) <> ''
+    `).all(userId, month, year)
+      .map((row) => normalizeMonthlyFinanceCarryKey(row.carry_key))
+      .filter(Boolean)
+  );
+
+  const blockedCarryKeys = new Set(
+    db.prepare(`
+      SELECT carry_key
+      FROM monthly_finance_carry_exceptions
+      WHERE user_id = ? AND month = ? AND year = ?
+    `).all(userId, month, year)
+      .map((row) => normalizeMonthlyFinanceCarryKey(row.carry_key))
+      .filter(Boolean)
+  );
+
+  const insertClone = db.prepare(`
+    INSERT OR IGNORE INTO monthly_finances (user_id, month, year, type, category_id, description, formula, amount_cents, amount_mode, carry_key, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, '', 0, ?, ?, ?)
+  `);
+
+  const currentNowIso = nowIso();
+  let insertedCount = 0;
+
+  db.transaction(() => {
+    for (const row of previousRows) {
+      if (currentCarryKeys.has(row.carry_key) || blockedCarryKeys.has(row.carry_key)) {
+        continue;
+      }
+
+      const result = insertClone.run(
+        userId,
+        month,
+        year,
+        row.type,
+        row.category_id ?? null,
+        row.description ?? '',
+        row.amount_mode,
+        row.carry_key,
+        currentNowIso
+      );
+
+      if (Number(result.changes || 0) > 0) {
+        currentCarryKeys.add(row.carry_key);
+        insertedCount += 1;
+      }
+    }
+  })();
+
+  return insertedCount;
+}
+
 function ensureMonthlyFinanceScaffold(userId, month, year) {
   const alreadyInitialized = !!db.prepare(`
     SELECT 1
@@ -4672,15 +4785,15 @@ function ensureMonthlyFinanceScaffold(userId, month, year) {
   );
 
   const selectPrevious = db.prepare(`
-    SELECT type, category_id, description, amount_mode
+    SELECT type, category_id, description, amount_mode, carry_key
     FROM monthly_finances
     WHERE user_id = ? AND month = ? AND year = ? AND type = ?
     ORDER BY id ASC
   `);
 
   const insertClone = db.prepare(`
-    INSERT INTO monthly_finances (user_id, month, year, type, category_id, description, formula, amount_cents, amount_mode, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, '', 0, ?, ?)
+    INSERT INTO monthly_finances (user_id, month, year, type, category_id, description, formula, amount_cents, amount_mode, carry_key, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, '', 0, ?, ?, ?)
   `);
 
   const nowIso = new Date().toISOString();
@@ -4699,6 +4812,7 @@ function ensureMonthlyFinanceScaffold(userId, month, year) {
           row.category_id ?? null,
           row.description ?? "",
           normalizeFinanceAmountMode(row.amount_mode),
+          normalizeMonthlyFinanceCarryKey(row.carry_key) || null,
           nowIso
         );
       }
@@ -11733,6 +11847,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 
   syncRecurringTransactions(userId, currentYear, currentMonth);
   ensureMonthlyFinanceScaffold(userId, currentMonth, currentYear);
+  syncMonthlyFinanceCarryForward(userId, currentMonth, currentYear);
 
   const owner = getSelfPerson(userId) || ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
   if (!owner) return res.status(400).send("Ajuste seu perfil em Amigos antes de seguir por aqui.");
@@ -15521,10 +15636,11 @@ app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) =>
 
     const nowIso = new Date().toISOString();
     const totalCents = amountMode === 'variable' ? sumFinanceItemCents(items) : 0;
+    const carryKey = createMonthlyFinanceCarryKey();
 
     const insertFinance = db.prepare(`
-      INSERT INTO monthly_finances (user_id, month, year, type, description, formula, amount_cents, amount_mode, created_at)
-      VALUES (?, ?, ?, ?, ?, '', ?, ?, ?)
+      INSERT INTO monthly_finances (user_id, month, year, type, description, formula, amount_cents, amount_mode, carry_key, created_at)
+      VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, ?)
     `);
 
     const insertItem = db.prepare(`
@@ -15533,7 +15649,7 @@ app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) =>
     `);
 
     const financeId = db.transaction(() => {
-      const result = insertFinance.run(userId, month, year, type, description, totalCents, amountMode, nowIso);
+      const result = insertFinance.run(userId, month, year, type, description, totalCents, amountMode, carryKey, nowIso);
       const createdFinanceId = Number(result.lastInsertRowid);
 
       if (amountMode === 'variable') {
@@ -15656,7 +15772,17 @@ app.post("/finances/delete/:id", ensureAuthenticated, (req, res) => {
     return res.status(423).json({ error: getMonthLockMessage(Number(row.month), Number(row.year)) });
   }
 
+  const carryKey = normalizeMonthlyFinanceCarryKey(row.carry_key);
+  const deletedAt = nowIso();
+
   db.transaction(() => {
+    if (carryKey) {
+      db.prepare(`
+        INSERT OR IGNORE INTO monthly_finance_carry_exceptions (user_id, carry_key, month, year, created_at)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(userId, carryKey, Number(row.month), Number(row.year), deletedAt);
+    }
+
     db.prepare("DELETE FROM monthly_finance_items WHERE finance_id = ? AND user_id = ?").run(req.params.id, userId);
     db.prepare("DELETE FROM monthly_finances WHERE id = ? AND user_id = ?").run(req.params.id, userId);
   })();

@@ -203,6 +203,7 @@ CREATE TABLE IF NOT EXISTS monthly_finances (
   formula TEXT,
   amount_cents INTEGER DEFAULT 0,
   amount_mode TEXT NOT NULL DEFAULT 'fixed',
+  carry_key TEXT,
   created_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (category_id) REFERENCES finance_categories(id)
@@ -223,6 +224,20 @@ CREATE TABLE IF NOT EXISTS monthly_finance_items (
 
 CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_finance_user ON monthly_finance_items(finance_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_user_date ON monthly_finance_items(user_id, item_date);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_monthly_finances_user_period_carry_key ON monthly_finances(user_id, month, year, carry_key) WHERE carry_key IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS monthly_finance_carry_exceptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  carry_key TEXT NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, carry_key, month, year),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_monthly_finance_carry_exceptions_user_period ON monthly_finance_carry_exceptions(user_id, year, month);
 
 CREATE TABLE IF NOT EXISTS scratchpad (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -919,6 +934,25 @@ CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_linked ON person_app_links
 if (!columnExists("monthly_finances", "amount_mode")) {
   db.exec("ALTER TABLE monthly_finances ADD COLUMN amount_mode TEXT NOT NULL DEFAULT 'fixed';");
 }
+
+if (!columnExists("monthly_finances", "carry_key")) {
+  db.exec("ALTER TABLE monthly_finances ADD COLUMN carry_key TEXT;");
+}
+
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_monthly_finances_user_period_carry_key ON monthly_finances(user_id, month, year, carry_key) WHERE carry_key IS NOT NULL;");
+db.exec(`
+CREATE TABLE IF NOT EXISTS monthly_finance_carry_exceptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  carry_key TEXT NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, carry_key, month, year),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+`);
+db.exec("CREATE INDEX IF NOT EXISTS idx_monthly_finance_carry_exceptions_user_period ON monthly_finance_carry_exceptions(user_id, year, month);");
 
 const DEFAULT_PURCHASE_CATEGORIES = [
   'Mercado',

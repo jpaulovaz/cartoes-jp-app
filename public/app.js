@@ -911,8 +911,8 @@
     }
 
     const isNarrowScreen = window.matchMedia('(max-width: 767px)').matches;
-    const radius = isNarrowScreen ? 74 : 82;
-    const strokeWidth = isNarrowScreen ? 26 : 28;
+    const radius = isNarrowScreen ? 82 : 92;
+    const strokeWidth = isNarrowScreen ? 28 : 30;
     const circumference = 2 * Math.PI * radius;
     let offset = 0;
     const segments = filtered.map((item, index) => {
@@ -962,8 +962,33 @@
             <span class="op-analytics-donut-center__copy" data-summary-donut-center-copy>${filtered.length} categorias no mapa</span>
           </div>
         </div>
+      </div>`;
 
-        <div class="op-analytics-donut-summary">
+    legendNode.innerHTML = `
+      <div class="op-analytics-category-stack">
+        <div class="op-analytics-category-list">
+          ${segments.map((segment, index) => {
+            const canOpen = !segment.is_aggregate && !segment.is_uncategorized && Number(segment.id || 0) > 0;
+            return `
+              <button type="button" class="op-analytics-category-item group" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}" data-segment-index="${index}" ${canOpen ? '' : 'data-category-disabled="true"'}>
+                <span class="op-analytics-category-item__body">
+                  <span class="op-analytics-category-item__top">
+                    <span class="op-analytics-category-item__title">
+                      <span class="op-analytics-category-item__swatch" style="background:${segment.color}"></span>
+                      <span class="op-analytics-category-item__label">${segment.label || 'Sem nome'}</span>
+                    </span>
+                    <span class="op-analytics-category-item__share">${segment.share}%</span>
+                  </span>
+                  <span class="op-analytics-category-item__meta-row">
+                    <span class="op-analytics-category-item__meta">${segment.txn_count || 0} compra(s)</span>
+                    <span class="op-analytics-category-item__amount">${formatMoney(segment.total_cents)}</span>
+                  </span>
+                  <span class="op-analytics-category-item__bar"><span style="width:${Math.max(8, Number(segment.share || 0))}%;background:${segment.color}"></span></span>
+                </span>
+              </button>`;
+          }).join('')}
+        </div>
+        <div class="op-analytics-donut-summary op-analytics-donut-summary--below">
           <div class="op-analytics-donut-summary-card">
             <span class="op-analytics-donut-summary-card__label">Campeã</span>
             <strong class="op-analytics-donut-summary-card__value">${topCategory ? topCategory.label : 'Ainda sem líder'}</strong>
@@ -980,26 +1005,6 @@
             <span class="op-analytics-donut-summary-card__sub">aparecendo por aqui</span>
           </div>
         </div>
-      </div>`;
-
-    legendNode.innerHTML = `
-      <div class="op-analytics-category-list">
-        ${segments.map((segment, index) => {
-          const canOpen = !segment.is_aggregate && !segment.is_uncategorized && Number(segment.id || 0) > 0;
-          return `
-            <button type="button" class="op-analytics-category-item group" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}" data-segment-index="${index}" ${canOpen ? '' : 'data-category-disabled="true"'}>
-              <span class="op-analytics-category-item__swatch" style="background:${segment.color}"></span>
-              <span class="op-analytics-category-item__body">
-                <span class="op-analytics-category-item__top">
-                  <span class="op-analytics-category-item__label">${segment.label || 'Sem nome'}</span>
-                  <span class="op-analytics-category-item__share">${segment.share}%</span>
-                </span>
-                <span class="op-analytics-category-item__meta">${segment.txn_count || 0} compra(s) · ${formatMoney(segment.total_cents)}</span>
-                <span class="op-analytics-category-item__bar"><span style="width:${Math.max(8, Number(segment.share || 0))}%;background:${segment.color}"></span></span>
-                <span class="op-analytics-category-item__hint ${canOpen ? 'op-analytics-category-item__hint--active' : ''}">${canOpen ? 'Abrir essas compras' : 'Só para olhar'}</span>
-              </span>
-            </button>`;
-        }).join('')}
       </div>`;
 
     const centerCopy = chartNode.querySelector('[data-summary-donut-center-copy]');

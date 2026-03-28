@@ -14228,7 +14228,7 @@ function buildMonthlyReviewViewModel(userId, month, year) {
     ? personPanel.find((item) => Number(item.person_id || 0) === selfPersonId) || null
     : null;
   const personalCategories = getPersonShareCategoryDistribution(userId, selfPersonId, month, year);
-  const personalMonthlyTrend = getPersonShareMonthlyTrend(userId, selfPersonId, month, year, 5);
+  const personalMonthlyTrend = getPersonShareMonthlyTrend(userId, selfPersonId, month, year, 11);
   const personalMerchantRanking = getPersonMerchantRanking(userId, selfPersonId, month, year, 6);
   const personalMerchantSuggestions = getPersonMerchantSuggestions(userId, selfPersonId, month, year, 4);
   const cardMonthlyTrend = getCardMonthlyTrend(userId, month, year, 6);

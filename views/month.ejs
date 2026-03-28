@@ -488,7 +488,7 @@
               <th class="px-4 py-4"><a class="hover:text-blue-600 transition-colors flex items-center"
                   href="<%= sortLink('desc') %>">Descrição</a></th>
               <th class="hidden md:table-cell px-4 py-4 text-center min-w-[13rem]">Categoria</th>
-              <th class="px-4 py-4"><a class="hover:text-blue-600 transition-colors flex items-center"
+              <th class="px-4 py-4 text-center min-w-[13rem]"><a class="hover:text-blue-600 transition-colors inline-flex items-center justify-center"
                   href="<%= sortLink('card') %>">Cartão</a></th>
               <th class="px-4 py-4"><a class="hover:text-blue-600 transition-colors flex items-center"
                   href="<%= sortLink('number') %>">Nº</a></th>
@@ -526,10 +526,10 @@
                     <span class="text-xs font-semibold text-slate-400 dark:text-slate-500">—</span>
                   <% } %>
                 </td>
-                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3">
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 align-middle text-center min-w-[13rem]">
                   <div class="flex items-center justify-between gap-3 md:block">
                     <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Cartão</span>
-                    <span class="inline-flex items-center px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-slate-600 text-right md:text-left">
+                    <span class="inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-center text-[11px] font-bold leading-none text-slate-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200">
                       <%= t.card_name %>
                     </span>
                   </div>

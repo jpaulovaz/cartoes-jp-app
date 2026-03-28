@@ -610,6 +610,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           personPhone: '<%= person.phone || "" %>',
+          personPhoneCountry: '<%= person.phone_ui_country || "BR" %>',
           message: whatsappCaptionMessage,
           followUpMessage: whatsappFollowUpMessage,
           pixPayload: whatsappPixPayload,

@@ -69,6 +69,13 @@ const {
   parseIntegerSetting,
   sanitizeSettingValue
 } = require("./src/appConfig");
+const {
+  DEFAULT_PHONE_COUNTRY,
+  buildPhoneCountryOptions,
+  normalizePhoneForStorage,
+  normalizePhoneForWhatsapp,
+  decoratePersonPhoneForView
+} = require('./src/phone');
 
 // --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
 require('./scripts/migrate.js');
@@ -10316,7 +10323,7 @@ app.post('/people/profile-photo/remove', ensureAuthenticated, async (req, res) =
 app.get("/people", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
-  const allPeople = getPeopleAll(userId);
+  const allPeople = getPeopleAll(userId).map((person) => decoratePersonPhoneForView(person, { fallbackCountry: DEFAULT_PHONE_COUNTRY }));
   const selfPerson = allPeople.find((person) => person && person.is_self) || null;
   if (selfPerson) {
     const currentUser = getUserRecord(userId, { includeDeleted: false }) || req.user || {};
@@ -10344,6 +10351,8 @@ app.get("/people", ensureAuthenticated, (req, res) => {
     pixAllCitySuggestions: PIX_ALL_CITY_SUGGESTIONS,
     pixDefaultState: PIX_DEFAULT_STATE,
     pixDefaultCity: PIX_DEFAULT_CITY,
+    phoneCountryOptions: buildPhoneCountryOptions(),
+    phoneDefaultCountry: DEFAULT_PHONE_COUNTRY,
     profileSignatureVibeOptions: PROFILE_SIGNATURE_VIBE_OPTIONS,
     profileSignatureMaxLength: PROFILE_SIGNATURE_MAX_LENGTH,
     title: "Amigos"
@@ -10378,15 +10387,20 @@ app.post("/people", ensureAuthenticated, (req, res) => {
     : '/people#network-lounge';
 
   const currentName = targetPerson ? String(targetPerson.name || '').trim() : '';
-  const currentPhone = targetPerson ? String(targetPerson.phone || '').trim().replace(/\D/g, '') : '';
+  const currentPhone = targetPerson ? String(targetPerson.phone || '').trim() : '';
   const currentEmail = targetPerson ? normalizeEmail(targetPerson.email) : null;
+  const requestedPhoneCountry = String(req.body.phone_country || DEFAULT_PHONE_COUNTRY).trim().toUpperCase() || DEFAULT_PHONE_COUNTRY;
 
   const name = isSelfTarget && requestedSection === 'pix'
     ? currentName
     : String(req.body.name || '').trim();
-  const phone = isSelfTarget && requestedSection === 'pix'
+  const rawPhoneInput = isSelfTarget && requestedSection === 'pix'
     ? currentPhone
-    : String(req.body.phone || '').trim().replace(/\D/g, '');
+    : String(req.body.phone || '').trim();
+  const normalizedPhone = isSelfTarget && requestedSection === 'pix'
+    ? { ok: true, value: currentPhone, countryCode: requestedPhoneCountry }
+    : normalizePhoneForStorage(rawPhoneInput, requestedPhoneCountry, { allowEmpty: true });
+  const phone = normalizedPhone.ok ? normalizedPhone.value : rawPhoneInput;
   const email = isSelfTarget && requestedSection === 'pix'
     ? currentEmail
     : normalizeEmail(req.body.email);
@@ -10470,6 +10484,11 @@ app.post("/people", ensureAuthenticated, (req, res) => {
 
   if (duplicatedPerson) {
     setFlash(req, 'error', 'Já existe alguém com esse nome na sua lista. Se forem xará, vale colocar um apelido para não virar bagunça.');
+    return res.redirect(redirectTarget);
+  }
+
+  if (!normalizedPhone.ok) {
+    setFlash(req, 'error', normalizedPhone.reason || 'Não consegui entender esse telefone ainda. Confere o país e o número e tenta de novo.');
     return res.redirect(redirectTarget);
   }
 
@@ -14871,17 +14890,18 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, async (req, res
   const exportData = getPersonStatementExportData(userId, month, year, personId, itemOrder);
   if (!exportData) return res.status(400).send("Pessoa inválida.");
 
+  const decoratedPerson = decoratePersonPhoneForView(exportData.person, { fallbackCountry: DEFAULT_PHONE_COUNTRY });
   const shareContext = await buildSharePixContext({
     userId,
     month,
     year,
-    person: exportData.person,
+    person: decoratedPerson,
     totalCents: exportData.total,
     paidCents: exportData.paid_cents,
     remainingCents: exportData.remaining_cents
   });
 
-  res.render("whatsapp", { month, year, itemOrder, shareContext, ...exportData, formatBRLFromCents });
+  res.render("whatsapp", { month, year, itemOrder, shareContext, ...exportData, person: decoratedPerson, formatBRLFromCents });
 });
 
 function maskPhoneForLog(rawPhone) {
@@ -14889,6 +14909,38 @@ function maskPhoneForLog(rawPhone) {
   if (!digits) return 'sem-telefone';
   if (digits.length <= 4) return digits;
   return `${'*'.repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
+}
+
+function findEvolutionMissingRecipient(payload, depth = 0) {
+  if (!payload || depth > 8) return null;
+
+  if (Array.isArray(payload)) {
+    for (const entry of payload) {
+      const found = findEvolutionMissingRecipient(entry, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  if (typeof payload !== 'object') return null;
+
+  if (payload.exists === false && (payload.number || payload.jid)) {
+    return payload;
+  }
+
+  for (const value of Object.values(payload)) {
+    const found = findEvolutionMissingRecipient(value, depth + 1);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+function getEvolutionRecipientIssueMessage(error) {
+  const payload = error && error.response && error.response.data;
+  const missingRecipient = findEvolutionMissingRecipient(payload);
+  if (!missingRecipient) return '';
+  return 'Esse número não apareceu no WhatsApp. Confere se o DDI e o celular estão certinhos?';
 }
 
 function summarizeAxiosError(error) {
@@ -15056,7 +15108,7 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
   }
 
   try {
-    const { personPhone, message, followUpMessage, pixPayload, imageBase64 } = req.body;
+    const { personPhone, personPhoneCountry, message, followUpMessage, pixPayload, imageBase64 } = req.body;
 
     const apiUrl = getSettingText('EVOLUTION_API_URL');
     const apiKey = getSettingText('EVOLUTION_API_KEY');
@@ -15066,12 +15118,15 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
       return res.status(400).json({ error: "O envio automático no WhatsApp ainda não foi configurado." });
     }
 
-    const cleanNumber = String(personPhone || '').replace(/\D/g, '');
-    if (!cleanNumber) {
-      return res.status(400).json({ error: "Essa pessoa ainda não tem um telefone válido para envio." });
+    const normalizedRecipient = normalizePhoneForWhatsapp(personPhone, { fallbackCountry: personPhoneCountry || DEFAULT_PHONE_COUNTRY });
+    if (!normalizedRecipient.ok || !normalizedRecipient.number) {
+      return res.status(400).json({ error: normalizedRecipient.reason || "Essa pessoa ainda não tem um telefone válido para envio." });
     }
 
-    const base64Data = String(imageBase64 || '').split(',')[1];
+    const cleanNumber = normalizedRecipient.number;
+    const base64Data = String(imageBase64 || '').includes(',')
+      ? String(imageBase64 || '').split(',')[1]
+      : String(imageBase64 || '').trim();
     if (!base64Data) {
       return res.status(400).json({ error: "Não consegui montar a imagem do resumo para enviar." });
     }
@@ -15088,6 +15143,7 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
 
     res.json({ success: true });
   } catch (e) {
+    const recipientIssueMessage = getEvolutionRecipientIssueMessage(e);
     const summarized = summarizeAxiosError(e);
     console.error('[whatsapp/send-automation] Falha no envio', {
       userId: req.user && req.user.id,
@@ -15095,8 +15151,13 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
       messageLength: req.body && req.body.message ? String(req.body.message).length : 0,
       hasImage: Boolean(req.body && req.body.imageBase64),
       hasPixPayload: Boolean(req.body && String(req.body.pixPayload || '').trim()),
-      details: summarized
+      details: summarized,
+      recipientIssueMessage: recipientIssueMessage || null
     });
+
+    if (recipientIssueMessage) {
+      return res.status(400).json({ error: recipientIssueMessage });
+    }
 
     const status = e && e.response && e.response.status ? 502 : 500;
     res.status(status).json({ error: `Não consegui enviar esse resumo no WhatsApp agora. ${summarized}`.trim() });

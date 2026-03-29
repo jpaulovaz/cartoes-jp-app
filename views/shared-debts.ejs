@@ -397,23 +397,38 @@
     return Number(regularSectionCount || 0) === 0;
   }
 
+  function isPrivateReminderItem(item) {
+    return String(item?.kind || '').trim() === 'private_reminder';
+  }
+
   function canArchiveItem(item) {
+    if (isPrivateReminderItem(item)) {
+      return isArchiveMode ? Number(item?.is_archived || 0) > 0 : !!item?.is_archivable;
+    }
     return archiveEligibleStatusSet.has(String(item?.status || '').trim());
   }
 
   function archiveToggleAction(item) {
+    if (isPrivateReminderItem(item)) {
+      return isArchiveMode ? `/shared-debts/private/${item.id}/unarchive` : `/shared-debts/private/${item.id}/archive`;
+    }
     return isArchiveMode ? `/shared-debts/${item.id}/unarchive` : `/shared-debts/${item.id}/archive`;
   }
 
   function archiveToggleLabel(item) {
+    if (isPrivateReminderItem(item)) {
+      return isArchiveMode ? 'Restaurar lembrete' : 'Arquivar lembrete';
+    }
     return isArchiveMode ? 'Restaurar cobrança' : 'Arquivar cobrança';
   }
 
   function archiveToggleGroupLabel(items) {
     const count = (items || []).length;
+    const firstItem = (items || [])[0] || null;
+    const noun = isPrivateReminderItem(firstItem) ? countLabel(count, 'lembrete', 'lembretes') : countLabel(count, 'cobrança', 'cobranças');
     return isArchiveMode
-      ? `Restaurar ${countLabel(count, 'cobrança', 'cobranças')}`
-      : `Arquivar ${countLabel(count, 'cobrança', 'cobranças')}`;
+      ? `Restaurar ${noun}`
+      : `Arquivar ${noun}`;
   }
 
   function hasManualActionableItem(items, scope) {
@@ -491,7 +506,6 @@
   const currentPath = pagePath || (isArchiveMode ? '/shared-debts/archive' : '/shared-debts');
   const otherPath = counterpartPath || (isArchiveMode ? '/shared-debts' : '/shared-debts/archive');
   const archiveEligibleStatusSet = new Set(Array.isArray(archiveEligibleStatuses) ? archiveEligibleStatuses : []);
-  const archivedTotalVisible = (received || []).length + (sent || []).length;
   const trackingFilters = sharedDebtFilters || { envio: 'all', origin: 'all', installment: 'all' };
   const trackingFiltersActive = !!sharedDebtFiltersActive;
   const manualDebtPeopleList = Array.isArray(manualDebtPeople) ? manualDebtPeople : [];
@@ -517,6 +531,8 @@
   const sentPrivateReminderOpenCount = countItems(privateReminderItems, item => String(item?.status || '').trim() === 'open');
   const sentVisibleCount = sentBaseItems.length + privateReminderItems.length;
   const sentTotalCount = (sent || []).length + rawPrivateReminderItems.length;
+  const sentHeroCount = (sent || []).length + rawPrivateReminderItems.length;
+  const archivedTotalVisible = (received || []).length + (sent || []).length + rawPrivateReminderItems.length;
   const receivedPendingCount = countItems(received, item => item.status === 'pending');
   const sentDecisionCount = countItems(sent, item => item.status === 'rejected_by_receiver');
   const sentReceiptCount = countItems(sent, item => item.status === 'accepted' && item.payment_marked_at);
@@ -862,8 +878,14 @@
       </div>
       <div class="op-kpi-card text-center">
         <div class="op-kpi-card__label">Enviadas</div>
-        <div class="op-kpi-card__value"><%= sent.length %></div>
-        <div class="op-kpi-card__hint"><span class="md:hidden"><%= countLabel(rawSentGroups.length, 'mês', 'meses') %></span><span class="hidden md:inline"><%= countLabel(rawSentGroups.length, 'período', 'períodos') %></span></div>
+        <div class="op-kpi-card__value"><%= sentHeroCount %></div>
+        <div class="op-kpi-card__hint">
+          <% if (rawPrivateReminderItems.length) { %>
+            <span><%= countLabel(rawSentGroups.length, 'período', 'períodos') %> + <%= countLabel(rawPrivateReminderItems.length, 'privada', 'privadas') %></span>
+          <% } else { %>
+            <span class="md:hidden"><%= countLabel(rawSentGroups.length, 'mês', 'meses') %></span><span class="hidden md:inline"><%= countLabel(rawSentGroups.length, 'período', 'períodos') %></span>
+          <% } %>
+        </div>
       </div>
       <div class="op-kpi-card text-center">
         <% if (isArchiveMode) { %>
@@ -2222,7 +2244,7 @@
           <div class="op-empty-state op-empty-state--compact">
             <div class="op-empty-state__icon">📤</div>
             <div class="op-empty-state__title"><%= trackingFiltersActive ? "Nenhuma cobrança enviada combina com os filtros" : (isArchiveMode ? "Nenhuma cobrança enviada foi arquivada" : "Nenhuma solicitação enviada ainda") %></div>
-            <p class="op-empty-state__text"><%= trackingFiltersActive ? "Limpe ou ajuste os filtros para voltar a enxergar o acompanhamento enviado inteiro." : (isArchiveMode ? "Quando você arquivar cobranças enviadas encerradas, elas passam a morar aqui. Enquanto isso, a área está em paz de espírito." : "Quando você dividir uma compra, mandar uma cobrança no app ou guardar um lembrete privado, tudo aparece aqui.") %></p>
+            <p class="op-empty-state__text"><%= trackingFiltersActive ? "Limpe ou ajuste os filtros para voltar a enxergar o acompanhamento enviado inteiro." : (isArchiveMode ? "Quando você arquivar cobranças ou lembretes privados encerrados, eles passam a morar aqui. Enquanto isso, a área está em paz de espírito." : "Quando você dividir uma compra, mandar uma cobrança no app ou guardar um lembrete privado, tudo aparece aqui.") %></p>
           </div>
         </div>
       <% } else { %>
@@ -2445,13 +2467,13 @@
           <% } %>
 
           <% if (privateReminderItems.length) { const privateReminderTotalCents = sumAmountCents(privateReminderItems); %>
-            <details class="rounded-3xl border border-cyan-200 bg-cyan-50/70 dark:border-cyan-800 dark:bg-cyan-900/10 overflow-hidden" <%= sentPrivateReminderSectionOpen ? 'open' : '' %>>
+            <details id="private-reminders" class="rounded-3xl border border-cyan-200 bg-cyan-50/70 dark:border-cyan-800 dark:bg-cyan-900/10 overflow-hidden" <%= sentPrivateReminderSectionOpen ? 'open' : '' %>>
               <summary class="list-none cursor-pointer px-5 py-4 bg-white/70 dark:bg-slate-950/30">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div class="text-xs font-bold uppercase tracking-[0.18em] text-cyan-600 dark:text-cyan-300">Privado · só você vê</div>
-                    <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white">Só acompanhar por aqui</div>
-                    <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Lembretes unilaterais para dinheiro emprestado, combinados fora da amizade do app ou só para manter o radar ligado sem avisar ninguém.</p>
+                    <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= isArchiveMode ? 'Arquivo privado' : 'Só acompanhar por aqui' %></div>
+                    <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= isArchiveMode ? 'Lembretes privados já encerrados e guardados para consulta. Se quiser, você restaura e eles voltam para as ativas sem perder o contexto.' : 'Lembretes unilaterais para dinheiro emprestado, combinados fora da amizade do app ou só para manter o radar ligado sem avisar ninguém.' %></p>
                   </div>
                   <div class="flex flex-wrap gap-2 sm:justify-end">
                     <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-xs font-bold text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200"><%= countLabel(privateReminderItems.length, 'lembrete privado', 'lembretes privados') %></span>
@@ -2549,6 +2571,15 @@
                         <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
                           <div class="text-sm font-bold text-slate-900 dark:text-white">Lembrete encerrado</div>
                           <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Esse lembrete foi encerrado e agora fica só para consulta por aqui.</div>
+                        </div>
+                      <% } %>
+
+                      <% if (canArchiveItem(item)) { %>
+                        <div class="flex justify-end">
+                          <form method="POST" action="<%= archiveToggleAction(item) %>" class="contents">
+                            <input type="hidden" name="return_to" value="<%= currentPath %>">
+                            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
+                          </form>
                         </div>
                       <% } %>
                     </div>

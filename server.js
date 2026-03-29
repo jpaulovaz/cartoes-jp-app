@@ -108,11 +108,13 @@ const {
   PRIVATE_DEBT_STATUS_OPEN,
   PRIVATE_DEBT_STATUS_SETTLED,
   PRIVATE_DEBT_STATUS_CANCELLED,
+  PRIVATE_DEBT_ARCHIVABLE_STATUSES,
   buildPrivateDebtPersonSnapshots,
   mapPrivateDebtReminderRow,
   sanitizePrivateDebtDescription,
   sanitizePrivateDebtNote,
-  normalizePrivateDebtPaymentDate
+  normalizePrivateDebtPaymentDate,
+  canArchivePrivateDebtStatus
 } = require('./src/privateDebtReminders');
 
 // --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
@@ -4539,6 +4541,9 @@ function detectSharedDebtOriginKindFromRows(rows) {
 }
 
 const SHARED_DEBT_ARCHIVABLE_STATUSES = new Set(['settled', 'cancelled', 'rejection_accepted_by_sender', 'rejection_contested_by_sender']);
+const PRIVATE_DEBT_ARCHIVABLE_STATUS_SQL = PRIVATE_DEBT_ARCHIVABLE_STATUSES
+  .map((status) => `'${String(status).replace(/'/g, "''")}'`)
+  .join(', ');
 
 function normalizeSharedDebtBatchStatus(value) {
   const normalized = String(value || '').trim().toLowerCase();
@@ -5075,8 +5080,10 @@ function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
   const sharedDebtFiltersActive = hasActiveSharedDebtTrackingFilters(sharedDebtFilters);
   const receivedTracking = filterSharedDebtTrackingItems(received, sharedDebtFilters);
   const sentTracking = filterSharedDebtTrackingItems(sent, sharedDebtFilters);
-  const privateDebtReminders = archiveMode ? [] : getPrivateDebtReminderRowsForOwner(userId, { includeArchived: false });
-  const privateDebtReminderTracking = archiveMode ? [] : filterPrivateDebtReminderTrackingItems(privateDebtReminders, sharedDebtFilters);
+  const allPrivateDebtReminders = getPrivateDebtReminderRowsForOwner(userId, { includeArchived: true });
+  const privateDebtReminders = allPrivateDebtReminders.filter((item) => archiveMode ? Number(item?.is_archived || 0) > 0 : Number(item?.is_archived || 0) === 0);
+  const privateDebtReminderTracking = filterPrivateDebtReminderTrackingItems(privateDebtReminders, sharedDebtFilters);
+  const archivedPrivateReminderCount = allPrivateDebtReminders.filter((item) => Number(item?.is_archived || 0) > 0).length;
   const receivedPendingBatches = archiveMode ? [] : buildSharedDebtBatchCards(received, 'received').filter(batch => batch.pendingCount > 0);
   const sentPendingBatches = archiveMode ? [] : buildSharedDebtBatchCards(sent, 'sent').filter(batch => batch.pendingCount > 0);
   const eventsByRequest = getSharedDebtEventsByRequestIds([
@@ -5112,9 +5119,10 @@ function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
     ]).values()).filter(Boolean),
     pagePath: archiveMode ? '/shared-debts/archive' : '/shared-debts',
     counterpartPath: archiveMode ? '/shared-debts' : '/shared-debts/archive',
-    archiveTotalCount: archivedReceivedCount + archivedSentCount,
+    archiveTotalCount: archivedReceivedCount + archivedSentCount + archivedPrivateReminderCount,
     archivedReceivedCount,
     archivedSentCount,
+    archivedPrivateReminderCount,
     archiveEligibleStatuses: Array.from(SHARED_DEBT_ARCHIVABLE_STATUSES)
   };
 }
@@ -9274,6 +9282,54 @@ function getOpenPrivateDebtReceivableSummary(userId) {
   };
 }
 
+function getPrivateDebtReminderDashboardSummary(ownerUserId) {
+  const safeOwnerUserId = Number(ownerUserId || 0);
+  if (!safeOwnerUserId) {
+    return {
+      activeCount: 0,
+      activeCents: 0,
+      readyToArchiveCount: 0,
+      readyToArchiveCents: 0,
+      archivedCount: 0,
+      archivedCents: 0,
+      hasActive: false,
+      hasReadyToArchive: false,
+      hasArchived: false
+    };
+  }
+
+  const row = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN COALESCE(is_archived, 0) = 0 AND status = 'open' THEN 1 ELSE 0 END), 0) AS active_count,
+      COALESCE(SUM(CASE WHEN COALESCE(is_archived, 0) = 0 AND status = 'open' THEN amount_cents ELSE 0 END), 0) AS active_cents,
+      COALESCE(SUM(CASE WHEN COALESCE(is_archived, 0) = 0 AND status IN (${PRIVATE_DEBT_ARCHIVABLE_STATUS_SQL}) THEN 1 ELSE 0 END), 0) AS ready_to_archive_count,
+      COALESCE(SUM(CASE WHEN COALESCE(is_archived, 0) = 0 AND status IN (${PRIVATE_DEBT_ARCHIVABLE_STATUS_SQL}) THEN amount_cents ELSE 0 END), 0) AS ready_to_archive_cents,
+      COALESCE(SUM(CASE WHEN COALESCE(is_archived, 0) = 1 THEN 1 ELSE 0 END), 0) AS archived_count,
+      COALESCE(SUM(CASE WHEN COALESCE(is_archived, 0) = 1 THEN amount_cents ELSE 0 END), 0) AS archived_cents
+    FROM private_debt_reminders
+    WHERE owner_user_id = ?
+  `).get(safeOwnerUserId) || {};
+
+  const activeCount = Math.max(0, Number(row.active_count || 0));
+  const activeCents = Math.max(0, Number(row.active_cents || 0));
+  const readyToArchiveCount = Math.max(0, Number(row.ready_to_archive_count || 0));
+  const readyToArchiveCents = Math.max(0, Number(row.ready_to_archive_cents || 0));
+  const archivedCount = Math.max(0, Number(row.archived_count || 0));
+  const archivedCents = Math.max(0, Number(row.archived_cents || 0));
+
+  return {
+    activeCount,
+    activeCents,
+    readyToArchiveCount,
+    readyToArchiveCents,
+    archivedCount,
+    archivedCents,
+    hasActive: activeCount > 0,
+    hasReadyToArchive: readyToArchiveCount > 0,
+    hasArchived: archivedCount > 0
+  };
+}
+
 function detachPrivateDebtRemindersFromPerson(ownerUserId, personId) {
   const safeOwnerUserId = Number(ownerUserId || 0);
   const safePersonId = Number(personId || 0);
@@ -9706,6 +9762,80 @@ app.post('/shared-debts/:id/unarchive', ensureAuthenticated, (req, res) => {
   });
 
   setFlash(req, 'success', 'Cobrança restaurada. Ela voltou para as ativas sem perder nadinha do histórico.');
+  return res.redirect(fallbackRedirect);
+});
+
+app.post('/shared-debts/private/:id/archive', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const reminderId = Number(req.params.id || 0);
+  const fallbackRedirect = resolveSharedDebtViewPath(req.body.return_to, redirectBackOr(req, '/shared-debts'));
+
+  if (!reminderId) {
+    setFlash(req, 'error', 'Ops, esse lembrete privado não parece válido.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const reminder = getPrivateDebtReminderRowForOwner(userId, reminderId, { includeArchived: true });
+  if (!reminder) {
+    setFlash(req, 'error', 'Lembrete privado não encontrado.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (Number(reminder.is_archived || 0) > 0) {
+    setFlash(req, 'info', 'Esse lembrete privado já estava curtindo o arquivo.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (!canArchivePrivateDebtStatus(reminder.status)) {
+    setFlash(req, 'info', 'Esse lembrete privado ainda está em aberto, então continua nas ativas até você confirmar o recebimento.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const now = nowIso();
+  db.prepare(`
+    UPDATE private_debt_reminders
+    SET is_archived = 1,
+        archived_at = ?,
+        restored_at = NULL,
+        updated_at = ?
+    WHERE id = ? AND owner_user_id = ?
+  `).run(now, now, reminderId, userId);
+
+  setFlash(req, 'success', 'Lembrete privado arquivado. A central respirou e o histórico continuou intacto.');
+  return res.redirect(fallbackRedirect);
+});
+
+app.post('/shared-debts/private/:id/unarchive', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const reminderId = Number(req.params.id || 0);
+  const fallbackRedirect = resolveSharedDebtViewPath(req.body.return_to, redirectBackOr(req, '/shared-debts/archive'));
+
+  if (!reminderId) {
+    setFlash(req, 'error', 'Ops, esse lembrete privado não parece válido.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const reminder = getPrivateDebtReminderRowForOwner(userId, reminderId, { includeArchived: true });
+  if (!reminder) {
+    setFlash(req, 'error', 'Lembrete privado não encontrado.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (Number(reminder.is_archived || 0) === 0) {
+    setFlash(req, 'info', 'Esse lembrete privado já está nas ativas.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const now = nowIso();
+  db.prepare(`
+    UPDATE private_debt_reminders
+    SET is_archived = 0,
+        restored_at = ?,
+        updated_at = ?
+    WHERE id = ? AND owner_user_id = ?
+  `).run(now, now, reminderId, userId);
+
+  setFlash(req, 'success', 'Lembrete privado restaurado. Ele voltou para as ativas sem perder o fio da meada.');
   return res.redirect(fallbackRedirect);
 });
 
@@ -13687,6 +13817,27 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     });
   }
 
+  const privateDebtReminderSummary = getPrivateDebtReminderDashboardSummary(userId);
+  if (privateDebtReminderSummary.hasActive || privateDebtReminderSummary.hasReadyToArchive) {
+    const descriptionParts = [];
+    if (privateDebtReminderSummary.hasActive) {
+      descriptionParts.push(`${formatCountLabel(privateDebtReminderSummary.activeCount, 'lembrete privado segue', 'lembretes privados seguem')} em aberto, somando ${formatBRLFromCents(privateDebtReminderSummary.activeCents)}.`);
+    }
+    if (privateDebtReminderSummary.hasReadyToArchive) {
+      descriptionParts.push(`${formatCountLabel(privateDebtReminderSummary.readyToArchiveCount, 'lembrete já pode', 'lembretes já podem')} ir para o arquivo.`);
+    }
+
+    alerts.push({
+      type: privateDebtReminderSummary.hasActive ? 'info' : 'success',
+      icon: privateDebtReminderSummary.hasActive ? '🧾' : '🗂️',
+      title: privateDebtReminderSummary.hasActive
+        ? (privateDebtReminderSummary.activeCount === 1 ? 'Tem 1 lembrete privado em aberto' : 'Tem lembretes privados em aberto')
+        : (privateDebtReminderSummary.readyToArchiveCount === 1 ? 'Tem 1 lembrete privado pronto para arquivo' : 'Tem lembretes privados prontos para arquivo'),
+      description: `${descriptionParts.join(' ')} Esse radar existe só no seu app.`,
+      href: '/shared-debts#private-reminders'
+    });
+  }
+
   const today = dayjs();
   const isCurrentReferenceMonth = currentYear === today.year() && currentMonth === (today.month() + 1);
 
@@ -16364,6 +16515,7 @@ function buildMonthlyReviewViewModel(userId, month, year) {
   const personalMerchantRanking = getPersonMerchantRanking(userId, selfPersonId, month, year, 6);
   const personalMerchantSuggestions = getPersonMerchantSuggestions(userId, selfPersonId, month, year, 4);
   const cardMonthlyTrend = getCardMonthlyTrend(userId, month, year, 6);
+  const privateDebtReminderSummary = getPrivateDebtReminderDashboardSummary(userId);
   const personalCardShareCents = Number(selfPersonPanel?.total_cents || 0);
   const personalPaidCents = Number(selfPersonPanel?.paid_cents || 0);
   const personalRemainingCents = Math.max(0, personalCardShareCents - personalPaidCents);
@@ -16468,6 +16620,7 @@ function buildMonthlyReviewViewModel(userId, month, year) {
     selfPerson,
     isClosed,
     summaryCharts,
+    privateDebtReminderSummary,
     previousSummaryRef: shiftMonth(year, month, -1),
     nextSummaryRef: shiftMonth(year, month, 1)
   };

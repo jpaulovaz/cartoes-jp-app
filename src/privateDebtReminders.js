@@ -8,6 +8,11 @@ const PRIVATE_DEBT_STATUSES = [
   PRIVATE_DEBT_STATUS_CANCELLED
 ];
 
+const PRIVATE_DEBT_ARCHIVABLE_STATUSES = [
+  PRIVATE_DEBT_STATUS_SETTLED,
+  PRIVATE_DEBT_STATUS_CANCELLED
+];
+
 function compactSpaces(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
@@ -30,6 +35,10 @@ function sanitizePrivateDebtDescription(value = '', max = 120) {
 function sanitizePrivateDebtNote(value = '', max = 400) {
   const sanitized = clampText(value, max);
   return sanitized || null;
+}
+
+function canArchivePrivateDebtStatus(value = PRIVATE_DEBT_STATUS_OPEN) {
+  return PRIVATE_DEBT_ARCHIVABLE_STATUSES.includes(normalizePrivateDebtStatus(value));
 }
 
 function normalizePrivateDebtPaymentDate(value = null) {
@@ -64,6 +73,7 @@ function mapPrivateDebtReminderRow(row = {}) {
 
   return {
     ...row,
+    kind: 'private_reminder',
     id: Number(row?.id || 0) || null,
     owner_user_id: Number(row?.owner_user_id || row?.ownerUserId || 0) || null,
     person_id: personId,
@@ -80,6 +90,7 @@ function mapPrivateDebtReminderRow(row = {}) {
     settlement_note: sanitizePrivateDebtNote(row?.settlement_note || row?.settlementNote || '', 400),
     payment_date: normalizePrivateDebtPaymentDate(row?.payment_date || row?.paymentDate || null),
     status,
+    is_archivable: canArchivePrivateDebtStatus(status),
     is_archived: isArchived ? 1 : 0,
     archived_at: row?.archived_at || row?.archivedAt || null,
     restored_at: row?.restored_at || row?.restoredAt || null,
@@ -100,7 +111,9 @@ module.exports = {
   PRIVATE_DEBT_STATUS_SETTLED,
   PRIVATE_DEBT_STATUS_CANCELLED,
   PRIVATE_DEBT_STATUSES,
+  PRIVATE_DEBT_ARCHIVABLE_STATUSES,
   normalizePrivateDebtStatus,
+  canArchivePrivateDebtStatus,
   sanitizePrivateDebtDescription,
   sanitizePrivateDebtNote,
   normalizePrivateDebtPaymentDate,

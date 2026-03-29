@@ -96,6 +96,7 @@ const {
   PASSKEY_MAX_CREDENTIALS_PER_USER,
   PASSKEY_CHALLENGE_MAX_AGE_MS,
   PASSKEY_RUNTIME_AVAILABLE,
+  PASSKEY_SUPPORTED_ALGORITHM_IDS,
   buildPasskeyContext,
   buildPasskeyUserHandle,
   normalizePasskeyLabel,
@@ -3291,6 +3292,78 @@ function buildPasskeyManagementViewModel(req, userId, pinSettings = null) {
     rpLabel: context.rpID || '',
     originLabel: context.origin || ''
   };
+}
+
+function previewPasskeyValue(value, { head = 12, tail = 8 } = {}) {
+  const safe = String(value || '').trim();
+  if (!safe) return null;
+  if (safe.length <= (head + tail + 1)) return safe;
+  return `${safe.slice(0, head)}…${safe.slice(-tail)}`;
+}
+
+function summarizePasskeyRequestBody(body = {}) {
+  const response = body && typeof body === 'object' ? (body.response || {}) : {};
+  return {
+    id: previewPasskeyValue(body?.id),
+    rawId: previewPasskeyValue(body?.rawId),
+    type: String(body?.type || '').trim() || null,
+    transports: Array.isArray(response?.transports) ? response.transports.filter(Boolean) : [],
+    clientDataJSONLength: String(response?.clientDataJSON || '').length || 0,
+    attestationObjectLength: String(response?.attestationObject || '').length || 0,
+    authenticatorDataLength: String(response?.authenticatorData || '').length || 0,
+    signatureLength: String(response?.signature || '').length || 0,
+    userHandleLength: String(response?.userHandle || '').length || 0
+  };
+}
+
+function logPasskeyFlowFailure(req, phase, error, context = null, body = null, extras = {}) {
+  const payload = {
+    requestId: req?.requestId || 'sem-id',
+    phase,
+    method: req?.method,
+    path: req?.originalUrl || req?.path,
+    userId: req?.user?.id || null,
+    host: req?.get?.('host') || null,
+    forwardedHost: req?.get?.('x-forwarded-host') || null,
+    forwardedProto: req?.get?.('x-forwarded-proto') || null,
+    secureContext: context?.secureContext ?? null,
+    available: context?.available ?? null,
+    origin: context?.origin || null,
+    rpID: context?.rpID || null,
+    supportedAlgorithmIDs: Array.isArray(PASSKEY_SUPPORTED_ALGORITHM_IDS) ? PASSKEY_SUPPORTED_ALGORITHM_IDS.join(',') : null,
+    message: error?.message || null,
+    code: error?.code || null,
+    details: summarizePasskeyRequestBody(body),
+    ...extras
+  };
+
+  console.error('[passkey-error]', payload, error?.stack || error);
+}
+
+function getFriendlyPasskeyErrorMessage(error, fallbackMessage = 'Não consegui confirmar esse aparelho agora.') {
+  const rawMessage = String(error?.message || '').trim();
+
+  if (/Unexpected registration response origin|Unexpected authentication response origin/i.test(rawMessage)) {
+    return 'O app e esse aparelho não combinaram certinho o endereço seguro do desbloqueio. Vale conferir o HTTPS e o endereço oficial do app.';
+  }
+
+  if (/rp id|rpidhash|rp id hash|expectedRPID|matchExpectedRPID/i.test(rawMessage)) {
+    return 'O endereço de confiança desse desbloqueio não bateu com o esperado pelo servidor. Vale revisar o domínio oficial configurado para as passkeys.';
+  }
+
+  if (/Unexpected public key alg/i.test(rawMessage)) {
+    return 'Esse aparelho tentou usar um formato de chave que o servidor ainda não tinha liberado. Agora ele já conversa melhor com passkeys mais novos.';
+  }
+
+  if (/User verification was required/i.test(rawMessage)) {
+    return 'Esse aparelho não confirmou sua identidade com a proteção dele agora. Tenta de novo validando com biometria, rosto ou PIN do aparelho.';
+  }
+
+  if (/challenge/i.test(rawMessage)) {
+    return 'Esse preparo perdeu o timing no meio do caminho. Tenta de novo que eu gero outro na hora.';
+  }
+
+  return getFriendlyErrorMessage(error, { defaultMessage: fallbackMessage });
 }
 
 function buildPasskeyLockViewModel(req, userId, pinSettings = null) {
@@ -12126,6 +12199,7 @@ app.post('/people/security/passkeys/register/verify', ensureAuthenticated, async
   setNoStoreHeaders(res);
   const userId = req.user.id;
   const flow = consumePasskeySessionFlow(req, 'register');
+  const context = buildPasskeyContext(req);
 
   if (!flow || Number(flow.userId || 0) !== Number(userId || 0)) {
     return res.status(410).json({ ok: false, message: 'Esse preparo perdeu a validade. Começa de novo que eu acompanho daqui.' });
@@ -12159,9 +12233,19 @@ app.post('/people/security/passkeys/register/verify', ensureAuthenticated, async
       count: listUserPasskeys(userId).length
     });
   } catch (error) {
+    logPasskeyFlowFailure(req, 'register-verify', error, {
+      ...context,
+      origin: String(flow.origin || '').trim() || context.origin || '',
+      rpID: String(flow.rpID || '').trim() || context.rpID || ''
+    }, req.body, {
+      flowCreatedAt: Number(flow.createdAt || 0) || null,
+      flowOrigin: String(flow.origin || '').trim() || null,
+      flowRpID: String(flow.rpID || '').trim() || null
+    });
+
     return res.status(normalizeErrorStatus(error, 500)).json({
       ok: false,
-      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui confirmar esse aparelho agora.' })
+      message: getFriendlyPasskeyErrorMessage(error, 'Não consegui confirmar esse aparelho agora.')
     });
   }
 });
@@ -12267,9 +12351,19 @@ app.post('/lock/passkey/verify', ensureAuthenticatedIgnoringPin, async (req, res
 
     return res.json({ ok: true, redirect: redirectTarget });
   } catch (error) {
+    logPasskeyFlowFailure(req, 'lock-verify', error, {
+      ...context,
+      origin: String(flow.origin || '').trim() || context.origin || '',
+      rpID: String(flow.rpID || '').trim() || context.rpID || ''
+    }, req.body, {
+      flowCreatedAt: Number(flow.createdAt || 0) || null,
+      flowOrigin: String(flow.origin || '').trim() || null,
+      flowRpID: String(flow.rpID || '').trim() || null
+    });
+
     return res.status(normalizeErrorStatus(error, 500)).json({
       ok: false,
-      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui confirmar esse desbloqueio agora. Você também pode seguir pelo PIN.' })
+      message: getFriendlyPasskeyErrorMessage(error, 'Não consegui confirmar esse desbloqueio agora. Você também pode seguir pelo PIN.')
     });
   }
 });

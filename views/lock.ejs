@@ -50,6 +50,46 @@
     .op-lock-keypad-shell {
       padding-bottom: max(0rem, env(safe-area-inset-bottom, 0px));
     }
+    @media (max-width: 1023px) {
+      .op-lock-sidebar { display: none; }
+    }
+    @media (max-width: 640px) {
+      .op-lock-main {
+        min-height: 100svh;
+        align-items: flex-start;
+        padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+        padding-right: max(0.85rem, env(safe-area-inset-right, 0px));
+        padding-bottom: max(0.85rem, env(safe-area-inset-bottom, 0px));
+        padding-left: max(0.85rem, env(safe-area-inset-left, 0px));
+      }
+      .op-lock-grid { gap: 0.85rem; }
+      .op-lock-card-body { padding: 1rem 1rem 1.1rem; }
+      .op-lock-logo { margin-bottom: 1rem; max-width: 170px; }
+      .op-lock-profile { margin-bottom: 0.85rem; gap: 0.75rem; padding: 0.85rem 0.9rem; border-radius: 20px; }
+      .op-lock-profile-avatar { width: 2.75rem; height: 2.75rem; border-radius: 1rem; }
+      .op-lock-profile-name { font-size: 1.375rem; line-height: 1.1; }
+      .op-lock-intro { margin-bottom: 0.85rem; }
+      .op-lock-intro-title { margin-top: 0.45rem; font-size: 1.375rem; line-height: 1.1; }
+      .op-lock-intro-copy { margin-top: 0.35rem; font-size: 0.875rem; line-height: 1.45; }
+      .op-lock-form { gap: 0.75rem; }
+      .op-lock-pin-input { padding-top: 0.85rem; padding-bottom: 0.85rem; font-size: 1.375rem; }
+      .op-lock-slots { margin-top: 0.6rem; }
+      .op-lock-pin-help { margin-top: 0.5rem; font-size: 0.72rem; line-height: 1.35; }
+      .op-lock-keypad-shell { gap: 0.6rem; padding-top: 0; }
+      .op-pin-key { min-height: 48px; }
+      .op-lock-actions { margin-top: 0.9rem; gap: 0.75rem; }
+      .op-lock-meta { margin-top: 0.85rem; font-size: 0.72rem; line-height: 1.4; }
+    }
+    @media (max-width: 640px) and (max-height: 860px) {
+      .op-lock-logo { max-width: 148px; margin-bottom: 0.85rem; }
+      .op-lock-profile { margin-bottom: 0.75rem; padding: 0.75rem 0.8rem; }
+      .op-lock-intro { margin-bottom: 0.7rem; }
+      .op-lock-intro-copy,
+      .op-lock-pin-help { display: none; }
+      .op-lock-keypad-shell { gap: 0.5rem; }
+      .op-pin-key { min-height: 44px; font-size: 1rem; }
+      .op-lock-card-body { padding-bottom: 1rem; }
+    }
   </style>
 </head>
 <%
@@ -78,21 +118,21 @@
 %>
 <body class="op-auth-page min-h-screen font-sans">
   <main class="op-lock-main mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center sm:p-6">
-    <div class="grid w-full gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.8fr)] lg:items-center">
+    <div class="op-lock-grid grid w-full gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.8fr)] lg:items-center">
       <section class="op-auth-shell w-full">
         <div class="op-auth-card overflow-hidden">
-          <section class="relative z-10 px-6 py-7 lg:px-8 lg:py-9">
-            <img src="/logo.png" alt="AcerttaPay" class="mx-auto mb-6 w-full max-w-[240px] drop-shadow-[0_18px_26px_rgba(37,99,235,0.16)] sm:max-w-[280px]">
+          <section class="op-lock-card-body relative z-10 px-6 py-7 lg:px-8 lg:py-9">
+            <img src="/logo.png" alt="AcerttaPay" class="op-lock-logo mx-auto mb-6 w-full max-w-[240px] drop-shadow-[0_18px_26px_rgba(37,99,235,0.16)] sm:max-w-[280px]">
 
-            <div class="mx-auto mb-5 flex max-w-md items-center gap-4 rounded-[24px] border border-slate-200 bg-white/95 px-4 py-4 shadow-lg shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-950/80">
+            <div class="op-lock-profile mx-auto mb-5 flex max-w-md items-center gap-4 rounded-[24px] border border-slate-200 bg-white/95 px-4 py-4 shadow-lg shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-950/80">
               <% if (displayPhoto) { %>
-                <img src="<%= displayPhoto %>" alt="<%= displayName %>" class="h-14 w-14 rounded-2xl object-cover ring-1 ring-slate-200 dark:ring-slate-700">
+                <img src="<%= displayPhoto %>" alt="<%= displayName %>" class="op-lock-profile-avatar h-14 w-14 rounded-2xl object-cover ring-1 ring-slate-200 dark:ring-slate-700">
               <% } else { %>
-                <div class="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-lg font-black text-white dark:bg-amber-500 dark:text-slate-950"><%= (displayName || 'V').charAt(0).toUpperCase() %></div>
+                <div class="op-lock-profile-avatar inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-lg font-black text-white dark:bg-amber-500 dark:text-slate-950"><%= (displayName || 'V').charAt(0).toUpperCase() %></div>
               <% } %>
               <div class="min-w-0 flex-1">
                 <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Proteção por PIN</div>
-                <h1 class="mt-1 truncate text-2xl font-black tracking-tight text-slate-900 dark:text-slate-50"><%= displayName %></h1>
+                <h1 class="op-lock-profile-name mt-1 truncate text-2xl font-black tracking-tight text-slate-900 dark:text-slate-50"><%= displayName %></h1>
                 <% if (displayEmail) { %>
                   <p class="mt-1 truncate text-sm font-medium text-slate-500 dark:text-slate-400"><%= displayEmail %></p>
                 <% } %>
@@ -112,22 +152,22 @@
               </div>
             <% } %>
 
-            <div class="mb-5">
+            <div class="op-lock-intro mb-5">
               <div class="text-xs font-extrabold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Desbloqueio</div>
-              <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-slate-50">Digite seu PIN para voltar</h2>
-              <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400"><%= lockMessage || 'Seu app está protegido por PIN. Digite os números para destravar.' %></p>
+              <h2 class="op-lock-intro-title mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-slate-50">Digite seu PIN para voltar</h2>
+              <p class="op-lock-intro-copy mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400"><%= lockMessage || 'Seu app está protegido por PIN. Digite os números para destravar.' %></p>
             </div>
 
-            <form method="post" action="/lock/unlock" class="grid gap-4" id="appUnlockForm" autocomplete="off" novalidate>
+            <form method="post" action="/lock/unlock" class="op-lock-form grid gap-4" id="appUnlockForm" autocomplete="off" novalidate>
               <input type="hidden" name="next" value="<%= safeNext %>">
               <label class="block">
                 <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">PIN do app</span>
                 <div class="relative">
-                  <input type="password" inputmode="numeric" enterkeyhint="done" autocomplete="one-time-code" pattern="[0-9]*" maxlength="<%= pinMaxLength %>" name="pin" id="lockPinInput" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-16 text-center text-2xl font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20 disabled:cursor-not-allowed disabled:opacity-60" placeholder="••••" required autofocus aria-describedby="lockPinHelp<%= guardNoticeTitle && guardNoticeMessage ? ' lockGuardNotice' : '' %>" <%= unlockTemporarilyDisabled ? 'disabled' : '' %>>
+                  <input type="password" inputmode="numeric" enterkeyhint="done" autocomplete="one-time-code" pattern="[0-9]*" maxlength="<%= pinMaxLength %>" name="pin" id="lockPinInput" class="op-lock-pin-input w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-16 text-center text-2xl font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20 disabled:cursor-not-allowed disabled:opacity-60" placeholder="••••" required autofocus aria-describedby="lockPinHelp<%= guardNoticeTitle && guardNoticeMessage ? ' lockGuardNotice' : '' %>" <%= unlockTemporarilyDisabled ? 'disabled' : '' %>>
                   <button type="button" id="lockPinVisibilityToggle" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500" <%= unlockTemporarilyDisabled ? 'disabled aria-disabled="true"' : '' %>>Ver</button>
                 </div>
-                <div id="lockPinSlots" class="mt-3"></div>
-                <p id="lockPinHelp" class="mt-3 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400">No desktop, vale usar o teclado físico também. Eu aceito de <%= pinMinLength %> a <%= pinMaxLength %> números.</p>
+                <div id="lockPinSlots" class="op-lock-slots mt-3"></div>
+                <p id="lockPinHelp" class="op-lock-pin-help mt-3 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400">No desktop, vale usar o teclado físico também. Eu aceito de <%= pinMinLength %> a <%= pinMaxLength %> números.</p>
               </label>
 
               <div class="op-lock-keypad-shell grid grid-cols-3 gap-3 pt-1" id="lockPinPad" aria-label="Teclado numérico do PIN">
@@ -150,17 +190,17 @@
               <% } %>
             </div>
 
-            <div class="mt-5 grid gap-3 sm:grid-cols-2">
+            <div class="op-lock-actions mt-5 grid gap-3 sm:grid-cols-2">
               <a href="/lock/reauth/google" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-900">Esqueci o PIN</a>
               <a href="/logout" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900">Sair da conta</a>
             </div>
 
-            <p class="mt-4 text-xs leading-6 text-slate-500 dark:text-slate-400">Hoje esse PIN está configurado para travar de novo <strong class="font-semibold text-slate-700 dark:text-slate-200"><%= pinIdleLabel %></strong>. Se você redefinir por aqui, o app volta destravado na sequência.</p>
+            <p class="op-lock-meta mt-4 text-xs leading-6 text-slate-500 dark:text-slate-400">Hoje esse PIN está configurado para travar de novo <strong class="font-semibold text-slate-700 dark:text-slate-200"><%= pinIdleLabel %></strong>. Se você redefinir por aqui, o app volta destravado na sequência.</p>
           </section>
         </div>
       </section>
 
-      <aside class="grid gap-5">
+      <aside class="op-lock-sidebar grid gap-5">
         <section class="rounded-[28px] border border-slate-200 bg-white/90 p-5 shadow-lg shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-900/80 sm:p-6">
           <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Como isso funciona</div>
           <h3 class="mt-2 text-lg font-black text-slate-900 dark:text-white">Jeitinho celular, sem drama</h3>
@@ -240,6 +280,7 @@
       const googleRecoveryLink = document.querySelector('a[href="/lock/reauth/google"]');
       const passkeyButton = document.getElementById('lockPasskeyButton');
       const passkeyFeedback = document.getElementById('lockPasskeyFeedback');
+      const focusTargetId = <%- JSON.stringify(recoveryMode ? 'recoveryPinInput' : 'lockPinInput') %>;
       const pinMaxLength = <%= pinMaxLength %>;
       const pinMinLength = <%= pinMinLength %>;
       const nextUrl = <%- JSON.stringify(safeNext) %>;
@@ -254,6 +295,54 @@
       let cooldownUntil = initialCooldownSeconds > 0 ? Date.now() + (initialCooldownSeconds * 1000) : 0;
       let countdownTimer = null;
       let syncChannel = null;
+
+      function focusInputField(input, { showKeyboard = false } = {}) {
+        if (!(input instanceof HTMLInputElement) || input.disabled) return;
+        try {
+          input.focus({ preventScroll: true });
+        } catch (_error) {
+          input.focus();
+        }
+
+        try {
+          const end = String(input.value || '').length;
+          input.setSelectionRange(end, end);
+        } catch (_error) {}
+
+        if (!showKeyboard) return;
+
+        try {
+          input.click();
+        } catch (_error) {}
+
+        const keyboard = navigator.virtualKeyboard;
+        if (keyboard && typeof keyboard.show === 'function') {
+          try {
+            keyboard.show();
+          } catch (_error) {}
+        }
+      }
+
+      function getInitialFocusTarget() {
+        const field = document.getElementById(focusTargetId);
+        return field instanceof HTMLInputElement ? field : null;
+      }
+
+      function requestInitialFocus({ showKeyboard = false } = {}) {
+        if (requiresReauth) {
+          googleRecoveryLink?.focus();
+          return;
+        }
+
+        if (unlockDisabled) return;
+
+        const focusTarget = getInitialFocusTarget();
+        if (!focusTarget) return;
+
+        window.requestAnimationFrame(() => {
+          focusInputField(focusTarget, { showKeyboard });
+        });
+      }
 
       function normalizeDigits(input) {
         if (!(input instanceof HTMLInputElement)) return '';
@@ -569,6 +658,7 @@
           broadcastPinState('unlocked', { redirect: redirectTo });
           window.location.href = redirectTo;
         } catch (error) {
+          console.warn('[passkey-lock]', { name: error?.name || null, message: error?.message || null, raw: error || null });
           const safeMessage = error && typeof error === 'object' && 'name' in error && error.name === 'NotAllowedError'
             ? 'Tudo bem. Parece que esse desbloqueio foi cancelado antes de terminar.'
             : (error && error.message) ? error.message : 'Não consegui destravar com este aparelho agora.';
@@ -741,15 +831,18 @@
         setUnlockControlsDisabled(false);
       }
 
-      window.setTimeout(() => {
-        if (requiresReauth) {
-          googleRecoveryLink?.focus();
-          return;
+      window.addEventListener('pageshow', () => {
+        window.setTimeout(() => requestInitialFocus({ showKeyboard: true }), 30);
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          window.setTimeout(() => requestInitialFocus({ showKeyboard: false }), 30);
         }
-        if (unlockDisabled) return;
-        const focusTarget = document.getElementById('<%= recoveryMode ? 'recoveryPinInput' : 'lockPinInput' %>');
-        focusTarget?.focus();
-      }, 40);
+      });
+
+      window.setTimeout(() => requestInitialFocus({ showKeyboard: true }), 40);
+      window.setTimeout(() => requestInitialFocus({ showKeyboard: true }), 220);
     })();
   </script>
 </body>

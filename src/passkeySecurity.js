@@ -10,6 +10,7 @@ try {
 const PASSKEY_MAX_CREDENTIALS_PER_USER = 6;
 const PASSKEY_CHALLENGE_MAX_AGE_MS = 5 * 60 * 1000;
 const PASSKEY_RP_NAME = String(process.env.APP_PASSKEY_RP_NAME || process.env.WEBAUTHN_RP_NAME || 'AcerttaPay').trim() || 'AcerttaPay';
+const PASSKEY_SUPPORTED_ALGORITHM_IDS = [-8, -7, -257];
 const PASSKEY_RUNTIME_AVAILABLE = !!simpleWebAuthnServer;
 
 function bufferToBase64Url(input) {
@@ -40,13 +41,38 @@ function getPasskeyServerApi() {
 }
 
 function getRequestProtocol(req) {
-  const forwardedProto = String(req?.get?.('x-forwarded-proto') || '')
-    .split(',')[0]
-    .trim()
-    .toLowerCase();
-  if (forwardedProto) return forwardedProto;
+  const headerCandidates = [
+    req?.get?.('x-forwarded-proto'),
+    req?.get?.('x-forwarded-scheme'),
+    req?.get?.('x-url-scheme')
+  ];
+
+  for (const candidate of headerCandidates) {
+    const normalized = String(candidate || '').split(',')[0].trim().toLowerCase();
+    if (normalized) return normalized;
+  }
+
+  const cfVisitor = String(req?.get?.('cf-visitor') || '').trim();
+  if (/\"scheme\"\s*:\s*\"https\"/i.test(cfVisitor)) return 'https';
+  if (/\"scheme\"\s*:\s*\"http\"/i.test(cfVisitor)) return 'http';
+
   if (req?.protocol) return String(req.protocol).trim().toLowerCase();
   return req?.secure ? 'https' : 'http';
+}
+
+function getRequestHost(req) {
+  const headerCandidates = [
+    req?.get?.('x-forwarded-host'),
+    req?.get?.('x-original-host'),
+    req?.get?.('host')
+  ];
+
+  for (const candidate of headerCandidates) {
+    const normalized = String(candidate || '').split(',')[0].trim();
+    if (normalized) return normalized;
+  }
+
+  return '';
 }
 
 function normalizeHostname(value) {
@@ -56,6 +82,18 @@ function normalizeHostname(value) {
 function isLoopbackHostname(hostname) {
   const safeHost = normalizeHostname(hostname);
   return safeHost === 'localhost' || safeHost === '127.0.0.1' || safeHost === '::1';
+}
+
+function normalizePasskeyRpId(value) {
+  const safeValue = String(value || '').trim();
+  if (!safeValue) return '';
+
+  try {
+    const candidateUrl = safeValue.includes('://') ? safeValue : `https://${safeValue}`;
+    return normalizeHostname(new URL(candidateUrl).hostname);
+  } catch (_error) {
+    return normalizeHostname(safeValue.replace(/^https?:\/\//i, '').split('/')[0].split(':')[0]);
+  }
 }
 
 function resolveRequestOrigin(req) {
@@ -69,7 +107,7 @@ function resolveRequestOrigin(req) {
     }
   }
 
-  const host = String(req?.get?.('host') || '').trim();
+  const host = getRequestHost(req);
   if (!host) return '';
   const protocol = getRequestProtocol(req);
   return `${protocol}://${host}`;
@@ -106,7 +144,7 @@ function buildPasskeyContext(req) {
     };
   }
 
-  const envRpId = String(process.env.APP_PASSKEY_RP_ID || process.env.WEBAUTHN_RP_ID || '').trim().toLowerCase();
+  const envRpId = normalizePasskeyRpId(process.env.APP_PASSKEY_RP_ID || process.env.WEBAUTHN_RP_ID || '');
   const rpID = envRpId || normalizeHostname(url.hostname);
   const secureContext = url.protocol === 'https:' || isLoopbackHostname(url.hostname);
 
@@ -164,7 +202,7 @@ async function generatePasskeyRegistrationOptions({ rpName, rpID, userID, userNa
     attestationType: 'none',
     residentKey: 'preferred',
     userVerification: 'required',
-    supportedAlgorithmIDs: [-7, -257],
+    supportedAlgorithmIDs: PASSKEY_SUPPORTED_ALGORITHM_IDS,
     excludeCredentials: excludeCredentials.map((entry) => ({
       id: String(entry.id || '').trim(),
       transports: Array.isArray(entry.transports) ? entry.transports.filter(Boolean) : undefined
@@ -299,6 +337,7 @@ module.exports = {
   PASSKEY_MAX_CREDENTIALS_PER_USER,
   PASSKEY_CHALLENGE_MAX_AGE_MS,
   PASSKEY_RP_NAME,
+  PASSKEY_SUPPORTED_ALGORITHM_IDS,
   PASSKEY_RUNTIME_AVAILABLE,
   bufferToBase64Url,
   base64UrlToBuffer,

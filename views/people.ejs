@@ -2434,6 +2434,7 @@ function bindPixForm(prefix, options = {}) {
           window.location.href = '/people#app-security';
         }, 240);
       } catch (error) {
+        console.warn('[passkey-register]', { name: error?.name || null, message: error?.message || null, raw: error || null });
         const safeMessage = error && typeof error === 'object' && 'name' in error && error.name === 'NotAllowedError'
           ? 'Tudo certo. Parece que esse preparo foi cancelado antes de terminar.'
           : (error && error.message) ? error.message : 'Não consegui preparar este aparelho agora.';

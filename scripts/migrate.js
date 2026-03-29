@@ -490,6 +490,32 @@ CREATE TABLE IF NOT EXISTS shared_debt_events (
   FOREIGN KEY (actor_user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS private_debt_reminders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_user_id INTEGER NOT NULL,
+  person_id INTEGER,
+  linked_user_id_snapshot INTEGER,
+  person_name_snapshot TEXT NOT NULL,
+  person_email_snapshot TEXT,
+  person_phone_snapshot TEXT,
+  description_snapshot TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  request_note TEXT,
+  settlement_note TEXT,
+  payment_date TEXT,
+  status TEXT NOT NULL DEFAULT 'open',
+  is_archived INTEGER NOT NULL DEFAULT 0,
+  archived_at TEXT,
+  restored_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  settled_at TEXT,
+  cancelled_at TEXT,
+  FOREIGN KEY (owner_user_id) REFERENCES users(id),
+  FOREIGN KEY (person_id) REFERENCES people(id),
+  FOREIGN KEY (linked_user_id_snapshot) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS shared_debt_monthly_settlements (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   requester_user_id INTEGER NOT NULL,
@@ -1028,6 +1054,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batc
 CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_user_archived ON shared_debt_archives(user_id, is_archived, updated_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_request_user ON shared_debt_archives(request_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_events_request ON shared_debt_events(request_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_status ON private_debt_reminders(owner_user_id, status, is_archived, updated_at);
+CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_person ON private_debt_reminders(owner_user_id, person_id, status);
+CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_archived ON private_debt_reminders(owner_user_id, is_archived, updated_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_pair ON shared_debt_monthly_settlements(requester_user_id, receiver_user_id, year, month, request_kind);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_receiver ON shared_debt_monthly_settlements(receiver_user_id, year, month, request_kind);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_settlement_status ON shared_debt_payment_intents(settlement_id, status, created_at);

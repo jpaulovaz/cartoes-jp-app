@@ -104,6 +104,13 @@ const {
   generatePasskeyAuthenticationOptions,
   verifyPasskeyAuthenticationResponse
 } = require('./src/passkeySecurity');
+const {
+  PRIVATE_DEBT_STATUS_OPEN,
+  PRIVATE_DEBT_STATUS_SETTLED,
+  PRIVATE_DEBT_STATUS_CANCELLED,
+  buildPrivateDebtPersonSnapshots,
+  mapPrivateDebtReminderRow
+} = require('./src/privateDebtReminders');
 
 // --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
 require('./scripts/migrate.js');
@@ -252,6 +259,33 @@ db.prepare(`
     UNIQUE(request_id, user_id),
     FOREIGN KEY (request_id) REFERENCES shared_debt_requests(id),
     FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS private_debt_reminders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL,
+    person_id INTEGER,
+    linked_user_id_snapshot INTEGER,
+    person_name_snapshot TEXT NOT NULL,
+    person_email_snapshot TEXT,
+    person_phone_snapshot TEXT,
+    description_snapshot TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL,
+    request_note TEXT,
+    settlement_note TEXT,
+    payment_date TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    is_archived INTEGER NOT NULL DEFAULT 0,
+    archived_at TEXT,
+    restored_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    settled_at TEXT,
+    cancelled_at TEXT,
+    FOREIGN KEY (owner_user_id) REFERENCES users(id),
+    FOREIGN KEY (person_id) REFERENCES people(id),
+    FOREIGN KEY (linked_user_id_snapshot) REFERENCES users(id)
   )
 `).run();
 db.prepare(`
@@ -465,6 +499,9 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_receiver ON
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batches(requester_user_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_user_archived ON shared_debt_archives(user_id, is_archived, updated_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_request_user ON shared_debt_archives(request_id, user_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_status ON private_debt_reminders(owner_user_id, status, is_archived, updated_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_person ON private_debt_reminders(owner_user_id, person_id, status)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_archived ON private_debt_reminders(owner_user_id, is_archived, updated_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_pair ON shared_debt_monthly_settlements(requester_user_id, receiver_user_id, year, month, request_kind)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_receiver ON shared_debt_monthly_settlements(receiver_user_id, year, month, request_kind)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_settlement_status ON shared_debt_payment_intents(settlement_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
@@ -9022,6 +9059,111 @@ app.get("/month/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
   return sendMonthTransactionsCsv(res, userId, month, year);
 });
 
+function buildPrivateDebtReminderSnapshotsForPerson(ownerUserId, personId) {
+  const safeOwnerUserId = Number(ownerUserId || 0);
+  const safePersonId = Number(personId || 0);
+  if (!safeOwnerUserId || !safePersonId) return null;
+
+  const person = db.prepare(`
+    SELECT
+      p.id,
+      p.name,
+      p.email,
+      p.phone,
+      p.deleted_label,
+      pal.linked_user_id
+    FROM people p
+    LEFT JOIN person_app_links pal ON pal.owner_user_id = p.user_id AND pal.person_id = p.id
+    WHERE p.id = ? AND p.user_id = ?
+    LIMIT 1
+  `).get(safePersonId, safeOwnerUserId);
+
+  if (!person) return null;
+  return buildPrivateDebtPersonSnapshots(person);
+}
+
+function getPrivateDebtReminderRowsForOwner(ownerUserId, { includeArchived = false, statuses = null } = {}) {
+  const safeOwnerUserId = Number(ownerUserId || 0);
+  if (!safeOwnerUserId) return [];
+
+  const where = ['r.owner_user_id = ?'];
+  const params = [safeOwnerUserId];
+
+  if (!includeArchived) {
+    where.push('COALESCE(r.is_archived, 0) = 0');
+  }
+
+  const normalizedStatuses = Array.isArray(statuses)
+    ? Array.from(new Set(statuses
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean)
+      .filter((value) => [PRIVATE_DEBT_STATUS_OPEN, PRIVATE_DEBT_STATUS_SETTLED, PRIVATE_DEBT_STATUS_CANCELLED].includes(value))))
+    : [];
+
+  if (normalizedStatuses.length) {
+    where.push(`r.status IN (${normalizedStatuses.map(() => '?').join(', ')})`);
+    params.push(...normalizedStatuses);
+  }
+
+  const rows = db.prepare(`
+    SELECT
+      r.*,
+      p.name AS current_person_name,
+      COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS current_person_status,
+      COALESCE(p.active, 1) AS current_person_active
+    FROM private_debt_reminders r
+    LEFT JOIN people p ON p.id = r.person_id AND p.user_id = r.owner_user_id
+    WHERE ${where.join(' AND ')}
+    ORDER BY
+      CASE r.status
+        WHEN 'open' THEN 0
+        WHEN 'settled' THEN 1
+        WHEN 'cancelled' THEN 2
+        ELSE 3
+      END,
+      COALESCE(r.updated_at, r.created_at) DESC,
+      r.id DESC
+  `).all(...params);
+
+  return rows.map((row) => mapPrivateDebtReminderRow(row));
+}
+
+function getOpenPrivateDebtReceivableSummary(userId) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) {
+    return { totalCount: 0, totalCents: 0 };
+  }
+
+  const row = db.prepare(`
+    SELECT
+      COUNT(*) AS total_requests,
+      COALESCE(SUM(amount_cents), 0) AS total_cents
+    FROM private_debt_reminders
+    WHERE owner_user_id = ?
+      AND status = 'open'
+      AND COALESCE(is_archived, 0) = 0
+  `).get(safeUserId) || { total_requests: 0, total_cents: 0 };
+
+  return {
+    totalCount: Math.max(0, Number(row.total_requests || 0)),
+    totalCents: Math.max(0, Number(row.total_cents || 0))
+  };
+}
+
+function detachPrivateDebtRemindersFromPerson(ownerUserId, personId) {
+  const safeOwnerUserId = Number(ownerUserId || 0);
+  const safePersonId = Number(personId || 0);
+  if (!safeOwnerUserId || !safePersonId) return;
+
+  db.prepare(`
+    UPDATE private_debt_reminders
+    SET person_id = NULL,
+        updated_at = ?
+    WHERE owner_user_id = ?
+      AND person_id = ?
+  `).run(nowIso(), safeOwnerUserId, safePersonId);
+}
+
 function getSharedDebtRequestsReceived(userId) {
   return db.prepare(`
     SELECT
@@ -9217,12 +9359,15 @@ function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
 
   const cardOwed = buildCardSideSummary('owed');
   const cardReceivable = buildCardSideSummary('receivable');
+  const privateReceivable = getOpenPrivateDebtReceivableSummary(userId);
 
   return {
     owedCents: Number(manualOwed.total_cents || 0) + cardOwed.totalCents,
     owedCount: Number(manualOwed.total_requests || 0) + cardOwed.totalCount,
-    receivableCents: Number(manualReceivable.total_cents || 0) + cardReceivable.totalCents,
-    receivableCount: Number(manualReceivable.total_requests || 0) + cardReceivable.totalCount
+    receivableCents: Number(manualReceivable.total_cents || 0) + cardReceivable.totalCents + privateReceivable.totalCents,
+    receivableCount: Number(manualReceivable.total_requests || 0) + cardReceivable.totalCount + privateReceivable.totalCount,
+    privateReceivableCents: privateReceivable.totalCents,
+    privateReceivableCount: privateReceivable.totalCount
   };
 }
 
@@ -11196,6 +11341,7 @@ function offboardContactFromActiveExperience(ownerUserId, personId) {
     }
 
     archivePendingFriendRequestsForSourcePerson(ownerUserId, personId, 'archived_by_contact_delete');
+    detachPrivateDebtRemindersFromPerson(ownerUserId, personId);
     db.prepare(`DELETE FROM person_app_links WHERE owner_user_id = ? AND person_id = ?`).run(ownerUserId, personId);
     tombstonePersonRecord(ownerUserId, personId);
   })();

@@ -2751,20 +2751,104 @@
   const idleSeconds = Math.max(0, Number(body.dataset.appPinIdleSeconds || 0) || 0);
   const idleMs = idleSeconds > 0 ? idleSeconds * 1000 : 0;
   const hiddenAtKey = 'op-app-pin-hidden-at';
+  const syncStorageKey = 'op-app-pin-sync';
+  const syncChannelName = 'op-app-pin';
+  const sourceId = `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const heartbeatGapMs = Math.min(30000, Math.max(10000, idleMs > 0 ? Math.floor(idleMs / 2) : 15000));
   let idleTimer = null;
   let touchTimer = null;
   let lastTouchAt = 0;
   let lastActivityAt = Date.now();
   let lockInFlight = false;
+  let syncChannel = null;
 
   function currentRelativeUrl() {
     return `${window.location.pathname || '/'}${window.location.search || ''}${window.location.hash || ''}`;
   }
 
-  function redirectToLock(url) {
-    window.location.href = url || '/lock';
+  function buildFallbackLockUrl(reason = 'locked') {
+    const params = new URLSearchParams();
+    params.set('reason', reason || 'locked');
+    params.set('next', currentRelativeUrl());
+    return `/lock?${params.toString()}`;
   }
+
+  function redirectToLock(url) {
+    window.location.href = url || buildFallbackLockUrl('locked');
+  }
+
+  function openSyncChannel() {
+    try {
+      if (typeof window.BroadcastChannel === 'function') {
+        syncChannel = new window.BroadcastChannel(syncChannelName);
+        syncChannel.addEventListener('message', (event) => {
+          handleSyncPayload(event?.data || null);
+        });
+      }
+    } catch (_error) {
+      syncChannel = null;
+    }
+  }
+
+  function readStorageKey() {
+    try {
+      return window.localStorage;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function broadcastPinState(type, extra = {}) {
+    const payload = {
+      type,
+      at: Date.now(),
+      sourceId,
+      url: currentRelativeUrl(),
+      ...extra
+    };
+
+    if (syncChannel) {
+      try {
+        syncChannel.postMessage(payload);
+      } catch (_error) {}
+    }
+
+    const storage = readStorageKey();
+    if (!storage) return;
+    try {
+      storage.setItem(syncStorageKey, JSON.stringify(payload));
+    } catch (_error) {}
+  }
+
+  function handleSyncPayload(payload) {
+    if (!payload || payload.sourceId === sourceId) return;
+    const type = String(payload.type || '').trim().toLowerCase();
+    if (!type) return;
+
+    if (type === 'locked') {
+      if (lockInFlight) return;
+      const redirect = String(payload.redirect || '').trim() || buildFallbackLockUrl(payload.reason || 'locked');
+      redirectToLock(redirect);
+      return;
+    }
+
+    if (type === 'unlocked') {
+      if (lockInFlight) return;
+      lastActivityAt = Date.now();
+      scheduleIdleLock();
+      scheduleTouchTimer();
+      touchServer(true);
+    }
+  }
+
+  window.addEventListener('storage', (event) => {
+    if (event.key !== syncStorageKey || !event.newValue) return;
+    try {
+      handleSyncPayload(JSON.parse(event.newValue));
+    } catch (_error) {}
+  });
+
+  openSyncChannel();
 
   async function resolveLockRedirect(response, fallbackReason) {
     let redirectUrl = response?.headers?.get('x-app-lock-redirect') || '';
@@ -2775,10 +2859,7 @@
       } catch (_error) {}
     }
     if (!redirectUrl) {
-      const params = new URLSearchParams();
-      params.set('reason', fallbackReason || 'locked');
-      params.set('next', currentRelativeUrl());
-      redirectUrl = `/lock?${params.toString()}`;
+      redirectUrl = buildFallbackLockUrl(fallbackReason || 'locked');
     }
     return redirectUrl;
   }
@@ -2788,21 +2869,81 @@
     const locked = Number(response.status || 0) === 423 || response.headers.get('x-app-locked') === '1';
     if (!locked) return false;
     const redirectUrl = await resolveLockRedirect(response, fallbackReason);
+    broadcastPinState('locked', { reason: fallbackReason || 'locked', redirect: redirectUrl });
     redirectToLock(redirectUrl);
     return true;
   }
 
+  function isSameOriginRequest(input) {
+    try {
+      const rawUrl = typeof input === 'string'
+        ? input
+        : input && typeof input === 'object' && 'url' in input
+          ? input.url
+          : '';
+      if (!rawUrl) return true;
+      return new URL(rawUrl, window.location.origin).origin === window.location.origin;
+    } catch (_error) {
+      return true;
+    }
+  }
+
   const previousFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
   if (previousFetch) {
-    window.fetch = async function (input, init) {
-      const response = await previousFetch(input, init);
-      if (await handleLockedResponse(response, 'locked')) {
+    window.fetch = async function (input, init = {}) {
+      const sameOrigin = isSameOriginRequest(input);
+      const headers = sameOrigin ? new Headers(init?.headers || {}) : null;
+      if (sameOrigin) {
+        if (!headers.has('X-AcerttaPay-Async')) {
+          headers.set('X-AcerttaPay-Async', '1');
+        }
+        if (!headers.has('X-Requested-With')) {
+          headers.set('X-Requested-With', 'fetch');
+        }
+      }
+      const response = await previousFetch(input, sameOrigin ? { ...init, headers } : init);
+      if (sameOrigin && await handleLockedResponse(response, 'locked')) {
         const error = new Error('O app foi bloqueado por PIN.');
         error.code = 'APP_PIN_LOCKED';
         error.response = response;
         throw error;
       }
       return response;
+    };
+  }
+
+  if (typeof window.XMLHttpRequest === 'function') {
+    const XHR = window.XMLHttpRequest;
+    const originalOpen = XHR.prototype.open;
+    const originalSend = XHR.prototype.send;
+
+    XHR.prototype.open = function (method, url, ...rest) {
+      this.__opPinWatchBound = false;
+      this.__opPinSameOrigin = isSameOriginRequest(url);
+      return originalOpen.call(this, method, url, ...rest);
+    };
+
+    XHR.prototype.send = function (...args) {
+      if (!this.__opPinWatchBound) {
+        this.__opPinWatchBound = true;
+        this.addEventListener('readystatechange', () => {
+          if (!this.__opPinSameOrigin || this.readyState !== 4) return;
+          const locked = Number(this.status || 0) === 423 || this.getResponseHeader('X-App-Locked') === '1';
+          if (!locked) return;
+          const redirectUrl = this.getResponseHeader('X-App-Lock-Redirect') || buildFallbackLockUrl('locked');
+          broadcastPinState('locked', { reason: 'locked', redirect: redirectUrl });
+          redirectToLock(redirectUrl);
+        });
+      }
+
+      if (this.__opPinSameOrigin) {
+        try {
+          this.setRequestHeader('X-AcerttaPay-Async', '1');
+          this.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        } catch (_error) {}
+      }
+
+      return originalSend.apply(this, args);
     };
   }
 
@@ -2831,7 +2972,8 @@
         method: 'POST',
         credentials: 'same-origin',
         headers: {
-          'X-Requested-With': 'XMLHttpRequest'
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-AcerttaPay-Async': '1'
         }
       });
       await handleLockedResponse(response, 'locked');
@@ -2869,18 +3011,17 @@
         credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-          'X-Requested-With': 'XMLHttpRequest'
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-AcerttaPay-Async': '1'
         },
         body: payload.toString(),
         keepalive
       });
       const redirectUrl = await resolveLockRedirect(response, reason);
+      broadcastPinState('locked', { reason, redirect: redirectUrl });
       redirectToLock(redirectUrl);
     } catch (_error) {
-      const params = new URLSearchParams();
-      params.set('reason', reason);
-      params.set('next', currentRelativeUrl());
-      redirectToLock(`/lock?${params.toString()}`);
+      redirectToLock(buildFallbackLockUrl(reason));
     }
   }
 
@@ -2954,5 +3095,6 @@
 
   scheduleIdleLock();
   scheduleTouchTimer();
+  broadcastPinState('unlocked');
   touchServer(true);
 })();

@@ -40,15 +40,29 @@
     .op-pin-slot.is-filled { background: rgb(15 23 42); border-color: rgb(15 23 42); }
     .dark .op-pin-slot.is-filled { background: rgb(251 191 36); border-color: rgb(251 191 36); }
     .op-pin-key { min-height: 60px; }
+    .op-pin-key[disabled] { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+    .op-lock-main {
+      padding-top: max(1rem, env(safe-area-inset-top, 0px));
+      padding-right: max(1rem, env(safe-area-inset-right, 0px));
+      padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+      padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    }
+    .op-lock-keypad-shell {
+      padding-bottom: max(0rem, env(safe-area-inset-bottom, 0px));
+    }
   </style>
 </head>
 <%
   const pinState = appPinSecurity || {};
+  const pinGuard = appPinGuard || {};
   const pinMinLength = Number(pinState.minLength || 4) || 4;
   const pinMaxLength = Number(pinState.maxLength || 6) || 6;
   const pinIdleLabel = pinState.idleLabel || '1 minuto';
   const pinIdleOptions = Array.isArray(pinState.idleOptions) ? pinState.idleOptions : [];
   const showRecoveryPanel = !!reauthFresh;
+  const guardRequiresReauth = !!pinGuard.requiresReauth;
+  const guardCooldownActive = !!pinGuard.cooldownActive;
+  const unlockTemporarilyDisabled = guardRequiresReauth || guardCooldownActive;
   const recoveryMode = lockMode === 'recover' && showRecoveryPanel;
   const safeNext = nextTarget || '/';
   const displayName = (lockUser && lockUser.name) ? lockUser.name : 'Você';
@@ -56,9 +70,12 @@
   const displayPhoto = (lockUser && lockUser.photo_url) ? lockUser.photo_url : '';
   const flashType = flash && flash.type ? String(flash.type) : '';
   const flashMessage = flash && flash.message ? String(flash.message) : '';
+  const guardNoticeTone = pinGuard.noticeTone || 'neutral';
+  const guardNoticeTitle = pinGuard.noticeTitle || '';
+  const guardNoticeMessage = pinGuard.noticeMessage || '';
 %>
 <body class="op-auth-page min-h-screen font-sans">
-  <main class="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center p-4 sm:p-6">
+  <main class="op-lock-main mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center sm:p-6">
     <div class="grid w-full gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.8fr)] lg:items-center">
       <section class="op-auth-shell w-full">
         <div class="op-auth-card overflow-hidden">
@@ -81,8 +98,15 @@
             </div>
 
             <% if (flashMessage) { %>
-              <div class="mb-5 rounded-[22px] border px-4 py-3 text-sm font-semibold <%= flashType === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-200' : flashType === 'info' ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/25 dark:text-sky-200' : 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/25 dark:text-red-200' %>">
+              <div class="mb-5 rounded-[22px] border px-4 py-3 text-sm font-semibold <%= flashType === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-200' : flashType === 'info' ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/25 dark:text-sky-200' : 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/25 dark:text-red-200' %>" aria-live="polite">
                 <%= flashMessage %>
+              </div>
+            <% } %>
+
+            <% if (guardNoticeTitle && guardNoticeMessage) { %>
+              <div id="lockGuardNotice" class="mb-5 rounded-[22px] border px-4 py-3 text-sm font-semibold <%= guardNoticeTone === 'danger' ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/25 dark:text-rose-200' : guardNoticeTone === 'warning' ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-100' : 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/25 dark:text-sky-200' %>" aria-live="polite">
+                <div class="font-black"><%= guardNoticeTitle %></div>
+                <p class="mt-1 leading-6"><span data-lock-guard-message><%= guardNoticeMessage %></span><% if (guardCooldownActive) { %><span data-lock-countdown class="font-black"><%= pinGuard.cooldownRemainingLabel ? ` (${pinGuard.cooldownRemainingLabel})` : '' %></span><% } %></p>
               </div>
             <% } %>
 
@@ -92,27 +116,28 @@
               <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400"><%= lockMessage || 'Seu app está protegido por PIN. Digite os números para destravar.' %></p>
             </div>
 
-            <form method="post" action="/lock/unlock" class="grid gap-4" id="appUnlockForm" autocomplete="off">
+            <form method="post" action="/lock/unlock" class="grid gap-4" id="appUnlockForm" autocomplete="off" novalidate>
               <input type="hidden" name="next" value="<%= safeNext %>">
               <label class="block">
                 <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">PIN do app</span>
                 <div class="relative">
-                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= pinMaxLength %>" name="pin" id="lockPinInput" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-16 text-center text-2xl font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required autofocus>
-                  <button type="button" id="lockPinVisibilityToggle" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
+                  <input type="password" inputmode="numeric" enterkeyhint="done" autocomplete="one-time-code" pattern="[0-9]*" maxlength="<%= pinMaxLength %>" name="pin" id="lockPinInput" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-16 text-center text-2xl font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20 disabled:cursor-not-allowed disabled:opacity-60" placeholder="••••" required autofocus aria-describedby="lockPinHelp<%= guardNoticeTitle && guardNoticeMessage ? ' lockGuardNotice' : '' %>" <%= unlockTemporarilyDisabled ? 'disabled' : '' %>>
+                  <button type="button" id="lockPinVisibilityToggle" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500" <%= unlockTemporarilyDisabled ? 'disabled aria-disabled="true"' : '' %>>Ver</button>
                 </div>
                 <div id="lockPinSlots" class="mt-3"></div>
+                <p id="lockPinHelp" class="mt-3 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400">No desktop, vale usar o teclado físico também. Eu aceito de <%= pinMinLength %> a <%= pinMaxLength %> números.</p>
               </label>
 
-              <div class="grid grid-cols-3 gap-3 pt-1" id="lockPinPad">
+              <div class="op-lock-keypad-shell grid grid-cols-3 gap-3 pt-1" id="lockPinPad" aria-label="Teclado numérico do PIN">
                 <% [1,2,3,4,5,6,7,8,9].forEach((digit) => { %>
-                  <button type="button" class="op-pin-key rounded-2xl border border-slate-200 bg-white px-4 py-3 text-lg font-black text-slate-800 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-900" data-pin-key="<%= digit %>"><%= digit %></button>
+                  <button type="button" class="op-pin-key rounded-2xl border border-slate-200 bg-white px-4 py-3 text-lg font-black text-slate-800 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-900" data-pin-key="<%= digit %>" aria-label="Digitar <%= digit %>" <%= unlockTemporarilyDisabled ? 'disabled aria-disabled="true"' : '' %>><%= digit %></button>
                 <% }) %>
-                <button type="button" class="op-pin-key rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-slate-500 shadow-sm transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900" data-pin-action="clear">Limpar</button>
-                <button type="button" class="op-pin-key rounded-2xl border border-slate-200 bg-white px-4 py-3 text-lg font-black text-slate-800 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-900" data-pin-key="0">0</button>
-                <button type="button" class="op-pin-key rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-slate-500 shadow-sm transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900" data-pin-action="backspace">Apagar</button>
+                <button type="button" class="op-pin-key rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-slate-500 shadow-sm transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900" data-pin-action="clear" aria-label="Limpar PIN" <%= unlockTemporarilyDisabled ? 'disabled aria-disabled="true"' : '' %>>Limpar</button>
+                <button type="button" class="op-pin-key rounded-2xl border border-slate-200 bg-white px-4 py-3 text-lg font-black text-slate-800 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-900" data-pin-key="0" aria-label="Digitar 0" <%= unlockTemporarilyDisabled ? 'disabled aria-disabled="true"' : '' %>>0</button>
+                <button type="button" class="op-pin-key rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-slate-500 shadow-sm transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900" data-pin-action="backspace" aria-label="Apagar último dígito" <%= unlockTemporarilyDisabled ? 'disabled aria-disabled="true"' : '' %>>Apagar</button>
               </div>
 
-              <button type="submit" id="unlockSubmit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400">Desbloquear app</button>
+              <button type="submit" id="unlockSubmit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400" <%= unlockTemporarilyDisabled ? 'disabled aria-disabled="true"' : '' %>>Desbloquear app</button>
             </form>
 
             <div class="mt-5 grid gap-3 sm:grid-cols-2">
@@ -148,7 +173,7 @@
               <label class="block">
                 <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Novo PIN</span>
                 <div class="relative">
-                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= pinMaxLength %>" name="pin" id="recoveryPinInput" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-16 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= pinMaxLength %>" name="pin" id="recoveryPinInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-16 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
                   <button type="button" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500" data-pin-visibility-toggle="recoveryPinInput">Ver</button>
                 </div>
                 <div class="mt-3" data-pin-slots="recoveryPinInput" data-max-length="<%= pinMaxLength %>"></div>
@@ -157,7 +182,7 @@
               <label class="block">
                 <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Confirmar novo PIN</span>
                 <div class="relative">
-                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= pinMaxLength %>" name="pin_confirm" id="recoveryPinConfirmInput" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-16 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= pinMaxLength %>" name="pin_confirm" id="recoveryPinConfirmInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-16 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
                   <button type="button" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500" data-pin-visibility-toggle="recoveryPinConfirmInput">Ver</button>
                 </div>
                 <div class="mt-3" data-pin-slots="recoveryPinConfirmInput" data-max-length="<%= pinMaxLength %>"></div>
@@ -190,14 +215,32 @@
 
   <script>
     (function () {
+      const syncStorageKey = 'op-app-pin-sync';
+      const syncChannelName = 'op-app-pin';
+      const sourceId = `lock-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       const unlockInput = document.getElementById('lockPinInput');
       const unlockSlots = document.getElementById('lockPinSlots');
       const unlockToggle = document.getElementById('lockPinVisibilityToggle');
       const unlockForm = document.getElementById('appUnlockForm');
       const unlockSubmit = document.getElementById('unlockSubmit');
       const pinPad = document.getElementById('lockPinPad');
+      const guardNotice = document.getElementById('lockGuardNotice');
+      const guardMessage = document.querySelector('[data-lock-guard-message]');
+      const countdownNode = document.querySelector('[data-lock-countdown]');
+      const googleRecoveryLink = document.querySelector('a[href="/lock/reauth/google"]');
       const pinMaxLength = <%= pinMaxLength %>;
+      const pinMinLength = <%= pinMinLength %>;
+      const nextUrl = <%- JSON.stringify(safeNext) %>;
+      const initialLockUrl = `${window.location.pathname || '/lock'}${window.location.search || ''}`;
+      const initialReason = <%- JSON.stringify(lockReason || 'locked') %>;
+      const unlockInitiallyDisabled = <%= unlockTemporarilyDisabled ? 'true' : 'false' %>;
+      const requiresReauth = <%= guardRequiresReauth ? 'true' : 'false' %>;
+      const initialCooldownSeconds = <%= Number(pinGuard.cooldownRemainingSeconds || 0) %>;
       let activeInput = unlockInput;
+      let unlockDisabled = unlockInitiallyDisabled;
+      let cooldownUntil = initialCooldownSeconds > 0 ? Date.now() + (initialCooldownSeconds * 1000) : 0;
+      let countdownTimer = null;
+      let syncChannel = null;
 
       function normalizeDigits(input) {
         if (!(input instanceof HTMLInputElement)) return '';
@@ -237,6 +280,7 @@
           button.setAttribute('aria-pressed', visible ? 'true' : 'false');
         };
         button.addEventListener('click', () => {
+          if (button.disabled) return;
           target.type = target.type === 'password' ? 'text' : 'password';
           sync();
           target.focus();
@@ -244,6 +288,229 @@
         });
         sync();
       }
+
+      function allUnlockControls() {
+        const controls = [];
+        if (unlockInput) controls.push(unlockInput);
+        if (unlockToggle) controls.push(unlockToggle);
+        if (unlockSubmit) controls.push(unlockSubmit);
+        if (pinPad) {
+          pinPad.querySelectorAll('button').forEach((button) => controls.push(button));
+        }
+        return controls;
+      }
+
+      function setUnlockControlsDisabled(disabled) {
+        unlockDisabled = !!disabled;
+        allUnlockControls().forEach((element) => {
+          if ('disabled' in element) {
+            element.disabled = !!disabled;
+            element.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+          }
+        });
+      }
+
+      function updateSlotsForInput(input) {
+        if (!(input instanceof HTMLInputElement)) return;
+        document.querySelectorAll(`[data-pin-slots="${input.id}"]`).forEach((container) => renderSlots(container, input));
+      }
+
+      function updateGuardNotice(message, countdownLabel = '') {
+        if (guardMessage instanceof HTMLElement && message) {
+          guardMessage.textContent = message;
+        }
+        if (countdownNode instanceof HTMLElement) {
+          countdownNode.textContent = countdownLabel ? ` (${countdownLabel})` : '';
+        }
+        if (guardNotice instanceof HTMLElement && message) {
+          guardNotice.classList.remove('hidden');
+        }
+      }
+
+      function formatCooldown(seconds) {
+        const totalSeconds = Math.max(0, Math.ceil(Number(seconds || 0) || 0));
+        if (!totalSeconds) return 'agora';
+        if (totalSeconds < 60) return `${totalSeconds} segundo${totalSeconds === 1 ? '' : 's'}`;
+        const totalMinutes = Math.ceil(totalSeconds / 60);
+        if (totalMinutes < 60) return `${totalMinutes} minuto${totalMinutes === 1 ? '' : 's'}`;
+        const totalHours = Math.ceil(totalMinutes / 60);
+        return `${totalHours} hora${totalHours === 1 ? '' : 's'}`;
+      }
+
+      function startCooldownCountdown() {
+        if (!cooldownUntil || requiresReauth) return;
+        if (countdownTimer) window.clearInterval(countdownTimer);
+        const tick = () => {
+          const remainingSeconds = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
+          if (remainingSeconds <= 0) {
+            cooldownUntil = 0;
+            if (countdownTimer) {
+              window.clearInterval(countdownTimer);
+              countdownTimer = null;
+            }
+            setUnlockControlsDisabled(false);
+            updateGuardNotice('Pode tentar de novo agora. Quando quiser, é só digitar o PIN.', '');
+            unlockInput?.focus();
+            return;
+          }
+          updateGuardNotice('Vou segurar novas tentativas por mais um tiquinho. Assim a proteção continua firme, sem pressa.', formatCooldown(remainingSeconds));
+          setUnlockControlsDisabled(true);
+        };
+        tick();
+        countdownTimer = window.setInterval(tick, 1000);
+      }
+
+      function appendDigit(target, digit) {
+        if (!(target instanceof HTMLInputElement) || unlockDisabled) return;
+        const currentValue = normalizeDigits(target);
+        if (!digit || currentValue.length >= pinMaxLength) return;
+        target.value = `${currentValue}${digit}`;
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      function clearDigits(target) {
+        if (!(target instanceof HTMLInputElement) || unlockDisabled) return;
+        target.value = '';
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      function backspaceDigit(target) {
+        if (!(target instanceof HTMLInputElement) || unlockDisabled) return;
+        const currentValue = normalizeDigits(target);
+        target.value = currentValue.slice(0, -1);
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      function requestUnlockSubmit() {
+        if (!(unlockForm instanceof HTMLFormElement) || unlockDisabled || requiresReauth) return;
+        const digits = normalizeDigits(unlockInput);
+        if (digits.length < pinMinLength) {
+          unlockInput?.focus();
+          return;
+        }
+        if (typeof unlockForm.requestSubmit === 'function') {
+          unlockForm.requestSubmit(unlockSubmit || undefined);
+        } else {
+          unlockForm.submit();
+        }
+      }
+
+      function handlePadButton(button) {
+        if (!(button instanceof HTMLButtonElement)) return;
+        const target = activeInput instanceof HTMLInputElement ? activeInput : unlockInput;
+        if (!(target instanceof HTMLInputElement)) return;
+        target.focus();
+        const action = button.getAttribute('data-pin-action');
+        const digit = button.getAttribute('data-pin-key');
+        if (action === 'clear') {
+          clearDigits(target);
+          return;
+        }
+        if (action === 'backspace') {
+          backspaceDigit(target);
+          return;
+        }
+        if (digit) {
+          appendDigit(target, digit);
+        }
+      }
+
+      function handlePhysicalKeyboard(event) {
+        if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+        const target = event.target;
+        const isEditingField = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || target?.isContentEditable;
+
+        if (!isEditingField && /^\d$/.test(event.key)) {
+          event.preventDefault();
+          appendDigit(activeInput instanceof HTMLInputElement ? activeInput : unlockInput, event.key);
+          return;
+        }
+
+        if (!isEditingField && (event.key === 'Backspace' || event.key === 'Delete')) {
+          event.preventDefault();
+          backspaceDigit(activeInput instanceof HTMLInputElement ? activeInput : unlockInput);
+          return;
+        }
+
+        if (!isEditingField && event.key === 'Enter') {
+          event.preventDefault();
+          requestUnlockSubmit();
+        }
+      }
+
+      function openSyncChannel() {
+        try {
+          if (typeof window.BroadcastChannel === 'function') {
+            syncChannel = new window.BroadcastChannel(syncChannelName);
+            syncChannel.addEventListener('message', (event) => {
+              handleSyncPayload(event?.data || null);
+            });
+          }
+        } catch (_error) {
+          syncChannel = null;
+        }
+      }
+
+      function getStorage() {
+        try {
+          return window.localStorage;
+        } catch (_error) {
+          return null;
+        }
+      }
+
+      function broadcastPinState(type, extra = {}) {
+        const payload = {
+          type,
+          at: Date.now(),
+          sourceId,
+          ...extra
+        };
+        if (syncChannel) {
+          try {
+            syncChannel.postMessage(payload);
+          } catch (_error) {}
+        }
+        const storage = getStorage();
+        if (!storage) return;
+        try {
+          storage.setItem(syncStorageKey, JSON.stringify(payload));
+        } catch (_error) {}
+      }
+
+      async function probeUnlockState() {
+        try {
+          const response = await fetch('/lock/touch', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-AcerttaPay-Async': '1'
+            }
+          });
+          if (Number(response.status || 0) === 204) {
+            window.location.href = nextUrl || '/';
+          }
+        } catch (_error) {}
+      }
+
+      function handleSyncPayload(payload) {
+        if (!payload || payload.sourceId === sourceId) return;
+        const type = String(payload.type || '').trim().toLowerCase();
+        if (type === 'unlocked') {
+          probeUnlockState();
+        }
+      }
+
+      window.addEventListener('storage', (event) => {
+        if (event.key !== syncStorageKey || !event.newValue) return;
+        try {
+          handleSyncPayload(JSON.parse(event.newValue));
+        } catch (_error) {}
+      });
+
+      openSyncChannel();
+      broadcastPinState('locked', { reason: initialReason || 'locked', redirect: initialLockUrl });
 
       if (unlockInput instanceof HTMLInputElement) {
         unlockInput.addEventListener('input', () => renderSlots(unlockSlots, unlockInput));
@@ -262,7 +529,7 @@
         if (!(input instanceof HTMLInputElement)) return;
         input.addEventListener('input', () => {
           normalizeDigits(input);
-          document.querySelectorAll(`[data-pin-slots="${input.id}"]`).forEach((container) => renderSlots(container, input));
+          updateSlotsForInput(input);
         });
         input.addEventListener('focus', () => { activeInput = input; });
       });
@@ -270,28 +537,24 @@
       if (pinPad instanceof HTMLElement && unlockInput instanceof HTMLInputElement) {
         pinPad.addEventListener('click', (event) => {
           const button = event.target instanceof HTMLElement ? event.target.closest('button') : null;
-          if (!(button instanceof HTMLButtonElement)) return;
-          const target = activeInput instanceof HTMLInputElement ? activeInput : unlockInput;
-          if (!(target instanceof HTMLInputElement)) return;
-          target.focus();
-          const action = button.getAttribute('data-pin-action');
-          const digit = button.getAttribute('data-pin-key');
-          const currentValue = normalizeDigits(target);
-
-          if (action === 'clear') {
-            target.value = '';
-          } else if (action === 'backspace') {
-            target.value = currentValue.slice(0, -1);
-          } else if (digit && currentValue.length < pinMaxLength) {
-            target.value = `${currentValue}${digit}`;
-          }
-
-          target.dispatchEvent(new Event('input', { bubbles: true }));
+          handlePadButton(button);
         });
       }
 
+      document.addEventListener('keydown', handlePhysicalKeyboard);
+
       if (unlockForm instanceof HTMLFormElement && unlockSubmit instanceof HTMLButtonElement) {
-        unlockForm.addEventListener('submit', () => {
+        unlockForm.addEventListener('submit', (event) => {
+          if (unlockDisabled || requiresReauth) {
+            event.preventDefault();
+            return;
+          }
+          const digits = normalizeDigits(unlockInput);
+          if (digits.length < pinMinLength) {
+            event.preventDefault();
+            unlockInput.focus();
+            return;
+          }
           unlockSubmit.disabled = true;
           unlockSubmit.textContent = 'Destravando...';
         });
@@ -313,11 +576,26 @@
         }
       });
 
+      if (requiresReauth) {
+        setUnlockControlsDisabled(true);
+      } else if (initialCooldownSeconds > 0) {
+        setUnlockControlsDisabled(true);
+        startCooldownCountdown();
+      } else {
+        setUnlockControlsDisabled(false);
+      }
+
       window.setTimeout(() => {
+        if (requiresReauth) {
+          googleRecoveryLink?.focus();
+          return;
+        }
+        if (unlockDisabled) return;
         const focusTarget = document.getElementById('<%= recoveryMode ? 'recoveryPinInput' : 'lockPinInput' %>');
         focusTarget?.focus();
       }, 40);
     })();
+  </script>
   </script>
 </body>
 </html>

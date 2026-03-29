@@ -81,12 +81,16 @@ const {
   APP_PIN_MAX_LENGTH,
   APP_PIN_DEFAULT_IDLE_SECONDS,
   APP_PIN_REAUTH_WINDOW_SECONDS,
+  APP_PIN_MAX_ATTEMPTS_BEFORE_REAUTH,
   APP_PIN_IDLE_OPTIONS,
   validatePinInput,
+  validateNewPinInput,
   normalizePinIdleSeconds,
   getPinIdleOptionLabel,
   buildStoredPinPayload,
-  verifyStoredPin
+  verifyStoredPin,
+  getPinFailurePolicy,
+  formatPinCooldownLabel
 } = require('./src/pinSecurity');
 
 // --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
@@ -2483,6 +2487,13 @@ function clearImportPreview(req) {
   delete req.session.importPreview;
 }
 
+function setNoStoreHeaders(res) {
+  if (!res || typeof res.set !== 'function') return;
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+}
+
 function getPinPepper() {
   return String(BOOTSTRAP_SESSION_SECRET || 'acerttapay-app-lock').trim() || 'acerttapay-app-lock';
 }
@@ -2611,7 +2622,7 @@ function buildAppPinViewModel(settings = null, { reauthFresh = false } = {}) {
 }
 
 function enableUserAppPin(userId, pin, idleSeconds) {
-  const preparedPin = validatePinInput(pin);
+  const preparedPin = validateNewPinInput(pin);
   if (!preparedPin.ok) {
     throw new Error(preparedPin.reason || 'Não consegui preparar esse PIN agora.');
   }
@@ -2655,18 +2666,107 @@ function verifyUserAppPin(userId, pin) {
   return verifyStoredPin(pin, { hash: settings.pin_hash, salt: settings.pin_salt }, { pepper: getPinPepper() });
 }
 
+function getUserAppPinGuardState(userId) {
+  const settings = getUserSecuritySettings(userId);
+  const failedAttempts = Math.max(0, Number(settings.failed_attempts || 0) || 0);
+  const policy = getPinFailurePolicy(failedAttempts);
+  const lockedUntilMs = settings.locked_until ? Date.parse(settings.locked_until) : 0;
+  const safeLockedUntilMs = Number.isFinite(lockedUntilMs) ? lockedUntilMs : 0;
+  const cooldownActive = !policy.requiresReauth && safeLockedUntilMs > Date.now();
+  const cooldownSeconds = cooldownActive ? Math.max(1, Math.ceil((safeLockedUntilMs - Date.now()) / 1000)) : 0;
+
+  if (!policy.requiresReauth && settings.locked_until && !cooldownActive) {
+    upsertUserSecuritySettings(userId, {
+      locked_until: null,
+      updated_at: nowIso()
+    });
+    settings.locked_until = null;
+  }
+
+  return {
+    settings,
+    failedAttempts,
+    cooldownActive,
+    cooldownSeconds,
+    cooldownLabel: cooldownSeconds > 0 ? formatPinCooldownLabel(cooldownSeconds) : '',
+    requiresReauth: policy.requiresReauth,
+    attemptsUntilPause: failedAttempts >= 5 ? 0 : Math.max(0, 5 - failedAttempts),
+    policy
+  };
+}
+
+function buildUserAppPinFailureMessage(guardState) {
+  if (guardState?.requiresReauth) {
+    return 'Por segurança, esse PIN entrou em pausa depois de muitas tentativas. Confirma sua conta Google para trocar ou desligar a proteção.';
+  }
+  if (guardState?.cooldownActive) {
+    return `PIN não bateu por aqui. Agora vou te dar ${guardState.cooldownLabel} antes da próxima tentativa.`;
+  }
+  if (Number(guardState?.attemptsUntilPause || 0) === 1) {
+    return 'PIN não bateu por aqui. Mais uma tentativa errada e eu dou uma pausa curtinha de 30 segundos.';
+  }
+  return 'PIN não bateu por aqui. Confere os números e tenta de novo.';
+}
+
+function buildAppPinGuardViewModel(userId) {
+  const guardState = getUserAppPinGuardState(userId);
+  let noticeTone = 'neutral';
+  let noticeTitle = '';
+  let noticeMessage = '';
+
+  if (guardState.requiresReauth) {
+    noticeTone = 'danger';
+    noticeTitle = 'Confirmação extra pedida';
+    noticeMessage = 'Depois de várias tentativas, eu pedi um reforço de segurança. Confirma sua conta Google para trocar ou desligar o PIN.';
+  } else if (guardState.cooldownActive) {
+    noticeTone = 'warning';
+    noticeTitle = 'Hora de dar uma respirada';
+    noticeMessage = `Vou segurar novas tentativas por ${guardState.cooldownLabel}. Assim a proteção continua firme, sem pressa.`;
+  } else if (Number(guardState.attemptsUntilPause || 0) === 1) {
+    noticeTone = 'caution';
+    noticeTitle = 'Só mais uma antes da pausinha';
+    noticeMessage = 'Se a próxima tentativa também escapar, eu faço uma pausa curtinha de 30 segundos antes de liberar de novo.';
+  }
+
+  return {
+    failedAttempts: guardState.failedAttempts,
+    cooldownActive: guardState.cooldownActive,
+    cooldownRemainingSeconds: guardState.cooldownSeconds,
+    cooldownRemainingLabel: guardState.cooldownLabel,
+    requiresReauth: guardState.requiresReauth,
+    attemptsUntilPause: guardState.attemptsUntilPause,
+    maxAttemptsBeforeReauth: APP_PIN_MAX_ATTEMPTS_BEFORE_REAUTH,
+    noticeTone,
+    noticeTitle,
+    noticeMessage
+  };
+}
+
 function registerUserAppPinFailure(userId) {
   const settings = getUserSecuritySettings(userId);
+  const nextFailedAttempts = Math.max(0, Number(settings.failed_attempts || 0) || 0) + 1;
+  const policy = getPinFailurePolicy(nextFailedAttempts);
+  const nextLockedUntil = policy.requiresReauth || policy.cooldownSeconds <= 0
+    ? null
+    : new Date(Date.now() + (policy.cooldownSeconds * 1000)).toISOString();
+
   upsertUserSecuritySettings(userId, {
-    failed_attempts: Math.max(0, Number(settings.failed_attempts || 0) || 0) + 1,
+    failed_attempts: nextFailedAttempts,
+    locked_until: nextLockedUntil,
     updated_at: nowIso()
   });
+
+  return getUserAppPinGuardState(userId);
 }
 
 function resetUserAppPinFailures(userId) {
   const settings = getUserSecuritySettings(userId);
-  if (!Number(settings.failed_attempts || 0)) return;
-  upsertUserSecuritySettings(userId, { failed_attempts: 0, updated_at: nowIso() });
+  if (!Number(settings.failed_attempts || 0) && !settings.locked_until) return;
+  upsertUserSecuritySettings(userId, {
+    failed_attempts: 0,
+    locked_until: null,
+    updated_at: nowIso()
+  });
 }
 
 function sanitizeInternalRedirectTarget(rawValue, fallback = '/') {
@@ -2790,6 +2890,15 @@ function buildAppLockRedirectUrl(req, { reason = 'locked', returnTo = null } = {
   return suffix ? `/lock?${suffix}` : '/lock';
 }
 
+function buildAppLockRecoveryUrl(req, { reason = 'locked', returnTo = null } = {}) {
+  const params = new URLSearchParams();
+  const target = sanitizeInternalRedirectTarget(returnTo || req.originalUrl || req.path || '/', '');
+  params.set('mode', 'recover');
+  if (reason) params.set('reason', String(reason));
+  if (target) params.set('next', target);
+  return `/lock?${params.toString()}`;
+}
+
 function pinLockMessageForReason(reason) {
   const safeReason = String(reason || '').trim().toLowerCase();
   if (safeReason === 'idle' || safeReason === 'background') {
@@ -2808,6 +2917,8 @@ function respondWithAppLock(req, res, { reason = 'locked', returnTo = null } = {
   lockAppSession(req, { reason, returnTo: returnTo || req.originalUrl || req.path || '' });
   const redirectUrl = buildAppLockRedirectUrl(req, { reason, returnTo });
   const message = pinLockMessageForReason(reason);
+
+  setNoStoreHeaders(res);
 
   if (isAjaxLikeRequest(req)) {
     res.set('X-App-Locked', '1');
@@ -3246,6 +3357,10 @@ function buildEnsureAuthenticated({ skipPinLock = false } = {}) {
     };
 
     req.appPinSettings = pinSettings;
+
+    if (Number(pinSettings.pin_enabled || 0) !== 0) {
+      setNoStoreHeaders(res);
+    }
 
     if (!skipPinLock) {
       const lockResponse = handleAppPinGate(req, res, pinSettings);
@@ -11226,6 +11341,7 @@ app.get('/lock', ensureAuthenticatedIgnoringPin, (req, res) => {
     return res.redirect(res.locals.dashboardHref || '/');
   }
 
+  setNoStoreHeaders(res);
   clearExpiredPinReauthSession(req, userId);
   const reauthFresh = hasFreshPinReauthSession(req, userId);
   const state = getAppSessionState(req);
@@ -11240,7 +11356,12 @@ app.get('/lock', ensureAuthenticatedIgnoringPin, (req, res) => {
   }
 
   const currentUser = getUserRecord(userId, { includeDeleted: false }) || req.user || {};
+  const guardView = buildAppPinGuardViewModel(userId);
   const lockMode = String(req.query.mode || '').trim().toLowerCase() === 'recover' && reauthFresh ? 'recover' : 'unlock';
+  const baseLockMessage = pinLockMessageForReason(req.query.reason || state.reason || '');
+  const lockMessage = guardView.requiresReauth || guardView.cooldownActive
+    ? guardView.noticeMessage || baseLockMessage
+    : baseLockMessage;
 
   return res.render('lock', {
     title: 'AcerttaPay | Desbloquear',
@@ -11250,8 +11371,9 @@ app.get('/lock', ensureAuthenticatedIgnoringPin, (req, res) => {
       photo_url: getEffectiveProfilePhoto(currentUser)
     },
     appPinSecurity: buildAppPinViewModel(settings, { reauthFresh }),
+    appPinGuard: guardView,
     lockReason: String(req.query.reason || state.reason || '').trim().toLowerCase(),
-    lockMessage: pinLockMessageForReason(req.query.reason || state.reason || ''),
+    lockMessage,
     nextTarget,
     lockMode,
     reauthFresh
@@ -11271,17 +11393,48 @@ app.post('/lock/unlock', ensureAuthenticatedIgnoringPin, (req, res) => {
     return res.redirect(redirectTarget);
   }
 
-  const pinCheck = validatePinInput(req.body.pin);
   const redirectTarget = sanitizeInternalRedirectTarget(req.body.next || getAppSessionState(req).returnTo || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
+  const recoveryRedirectTarget = buildAppLockRecoveryUrl(req, { reason: 'locked', returnTo: redirectTarget });
+  const preGuardState = getUserAppPinGuardState(userId);
 
-  if (!pinCheck.ok || !verifyUserAppPin(userId, pinCheck.value)) {
-    registerUserAppPinFailure(userId);
-    const message = 'PIN não bateu por aqui. Confere os números e tenta de novo.';
+  if (preGuardState.requiresReauth) {
+    const message = 'Por segurança, esse PIN entrou em pausa. Confirma sua conta Google para trocar ou desligar a proteção.';
     if (isAjaxLikeRequest(req)) {
-      return res.status(422).json({ ok: false, message });
+      return res.status(423).json({ ok: false, message, requiresReauth: true, redirect: recoveryRedirectTarget });
+    }
+    setFlash(req, 'error', message);
+    return res.redirect(recoveryRedirectTarget);
+  }
+
+  if (preGuardState.cooldownActive) {
+    const message = `Segura ${preGuardState.cooldownLabel} que eu volto a liberar novas tentativas.`;
+    if (isAjaxLikeRequest(req)) {
+      return res.status(429).json({ ok: false, message, retryAfter: preGuardState.cooldownSeconds, redirect: buildAppLockRedirectUrl(req, { reason: 'locked', returnTo: redirectTarget }) });
     }
     setFlash(req, 'error', message);
     return res.redirect(buildAppLockRedirectUrl(req, { reason: 'locked', returnTo: redirectTarget }));
+  }
+
+  const pinCheck = validatePinInput(req.body.pin);
+
+  if (!pinCheck.ok || !verifyUserAppPin(userId, pinCheck.value)) {
+    const postGuardState = registerUserAppPinFailure(userId);
+    const message = buildUserAppPinFailureMessage(postGuardState);
+    if (isAjaxLikeRequest(req)) {
+      return res.status(postGuardState.requiresReauth ? 423 : postGuardState.cooldownActive ? 429 : 422).json({
+        ok: false,
+        message,
+        requiresReauth: postGuardState.requiresReauth,
+        retryAfter: postGuardState.cooldownActive ? postGuardState.cooldownSeconds : 0,
+        redirect: postGuardState.requiresReauth
+          ? recoveryRedirectTarget
+          : buildAppLockRedirectUrl(req, { reason: 'locked', returnTo: redirectTarget })
+      });
+    }
+    setFlash(req, 'error', message);
+    return res.redirect(postGuardState.requiresReauth
+      ? recoveryRedirectTarget
+      : buildAppLockRedirectUrl(req, { reason: 'locked', returnTo: redirectTarget }));
   }
 
   resetUserAppPinFailures(userId);
@@ -11301,6 +11454,7 @@ app.post('/lock/engage', ensureAuthenticatedIgnoringPin, (req, res) => {
   const returnTo = sanitizeInternalRedirectTarget(req.body.return_to || req.query.return_to || req.get('referer') || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
   lockAppSession(req, { reason, returnTo });
   const redirectTarget = buildAppLockRedirectUrl(req, { reason, returnTo });
+  setNoStoreHeaders(res);
 
   if (isAjaxLikeRequest(req)) {
     return res.json({ ok: true, redirect: redirectTarget });
@@ -11313,9 +11467,18 @@ app.post('/lock/touch', ensureAuthenticatedIgnoringPin, (req, res) => {
   const userId = req.user.id;
   const settings = getUserSecuritySettings(userId);
 
+  setNoStoreHeaders(res);
+
   if (!settings.pin_enabled) {
     clearAppLockSession(req);
     return res.status(204).end();
+  }
+
+  const guardState = getUserAppPinGuardState(userId);
+  if (guardState.requiresReauth) {
+    res.set('X-App-Locked', '1');
+    res.set('X-App-Lock-Redirect', buildAppLockRecoveryUrl(req, { reason: 'locked', returnTo: getAppSessionState(req).returnTo || res.locals.dashboardHref || '/' }));
+    return res.status(423).json({ ok: false, appLocked: true, requiresReauth: true, redirect: buildAppLockRecoveryUrl(req, { reason: 'locked', returnTo: getAppSessionState(req).returnTo || res.locals.dashboardHref || '/' }) });
   }
 
   const state = getAppSessionState(req);

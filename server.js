@@ -76,6 +76,18 @@ const {
   normalizePhoneForWhatsapp,
   decoratePersonPhoneForView
 } = require('./src/phone');
+const {
+  APP_PIN_MIN_LENGTH,
+  APP_PIN_MAX_LENGTH,
+  APP_PIN_DEFAULT_IDLE_SECONDS,
+  APP_PIN_REAUTH_WINDOW_SECONDS,
+  APP_PIN_IDLE_OPTIONS,
+  validatePinInput,
+  normalizePinIdleSeconds,
+  getPinIdleOptionLabel,
+  buildStoredPinPayload,
+  verifyStoredPin
+} = require('./src/pinSecurity');
 
 // --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
 require('./scripts/migrate.js');
@@ -2471,6 +2483,443 @@ function clearImportPreview(req) {
   delete req.session.importPreview;
 }
 
+function getPinPepper() {
+  return String(BOOTSTRAP_SESSION_SECRET || 'acerttapay-app-lock').trim() || 'acerttapay-app-lock';
+}
+
+function getDefaultUserSecuritySettings(userId = null) {
+  return {
+    user_id: Number(userId || 0) || null,
+    pin_enabled: 0,
+    pin_hash: '',
+    pin_salt: '',
+    pin_kdf: 'scrypt-v1',
+    pin_idle_seconds: APP_PIN_DEFAULT_IDLE_SECONDS,
+    failed_attempts: 0,
+    locked_until: null,
+    last_changed_at: null,
+    updated_at: null
+  };
+}
+
+function getUserSecuritySettings(userId) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return getDefaultUserSecuritySettings(null);
+
+  const row = db.prepare(`
+    SELECT user_id,
+           COALESCE(pin_enabled, 0) AS pin_enabled,
+           pin_hash,
+           pin_salt,
+           COALESCE(pin_kdf, 'scrypt-v1') AS pin_kdf,
+           COALESCE(pin_idle_seconds, ${APP_PIN_DEFAULT_IDLE_SECONDS}) AS pin_idle_seconds,
+           COALESCE(failed_attempts, 0) AS failed_attempts,
+           locked_until,
+           last_changed_at,
+           updated_at
+    FROM user_security_settings
+    WHERE user_id = ?
+    LIMIT 1
+  `).get(safeUserId);
+
+  if (!row) {
+    return getDefaultUserSecuritySettings(safeUserId);
+  }
+
+  return {
+    user_id: safeUserId,
+    pin_enabled: Number(row.pin_enabled || 0) !== 0 ? 1 : 0,
+    pin_hash: String(row.pin_hash || '').trim(),
+    pin_salt: String(row.pin_salt || '').trim(),
+    pin_kdf: String(row.pin_kdf || 'scrypt-v1').trim() || 'scrypt-v1',
+    pin_idle_seconds: normalizePinIdleSeconds(row.pin_idle_seconds),
+    failed_attempts: Number(row.failed_attempts || 0) || 0,
+    locked_until: row.locked_until || null,
+    last_changed_at: row.last_changed_at || null,
+    updated_at: row.updated_at || null
+  };
+}
+
+function upsertUserSecuritySettings(userId, overrides = {}) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) throw new Error('Não encontrei o usuário para salvar a segurança do app.');
+
+  const current = getUserSecuritySettings(safeUserId);
+  const next = {
+    ...current,
+    ...overrides
+  };
+
+  next.user_id = safeUserId;
+  next.pin_enabled = Number(next.pin_enabled || 0) !== 0 ? 1 : 0;
+  next.pin_hash = next.pin_hash ? String(next.pin_hash).trim() : null;
+  next.pin_salt = next.pin_salt ? String(next.pin_salt).trim() : null;
+  next.pin_kdf = String(next.pin_kdf || 'scrypt-v1').trim() || 'scrypt-v1';
+  next.pin_idle_seconds = normalizePinIdleSeconds(next.pin_idle_seconds);
+  next.failed_attempts = Math.max(0, Number(next.failed_attempts || 0) || 0);
+  next.locked_until = next.locked_until || null;
+  next.last_changed_at = next.last_changed_at || current.last_changed_at || null;
+  next.updated_at = next.updated_at || nowIso();
+
+  db.prepare(`
+    INSERT INTO user_security_settings (
+      user_id, pin_enabled, pin_hash, pin_salt, pin_kdf, pin_idle_seconds,
+      failed_attempts, locked_until, last_changed_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      pin_enabled = excluded.pin_enabled,
+      pin_hash = excluded.pin_hash,
+      pin_salt = excluded.pin_salt,
+      pin_kdf = excluded.pin_kdf,
+      pin_idle_seconds = excluded.pin_idle_seconds,
+      failed_attempts = excluded.failed_attempts,
+      locked_until = excluded.locked_until,
+      last_changed_at = excluded.last_changed_at,
+      updated_at = excluded.updated_at
+  `).run(
+    next.user_id,
+    next.pin_enabled,
+    next.pin_hash,
+    next.pin_salt,
+    next.pin_kdf,
+    next.pin_idle_seconds,
+    next.failed_attempts,
+    next.locked_until,
+    next.last_changed_at,
+    next.updated_at
+  );
+
+  return getUserSecuritySettings(safeUserId);
+}
+
+function buildAppPinViewModel(settings = null, { reauthFresh = false } = {}) {
+  const source = settings || getDefaultUserSecuritySettings(null);
+  const idleSeconds = normalizePinIdleSeconds(source.pin_idle_seconds);
+  return {
+    enabled: Number(source.pin_enabled || 0) !== 0,
+    idleSeconds,
+    idleLabel: getPinIdleOptionLabel(idleSeconds),
+    idleOptions: APP_PIN_IDLE_OPTIONS.map((option) => ({
+      value: Number(option.value),
+      label: option.label,
+      selected: Number(option.value) === idleSeconds
+    })),
+    minLength: APP_PIN_MIN_LENGTH,
+    maxLength: APP_PIN_MAX_LENGTH,
+    reauthFresh: !!reauthFresh
+  };
+}
+
+function enableUserAppPin(userId, pin, idleSeconds) {
+  const preparedPin = validatePinInput(pin);
+  if (!preparedPin.ok) {
+    throw new Error(preparedPin.reason || 'Não consegui preparar esse PIN agora.');
+  }
+
+  const now = nowIso();
+  const stored = buildStoredPinPayload(preparedPin.value, { pepper: getPinPepper() });
+  return upsertUserSecuritySettings(userId, {
+    pin_enabled: 1,
+    pin_hash: stored.hash,
+    pin_salt: stored.salt,
+    pin_kdf: stored.kdf,
+    pin_idle_seconds: normalizePinIdleSeconds(idleSeconds),
+    failed_attempts: 0,
+    locked_until: null,
+    last_changed_at: now,
+    updated_at: now
+  });
+}
+
+function disableUserAppPin(userId) {
+  const now = nowIso();
+  const current = getUserSecuritySettings(userId);
+  return upsertUserSecuritySettings(userId, {
+    pin_enabled: 0,
+    pin_hash: null,
+    pin_salt: null,
+    pin_kdf: 'scrypt-v1',
+    pin_idle_seconds: normalizePinIdleSeconds(current.pin_idle_seconds),
+    failed_attempts: 0,
+    locked_until: null,
+    last_changed_at: now,
+    updated_at: now
+  });
+}
+
+function verifyUserAppPin(userId, pin) {
+  const settings = getUserSecuritySettings(userId);
+  if (!settings.pin_enabled || !settings.pin_hash || !settings.pin_salt) {
+    return false;
+  }
+  return verifyStoredPin(pin, { hash: settings.pin_hash, salt: settings.pin_salt }, { pepper: getPinPepper() });
+}
+
+function registerUserAppPinFailure(userId) {
+  const settings = getUserSecuritySettings(userId);
+  upsertUserSecuritySettings(userId, {
+    failed_attempts: Math.max(0, Number(settings.failed_attempts || 0) || 0) + 1,
+    updated_at: nowIso()
+  });
+}
+
+function resetUserAppPinFailures(userId) {
+  const settings = getUserSecuritySettings(userId);
+  if (!Number(settings.failed_attempts || 0)) return;
+  upsertUserSecuritySettings(userId, { failed_attempts: 0, updated_at: nowIso() });
+}
+
+function sanitizeInternalRedirectTarget(rawValue, fallback = '/') {
+  const raw = String(rawValue || '').trim();
+  const safeFallback = String(fallback || '/').trim() || '/';
+
+  if (!raw) return safeFallback;
+  if (!raw.startsWith('/')) return safeFallback;
+  if (raw.startsWith('//')) return safeFallback;
+  if (/^\/auth\/google(?:\/callback)?/i.test(raw)) return safeFallback;
+  if (/^\/logout/i.test(raw)) return safeFallback;
+  if (/^\/lock(?:$|\?)/i.test(raw)) return safeFallback;
+  return raw;
+}
+
+function ensureAppLockSession(req) {
+  if (!req.session) return null;
+  if (!req.session.appLock || typeof req.session.appLock !== 'object') {
+    req.session.appLock = {
+      unlocked: false,
+      lastActiveAt: 0,
+      unlockedAt: 0,
+      lockedAt: 0,
+      reason: '',
+      returnTo: ''
+    };
+  }
+  return req.session.appLock;
+}
+
+function clearAppLockSession(req) {
+  if (!req.session) return;
+  delete req.session.appLock;
+}
+
+function lockAppSession(req, { reason = 'manual', returnTo = '' } = {}) {
+  const state = ensureAppLockSession(req);
+  if (!state) return null;
+  state.unlocked = false;
+  state.lastActiveAt = 0;
+  state.unlockedAt = 0;
+  state.lockedAt = Date.now();
+  state.reason = String(reason || 'manual').trim() || 'manual';
+  state.returnTo = sanitizeInternalRedirectTarget(returnTo, '');
+  return state;
+}
+
+function unlockAppSession(req, { clearReturnTo = false } = {}) {
+  const state = ensureAppLockSession(req);
+  if (!state) return null;
+  const now = Date.now();
+  state.unlocked = true;
+  state.lastActiveAt = now;
+  state.unlockedAt = now;
+  state.lockedAt = 0;
+  state.reason = '';
+  if (clearReturnTo) {
+    state.returnTo = '';
+  }
+  return state;
+}
+
+function touchAppSession(req) {
+  const state = ensureAppLockSession(req);
+  if (!state || !state.unlocked) return state;
+  state.lastActiveAt = Date.now();
+  return state;
+}
+
+function getAppSessionState(req) {
+  const state = ensureAppLockSession(req);
+  return state || { unlocked: false, lastActiveAt: 0, unlockedAt: 0, lockedAt: 0, reason: '', returnTo: '' };
+}
+
+function clearPinReauthSession(req) {
+  if (!req.session) return;
+  delete req.session.appPinReauth;
+  delete req.session.appPinReauthFlow;
+}
+
+function startPinReauthSession(req, { returnTo = '/lock?mode=recover' } = {}) {
+  if (!req.session || !req.user?.id) return;
+  req.session.appPinReauthFlow = {
+    userId: Number(req.user.id || 0),
+    returnTo: sanitizeInternalRedirectTarget(returnTo, '/lock?mode=recover'),
+    startedAt: Date.now()
+  };
+}
+
+function grantPinReauthSession(req, userId, { returnTo = '/lock?mode=recover' } = {}) {
+  if (!req.session) return;
+  req.session.appPinReauth = {
+    userId: Number(userId || 0),
+    returnTo: sanitizeInternalRedirectTarget(returnTo, '/lock?mode=recover'),
+    grantedAt: Date.now(),
+    expiresAt: Date.now() + (APP_PIN_REAUTH_WINDOW_SECONDS * 1000)
+  };
+  delete req.session.appPinReauthFlow;
+}
+
+function hasFreshPinReauthSession(req, userId) {
+  const payload = req.session?.appPinReauth;
+  if (!payload) return false;
+  if (Number(payload.userId || 0) !== Number(userId || 0)) return false;
+  return Number(payload.expiresAt || 0) > Date.now();
+}
+
+function clearExpiredPinReauthSession(req, userId) {
+  if (!req.session?.appPinReauth) return;
+  if (!hasFreshPinReauthSession(req, userId)) {
+    delete req.session.appPinReauth;
+  }
+}
+
+function buildAppLockRedirectUrl(req, { reason = 'locked', returnTo = null } = {}) {
+  const params = new URLSearchParams();
+  const target = sanitizeInternalRedirectTarget(returnTo || req.originalUrl || req.path || '/', '');
+  if (reason) params.set('reason', String(reason));
+  if (target) params.set('next', target);
+  const suffix = params.toString();
+  return suffix ? `/lock?${suffix}` : '/lock';
+}
+
+function pinLockMessageForReason(reason) {
+  const safeReason = String(reason || '').trim().toLowerCase();
+  if (safeReason === 'idle' || safeReason === 'background') {
+    return 'Travei o app por inatividade. Digite seu PIN para voltar a ver seus dados.';
+  }
+  if (safeReason === 'reauth-mismatch') {
+    return 'Para redefinir o PIN, confirme com a mesma conta Google que está usando aqui no app.';
+  }
+  if (safeReason === 'manual') {
+    return 'App bloqueado como você pediu. Digite seu PIN e seguimos o baile.';
+  }
+  return 'Seu app está protegido por PIN. Digite os números para destravar.';
+}
+
+function respondWithAppLock(req, res, { reason = 'locked', returnTo = null } = {}) {
+  lockAppSession(req, { reason, returnTo: returnTo || req.originalUrl || req.path || '' });
+  const redirectUrl = buildAppLockRedirectUrl(req, { reason, returnTo });
+  const message = pinLockMessageForReason(reason);
+
+  if (isAjaxLikeRequest(req)) {
+    res.set('X-App-Locked', '1');
+    res.set('X-App-Lock-Redirect', redirectUrl);
+    return res.status(423).json({
+      ok: false,
+      appLocked: true,
+      redirect: redirectUrl,
+      message
+    });
+  }
+
+  return res.redirect(redirectUrl);
+}
+
+function handleAppPinGate(req, res, settings) {
+  if (!settings || !settings.pin_enabled) {
+    clearAppLockSession(req);
+    clearExpiredPinReauthSession(req, req.user?.id);
+    return null;
+  }
+
+  clearExpiredPinReauthSession(req, req.user?.id);
+
+  const state = getAppSessionState(req);
+  const idleSeconds = normalizePinIdleSeconds(settings.pin_idle_seconds);
+  const idleMs = idleSeconds > 0 ? idleSeconds * 1000 : 0;
+  const lastActiveAt = Number(state.lastActiveAt || 0);
+
+  if (state.unlocked && idleMs > 0 && lastActiveAt && (Date.now() - lastActiveAt) >= idleMs) {
+    return respondWithAppLock(req, res, { reason: 'idle', returnTo: req.originalUrl || req.path || '' });
+  }
+
+  if (!state.unlocked) {
+    return respondWithAppLock(req, res, { reason: state.reason || 'locked', returnTo: req.originalUrl || req.path || '' });
+  }
+
+  touchAppSession(req);
+  return null;
+}
+
+function normalizePinConfirmationPayload(newPinValue, confirmPinValue) {
+  const preparedPin = validatePinInput(newPinValue);
+  if (!preparedPin.ok) return preparedPin;
+
+  const preparedConfirm = validatePinInput(confirmPinValue);
+  if (!preparedConfirm.ok) {
+    return { ok: false, value: '', reason: 'Preciso da confirmação do PIN para garantir que vocês dois estão combinando.' };
+  }
+
+  if (preparedPin.value !== preparedConfirm.value) {
+    return { ok: false, value: '', reason: 'Os dois PINs não bateram. Digita de novo que eu confiro daqui.' };
+  }
+
+  return { ok: true, value: preparedPin.value };
+}
+
+function normalizePinMode(value) {
+  const safeValue = String(value || '').trim().toLowerCase();
+  if (safeValue === 'change') return 'change';
+  return 'create';
+}
+
+function saveUserAppPinFromRequest(userId, req, { allowReauthOverride = false } = {}) {
+  const settings = getUserSecuritySettings(userId);
+  const mode = normalizePinMode(req.body.mode || (settings.pin_enabled ? 'change' : 'create'));
+  const confirmation = normalizePinConfirmationPayload(req.body.pin, req.body.pin_confirm);
+  if (!confirmation.ok) {
+    throw new Error(confirmation.reason || 'Não consegui validar esse PIN agora.');
+  }
+
+  const idleSeconds = normalizePinIdleSeconds(req.body.pin_idle_seconds);
+  const canBypassCurrentPin = allowReauthOverride && hasFreshPinReauthSession(req, userId);
+
+  if (settings.pin_enabled && mode === 'change' && !canBypassCurrentPin) {
+    const currentPinCheck = validatePinInput(req.body.current_pin);
+    if (!currentPinCheck.ok || !verifyUserAppPin(userId, currentPinCheck.value)) {
+      throw new Error('Para trocar o PIN, me confirma o PIN atual primeiro.');
+    }
+  }
+
+  const saved = enableUserAppPin(userId, confirmation.value, idleSeconds);
+  resetUserAppPinFailures(userId);
+  unlockAppSession(req);
+  if (allowReauthOverride) {
+    clearPinReauthSession(req);
+  }
+  return saved;
+}
+
+function disableUserAppPinFromRequest(userId, req, { allowReauthOverride = false } = {}) {
+  const settings = getUserSecuritySettings(userId);
+  if (!settings.pin_enabled) {
+    clearAppLockSession(req);
+    if (allowReauthOverride) clearPinReauthSession(req);
+    return settings;
+  }
+
+  const canBypassCurrentPin = allowReauthOverride && hasFreshPinReauthSession(req, userId);
+  if (!canBypassCurrentPin) {
+    const currentPinCheck = validatePinInput(req.body.current_pin);
+    if (!currentPinCheck.ok || !verifyUserAppPin(userId, currentPinCheck.value)) {
+      throw new Error('Para desligar o PIN, me confirma o PIN atual antes.');
+    }
+  }
+
+  const updated = disableUserAppPin(userId);
+  clearAppLockSession(req);
+  clearPinReauthSession(req);
+  return updated;
+}
+
 function normalizeErrorStatus(error, fallback = 500) {
   const candidate = Number(error?.status || error?.statusCode || fallback);
   return Number.isInteger(candidate) && candidate >= 400 && candidate <= 599 ? candidate : fallback;
@@ -2769,30 +3218,48 @@ function expireDeletedAccessSession(req, res) {
 }
 
 // ===== MIDDLEWARE DE AUTENTICAÇÃO =====
-function ensureAuthenticated(req, res, next) {
-  if (!req.isAuthenticated()) {
-    return res.redirect(isInitialSetupRequired() ? '/setup' : '/login');
-  }
+function buildEnsureAuthenticated({ skipPinLock = false } = {}) {
+  return function ensureAuthenticatedMiddleware(req, res, next) {
+    if (!req.isAuthenticated()) {
+      return res.redirect(isInitialSetupRequired() ? '/setup' : '/login');
+    }
 
-  const currentUser = getUserRecord(req.user?.id, { includeDeleted: false });
-  if (!currentUser) {
-    return expireDeletedAccessSession(req, res);
-  }
+    const currentUser = getUserRecord(req.user?.id, { includeDeleted: false });
+    if (!currentUser) {
+      return expireDeletedAccessSession(req, res);
+    }
 
-  req.user = {
-    ...req.user,
-    id: currentUser.id,
-    email: currentUser.email,
-    name: currentUser.name,
-    role: currentUser.role,
-    can_import: Number(currentUser.can_import ?? 1),
-    status: currentUser.status,
-    google_photo_url: currentUser.google_photo_url || '',
-    profile_photo_url: currentUser.profile_photo_url || ''
+    const pinSettings = getUserSecuritySettings(currentUser.id);
+
+    req.user = {
+      ...req.user,
+      id: currentUser.id,
+      email: currentUser.email,
+      name: currentUser.name,
+      role: currentUser.role,
+      can_import: Number(currentUser.can_import ?? 1),
+      status: currentUser.status,
+      google_photo_url: currentUser.google_photo_url || '',
+      profile_photo_url: currentUser.profile_photo_url || '',
+      pin_enabled: Number(pinSettings.pin_enabled || 0) !== 0 ? 1 : 0,
+      pin_idle_seconds: pinSettings.pin_idle_seconds
+    };
+
+    req.appPinSettings = pinSettings;
+
+    if (!skipPinLock) {
+      const lockResponse = handleAppPinGate(req, res, pinSettings);
+      if (lockResponse) {
+        return lockResponse;
+      }
+    }
+
+    return next();
   };
-
-  return next();
 }
+
+const ensureAuthenticated = buildEnsureAuthenticated();
+const ensureAuthenticatedIgnoringPin = buildEnsureAuthenticated({ skipPinLock: true });
 
 function ensureCanImport(req, res, next) {
   if (!req.isAuthenticated()) {
@@ -2952,9 +3419,32 @@ const handleGoogleCallback = (req, res, next) => {
     return res.redirect('/login?error=google_not_configured');
   }
 
-  return passport.authenticate('google', {
-    successRedirect: '/',
-    failureRedirect: '/login?error=auth_failed'
+  return passport.authenticate('google', (error, user) => {
+    if (error || !user) {
+      return res.redirect('/login?error=auth_failed');
+    }
+
+    const reauthFlow = req.session?.appPinReauthFlow || null;
+    if (reauthFlow && Number(reauthFlow.userId || 0) > 0 && Number(user.id || 0) !== Number(reauthFlow.userId || 0)) {
+      clearPinReauthSession(req);
+      setFlash(req, 'error', 'Para redefinir o PIN, confirme com a mesma conta Google que está usando aqui no app.');
+      return res.redirect('/lock?reason=reauth-mismatch');
+    }
+
+    return req.logIn(user, (loginError) => {
+      if (loginError) {
+        return next(loginError);
+      }
+
+      if (reauthFlow && Number(reauthFlow.userId || 0) > 0) {
+        const returnTo = sanitizeInternalRedirectTarget(reauthFlow.returnTo, '/lock?mode=recover');
+        grantPinReauthSession(req, user.id, { returnTo });
+        setFlash(req, 'success', 'Conta confirmada com o Google. Agora você pode redefinir ou desligar o PIN por alguns minutinhos.');
+        return res.redirect(returnTo || '/lock?mode=recover');
+      }
+
+      return res.redirect('/');
+    });
   })(req, res, next);
 };
 
@@ -3008,6 +3498,8 @@ app.use((req, res, next) => {
   res.locals.appVersion = APP_VERSION;
   res.locals.cardBrandOptions = CARD_BRAND_OPTIONS;
   res.locals.getCardBrandMeta = getCardBrandMeta;
+  res.locals.currentPath = req.path || '/';
+  res.locals.appPin = buildAppPinViewModel(getDefaultUserSecuritySettings(null));
   const now = dayjs();
   res.locals.dashboardHref = `/detalhamento/${now.year()}/${now.month() + 1}`;
 
@@ -3039,11 +3531,13 @@ app.use((req, res, next) => {
       req.user.profile_signature_vibe = normalizeProfileSignatureVibe(currentUser.profile_signature_vibe || '');
     }
 
+    const pinSettings = getUserSecuritySettings(req.user.id);
     res.locals.user = req.user;
     res.locals.userAvatar = getAvatarPayload(req.user, req.user.name || req.user.email);
     res.locals.userId = req.user.id;
     res.locals.isAdmin = req.user.role === 'admin';
     res.locals.canImport = Number(req.user.can_import ?? 1) !== 0;
+    res.locals.appPin = buildAppPinViewModel(pinSettings, { reauthFresh: hasFreshPinReauthSession(req, req.user.id) });
 
     try {
       const selfProfile = ensureSelfPerson(req.user.id, currentUser?.name || req.user.name || req.user.email, currentUser?.email || req.user.email);
@@ -10479,6 +10973,7 @@ app.get("/people", ensureAuthenticated, (req, res) => {
     phoneDefaultCountry: DEFAULT_PHONE_COUNTRY,
     profileSignatureVibeOptions: PROFILE_SIGNATURE_VIBE_OPTIONS,
     profileSignatureMaxLength: PROFILE_SIGNATURE_MAX_LENGTH,
+    appPinSecurity: buildAppPinViewModel(getUserSecuritySettings(userId), { reauthFresh: hasFreshPinReauthSession(req, userId) }),
     title: "Amigos"
   });
 });
@@ -10690,6 +11185,217 @@ app.post("/people", ensureAuthenticated, (req, res) => {
   setFlash(req, 'success', successMessage);
   return res.redirect(redirectTarget);
 });
+app.post('/people/security/pin/setup', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const currentSettings = getUserSecuritySettings(userId);
+  const redirectTarget = '/people#app-security';
+
+  try {
+    saveUserAppPinFromRequest(userId, req, { allowReauthOverride: false });
+    setFlash(req, 'success', currentSettings.pin_enabled
+      ? 'PIN atualizado e app protegido do jeitinho novo.'
+      : 'PIN ligado com sucesso. Agora seu app já sabe a hora de pedir proteção.');
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui salvar seu PIN agora.');
+  }
+
+  return res.redirect(redirectTarget);
+});
+
+app.post('/people/security/pin/disable', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const redirectTarget = '/people#app-security';
+
+  try {
+    disableUserAppPinFromRequest(userId, req, { allowReauthOverride: false });
+    setFlash(req, 'success', 'PIN desligado por aqui. O app volta a abrir sem essa trava extra.');
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui desligar o PIN agora.');
+  }
+
+  return res.redirect(redirectTarget);
+});
+
+app.get('/lock', ensureAuthenticatedIgnoringPin, (req, res) => {
+  const userId = req.user.id;
+  const settings = getUserSecuritySettings(userId);
+
+  if (!settings.pin_enabled) {
+    clearAppLockSession(req);
+    clearPinReauthSession(req);
+    return res.redirect(res.locals.dashboardHref || '/');
+  }
+
+  clearExpiredPinReauthSession(req, userId);
+  const reauthFresh = hasFreshPinReauthSession(req, userId);
+  const state = getAppSessionState(req);
+  const nextTarget = sanitizeInternalRedirectTarget(req.query.next || state.returnTo || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
+  const sessionState = ensureAppLockSession(req);
+  if (sessionState && nextTarget) {
+    sessionState.returnTo = nextTarget;
+  }
+
+  if (state.unlocked && !reauthFresh) {
+    return res.redirect(nextTarget || res.locals.dashboardHref || '/');
+  }
+
+  const currentUser = getUserRecord(userId, { includeDeleted: false }) || req.user || {};
+  const lockMode = String(req.query.mode || '').trim().toLowerCase() === 'recover' && reauthFresh ? 'recover' : 'unlock';
+
+  return res.render('lock', {
+    title: 'AcerttaPay | Desbloquear',
+    lockUser: {
+      name: currentUser.name || req.user.name || req.user.email || 'Você',
+      email: currentUser.email || req.user.email || '',
+      photo_url: getEffectiveProfilePhoto(currentUser)
+    },
+    appPinSecurity: buildAppPinViewModel(settings, { reauthFresh }),
+    lockReason: String(req.query.reason || state.reason || '').trim().toLowerCase(),
+    lockMessage: pinLockMessageForReason(req.query.reason || state.reason || ''),
+    nextTarget,
+    lockMode,
+    reauthFresh
+  });
+});
+
+app.post('/lock/unlock', ensureAuthenticatedIgnoringPin, (req, res) => {
+  const userId = req.user.id;
+  const settings = getUserSecuritySettings(userId);
+
+  if (!settings.pin_enabled) {
+    clearAppLockSession(req);
+    const redirectTarget = sanitizeInternalRedirectTarget(req.body.next || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
+    if (isAjaxLikeRequest(req)) {
+      return res.json({ ok: true, redirect: redirectTarget });
+    }
+    return res.redirect(redirectTarget);
+  }
+
+  const pinCheck = validatePinInput(req.body.pin);
+  const redirectTarget = sanitizeInternalRedirectTarget(req.body.next || getAppSessionState(req).returnTo || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
+
+  if (!pinCheck.ok || !verifyUserAppPin(userId, pinCheck.value)) {
+    registerUserAppPinFailure(userId);
+    const message = 'PIN não bateu por aqui. Confere os números e tenta de novo.';
+    if (isAjaxLikeRequest(req)) {
+      return res.status(422).json({ ok: false, message });
+    }
+    setFlash(req, 'error', message);
+    return res.redirect(buildAppLockRedirectUrl(req, { reason: 'locked', returnTo: redirectTarget }));
+  }
+
+  resetUserAppPinFailures(userId);
+  unlockAppSession(req);
+  const sessionState = ensureAppLockSession(req);
+  if (sessionState) sessionState.returnTo = '';
+
+  if (isAjaxLikeRequest(req)) {
+    return res.json({ ok: true, redirect: redirectTarget });
+  }
+
+  return res.redirect(redirectTarget);
+});
+
+app.post('/lock/engage', ensureAuthenticatedIgnoringPin, (req, res) => {
+  const reason = String(req.body.reason || req.query.reason || 'manual').trim().toLowerCase() || 'manual';
+  const returnTo = sanitizeInternalRedirectTarget(req.body.return_to || req.query.return_to || req.get('referer') || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
+  lockAppSession(req, { reason, returnTo });
+  const redirectTarget = buildAppLockRedirectUrl(req, { reason, returnTo });
+
+  if (isAjaxLikeRequest(req)) {
+    return res.json({ ok: true, redirect: redirectTarget });
+  }
+
+  return res.redirect(redirectTarget);
+});
+
+app.post('/lock/touch', ensureAuthenticatedIgnoringPin, (req, res) => {
+  const userId = req.user.id;
+  const settings = getUserSecuritySettings(userId);
+
+  if (!settings.pin_enabled) {
+    clearAppLockSession(req);
+    return res.status(204).end();
+  }
+
+  const state = getAppSessionState(req);
+  const idleSeconds = normalizePinIdleSeconds(settings.pin_idle_seconds);
+  const idleMs = idleSeconds > 0 ? idleSeconds * 1000 : 0;
+  const lastActiveAt = Number(state.lastActiveAt || 0);
+
+  if (state.unlocked && idleMs > 0 && lastActiveAt && (Date.now() - lastActiveAt) >= idleMs) {
+    return respondWithAppLock(req, res, { reason: 'idle', returnTo: state.returnTo || res.locals.dashboardHref || '/' });
+  }
+
+  if (!state.unlocked) {
+    res.set('X-App-Locked', '1');
+    res.set('X-App-Lock-Redirect', buildAppLockRedirectUrl(req, { reason: state.reason || 'locked', returnTo: state.returnTo || res.locals.dashboardHref || '/' }));
+    return res.status(423).json({ ok: false, appLocked: true, redirect: buildAppLockRedirectUrl(req, { reason: state.reason || 'locked', returnTo: state.returnTo || res.locals.dashboardHref || '/' }) });
+  }
+
+  touchAppSession(req);
+  return res.status(204).end();
+});
+
+app.get('/lock/reauth/google', ensureAuthenticatedIgnoringPin, (req, res, next) => {
+  const settings = getUserSecuritySettings(req.user.id);
+  if (!settings.pin_enabled) {
+    return res.redirect(res.locals.dashboardHref || '/');
+  }
+
+  if (!isGoogleAuthConfigured()) {
+    setFlash(req, 'error', 'O login com Google não está pronto por aqui para confirmar essa redefinição agora.');
+    return res.redirect('/lock');
+  }
+
+  startPinReauthSession(req, { returnTo: '/lock?mode=recover' });
+  return passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    prompt: 'select_account',
+    loginHint: req.user.email
+  })(req, res, next);
+});
+
+app.post('/lock/recovery/setup', ensureAuthenticatedIgnoringPin, (req, res) => {
+  const userId = req.user.id;
+  const redirectTarget = sanitizeInternalRedirectTarget(req.body.next || getAppSessionState(req).returnTo || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
+
+  if (!hasFreshPinReauthSession(req, userId)) {
+    setFlash(req, 'error', 'Antes de redefinir o PIN, preciso que você confirme sua conta Google de novo.');
+    return res.redirect('/lock');
+  }
+
+  try {
+    saveUserAppPinFromRequest(userId, req, { allowReauthOverride: true });
+    const sessionState = ensureAppLockSession(req);
+    if (sessionState) sessionState.returnTo = '';
+    setFlash(req, 'success', 'Novo PIN salvo com sucesso. Agora o app já pode destravar com ele.');
+    return res.redirect(redirectTarget);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui redefinir o PIN agora.');
+    return res.redirect('/lock?mode=recover');
+  }
+});
+
+app.post('/lock/recovery/disable', ensureAuthenticatedIgnoringPin, (req, res) => {
+  const userId = req.user.id;
+  const redirectTarget = sanitizeInternalRedirectTarget(req.body.next || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
+
+  if (!hasFreshPinReauthSession(req, userId)) {
+    setFlash(req, 'error', 'Antes de desligar o PIN, preciso que você confirme sua conta Google de novo.');
+    return res.redirect('/lock');
+  }
+
+  try {
+    disableUserAppPinFromRequest(userId, req, { allowReauthOverride: true });
+    setFlash(req, 'success', 'PIN desligado depois da confirmação com Google.');
+    return res.redirect(redirectTarget);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui desligar o PIN agora.');
+    return res.redirect('/lock?mode=recover');
+  }
+});
+
 app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const personId = Number(req.params.id);

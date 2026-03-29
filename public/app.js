@@ -2736,3 +2736,223 @@
     initAnalyticsTabs();
   }
 })();
+
+
+(function () {
+  const body = document.body;
+  if (!(body instanceof HTMLElement)) return;
+
+  const appPinEnabled = body.dataset.appPinEnabled === '1';
+  const appPinScreen = String(body.dataset.appPinScreen || 'app').toLowerCase();
+  if (!appPinEnabled || appPinScreen === 'lock') return;
+
+  const lockUrl = body.dataset.appPinLockUrl || '/lock/engage';
+  const touchUrl = body.dataset.appPinTouchUrl || '/lock/touch';
+  const idleSeconds = Math.max(0, Number(body.dataset.appPinIdleSeconds || 0) || 0);
+  const idleMs = idleSeconds > 0 ? idleSeconds * 1000 : 0;
+  const hiddenAtKey = 'op-app-pin-hidden-at';
+  const heartbeatGapMs = Math.min(30000, Math.max(10000, idleMs > 0 ? Math.floor(idleMs / 2) : 15000));
+  let idleTimer = null;
+  let touchTimer = null;
+  let lastTouchAt = 0;
+  let lastActivityAt = Date.now();
+  let lockInFlight = false;
+
+  function currentRelativeUrl() {
+    return `${window.location.pathname || '/'}${window.location.search || ''}${window.location.hash || ''}`;
+  }
+
+  function redirectToLock(url) {
+    window.location.href = url || '/lock';
+  }
+
+  async function resolveLockRedirect(response, fallbackReason) {
+    let redirectUrl = response?.headers?.get('x-app-lock-redirect') || '';
+    if (!redirectUrl && response && typeof response.clone === 'function') {
+      try {
+        const payload = await response.clone().json();
+        redirectUrl = String(payload?.redirect || '').trim();
+      } catch (_error) {}
+    }
+    if (!redirectUrl) {
+      const params = new URLSearchParams();
+      params.set('reason', fallbackReason || 'locked');
+      params.set('next', currentRelativeUrl());
+      redirectUrl = `/lock?${params.toString()}`;
+    }
+    return redirectUrl;
+  }
+
+  async function handleLockedResponse(response, fallbackReason) {
+    if (!response) return false;
+    const locked = Number(response.status || 0) === 423 || response.headers.get('x-app-locked') === '1';
+    if (!locked) return false;
+    const redirectUrl = await resolveLockRedirect(response, fallbackReason);
+    redirectToLock(redirectUrl);
+    return true;
+  }
+
+  const previousFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
+  if (previousFetch) {
+    window.fetch = async function (input, init) {
+      const response = await previousFetch(input, init);
+      if (await handleLockedResponse(response, 'locked')) {
+        const error = new Error('O app foi bloqueado por PIN.');
+        error.code = 'APP_PIN_LOCKED';
+        error.response = response;
+        throw error;
+      }
+      return response;
+    };
+  }
+
+  function clearIdleTimer() {
+    if (idleTimer) {
+      window.clearTimeout(idleTimer);
+      idleTimer = null;
+    }
+  }
+
+  function clearTouchTimer() {
+    if (touchTimer) {
+      window.clearTimeout(touchTimer);
+      touchTimer = null;
+    }
+  }
+
+  async function touchServer(force = false) {
+    if (lockInFlight) return;
+    const now = Date.now();
+    if (!force && now - lastTouchAt < heartbeatGapMs) return;
+    lastTouchAt = now;
+
+    try {
+      const response = await fetch(touchUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+      await handleLockedResponse(response, 'locked');
+    } catch (error) {
+      if (error?.code !== 'APP_PIN_LOCKED') {
+        console.warn('Não consegui atualizar o bloqueio por PIN agora.', error);
+      }
+    }
+  }
+
+  function scheduleTouchTimer() {
+    clearTouchTimer();
+    touchTimer = window.setTimeout(() => {
+      touchServer(true).finally(() => {
+        if (!lockInFlight) {
+          scheduleTouchTimer();
+        }
+      });
+    }, heartbeatGapMs);
+  }
+
+  async function lockNow(reason = 'manual', { keepalive = false } = {}) {
+    if (lockInFlight) return;
+    lockInFlight = true;
+    clearIdleTimer();
+    clearTouchTimer();
+
+    const payload = new URLSearchParams();
+    payload.set('reason', reason);
+    payload.set('return_to', currentRelativeUrl());
+
+    try {
+      const response = await fetch(lockUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: payload.toString(),
+        keepalive
+      });
+      const redirectUrl = await resolveLockRedirect(response, reason);
+      redirectToLock(redirectUrl);
+    } catch (_error) {
+      const params = new URLSearchParams();
+      params.set('reason', reason);
+      params.set('next', currentRelativeUrl());
+      redirectToLock(`/lock?${params.toString()}`);
+    }
+  }
+
+  function scheduleIdleLock() {
+    clearIdleTimer();
+    if (lockInFlight || idleMs <= 0) return;
+    const elapsedMs = Math.max(0, Date.now() - lastActivityAt);
+    const remainingMs = Math.max(0, idleMs - elapsedMs);
+    if (remainingMs <= 0) {
+      lockNow('idle');
+      return;
+    }
+    idleTimer = window.setTimeout(() => {
+      lockNow('idle');
+    }, remainingMs);
+  }
+
+  function markActivity() {
+    if (lockInFlight) return;
+    lastActivityAt = Date.now();
+    scheduleIdleLock();
+    scheduleTouchTimer();
+    touchServer(false);
+  }
+
+  function handleVisibilityReturn() {
+    const hiddenAt = Number(sessionStorage.getItem(hiddenAtKey) || 0);
+    sessionStorage.removeItem(hiddenAtKey);
+    if (lockInFlight) return;
+
+    if (idleSeconds === 0) {
+      if (hiddenAt) {
+        lockNow('background');
+        return;
+      }
+      scheduleTouchTimer();
+      touchServer(true);
+      return;
+    }
+
+    if ((hiddenAt && idleMs > 0 && (Date.now() - hiddenAt) >= idleMs) || (idleMs > 0 && (Date.now() - lastActivityAt) >= idleMs)) {
+      lockNow('background');
+      return;
+    }
+
+    scheduleIdleLock();
+    scheduleTouchTimer();
+    touchServer(true);
+  }
+
+  ['pointerdown', 'touchstart', 'mousedown'].forEach((eventName) => {
+    document.addEventListener(eventName, markActivity, { passive: true });
+  });
+  document.addEventListener('keydown', markActivity);
+
+  window.addEventListener('focus', handleVisibilityReturn, { passive: true });
+  window.addEventListener('pageshow', handleVisibilityReturn, { passive: true });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      sessionStorage.setItem(hiddenAtKey, String(Date.now()));
+      clearIdleTimer();
+      clearTouchTimer();
+      if (idleSeconds === 0) {
+        lockNow('background', { keepalive: true });
+      }
+      return;
+    }
+    handleVisibilityReturn();
+  });
+
+  scheduleIdleLock();
+  scheduleTouchTimer();
+  touchServer(true);
+})();

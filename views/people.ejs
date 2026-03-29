@@ -31,6 +31,12 @@
   const selfPhoneDisplay = selfProfile?.phone_display || '';
   const selfPhoneStored = selfProfile?.phone_e164 || selfPhoneDisplay || '';
   const selfEmail = selfProfile?.email || '';
+  const appPinSecurityState = appPinSecurity || {};
+  const appPinEnabled = !!appPinSecurityState.enabled;
+  const appPinIdleLabel = appPinSecurityState.idleLabel || '1 minuto';
+  const appPinIdleOptions = Array.isArray(appPinSecurityState.idleOptions) ? appPinSecurityState.idleOptions : [];
+  const appPinMinLength = Number(appPinSecurityState.minLength || 4) || 4;
+  const appPinMaxLength = Number(appPinSecurityState.maxLength || 6) || 6;
   const selfPixEnabled = !!selfProfile?.pix_enabled;
   const selfPixKeyType = selfProfile?.pix_key_type || '';
   const selfPixKeyValueInput = selfProfile?.pix_key_value_input || selfProfile?.pix_key_value || '';
@@ -615,6 +621,163 @@
             </div>
           </div>
         </form>
+
+        <section id="app-security" class="xl:col-span-2 rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Segurança do app</div>
+              <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">PIN e bloqueio por inatividade</h3>
+              <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Aqui você decide se o app pede um PIN numérico para abrir e depois de quanto tempo ele volta a travar sozinho.</p>
+            </div>
+            <% if (appPinEnabled) { %>
+              <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">PIN ligado</span>
+            <% } else { %>
+              <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">PIN desligado</span>
+            <% } %>
+          </div>
+
+          <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(280px,0.82fr)_minmax(0,1.18fr)] xl:items-start">
+            <div class="grid gap-4">
+              <div class="rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+                <div class="flex items-start gap-3">
+                  <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700" aria-hidden="true">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0-.967.784-1.75 1.75-1.75S15.5 10.033 15.5 11c0 .645-.35 1.208-.87 1.51-.358.208-.63.57-.63.98V15m-4-4V8a4 4 0 118 0v3m-10 0h12a1 1 0 011 1v7a1 1 0 01-1 1H7a1 1 0 01-1-1v-7a1 1 0 011-1z"></path></svg>
+                  </span>
+                  <div class="min-w-0 flex-1">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Resumo atual</div>
+                    <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
+                      <% if (appPinEnabled) { %>
+                        O app já pede PIN para destravar e hoje está configurado para bloquear <strong class="font-semibold text-slate-700 dark:text-slate-100"><%= appPinIdleLabel %></strong>.
+                      <% } else { %>
+                        Hoje ele abre direto, sem pedir PIN. Se quiser, você pode ligar essa proteção e deixar a tela financeira mais resguardada.
+                      <% } %>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="rounded-[26px] border border-sky-200/70 bg-sky-50/80 px-4 py-4 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20 sm:px-5">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Como isso se comporta</div>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Depois de ligado, o app trava sozinho ao abrir de novo ou quando passa do tempo que você escolher. Se esquecer o PIN, na tela de bloqueio dá para confirmar sua conta Google e redefinir por lá.</p>
+              </div>
+            </div>
+
+            <div class="grid gap-4">
+              <div class="rounded-[26px] border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+                <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                  <% if (!appPinEnabled) { %>
+                    <button type="button" data-app-pin-open="create" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400">Ativar PIN</button>
+                  <% } else { %>
+                    <button type="button" data-app-pin-open="change" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400">Trocar PIN</button>
+                    <form method="post" action="/lock/engage" class="contents sm:contents">
+                      <input type="hidden" name="reason" value="manual">
+                      <input type="hidden" name="return_to" value="/people#app-security">
+                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Bloquear agora</button>
+                    </form>
+                    <button type="button" data-app-pin-open="disable" class="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-white px-5 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Desligar PIN</button>
+                  <% } %>
+                </div>
+                <p class="mt-3 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Seu PIN pode ter de <%= appPinMinLength %> a <%= appPinMaxLength %> dígitos. A recomendação amiga é usar <strong class="font-semibold text-slate-700 dark:text-slate-100">6 números</strong>.</p>
+              </div>
+
+              <div class="rounded-[26px] border border-dashed border-slate-200 bg-slate-50/70 px-4 py-4 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 sm:px-5">
+                <div class="font-black text-slate-900 dark:text-white">Dica boa para não se enrolar</div>
+                <p class="mt-2">Se em algum momento esse PIN sumir da cabeça, tenta destravar normalmente. Se não rolar, a tela de bloqueio oferece a saída com Google para você redefinir sem ficar preso.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div id="appPinManageModal" class="fixed inset-0 z-[130] hidden items-center justify-center overflow-y-auto p-4 sm:p-6" aria-hidden="true">
+          <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" data-app-pin-close></div>
+          <div class="relative my-auto w-full max-w-lg rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Segurança do app</div>
+                <h4 id="appPinManageTitle" class="mt-2 text-lg font-black text-slate-900 dark:text-white">Criar PIN</h4>
+                <p id="appPinManageHint" class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Escolha um PIN numérico para proteger a abertura do app.</p>
+              </div>
+              <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800" data-app-pin-close aria-label="Fechar">✕</button>
+            </div>
+
+            <form method="post" action="/people/security/pin/setup" class="mt-5 grid gap-4" id="appPinManageForm" autocomplete="off">
+              <input type="hidden" name="mode" id="appPinManageMode" value="create">
+
+              <div id="appPinCurrentGroup" class="hidden">
+                <label class="block">
+                  <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">PIN atual</span>
+                  <div class="relative">
+                    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="current_pin" id="appPinCurrentInput" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-14 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••">
+                    <button type="button" data-app-pin-visibility-toggle data-target="appPinCurrentInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
+                  </div>
+                  <div class="mt-3" data-pin-slots data-input-id="appPinCurrentInput" data-max-length="<%= appPinMaxLength %>"></div>
+                </label>
+              </div>
+
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Novo PIN</span>
+                <div class="relative">
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="pin" id="appPinNewInput" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-14 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <button type="button" data-app-pin-visibility-toggle data-target="appPinNewInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
+                </div>
+                <div class="mt-3" data-pin-slots data-input-id="appPinNewInput" data-max-length="<%= appPinMaxLength %>"></div>
+              </label>
+
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Confirmar PIN</span>
+                <div class="relative">
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="pin_confirm" id="appPinConfirmInput" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-14 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <button type="button" data-app-pin-visibility-toggle data-target="appPinConfirmInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
+                </div>
+                <div class="mt-3" data-pin-slots data-input-id="appPinConfirmInput" data-max-length="<%= appPinMaxLength %>"></div>
+              </label>
+
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Depois de quanto tempo travar de novo</span>
+                <select name="pin_idle_seconds" id="appPinIdleSelect" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-bold text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20">
+                  <% appPinIdleOptions.forEach((option) => { %>
+                    <option value="<%= option.value %>" <%= option.selected ? 'selected' : '' %>><%= option.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button type="button" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto" data-app-pin-close>Cancelar</button>
+                <button type="submit" id="appPinManageSubmit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400 sm:w-auto">Salvar PIN</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div id="appPinDisableModal" class="fixed inset-0 z-[130] hidden items-center justify-center overflow-y-auto p-4 sm:p-6" aria-hidden="true">
+          <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" data-app-pin-disable-close></div>
+          <div class="relative my-auto w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-rose-600 dark:text-rose-300">Desligar PIN</div>
+                <h4 class="mt-2 text-lg font-black text-slate-900 dark:text-white">Tem certeza que quer tirar essa camada?</h4>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Para confirmar, me conta o PIN atual. Aí eu desligo essa proteção extra sem mexer na sua conta Google.</p>
+              </div>
+              <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800" data-app-pin-disable-close aria-label="Fechar">✕</button>
+            </div>
+
+            <form method="post" action="/people/security/pin/disable" class="mt-5 grid gap-4" id="appPinDisableForm" autocomplete="off">
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">PIN atual</span>
+                <div class="relative">
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="current_pin" id="appPinDisableInput" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-14 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <button type="button" data-app-pin-visibility-toggle data-target="appPinDisableInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
+                </div>
+                <div class="mt-3" data-pin-slots data-input-id="appPinDisableInput" data-max-length="<%= appPinMaxLength %>"></div>
+              </label>
+
+              <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button type="button" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto" data-app-pin-disable-close>Cancelar</button>
+                <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 bg-rose-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-rose-500/20 transition-all hover:-translate-y-0.5 hover:bg-rose-700 sm:w-auto">Desligar PIN</button>
+              </div>
+            </form>
+          </div>
+        </div>
     </section>
   <% } %>
 
@@ -1824,6 +1987,246 @@ function bindPixForm(prefix, options = {}) {
     });
   }
 
+
+  function createPinSlotMarkup(maxLength, filledCount) {
+    const total = Math.max(1, Number(maxLength || 0) || 6);
+    const active = Math.max(0, Math.min(total, Number(filledCount || 0) || 0));
+    return Array.from({ length: total }, (_, index) => {
+      const filled = index < active;
+      return `
+        <span class="inline-flex h-3 w-3 rounded-full border transition-all ${filled
+          ? 'border-slate-900 bg-slate-900 dark:border-amber-400 dark:bg-amber-400'
+          : 'border-slate-300 bg-transparent dark:border-slate-600'}"></span>
+      `;
+    }).join('');
+  }
+
+  function renderPinSlots(container, input) {
+    if (!(container instanceof HTMLElement) || !(input instanceof HTMLInputElement)) return;
+    const maxLength = Math.max(1, Number(container.dataset.maxLength || input.maxLength || 6) || 6);
+    const digits = String(input.value || '').replace(/\D/g, '').slice(0, maxLength);
+    if (digits !== input.value) {
+      input.value = digits;
+    }
+    container.innerHTML = `
+      <div class="flex items-center justify-center gap-2">${createPinSlotMarkup(maxLength, digits.length)}</div>
+      <div class="mt-2 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">${digits.length}/${maxLength} dígitos</div>
+    `;
+  }
+
+  function bindPinSlotPreview(container) {
+    if (!(container instanceof HTMLElement) || container.dataset.pinSlotsBound === '1') return;
+    const inputId = String(container.dataset.inputId || '').trim();
+    if (!inputId) return;
+    const input = document.getElementById(inputId);
+    if (!(input instanceof HTMLInputElement)) return;
+    const sync = () => renderPinSlots(container, input);
+    input.addEventListener('input', sync);
+    input.addEventListener('change', sync);
+    container.dataset.pinSlotsBound = '1';
+    sync();
+  }
+
+  function setupPinVisibilityToggles(root) {
+    const scope = root instanceof HTMLElement || root instanceof Document ? root : document;
+    scope.querySelectorAll('[data-app-pin-visibility-toggle]').forEach((button) => {
+      if (!(button instanceof HTMLButtonElement) || button.dataset.pinVisibilityBound === '1') return;
+      const target = document.getElementById(button.dataset.target || '');
+      if (!(target instanceof HTMLInputElement)) return;
+      const syncLabel = () => {
+        const visible = target.type === 'text';
+        button.textContent = visible ? 'Ocultar' : 'Ver';
+        button.setAttribute('aria-pressed', visible ? 'true' : 'false');
+      };
+      button.addEventListener('click', () => {
+        target.type = target.type === 'password' ? 'text' : 'password';
+        syncLabel();
+        target.focus();
+        target.setSelectionRange?.(target.value.length, target.value.length);
+      });
+      button.dataset.pinVisibilityBound = '1';
+      syncLabel();
+    });
+  }
+
+  function resetPinFieldState(root) {
+    if (!(root instanceof HTMLElement)) return;
+    root.querySelectorAll('input[inputmode="numeric"]').forEach((input) => {
+      if (!(input instanceof HTMLInputElement)) return;
+      input.value = String(input.value || '').replace(/\D/g, '');
+      input.type = 'password';
+    });
+    root.querySelectorAll('[data-app-pin-visibility-toggle]').forEach((button) => {
+      if (button instanceof HTMLButtonElement) {
+        button.textContent = 'Ver';
+        button.setAttribute('aria-pressed', 'false');
+      }
+    });
+    root.querySelectorAll('[data-pin-slots]').forEach((container) => bindPinSlotPreview(container));
+  }
+
+  function setPinModalVisibility(modal, isOpen) {
+    if (!(modal instanceof HTMLElement)) return;
+    modal.classList.toggle('hidden', !isOpen);
+    modal.classList.toggle('flex', isOpen);
+    modal.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+    document.body.classList.toggle('overflow-hidden', !!isOpen);
+  }
+
+  function bindAppPinSecurityControls() {
+    const manageModal = document.getElementById('appPinManageModal');
+    const disableModal = document.getElementById('appPinDisableModal');
+    if (!(manageModal instanceof HTMLElement) || !(disableModal instanceof HTMLElement)) return;
+
+    const manageForm = document.getElementById('appPinManageForm');
+    const manageTitle = document.getElementById('appPinManageTitle');
+    const manageHint = document.getElementById('appPinManageHint');
+    const manageModeInput = document.getElementById('appPinManageMode');
+    const currentGroup = document.getElementById('appPinCurrentGroup');
+    const currentInput = document.getElementById('appPinCurrentInput');
+    const newInput = document.getElementById('appPinNewInput');
+    const confirmInput = document.getElementById('appPinConfirmInput');
+    const idleSelect = document.getElementById('appPinIdleSelect');
+    const manageSubmit = document.getElementById('appPinManageSubmit');
+    const disableForm = document.getElementById('appPinDisableForm');
+    const disableInput = document.getElementById('appPinDisableInput');
+
+    if (!(manageForm instanceof HTMLFormElement) || !(disableForm instanceof HTMLFormElement) ||
+        !(manageTitle instanceof HTMLElement) || !(manageHint instanceof HTMLElement) ||
+        !(manageModeInput instanceof HTMLInputElement) || !(currentGroup instanceof HTMLElement) ||
+        !(newInput instanceof HTMLInputElement) || !(confirmInput instanceof HTMLInputElement) ||
+        !(idleSelect instanceof HTMLSelectElement) || !(manageSubmit instanceof HTMLButtonElement) ||
+        !(disableInput instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const openManageButtons = Array.from(document.querySelectorAll('[data-app-pin-open="create"], [data-app-pin-open="change"]'));
+    const openDisableButton = document.querySelector('[data-app-pin-open="disable"]');
+    const manageCloseButtons = Array.from(manageModal.querySelectorAll('[data-app-pin-close]'));
+    const disableCloseButtons = Array.from(disableModal.querySelectorAll('[data-app-pin-disable-close]'));
+    const selectedIdleOption = idleSelect.value;
+
+    manageModal.querySelectorAll('[data-pin-slots]').forEach((container) => bindPinSlotPreview(container));
+    disableModal.querySelectorAll('[data-pin-slots]').forEach((container) => bindPinSlotPreview(container));
+    setupPinVisibilityToggles(manageModal);
+    setupPinVisibilityToggles(disableModal);
+
+    const closeAll = () => {
+      setPinModalVisibility(manageModal, false);
+      setPinModalVisibility(disableModal, false);
+    };
+
+    const resetManageForm = () => {
+      manageForm.reset();
+      manageModeInput.value = 'create';
+      idleSelect.value = selectedIdleOption;
+      currentGroup.classList.add('hidden');
+      currentInput.required = false;
+      manageTitle.textContent = 'Criar PIN';
+      manageHint.textContent = 'Escolha um PIN numérico para proteger a abertura do app.';
+      manageSubmit.textContent = 'Salvar PIN';
+      resetPinFieldState(manageModal);
+    };
+
+    const openManage = (mode) => {
+      closeAll();
+      resetManageForm();
+      const safeMode = mode === 'change' ? 'change' : 'create';
+      manageModeInput.value = safeMode;
+      const changing = safeMode === 'change';
+      currentGroup.classList.toggle('hidden', !changing);
+      currentInput.required = changing;
+      manageTitle.textContent = changing ? 'Trocar PIN' : 'Criar PIN';
+      manageHint.textContent = changing
+        ? 'Confirme o PIN atual e depois escolha o novo jeitinho de destravar o app.'
+        : 'Escolha um PIN numérico para proteger a abertura do app.';
+      manageSubmit.textContent = changing ? 'Atualizar PIN' : 'Salvar PIN';
+      setPinModalVisibility(manageModal, true);
+      window.setTimeout(() => {
+        (changing ? currentInput : newInput).focus();
+      }, 40);
+    };
+
+    const resetDisableForm = () => {
+      disableForm.reset();
+      resetPinFieldState(disableModal);
+    };
+
+    const openDisable = () => {
+      closeAll();
+      resetDisableForm();
+      setPinModalVisibility(disableModal, true);
+      window.setTimeout(() => disableInput.focus(), 40);
+    };
+
+    openManageButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const mode = button.getAttribute('data-app-pin-open') || 'create';
+        openManage(mode);
+      });
+    });
+
+    if (openDisableButton instanceof HTMLButtonElement) {
+      openDisableButton.addEventListener('click', openDisable);
+    }
+
+    manageCloseButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        resetManageForm();
+        setPinModalVisibility(manageModal, false);
+      });
+    });
+
+    disableCloseButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        resetDisableForm();
+        setPinModalVisibility(disableModal, false);
+      });
+    });
+
+    manageModal.addEventListener('click', (event) => {
+      if (event.target === manageModal) {
+        resetManageForm();
+        setPinModalVisibility(manageModal, false);
+      }
+    });
+
+    disableModal.addEventListener('click', (event) => {
+      if (event.target === disableModal) {
+        resetDisableForm();
+        setPinModalVisibility(disableModal, false);
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      if (!manageModal.classList.contains('hidden')) {
+        resetManageForm();
+        setPinModalVisibility(manageModal, false);
+      }
+      if (!disableModal.classList.contains('hidden')) {
+        resetDisableForm();
+        setPinModalVisibility(disableModal, false);
+      }
+    });
+
+    manageForm.addEventListener('submit', () => {
+      manageSubmit.disabled = true;
+      manageSubmit.textContent = 'Salvando...';
+    });
+
+    disableForm.addEventListener('submit', (event) => {
+      const submitButton = disableForm.querySelector('button[type="submit"]');
+      if (submitButton instanceof HTMLButtonElement) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Desligando...';
+      }
+    });
+
+    resetManageForm();
+    resetDisableForm();
+  }
+
   window.addEventListener('load', () => {
     bindPhoneField('self');
     bindPhoneField('contact');
@@ -1834,6 +2237,7 @@ function bindPixForm(prefix, options = {}) {
     bindNetworkDiscoveryControls();
     bindProfilePhotoForm();
     bindProfileSignatureForm();
+    bindAppPinSecurityControls();
 
     const highlighted = document.querySelector('[id^="friend-request-"][class*="ring-2"]');
     if (highlighted) {

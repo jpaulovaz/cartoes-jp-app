@@ -52,6 +52,59 @@ if (!columnExists("users", "profile_photo_mode")) {
   db.exec("ALTER TABLE users ADD COLUMN profile_photo_mode TEXT NOT NULL DEFAULT 'default';");
 }
 
+// ===== SEGURANCA DO APP =====
+db.exec(`
+CREATE TABLE IF NOT EXISTS user_security_settings (
+  user_id INTEGER PRIMARY KEY,
+  pin_enabled INTEGER NOT NULL DEFAULT 0,
+  pin_hash TEXT,
+  pin_salt TEXT,
+  pin_kdf TEXT NOT NULL DEFAULT 'scrypt-v1',
+  pin_idle_seconds INTEGER NOT NULL DEFAULT 60,
+  failed_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until TEXT,
+  last_changed_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+`);
+
+if (!columnExists("user_security_settings", "pin_enabled")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN pin_enabled INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("user_security_settings", "pin_hash")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN pin_hash TEXT;");
+}
+
+if (!columnExists("user_security_settings", "pin_salt")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN pin_salt TEXT;");
+}
+
+if (!columnExists("user_security_settings", "pin_kdf")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN pin_kdf TEXT NOT NULL DEFAULT 'scrypt-v1';");
+}
+
+if (!columnExists("user_security_settings", "pin_idle_seconds")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN pin_idle_seconds INTEGER NOT NULL DEFAULT 60;");
+}
+
+if (!columnExists("user_security_settings", "failed_attempts")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN failed_attempts INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("user_security_settings", "locked_until")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN locked_until TEXT;");
+}
+
+if (!columnExists("user_security_settings", "last_changed_at")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN last_changed_at TEXT;");
+}
+
+if (!columnExists("user_security_settings", "updated_at")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN updated_at TEXT;");
+}
+
 // ===== TABELAS EXISTENTES COM user_id =====
 db.exec(`
 CREATE TABLE IF NOT EXISTS cards (

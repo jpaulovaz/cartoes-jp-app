@@ -137,7 +137,18 @@
     }
   </style>
 </head>
-<body class="op-shell text-slate-800 dark:text-slate-200 antialiased selection:bg-blue-300 selection:text-blue-900 flex min-h-screen flex-col font-sans" data-push-public-key="<%= typeof pushPublicKey !== 'undefined' ? pushPublicKey : '' %>" data-push-configured="<%= pushNotificationsEnabled ? '1' : '0' %>">
+<%
+  const appPinContext = (typeof appPin !== 'undefined' && appPin) ? appPin : {};
+  const appPinScreen = (typeof currentPath !== 'undefined' && currentPath === '/lock') ? 'lock' : 'app';
+%>
+<body class="op-shell text-slate-800 dark:text-slate-200 antialiased selection:bg-blue-300 selection:text-blue-900 flex min-h-screen flex-col font-sans"
+      data-push-public-key="<%= typeof pushPublicKey !== 'undefined' ? pushPublicKey : '' %>"
+      data-push-configured="<%= pushNotificationsEnabled ? '1' : '0' %>"
+      data-app-pin-enabled="<%= appPinContext.enabled ? '1' : '0' %>"
+      data-app-pin-idle-seconds="<%= Number(appPinContext.idleSeconds || 0) %>"
+      data-app-pin-lock-url="/lock/engage"
+      data-app-pin-touch-url="/lock/touch"
+      data-app-pin-screen="<%= appPinScreen %>">
   <div class="mobile-top-chrome-fix" aria-hidden="true"></div>
 
   <% const dNav = new Date();

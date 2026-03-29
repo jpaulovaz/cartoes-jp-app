@@ -2436,7 +2436,7 @@ function ensureDefaultOwnerPerson(userId, preferredName, preferredEmail = null) 
 }
 
 function renderAdmin(res, { error = null, success = null, activeSection = 'access' } = {}) {
-  return res.render('admin', {
+  return safeRenderView(res, 'admin', {
     title: 'AcerttaPay | Administração',
     users: getAllUsers(),
     error,
@@ -2464,7 +2464,7 @@ function buildSetupFormSeed(overrides = {}) {
 }
 
 function renderSetup(res, { error = null, success = null, form = {} } = {}) {
-  return res.render('setup', {
+  return safeRenderView(res, 'setup', {
     title: 'AcerttaPay | Primeira configuração',
     error,
     success,
@@ -2501,9 +2501,16 @@ function clearImportPreview(req) {
 
 function setNoStoreHeaders(res) {
   if (!res || typeof res.set !== 'function') return;
+  if (res.headersSent || res.writableEnded) return;
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.set('Pragma', 'no-cache');
   res.set('Expires', '0');
+}
+
+function safeRenderView(res, view, locals = {}) {
+  if (!res || typeof res.render !== 'function') return null;
+  if (res.headersSent || res.writableEnded) return null;
+  return res.render(view, locals);
 }
 
 function getPinPepper() {
@@ -3427,7 +3434,8 @@ function logFriendlyRouteError(req, error, details) {
 }
 
 function renderFriendlyErrorPage(res, { status = 500, message, actionHref = '/', actionLabel = 'Voltar para o app' } = {}) {
-  return res.status(status).render('error', {
+  res.status(status);
+  return safeRenderView(res, 'error', {
     title: 'AcerttaPay | Opa',
     errorTitle: status >= 500 ? 'Deu uma tropeçada por aqui' : 'Tem um ajuste pedindo atenção',
     errorMessage: message,
@@ -3745,11 +3753,11 @@ app.get('/login', (req, res) => {
     notice = 'Tudo pronto por aqui. Agora é só entrar com a conta principal do Google e começar.';
   }
 
-  res.render('login_oauth', { error, notice });
+  return safeRenderView(res, 'login_oauth', { error, notice });
 });
 
 app.get(['/privacy-policy', '/politica-de-privacidade'], (req, res) => {
-  res.render('privacy-policy', {
+  return safeRenderView(res, 'privacy-policy', {
     updatedAt: '14/03/2026'
   });
 });
@@ -5080,7 +5088,7 @@ function renderSharedDebtsPage(req, res, { archiveMode = false } = {}) {
   }
 
   const payload = buildSharedDebtsPagePayload(userId, req.query, archiveMode);
-  return res.render('shared-debts', {
+  return safeRenderView(res, 'shared-debts', {
     title: archiveMode ? 'AcerttaPay | Arquivo de cobranças' : 'AcerttaPay | Cobranças',
     ...payload,
     formatBRLFromCents,
@@ -8865,7 +8873,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
   const cards = getActiveCards(userId).map(({ id, name, close_day, due_day, brand }) => ({ id, name, close_day, due_day, brand }));
   const purchaseCategories = getPurchaseCategories(userId);
 
-  res.render("home", {
+  return safeRenderView(res, "home", {
     groupedRecent: groupedRecentDisplay,
     featuredOpenGroup,
     formatBRLFromCents,
@@ -11314,7 +11322,7 @@ app.get("/people", ensureAuthenticated, (req, res) => {
   const pendingFriendRequests = getPendingReceivedFriendRequests(userId);
   const highlightedFriendRequestId = Number(req.query.friendRequest || req.query.friend_request || 0) || null;
 
-  res.render("people", {
+  return safeRenderView(res, "people", {
     selfPerson,
     contacts,
     people: contacts,
@@ -11811,7 +11819,7 @@ app.get('/lock', ensureAuthenticatedIgnoringPin, (req, res) => {
     ? guardView.noticeMessage || baseLockMessage
     : baseLockMessage;
 
-  return res.render('lock', {
+  return safeRenderView(res, 'lock', {
     title: 'AcerttaPay | Desbloquear',
     lockUser: {
       name: currentUser.name || req.user.name || req.user.email || 'Você',
@@ -12371,7 +12379,7 @@ app.post("/people/:id/delete", ensureAuthenticated, (req, res) => {
 // Cards
 app.get("/cards", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  res.render("cards", { cards: getCards(userId) });
+  return safeRenderView(res, "cards", { cards: getCards(userId) });
 });
 
 app.post("/cards", ensureAuthenticated, (req, res) => {
@@ -12973,7 +12981,7 @@ app.get("/import", ensureAuthenticated, ensureCanImport, (req, res) => {
   const preview = req.session?.importPreview || null;
   const formSeed = preview?.formSeed || res.locals.importFormSeed || null;
 
-  res.render("import", {
+  return safeRenderView(res, "import", {
     cards: getActiveCards(userId),
     error: null,
     formSeed,
@@ -13474,7 +13482,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     }
   }
 
-  res.render("detalhamento", {
+  return safeRenderView(res, "detalhamento", {
     title: "Meu Detalhamento",
     year: currentYear,
     month: currentMonth,
@@ -13648,7 +13656,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   const draftQueueSummaryForMonth = getSharedDebtSendQueueDraftSummary(userId, { month, year });
 
-  res.render("month", {
+  return safeRenderView(res, "month", {
     month,
     year,
     txns,
@@ -13927,7 +13935,7 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
     Number(txn.card_id || 0)
   ]);
 
-  res.render("txn", {
+  return safeRenderView(res, "txn", {
     txn,
     people,
     selected,
@@ -16115,7 +16123,7 @@ app.get("/analytics/:year/:month", ensureAuthenticated, (req, res) => {
   const { month, year } = parsed;
 
   const viewModel = buildMonthlyReviewViewModel(userId, month, year);
-  res.render("analytics", {
+  return safeRenderView(res, "analytics", {
     ...viewModel,
     formatBRLFromCents
   });
@@ -16128,7 +16136,7 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
   const { month, year } = parsed;
 
   const viewModel = buildMonthlyReviewViewModel(userId, month, year);
-  res.render("summary", {
+  return safeRenderView(res, "summary", {
     ...viewModel,
     formatBRLFromCents
   });
@@ -16617,7 +16625,7 @@ app.get("/share/:year/:month/:personId", ensureAuthenticated, async (req, res) =
     remainingCents: exportData.remaining_cents
   });
 
-  res.render("share", { month, year, itemOrder, shareContext, ...exportData, formatBRLFromCents });
+  return safeRenderView(res, "share", { month, year, itemOrder, shareContext, ...exportData, formatBRLFromCents });
 });
 
 app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, async (req, res) => {
@@ -16649,7 +16657,7 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, async (req, res
     remainingCents: exportData.remaining_cents
   });
 
-  res.render("whatsapp", { month, year, itemOrder, shareContext, ...exportData, person: decoratedPerson, formatBRLFromCents });
+  return safeRenderView(res, "whatsapp", { month, year, itemOrder, shareContext, ...exportData, person: decoratedPerson, formatBRLFromCents });
 });
 
 function maskPhoneForLog(rawPhone) {
@@ -17567,7 +17575,7 @@ app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
 app.use((req, res, next) => {
   if (res.headersSent) return next();
   res.status(404);
-  return res.render('error', {
+  return safeRenderView(res, 'error', {
     title: 'AcerttaPay | Opa',
     errorTitle: 'Deu uma tropeçadinha no caminho',
     errorMessage: 'Essa página não apareceu por aqui. Bora voltar para um cantinho conhecido do app?',

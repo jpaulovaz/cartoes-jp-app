@@ -73,6 +73,8 @@
   const guardNoticeTone = pinGuard.noticeTone || 'neutral';
   const guardNoticeTitle = pinGuard.noticeTitle || '';
   const guardNoticeMessage = pinGuard.noticeMessage || '';
+  const passkeyLock = appPasskeyLock || {};
+  const passkeyUnlockEnabled = !!passkeyLock.enabled;
 %>
 <body class="op-auth-page min-h-screen font-sans">
   <main class="op-lock-main mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center sm:p-6">
@@ -139,6 +141,14 @@
 
               <button type="submit" id="unlockSubmit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400" <%= unlockTemporarilyDisabled ? 'disabled aria-disabled="true"' : '' %>>Desbloquear app</button>
             </form>
+
+            <div class="mt-4 rounded-[24px] border border-violet-200 bg-violet-50/70 px-4 py-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20">
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Atalho deste aparelho</div>
+              <p id="lockPasskeyFeedback" class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= passkeyLock.message || 'Se este aparelho topar, você pode entrar com a proteção dele e deixar o PIN como plano B.' %></p>
+              <% if (passkeyUnlockEnabled) { %>
+                <button type="button" id="lockPasskeyButton" class="mt-4 inline-flex w-full items-center justify-center rounded-2xl border border-violet-200 bg-white px-5 py-3 text-sm font-black text-violet-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-950 dark:text-violet-200 dark:hover:bg-slate-900">Entrar com este aparelho</button>
+              <% } %>
+            </div>
 
             <div class="mt-5 grid gap-3 sm:grid-cols-2">
               <a href="/lock/reauth/google" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-900">Esqueci o PIN</a>
@@ -228,12 +238,15 @@
       const guardMessage = document.querySelector('[data-lock-guard-message]');
       const countdownNode = document.querySelector('[data-lock-countdown]');
       const googleRecoveryLink = document.querySelector('a[href="/lock/reauth/google"]');
+      const passkeyButton = document.getElementById('lockPasskeyButton');
+      const passkeyFeedback = document.getElementById('lockPasskeyFeedback');
       const pinMaxLength = <%= pinMaxLength %>;
       const pinMinLength = <%= pinMinLength %>;
       const nextUrl = <%- JSON.stringify(safeNext) %>;
       const initialLockUrl = `${window.location.pathname || '/lock'}${window.location.search || ''}`;
       const initialReason = <%- JSON.stringify(lockReason || 'locked') %>;
       const unlockInitiallyDisabled = <%= unlockTemporarilyDisabled ? 'true' : 'false' %>;
+      const passkeyUnlockEnabled = <%= passkeyUnlockEnabled ? 'true' : 'false' %>;
       const requiresReauth = <%= guardRequiresReauth ? 'true' : 'false' %>;
       const initialCooldownSeconds = <%= Number(pinGuard.cooldownRemainingSeconds || 0) %>;
       let activeInput = unlockInput;
@@ -438,6 +451,137 @@
         }
       }
 
+      function setPasskeyFeedback(message, tone = 'slate') {
+        if (!(passkeyFeedback instanceof HTMLElement)) return;
+        const safeMessage = String(message || '').trim();
+        passkeyFeedback.textContent = safeMessage;
+        passkeyFeedback.classList.remove('text-slate-600', 'text-violet-700', 'text-emerald-700', 'text-amber-700', 'text-rose-700', 'dark:text-slate-300', 'dark:text-violet-200', 'dark:text-emerald-200', 'dark:text-amber-200', 'dark:text-rose-200');
+        if (tone === 'violet') {
+          passkeyFeedback.classList.add('text-violet-700', 'dark:text-violet-200');
+        } else if (tone === 'emerald') {
+          passkeyFeedback.classList.add('text-emerald-700', 'dark:text-emerald-200');
+        } else if (tone === 'amber') {
+          passkeyFeedback.classList.add('text-amber-700', 'dark:text-amber-200');
+        } else if (tone === 'rose') {
+          passkeyFeedback.classList.add('text-rose-700', 'dark:text-rose-200');
+        } else {
+          passkeyFeedback.classList.add('text-slate-600', 'dark:text-slate-300');
+        }
+      }
+
+      function base64UrlToUint8Array(value) {
+        const safe = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+        const padded = safe + '='.repeat((4 - (safe.length % 4 || 4)) % 4);
+        const binary = window.atob(padded);
+        return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      }
+
+      function bufferToBase64Url(value) {
+        const bytes = value instanceof ArrayBuffer ? new Uint8Array(value) : value instanceof Uint8Array ? value : new Uint8Array([]);
+        let binary = '';
+        bytes.forEach((byte) => {
+          binary += String.fromCharCode(byte);
+        });
+        return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+      }
+
+      function toPublicKeyCredentialJSON(value) {
+        if (value instanceof ArrayBuffer) {
+          return bufferToBase64Url(value);
+        }
+        if (ArrayBuffer.isView(value)) {
+          return bufferToBase64Url(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+        }
+        if (Array.isArray(value)) {
+          return value.map((entry) => toPublicKeyCredentialJSON(entry));
+        }
+        if (value && typeof value === 'object') {
+          return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, toPublicKeyCredentialJSON(entry)]));
+        }
+        return value;
+      }
+
+      function decodeAuthenticationOptions(options) {
+        const publicKey = options ? JSON.parse(JSON.stringify(options)) : {};
+        if (publicKey.challenge) publicKey.challenge = base64UrlToUint8Array(publicKey.challenge);
+        if (Array.isArray(publicKey.allowCredentials)) {
+          publicKey.allowCredentials = publicKey.allowCredentials.map((credential) => ({
+            ...credential,
+            id: base64UrlToUint8Array(credential.id)
+          }));
+        }
+        return publicKey;
+      }
+
+      async function handlePasskeyUnlock() {
+        if (!(passkeyButton instanceof HTMLButtonElement) || passkeyButton.disabled) return;
+        if (!(window.PublicKeyCredential && window.isSecureContext && navigator.credentials && typeof navigator.credentials.get === 'function')) {
+          setPasskeyFeedback('Neste navegador ou endereço esse desbloqueio ainda não ficou disponível.', 'amber');
+          return;
+        }
+
+        passkeyButton.disabled = true;
+        passkeyButton.setAttribute('aria-disabled', 'true');
+        passkeyButton.textContent = 'Abrindo...';
+        setPasskeyFeedback('Preparando o desbloqueio deste aparelho...', 'violet');
+
+        try {
+          const optionsResponse = await fetch('/lock/passkey/options', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-AcerttaPay-Async': '1'
+            },
+            body: JSON.stringify({ next: nextUrl })
+          });
+          const optionsPayload = await optionsResponse.json().catch(() => ({}));
+          if (!optionsResponse.ok || !optionsPayload.ok || !optionsPayload.options) {
+            throw new Error(optionsPayload.message || 'Não consegui preparar o desbloqueio deste aparelho agora.');
+          }
+
+          const credential = await navigator.credentials.get({ publicKey: decodeAuthenticationOptions(optionsPayload.options) });
+          if (!(credential instanceof PublicKeyCredential)) {
+            throw new Error('Esse aparelho não confirmou o desbloqueio agora.');
+          }
+
+          const verifyResponse = await fetch('/lock/passkey/verify', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-AcerttaPay-Async': '1'
+            },
+            body: JSON.stringify({
+              ...toPublicKeyCredentialJSON(credential),
+              next: nextUrl
+            })
+          });
+          const verifyPayload = await verifyResponse.json().catch(() => ({}));
+          if (!verifyResponse.ok || !verifyPayload.ok) {
+            throw new Error(verifyPayload.message || 'Não consegui confirmar esse desbloqueio agora.');
+          }
+
+          const redirectTo = verifyPayload.redirect || nextUrl || '/';
+          setPasskeyFeedback('Pronto, deu para entrar com este aparelho.', 'emerald');
+          broadcastPinState('unlocked', { redirect: redirectTo });
+          window.location.href = redirectTo;
+        } catch (error) {
+          const safeMessage = error && typeof error === 'object' && 'name' in error && error.name === 'NotAllowedError'
+            ? 'Tudo bem. Parece que esse desbloqueio foi cancelado antes de terminar.'
+            : (error && error.message) ? error.message : 'Não consegui destravar com este aparelho agora.';
+          setPasskeyFeedback(safeMessage, safeMessage.includes('cancelado') ? 'amber' : 'rose');
+        } finally {
+          if (passkeyButton instanceof HTMLButtonElement) {
+            passkeyButton.disabled = false;
+            passkeyButton.setAttribute('aria-disabled', 'false');
+            passkeyButton.textContent = 'Entrar com este aparelho';
+          }
+        }
+      }
+
       function openSyncChannel() {
         try {
           if (typeof window.BroadcastChannel === 'function') {
@@ -543,6 +687,18 @@
 
       document.addEventListener('keydown', handlePhysicalKeyboard);
 
+      if (passkeyButton instanceof HTMLButtonElement) {
+        if (!(window.PublicKeyCredential && window.isSecureContext && navigator.credentials && typeof navigator.credentials.get === 'function')) {
+          passkeyButton.disabled = true;
+          passkeyButton.setAttribute('aria-disabled', 'true');
+          setPasskeyFeedback('Neste navegador ou endereço esse desbloqueio ainda não ficou disponível.', 'amber');
+        } else if (passkeyUnlockEnabled) {
+          passkeyButton.addEventListener('click', () => {
+            handlePasskeyUnlock().catch(() => {});
+          });
+        }
+      }
+
       if (unlockForm instanceof HTMLFormElement && unlockSubmit instanceof HTMLButtonElement) {
         unlockForm.addEventListener('submit', (event) => {
           if (unlockDisabled || requiresReauth) {
@@ -595,7 +751,6 @@
         focusTarget?.focus();
       }, 40);
     })();
-  </script>
   </script>
 </body>
 </html>

@@ -105,6 +105,70 @@ if (!columnExists("user_security_settings", "updated_at")) {
   db.exec("ALTER TABLE user_security_settings ADD COLUMN updated_at TEXT;");
 }
 
+// ===== PASSKEYS / DESBLOQUEIO PELO APARELHO =====
+db.exec(`
+CREATE TABLE IF NOT EXISTS user_passkeys (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  label TEXT,
+  public_key TEXT NOT NULL,
+  counter INTEGER NOT NULL DEFAULT 0,
+  device_type TEXT,
+  backed_up INTEGER NOT NULL DEFAULT 0,
+  transports TEXT,
+  aaguid TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  last_used_at TEXT,
+  last_used_origin TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+`);
+
+if (!columnExists("user_passkeys", "label")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN label TEXT;");
+}
+
+if (!columnExists("user_passkeys", "public_key")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN public_key TEXT NOT NULL DEFAULT '';");
+}
+
+if (!columnExists("user_passkeys", "counter")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN counter INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("user_passkeys", "device_type")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN device_type TEXT;");
+}
+
+if (!columnExists("user_passkeys", "backed_up")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN backed_up INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("user_passkeys", "transports")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN transports TEXT;");
+}
+
+if (!columnExists("user_passkeys", "aaguid")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN aaguid TEXT;");
+}
+
+if (!columnExists("user_passkeys", "created_at")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN created_at TEXT NOT NULL DEFAULT '';");
+}
+
+if (!columnExists("user_passkeys", "updated_at")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN updated_at TEXT NOT NULL DEFAULT '';");
+}
+
+if (!columnExists("user_passkeys", "last_used_at")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN last_used_at TEXT;");
+}
+
+if (!columnExists("user_passkeys", "last_used_origin")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN last_used_origin TEXT;");
+}
+
 // ===== TABELAS EXISTENTES COM user_id =====
 db.exec(`
 CREATE TABLE IF NOT EXISTS cards (
@@ -981,6 +1045,8 @@ CREATE INDEX IF NOT EXISTS idx_friend_requests_pair_status ON friend_requests(re
 CREATE INDEX IF NOT EXISTS idx_friendships_pair_status ON friendships(user_low_id, user_high_id, status);
 CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_person ON person_app_links(owner_user_id, person_id);
 CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_linked ON person_app_links(owner_user_id, linked_user_id);
+CREATE INDEX IF NOT EXISTS idx_user_passkeys_user_created ON user_passkeys(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_passkeys_user_last_used ON user_passkeys(user_id, last_used_at DESC);
 `);
 
 if (!columnExists("monthly_finances", "amount_mode")) {

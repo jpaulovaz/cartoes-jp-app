@@ -92,6 +92,18 @@ const {
   getPinFailurePolicy,
   formatPinCooldownLabel
 } = require('./src/pinSecurity');
+const {
+  PASSKEY_MAX_CREDENTIALS_PER_USER,
+  PASSKEY_CHALLENGE_MAX_AGE_MS,
+  PASSKEY_RUNTIME_AVAILABLE,
+  buildPasskeyContext,
+  buildPasskeyUserHandle,
+  normalizePasskeyLabel,
+  generatePasskeyRegistrationOptions,
+  verifyPasskeyRegistrationResponse,
+  generatePasskeyAuthenticationOptions,
+  verifyPasskeyAuthenticationResponse
+} = require('./src/passkeySecurity');
 
 // --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
 require('./scripts/migrate.js');
@@ -3031,6 +3043,235 @@ function disableUserAppPinFromRequest(userId, req, { allowReauthOverride = false
   return updated;
 }
 
+function ensurePasskeySessionState(req) {
+  if (!req?.session) return null;
+  if (!req.session.appPasskey) {
+    req.session.appPasskey = {};
+  }
+  return req.session.appPasskey;
+}
+
+function clearExpiredPasskeySessionFlow(req, key) {
+  const state = ensurePasskeySessionState(req);
+  if (!state || !state[key]) return null;
+  const createdAt = Number(state[key].createdAt || 0) || 0;
+  if (createdAt && (Date.now() - createdAt) <= PASSKEY_CHALLENGE_MAX_AGE_MS) {
+    return state[key];
+  }
+  delete state[key];
+  return null;
+}
+
+function setPasskeySessionFlow(req, key, payload) {
+  const state = ensurePasskeySessionState(req);
+  if (!state) return null;
+  state[key] = {
+    ...payload,
+    createdAt: Date.now()
+  };
+  return state[key];
+}
+
+function consumePasskeySessionFlow(req, key) {
+  const state = ensurePasskeySessionState(req);
+  if (!state) return null;
+  const entry = clearExpiredPasskeySessionFlow(req, key);
+  delete state[key];
+  return entry || null;
+}
+
+function listUserPasskeys(userId) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return [];
+  return db.prepare(`
+    SELECT id, user_id, label, public_key, counter, device_type, backed_up, transports, aaguid,
+           created_at, updated_at, last_used_at, last_used_origin
+    FROM user_passkeys
+    WHERE user_id = ?
+    ORDER BY COALESCE(last_used_at, created_at) DESC, created_at DESC
+  `).all(safeUserId).map((row) => ({
+    id: String(row.id || '').trim(),
+    user_id: safeUserId,
+    label: normalizePasskeyLabel(row.label || '', 'Este aparelho'),
+    public_key: String(row.public_key || '').trim(),
+    counter: Number(row.counter || 0) || 0,
+    device_type: String(row.device_type || '').trim(),
+    backed_up: Number(row.backed_up || 0) !== 0 ? 1 : 0,
+    transports: row.transports ? (() => { try { return JSON.parse(row.transports); } catch (_error) { return []; } })() : [],
+    aaguid: String(row.aaguid || '').trim(),
+    created_at: row.created_at || null,
+    updated_at: row.updated_at || null,
+    last_used_at: row.last_used_at || null,
+    last_used_origin: row.last_used_origin || null
+  }));
+}
+
+function getUserPasskey(userId, credentialId) {
+  const safeId = String(credentialId || '').trim();
+  if (!safeId) return null;
+  return listUserPasskeys(userId).find((entry) => entry.id === safeId) || null;
+}
+
+function saveUserPasskey(userId, payload) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) {
+    throw new Error('Não encontrei quem vai receber esse desbloqueio pelo aparelho.');
+  }
+
+  const safeId = String(payload?.id || '').trim();
+  const safePublicKey = String(payload?.public_key || '').trim();
+  if (!safeId || !safePublicKey) {
+    throw new Error('Não consegui guardar esse aparelho agora.');
+  }
+
+  const now = nowIso();
+  db.prepare(`
+    INSERT INTO user_passkeys (
+      id, user_id, label, public_key, counter, device_type, backed_up, transports, aaguid,
+      created_at, updated_at, last_used_at, last_used_origin
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      user_id = excluded.user_id,
+      label = excluded.label,
+      public_key = excluded.public_key,
+      counter = excluded.counter,
+      device_type = excluded.device_type,
+      backed_up = excluded.backed_up,
+      transports = excluded.transports,
+      aaguid = excluded.aaguid,
+      updated_at = excluded.updated_at
+  `).run(
+    safeId,
+    safeUserId,
+    normalizePasskeyLabel(payload.label || '', 'Este aparelho'),
+    safePublicKey,
+    Number(payload.counter || 0) || 0,
+    String(payload.device_type || '').trim() || null,
+    Number(payload.backed_up || 0) !== 0 ? 1 : 0,
+    JSON.stringify(Array.isArray(payload.transports) ? payload.transports.filter(Boolean) : []),
+    String(payload.aaguid || '').trim() || null,
+    now,
+    now,
+    null,
+    null
+  );
+
+  return getUserPasskey(safeUserId, safeId);
+}
+
+function deleteUserPasskey(userId, credentialId) {
+  const safeUserId = Number(userId || 0);
+  const safeId = String(credentialId || '').trim();
+  if (!safeUserId || !safeId) return 0;
+  return db.prepare(`DELETE FROM user_passkeys WHERE user_id = ? AND id = ?`).run(safeUserId, safeId).changes || 0;
+}
+
+function touchUserPasskeyUsage(userId, credentialId, { counter = 0, origin = '' } = {}) {
+  const safeUserId = Number(userId || 0);
+  const safeId = String(credentialId || '').trim();
+  if (!safeUserId || !safeId) return;
+  db.prepare(`
+    UPDATE user_passkeys
+    SET counter = ?, updated_at = ?, last_used_at = ?, last_used_origin = ?
+    WHERE user_id = ? AND id = ?
+  `).run(
+    Number(counter || 0) || 0,
+    nowIso(),
+    nowIso(),
+    String(origin || '').trim() || null,
+    safeUserId,
+    safeId
+  );
+}
+
+function formatPasskeyDateTimeLabel(value) {
+  if (!value) return '';
+  const parsed = dayjs(value);
+  if (!parsed.isValid()) return '';
+  return parsed.tz('America/Sao_Paulo').format('DD/MM/YYYY [às] HH:mm');
+}
+
+function buildPasskeyBadge(passkey) {
+  if (Number(passkey?.backed_up || 0) !== 0) {
+    return { label: 'Sincronizada', tone: 'emerald' };
+  }
+  return { label: 'Local', tone: 'slate' };
+}
+
+function buildPasskeyManagementViewModel(req, userId, pinSettings = null) {
+  const settings = pinSettings || getUserSecuritySettings(userId);
+  const context = buildPasskeyContext(req);
+  const passkeys = listUserPasskeys(userId);
+  const items = passkeys.map((entry) => {
+    const badge = buildPasskeyBadge(entry);
+    return {
+      id: entry.id,
+      label: entry.label,
+      createdAtLabel: formatPasskeyDateTimeLabel(entry.created_at),
+      lastUsedAtLabel: formatPasskeyDateTimeLabel(entry.last_used_at),
+      badgeLabel: badge.label,
+      badgeTone: badge.tone,
+      hasBeenUsed: !!entry.last_used_at
+    };
+  });
+
+  let helpText = '';
+  if (!settings.pin_enabled) {
+    helpText = 'Primeiro liga o PIN. Aí sim dá para preparar o desbloqueio pelo aparelho como atalho bonitinho.';
+  } else if (!context.available) {
+    helpText = context.disabledMessage || 'Esse desbloqueio ainda não ficou disponível neste ambiente.';
+  } else if (!items.length) {
+    helpText = 'Quando quiser, dá para preparar este aparelho para destravar o app com digital, rosto ou a proteção dele.';
+  } else {
+    helpText = 'Se o aparelho topar, você pode usar esse atalho junto com o PIN. Um complementa o outro, sem drama.';
+  }
+
+  return {
+    runtimeAvailable: PASSKEY_RUNTIME_AVAILABLE,
+    serverReady: context.available,
+    secureContext: context.secureContext,
+    disabledReason: context.disabledReason || '',
+    disabledMessage: context.disabledMessage || '',
+    pinEnabled: Number(settings.pin_enabled || 0) !== 0,
+    canRegister: Number(settings.pin_enabled || 0) !== 0 && context.available && items.length < PASSKEY_MAX_CREDENTIALS_PER_USER,
+    limitReached: items.length >= PASSKEY_MAX_CREDENTIALS_PER_USER,
+    count: items.length,
+    maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER,
+    items,
+    helpText,
+    rpLabel: context.rpID || '',
+    originLabel: context.origin || ''
+  };
+}
+
+function buildPasskeyLockViewModel(req, userId, pinSettings = null) {
+  const settings = pinSettings || getUserSecuritySettings(userId);
+  const context = buildPasskeyContext(req);
+  const passkeys = listUserPasskeys(userId);
+  const enabled = Number(settings.pin_enabled || 0) !== 0 && context.available && passkeys.length > 0;
+
+  let message = '';
+  if (!Number(settings.pin_enabled || 0)) {
+    message = 'O desbloqueio pelo aparelho entra em cena junto com o PIN.';
+  } else if (!passkeys.length) {
+    message = 'Se quiser, depois dá para preparar este aparelho lá em Amigos > Segurança do app.';
+  } else if (!context.available) {
+    message = context.disabledMessage || 'Hoje o desbloqueio pelo aparelho não ficou disponível neste endereço.';
+  } else {
+    message = 'Se o seu aparelho topar, você pode entrar com digital, rosto ou a proteção dele e deixar o PIN como plano B.';
+  }
+
+  return {
+    enabled,
+    available: context.available,
+    runtimeAvailable: PASSKEY_RUNTIME_AVAILABLE,
+    secureContext: context.secureContext,
+    count: passkeys.length,
+    message,
+    disabledMessage: context.disabledMessage || ''
+  };
+}
+
 function normalizeErrorStatus(error, fallback = 500) {
   const candidate = Number(error?.status || error?.statusCode || fallback);
   return Number.isInteger(candidate) && candidate >= 400 && candidate <= 599 ? candidate : fallback;
@@ -3493,15 +3734,15 @@ app.get('/login', (req, res) => {
   let notice = null;
 
   if (String(req.query.reason || '').trim().toLowerCase() === 'idle') {
-    error = 'Sua sessão expirou por inatividade. Faça login novamente.';
+    error = 'Fiquei um tempinho sem te ver por aqui, então fechei a porta por segurança. Entra de novo e seguimos.';
   } else if (String(req.query.error || '').trim().toLowerCase() === 'auth_failed') {
-    error = 'Não foi possível concluir a autenticação. Tente novamente.';
+    error = 'Não consegui te trazer com o Google agora. Tenta mais uma vez que eu ajeito daqui.';
   } else if (String(req.query.error || '').trim().toLowerCase() === 'google_not_configured') {
-    error = 'O login com Google ainda não está configurado. Ajuste isso na área Admin antes de sair distribuindo logins.';
+    error = 'O botão de entrar com Google ainda não foi ligado por aqui. Vale ajustar isso primeiro em Administração.';
   }
 
   if (String(req.query.setup || '').trim().toLowerCase() === 'done') {
-    notice = 'Casa arrumada. Agora é só entrar com o Google do admin inaugural e seguir o baile.';
+    notice = 'Tudo pronto por aqui. Agora é só entrar com a conta principal do Google e começar.';
   }
 
   res.render('login_oauth', { error, notice });
@@ -11089,6 +11330,7 @@ app.get("/people", ensureAuthenticated, (req, res) => {
     profileSignatureVibeOptions: PROFILE_SIGNATURE_VIBE_OPTIONS,
     profileSignatureMaxLength: PROFILE_SIGNATURE_MAX_LENGTH,
     appPinSecurity: buildAppPinViewModel(getUserSecuritySettings(userId), { reauthFresh: hasFreshPinReauthSession(req, userId) }),
+    appPasskeys: buildPasskeyManagementViewModel(req, userId),
     title: "Amigos"
   });
 });
@@ -11331,6 +11573,212 @@ app.post('/people/security/pin/disable', ensureAuthenticated, (req, res) => {
   return res.redirect(redirectTarget);
 });
 
+
+app.post('/people/security/passkeys/register/options', ensureAuthenticated, async (req, res) => {
+  setNoStoreHeaders(res);
+  const userId = req.user.id;
+  const settings = getUserSecuritySettings(userId);
+
+  if (!settings.pin_enabled) {
+    return res.status(422).json({ ok: false, message: 'Primeiro liga o PIN. Aí eu consigo preparar o desbloqueio pelo aparelho.' });
+  }
+
+  const context = buildPasskeyContext(req);
+  if (!context.available) {
+    return res.status(422).json({ ok: false, message: context.disabledMessage || 'Esse desbloqueio ainda não ficou disponível neste ambiente.' });
+  }
+
+  const currentPasskeys = listUserPasskeys(userId);
+  if (currentPasskeys.length >= PASSKEY_MAX_CREDENTIALS_PER_USER) {
+    return res.status(409).json({ ok: false, message: `Você já preparou ${PASSKEY_MAX_CREDENTIALS_PER_USER} aparelhos por aqui. Se quiser abrir espaço, é só remover um deles.` });
+  }
+
+  try {
+    const friendlyLabel = normalizePasskeyLabel(req.body?.label || '', 'Este aparelho');
+    const options = await generatePasskeyRegistrationOptions({
+      rpName: context.rpName,
+      rpID: context.rpID,
+      userID: buildPasskeyUserHandle(userId, getPinPepper()),
+      userName: String(req.user.email || `user-${userId}@acerttapay.local`).trim(),
+      userDisplayName: String(req.user.name || req.user.email || 'Você').trim(),
+      excludeCredentials: currentPasskeys
+    });
+
+    setPasskeySessionFlow(req, 'register', {
+      userId: Number(userId || 0),
+      challenge: options.challenge,
+      origin: context.origin,
+      rpID: context.rpID,
+      label: friendlyLabel
+    });
+
+    return res.json({
+      ok: true,
+      options,
+      label: friendlyLabel,
+      count: currentPasskeys.length,
+      maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER
+    });
+  } catch (error) {
+    return res.status(normalizeErrorStatus(error, 500)).json({
+      ok: false,
+      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui preparar esse aparelho agora.' })
+    });
+  }
+});
+
+app.post('/people/security/passkeys/register/verify', ensureAuthenticated, async (req, res) => {
+  setNoStoreHeaders(res);
+  const userId = req.user.id;
+  const flow = consumePasskeySessionFlow(req, 'register');
+
+  if (!flow || Number(flow.userId || 0) !== Number(userId || 0)) {
+    return res.status(410).json({ ok: false, message: 'Esse preparo perdeu a validade. Começa de novo que eu acompanho daqui.' });
+  }
+
+  try {
+    const verification = await verifyPasskeyRegistrationResponse({
+      response: req.body,
+      expectedChallenge: flow.challenge,
+      expectedOrigin: String(flow.origin || '').trim(),
+      expectedRPID: String(flow.rpID || '').trim()
+    });
+
+    if (!verification.verified || !verification.credential) {
+      return res.status(422).json({ ok: false, message: 'Não consegui confirmar esse aparelho agora. Vamos tentar de novo?' });
+    }
+
+    const currentPasskeys = listUserPasskeys(userId);
+    if (currentPasskeys.length >= PASSKEY_MAX_CREDENTIALS_PER_USER) {
+      return res.status(409).json({ ok: false, message: `Você já preparou ${PASSKEY_MAX_CREDENTIALS_PER_USER} aparelhos por aqui. Se quiser abrir espaço, é só remover um deles.` });
+    }
+
+    const saved = saveUserPasskey(userId, {
+      ...verification.credential,
+      label: normalizePasskeyLabel(req.body?.label || flow.label || '', 'Este aparelho')
+    });
+
+    return res.json({
+      ok: true,
+      message: `Pronto, ${saved?.label || 'este aparelho'} já pode entrar em cena no desbloqueio.`,
+      count: listUserPasskeys(userId).length
+    });
+  } catch (error) {
+    return res.status(normalizeErrorStatus(error, 500)).json({
+      ok: false,
+      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui confirmar esse aparelho agora.' })
+    });
+  }
+});
+
+app.post('/people/security/passkeys/:id/delete', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const passkey = getUserPasskey(userId, req.params.id);
+
+  if (!passkey) {
+    setFlash(req, 'error', 'Esse aparelho já tinha saído da lista por aqui.');
+    return res.redirect('/people#app-security');
+  }
+
+  deleteUserPasskey(userId, req.params.id);
+  setFlash(req, 'success', `${passkey.label || 'Esse aparelho'} saiu da lista de desbloqueio.`);
+  return res.redirect('/people#app-security');
+});
+
+app.post('/lock/passkey/options', ensureAuthenticatedIgnoringPin, async (req, res) => {
+  setNoStoreHeaders(res);
+  const userId = req.user.id;
+  const settings = getUserSecuritySettings(userId);
+
+  if (!settings.pin_enabled) {
+    return res.status(422).json({ ok: false, message: 'O desbloqueio pelo aparelho entra em cena junto com o PIN.' });
+  }
+
+  const context = buildPasskeyContext(req);
+  if (!context.available) {
+    return res.status(422).json({ ok: false, message: context.disabledMessage || 'Hoje esse desbloqueio não ficou disponível neste endereço.' });
+  }
+
+  const passkeys = listUserPasskeys(userId);
+  if (!passkeys.length) {
+    return res.status(404).json({ ok: false, message: 'Ainda não há nenhum aparelho preparado para esse atalho.' });
+  }
+
+  try {
+    const options = await generatePasskeyAuthenticationOptions({
+      rpID: context.rpID,
+      allowCredentials: passkeys
+    });
+
+    setPasskeySessionFlow(req, 'unlock', {
+      userId: Number(userId || 0),
+      challenge: options.challenge,
+      origin: context.origin,
+      rpID: context.rpID
+    });
+
+    return res.json({ ok: true, options });
+  } catch (error) {
+    return res.status(normalizeErrorStatus(error, 500)).json({
+      ok: false,
+      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui preparar o desbloqueio pelo aparelho agora.' })
+    });
+  }
+});
+
+app.post('/lock/passkey/verify', ensureAuthenticatedIgnoringPin, async (req, res) => {
+  setNoStoreHeaders(res);
+  const userId = req.user.id;
+  const settings = getUserSecuritySettings(userId);
+
+  if (!settings.pin_enabled) {
+    clearAppLockSession(req);
+    return res.status(200).json({ ok: true, redirect: sanitizeInternalRedirectTarget(req.body?.next || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/') });
+  }
+
+  const state = getAppSessionState(req);
+  const redirectTarget = sanitizeInternalRedirectTarget(req.body?.next || state.returnTo || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
+  const flow = consumePasskeySessionFlow(req, 'unlock');
+
+  if (!flow || Number(flow.userId || 0) !== Number(userId || 0)) {
+    return res.status(410).json({ ok: false, message: 'Esse desbloqueio perdeu a validade. Tenta mais uma vez que eu preparo de novo.' });
+  }
+
+  const credentialId = String(req.body?.id || '').trim();
+  const passkey = getUserPasskey(userId, credentialId);
+  if (!credentialId || !passkey) {
+    return res.status(404).json({ ok: false, message: 'Não encontrei esse aparelho na sua lista de desbloqueio.' });
+  }
+
+  try {
+    const verification = await verifyPasskeyAuthenticationResponse({
+      response: req.body,
+      expectedChallenge: flow.challenge,
+      expectedOrigin: String(flow.origin || '').trim(),
+      expectedRPID: String(flow.rpID || '').trim(),
+      passkey
+    });
+
+    if (!verification.verified) {
+      return res.status(422).json({ ok: false, message: 'Esse desbloqueio não foi confirmado agora. Pode tentar de novo ou seguir pelo PIN.' });
+    }
+
+    touchUserPasskeyUsage(userId, passkey.id, {
+      counter: verification.newCounter,
+      origin: String(flow.origin || '').trim()
+    });
+    resetUserAppPinFailures(userId);
+    unlockAppSession(req, { clearReturnTo: true });
+
+    return res.json({ ok: true, redirect: redirectTarget });
+  } catch (error) {
+    return res.status(normalizeErrorStatus(error, 500)).json({
+      ok: false,
+      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui confirmar esse desbloqueio agora. Você também pode seguir pelo PIN.' })
+    });
+  }
+});
+
 app.get('/lock', ensureAuthenticatedIgnoringPin, (req, res) => {
   const userId = req.user.id;
   const settings = getUserSecuritySettings(userId);
@@ -11372,6 +11820,7 @@ app.get('/lock', ensureAuthenticatedIgnoringPin, (req, res) => {
     },
     appPinSecurity: buildAppPinViewModel(settings, { reauthFresh }),
     appPinGuard: guardView,
+    appPasskeyLock: buildPasskeyLockViewModel(req, userId, settings),
     lockReason: String(req.query.reason || state.reason || '').trim().toLowerCase(),
     lockMessage,
     nextTarget,

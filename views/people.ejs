@@ -37,6 +37,10 @@
   const appPinIdleOptions = Array.isArray(appPinSecurityState.idleOptions) ? appPinSecurityState.idleOptions : [];
   const appPinMinLength = Number(appPinSecurityState.minLength || 4) || 4;
   const appPinMaxLength = Number(appPinSecurityState.maxLength || 6) || 6;
+  const appPasskeyState = appPasskeys || {};
+  const appPasskeyItems = Array.isArray(appPasskeyState.items) ? appPasskeyState.items : [];
+  const appPasskeyCount = Number(appPasskeyState.count || 0) || 0;
+  const appPasskeyMaxCount = Number(appPasskeyState.maxCount || 0) || 0;
   const selfPixEnabled = !!selfProfile?.pix_enabled;
   const selfPixKeyType = selfProfile?.pix_key_type || '';
   const selfPixKeyValueInput = selfProfile?.pix_key_value_input || selfProfile?.pix_key_value || '';
@@ -678,6 +682,48 @@
                   <% } %>
                 </div>
                 <p class="mt-3 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Seu PIN pode ter de <%= appPinMinLength %> a <%= appPinMaxLength %> dígitos. A recomendação amiga é usar <strong class="font-semibold text-slate-700 dark:text-slate-100">6 números</strong> e fugir de combinações óbvias, tipo 1234, 0000 ou repeteco.</p>
+              </div>
+
+              <div class="rounded-[26px] border border-violet-200/70 bg-violet-50/80 px-4 py-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20 sm:px-5">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Desbloqueio pelo aparelho</div>
+                    <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Se o aparelho topar, dá para usar digital, rosto ou a proteção dele para abrir o app. O PIN continua ali como plano B.</p>
+                  </div>
+                  <span class="inline-flex items-center self-start rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-black text-violet-700 dark:border-violet-800 dark:bg-slate-900/70 dark:text-violet-200"><%= appPasskeyCount %>/<%= appPasskeyMaxCount || 6 %> aparelhos</span>
+                </div>
+
+                <p id="appPasskeyFeedback" class="mt-3 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= appPasskeyState.helpText || 'Quando quiser, dá para preparar este aparelho para destravar o app com um toque mais esperto.' %></p>
+
+                <% if (appPasskeyState.canRegister) { %>
+                  <button type="button" id="appPasskeyRegisterButton" class="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 sm:w-auto">Adicionar neste aparelho</button>
+                <% } else if (appPasskeyState.limitReached) { %>
+                  <div class="mt-4 inline-flex items-center rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-bold text-amber-700 dark:border-amber-800 dark:bg-slate-900/70 dark:text-amber-200">Você já chegou no limite de aparelhos por aqui.</div>
+                <% } %>
+
+                <% if (appPasskeyItems.length) { %>
+                  <div class="mt-4 grid gap-3">
+                    <% appPasskeyItems.forEach((item) => { %>
+                      <div class="rounded-[22px] border border-white/80 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+                        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                              <div class="truncate text-sm font-black text-slate-900 dark:text-white"><%= item.label %></div>
+                              <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= item.badgeTone === 'emerald' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200' : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300' %>"><%= item.badgeLabel %></span>
+                            </div>
+                            <div class="mt-2 grid gap-1 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400">
+                              <p>Preparado em <strong class="font-semibold text-slate-700 dark:text-slate-200"><%= item.createdAtLabel || 'agora há pouco' %></strong></p>
+                              <p><%= item.hasBeenUsed ? 'Último uso em' : 'Ainda não foi usado para destravar' %> <strong class="font-semibold text-slate-700 dark:text-slate-200"><%= item.hasBeenUsed ? item.lastUsedAtLabel : '—' %></strong></p>
+                            </div>
+                          </div>
+                          <form method="post" action="/people/security/passkeys/<%= item.id %>/delete" data-confirm-prompt="Remover <%= item.label %> da lista de desbloqueio? O PIN continua funcionando normalmente." class="lg:shrink-0">
+                            <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20 lg:w-auto">Remover</button>
+                          </form>
+                        </div>
+                      </div>
+                    <% }) %>
+                  </div>
+                <% } %>
               </div>
 
               <div class="rounded-[26px] border border-dashed border-slate-200 bg-slate-50/70 px-4 py-4 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 sm:px-5">
@@ -2229,6 +2275,176 @@ function bindPixForm(prefix, options = {}) {
     resetDisableForm();
   }
 
+
+  function bindAppPasskeySecurityControls() {
+    const registerButton = document.getElementById('appPasskeyRegisterButton');
+    const feedback = document.getElementById('appPasskeyFeedback');
+    if (!(feedback instanceof HTMLElement)) return;
+
+    const hasClientSupport = !!(window.PublicKeyCredential && window.isSecureContext && navigator.credentials && typeof navigator.credentials.create === 'function');
+
+    const setFeedback = (message, tone = 'slate') => {
+      const safeMessage = String(message || '').trim();
+      feedback.textContent = safeMessage;
+      feedback.classList.remove('text-slate-600', 'text-violet-700', 'text-emerald-700', 'text-amber-700', 'text-rose-700', 'dark:text-slate-300', 'dark:text-violet-200', 'dark:text-emerald-200', 'dark:text-amber-200', 'dark:text-rose-200');
+      if (tone === 'violet') {
+        feedback.classList.add('text-violet-700', 'dark:text-violet-200');
+      } else if (tone === 'emerald') {
+        feedback.classList.add('text-emerald-700', 'dark:text-emerald-200');
+      } else if (tone === 'amber') {
+        feedback.classList.add('text-amber-700', 'dark:text-amber-200');
+      } else if (tone === 'rose') {
+        feedback.classList.add('text-rose-700', 'dark:text-rose-200');
+      } else {
+        feedback.classList.add('text-slate-600', 'dark:text-slate-300');
+      }
+      feedback.classList.toggle('hidden', !safeMessage);
+    };
+
+    function base64UrlToUint8Array(value) {
+      const safe = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+      const padded = safe + '='.repeat((4 - (safe.length % 4 || 4)) % 4);
+      const binary = window.atob(padded);
+      return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    }
+
+    function bufferToBase64Url(value) {
+      const bytes = value instanceof ArrayBuffer ? new Uint8Array(value) : value instanceof Uint8Array ? value : new Uint8Array([]);
+      let binary = '';
+      bytes.forEach((byte) => {
+        binary += String.fromCharCode(byte);
+      });
+      return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+    }
+
+    function toPublicKeyCredentialJSON(value) {
+      if (value instanceof ArrayBuffer) {
+        return bufferToBase64Url(value);
+      }
+      if (ArrayBuffer.isView(value)) {
+        return bufferToBase64Url(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+      }
+      if (Array.isArray(value)) {
+        return value.map((entry) => toPublicKeyCredentialJSON(entry));
+      }
+      if (value && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, toPublicKeyCredentialJSON(entry)]));
+      }
+      return value;
+    }
+
+    function decodeRegistrationOptions(options) {
+      const publicKey = options ? JSON.parse(JSON.stringify(options)) : {};
+      if (publicKey.challenge) publicKey.challenge = base64UrlToUint8Array(publicKey.challenge);
+      if (publicKey.user && publicKey.user.id) publicKey.user.id = base64UrlToUint8Array(publicKey.user.id);
+      if (Array.isArray(publicKey.excludeCredentials)) {
+        publicKey.excludeCredentials = publicKey.excludeCredentials.map((credential) => ({
+          ...credential,
+          id: base64UrlToUint8Array(credential.id)
+        }));
+      }
+      return publicKey;
+    }
+
+    function buildPasskeyDeviceLabel() {
+      const parts = [];
+      const uaData = navigator.userAgentData || null;
+      const platform = uaData && uaData.platform ? uaData.platform : navigator.platform;
+      const safePlatform = String(platform || '').trim();
+      if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
+        parts.push('iPhone');
+      } else if (/android/i.test(navigator.userAgent)) {
+        parts.push('Android');
+      } else if (/mac/i.test(safePlatform)) {
+        parts.push('Mac');
+      } else if (/win/i.test(safePlatform)) {
+        parts.push('Windows');
+      } else if (/linux/i.test(safePlatform)) {
+        parts.push('Linux');
+      }
+      const standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+      if (standalone || navigator.standalone) {
+        parts.push('app');
+      }
+      return parts.join(' · ') || 'Este aparelho';
+    }
+
+    if (!(registerButton instanceof HTMLButtonElement)) {
+      if (!hasClientSupport && feedback.textContent.trim()) {
+        setFeedback('Se este navegador topar, depois você consegue preparar o desbloqueio por digital, rosto ou a proteção dele.', 'slate');
+      }
+      return;
+    }
+
+    if (!hasClientSupport) {
+      registerButton.disabled = true;
+      registerButton.setAttribute('aria-disabled', 'true');
+      setFeedback('Neste navegador ou endereço ainda não rolou liberar o desbloqueio pelo aparelho.', 'amber');
+      return;
+    }
+
+    registerButton.addEventListener('click', async () => {
+      if (registerButton.disabled) return;
+      const defaultLabel = buildPasskeyDeviceLabel();
+      registerButton.disabled = true;
+      registerButton.textContent = 'Preparando...';
+      setFeedback('Deixa comigo: estou preparando este aparelho.', 'violet');
+
+      try {
+        const optionsResponse = await fetch('/people/security/passkeys/register/options', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-AcerttaPay-Async': '1'
+          },
+          body: JSON.stringify({ label: defaultLabel })
+        });
+        const optionsPayload = await optionsResponse.json().catch(() => ({}));
+        if (!optionsResponse.ok || !optionsPayload.ok || !optionsPayload.options) {
+          throw new Error(optionsPayload.message || 'Não consegui preparar este aparelho agora.');
+        }
+
+        const credential = await navigator.credentials.create({ publicKey: decodeRegistrationOptions(optionsPayload.options) });
+        if (!(credential instanceof PublicKeyCredential)) {
+          throw new Error('Esse aparelho não devolveu o preparo completo agora.');
+        }
+
+        const verifyResponse = await fetch('/people/security/passkeys/register/verify', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-AcerttaPay-Async': '1'
+          },
+          body: JSON.stringify({
+            ...toPublicKeyCredentialJSON(credential),
+            label: defaultLabel
+          })
+        });
+        const verifyPayload = await verifyResponse.json().catch(() => ({}));
+        if (!verifyResponse.ok || !verifyPayload.ok) {
+          throw new Error(verifyPayload.message || 'Não consegui confirmar este aparelho agora.');
+        }
+
+        setFeedback(verifyPayload.message || 'Pronto, este aparelho já entrou na sua lista de desbloqueio.', 'emerald');
+        window.setTimeout(() => {
+          window.location.href = '/people#app-security';
+        }, 240);
+      } catch (error) {
+        const safeMessage = error && typeof error === 'object' && 'name' in error && error.name === 'NotAllowedError'
+          ? 'Tudo certo. Parece que esse preparo foi cancelado antes de terminar.'
+          : (error && error.message) ? error.message : 'Não consegui preparar este aparelho agora.';
+        setFeedback(safeMessage, 'rose');
+      } finally {
+        registerButton.disabled = false;
+        registerButton.textContent = 'Adicionar neste aparelho';
+      }
+    });
+  }
+
   window.addEventListener('load', () => {
     bindPhoneField('self');
     bindPhoneField('contact');
@@ -2240,6 +2456,7 @@ function bindPixForm(prefix, options = {}) {
     bindProfilePhotoForm();
     bindProfileSignatureForm();
     bindAppPinSecurityControls();
+    bindAppPasskeySecurityControls();
 
     const highlighted = document.querySelector('[id^="friend-request-"][class*="ring-2"]');
     if (highlighted) {

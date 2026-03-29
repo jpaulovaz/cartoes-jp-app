@@ -590,6 +590,82 @@
         return value;
       }
 
+      function serializeAuthenticatorResponse(response) {
+        if (!response || typeof response !== 'object') {
+          return {};
+        }
+
+        if (typeof response.toJSON === 'function') {
+          try {
+            return response.toJSON();
+          } catch (_error) {
+            // segue para o fallback manual logo abaixo
+          }
+        }
+
+        const payload = {
+          clientDataJSON: response.clientDataJSON ? bufferToBase64Url(response.clientDataJSON) : undefined
+        };
+
+        if ('attestationObject' in response && response.attestationObject) {
+          payload.attestationObject = bufferToBase64Url(response.attestationObject);
+        }
+
+        if ('authenticatorData' in response && response.authenticatorData) {
+          payload.authenticatorData = bufferToBase64Url(response.authenticatorData);
+        }
+
+        if ('signature' in response && response.signature) {
+          payload.signature = bufferToBase64Url(response.signature);
+        }
+
+        if ('userHandle' in response) {
+          payload.userHandle = response.userHandle ? bufferToBase64Url(response.userHandle) : null;
+        }
+
+        if (typeof response.getTransports === 'function') {
+          try {
+            const transports = response.getTransports();
+            if (Array.isArray(transports) && transports.length) {
+              payload.transports = transports.filter(Boolean);
+            }
+          } catch (_error) {
+            // alguns navegadores podem não deixar consultar isso aqui, então deixa quietinho
+          }
+        }
+
+        return payload;
+      }
+
+      function serializePublicKeyCredential(credential) {
+        if (!credential || typeof credential !== 'object') {
+          return {};
+        }
+
+        if (typeof credential.toJSON === 'function') {
+          try {
+            return credential.toJSON();
+          } catch (_error) {
+            // fallback manual para navegadores que tropeçam nessa serialização
+          }
+        }
+
+        const clientExtensionResults = typeof credential.getClientExtensionResults === 'function'
+          ? credential.getClientExtensionResults()
+          : undefined;
+
+        return {
+          id: String(credential.id || '').trim() || undefined,
+          rawId: credential.rawId ? bufferToBase64Url(credential.rawId) : undefined,
+          type: String(credential.type || '').trim() || 'public-key',
+          authenticatorAttachment: credential.authenticatorAttachment || undefined,
+          clientExtensionResults: clientExtensionResults && Object.keys(clientExtensionResults).length
+            ? toPublicKeyCredentialJSON(clientExtensionResults)
+            : undefined,
+          response: serializeAuthenticatorResponse(credential.response)
+        };
+      }
+
       function decodeAuthenticationOptions(options) {
         const publicKey = options ? JSON.parse(JSON.stringify(options)) : {};
         if (publicKey.challenge) publicKey.challenge = base64UrlToUint8Array(publicKey.challenge);
@@ -644,7 +720,7 @@
               'X-AcerttaPay-Async': '1'
             },
             body: JSON.stringify({
-              ...toPublicKeyCredentialJSON(credential),
+              ...serializePublicKeyCredential(credential),
               next: nextUrl
             })
           });

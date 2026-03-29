@@ -3343,6 +3343,10 @@ function logPasskeyFlowFailure(req, phase, error, context = null, body = null, e
 function getFriendlyPasskeyErrorMessage(error, fallbackMessage = 'Não consegui confirmar esse aparelho agora.') {
   const rawMessage = String(error?.message || '').trim();
 
+  if (/Missing credential ID/i.test(rawMessage)) {
+    return 'Esse navegador devolveu a confirmação do aparelho incompleta por aqui. Ajustei a conversa com a passkey para enviar os dados certinhos.';
+  }
+
   if (/Unexpected registration response origin|Unexpected authentication response origin/i.test(rawMessage)) {
     return 'O app e esse aparelho não combinaram certinho o endereço seguro do desbloqueio. Vale conferir o HTTPS e o endereço oficial do app.';
   }

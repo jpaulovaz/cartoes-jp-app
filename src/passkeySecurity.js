@@ -11,8 +11,8 @@ const PASSKEY_MAX_CREDENTIALS_PER_USER = 6;
 const PASSKEY_CHALLENGE_MAX_AGE_MS = 5 * 60 * 1000;
 const PASSKEY_RP_NAME = String(process.env.APP_PASSKEY_RP_NAME || process.env.WEBAUTHN_RP_NAME || 'AcerttaPay').trim() || 'AcerttaPay';
 const PASSKEY_SUPPORTED_ALGORITHM_IDS = [-8, -7, -257];
-const PASSKEY_ALLOWED_TRANSPORTS = new Set(['ble', 'hybrid', 'internal', 'nfc', 'usb']);
 const PASSKEY_RUNTIME_AVAILABLE = !!simpleWebAuthnServer;
+const PASSKEY_ALLOWED_TRANSPORTS = new Set(['ble', 'hybrid', 'internal', 'nfc', 'usb']);
 
 function bufferToBase64Url(input) {
   const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input || []);
@@ -187,21 +187,99 @@ function normalizePasskeyLabel(value, fallback = 'Este aparelho') {
   return safe.slice(0, 60);
 }
 
+function toBufferFromUnknown(value) {
+  if (Buffer.isBuffer(value)) return value;
+
+  if (value instanceof ArrayBuffer) {
+    return Buffer.from(value);
+  }
+
+  if (ArrayBuffer.isView(value)) {
+    return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+  }
+
+  if (Array.isArray(value)) {
+    const bytes = value
+      .map((entry) => Number(entry))
+      .filter((entry) => Number.isFinite(entry) && entry >= 0 && entry <= 255);
+
+    return bytes.length ? Buffer.from(bytes) : Buffer.alloc(0);
+  }
+
+  return null;
+}
+
+function normalizePasskeyCredentialId(value) {
+  const directBuffer = toBufferFromUnknown(value);
+  if (directBuffer && directBuffer.length) {
+    return bufferToBase64Url(directBuffer);
+  }
+
+  const safe = String(value || '').trim();
+  if (!safe) return '';
+
+  if (/^\[(?:\s*\d+\s*,)*\s*\d+\s*\]$/.test(safe)) {
+    try {
+      const parsed = JSON.parse(safe);
+      const parsedBuffer = toBufferFromUnknown(parsed);
+      if (parsedBuffer && parsedBuffer.length) {
+        return bufferToBase64Url(parsedBuffer);
+      }
+    } catch (_error) {
+      // segue o baile com o valor original
+    }
+  }
+
+  if (/^\d+(?:\s*,\s*\d+)+$/.test(safe)) {
+    const parsed = safe.split(',').map((entry) => Number(entry.trim()));
+    const parsedBuffer = toBufferFromUnknown(parsed);
+    if (parsedBuffer && parsedBuffer.length) {
+      return bufferToBase64Url(parsedBuffer);
+    }
+  }
+
+  return safe;
+}
+
+function collectPasskeyCredentialIdCandidates(...values) {
+  const seen = new Set();
+  const candidates = [];
+
+  for (const value of values) {
+    const normalized = normalizePasskeyCredentialId(value);
+    if (normalized && !seen.has(normalized)) {
+      seen.add(normalized);
+      candidates.push(normalized);
+    }
+
+    if (typeof value === 'string') {
+      const raw = value.trim();
+      if (raw && !seen.has(raw)) {
+        seen.add(raw);
+        candidates.push(raw);
+      }
+    }
+  }
+
+  return candidates;
+}
+
 function normalizeCredentialTransports(value) {
   if (!Array.isArray(value)) return undefined;
   const safe = value
     .map((entry) => String(entry || '').trim())
-    .filter((entry, index, list) => entry && PASSKEY_ALLOWED_TRANSPORTS.has(entry) && list.indexOf(entry) == index);
+    .filter((entry, index, list) => entry && PASSKEY_ALLOWED_TRANSPORTS.has(entry) && list.indexOf(entry) === index);
   return safe.length ? safe : undefined;
 }
 
 function normalizeCredentialDescriptor(entry = {}) {
-  const id = String(
+  const id = normalizePasskeyCredentialId(
     entry?.id
     || entry?.credential_id
     || entry?.credentialId
+    || entry?.rawId
     || ''
-  ).trim();
+  );
 
   if (!id) return null;
 
@@ -237,7 +315,13 @@ async function generatePasskeyRegistrationOptions({ rpName, rpID, userID, userNa
 
 function extractRegistrationCredential(registrationInfo = {}, response = null) {
   const credential = registrationInfo.credential || {};
-  const candidateId = credential.id || registrationInfo.credentialID || response?.id || '';
+  const candidateId = normalizePasskeyCredentialId(
+    credential.id
+    || registrationInfo.credentialID
+    || response?.id
+    || response?.rawId
+    || ''
+  );
   const publicKey = credential.publicKey || registrationInfo.credentialPublicKey || null;
   const counter = credential.counter ?? registrationInfo.counter ?? 0;
   const transports = credential.transports || registrationInfo.transports || response?.response?.transports || [];
@@ -246,7 +330,7 @@ function extractRegistrationCredential(registrationInfo = {}, response = null) {
   const aaguid = credential.aaguid || registrationInfo.aaguid || '';
 
   return {
-    id: String(candidateId || '').trim(),
+    id: candidateId,
     publicKey: bufferToBase64Url(publicKey || Buffer.alloc(0)),
     counter: Number(counter || 0) || 0,
     transports: Array.isArray(transports) ? transports.filter(Boolean) : [],
@@ -294,7 +378,7 @@ async function generatePasskeyAuthenticationOptions({ rpID, allowCredentials = [
 
 function buildVerificationCredential(passkey) {
   return {
-    id: String(passkey?.id || '').trim(),
+    id: normalizePasskeyCredentialId(passkey?.id || passkey?.credential_id || passkey?.credentialId || ''),
     publicKey: base64UrlToBuffer(passkey?.public_key || passkey?.publicKey || ''),
     counter: Number(passkey?.counter || 0) || 0,
     transports: Array.isArray(passkey?.transports)
@@ -368,6 +452,8 @@ module.exports = {
   buildPasskeyContext,
   buildPasskeyUserHandle,
   normalizePasskeyLabel,
+  normalizePasskeyCredentialId,
+  collectPasskeyCredentialIdCandidates,
   generatePasskeyRegistrationOptions,
   verifyPasskeyRegistrationResponse,
   generatePasskeyAuthenticationOptions,

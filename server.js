@@ -100,6 +100,8 @@ const {
   buildPasskeyContext,
   buildPasskeyUserHandle,
   normalizePasskeyLabel,
+  normalizePasskeyCredentialId,
+  collectPasskeyCredentialIdCandidates,
   generatePasskeyRegistrationOptions,
   verifyPasskeyRegistrationResponse,
   generatePasskeyAuthenticationOptions,
@@ -3139,27 +3141,42 @@ function listUserPasskeys(userId) {
     FROM user_passkeys
     WHERE user_id = ?
     ORDER BY COALESCE(last_used_at, created_at) DESC, created_at DESC
-  `).all(safeUserId).map((row) => ({
-    id: String(row.id || '').trim(),
-    user_id: safeUserId,
-    label: normalizePasskeyLabel(row.label || '', 'Este aparelho'),
-    public_key: String(row.public_key || '').trim(),
-    counter: Number(row.counter || 0) || 0,
-    device_type: String(row.device_type || '').trim(),
-    backed_up: Number(row.backed_up || 0) !== 0 ? 1 : 0,
-    transports: row.transports ? (() => { try { return JSON.parse(row.transports); } catch (_error) { return []; } })() : [],
-    aaguid: String(row.aaguid || '').trim(),
-    created_at: row.created_at || null,
-    updated_at: row.updated_at || null,
-    last_used_at: row.last_used_at || null,
-    last_used_origin: row.last_used_origin || null
-  }));
+  `).all(safeUserId).map((row) => {
+    const dbId = String(row.id || '').trim();
+    const normalizedId = normalizePasskeyCredentialId(dbId) || dbId;
+    return {
+      id: normalizedId,
+      db_id: dbId,
+      id_candidates: collectPasskeyCredentialIdCandidates(dbId, normalizedId),
+      user_id: safeUserId,
+      label: normalizePasskeyLabel(row.label || '', 'Este aparelho'),
+      public_key: String(row.public_key || '').trim(),
+      counter: Number(row.counter || 0) || 0,
+      device_type: String(row.device_type || '').trim(),
+      backed_up: Number(row.backed_up || 0) !== 0 ? 1 : 0,
+      transports: row.transports ? (() => { try { return JSON.parse(row.transports); } catch (_error) { return []; } })() : [],
+      aaguid: String(row.aaguid || '').trim(),
+      created_at: row.created_at || null,
+      updated_at: row.updated_at || null,
+      last_used_at: row.last_used_at || null,
+      last_used_origin: row.last_used_origin || null
+    };
+  });
+}
+
+function findUserPasskeyInList(passkeys, credentialId) {
+  const candidates = collectPasskeyCredentialIdCandidates(credentialId);
+  if (!candidates.length) return null;
+  return (Array.isArray(passkeys) ? passkeys : []).find((entry) => {
+    const entryCandidates = Array.isArray(entry?.id_candidates) && entry.id_candidates.length
+      ? entry.id_candidates
+      : collectPasskeyCredentialIdCandidates(entry?.db_id, entry?.id);
+    return candidates.some((candidate) => entryCandidates.includes(candidate));
+  }) || null;
 }
 
 function getUserPasskey(userId, credentialId) {
-  const safeId = String(credentialId || '').trim();
-  if (!safeId) return null;
-  return listUserPasskeys(userId).find((entry) => entry.id === safeId) || null;
+  return findUserPasskeyInList(listUserPasskeys(userId), credentialId);
 }
 
 function saveUserPasskey(userId, payload) {
@@ -3168,12 +3185,12 @@ function saveUserPasskey(userId, payload) {
     throw new Error('Não encontrei quem vai receber esse desbloqueio pelo aparelho.');
   }
 
-  const safeId = String(
-    payload?.id
+  const rawId = payload?.id
     || payload?.credential_id
     || payload?.credentialId
-    || ''
-  ).trim();
+    || payload?.rawId
+    || '';
+  const safeId = normalizePasskeyCredentialId(rawId) || String(rawId || '').trim();
   const safePublicKey = String(
     payload?.public_key
     || payload?.publicKey
@@ -3198,52 +3215,67 @@ function saveUserPasskey(userId, payload) {
     throw new Error('Não consegui guardar esse aparelho agora.');
   }
 
+  const existingPasskey = getUserPasskey(safeUserId, rawId || safeId);
+  const existingDbId = String(existingPasskey?.db_id || '').trim();
   const now = nowIso();
-  db.prepare(`
-    INSERT INTO user_passkeys (
-      id, user_id, label, public_key, counter, device_type, backed_up, transports, aaguid,
-      created_at, updated_at, last_used_at, last_used_origin
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      user_id = excluded.user_id,
-      label = excluded.label,
-      public_key = excluded.public_key,
-      counter = excluded.counter,
-      device_type = excluded.device_type,
-      backed_up = excluded.backed_up,
-      transports = excluded.transports,
-      aaguid = excluded.aaguid,
-      updated_at = excluded.updated_at
-  `).run(
-    safeId,
-    safeUserId,
-    normalizePasskeyLabel(payload.label || '', 'Este aparelho'),
-    safePublicKey,
-    safeCounter,
-    safeDeviceType,
-    safeBackedUp,
-    JSON.stringify(safeTransports),
-    safeAaguid,
-    now,
-    now,
-    null,
-    null
-  );
+
+  const persistPasskey = db.transaction(() => {
+    if (existingDbId && existingDbId !== safeId) {
+      db.prepare(`DELETE FROM user_passkeys WHERE user_id = ? AND id = ?`).run(safeUserId, existingDbId);
+    }
+
+    db.prepare(`
+      INSERT INTO user_passkeys (
+        id, user_id, label, public_key, counter, device_type, backed_up, transports, aaguid,
+        created_at, updated_at, last_used_at, last_used_origin
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        user_id = excluded.user_id,
+        label = excluded.label,
+        public_key = excluded.public_key,
+        counter = excluded.counter,
+        device_type = excluded.device_type,
+        backed_up = excluded.backed_up,
+        transports = excluded.transports,
+        aaguid = excluded.aaguid,
+        updated_at = excluded.updated_at
+    `).run(
+      safeId,
+      safeUserId,
+      normalizePasskeyLabel(payload.label || '', 'Este aparelho'),
+      safePublicKey,
+      safeCounter,
+      safeDeviceType,
+      safeBackedUp,
+      JSON.stringify(safeTransports),
+      safeAaguid,
+      now,
+      now,
+      null,
+      null
+    );
+  });
+
+  persistPasskey();
 
   return getUserPasskey(safeUserId, safeId);
 }
 
 function deleteUserPasskey(userId, credentialId) {
   const safeUserId = Number(userId || 0);
-  const safeId = String(credentialId || '').trim();
-  if (!safeUserId || !safeId) return 0;
-  return db.prepare(`DELETE FROM user_passkeys WHERE user_id = ? AND id = ?`).run(safeUserId, safeId).changes || 0;
+  if (!safeUserId) return 0;
+  const passkey = getUserPasskey(safeUserId, credentialId);
+  const dbId = String(passkey?.db_id || '').trim();
+  if (!dbId) return 0;
+  return db.prepare(`DELETE FROM user_passkeys WHERE user_id = ? AND id = ?`).run(safeUserId, dbId).changes || 0;
 }
 
 function touchUserPasskeyUsage(userId, credentialId, { counter = 0, origin = '' } = {}) {
   const safeUserId = Number(userId || 0);
-  const safeId = String(credentialId || '').trim();
-  if (!safeUserId || !safeId) return;
+  if (!safeUserId) return;
+  const passkey = getUserPasskey(safeUserId, credentialId);
+  const dbId = String(passkey?.db_id || '').trim();
+  if (!dbId) return;
   db.prepare(`
     UPDATE user_passkeys
     SET counter = ?, updated_at = ?, last_used_at = ?, last_used_origin = ?
@@ -3254,7 +3286,7 @@ function touchUserPasskeyUsage(userId, credentialId, { counter = 0, origin = '' 
     nowIso(),
     String(origin || '').trim() || null,
     safeUserId,
-    safeId
+    dbId
   );
 }
 
@@ -3323,6 +3355,22 @@ function previewPasskeyValue(value, { head = 12, tail = 8 } = {}) {
   if (!safe) return null;
   if (safe.length <= (head + tail + 1)) return safe;
   return `${safe.slice(0, head)}…${safe.slice(-tail)}`;
+}
+
+function summarizePasskeyCredentialLookup(passkeys = [], credentialId = '') {
+  const requestedCandidates = collectPasskeyCredentialIdCandidates(credentialId);
+  return {
+    requestedId: previewPasskeyValue(credentialId),
+    requestedCandidates: requestedCandidates.map((value) => previewPasskeyValue(value)).filter(Boolean),
+    knownPasskeys: (Array.isArray(passkeys) ? passkeys : []).map((entry) => ({
+      label: entry?.label || null,
+      id: previewPasskeyValue(entry?.id),
+      dbId: previewPasskeyValue(entry?.db_id),
+      candidates: Array.isArray(entry?.id_candidates)
+        ? entry.id_candidates.map((value) => previewPasskeyValue(value)).filter(Boolean)
+        : []
+    }))
+  };
 }
 
 function summarizePasskeyRequestBody(body = {}) {
@@ -12337,6 +12385,7 @@ app.post('/lock/passkey/verify', ensureAuthenticatedIgnoringPin, async (req, res
   setNoStoreHeaders(res);
   const userId = req.user.id;
   const settings = getUserSecuritySettings(userId);
+  const context = buildPasskeyContext(req);
 
   if (!settings.pin_enabled) {
     clearAppLockSession(req);
@@ -12351,9 +12400,22 @@ app.post('/lock/passkey/verify', ensureAuthenticatedIgnoringPin, async (req, res
     return res.status(410).json({ ok: false, message: 'Esse desbloqueio perdeu a validade. Tenta mais uma vez que eu preparo de novo.' });
   }
 
-  const credentialId = String(req.body?.id || '').trim();
-  const passkey = getUserPasskey(userId, credentialId);
+  const passkeys = listUserPasskeys(userId);
+  const credentialId = normalizePasskeyCredentialId(req.body?.id || req.body?.rawId || '') || String(req.body?.id || req.body?.rawId || '').trim();
+  const passkey = findUserPasskeyInList(passkeys, credentialId);
   if (!credentialId || !passkey) {
+    logPasskeyFlowFailure(req, 'lock-lookup', new Error('Passkey not found in unlock list'), {
+      ...context,
+      origin: String(flow.origin || '').trim() || context.origin || '',
+      rpID: String(flow.rpID || '').trim() || context.rpID || ''
+    }, req.body, {
+      flowCreatedAt: Number(flow.createdAt || 0) || null,
+      flowOrigin: String(flow.origin || '').trim() || null,
+      flowRpID: String(flow.rpID || '').trim() || null,
+      passkeyCount: passkeys.length,
+      credentialLookup: summarizePasskeyCredentialLookup(passkeys, credentialId)
+    });
+
     return res.status(404).json({ ok: false, message: 'Não encontrei esse aparelho na sua lista de desbloqueio.' });
   }
 

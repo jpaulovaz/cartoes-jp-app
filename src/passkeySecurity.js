@@ -11,6 +11,7 @@ const PASSKEY_MAX_CREDENTIALS_PER_USER = 6;
 const PASSKEY_CHALLENGE_MAX_AGE_MS = 5 * 60 * 1000;
 const PASSKEY_RP_NAME = String(process.env.APP_PASSKEY_RP_NAME || process.env.WEBAUTHN_RP_NAME || 'AcerttaPay').trim() || 'AcerttaPay';
 const PASSKEY_SUPPORTED_ALGORITHM_IDS = [-8, -7, -257];
+const PASSKEY_ALLOWED_TRANSPORTS = new Set(['ble', 'hybrid', 'internal', 'nfc', 'usb']);
 const PASSKEY_RUNTIME_AVAILABLE = !!simpleWebAuthnServer;
 
 function bufferToBase64Url(input) {
@@ -186,6 +187,31 @@ function normalizePasskeyLabel(value, fallback = 'Este aparelho') {
   return safe.slice(0, 60);
 }
 
+function normalizeCredentialTransports(value) {
+  if (!Array.isArray(value)) return undefined;
+  const safe = value
+    .map((entry) => String(entry || '').trim())
+    .filter((entry, index, list) => entry && PASSKEY_ALLOWED_TRANSPORTS.has(entry) && list.indexOf(entry) == index);
+  return safe.length ? safe : undefined;
+}
+
+function normalizeCredentialDescriptor(entry = {}) {
+  const id = String(
+    entry?.id
+    || entry?.credential_id
+    || entry?.credentialId
+    || ''
+  ).trim();
+
+  if (!id) return null;
+
+  return {
+    id,
+    type: 'public-key',
+    transports: normalizeCredentialTransports(entry?.transports)
+  };
+}
+
 async function generatePasskeyRegistrationOptions({ rpName, rpID, userID, userName, userDisplayName, excludeCredentials = [] }) {
   const api = getPasskeyServerApi();
   if (!api?.generateRegistrationOptions) {
@@ -203,10 +229,9 @@ async function generatePasskeyRegistrationOptions({ rpName, rpID, userID, userNa
     residentKey: 'preferred',
     userVerification: 'required',
     supportedAlgorithmIDs: PASSKEY_SUPPORTED_ALGORITHM_IDS,
-    excludeCredentials: excludeCredentials.map((entry) => ({
-      id: String(entry.id || '').trim(),
-      transports: Array.isArray(entry.transports) ? entry.transports.filter(Boolean) : undefined
-    }))
+    excludeCredentials: excludeCredentials
+      .map((entry) => normalizeCredentialDescriptor(entry))
+      .filter(Boolean)
   });
 }
 
@@ -260,10 +285,9 @@ async function generatePasskeyAuthenticationOptions({ rpID, allowCredentials = [
   return api.generateAuthenticationOptions({
     rpID,
     timeout: 60000,
-    allowCredentials: allowCredentials.map((entry) => ({
-      id: String(entry.id || '').trim(),
-      transports: Array.isArray(entry.transports) ? entry.transports.filter(Boolean) : undefined
-    })),
+    allowCredentials: allowCredentials
+      .map((entry) => normalizeCredentialDescriptor(entry))
+      .filter(Boolean),
     userVerification: 'required'
   });
 }

@@ -2414,10 +2414,13 @@ function bindPixForm(prefix, options = {}) {
       if (publicKey.challenge) publicKey.challenge = base64UrlToUint8Array(publicKey.challenge);
       if (publicKey.user && publicKey.user.id) publicKey.user.id = base64UrlToUint8Array(publicKey.user.id);
       if (Array.isArray(publicKey.excludeCredentials)) {
-        publicKey.excludeCredentials = publicKey.excludeCredentials.map((credential) => ({
-          ...credential,
-          id: base64UrlToUint8Array(credential.id)
-        }));
+        publicKey.excludeCredentials = publicKey.excludeCredentials
+          .filter((credential) => credential && credential.id)
+          .map((credential) => ({
+            ...credential,
+            type: credential.type || 'public-key',
+            id: base64UrlToUint8Array(credential.id)
+          }));
       }
       return publicKey;
     }

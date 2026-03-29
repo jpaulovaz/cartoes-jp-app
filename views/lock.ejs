@@ -670,10 +670,13 @@
         const publicKey = options ? JSON.parse(JSON.stringify(options)) : {};
         if (publicKey.challenge) publicKey.challenge = base64UrlToUint8Array(publicKey.challenge);
         if (Array.isArray(publicKey.allowCredentials)) {
-          publicKey.allowCredentials = publicKey.allowCredentials.map((credential) => ({
-            ...credential,
-            id: base64UrlToUint8Array(credential.id)
-          }));
+          publicKey.allowCredentials = publicKey.allowCredentials
+            .filter((credential) => credential && credential.id)
+            .map((credential) => ({
+              ...credential,
+              type: credential.type || 'public-key',
+              id: base64UrlToUint8Array(credential.id)
+            }));
         }
         return publicKey;
       }

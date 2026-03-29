@@ -109,7 +109,10 @@ const {
   PRIVATE_DEBT_STATUS_SETTLED,
   PRIVATE_DEBT_STATUS_CANCELLED,
   buildPrivateDebtPersonSnapshots,
-  mapPrivateDebtReminderRow
+  mapPrivateDebtReminderRow,
+  sanitizePrivateDebtDescription,
+  sanitizePrivateDebtNote,
+  normalizePrivateDebtPaymentDate
 } = require('./src/privateDebtReminders');
 
 // --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
@@ -5056,6 +5059,7 @@ function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
   const requestIdToHighlight = Number(query?.request) || null;
   const batchIdToHighlight = Number(query?.batch) || null;
   const settlementIdToHighlight = Number(query?.settlement) || null;
+  const privateReminderIdToHighlight = Number(query?.private) || null;
   const archivedRequestIds = getSharedDebtArchivedRequestIdSet(userId);
   const receivedWithPixMeta = attachSharedDebtPixMeta(getSharedDebtRequestsReceived(userId), userId);
   const sentWithPixMeta = attachSharedDebtPixMeta(getSharedDebtRequestsSent(userId), userId);
@@ -5071,6 +5075,8 @@ function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
   const sharedDebtFiltersActive = hasActiveSharedDebtTrackingFilters(sharedDebtFilters);
   const receivedTracking = filterSharedDebtTrackingItems(received, sharedDebtFilters);
   const sentTracking = filterSharedDebtTrackingItems(sent, sharedDebtFilters);
+  const privateDebtReminders = archiveMode ? [] : getPrivateDebtReminderRowsForOwner(userId, { includeArchived: false });
+  const privateDebtReminderTracking = archiveMode ? [] : filterPrivateDebtReminderTrackingItems(privateDebtReminders, sharedDebtFilters);
   const receivedPendingBatches = archiveMode ? [] : buildSharedDebtBatchCards(received, 'received').filter(batch => batch.pendingCount > 0);
   const sentPendingBatches = archiveMode ? [] : buildSharedDebtBatchCards(sent, 'sent').filter(batch => batch.pendingCount > 0);
   const eventsByRequest = getSharedDebtEventsByRequestIds([
@@ -5082,8 +5088,11 @@ function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
     requestIdToHighlight,
     batchIdToHighlight,
     settlementIdToHighlight,
+    privateReminderIdToHighlight,
     received,
     sent,
+    privateDebtReminders,
+    privateDebtReminderTracking,
     receivedPendingBatches,
     sentPendingBatches,
     receivedTracking,
@@ -5093,8 +5102,10 @@ function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
     draftSendQueues: archiveMode ? [] : getSharedDebtSendQueueDraftsForUser(userId),
     draftSendQueueSummary: archiveMode ? { queueCount: 0, itemCount: 0, totalCents: 0 } : getSharedDebtSendQueueDraftSummary(userId),
     manualDebtEligiblePeople: archiveMode ? [] : getManualSharedDebtEligiblePeople(userId),
+    manualDebtPeople: archiveMode ? [] : getPrivateDebtReminderSelectablePeople(userId),
     eventsByRequest,
     archiveMode,
+    todayIsoDate: dayjs().tz('America/Sao_Paulo').format('YYYY-MM-DD'),
     cardMonthlySettlements: Array.from(new Map([
       ...receivedSettlementMeta.snapshots.map((snapshot) => [snapshot.settlementKey || buildSharedDebtCardMonthlySettlementKey({ requesterUserId: snapshot.requesterUserId, receiverUserId: snapshot.receiverUserId, month: snapshot.month, year: snapshot.year }), snapshot]),
       ...sentSettlementMeta.snapshots.map((snapshot) => [snapshot.settlementKey || buildSharedDebtCardMonthlySettlementKey({ requesterUserId: snapshot.requesterUserId, receiverUserId: snapshot.receiverUserId, month: snapshot.month, year: snapshot.year }), snapshot])
@@ -6960,6 +6971,119 @@ function getManualSharedDebtEligiblePeople(userId) {
   return getPeopleAll(userId)
     .filter(person => person && person.can_share_charge && person.friendship_active && Number(person.active || 0) !== 0 && !person.is_self)
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' }));
+}
+
+function getPrivateDebtReminderSelectablePeople(userId) {
+  return getPeopleAll(userId)
+    .filter(person => person && Number(person.active || 0) !== 0 && !person.is_self)
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' }));
+}
+
+function normalizeManualSharedDebtMode(value) {
+  return String(value || '').trim().toLowerCase() === 'private' ? 'private' : 'app';
+}
+
+function createPrivateDebtReminder({ ownerUserId, person, description, amountCents, note = null, createdAt = null }) {
+  const cleanOwnerUserId = Number(ownerUserId || 0);
+  const cleanAmountCents = Math.max(0, Number(amountCents || 0));
+  if (!cleanOwnerUserId || !person || !cleanAmountCents) return null;
+
+  const snapshots = buildPrivateDebtPersonSnapshots(person);
+  const now = createdAt || nowIso();
+  const cleanDescription = sanitizePrivateDebtDescription(description, 120);
+  const cleanNote = sanitizePrivateDebtNote(note, 400);
+  if (!cleanDescription) return null;
+
+  const info = db.prepare(`
+    INSERT INTO private_debt_reminders (
+      owner_user_id,
+      person_id,
+      linked_user_id_snapshot,
+      person_name_snapshot,
+      person_email_snapshot,
+      person_phone_snapshot,
+      description_snapshot,
+      amount_cents,
+      request_note,
+      status,
+      is_archived,
+      created_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', 0, ?, ?)
+  `).run(
+    cleanOwnerUserId,
+    snapshots.personId,
+    snapshots.linkedUserIdSnapshot,
+    snapshots.personNameSnapshot,
+    snapshots.personEmailSnapshot,
+    snapshots.personPhoneSnapshot,
+    cleanDescription,
+    cleanAmountCents,
+    cleanNote,
+    now,
+    now
+  );
+
+  return Number(info.lastInsertRowid || 0) || null;
+}
+
+function getPrivateDebtReminderRowForOwner(ownerUserId, reminderId, { includeArchived = true } = {}) {
+  const safeOwnerUserId = Number(ownerUserId || 0);
+  const safeReminderId = Number(reminderId || 0);
+  if (!safeOwnerUserId || !safeReminderId) return null;
+
+  const where = ['r.owner_user_id = ?', 'r.id = ?'];
+  const params = [safeOwnerUserId, safeReminderId];
+  if (!includeArchived) {
+    where.push('COALESCE(r.is_archived, 0) = 0');
+  }
+
+  const row = db.prepare(`
+    SELECT
+      r.*,
+      p.name AS current_person_name,
+      COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS current_person_status,
+      COALESCE(p.active, 1) AS current_person_active
+    FROM private_debt_reminders r
+    LEFT JOIN people p ON p.id = r.person_id AND p.user_id = r.owner_user_id
+    WHERE ${where.join(' AND ')}
+    LIMIT 1
+  `).get(...params);
+
+  return row ? mapPrivateDebtReminderRow(row) : null;
+}
+
+function buildPrivateDebtReminderTrackingSearchText(item = {}) {
+  const createdDateText = item?.created_at ? formatDateBR(item.created_at) : '';
+  const paymentDateText = item?.payment_date ? formatDateBR(item.payment_date) : '';
+
+  return normalizeSharedDebtSearchTerm([
+    item?.description_snapshot,
+    item?.request_note,
+    item?.settlement_note,
+    item?.display_name,
+    item?.person_name_snapshot,
+    item?.person_email_snapshot,
+    item?.person_phone_snapshot,
+    item?.current_person_name,
+    item?.status,
+    'privado',
+    createdDateText,
+    paymentDateText
+  ].filter(Boolean).join(' '));
+}
+
+function filterPrivateDebtReminderTrackingItems(items = [], filters = {}) {
+  const normalized = normalizeSharedDebtTrackingFilters(filters);
+  const searchTerm = normalizeSharedDebtSearchTerm(normalized.q || '');
+
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    if (normalized.envio === 'grouped') return false;
+    if (normalized.origin !== 'all' && normalized.origin !== 'private') return false;
+    if (normalized.installment === 'yes') return false;
+    if (searchTerm && !buildPrivateDebtReminderTrackingSearchText(item).includes(searchTerm)) return false;
+    return true;
+  });
 }
 
 function upsertPushSubscription(userId, subscription) {
@@ -9388,7 +9512,7 @@ function normalizeSharedDebtTrackingFilters(query = {}) {
 
   return {
     envio: ['all', 'single', 'grouped'].includes(envio) ? envio : 'all',
-    origin: ['all', 'single', 'multiple', 'installment', 'mixed', 'manual'].includes(origin) ? origin : 'all',
+    origin: ['all', 'single', 'multiple', 'installment', 'mixed', 'manual', 'private'].includes(origin) ? origin : 'all',
     installment: ['all', 'yes', 'no'].includes(installment) ? installment : 'all',
     q
   };
@@ -9698,18 +9822,21 @@ app.post('/shared-debts/draft-queues/:id/discard', ensureAuthenticated, (req, re
 
 app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
+  const mode = normalizeManualSharedDebtMode(req.body.mode || req.body.delivery_mode || req.body.kind);
   const personId = Number(req.body.person_id || 0);
-  const description = String(req.body.description || '').trim();
-  const note = String(req.body.note || '').trim() || null;
+  const description = sanitizePrivateDebtDescription(req.body.description || '', 120);
+  const note = sanitizePrivateDebtNote(req.body.note || '', 400);
   const amountCents = centsFromPtBrMoney(req.body.amount);
 
   if (!personId) {
-    setFlash(req, 'error', 'Escolha uma amizade para enviar esse lembrete avulso.');
+    setFlash(req, 'error', mode === 'private'
+      ? 'Escolha um contato para guardar esse lembrete privado.'
+      : 'Escolha uma amizade para enviar esse lembrete avulso.');
     return res.redirect('/shared-debts');
   }
 
   if (!description) {
-    setFlash(req, 'error', 'Dê um nome curto para essa cobrança avulsa antes de enviar.');
+    setFlash(req, 'error', 'Dê um nome curto para esse combinado antes de continuar.');
     return res.redirect('/shared-debts');
   }
 
@@ -9718,9 +9845,39 @@ app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
     return res.redirect('/shared-debts');
   }
 
+  if (mode === 'private') {
+    const person = getPrivateDebtReminderSelectablePeople(userId).find(entry => Number(entry.id || 0) === personId);
+    if (!person) {
+      setFlash(req, 'error', 'Esse contato não está disponível para virar lembrete privado agora.');
+      return res.redirect('/shared-debts');
+    }
+
+    const reminderId = createPrivateDebtReminder({
+      ownerUserId: userId,
+      person,
+      description,
+      amountCents,
+      note,
+      createdAt: nowIso()
+    });
+
+    if (!reminderId) {
+      setFlash(req, 'error', 'Não consegui guardar esse lembrete privado agora. Tenta de novo em um instantinho.');
+      return res.redirect('/shared-debts');
+    }
+
+    const receiverName = person.name || person.linked_user_name || person.linked_user_email || 'esse contato';
+    if (person.can_share_charge && person.friendship_active) {
+      setFlash(req, 'success', `Lembrete privado criado para ${receiverName}. Fica só no seu app, sem avisar a outra pessoa.`);
+    } else {
+      setFlash(req, 'success', `Lembrete privado criado para ${receiverName}. Agora ele entra no seu controle até você confirmar o recebimento.`);
+    }
+    return res.redirect(`/shared-debts?private=${reminderId}`);
+  }
+
   const person = getManualSharedDebtEligiblePeople(userId).find(entry => Number(entry.id || 0) === personId);
   if (!person) {
-    setFlash(req, 'error', 'Essa amizade não está pronta para receber cobrança avulsa agora.');
+    setFlash(req, 'error', 'Essa amizade não está pronta para receber cobrança avulsa agora. Se preferir, dá para guardar como lembrete privado só no seu app.');
     return res.redirect('/shared-debts');
   }
 
@@ -9783,6 +9940,60 @@ app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
 
   setFlash(req, 'success', `Pronto! O lembrete avulso para ${receiverName} já foi enviado com a data de hoje.`);
   return res.redirect(`/shared-debts?request=${requestId}`);
+});
+
+app.post('/shared-debts/private/:id/settle', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const reminderId = Number(req.params.id || 0);
+  const note = sanitizePrivateDebtNote(req.body.note || '', 400);
+  const paymentDate = normalizePrivateDebtPaymentDate(req.body.payment_date || req.body.paymentDate || null);
+
+  if (!reminderId) {
+    setFlash(req, 'error', 'Esse lembrete privado não parece válido.');
+    return res.redirect('/shared-debts');
+  }
+
+  const reminder = getPrivateDebtReminderRowForOwner(userId, reminderId, { includeArchived: false });
+  if (!reminder) {
+    setFlash(req, 'error', 'Não encontrei esse lembrete privado por aqui.');
+    return res.redirect('/shared-debts');
+  }
+
+  if (reminder.status === PRIVATE_DEBT_STATUS_SETTLED) {
+    setFlash(req, 'info', 'Esse lembrete privado já estava quitado.');
+    return res.redirect(`/shared-debts?private=${reminderId}`);
+  }
+
+  if (reminder.status !== PRIVATE_DEBT_STATUS_OPEN) {
+    setFlash(req, 'info', 'Esse lembrete privado não está aberto para confirmação agora.');
+    return res.redirect(`/shared-debts?private=${reminderId}`);
+  }
+
+  const now = nowIso();
+  db.prepare(`
+    UPDATE private_debt_reminders
+    SET status = ?,
+        settlement_note = ?,
+        payment_date = ?,
+        settled_at = ?,
+        updated_at = ?
+    WHERE id = ?
+      AND owner_user_id = ?
+      AND status = ?
+      AND COALESCE(is_archived, 0) = 0
+  `).run(
+    PRIVATE_DEBT_STATUS_SETTLED,
+    note,
+    paymentDate,
+    now,
+    now,
+    reminderId,
+    userId,
+    PRIVATE_DEBT_STATUS_OPEN
+  );
+
+  setFlash(req, 'success', `Boa! O lembrete privado com ${reminder.display_name || 'esse contato'} foi marcado como recebido.`);
+  return res.redirect(`/shared-debts?private=${reminderId}`);
 });
 
 app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) => {

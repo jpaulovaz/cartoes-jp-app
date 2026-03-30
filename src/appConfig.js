@@ -3,56 +3,72 @@ const SETTING_SECTIONS = [
     key: 'google',
     title: 'Login com Google',
     eyebrow: 'Porta de entrada',
-    description: 'Aqui mora a chave que abre a porta do app. Sem esse trio, o login com Google tira folga.',
+    description: 'Client ID, secret e retorno do OAuth para o login com Google trabalhar bonito.',
+    shortDescription: 'Configura a porta de entrada via Google.',
+    group: 'identity',
     icon: 'google'
   },
   {
     key: 'whatsapp',
     title: 'WhatsApp automático',
     eyebrow: 'Disparos do resumo',
-    description: 'Configura a ponte com a Evolution API para mandar resumos e recadinhos sem drama.',
+    description: 'Ponte com a Evolution API para os envios automáticos de resumo e recados do app.',
+    shortDescription: 'Conecta o app ao WhatsApp automático.',
+    group: 'messaging',
     icon: 'whatsapp'
   },
   {
     key: 'email',
     title: 'E-mail transacional',
     eyebrow: 'Convites e boas-vindas',
-    description: 'Configura o SMTP para o admin disparar boas-vindas, testar a conexão e reenviar convites sem tropeço.',
+    description: 'SMTP para boas-vindas, testes de entrega e reenvio de convite sem depender de gambiarra.',
+    shortDescription: 'Liga o correio do admin e dos convites.',
+    group: 'messaging',
     icon: 'mail'
   },
   {
     key: 'push',
     title: 'Alertas e push',
     eyebrow: 'Sininho ligado',
-    description: 'Chaves web push e rotina dos lembretes de vencimento. É o setor onde o sino aprende a tocar.',
+    description: 'Chaves web push e rotina dos lembretes de vencimento do cartão.',
+    shortDescription: 'Controla o push e os lembretes do app.',
+    group: 'messaging',
     icon: 'bell'
   },
   {
     key: 'security',
     title: 'Sessão e segurança',
     eyebrow: 'Quem entra e por quanto tempo',
-    description: 'Ajusta segredo de sessão e tempo de inatividade. Aqui o app decide quanto tempo pode ficar cochilando.',
+    description: 'Segredo de sessão, timeout e regras que mexem com a permanência dentro do app.',
+    shortDescription: 'Define como a sessão se comporta.',
+    group: 'identity',
     icon: 'shield'
   },
   {
     key: 'sharedDebt',
     title: 'Cobranças entre amigos',
     eyebrow: 'Regra de vínculo',
-    description: 'Controla se cobrança automática depende de amizade ativa ou se pode rolar só no match de e-mail.',
+    description: 'Decide quando a cobrança automática depende de amizade ativa e quando o e-mail já basta.',
+    shortDescription: 'Ajusta a regra de vínculo das cobranças.',
+    group: 'rules',
     icon: 'friends'
   },
   {
     key: 'backup',
     title: 'Backup e restauração',
     eyebrow: 'Rede de segurança',
-    description: 'Define a rotina que guarda a memória do app em dois cantinhos do servidor e, se você quiser, também no Google Drive.',
+    description: 'Rotina do cofre local, integração com Google Drive e restauração do app.',
+    shortDescription: 'Protege a memória do app e cuida do retorno.',
+    group: 'operations',
     icon: 'archive'
   },
   {
     key: 'system',
     title: 'Sistema',
     eyebrow: 'Ajustes da casa',
-    description: 'Configurações mais estruturais do servidor. Algumas entram na hora, outras pedem um restart de carinho.',
+    description: 'Configurações estruturais do servidor; algumas entram na hora, outras pedem restart.',
+    shortDescription: 'Reúne os ajustes mais sensíveis do servidor.',
+    group: 'system',
     icon: 'sparkles'
   }
 ];

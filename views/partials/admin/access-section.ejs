@@ -1,0 +1,180 @@
+<%
+  const usersList = Array.isArray(users) ? users : [];
+  const adminUsersCount = usersList.filter((item) => String(item.role || '') === 'admin').length;
+  const importReleasedCount = usersList.filter((item) => Number(item.can_import ?? 1) !== 0).length;
+  const neverAccessedCount = usersList.filter((item) => !item.last_login).length;
+  const welcomePendingCount = usersList.filter((item) => (item.welcomeEmailStatus?.tone || 'muted') !== 'success').length;
+%>
+<section id="admin-section-access"
+         data-admin-search-target
+         data-admin-search="acessos usuarios convite email boas-vindas admin importacao login"
+         class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
+  <div class="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-700 space-y-5">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div class="max-w-3xl">
+        <span class="text-xs font-black uppercase tracking-[0.18em] text-blue-500 dark:text-blue-300">Acessos</span>
+        <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Quem entra, com qual papel e em que pé está o convite</h2>
+        <p class="mt-3 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">
+          Aqui fica o centro de acesso do app: convidar, ajustar papel, reenviar boas-vindas e revisar quem ainda nem passou da porta.
+        </p>
+      </div>
+
+      <div class="flex flex-wrap gap-3">
+        <button type="button" onclick="openAddUserModal()"
+          class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400">
+          <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          Liberar acesso
+        </button>
+        <button type="button" data-copy-login-url data-login-url="<%= emailState && emailState.loginUrl ? emailState.loginUrl : '/login' %>"
+          class="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900/40">
+          Copiar link de entrada
+        </button>
+      </div>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
+        <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Acessos ativos</div>
+        <div class="mt-3 text-3xl font-black tracking-tight text-slate-900 dark:text-white"><%= usersList.length %></div>
+        <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400"><%= adminUsersCount %> admin(s) e <%= Math.max(usersList.length - adminUsersCount, 0) %> usuário(s).</p>
+      </div>
+      <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
+        <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Importação liberada</div>
+        <div class="mt-3 text-3xl font-black tracking-tight text-slate-900 dark:text-white"><%= importReleasedCount %></div>
+        <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400"><%= Math.max(usersList.length - importReleasedCount, 0) %> acesso(s) com importação bloqueada.</p>
+      </div>
+      <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
+        <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Convites pedindo atenção</div>
+        <div class="mt-3 text-3xl font-black tracking-tight text-slate-900 dark:text-white"><%= welcomePendingCount %></div>
+        <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">Quem nunca recebeu ou ainda não teve envio confirmado.</p>
+      </div>
+      <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
+        <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Ainda sem login</div>
+        <div class="mt-3 text-3xl font-black tracking-tight text-slate-900 dark:text-white"><%= neverAccessedCount %></div>
+        <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">Útil para saber quem recebeu acesso, mas ainda não estreou.</p>
+      </div>
+    </div>
+
+    <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr),220px] xl:items-end">
+      <label class="block">
+        <span class="block text-[11px] font-black uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Buscar pessoa</span>
+        <div class="relative mt-2">
+          <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 dark:text-slate-500">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.6-5.15a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          </span>
+          <input type="search" data-access-search-input placeholder="Nome, e-mail, papel ou status"
+            class="w-full rounded-2xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-950 py-3 pl-10 pr-4 text-sm font-medium text-slate-800 dark:text-slate-100 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:focus:border-blue-500 dark:focus:bg-slate-900">
+        </div>
+      </label>
+
+      <label class="block">
+        <span class="block text-[11px] font-black uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Filtro rápido</span>
+        <select data-access-role-filter
+                class="mt-2 w-full rounded-2xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-950 px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-100 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:focus:border-blue-500 dark:focus:bg-slate-900">
+          <option value="all">Todos os acessos</option>
+          <option value="admin">Só admins</option>
+          <option value="user">Só usuários</option>
+          <option value="pending">Convites pedindo atenção</option>
+          <option value="never">Sem login ainda</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="flex items-center justify-between gap-3 text-sm font-medium text-slate-500 dark:text-slate-400">
+      <p>Cards compactos no lugar da tabela larga para o painel não depender de rolagem horizontal.</p>
+      <span data-access-results class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300"><%= usersList.length %> resultado(s)</span>
+    </div>
+  </div>
+
+  <div class="p-6 sm:p-8">
+    <% if (usersList.length > 0) { %>
+      <div data-access-list class="grid gap-4 2xl:grid-cols-2">
+        <% usersList.forEach((u) => {
+             const isSelf = user && u.id === user.id;
+             const welcomeTone = toneBadgeClasses[u.welcomeEmailStatus?.tone || 'muted'] || toneBadgeClasses.muted;
+             const roleLabel = u.role === 'admin' ? 'Administrador' : 'Usuário';
+             const importLabel = Number(u.can_import ?? 1) !== 0 ? 'Importação liberada' : 'Importação bloqueada';
+             const searchCorpus = [u.name, u.email, roleLabel, importLabel, u.welcomeEmailStatus?.label, u.welcomeEmailStatus?.detail].filter(Boolean).join(' ');
+        %>
+          <article data-access-card
+                   data-access-search="<%= searchCorpus %>"
+                   data-access-role="<%= u.role === 'admin' ? 'admin' : 'user' %>"
+                   data-access-welcome="<%= (u.welcomeEmailStatus?.tone || 'muted') === 'success' ? 'sent' : 'pending' %>"
+                   data-access-never="<%= u.last_login ? '0' : '1' %>"
+                   class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm space-y-4">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h3 class="text-lg font-black tracking-tight text-slate-900 dark:text-white"><%= u.name || '-' %></h3>
+                  <% if (isSelf) { %>
+                    <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200">Você</span>
+                  <% } %>
+                </div>
+                <div class="mt-1 break-all text-sm font-medium text-slate-500 dark:text-slate-400"><%= u.email %></div>
+                <div class="mt-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">ID <%= u.id %></div>
+              </div>
+
+              <div class="sm:text-right">
+                <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] <%= welcomeTone %>"><%= u.welcomeEmailStatus?.label || 'Nunca enviado' %></span>
+                <p class="mt-2 max-w-[22rem] text-xs font-medium leading-relaxed text-slate-500 dark:text-slate-400 sm:ml-auto"><%= u.welcomeEmailStatus?.detail || 'Ainda sem disparo de e-mail.' %></p>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] <%= u.role === 'admin' ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200' : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300' %>"><%= roleLabel %></span>
+              <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] <%= Number(u.can_import ?? 1) !== 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200' : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200' %>"><%= importLabel %></span>
+              <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">Criado em <%= u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '-' %></span>
+              <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300"><%= u.last_login ? `Último acesso ${new Date(u.last_login).toLocaleDateString('pt-BR')}` : 'Sem login ainda' %></span>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button type="button"
+                onclick="openEditUserModal(this)"
+                data-user-id="<%= u.id %>"
+                data-user-email="<%= u.email %>"
+                data-user-name="<%= u.name || '' %>"
+                data-user-role="<%= u.role || 'user' %>"
+                data-user-can-import="<%= Number(u.can_import ?? 1) !== 0 ? '1' : '0' %>"
+                class="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-slate-900/70">
+                Ajustar acesso
+              </button>
+
+              <button type="button"
+                data-copy-login-url
+                data-login-url="<%= emailState && emailState.loginUrl ? emailState.loginUrl : '/login' %>"
+                class="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-slate-900/70">
+                Copiar link
+              </button>
+
+              <form action="/admin/users/<%= u.id %>/resend-welcome" method="POST">
+                <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm font-black text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200 dark:hover:bg-emerald-950/40">
+                  Reenviar boas-vindas
+                </button>
+              </form>
+
+              <% if (!isSelf) { %>
+                <form action="/admin/remove-user/<%= u.id %>" method="POST" onsubmit="return confirm('Excluir esse acesso da área ativa? O histórico continua salvo, mas a exclusão trava se ainda houver cobrança aberta, Pix do mês em andamento ou rascunho na caixa de saída.')">
+                  <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-black text-red-600 transition hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/40">
+                    Remover acesso
+                  </button>
+                </form>
+              <% } %>
+            </div>
+          </article>
+        <% }) %>
+      </div>
+    <% } else { %>
+      <div class="op-empty-state op-empty-state--compact">
+        <div class="op-empty-state__icon">
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v6m3-3h-6m-6 6H5a2 2 0 01-2-2V8a2 2 0 012-2h4l2-2h2l2 2h4a2 2 0 012 2v4"></path></svg>
+        </div>
+        <div class="op-empty-state__title">Nenhum usuário encontrado</div>
+        <p class="op-empty-state__text">Cadastre o primeiro e-mail autorizado para começar a distribuir acessos ao aplicativo.</p>
+      </div>
+    <% } %>
+
+    <div class="mt-6 rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
+      O convite continua sendo de <span class="font-black text-slate-900 dark:text-white">acesso liberado + login com Google</span>. Nada de senha inventada nem texto sobrando para explicar o óbvio.
+    </div>
+  </div>
+</section>

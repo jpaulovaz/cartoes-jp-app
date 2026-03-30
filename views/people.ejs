@@ -93,7 +93,7 @@
   const renderPersonStatusChips = (person) => {
     const chips = [];
     const addChip = (classes, label) => {
-      chips.push(`<span class="inline-flex max-w-full items-center justify-start whitespace-nowrap rounded-full border px-2.5 py-1 text-[10.5px] font-bold leading-4 ${classes}">${label}</span>`);
+      chips.push(`<span class="inline-flex w-fit shrink-0 items-center whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-bold leading-4 ${classes}">${label}</span>`);
     };
 
     if (person.is_self) {
@@ -151,7 +151,7 @@
       return {
         key: 'friend',
         label: 'Amigos',
-        summary: 'Já podem dividir e cobrar por aqui.',
+        summary: 'Já podem dividir e cobrar.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
         barClasses: 'from-emerald-400 via-cyan-400 to-sky-500'
       };
@@ -200,7 +200,7 @@
     if (person && person.friendship_active && person.linked_user_pix_ready) {
       return {
         label: 'Pix ok',
-        summary: 'Nos pagamentos, o app usa o Pix salvo por essa pessoa.',
+        summary: 'Quando rolar pagamento, vai no Pix do perfil.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200'
       };
     }
@@ -208,7 +208,7 @@
     if (person && person.friendship_active && person.linked_user_pix_enabled) {
       return {
         label: 'Pix pendente',
-        summary: 'Ela ligou o Pix, mas ainda falta terminar.',
+        summary: 'O Pix foi ligado, mas ainda não ficou pronto.',
         badgeClasses: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
       };
     }
@@ -216,7 +216,7 @@
     if (person && person.friendship_active && person.has_app_user) {
       return {
         label: 'Pix pendente',
-        summary: 'A amizade está valendo; falta deixar o Pix pronto.',
+        summary: 'A amizade vale; o Pix ainda falta.',
         badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300'
       };
     }
@@ -224,14 +224,14 @@
     if (person && person.has_app_user) {
       return {
         label: 'Depois da amizade',
-        summary: 'Depois da amizade, o Pix vem do perfil da pessoa.',
+        summary: 'Depois da amizade, o Pix vem do perfil.',
         badgeClasses: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200'
       };
     }
 
     return {
       label: 'Sem Pix por aqui',
-      summary: 'Se a pessoa entrar no app, ela cadastra o Pix do lado dela.',
+      summary: 'Se ela entrar no app, cadastra o Pix do lado de lá.',
       badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300'
     };
   };
@@ -276,59 +276,60 @@
             <div class="absolute -left-10 top-0 h-28 w-28 rounded-full bg-amber-200/60 blur-3xl dark:bg-amber-500/20"></div>
             <div class="absolute right-0 top-6 h-24 w-24 rounded-full bg-sky-200/60 blur-3xl dark:bg-sky-500/20"></div>
           </div>
-          <div class="relative flex flex-col gap-5">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div class="flex min-w-0 flex-1 gap-4">
-                <div class="relative h-20 w-20 shrink-0">
-                  <% if (getAvatarUrl(selfProfile)) { %>
-                    <img src="<%= getAvatarUrl(selfProfile) %>" alt="<%= selfProfile.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-20 w-20 rounded-full object-cover ring-4 ring-white shadow-xl shadow-amber-500/10 dark:ring-slate-800">
-                  <% } else { %>
-                    <div class="flex h-20 w-20 items-center justify-center rounded-full bg-white text-2xl font-black text-amber-700 shadow-xl shadow-amber-500/10 dark:bg-slate-900 dark:text-amber-200"><%= getAvatarInitials(selfProfile) %></div>
-                  <% } %>
-                  <span class="absolute -bottom-1 -right-1 inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200 bg-white text-lg shadow-sm dark:border-amber-900 dark:bg-slate-900" title="Seu perfil">👑</span>
-                </div>
-
-                <div class="min-w-0 flex-1">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Seu perfil oficial</div>
-                  <h2 class="mt-2 truncate text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= selfProfile.name %></h2>
-                  <div class="mt-3 space-y-2 text-sm font-medium text-slate-600 dark:text-slate-300">
-                    <div class="flex min-w-0 items-center gap-2.5 rounded-2xl border border-white/70 bg-white/75 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/70">
-                      <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white/90 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a2 2 0 011.897 1.368l1.516 4.547a2 2 0 01-.45 2.11l-2.07 2.07a16 16 0 006.364 6.364l2.07-2.07a2 2 0 012.11-.45l4.547 1.516A2 2 0 0121 15.72V19a2 2 0 01-2 2h-1C9.163 21 3 14.837 3 7V5z"></path></svg>
-                      </span>
-                      <span class="min-w-0 flex-1 truncate leading-5" title="<%= selfPhoneDisplay ? selfPhoneDisplay : 'Telefone não informado por aqui ainda.' %>"><%= selfPhoneDisplay ? selfPhoneDisplay : 'Telefone não informado por aqui ainda.' %></span>
-                    </div>
-                    <div class="flex min-w-0 items-center gap-2.5 rounded-2xl border border-white/80 bg-white/80 px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
-                      <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white/90 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-16 8h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
-                      </span>
-                      <span class="min-w-0 flex-1 truncate leading-5" title="<%= selfEmail ? selfEmail : 'E-mail não informado por aqui ainda.' %>"><%= selfEmail ? selfEmail : 'E-mail não informado por aqui ainda.' %></span>
-                    </div>
-                  </div>
-                  <div class="mt-4 flex flex-wrap items-center gap-1.5">
-                    <%- renderPersonStatusChips(selfProfile) %>
-                  </div>
-                  <p class="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Esse é o perfil que aparece nas suas cobranças e divisões por aqui.</p>
-                </div>
+          <div class="relative flex flex-col gap-4">
+            <div class="flex min-w-0 gap-4">
+              <div class="relative h-20 w-20 shrink-0">
+                <% if (getAvatarUrl(selfProfile)) { %>
+                  <img src="<%= getAvatarUrl(selfProfile) %>" alt="<%= selfProfile.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-20 w-20 rounded-full object-cover ring-4 ring-white shadow-xl shadow-amber-500/10 dark:ring-slate-800">
+                <% } else { %>
+                  <div class="flex h-20 w-20 items-center justify-center rounded-full bg-white text-2xl font-black text-amber-700 shadow-xl shadow-amber-500/10 dark:bg-slate-900 dark:text-amber-200"><%= getAvatarInitials(selfProfile) %></div>
+                <% } %>
+                <span class="absolute -bottom-1 -right-1 inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200 bg-white text-lg shadow-sm dark:border-amber-900 dark:bg-slate-900" title="Seu perfil">👑</span>
               </div>
 
-              <div class="grid grid-cols-2 gap-3 sm:w-[17rem] lg:shrink-0">
-                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Amizades</div>
-                  <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= activeFriendCount %></div>
+              <div class="min-w-0 flex-1">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Seu perfil oficial</div>
+                <h2 class="mt-2 truncate text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= selfProfile.name %></h2>
+                <div class="mt-3 space-y-2 text-[13px] font-medium text-slate-600 dark:text-slate-300">
+                  <div class="flex min-w-0 items-center gap-2 rounded-2xl border border-white/70 bg-white/75 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/70">
+                    <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white/90 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a2 2 0 011.897 1.368l1.516 4.547a2 2 0 01-.45 2.11l-2.07 2.07a16 16 0 006.364 6.364l2.07-2.07a2 2 0 012.11-.45l4.547 1.516A2 2 0 0121 15.72V19a2 2 0 01-2 2h-1C9.163 21 3 14.837 3 7V5z"></path></svg>
+                    </span>
+                    <span class="block min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap leading-5" title="<%= selfPhoneDisplay ? selfPhoneDisplay : 'Telefone não informado por aqui ainda.' %>"><%= selfPhoneDisplay ? selfPhoneDisplay : 'Telefone não informado por aqui ainda.' %></span>
+                  </div>
+                  <div class="flex min-w-0 items-center gap-2 rounded-2xl border border-white/80 bg-white/80 px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
+                    <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white/90 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-16 8h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+                    </span>
+                    <span class="block min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap leading-5" title="<%= selfEmail ? selfEmail : 'E-mail não informado por aqui ainda.' %>"><%= selfEmail ? selfEmail : 'E-mail não informado por aqui ainda.' %></span>
+                  </div>
                 </div>
-                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Contatos</div>
-                  <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= contactList.length %></div>
+                <div class="mt-4 flex flex-wrap gap-2">
+                  <%- renderPersonStatusChips(selfProfile) %>
                 </div>
-                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Convites</div>
-                  <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= pendingContactCount %></div>
+                <div class="mt-3 inline-flex max-w-full items-center gap-2 rounded-full border border-white/80 bg-white/80 px-3 py-2 text-[13px] font-semibold leading-5 text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300 sm:whitespace-nowrap">
+                  <span aria-hidden="true">✨</span>
+                  <span>Esse perfil aparece nas suas cobranças e divisões.</span>
                 </div>
-                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Pix pronto</div>
-                  <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= selfProfile.pix_enabled && selfProfile.pix_valid ? 'Sim' : 'Não' %></div>
-                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Amizades</div>
+                <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= activeFriendCount %></div>
+              </div>
+              <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Contatos</div>
+                <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= contactList.length %></div>
+              </div>
+              <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Convites</div>
+                <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= pendingContactCount %></div>
+              </div>
+              <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Pix pronto</div>
+                <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= selfProfile.pix_enabled && selfProfile.pix_valid ? 'Sim' : 'Não' %></div>
               </div>
             </div>
           </div>
@@ -1131,25 +1132,25 @@
              const profileSignatureVisible = p.friendship_active && !!(p.profile_signature_text || p.profile_signature_vibe);
              let personHintText = '';
              if (!p.email) {
-               personHintText = 'Com e-mail, fica mais fácil descobrir se essa pessoa já usa o app.';
+               personHintText = 'Com e-mail, fica mais fácil achar essa pessoa no app.';
              } else if (!p.has_app_user) {
-               personHintText = 'Ainda não achamos essa pessoa no app com esse e-mail. Se ela entrar depois, o Pix continua sendo dela.';
+               personHintText = 'Ainda não achamos essa pessoa no app. Se ela entrar depois, o Pix continua sendo dela.';
              } else if (p.friendship_active && !p.active) {
-               personHintText = 'A amizade continua valendo, mas esse contato está pausado na sua lista.';
+               personHintText = 'A amizade vale, mas esse contato está pausado.';
              } else if (p.friendship_active && p.linked_user_pix_ready) {
-               personHintText = 'Quando pintar pagamento, o app usa o Pix salvo por essa pessoa.';
+               personHintText = 'Quando rolar pagamento, o app usa o Pix do perfil dela.';
              } else if (p.friendship_active && p.linked_user_pix_enabled && !p.linked_user_pix_ready) {
-               personHintText = 'A amizade já está valendo, mas essa pessoa ainda está terminando o Pix.';
+               personHintText = 'A amizade vale, mas o Pix dela ainda está terminando.';
              } else if (p.friendship_active) {
-               personHintText = 'A amizade já está valendo. Agora só falta essa pessoa deixar o Pix pronto.';
+               personHintText = 'A amizade já vale. Só falta o Pix dela.';
              } else if (p.friendship_state === 'pending_sent') {
-               personHintText = 'O convite já foi enviado. Agora é esperar a resposta.';
+               personHintText = 'Convite enviado. Agora é esperar.';
              } else if (p.friendship_state === 'pending_received') {
                personHintText = 'Essa pessoa já te chamou. É só aceitar.';
              } else if (!p.active) {
-               personHintText = 'Esse contato usa o app, mas está pausado na sua lista.';
+               personHintText = 'Esse contato usa o app, mas está pausado.';
              } else {
-               personHintText = 'O app já encontrou essa pessoa. Se fizer sentido, mande um convite.';
+               personHintText = 'O app já encontrou essa pessoa. Se fizer sentido, mande convite.';
              }
         %>
           <article
@@ -1158,93 +1159,95 @@
             data-search-text="<%= [p.name, p.phone_search_text, p.email, personState.label, personHintText, p.profile_signature_text, profileSignatureMeta?.label].filter(Boolean).join(' ') %>"
             class="group relative overflow-hidden rounded-[30px] border bg-white shadow-sm transition-all dark:bg-slate-800 <%= isHighlighted ? 'border-emerald-400 ring-2 ring-emerald-200 dark:border-emerald-500 dark:ring-emerald-900/70' : 'border-slate-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md dark:border-slate-700 dark:hover:border-slate-600' %>">
             <div class="h-1.5 bg-gradient-to-r <%= personState.barClasses %>"></div>
-            <div class="flex flex-col gap-5 p-5 sm:p-6">
-              <div class="flex flex-col gap-5 xl:grid xl:grid-cols-[minmax(0,1fr)_13rem] xl:items-start xl:gap-4">
-                <div class="flex min-w-0 gap-4 xl:pr-2">
-                  <div class="relative h-14 w-14 shrink-0">
-                    <% if (getAvatarUrl(p)) { %>
-                      <img src="<%= getAvatarUrl(p) %>" alt="<%= p.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-14 w-14 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700">
-                    <% } else { %>
-                      <div class="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-lg font-black text-slate-600 transition-colors group-hover:bg-sky-50 group-hover:text-sky-600 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:bg-sky-900/40"><%= getAvatarInitials(p) %></div>
-                    <% } %>
-                    <% if (p.friendship_active) { %>
-                      <span class="absolute -bottom-1 -right-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-emerald-200 bg-emerald-500 text-[13px] text-white shadow-sm dark:border-emerald-700" title="Amizade ativa">🔗</span>
-                    <% } %>
-                  </div>
-
-                  <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-1.5">
-                      <h3 class="truncate text-xl font-black text-slate-900 dark:text-white"><%= p.name %></h3>
-                      <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[10.5px] font-bold <%= personState.badgeClasses %>"><%= personState.label %></span>
-                      <button type="button"
-                        data-id="<%= p.id %>"
-                        data-name="<%= p.name %>"
-                        data-phone="<%= p.phone_ui_national || '' %>"
-                        data-phone-country="<%= p.phone_ui_country || phoneDefaultCountryCode %>"
-                        data-email="<%= p.email || '' %>"
-                        onclick="editContactFromButton(this)"
-                        class="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-800 dark:hover:bg-sky-900/20 dark:hover:text-sky-200"
-                        aria-label="Editar contato"
-                        title="Editar contato">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                      </button>
-                    </div>
-                    <div class="mt-3 space-y-2 text-sm font-medium text-slate-600 dark:text-slate-300">
-                      <div class="flex min-w-0 items-center gap-2.5 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
-                        <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50/80 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
-                          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a2 2 0 011.897 1.368l1.516 4.547a2 2 0 01-.45 2.11l-2.07 2.07a16 16 0 006.364 6.364l2.07-2.07a2 2 0 012.11-.45l4.547 1.516A2 2 0 0121 15.72V19a2 2 0 01-2 2h-1C9.163 21 3 14.837 3 7V5z"></path></svg>
-                        </span>
-                        <span class="min-w-0 flex-1 truncate leading-5" title="<%= p.phone_display ? p.phone_display : 'Telefone não informado ainda.' %>"><%= p.phone_display ? p.phone_display : 'Telefone não informado ainda.' %></span>
-                      </div>
-                      <div class="flex min-w-0 items-center gap-2.5 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/70">
-                        <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50/80 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
-                          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-16 8h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
-                        </span>
-                        <span class="min-w-0 flex-1 truncate leading-5" title="<%= p.email ? p.email : 'E-mail não informado ainda.' %>"><%= p.email ? p.email : 'E-mail não informado ainda.' %></span>
-                      </div>
-                    </div>
-                    <div class="mt-3 inline-flex max-w-full items-center gap-2 rounded-2xl bg-slate-50/80 px-3 py-2 text-sm font-medium leading-5 text-slate-600 dark:bg-slate-900/60 dark:text-slate-300"><span aria-hidden="true">💬</span><span><%= personState.summary %></span></div>
-                    <div class="mt-4 flex flex-wrap items-center gap-1.5">
-                      <%- renderPersonStatusChips(p) %>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="flex w-full flex-col gap-2 xl:w-[13rem] xl:shrink-0">
-                  <% if (p.friendship_state === 'active') { %>
-                    <form method="post" action="/people/<%= p.id %>/unfriend" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novas cobranças entre vocês param na hora.">
-                      <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Desfazer amizade</button>
-                    </form>
-                  <% } else if (p.friendship_state === 'pending_sent') { %>
-                    <form method="post" action="/friend-requests/<%= p.outgoing_friend_request_id %>/cancel">
-                      <button class="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-700 transition-all hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">Cancelar pedido</button>
-                    </form>
-                  <% } else if (p.friendship_state === 'pending_received') { %>
-                    <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
-                      <input type="hidden" name="action" value="accept">
-                      <button class="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">Aceitar amizade</button>
-                    </form>
-                    <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
-                      <input type="hidden" name="action" value="reject">
-                      <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Recusar</button>
-                    </form>
-                  <% } else if (p.has_app_user && p.active) { %>
-                    <form method="post" action="/people/<%= p.id %>/send-friend-request">
-                      <button class="w-full rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Enviar pedido de amizade</button>
-                    </form>
+            <div class="flex flex-col gap-4 p-5 sm:p-6">
+              <div class="flex min-w-0 gap-4">
+                <div class="relative h-14 w-14 shrink-0">
+                  <% if (getAvatarUrl(p)) { %>
+                    <img src="<%= getAvatarUrl(p) %>" alt="<%= p.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-14 w-14 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700">
                   <% } else { %>
-                    <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">Convite indisponível</div>
+                    <div class="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-lg font-black text-slate-600 transition-colors group-hover:bg-sky-50 group-hover:text-sky-600 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:bg-sky-900/40"><%= getAvatarInitials(p) %></div>
                   <% } %>
+                  <% if (p.friendship_active) { %>
+                    <span class="absolute -bottom-1 -right-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-emerald-200 bg-emerald-500 text-[13px] text-white shadow-sm dark:border-emerald-700" title="Amizade ativa">🔗</span>
+                  <% } %>
+                </div>
 
-                  <div class="grid grid-cols-2 gap-2 pt-1">
-                    <form method="post" action="/people/<%= p.id %>/toggle">
-                      <button class="w-full rounded-xl border bg-white px-3 py-2.5 text-xs font-bold shadow-sm transition-colors dark:bg-slate-900 <%= p.active ? 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20' : 'border-green-200 text-green-700 hover:bg-green-50 dark:border-green-900 dark:text-green-400 dark:hover:bg-green-900/20' %>"><%= p.active ? 'Desativar' : 'Reativar' %></button>
-                    </form>
-                    <form method="post" action="/people/<%= p.id %>/delete" data-confirm-prompt="Excluir <%= p.name %> da sua lista ativa? O passado continua salvo, mas a exclusão trava se ainda houver valor em aberto, Pix do mês em andamento ou cobrança guardada para enviar depois." data-confirm-phrase="Eu confirmo">
-                      <button class="w-full rounded-xl border border-red-200 bg-white px-3 py-2.5 text-xs font-bold text-red-700 shadow-sm transition-colors hover:bg-red-50 dark:border-red-900 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-900/20">Excluir da lista</button>
-                    </form>
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-start gap-2">
+                    <h3 class="min-w-0 flex-1 text-xl font-black text-slate-900 dark:text-white"><span class="block truncate"><%= p.name %></span></h3>
+                    <span class="inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[10.5px] font-bold <%= personState.badgeClasses %>"><%= personState.label %></span>
+                    <button type="button"
+                      data-id="<%= p.id %>"
+                      data-name="<%= p.name %>"
+                      data-phone="<%= p.phone_ui_national || '' %>"
+                      data-phone-country="<%= p.phone_ui_country || phoneDefaultCountryCode %>"
+                      data-email="<%= p.email || '' %>"
+                      onclick="editContactFromButton(this)"
+                      class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-800 dark:hover:bg-sky-900/20 dark:hover:text-sky-200"
+                      aria-label="Editar contato"
+                      title="Editar contato">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    </button>
+                  </div>
+
+                  <div class="mt-3 space-y-2 text-[13px] font-medium text-slate-600 dark:text-slate-300">
+                    <div class="flex min-w-0 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
+                      <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50/80 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a2 2 0 011.897 1.368l1.516 4.547a2 2 0 01-.45 2.11l-2.07 2.07a16 16 0 006.364 6.364l2.07-2.07a2 2 0 012.11-.45l4.547 1.516A2 2 0 0121 15.72V19a2 2 0 01-2 2h-1C9.163 21 3 14.837 3 7V5z"></path></svg>
+                      </span>
+                      <span class="block min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap leading-5" title="<%= p.phone_display ? p.phone_display : 'Telefone não informado ainda.' %>"><%= p.phone_display ? p.phone_display : 'Telefone não informado ainda.' %></span>
+                    </div>
+                    <div class="flex min-w-0 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/70">
+                      <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50/80 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-16 8h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+                      </span>
+                      <span class="block min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap leading-5" title="<%= p.email ? p.email : 'E-mail não informado ainda.' %>"><%= p.email ? p.email : 'E-mail não informado ainda.' %></span>
+                    </div>
+                  </div>
+
+                  <div class="mt-3 inline-flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-slate-50/80 px-3 py-2 text-[13px] font-semibold leading-5 text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 sm:whitespace-nowrap">
+                    <span aria-hidden="true">💬</span>
+                    <span><%= personState.summary %></span>
                   </div>
                 </div>
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                <%- renderPersonStatusChips(p) %>
+              </div>
+
+              <div class="flex flex-col gap-2 sm:ml-auto sm:w-[11.5rem]">
+                <% if (p.friendship_state === 'active') { %>
+                  <form method="post" action="/people/<%= p.id %>/unfriend" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novas cobranças entre vocês param na hora.">
+                    <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Desfazer amizade</button>
+                  </form>
+                <% } else if (p.friendship_state === 'pending_sent') { %>
+                  <form method="post" action="/friend-requests/<%= p.outgoing_friend_request_id %>/cancel">
+                    <button class="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-700 transition-all hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">Cancelar pedido</button>
+                  </form>
+                <% } else if (p.friendship_state === 'pending_received') { %>
+                  <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
+                    <input type="hidden" name="action" value="accept">
+                    <button class="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">Aceitar amizade</button>
+                  </form>
+                  <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
+                    <input type="hidden" name="action" value="reject">
+                    <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Recusar</button>
+                  </form>
+                <% } else if (p.has_app_user && p.active) { %>
+                  <form method="post" action="/people/<%= p.id %>/send-friend-request">
+                    <button class="w-full rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Enviar pedido</button>
+                  </form>
+                <% } else { %>
+                  <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">Convite indisponível</div>
+                <% } %>
+
+                <form method="post" action="/people/<%= p.id %>/toggle">
+                  <button class="w-full rounded-xl border bg-white px-3 py-2.5 text-xs font-bold shadow-sm transition-colors dark:bg-slate-900 <%= p.active ? 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20' : 'border-green-200 text-green-700 hover:bg-green-50 dark:border-green-900 dark:text-green-400 dark:hover:bg-green-900/20' %>"><%= p.active ? 'Desativar' : 'Reativar' %></button>
+                </form>
+                <form method="post" action="/people/<%= p.id %>/delete" data-confirm-prompt="Excluir <%= p.name %> da sua lista ativa? O passado continua salvo, mas a exclusão trava se ainda houver valor em aberto, Pix do mês em andamento ou cobrança guardada para enviar depois." data-confirm-phrase="Eu confirmo">
+                  <button class="w-full rounded-xl border border-red-200 bg-white px-3 py-2.5 text-xs font-bold text-red-700 shadow-sm transition-colors hover:bg-red-50 dark:border-red-900 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-900/20">Excluir da lista</button>
+                </form>
               </div>
 
               <div class="grid gap-3 xl:grid-cols-2">
@@ -1253,7 +1256,7 @@
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600/80 dark:text-violet-300/80">Pix nas cobranças</div>
                     <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= pixState.badgeClasses %>"><%= pixState.label %></span>
                   </div>
-                  <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= pixState.summary %></p>
+                  <p class="mt-2 text-[13px] font-medium leading-5 text-slate-600 dark:text-slate-300"><%= pixState.summary %></p>
                 </div>
 
                 <div class="rounded-[24px] border border-sky-100/70 bg-slate-50/90 px-4 py-3.5 shadow-sm shadow-sky-100/10 dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
@@ -1273,9 +1276,9 @@
                         <% } %>
                       </div>
                       <% if (profileSignatureVisible) { %>
-                        <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= p.profile_signature_text || 'Essa pessoa preferiu mostrar só o status por aqui.' %></p>
+                        <p class="mt-1 text-[13px] font-medium leading-5 text-slate-600 dark:text-slate-300"><%= p.profile_signature_text || 'Essa pessoa preferiu mostrar só o status por aqui.' %></p>
                       <% } else { %>
-                        <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= personHintText %></p>
+                        <p class="mt-1 text-[13px] font-medium leading-5 text-slate-600 dark:text-slate-300"><%= personHintText %></p>
                       <% } %>
                     </div>
                   </div>

@@ -10629,6 +10629,370 @@ function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
 }
 
 
+
+function getSharedDebtCardDetailBreakdownForMonth(userId, month, year, scope = 'owed') {
+  const safeUserId = Number(userId || 0);
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  if (!safeUserId || !safeMonth || !safeYear) {
+    return { totalCents: 0, itemCount: 0, settlementCount: 0 };
+  }
+
+  const roleColumn = scope === 'owed' ? 'receiver_user_id' : 'requester_user_id';
+  const pairRows = db.prepare(`
+    SELECT DISTINCT r.requester_user_id, r.receiver_user_id
+    FROM shared_debt_requests r
+    LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE r.${roleColumn} = ?
+      AND COALESCE(r.request_kind, 'card') = 'card'
+      AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
+      AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
+      AND r.status IN ('accepted', 'settled')
+  `).all(safeUserId, safeMonth, safeYear);
+
+  return pairRows.reduce((acc, row) => {
+    const snapshot = getSharedDebtCardMonthlySettlementSnapshot({
+      requesterUserId: row.requester_user_id,
+      receiverUserId: row.receiver_user_id,
+      month: safeMonth,
+      year: safeYear
+    });
+
+    if (!snapshot || Number(snapshot.openCents || 0) <= 0) {
+      return acc;
+    }
+
+    const openCents = Math.max(0, Number(snapshot.openCents || 0));
+    const preview = buildSharedDebtCardMonthlyIntentPreview(snapshot, openCents, {
+      maxAmountCents: openCents
+    });
+
+    acc.totalCents += openCents;
+    acc.itemCount += Math.max(1, Number(preview?.touchedCount || 0));
+    acc.settlementCount += 1;
+    return acc;
+  }, { totalCents: 0, itemCount: 0, settlementCount: 0 });
+}
+
+function buildSharedDebtDetailPayStatus(summary = {}) {
+  const pendingReceivedCount = Math.max(0, Number(summary.pendingReceivedCount || 0));
+  const manualOwedCount = Math.max(0, Number(summary.manual?.owedCount || 0));
+  const cardOwedCount = Math.max(0, Number(summary.card?.owedItemCount || 0));
+  const totalOwedCents = Math.max(0, Number(summary.pay?.amountCents || 0));
+
+  if (pendingReceivedCount > 0) {
+    return {
+      tone: 'warning',
+      label: pendingReceivedCount === 1
+        ? '1 envio ainda aguarda sua decisão.'
+        : `${pendingReceivedCount} envios ainda aguardam sua decisão.`
+    };
+  }
+
+  if (totalOwedCents > 0) {
+    if (manualOwedCount > 0 && cardOwedCount > 0) {
+      return {
+        tone: 'info',
+        label: 'Tem combinado avulso e cartão batendo ponto aqui.'
+      };
+    }
+
+    if (cardOwedCount > 0) {
+      return {
+        tone: 'info',
+        label: cardOwedCount === 1
+          ? '1 item do cartão segue em aberto.'
+          : `${cardOwedCount} itens do cartão seguem em aberto.`
+      };
+    }
+
+    return {
+      tone: 'info',
+      label: manualOwedCount === 1
+        ? '1 combinado ainda segue em aberto.'
+        : `${manualOwedCount} combinados ainda seguem em aberto.`
+    };
+  }
+
+  return {
+    tone: 'success',
+    label: 'Nada puxando seu mês desse lado.'
+  };
+}
+
+function buildSharedDebtDetailReceiveStatus(summary = {}) {
+  const pendingReceiptConfirmationCount = Math.max(0, Number(summary.pendingReceiptConfirmationCount || 0));
+  const senderDecisionCount = Math.max(0, Number(summary.senderDecisionCount || 0));
+  const pendingSentCount = Math.max(0, Number(summary.pendingSentCount || 0));
+  const manualReceivableCount = Math.max(0, Number(summary.manual?.receivableCount || 0));
+  const privateActiveCount = Math.max(0, Number(summary.manual?.privateActiveCount || 0));
+  const cardReceivableCount = Math.max(0, Number(summary.card?.receivableItemCount || 0));
+  const totalReceivableCents = Math.max(0, Number(summary.receive?.amountCents || 0));
+
+  if (pendingReceiptConfirmationCount > 0) {
+    return {
+      tone: 'warning',
+      label: pendingReceiptConfirmationCount === 1
+        ? '1 pagamento já pode receber seu ok.'
+        : `${pendingReceiptConfirmationCount} pagamentos já podem receber seu ok.`
+    };
+  }
+
+  if (senderDecisionCount > 0) {
+    return {
+      tone: 'warning',
+      label: senderDecisionCount === 1
+        ? '1 recusa pede sua decisão.'
+        : `${senderDecisionCount} recusas pedem sua decisão.`
+    };
+  }
+
+  if (pendingSentCount > 0) {
+    return {
+      tone: 'info',
+      label: pendingSentCount === 1
+        ? '1 envio ainda aguarda aceite.'
+        : `${pendingSentCount} envios ainda aguardam aceite.`
+    };
+  }
+
+  if (totalReceivableCents > 0) {
+    if (!manualReceivableCount && !cardReceivableCount && privateActiveCount > 0) {
+      return {
+        tone: 'info',
+        label: privateActiveCount === 1
+          ? '1 lembrete privado segue no seu radar.'
+          : `${privateActiveCount} lembretes privados seguem no seu radar.`
+      };
+    }
+
+    if ((manualReceivableCount + privateActiveCount) > 0 && cardReceivableCount > 0) {
+      return {
+        tone: 'info',
+        label: 'Tem avulsas e cartão rodando daqui.'
+      };
+    }
+
+    if (cardReceivableCount > 0) {
+      return {
+        tone: 'info',
+        label: cardReceivableCount === 1
+          ? '1 item do cartão segue esperando acerto.'
+          : `${cardReceivableCount} itens do cartão seguem esperando acerto.`
+      };
+    }
+
+    const manualLikeCount = manualReceivableCount + privateActiveCount;
+    return {
+      tone: 'info',
+      label: manualLikeCount === 1
+        ? '1 cobrança segue em aberto daqui.'
+        : `${manualLikeCount} cobranças seguem em aberto daqui.`
+    };
+  }
+
+  return {
+    tone: 'success',
+    label: 'Nada pendurado do lado de cá.'
+  };
+}
+
+function getSharedDebtDetailModuleSummary(userId, month, year) {
+  const safeUserId = Number(userId || 0);
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+
+  if (!safeUserId || !safeMonth || !safeYear) {
+    return {
+      hasAnySignal: false,
+      headerHref: '/shared-debts',
+      pay: { amountCents: 0, count: 0, href: '/shared-debts#received', ctaLabel: 'Ver recebidas', status: { tone: 'success', label: 'Nada puxando seu mês desse lado.' } },
+      receive: { amountCents: 0, count: 0, href: '/shared-debts#sent', ctaLabel: 'Ver enviadas', status: { tone: 'success', label: 'Nada pendurado do lado de cá.' } },
+      manual: { owedCents: 0, receivableCents: 0, owedCount: 0, receivableCount: 0, bilateralCount: 0, privateActiveCents: 0, privateActiveCount: 0, totalCount: 0, href: '/shared-debts' },
+      card: { owedCents: 0, receivableCents: 0, owedItemCount: 0, receivableItemCount: 0, itemCount: 0, settlementCount: 0, href: '/shared-debts' },
+      chips: []
+    };
+  }
+
+  const manualOwedRow = db.prepare(`
+    SELECT
+      COUNT(*) AS total_requests,
+      COALESCE(SUM(CASE
+        WHEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0)) > 0 THEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0))
+        ELSE 0
+      END), 0) AS total_cents
+    FROM shared_debt_requests r
+    WHERE r.receiver_user_id = ?
+      AND COALESCE(r.request_kind, 'card') = 'manual'
+      AND r.status = 'accepted'
+  `).get(safeUserId) || { total_requests: 0, total_cents: 0 };
+
+  const manualReceivableRow = db.prepare(`
+    SELECT
+      COUNT(*) AS total_requests,
+      COALESCE(SUM(CASE
+        WHEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0)) > 0 THEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0))
+        ELSE 0
+      END), 0) AS total_cents
+    FROM shared_debt_requests r
+    WHERE r.requester_user_id = ?
+      AND COALESCE(r.request_kind, 'card') = 'manual'
+      AND r.status = 'accepted'
+  `).get(safeUserId) || { total_requests: 0, total_cents: 0 };
+
+  const cardOwed = getSharedDebtCardDetailBreakdownForMonth(safeUserId, safeMonth, safeYear, 'owed');
+  const cardReceivable = getSharedDebtCardDetailBreakdownForMonth(safeUserId, safeMonth, safeYear, 'receivable');
+  const privateReminderSummary = getPrivateDebtReminderDashboardSummary(safeUserId);
+
+  const pendingReceivedCount = db.prepare(`
+    SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS total
+    FROM shared_debt_requests
+    WHERE receiver_user_id = ?
+      AND status = 'pending'
+  `).get(safeUserId)?.total || 0;
+
+  const pendingSentCount = db.prepare(`
+    SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS total
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND status = 'pending'
+  `).get(safeUserId)?.total || 0;
+
+  const senderDecisionCount = db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND status = 'rejected_by_receiver'
+  `).get(safeUserId)?.total || 0;
+
+  const legacyPendingReceiptConfirmationCount = db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND status = 'accepted'
+      AND payment_marked_at IS NOT NULL
+  `).get(safeUserId)?.total || 0;
+
+  const monthlyPendingReceiptConfirmationCount = db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM shared_debt_payment_intents
+    WHERE requester_user_id = ?
+      AND request_kind = 'card'
+      AND status = 'reported'
+  `).get(safeUserId)?.total || 0;
+
+  const pendingReceiptConfirmationCount = legacyPendingReceiptConfirmationCount + monthlyPendingReceiptConfirmationCount;
+
+  const manualOwedCount = Math.max(0, Number(manualOwedRow.total_requests || 0));
+  const manualReceivableCount = Math.max(0, Number(manualReceivableRow.total_requests || 0));
+  const manualOwedCents = Math.max(0, Number(manualOwedRow.total_cents || 0));
+  const manualReceivableCents = Math.max(0, Number(manualReceivableRow.total_cents || 0));
+  const privateActiveCount = Math.max(0, Number(privateReminderSummary.activeCount || 0));
+  const privateActiveCents = Math.max(0, Number(privateReminderSummary.activeCents || 0));
+  const cardOwedCents = Math.max(0, Number(cardOwed.totalCents || 0));
+  const cardReceivableCents = Math.max(0, Number(cardReceivable.totalCents || 0));
+  const cardOwedCount = Math.max(0, Number(cardOwed.itemCount || 0));
+  const cardReceivableCount = Math.max(0, Number(cardReceivable.itemCount || 0));
+
+  const summary = {
+    headerHref: '/shared-debts',
+    pendingReceivedCount: Math.max(0, Number(pendingReceivedCount || 0)),
+    pendingSentCount: Math.max(0, Number(pendingSentCount || 0)),
+    senderDecisionCount: Math.max(0, Number(senderDecisionCount || 0)),
+    pendingReceiptConfirmationCount: Math.max(0, Number(pendingReceiptConfirmationCount || 0)),
+    pay: {
+      amountCents: manualOwedCents + cardOwedCents,
+      count: manualOwedCount + cardOwedCount,
+      href: '/shared-debts#received',
+      ctaLabel: 'Ver recebidas'
+    },
+    receive: {
+      amountCents: manualReceivableCents + cardReceivableCents + privateActiveCents,
+      count: manualReceivableCount + cardReceivableCount + privateActiveCount,
+      href: (manualReceivableCount + cardReceivableCount + pendingSentCount + senderDecisionCount + pendingReceiptConfirmationCount) > 0
+        ? '/shared-debts#sent'
+        : (privateActiveCount > 0 ? '/shared-debts#private-reminders' : '/shared-debts#sent'),
+      ctaLabel: (manualReceivableCount + cardReceivableCount + pendingSentCount + senderDecisionCount + pendingReceiptConfirmationCount) > 0
+        ? 'Ver enviadas'
+        : (privateActiveCount > 0 ? 'Ver privadas' : 'Ver enviadas')
+    },
+    manual: {
+      owedCents: manualOwedCents,
+      receivableCents: manualReceivableCents + privateActiveCents,
+      owedCount: manualOwedCount,
+      receivableCount: manualReceivableCount,
+      bilateralCount: manualOwedCount + manualReceivableCount,
+      privateActiveCents,
+      privateActiveCount,
+      totalCount: manualOwedCount + manualReceivableCount + privateActiveCount,
+      href: '/shared-debts'
+    },
+    card: {
+      owedCents: cardOwedCents,
+      receivableCents: cardReceivableCents,
+      owedItemCount: cardOwedCount,
+      receivableItemCount: cardReceivableCount,
+      itemCount: cardOwedCount + cardReceivableCount,
+      settlementCount: Math.max(0, Number(cardOwed.settlementCount || 0)) + Math.max(0, Number(cardReceivable.settlementCount || 0)),
+      href: '/shared-debts'
+    },
+    chips: []
+  };
+
+  summary.pay.status = buildSharedDebtDetailPayStatus(summary);
+  summary.receive.status = buildSharedDebtDetailReceiveStatus(summary);
+
+  summary.hasAnySignal = summary.pay.amountCents > 0
+    || summary.receive.amountCents > 0
+    || summary.pendingReceivedCount > 0
+    || summary.pendingSentCount > 0
+    || summary.senderDecisionCount > 0
+    || summary.pendingReceiptConfirmationCount > 0;
+
+  if (summary.pendingReceivedCount > 0) {
+    summary.chips.push({
+      tone: 'warning',
+      label: summary.pendingReceivedCount === 1 ? '1 aguardando decisão' : `${summary.pendingReceivedCount} aguardando decisão`,
+      href: '/shared-debts#received'
+    });
+  }
+
+  if (summary.pendingReceiptConfirmationCount > 0) {
+    summary.chips.push({
+      tone: 'warning',
+      label: summary.pendingReceiptConfirmationCount === 1 ? '1 pronto para confirmar' : `${summary.pendingReceiptConfirmationCount} prontos para confirmar`,
+      href: '/shared-debts#sent'
+    });
+  }
+
+  if (summary.senderDecisionCount > 0) {
+    summary.chips.push({
+      tone: 'info',
+      label: summary.senderDecisionCount === 1 ? '1 recusa pedindo decisão' : `${summary.senderDecisionCount} recusas pedindo decisão`,
+      href: '/shared-debts#sent'
+    });
+  }
+
+  if (summary.manual.privateActiveCount > 0) {
+    summary.chips.push({
+      tone: 'info',
+      label: summary.manual.privateActiveCount === 1 ? '1 privado no radar' : `${summary.manual.privateActiveCount} privados no radar`,
+      href: '/shared-debts#private-reminders'
+    });
+  }
+
+  if (!summary.chips.length && summary.pendingSentCount > 0) {
+    summary.chips.push({
+      tone: 'info',
+      label: summary.pendingSentCount === 1 ? '1 aguardando aceite' : `${summary.pendingSentCount} aguardando aceite`,
+      href: '/shared-debts#sent'
+    });
+  }
+
+  return summary;
+}
+
 function normalizeSharedDebtSearchTerm(value = '') {
   return String(value || '')
     .normalize('NFD')
@@ -14853,6 +15217,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const statementByCard = new Map(statementRows.map(row => [row.card_id, row]));
 
   const sharedDebtSummary = getAcceptedSharedDebtSummaryForMonth(userId, currentMonth, currentYear);
+  const sharedDebtDetailModuleSummary = getSharedDebtDetailModuleSummary(userId, currentMonth, currentYear);
 
   const alerts = [];
   const pendingFriendRequests = db.prepare(`
@@ -15148,7 +15513,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     alerts,
     cards,
     purchaseCategories,
-    sharedDebtSummary
+    sharedDebtSummary,
+    sharedDebtDetailModuleSummary
   });
 });
 

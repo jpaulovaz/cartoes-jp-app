@@ -8,8 +8,13 @@
             if (f.type === 'expense') expCents += f.amount_cents;
         });
 
-        const sharedDebtOwedCents = Number((sharedDebtSummary && sharedDebtSummary.owedCents) || 0);
-        const sharedDebtReceivableCents = Number((sharedDebtSummary && sharedDebtSummary.receivableCents) || 0);
+        const debtModule = sharedDebtDetailModuleSummary || {};
+        const debtModulePay = debtModule.pay || {};
+        const debtModuleReceive = debtModule.receive || {};
+        const debtModuleManual = debtModule.manual || {};
+        const debtModuleCard = debtModule.card || {};
+        const debtModuleChips = Array.isArray(debtModule.chips) ? debtModule.chips : [];
+        const debtModuleHasSignal = !!debtModule.hasAnySignal;
         const saldoCents = incCents - expCents - cardTotalCents;
 
         let prevM = parseInt(month, 10) - 1;
@@ -51,6 +56,24 @@
             const totalItems = getItemCount(fin);
             if (!totalItems) return 'Ainda sem lançamentos por aqui';
             return totalItems === 1 ? '1 lançamento somando esse total' : `${totalItems} lançamentos somando esse total`;
+        }
+
+
+        function formatModuleCountLabel(count, singular, plural) {
+            const safeCount = Math.max(0, Number(count || 0));
+            return `${safeCount} ${safeCount === 1 ? singular : plural}`;
+        }
+
+        function debtHeaderChipClasses(tone) {
+            if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100';
+            if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100';
+            return 'border-slate-200 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-900/70 dark:text-slate-200';
+        }
+
+        function debtStatusPillClasses(tone) {
+            if (tone === 'warning') return 'bg-amber-50/95 text-amber-950';
+            if (tone === 'success') return 'bg-emerald-50/95 text-emerald-950';
+            return 'bg-white/15 text-white';
         }
     %>
 
@@ -244,45 +267,147 @@
                     </div>
                 </div>
 
-                <div class="mt-4 mb-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-300">
-                    <span class="font-bold text-slate-800 dark:text-white">Cobranças ficam num trilho à parte:</span>
-                    o que você tem para pagar ou receber aparece logo abaixo como lembrete, sem mexer no respiro real do mês ali em cima.
-                </div>
+                <%
+                    const debtManualTotalCount = Number(debtModuleManual.totalCount || 0);
+                    const debtManualPrivateCount = Number(debtModuleManual.privateActiveCount || 0);
+                    const debtManualBilateralCount = Number(debtModuleManual.bilateralCount || 0);
+                    const debtCardItemCount = Number(debtModuleCard.itemCount || 0);
+                    const debtCardSettlementCount = Number(debtModuleCard.settlementCount || 0);
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 mt-4">
-                    <a href="/shared-debts#received" class="block bg-sky-500 p-5 rounded-3xl text-white shadow-sm border border-sky-600 hover:-translate-y-0.5 transition-transform">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Cobranças pra pagar</p>
-                                <h3 class="text-xl xl:text-2xl font-black mt-1">
-                                    <%= formatBRLFromCents(sharedDebtOwedCents) %>
-                                </h3>
-                                <p class="mt-2 text-xs font-semibold opacity-85">
-                                    <%= Number(sharedDebtSummary?.owedCount || 0) %> cobrança(s) em aberto por aqui
-                                </p>
-                                <p class="mt-2 text-[11px] font-medium opacity-80">Fica só no lembrete. Não entra no saldo do topo.</p>
-                                <p class="mt-3 text-xs font-bold uppercase tracking-[0.18em] opacity-90">Abrir cobranças recebidas</p>
+                    const debtPayCountText = Number(debtModulePay.count || 0) > 0
+                        ? `${formatModuleCountLabel(Number(debtModulePay.count || 0), 'pendência em aberto', 'pendências em aberto')}`
+                        : 'Sem valor aberto por agora.';
+                    const debtReceiveCountText = Number(debtModuleReceive.count || 0) > 0
+                        ? `${formatModuleCountLabel(Number(debtModuleReceive.count || 0), 'pendência em aberto', 'pendências em aberto')}`
+                        : 'Sem valor aberto por agora.';
+                    const debtManualCountText = debtManualTotalCount > 0
+                        ? `${formatModuleCountLabel(debtManualTotalCount, 'pendência avulsa no radar', 'pendências avulsas no radar')}`
+                        : 'Nenhum combinado avulso aberto por agora.';
+                    const debtManualSubText = debtManualPrivateCount > 0
+                        ? `Inclui ${formatModuleCountLabel(debtManualPrivateCount, 'lembrete privado só seu', 'lembretes privados só seus')}.`
+                        : (debtManualBilateralCount > 0 ? 'Tudo que foi combinado fora do cartão aparece aqui.' : 'Sem lembrete privado puxando a manga no momento.');
+                    const debtCardCountText = debtCardItemCount > 0
+                        ? `${formatModuleCountLabel(debtCardItemCount, 'item/mensalidade em aberto', 'itens/mensalidades em aberto')}`
+                        : 'Nenhum acerto de cartão em aberto por enquanto.';
+                    const debtCardSubText = debtCardSettlementCount > 0
+                        ? `Espalhados em ${formatModuleCountLabel(debtCardSettlementCount, 'carteira do mês', 'carteiras do mês')}.`
+                        : 'Quando pintar acerto de cartão, ele aterrissa aqui.';
+                %>
+
+                <section class="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div class="border-b border-slate-200 bg-slate-50/90 px-5 py-5 dark:border-slate-700 dark:bg-slate-900/70 sm:px-6">
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            <div class="min-w-0">
+                                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Cobranças e acertos</div>
+                                <h2 class="mt-1 text-xl font-extrabold text-slate-900 dark:text-white">Cobranças e acertos</h2>
+                                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Esses valores ficam separados do saldo do mês, então o topo continua mostrando só a saúde real do seu bolso.</p>
                             </div>
-                            <div class="h-12 w-12 shrink-0 rounded-2xl bg-white/15 flex items-center justify-center text-2xl">🧾</div>
+                            <a href="<%= debtModule.headerHref || '/shared-debts' %>" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Abrir central</a>
                         </div>
-                    </a>
-                    <a href="/shared-debts#sent" class="block bg-cyan-600 p-5 rounded-3xl text-white shadow-sm border border-cyan-700 hover:-translate-y-0.5 transition-transform">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Cobranças pra receber</p>
-                                <h3 class="text-xl xl:text-2xl font-black mt-1">
-                                    <%= formatBRLFromCents(sharedDebtReceivableCents) %>
-                                </h3>
-                                <p class="mt-2 text-xs font-semibold opacity-85">
-                                    <%= Number(sharedDebtSummary?.receivableCount || 0) %> cobrança(s) em aberto por aqui
-                                </p>
-                                <p class="mt-2 text-[11px] font-medium opacity-80">Fica só no lembrete. Não entra no saldo do topo.</p>
-                                <p class="mt-3 text-xs font-bold uppercase tracking-[0.18em] opacity-90">Abrir cobranças enviadas</p>
+
+                        <% if (debtModuleHasSignal && debtModuleChips.length) { %>
+                            <div class="mt-4 flex flex-wrap gap-2">
+                                <% debtModuleChips.forEach((chip) => { %>
+                                    <a href="<%= chip.href || (debtModule.headerHref || '/shared-debts') %>" class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold tracking-[0.02em] <%= debtHeaderChipClasses(chip.tone) %>">
+                                        <%= chip.label %>
+                                    </a>
+                                <% }) %>
                             </div>
-                            <div class="h-12 w-12 shrink-0 rounded-2xl bg-white/15 flex items-center justify-center text-2xl">💸</div>
+                        <% } %>
+                    </div>
+
+                    <% if (debtModuleHasSignal) { %>
+                        <div class="space-y-4 p-4 sm:p-6">
+                            <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                <a href="<%= debtModulePay.href || '/shared-debts#received' %>" class="group block rounded-3xl border border-sky-600 bg-gradient-to-br from-sky-500 to-sky-600 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold uppercase tracking-wider opacity-80">Pra pagar</p>
+                                            <h3 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(debtModulePay.amountCents || 0)) %></h3>
+                                            <p class="mt-2 text-sm font-semibold opacity-90"><%= debtPayCountText %></p>
+                                            <span class="mt-3 inline-flex max-w-full rounded-full px-3 py-1 text-[11px] font-bold leading-5 <%= debtStatusPillClasses((debtModulePay.status || {}).tone) %>"><%= (debtModulePay.status || {}).label || 'Sem susto desse lado.' %></span>
+                                            <p class="mt-3 text-[11px] font-medium opacity-80">Fica no radar, mas não entra no saldo do topo.</p>
+                                            <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= debtModulePay.ctaLabel || 'Ver recebidas' %></p>
+                                        </div>
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">🧾</div>
+                                    </div>
+                                </a>
+
+                                <a href="<%= debtModuleReceive.href || '/shared-debts#sent' %>" class="group block rounded-3xl border border-cyan-700 bg-gradient-to-br from-cyan-600 to-cyan-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold uppercase tracking-wider opacity-80">Pra receber</p>
+                                            <h3 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(debtModuleReceive.amountCents || 0)) %></h3>
+                                            <p class="mt-2 text-sm font-semibold opacity-90"><%= debtReceiveCountText %></p>
+                                            <span class="mt-3 inline-flex max-w-full rounded-full px-3 py-1 text-[11px] font-bold leading-5 <%= debtStatusPillClasses((debtModuleReceive.status || {}).tone) %>"><%= (debtModuleReceive.status || {}).label || 'Tudo tranquilo do lado de cá.' %></span>
+                                            <p class="mt-3 text-[11px] font-medium opacity-80">Recebível não vira respiro antecipado por aqui.</p>
+                                            <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= debtModuleReceive.ctaLabel || 'Ver enviadas' %></p>
+                                        </div>
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">💸</div>
+                                    </div>
+                                </a>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                <a href="<%= debtModuleManual.href || '/shared-debts' %>" class="group block rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm transition-transform hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/40">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Avulsas</p>
+                                            <div class="mt-3 grid grid-cols-2 gap-3">
+                                                <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                                                    <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Pra pagar</p>
+                                                    <p class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(Number(debtModuleManual.owedCents || 0)) %></p>
+                                                </div>
+                                                <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                                                    <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Pra receber</p>
+                                                    <p class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(Number(debtModuleManual.receivableCents || 0)) %></p>
+                                                </div>
+                                            </div>
+                                            <p class="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-200"><%= debtManualCountText %></p>
+                                            <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= debtManualSubText %></p>
+                                            <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">Abrir central</p>
+                                        </div>
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-2xl text-white dark:bg-slate-100 dark:text-slate-900">🤝</div>
+                                    </div>
+                                </a>
+
+                                <a href="<%= debtModuleCard.href || '/shared-debts' %>" class="group block rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm transition-transform hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/40">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">No cartão</p>
+                                            <div class="mt-3 grid grid-cols-2 gap-3">
+                                                <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                                                    <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Pra pagar</p>
+                                                    <p class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(Number(debtModuleCard.owedCents || 0)) %></p>
+                                                </div>
+                                                <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                                                    <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Pra receber</p>
+                                                    <p class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(Number(debtModuleCard.receivableCents || 0)) %></p>
+                                                </div>
+                                            </div>
+                                            <p class="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-200"><%= debtCardCountText %></p>
+                                            <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= debtCardSubText %></p>
+                                            <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">Abrir central</p>
+                                        </div>
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-2xl text-white dark:bg-slate-100 dark:text-slate-900">💳</div>
+                                    </div>
+                                </a>
+                            </div>
                         </div>
-                    </a>
-                </div>
+                    <% } else { %>
+                        <div class="p-4 sm:p-6">
+                            <div class="rounded-3xl border border-dashed border-slate-300 bg-slate-50/80 px-5 py-6 dark:border-slate-600 dark:bg-slate-900/50 sm:px-6">
+                                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                                    <div>
+                                        <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">Sem cobranças abertas por aqui. Seu mês segue limpinho.</h3>
+                                        <p class="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Se pintar algum combinado, ele pousa aqui sem mexer no saldo do topo e sem bagunçar o retrato real do mês.</p>
+                                    </div>
+                                    <a href="<%= debtModule.headerHref || '/shared-debts' %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir central</a>
+                                </div>
+                            </div>
+                        </div>
+                    <% } %>
+                </section>
 
                 <% if (alerts && alerts.length) { %>
                     <div class="mb-8 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">

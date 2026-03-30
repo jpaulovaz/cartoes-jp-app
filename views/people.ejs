@@ -415,12 +415,12 @@
                     <span class="inline-flex items-center rounded-full border border-sky-200 bg-white/90 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-sky-700 shadow-sm dark:border-sky-800 dark:bg-slate-900/80 dark:text-sky-200">Seus alertas</span>
                     <span class="inline-flex items-center rounded-full border border-white/80 bg-white/80 px-3 py-1 text-[11px] font-bold text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300"><%= notificationPreferenceEnabledCount %>/<%= notificationPreferenceTotalCount %> grupos ligados</span>
                   </div>
-                  <h3 class="mt-3 text-lg font-black text-slate-900 dark:text-white">Escolha seus alertas</h3>
-                  <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Os checks valem na sua conta. O botão ao lado liga só este aparelho.</p>
-                  <p id="selfNotificationPushStatus" class="mt-2 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400">Ligue este aparelho para receber novidades.</p>
                 </div>
-                <button type="button" data-push-toggle data-push-public-key="<%= pushPublicKey %>" data-push-status-target="#selfNotificationPushStatus" class="op-btn op-btn-warning-soft w-full whitespace-nowrap sm:w-auto">Ativar alertas</button>
+                <button type="button" data-push-toggle data-push-public-key="<%= pushPublicKey %>" data-push-status-target="#selfNotificationPushStatus" class="op-btn op-btn-warning-soft op-btn--compact ml-auto shrink-0 whitespace-nowrap px-4">Ativar alertas</button>
               </div>
+              <h3 class="mt-3 text-lg font-black text-slate-900 dark:text-white">Escolha seus alertas</h3>
+              <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Os checks valem na sua conta. O botão ao lado liga só este aparelho.</p>
+              <p id="selfNotificationPushStatus" class="mt-2 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400">Ligue este aparelho para receber novidades.</p>
             </div>
 
             <form method="post" action="/people/notification-preferences" class="space-y-4">
@@ -678,18 +678,18 @@
                 </label>
               </div>
 
-              <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+              <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                 <label class="block" data-self-pix-field>
                   <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nome que aparece no Pix</span>
                   <input name="pix_label" id="selfPixLabel" value="<%- selfPixLabel %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: João - AcerttaPay">
                 </label>
 
-                <div class="grid gap-3 lg:justify-items-end">
+                <div class="flex flex-col gap-3 lg:items-end lg:self-end">
                   <div id="selfPixDormantHint" class="rounded-[24px] border border-dashed border-violet-200 bg-violet-50/70 px-4 py-4 text-sm font-medium leading-6 text-slate-600 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-slate-300 lg:max-w-[24rem] <%= selfPixEnabled ? 'hidden' : '' %>">
                     <div class="font-black text-slate-900 dark:text-white">Pode deixar desligado sem problema.</div>
                     <p class="mt-2">Quando quiser, é só ligar, preencher e salvar.</p>
                   </div>
-                  <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 sm:w-auto">Salvar meu Pix</button>
+                  <button type="submit" class="inline-flex w-full items-center justify-center self-start rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 sm:w-auto lg:self-end">Salvar meu Pix</button>
                 </div>
               </div>
             </div>
@@ -710,9 +710,9 @@
             <% } %>
           </div>
 
-          <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(280px,0.82fr)_minmax(0,1.18fr)] xl:items-start">
-            <div class="grid gap-4">
-              <div class="rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+          <div class="mt-5 grid gap-4">
+            <div class="grid gap-4 xl:grid-cols-2 xl:items-stretch">
+              <div class="h-full rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
                 <div class="flex items-start gap-3">
                   <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700" aria-hidden="true">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0-.967.784-1.75 1.75-1.75S15.5 10.033 15.5 11c0 .645-.35 1.208-.87 1.51-.358.208-.63.57-.63.98V15m-4-4V8a4 4 0 118 0v3m-10 0h12a1 1 0 011 1v7a1 1 0 01-1 1H7a1 1 0 01-1-1v-7a1 1 0 011-1z"></path></svg>
@@ -730,14 +730,7 @@
                 </div>
               </div>
 
-              <div class="rounded-[26px] border border-sky-200/70 bg-sky-50/80 px-4 py-4 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20 sm:px-5">
-                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Como isso se comporta</div>
-                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Depois de ligado, o app trava sozinho ao abrir de novo ou quando passa do tempo que você escolher. Se esquecer o PIN, na tela de bloqueio dá para confirmar sua conta Google e redefinir por lá.</p>
-              </div>
-            </div>
-
-            <div class="grid gap-4">
-              <div class="rounded-[26px] border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+              <div class="flex h-full flex-col rounded-[26px] border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
                 <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                   <% if (!appPinEnabled) { %>
                     <button type="button" data-app-pin-open="create" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400">Ativar PIN</button>
@@ -753,53 +746,61 @@
                 </div>
                 <p class="mt-3 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Seu PIN pode ter de <%= appPinMinLength %> a <%= appPinMaxLength %> dígitos. A recomendação amiga é usar <strong class="font-semibold text-slate-700 dark:text-slate-100">6 números</strong> e fugir de combinações óbvias, tipo 1234, 0000 ou repeteco.</p>
               </div>
+            </div>
 
-              <div class="rounded-[26px] border border-violet-200/70 bg-violet-50/80 px-4 py-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20 sm:px-5">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Desbloqueio pelo aparelho</div>
-                    <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Se o aparelho topar, dá para usar digital, rosto ou a proteção dele para abrir o app. O PIN continua ali como plano B.</p>
-                  </div>
-                  <span class="inline-flex items-center self-start rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-black text-violet-700 dark:border-violet-800 dark:bg-slate-900/70 dark:text-violet-200"><%= appPasskeyCount %>/<%= appPasskeyMaxCount || 6 %> aparelhos</span>
-                </div>
-
-                <p id="appPasskeyFeedback" class="mt-3 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= appPasskeyState.helpText || 'Quando quiser, dá para preparar este aparelho para destravar o app com um toque mais esperto.' %></p>
-
-                <% if (appPasskeyState.canRegister) { %>
-                  <button type="button" id="appPasskeyRegisterButton" class="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 sm:w-auto">Adicionar neste aparelho</button>
-                <% } else if (appPasskeyState.limitReached) { %>
-                  <div class="mt-4 inline-flex items-center rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-bold text-amber-700 dark:border-amber-800 dark:bg-slate-900/70 dark:text-amber-200">Você já chegou no limite de aparelhos por aqui.</div>
-                <% } %>
-
-                <% if (appPasskeyItems.length) { %>
-                  <div class="mt-4 grid gap-3">
-                    <% appPasskeyItems.forEach((item) => { %>
-                      <div class="rounded-[22px] border border-white/80 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
-                        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                          <div class="min-w-0 flex-1">
-                            <div class="flex flex-wrap items-center gap-2">
-                              <div class="truncate text-sm font-black text-slate-900 dark:text-white"><%= item.label %></div>
-                              <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= item.badgeTone === 'emerald' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200' : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300' %>"><%= item.badgeLabel %></span>
-                            </div>
-                            <div class="mt-2 grid gap-1 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400">
-                              <p>Preparado em <strong class="font-semibold text-slate-700 dark:text-slate-200"><%= item.createdAtLabel || 'agora há pouco' %></strong></p>
-                              <p><%= item.hasBeenUsed ? 'Último uso em' : 'Ainda não foi usado para destravar' %> <strong class="font-semibold text-slate-700 dark:text-slate-200"><%= item.hasBeenUsed ? item.lastUsedAtLabel : '—' %></strong></p>
-                            </div>
-                          </div>
-                          <form method="post" action="/people/security/passkeys/<%= item.id %>/delete" data-confirm-prompt="Remover <%= item.label %> da lista de desbloqueio? O PIN continua funcionando normalmente." class="lg:shrink-0">
-                            <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20 lg:w-auto">Remover</button>
-                          </form>
-                        </div>
-                      </div>
-                    <% }) %>
-                  </div>
-                <% } %>
+            <div class="grid gap-4 xl:grid-cols-2 xl:items-stretch">
+              <div class="h-full rounded-[26px] border border-sky-200/70 bg-sky-50/80 px-4 py-4 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20 sm:px-5">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Como isso se comporta</div>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Depois de ligado, o app trava sozinho ao abrir de novo ou quando passa do tempo que você escolher. Se esquecer o PIN, na tela de bloqueio dá para confirmar sua conta Google e redefinir por lá.</p>
               </div>
 
-              <div class="rounded-[26px] border border-dashed border-slate-200 bg-slate-50/70 px-4 py-4 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 sm:px-5">
+              <div class="h-full rounded-[26px] border border-dashed border-slate-200 bg-slate-50/70 px-4 py-4 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 sm:px-5">
                 <div class="font-black text-slate-900 dark:text-white">Dica boa para não se enrolar</div>
                 <p class="mt-2">Se em algum momento esse PIN sumir da cabeça, tenta destravar normalmente. Se não rolar, a tela de bloqueio oferece a saída com Google para você redefinir sem ficar preso.</p>
               </div>
+            </div>
+
+            <div class="rounded-[26px] border border-violet-200/70 bg-violet-50/80 px-4 py-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20 sm:px-5">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Desbloqueio pelo aparelho</div>
+                    <span class="inline-flex items-center rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-black text-violet-700 dark:border-violet-800 dark:bg-slate-900/70 dark:text-violet-200"><%= appPasskeyCount %>/<%= appPasskeyMaxCount || 6 %> aparelhos</span>
+                  </div>
+                  <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Se o aparelho topar, dá para usar digital, rosto ou a proteção dele para abrir o app. O PIN continua ali como plano B.</p>
+                </div>
+                <% if (appPasskeyState.canRegister) { %>
+                  <button type="button" id="appPasskeyRegisterButton" class="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 sm:w-auto sm:shrink-0">Adicionar neste aparelho</button>
+                <% } else if (appPasskeyState.limitReached) { %>
+                  <div class="inline-flex items-center rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-bold text-amber-700 dark:border-amber-800 dark:bg-slate-900/70 dark:text-amber-200 sm:shrink-0">Você já chegou no limite de aparelhos por aqui.</div>
+                <% } %>
+              </div>
+
+              <p id="appPasskeyFeedback" class="mt-3 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= appPasskeyState.helpText || 'Quando quiser, dá para preparar este aparelho para destravar o app com um toque mais esperto.' %></p>
+
+              <% if (appPasskeyItems.length) { %>
+                <div class="mt-4 grid gap-3 lg:grid-cols-2">
+                  <% appPasskeyItems.forEach((item) => { %>
+                    <div class="h-full rounded-[22px] border border-white/80 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+                      <div class="flex h-full flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div class="min-w-0 flex-1">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <div class="truncate text-sm font-black text-slate-900 dark:text-white"><%= item.label %></div>
+                            <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= item.badgeTone === 'emerald' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200' : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300' %>"><%= item.badgeLabel %></span>
+                          </div>
+                          <div class="mt-2 grid gap-1 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400 sm:grid-cols-2">
+                            <p>Preparado em <strong class="font-semibold text-slate-700 dark:text-slate-200"><%= item.createdAtLabel || 'agora há pouco' %></strong></p>
+                            <p><%= item.hasBeenUsed ? 'Último uso em' : 'Ainda não foi usado para destravar' %> <strong class="font-semibold text-slate-700 dark:text-slate-200"><%= item.hasBeenUsed ? item.lastUsedAtLabel : '—' %></strong></p>
+                          </div>
+                        </div>
+                        <form method="post" action="/people/security/passkeys/<%= item.id %>/delete" data-confirm-prompt="Remover <%= item.label %> da lista de desbloqueio? O PIN continua funcionando normalmente." class="sm:shrink-0">
+                          <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20 sm:w-auto">Remover</button>
+                        </form>
+                      </div>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } %>
             </div>
           </div>
         </section>

@@ -469,6 +469,7 @@ CREATE TABLE IF NOT EXISTS shared_debt_requests (
   receiver_email_snapshot TEXT,
   receiver_name_snapshot TEXT,
   request_note TEXT,
+  promised_payment_date TEXT,
   response_note TEXT,
   payment_marked_at TEXT,
   payment_note TEXT,
@@ -544,6 +545,7 @@ CREATE TABLE IF NOT EXISTS private_debt_reminders (
   description_snapshot TEXT NOT NULL,
   amount_cents INTEGER NOT NULL,
   request_note TEXT,
+  promised_payment_date TEXT,
   settlement_note TEXT,
   payment_date TEXT,
   status TEXT NOT NULL DEFAULT 'open',
@@ -557,6 +559,17 @@ CREATE TABLE IF NOT EXISTS private_debt_reminders (
   FOREIGN KEY (owner_user_id) REFERENCES users(id),
   FOREIGN KEY (person_id) REFERENCES people(id),
   FOREIGN KEY (linked_user_id_snapshot) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS manual_debt_due_alert_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  scope TEXT NOT NULL,
+  date_key TEXT NOT NULL,
+  payload_json TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, scope, date_key),
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS shared_debt_monthly_settlements (
@@ -890,6 +903,10 @@ if (!columnExists("shared_debt_requests", "payment_marked_at")) {
   db.exec("ALTER TABLE shared_debt_requests ADD COLUMN payment_marked_at TEXT;");
 }
 
+if (!columnExists("shared_debt_requests", "promised_payment_date")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN promised_payment_date TEXT;");
+}
+
 if (!columnExists("shared_debt_requests", "payment_note")) {
   db.exec("ALTER TABLE shared_debt_requests ADD COLUMN payment_note TEXT;");
 }
@@ -928,6 +945,25 @@ if (!columnExists("shared_debt_requests", "last_pix_amount_cents")) {
 
 if (!columnExists("shared_debt_requests", "pix_version")) {
   db.exec("ALTER TABLE shared_debt_requests ADD COLUMN pix_version INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("private_debt_reminders", "promised_payment_date")) {
+  db.exec("ALTER TABLE private_debt_reminders ADD COLUMN promised_payment_date TEXT;");
+}
+
+if (!tableExists("manual_debt_due_alert_logs")) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_debt_due_alert_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      scope TEXT NOT NULL,
+      date_key TEXT NOT NULL,
+      payload_json TEXT,
+      created_at TEXT NOT NULL,
+      UNIQUE(user_id, scope, date_key),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+  `);
 }
 
 if (!columnExists("shared_debt_payment_intents", "creditor_note")) {
@@ -1113,6 +1149,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_debts_requester_status ON shared_debt_requ
 CREATE INDEX IF NOT EXISTS idx_shared_debts_batch_id ON shared_debt_requests(batch_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debts_source_allocation ON shared_debt_requests(source_allocation_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debts_source_person ON shared_debt_requests(requester_user_id, source_transaction_id, source_person_id);
+CREATE INDEX IF NOT EXISTS idx_shared_debts_receiver_promised ON shared_debt_requests(receiver_user_id, promised_payment_date, status, request_kind);
+CREATE INDEX IF NOT EXISTS idx_shared_debts_requester_promised ON shared_debt_requests(requester_user_id, promised_payment_date, status, request_kind);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_receiver ON shared_debt_batches(receiver_user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batches(requester_user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_user_archived ON shared_debt_archives(user_id, is_archived, updated_at);
@@ -1121,6 +1159,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_debt_events_request ON shared_debt_events(
 CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_status ON private_debt_reminders(owner_user_id, status, is_archived, updated_at);
 CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_person ON private_debt_reminders(owner_user_id, person_id, status);
 CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_archived ON private_debt_reminders(owner_user_id, is_archived, updated_at);
+CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_promised ON private_debt_reminders(owner_user_id, promised_payment_date, status, is_archived);
+CREATE INDEX IF NOT EXISTS idx_manual_debt_due_alert_logs_date_scope ON manual_debt_due_alert_logs(date_key, scope, user_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_pair ON shared_debt_monthly_settlements(requester_user_id, receiver_user_id, year, month, request_kind);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_receiver ON shared_debt_monthly_settlements(receiver_user_id, year, month, request_kind);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_settlement_status ON shared_debt_payment_intents(settlement_id, status, created_at);

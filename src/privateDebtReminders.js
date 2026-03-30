@@ -41,10 +41,18 @@ function canArchivePrivateDebtStatus(value = PRIVATE_DEBT_STATUS_OPEN) {
   return PRIVATE_DEBT_ARCHIVABLE_STATUSES.includes(normalizePrivateDebtStatus(value));
 }
 
-function normalizePrivateDebtPaymentDate(value = null) {
+function normalizePrivateDebtIsoDate(value = null) {
   const raw = compactSpaces(value);
   if (!raw) return null;
   return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+}
+
+function normalizePrivateDebtPaymentDate(value = null) {
+  return normalizePrivateDebtIsoDate(value);
+}
+
+function normalizePrivateDebtPromisedPaymentDate(value = null) {
+  return normalizePrivateDebtIsoDate(value);
 }
 
 function normalizeBooleanFlag(value) {
@@ -88,6 +96,7 @@ function mapPrivateDebtReminderRow(row = {}) {
     amount_cents: amountCents,
     request_note: sanitizePrivateDebtNote(row?.request_note || row?.requestNote || '', 400),
     settlement_note: sanitizePrivateDebtNote(row?.settlement_note || row?.settlementNote || '', 400),
+    promised_payment_date: normalizePrivateDebtPromisedPaymentDate(row?.promised_payment_date || row?.promisedPaymentDate || null),
     payment_date: normalizePrivateDebtPaymentDate(row?.payment_date || row?.paymentDate || null),
     status,
     is_archivable: canArchivePrivateDebtStatus(status),
@@ -117,6 +126,7 @@ module.exports = {
   sanitizePrivateDebtDescription,
   sanitizePrivateDebtNote,
   normalizePrivateDebtPaymentDate,
+  normalizePrivateDebtPromisedPaymentDate,
   buildPrivateDebtPersonSnapshots,
   mapPrivateDebtReminderRow
 };

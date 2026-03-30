@@ -386,6 +386,10 @@
     return item?.created_at ? formatDateBR(item.created_at) : 'Data não informada';
   }
 
+  function promisedPaymentLabel(value) {
+    return value ? formatDateBR(value) : 'Sem data combinada';
+  }
+
   function privateReminderSettledLabel(item) {
     return item?.settled_at ? formatDateBR(item.settled_at) : (item?.payment_date ? formatDateBR(item.payment_date) : 'Data não informada');
   }
@@ -984,7 +988,7 @@
             </svg>
             Novo lembrete avulso
           </button>
-          <p class="text-xs font-medium text-slate-500 dark:text-slate-400 lg:text-right">Poucos campos, data de hoje automática e um jeitinho novo de acompanhar emprestado até cair na conta.</p>
+          <p class="text-xs font-medium text-slate-500 dark:text-slate-400 lg:text-right">Poucos campos, data de hoje automática e uma data combinada opcional para o radar não deixar esse combinado cochilar.</p>
         </div>
       </div>
 
@@ -997,6 +1001,7 @@
           <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200"><%= countLabel(manualDebtEligibleList.length, 'amizade pronta', 'amizades prontas') %> para receber no app</span>
           <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200"><%= countLabel(manualDebtPeopleList.length, 'contato ativo', 'contatos ativos') %> para lembrete privado</span>
           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70">Data de hoje automática</span>
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70">Data combinada opcional</span>
           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70">Acompanha até quitar</span>
         </div>
       <% } %>
@@ -1100,7 +1105,7 @@
         <div>
           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Cobrança avulsa</div>
           <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Mandar um lembrete sem cartão</h3>
-          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Vai com a data de hoje e segue visível até o pagamento ser confirmado.</p>
+          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Vai com a data de hoje e você ainda pode marcar uma data combinada para o app lembrar no dia certinho.</p>
         </div>
         <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar envio avulso">
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -1140,7 +1145,7 @@
           <% } %>
         </label>
 
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 sm:grid-cols-3">
           <label class="block">
             <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor (R$)</span>
             <input type="text" name="amount" placeholder="0,00" required data-money-mask data-shared-debt-manual-focus inputmode="decimal" enterkeyhint="next" autocapitalize="off" autocomplete="off" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
@@ -1150,6 +1155,11 @@
             <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white">Hoje</div>
             <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Vai assim automaticamente para você não perder tempo.</div>
           </div>
+          <label class="block">
+            <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Data combinada (opcional)</span>
+            <input type="date" name="promised_payment_date" value="" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
+            <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Se marcar, o app lembra no dia e o radar não deixa esse combinado tirar férias.</div>
+          </label>
         </div>
 
         <label class="block">
@@ -1698,6 +1708,7 @@
                             <span>Enviado por <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.requester_name || item.requester_email || 'Usuário' %></span></span>
                             <span><%= itemDateLead(item) %> <span class="font-semibold text-slate-700 dark:text-slate-200"><%= itemDateValue(item) %></span></span>
                             <span><%= itemContextLabel(item) %> <span class="font-semibold text-slate-700 dark:text-slate-200"><%= itemContextValue(item) %></span></span>
+                            <% if (item.promised_payment_date) { %><span>Pagamento combinado <span class="font-semibold text-slate-700 dark:text-slate-200"><%= promisedPaymentLabel(item.promised_payment_date) %></span></span><% } %>
                           </div>
                         </div>
                         <div class="flex items-center justify-between gap-3 lg:block lg:text-right">
@@ -1712,7 +1723,7 @@
                     </summary>
 
                     <div class="px-5 pb-5 pt-1 space-y-4 border-t border-violet-200/70 dark:border-violet-900/40">
-                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                         <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemPeriodLabel(item) %></div>
                           <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= itemPeriodValue(item) %></div>
@@ -1724,6 +1735,11 @@
                         <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemContextLabel(item) %></div>
                           <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= itemContextValue(item) %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pagamento combinado</div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= promisedPaymentLabel(item.promised_payment_date) %></div>
+                          <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Se tiver data marcada, o alerta entra em campo no dia certinho.</div>
                         </div>
                         <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemObservacaoLabel(item) %></div>
@@ -2292,6 +2308,7 @@
                             <span>Enviado para <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.receiver_name || item.receiver_email || item.receiver_email_snapshot || 'Usuário' %></span></span>
                             <span><%= itemDateLead(item) %> <span class="font-semibold text-slate-700 dark:text-slate-200"><%= itemDateValue(item) %></span></span>
                             <span><%= itemContextLabel(item) %> <span class="font-semibold text-slate-700 dark:text-slate-200"><%= itemContextValue(item) %></span></span>
+                            <% if (item.promised_payment_date) { %><span>Pagamento combinado <span class="font-semibold text-slate-700 dark:text-slate-200"><%= promisedPaymentLabel(item.promised_payment_date) %></span></span><% } %>
                           </div>
                         </div>
                         <div class="flex items-center justify-between gap-3 lg:block lg:text-right">
@@ -2306,7 +2323,7 @@
                     </summary>
 
                     <div class="px-5 pb-5 pt-1 space-y-4 border-t border-violet-200/70 dark:border-violet-900/40">
-                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                         <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemPeriodLabel(item) %></div>
                           <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= itemPeriodValue(item) %></div>
@@ -2318,6 +2335,11 @@
                         <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemContextLabel(item) %></div>
                           <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= itemContextValue(item) %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pagamento combinado</div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= promisedPaymentLabel(item.promised_payment_date) %></div>
+                          <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Se tiver data marcada, o alerta entra em campo no dia certinho.</div>
                         </div>
                         <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemObservacaoLabel(item) %></div>
@@ -2497,6 +2519,7 @@
                           <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium text-slate-500 dark:text-slate-400">
                             <span>Com <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.display_name || item.person_name_snapshot || 'Contato' %></span></span>
                             <span>Criado em <span class="font-semibold text-slate-700 dark:text-slate-200"><%= privateReminderCreatedLabel(item) %></span></span>
+                            <% if (item.promised_payment_date) { %><span>Pagamento combinado <span class="font-semibold text-slate-700 dark:text-slate-200"><%= promisedPaymentLabel(item.promised_payment_date) %></span></span><% } %>
                             <% if (secondaryLine) { %><span><%= secondaryLine %></span><% } %>
                           </div>
                         </div>
@@ -2511,7 +2534,7 @@
                     </summary>
 
                     <div class="px-5 pb-5 pt-1 space-y-4 border-t border-cyan-200/70 dark:border-cyan-900/40">
-                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                         <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Contato</div>
                           <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= item.display_name || item.person_name_snapshot || 'Contato' %></div>
@@ -2521,6 +2544,11 @@
                           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Modo</div>
                           <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white">Só acompanhar por aqui</div>
                           <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Nada é enviado para a outra pessoa automaticamente.</div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pagamento combinado</div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= promisedPaymentLabel(item.promised_payment_date) %></div>
+                          <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Se marcar uma data, o alerta entra no jogo no dia certo.</div>
                         </div>
                         <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pagamento real</div>

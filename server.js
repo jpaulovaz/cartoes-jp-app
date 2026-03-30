@@ -124,6 +124,7 @@ const {
   sanitizePrivateDebtDescription,
   sanitizePrivateDebtNote,
   normalizePrivateDebtPaymentDate,
+  normalizePrivateDebtPromisedPaymentDate,
   canArchivePrivateDebtStatus
 } = require('./src/privateDebtReminders');
 
@@ -261,6 +262,7 @@ try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN updated_a
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_txn_date_snapshot TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_marked_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN promised_payment_date TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_note TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN batch_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN request_kind TEXT NOT NULL DEFAULT 'card'").run(); } catch (e) { /* Coluna já existe */ }
@@ -331,6 +333,7 @@ db.prepare(`
     description_snapshot TEXT NOT NULL,
     amount_cents INTEGER NOT NULL,
     request_note TEXT,
+    promised_payment_date TEXT,
     settlement_note TEXT,
     payment_date TEXT,
     status TEXT NOT NULL DEFAULT 'open',
@@ -344,6 +347,19 @@ db.prepare(`
     FOREIGN KEY (owner_user_id) REFERENCES users(id),
     FOREIGN KEY (person_id) REFERENCES people(id),
     FOREIGN KEY (linked_user_id_snapshot) REFERENCES users(id)
+  )
+`).run();
+try { db.prepare("ALTER TABLE private_debt_reminders ADD COLUMN promised_payment_date TEXT").run(); } catch (e) { /* Coluna já existe */ }
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS manual_debt_due_alert_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    scope TEXT NOT NULL,
+    date_key TEXT NOT NULL,
+    payload_json TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(user_id, scope, date_key),
+    FOREIGN KEY (user_id) REFERENCES users(id)
   )
 `).run();
 db.prepare(`
@@ -561,6 +577,10 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_request_us
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_status ON private_debt_reminders(owner_user_id, status, is_archived, updated_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_person ON private_debt_reminders(owner_user_id, person_id, status)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_archived ON private_debt_reminders(owner_user_id, is_archived, updated_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debts_receiver_promised ON shared_debt_requests(receiver_user_id, promised_payment_date, status, request_kind)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debts_requester_promised ON shared_debt_requests(requester_user_id, promised_payment_date, status, request_kind)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_promised ON private_debt_reminders(owner_user_id, promised_payment_date, status, is_archived)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_manual_debt_due_alert_logs_date_scope ON manual_debt_due_alert_logs(date_key, scope, user_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_pair ON shared_debt_monthly_settlements(requester_user_id, receiver_user_id, year, month, request_kind)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_receiver ON shared_debt_monthly_settlements(receiver_user_id, year, month, request_kind)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_settlement_status ON shared_debt_payment_intents(settlement_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
@@ -1032,6 +1052,9 @@ let googleAuthConfigured = false;
 let scheduledDuePushSweepRunning = false;
 let duePushSchedulerInitialHandle = null;
 let duePushSchedulerIntervalHandle = null;
+let scheduledManualDebtDueSweepRunning = false;
+let manualDebtDueSchedulerInitialHandle = null;
+let manualDebtDueSchedulerIntervalHandle = null;
 let backupSchedulerHandle = null;
 let backupSchedulerNextRunAt = null;
 let backupJobRunning = false;
@@ -2432,6 +2455,32 @@ function clearCardDueTodayPushScheduler() {
   }
 }
 
+function clearManualDebtDueScheduler() {
+  if (manualDebtDueSchedulerInitialHandle) {
+    clearTimeout(manualDebtDueSchedulerInitialHandle);
+    manualDebtDueSchedulerInitialHandle = null;
+  }
+  if (manualDebtDueSchedulerIntervalHandle) {
+    clearInterval(manualDebtDueSchedulerIntervalHandle);
+    manualDebtDueSchedulerIntervalHandle = null;
+  }
+}
+
+function restartManualDebtDueScheduler() {
+  clearManualDebtDueScheduler();
+
+  const config = getManualDebtDueRuntimeConfig();
+  const intervalMs = Math.max(1, config.checkIntervalMinutes) * 60 * 1000;
+
+  manualDebtDueSchedulerInitialHandle = setTimeout(() => {
+    runManualDebtDueAlertSweep().catch(err => console.error('Falha no agendamento inicial da data combinada:', err?.message || err));
+  }, 15000);
+
+  manualDebtDueSchedulerIntervalHandle = setInterval(() => {
+    runManualDebtDueAlertSweep().catch(err => console.error('Falha no agendamento recorrente da data combinada:', err?.message || err));
+  }, intervalMs);
+}
+
 function restartCardDueTodayPushScheduler() {
   clearCardDueTodayPushScheduler();
 
@@ -2457,6 +2506,7 @@ function refreshRuntimeSettings({ restartScheduler = true } = {}) {
   configureGoogleStrategy();
   if (restartScheduler) {
     restartCardDueTodayPushScheduler();
+    restartManualDebtDueScheduler();
     restartBackupScheduler();
   }
   return runtimeSettingsCache;
@@ -5831,7 +5881,7 @@ function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
     manualDebtPeople: archiveMode ? [] : getPrivateDebtReminderSelectablePeople(userId),
     eventsByRequest,
     archiveMode,
-    todayIsoDate: dayjs().tz('America/Sao_Paulo').format('YYYY-MM-DD'),
+    todayIsoDate: dayjs().tz(getManualDebtDueRuntimeConfig().timezone).format('YYYY-MM-DD'),
     cardMonthlySettlements: Array.from(new Map([
       ...receivedSettlementMeta.snapshots.map((snapshot) => [snapshot.settlementKey || buildSharedDebtCardMonthlySettlementKey({ requesterUserId: snapshot.requesterUserId, receiverUserId: snapshot.receiverUserId, month: snapshot.month, year: snapshot.year }), snapshot]),
       ...sentSettlementMeta.snapshots.map((snapshot) => [snapshot.settlementKey || buildSharedDebtCardMonthlySettlementKey({ requesterUserId: snapshot.requesterUserId, receiverUserId: snapshot.receiverUserId, month: snapshot.month, year: snapshot.year }), snapshot])
@@ -7711,7 +7761,7 @@ function normalizeManualSharedDebtMode(value) {
   return String(value || '').trim().toLowerCase() === 'private' ? 'private' : 'app';
 }
 
-function createPrivateDebtReminder({ ownerUserId, person, description, amountCents, note = null, createdAt = null }) {
+function createPrivateDebtReminder({ ownerUserId, person, description, amountCents, note = null, promisedPaymentDate = null, createdAt = null }) {
   const cleanOwnerUserId = Number(ownerUserId || 0);
   const cleanAmountCents = Math.max(0, Number(amountCents || 0));
   if (!cleanOwnerUserId || !person || !cleanAmountCents) return null;
@@ -7720,6 +7770,7 @@ function createPrivateDebtReminder({ ownerUserId, person, description, amountCen
   const now = createdAt || nowIso();
   const cleanDescription = sanitizePrivateDebtDescription(description, 120);
   const cleanNote = sanitizePrivateDebtNote(note, 400);
+  const cleanPromisedPaymentDate = normalizePrivateDebtPromisedPaymentDate(promisedPaymentDate);
   if (!cleanDescription) return null;
 
   const info = db.prepare(`
@@ -7733,6 +7784,7 @@ function createPrivateDebtReminder({ ownerUserId, person, description, amountCen
       description_snapshot,
       amount_cents,
       request_note,
+      promised_payment_date,
       status,
       is_archived,
       created_at,
@@ -7748,6 +7800,7 @@ function createPrivateDebtReminder({ ownerUserId, person, description, amountCen
     cleanDescription,
     cleanAmountCents,
     cleanNote,
+    cleanPromisedPaymentDate,
     now,
     now
   );
@@ -7783,6 +7836,7 @@ function getPrivateDebtReminderRowForOwner(ownerUserId, reminderId, { includeArc
 
 function buildPrivateDebtReminderTrackingSearchText(item = {}) {
   const createdDateText = item?.created_at ? formatDateBR(item.created_at) : '';
+  const promisedDateText = item?.promised_payment_date ? formatDateBR(item.promised_payment_date) : '';
   const paymentDateText = item?.payment_date ? formatDateBR(item.payment_date) : '';
 
   return normalizeSharedDebtSearchTerm([
@@ -7797,7 +7851,10 @@ function buildPrivateDebtReminderTrackingSearchText(item = {}) {
     item?.status,
     'privado',
     createdDateText,
-    paymentDateText
+    promisedDateText,
+    paymentDateText,
+    'data combinada',
+    'pagamento combinado'
   ].filter(Boolean).join(' '));
 }
 
@@ -8129,6 +8186,10 @@ function startCardDueTodayPushScheduler() {
   restartCardDueTodayPushScheduler();
 }
 
+function startManualDebtDueScheduler() {
+  restartManualDebtDueScheduler();
+}
+
 function queuePushNotification(userId, payload) {
   if (!isPushConfigured()) return;
 
@@ -8155,6 +8216,292 @@ function createNotification({ userId, type, title, body = null, href = null, rel
   queuePushNotification(targetUser.id, { title, body, href, tag: pushTag });
 
   return result;
+}
+
+
+function normalizeManualDebtDueScope(value = '') {
+  return String(value || '').trim().toLowerCase() === 'pay' ? 'pay' : 'receive';
+}
+
+function normalizeManualDebtDueUserIds(userIds = null) {
+  const source = Array.isArray(userIds) ? userIds : (userIds == null ? [] : [userIds]);
+  const ids = Array.from(new Set(source.map((value) => Number(value || 0)).filter(Boolean)));
+  return ids.length ? ids : null;
+}
+
+function getManualDebtDueRuntimeConfig() {
+  const pushConfig = getPushRuntimeConfig();
+  return {
+    timezone: pushConfig.timezone || 'America/Sao_Paulo',
+    hour: Math.max(0, Math.min(23, Number(pushConfig.hour || 0))),
+    minute: Math.max(0, Math.min(59, Number(pushConfig.minute || 0))),
+    checkIntervalMinutes: Math.max(1, Number(pushConfig.checkIntervalMinutes || 10) || 10)
+  };
+}
+
+function getManualDebtDueScheduleContext(reference = dayjs()) {
+  const config = getManualDebtDueRuntimeConfig();
+  const now = dayjs(reference).tz(config.timezone);
+  const scheduledAt = now.startOf('day').hour(config.hour).minute(config.minute).second(0).millisecond(0);
+  return {
+    config,
+    now,
+    scheduledAt,
+    dateKey: now.format('YYYY-MM-DD')
+  };
+}
+
+function getManualDebtDueBucketsForDate(dateKey, { userIds = null } = {}) {
+  const safeDateKey = String(dateKey || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(safeDateKey)) return new Map();
+
+  const filteredUserIds = normalizeManualDebtDueUserIds(userIds);
+  const payUserFilterSql = filteredUserIds ? ` AND r.receiver_user_id IN (${filteredUserIds.map(() => '?').join(', ')})` : '';
+  const receiveUserFilterSql = filteredUserIds ? ` AND r.requester_user_id IN (${filteredUserIds.map(() => '?').join(', ')})` : '';
+  const privateUserFilterSql = filteredUserIds ? ` AND r.owner_user_id IN (${filteredUserIds.map(() => '?').join(', ')})` : '';
+
+  const payRows = db.prepare(`
+    SELECT
+      r.id,
+      r.receiver_user_id AS target_user_id,
+      'pay' AS scope,
+      'shared_request' AS item_kind,
+      r.description_snapshot,
+      r.amount_cents,
+      u.name AS counterpart_name,
+      u.email AS counterpart_email
+    FROM shared_debt_requests r
+    JOIN users u ON u.id = r.requester_user_id
+    LEFT JOIN shared_debt_archives a
+      ON a.request_id = r.id
+     AND a.user_id = r.receiver_user_id
+    WHERE r.request_kind = 'manual'
+      AND r.promised_payment_date = ?
+      AND r.status IN ('pending', 'accepted')
+      AND r.payment_marked_at IS NULL
+      AND COALESCE(a.is_archived, 0) = 0
+      ${payUserFilterSql}
+    ORDER BY r.created_at ASC, r.id ASC
+  `).all(safeDateKey, ...(filteredUserIds || []));
+
+  const receiveRows = db.prepare(`
+    SELECT
+      r.id,
+      r.requester_user_id AS target_user_id,
+      'receive' AS scope,
+      'shared_request' AS item_kind,
+      r.description_snapshot,
+      r.amount_cents,
+      u.name AS counterpart_name,
+      u.email AS counterpart_email
+    FROM shared_debt_requests r
+    JOIN users u ON u.id = r.receiver_user_id
+    LEFT JOIN shared_debt_archives a
+      ON a.request_id = r.id
+     AND a.user_id = r.requester_user_id
+    WHERE r.request_kind = 'manual'
+      AND r.promised_payment_date = ?
+      AND r.status IN ('pending', 'accepted')
+      AND r.payment_marked_at IS NULL
+      AND COALESCE(a.is_archived, 0) = 0
+      ${receiveUserFilterSql}
+    ORDER BY r.created_at ASC, r.id ASC
+  `).all(safeDateKey, ...(filteredUserIds || []));
+
+  const privateRows = db.prepare(`
+    SELECT
+      r.id,
+      r.owner_user_id AS target_user_id,
+      'receive' AS scope,
+      'private_reminder' AS item_kind,
+      r.description_snapshot,
+      r.amount_cents,
+      COALESCE(r.person_name_snapshot, p.name, 'Contato') AS counterpart_name,
+      COALESCE(r.person_email_snapshot, p.email) AS counterpart_email
+    FROM private_debt_reminders r
+    LEFT JOIN people p ON p.id = r.person_id AND p.user_id = r.owner_user_id
+    WHERE r.promised_payment_date = ?
+      AND r.status = 'open'
+      AND COALESCE(r.is_archived, 0) = 0
+      ${privateUserFilterSql}
+    ORDER BY r.created_at ASC, r.id ASC
+  `).all(safeDateKey, ...(filteredUserIds || []));
+
+  const buckets = new Map();
+  const append = (row) => {
+    const userId = Number(row?.target_user_id || 0);
+    if (!userId) return;
+    if (!buckets.has(userId)) {
+      buckets.set(userId, { userId, pay: [], receive: [] });
+    }
+    const entry = buckets.get(userId);
+    entry[normalizeManualDebtDueScope(row?.scope)].push({
+      id: Number(row?.id || 0) || null,
+      item_kind: String(row?.item_kind || 'shared_request').trim() || 'shared_request',
+      description_snapshot: String(row?.description_snapshot || '').trim(),
+      amount_cents: Math.max(0, Number(row?.amount_cents || 0) || 0),
+      counterpart_name: String(row?.counterpart_name || '').trim() || null,
+      counterpart_email: String(row?.counterpart_email || '').trim() || null
+    });
+  };
+
+  [...payRows, ...receiveRows, ...privateRows].forEach(append);
+  return buckets;
+}
+
+function hasManualDebtDueAlertLog({ userId, scope, dateKey }) {
+  const safeUserId = Number(userId || 0);
+  const safeScope = normalizeManualDebtDueScope(scope);
+  const safeDateKey = String(dateKey || '').trim();
+  if (!safeUserId || !/^\d{4}-\d{2}-\d{2}$/.test(safeDateKey)) return false;
+
+  const row = db.prepare(`
+    SELECT id
+    FROM manual_debt_due_alert_logs
+    WHERE user_id = ? AND scope = ? AND date_key = ?
+    LIMIT 1
+  `).get(safeUserId, safeScope, safeDateKey);
+
+  return !!row;
+}
+
+function recordManualDebtDueAlertLog({ userId, scope, dateKey, payload = null }) {
+  const safeUserId = Number(userId || 0);
+  const safeScope = normalizeManualDebtDueScope(scope);
+  const safeDateKey = String(dateKey || '').trim();
+  if (!safeUserId || !/^\d{4}-\d{2}-\d{2}$/.test(safeDateKey)) return false;
+
+  const info = db.prepare(`
+    INSERT OR IGNORE INTO manual_debt_due_alert_logs (user_id, scope, date_key, payload_json, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(safeUserId, safeScope, safeDateKey, payload ? JSON.stringify(payload) : null, nowIso());
+
+  return Number(info.changes || 0) > 0;
+}
+
+function buildManualDebtDueCounterpartPreview(items = []) {
+  const names = Array.from(new Set(
+    (Array.isArray(items) ? items : [])
+      .map((item) => String(item?.counterpart_name || item?.counterpart_email || '').trim())
+      .filter(Boolean)
+  ));
+
+  if (!names.length) return '';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} e ${names[1]}`;
+  return `${names[0]}, ${names[1]} e mais ${names.length - 2}`;
+}
+
+function resolveManualDebtDueHref(scope, items = []) {
+  const safeScope = normalizeManualDebtDueScope(scope);
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!list.length) return '/shared-debts';
+
+  if (list.length === 1) {
+    const item = list[0];
+    if (item.item_kind === 'private_reminder') return `/shared-debts?private=${item.id}`;
+    return `/shared-debts?request=${item.id}`;
+  }
+
+  if (safeScope === 'pay') return '/shared-debts#received';
+
+  const kinds = Array.from(new Set(list.map((item) => item.item_kind)));
+  if (kinds.length === 1 && kinds[0] === 'private_reminder') return '/shared-debts#private-reminders';
+  if (kinds.length === 1 && kinds[0] === 'shared_request') return '/shared-debts#sent';
+  return '/shared-debts';
+}
+
+function buildManualDebtDueNotificationPayload(scope, items = [], dateKey = null) {
+  const safeScope = normalizeManualDebtDueScope(scope);
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  const totalCents = list.reduce((sum, item) => sum + Math.max(0, Number(item?.amount_cents || 0) || 0), 0);
+  const counterpartPreview = buildManualDebtDueCounterpartPreview(list);
+  const href = resolveManualDebtDueHref(safeScope, list);
+
+  if (list.length === 1) {
+    const item = list[0];
+    const counterpart = item.counterpart_name || item.counterpart_email || 'alguém';
+    const description = item.description_snapshot || 'esse combinado';
+    return {
+      title: safeScope === 'pay' ? 'Hoje é o dia combinado para pagar' : 'Hoje é o dia combinado para receber',
+      body: safeScope === 'pay'
+        ? `Tem ${formatBRLFromCents(item.amount_cents)} combinado com ${counterpart} em ${description}.`
+        : `Tem ${formatBRLFromCents(item.amount_cents)} combinado com ${counterpart} em ${description} batendo hoje.`,
+      href,
+      relatedType: item.item_kind === 'private_reminder' ? 'private_debt_reminder' : 'shared_debt_request',
+      relatedId: item.id || null,
+      payloadMeta: { scope: safeScope, dateKey, totalCents, count: 1, itemKind: item.item_kind }
+    };
+  }
+
+  return {
+    title: safeScope === 'pay' ? 'Hoje tem combinados para pagar' : 'Hoje tem combinados para receber',
+    body: `São ${formatCountLabel(list.length, 'combinado', 'combinados')} batendo hoje, somando ${formatBRLFromCents(totalCents)}${counterpartPreview ? ` com ${counterpartPreview}` : ''}.`,
+    href,
+    relatedType: list.every((item) => item.item_kind === 'private_reminder') ? 'private_debt_reminder' : 'shared_debt_request',
+    relatedId: list.length === 1 ? list[0].id || null : null,
+    payloadMeta: { scope: safeScope, dateKey, totalCents, count: list.length }
+  };
+}
+
+function buildManualDebtDueDashboardAlert(scope, items = [], dateKey = null) {
+  const payload = buildManualDebtDueNotificationPayload(scope, items, dateKey);
+  return {
+    type: normalizeManualDebtDueScope(scope) === 'pay' ? 'warning' : 'info',
+    icon: normalizeManualDebtDueScope(scope) === 'pay' ? '💸' : '📥',
+    title: normalizeManualDebtDueScope(scope) === 'pay'
+      ? 'Tem combinado batendo hoje para pagar'
+      : 'Tem combinado batendo hoje para receber',
+    description: payload.body,
+    href: payload.href
+  };
+}
+
+async function deliverManualDebtDueAlertsForDate(dateKey, { userIds = null } = {}) {
+  const buckets = getManualDebtDueBucketsForDate(dateKey, { userIds });
+  let deliveredCount = 0;
+
+  for (const [userId, bucket] of buckets.entries()) {
+    for (const scope of ['pay', 'receive']) {
+      const items = Array.isArray(bucket?.[scope]) ? bucket[scope] : [];
+      if (!items.length) continue;
+      if (hasManualDebtDueAlertLog({ userId, scope, dateKey })) continue;
+
+      const payload = buildManualDebtDueNotificationPayload(scope, items, dateKey);
+      const result = createNotification({
+        userId,
+        type: 'shared_debt_request',
+        title: payload.title,
+        body: payload.body,
+        href: payload.href,
+        relatedType: payload.relatedType,
+        relatedId: payload.relatedId,
+        groupKey: 'shared_debt_payments'
+      });
+
+      if (result) {
+        recordManualDebtDueAlertLog({ userId, scope, dateKey, payload: payload.payloadMeta });
+        deliveredCount += 1;
+      }
+    }
+  }
+
+  return deliveredCount;
+}
+
+async function runManualDebtDueAlertSweep() {
+  if (scheduledManualDebtDueSweepRunning) return;
+  scheduledManualDebtDueSweepRunning = true;
+
+  try {
+    const { now, scheduledAt, dateKey } = getManualDebtDueScheduleContext();
+    if (now.isBefore(scheduledAt)) return;
+    await deliverManualDebtDueAlertsForDate(dateKey);
+  } catch (error) {
+    console.error('Falha no sweep de alertas da data combinada:', error?.message || error);
+  } finally {
+    scheduledManualDebtDueSweepRunning = false;
+  }
 }
 
 function getUnreadNotificationCount(userId) {
@@ -10320,6 +10667,7 @@ function buildSharedDebtTrackingSearchText(item = {}) {
     ? monthLabel(item.source_due_month, item.source_due_year)
     : '';
   const txnDateText = item?.source_txn_date ? formatDateBR(item.source_txn_date) : '';
+  const promisedDateText = item?.promised_payment_date ? formatDateBR(item.promised_payment_date) : '';
 
   return normalizeSharedDebtSearchTerm([
     item?.description_snapshot,
@@ -10335,7 +10683,10 @@ function buildSharedDebtTrackingSearchText(item = {}) {
     item?.batch_origin_kind,
     item?.status,
     monthText,
-    txnDateText
+    txnDateText,
+    promisedDateText,
+    'data combinada',
+    'pagamento combinado'
   ].filter(Boolean).join(' '));
 }
 
@@ -10686,6 +11037,7 @@ app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
   const personId = Number(req.body.person_id || 0);
   const description = sanitizePrivateDebtDescription(req.body.description || '', 120);
   const note = sanitizePrivateDebtNote(req.body.note || '', 400);
+  const promisedPaymentDate = normalizePrivateDebtPromisedPaymentDate(req.body.promised_payment_date || req.body.promisedPaymentDate || null);
   const amountCents = centsFromPtBrMoney(req.body.amount);
 
   if (!personId) {
@@ -10718,6 +11070,7 @@ app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
       description,
       amountCents,
       note,
+      promisedPaymentDate,
       createdAt: nowIso()
     });
 
@@ -10727,10 +11080,11 @@ app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
     }
 
     const receiverName = person.name || person.linked_user_name || person.linked_user_email || 'esse contato';
+    const promisedLabel = promisedPaymentDate ? ` Pagamento combinado para ${formatDateBR(promisedPaymentDate)}.` : '';
     if (person.can_share_charge && person.friendship_active) {
-      setFlash(req, 'success', `Lembrete privado criado para ${receiverName}. Fica só no seu app, sem avisar a outra pessoa.`);
+      setFlash(req, 'success', `Lembrete privado criado para ${receiverName}. Fica só no seu app, sem avisar a outra pessoa.${promisedLabel}`);
     } else {
-      setFlash(req, 'success', `Lembrete privado criado para ${receiverName}. Agora ele entra no seu controle até você confirmar o recebimento.`);
+      setFlash(req, 'success', `Lembrete privado criado para ${receiverName}. Agora ele entra no seu controle até você confirmar o recebimento.${promisedLabel}`);
     }
     return res.redirect(`/shared-debts?private=${reminderId}`);
   }
@@ -10765,9 +11119,9 @@ app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
       requester_user_id, requester_person_id, receiver_user_id, source_person_id,
       source_transaction_id, source_allocation_id, source_due_month, source_due_year, source_txn_date_snapshot,
       card_id, card_name_snapshot, description_snapshot, amount_cents,
-      receiver_email_snapshot, receiver_name_snapshot, request_note, response_note,
+      receiver_email_snapshot, receiver_name_snapshot, request_note, promised_payment_date, response_note,
       status, batch_id, request_kind, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, NULL, NULL, ?, ?, ?, ?, ?, NULL, 'pending', ?, 'manual', ?, ?)
+    ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, NULL, 'pending', ?, 'manual', ?, ?)
   `).run(
     userId,
     requesterPerson?.id || null,
@@ -10779,6 +11133,7 @@ app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
     receiverEmail,
     receiverName,
     note,
+    promisedPaymentDate,
     batchId,
     now,
     now
@@ -10799,7 +11154,7 @@ app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
     groupKey: 'shared_debt_new'
   });
 
-  setFlash(req, 'success', `Pronto! O lembrete avulso para ${receiverName} já foi enviado com a data de hoje.`);
+  setFlash(req, 'success', `Pronto! O lembrete avulso para ${receiverName} já foi enviado com a data de hoje.${promisedPaymentDate ? ` Pagamento combinado para ${formatDateBR(promisedPaymentDate)}.` : ''}`);
   return res.redirect(`/shared-debts?request=${requestId}`);
 });
 
@@ -14616,7 +14971,18 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     });
   }
 
-  const today = dayjs();
+  const manualDebtDueContext = getManualDebtDueScheduleContext();
+  const today = manualDebtDueContext.now;
+  const todayManualDebtBucket = getManualDebtDueBucketsForDate(manualDebtDueContext.dateKey, { userIds: [userId] }).get(userId) || { pay: [], receive: [] };
+
+  if ((todayManualDebtBucket.pay || []).length) {
+    alerts.push(buildManualDebtDueDashboardAlert('pay', todayManualDebtBucket.pay, manualDebtDueContext.dateKey));
+  }
+
+  if ((todayManualDebtBucket.receive || []).length) {
+    alerts.push(buildManualDebtDueDashboardAlert('receive', todayManualDebtBucket.receive, manualDebtDueContext.dateKey));
+  }
+
   const isCurrentReferenceMonth = currentYear === today.year() && currentMonth === (today.month() + 1);
 
   if (isCurrentReferenceMonth) {
@@ -19035,4 +19401,5 @@ const PORT = BOOTSTRAP_PORT || 3001;
 app.listen(PORT, () => {
   console.log(`✅ Rodando em http://localhost:${PORT}`);
   startCardDueTodayPushScheduler();
+  startManualDebtDueScheduler();
 });

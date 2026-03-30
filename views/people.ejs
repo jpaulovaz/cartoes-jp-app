@@ -52,6 +52,32 @@
   const notificationPreferenceGroups = Array.isArray(notificationPreferenceState.groups) ? notificationPreferenceState.groups : [];
   const notificationPreferenceEnabledCount = Number(notificationPreferenceState.enabledCount || 0) || 0;
   const notificationPreferenceTotalCount = Number(notificationPreferenceState.totalCount || 0) || notificationPreferenceGroups.length;
+  const notificationPreferenceCopy = {
+    friendship_activity: {
+      title: 'Amizades',
+      description: 'Pedidos, aceites e mudanças por aqui.'
+    },
+    shared_debt_new: {
+      title: 'Novas cobranças',
+      description: 'Quando chega cobrança, envio ou lembrete novo.'
+    },
+    shared_debt_updates: {
+      title: 'Respostas de cobranças',
+      description: 'Atualizações, aceites, recusas e revisões.'
+    },
+    shared_debt_payments: {
+      title: 'Pagamentos',
+      description: 'Quando alguém marca ou confirma pagamento.'
+    },
+    monthly_pix_updates: {
+      title: 'Pix do mês',
+      description: 'Pix informado, confirmado ou revisado.'
+    },
+    card_due_today: {
+      title: 'Fatura vencendo',
+      description: 'Lembrete no dia do vencimento do cartão.'
+    }
+  };
   const signatureVibeOptions = Array.isArray(profileSignatureVibeOptions) ? profileSignatureVibeOptions : [];
   const signatureVibeMap = new Map(signatureVibeOptions.map((option) => [String(option?.code || '').trim(), option]));
   const getSignatureVibeMeta = (value) => signatureVibeMap.get(String(value || '').trim()) || null;
@@ -309,19 +335,12 @@
         </div>
 
         <div id="selfIdentityShell" class="border-t border-amber-100 p-5 dark:border-amber-900/40 sm:p-6">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Como você aparece</div>
-              <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seus dados por aqui</h3>
-              <p class="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Telefone e e-mail já ficam logo abaixo do seu nome. Quando quiser mexer, é só tocar em editar.</p>
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <span id="selfIdentityEditingBadge" class="hidden inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Modo edição</span>
-              <button type="button" id="selfIdentityEditButton" onclick="toggleSelfIdentityEdit()" class="inline-flex w-full items-center justify-center rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-black text-amber-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-amber-50 dark:border-amber-900 dark:bg-slate-900 dark:text-amber-200 dark:hover:bg-amber-900/20 sm:w-auto" aria-expanded="false" aria-controls="selfIdentityForm">
-                <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                Editar
-              </button>
-            </div>
+          <div class="flex flex-wrap items-center justify-end gap-2">
+            <span id="selfIdentityEditingBadge" class="hidden inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Modo edição</span>
+            <button type="button" id="selfIdentityEditButton" onclick="toggleSelfIdentityEdit()" class="inline-flex w-full items-center justify-center rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-black text-amber-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-amber-50 dark:border-amber-900 dark:bg-slate-900 dark:text-amber-200 dark:hover:bg-amber-900/20 sm:w-auto" aria-expanded="false" aria-controls="selfIdentityForm">
+              <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+              Editar
+            </button>
           </div>
 
           <form method="post" action="/people" id="selfIdentityForm" class="mt-5 hidden space-y-4" autocomplete="on">
@@ -387,48 +406,48 @@
             </div>
           </form>
 
-          <div id="selfNotificationPreferencesPanel" class="mt-5 space-y-4">
+          <div id="selfNotificationPreferencesPanel" class="mt-4 space-y-4">
             <div class="rounded-[26px] border border-sky-100 bg-sky-50/80 p-4 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20">
-              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-center gap-2">
                     <span class="inline-flex items-center rounded-full border border-sky-200 bg-white/90 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-sky-700 shadow-sm dark:border-sky-800 dark:bg-slate-900/80 dark:text-sky-200">Seus alertas</span>
                     <span class="inline-flex items-center rounded-full border border-white/80 bg-white/80 px-3 py-1 text-[11px] font-bold text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300"><%= notificationPreferenceEnabledCount %>/<%= notificationPreferenceTotalCount %> grupos ligados</span>
                   </div>
-                  <h3 class="mt-3 text-xl font-black text-slate-900 dark:text-white">Escolha o que pode te chamar aqui</h3>
-                  <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Esses checks valem para sua conta inteira. O botão ao lado liga ou desliga os alertas deste aparelho, sem mexer no resto da sua rede.</p>
-                  <p id="selfNotificationPushStatus" class="mt-3 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400">Ative os alertas para receber um toque do app quando pintar novidade importante.</p>
+                  <h3 class="mt-3 text-lg font-black text-slate-900 dark:text-white">Escolha seus alertas</h3>
+                  <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Os checks valem na sua conta inteira. O botão ao lado liga ou pausa só este aparelho.</p>
+                  <p id="selfNotificationPushStatus" class="mt-2 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400">Ligue os alertas deste aparelho para receber novidades.</p>
                 </div>
-                <div class="w-full lg:max-w-[16rem]">
-                  <button type="button" data-push-toggle data-push-public-key="<%= pushPublicKey %>" data-push-status-target="#selfNotificationPushStatus" class="op-btn op-btn-warning-soft op-btn--block">Ativar alertas</button>
-                </div>
+                <button type="button" data-push-toggle data-push-public-key="<%= pushPublicKey %>" data-push-status-target="#selfNotificationPushStatus" class="op-btn op-btn-warning-soft w-full whitespace-nowrap sm:w-auto">Ativar alertas</button>
               </div>
             </div>
 
             <form method="post" action="/people/notification-preferences" class="space-y-4">
-              <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <% notificationPreferenceGroups.forEach((group) => { %>
-                  <label class="group flex min-h-[9.25rem] cursor-pointer flex-col rounded-[26px] border border-slate-200 bg-white px-4 py-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-sky-200 hover:bg-sky-50/50 dark:border-slate-700 dark:bg-slate-900/80 dark:hover:border-sky-800 dark:hover:bg-sky-950/20">
-                    <div class="flex items-start justify-between gap-3">
-                      <div>
-                        <div class="text-sm font-black text-slate-900 dark:text-white"><%= group.title %></div>
-                        <p class="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400"><%= group.description %></p>
-                      </div>
-                      <span class="relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-all <%= group.enabled ? 'border-sky-400 bg-sky-500/90 dark:border-sky-500 dark:bg-sky-500/80' : 'border-slate-300 bg-slate-200 dark:border-slate-600 dark:bg-slate-700' %>">
-                        <span class="mx-0.5 inline-flex h-5 w-5 rounded-full bg-white shadow transition-all <%= group.enabled ? 'translate-x-5' : 'translate-x-0' %>"></span>
-                      </span>
+              <div class="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <% notificationPreferenceGroups.forEach((group, index) => { 
+                     const groupCopy = notificationPreferenceCopy[group.key] || {};
+                     const groupTitle = groupCopy.title || group.title;
+                     const groupDescription = groupCopy.description || group.description;
+                %>
+                  <label class="group flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-sky-50/60 dark:hover:bg-sky-950/20">
+                    <div class="min-w-0 flex-1">
+                      <div class="text-sm font-black text-slate-900 dark:text-white"><%= groupTitle %></div>
+                      <p class="mt-0.5 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= groupDescription %></p>
                     </div>
-                    <div class="mt-4 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                      <input type="checkbox" name="pref_<%= group.key %>" value="1" <%= group.enabled ? 'checked' : '' %> class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 dark:border-slate-600 dark:bg-slate-950">
-                      <span><%= group.enabled ? 'Ligado' : 'Pausado' %></span>
+                    <div class="flex shrink-0 items-center gap-3 pl-2">
+                      <span class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400"><%= group.enabled ? 'Ligado' : 'Pausado' %></span>
+                      <input type="checkbox" name="pref_<%= group.key %>" value="1" <%= group.enabled ? 'checked' : '' %> class="h-5 w-5 shrink-0 rounded-md border-slate-300 text-sky-600 focus:ring-sky-500 dark:border-slate-600 dark:bg-slate-950">
                     </div>
                   </label>
+                  <% if (index < notificationPreferenceGroups.length - 1) { %>
+                    <div class="mx-4 border-t border-slate-200/80 dark:border-slate-700/80"></div>
+                  <% } %>
                 <% }) %>
               </div>
 
-              <div class="flex flex-col gap-3 rounded-[24px] border border-dashed border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/60 sm:flex-row sm:items-center sm:justify-between">
-                <p class="text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Se quiser paz em algum assunto específico, é só desmarcar. O sininho do topo continua abrindo a central completa.</p>
-                <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400 sm:w-auto">Salvar meus alertas</button>
+              <div class="flex flex-col gap-3 rounded-[24px] border border-dashed border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/60 sm:flex-row sm:items-center sm:justify-between">
+                <p class="text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Os grupos ficam salvos na sua conta. O sininho do topo continua abrindo a central completa.</p>
+                <button type="submit" class="inline-flex w-full shrink-0 items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400 sm:w-auto whitespace-nowrap">Salvar alertas</button>
               </div>
             </form>
           </div>

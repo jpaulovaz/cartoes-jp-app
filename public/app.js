@@ -1363,11 +1363,11 @@
   }
 
   function getPushStatusMessage(state) {
-    if (state === 'enabled') return 'Tudo certo! Este aparelho já vai te chamar quando pintar novidade.';
-    if (state === 'blocked') return 'Os alertas foram bloqueados neste navegador. Para ligar de novo, libere a permissão nas configurações do navegador.';
-    if (state === 'unsupported') return 'Este navegador não consegue receber alertas por aqui, ou o recurso ainda não foi configurado.';
+    if (state === 'enabled') return 'Tudo certo! Este aparelho já recebe alertas.';
+    if (state === 'blocked') return 'Os alertas estão bloqueados neste navegador. Libere a permissão para voltar a receber.';
+    if (state === 'unsupported') return 'Este navegador ainda não consegue receber alertas por aqui.';
     if (state === 'loading') return 'Preparando os alertas deste aparelho...';
-    return 'Ligue os alertas neste aparelho e deixe o app te dar um toque quando algo mudar.';
+    return 'Ligue os alertas deste aparelho para receber novidades.';
   }
 
   function getToggleStateConfig(state) {

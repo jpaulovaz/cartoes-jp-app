@@ -1144,6 +1144,10 @@ function getEmailRuntimeConfig() {
     port: getSettingInt('MAIL_SMTP_PORT', 587),
     secure: getSettingBoolean('MAIL_SMTP_SECURE', false),
     requireTLS: getSettingBoolean('MAIL_SMTP_REQUIRE_TLS', true),
+    trustSystemCA: getSettingBoolean('MAIL_SMTP_TRUST_SYSTEM_CA', false),
+    allowSelfSigned: getSettingBoolean('MAIL_SMTP_ALLOW_SELF_SIGNED', false),
+    servername: getSettingText('MAIL_SMTP_SERVERNAME'),
+    caCert: String(getSettingValue('MAIL_SMTP_CA_CERT') || ''),
     user: getSettingText('MAIL_SMTP_USER'),
     pass: getSettingText('MAIL_SMTP_PASS'),
     fromEmail: getSettingText('MAIL_FROM_EMAIL'),
@@ -1160,6 +1164,20 @@ function isEmailConfigured(config = getEmailRuntimeConfig()) {
 
 function getEmailConnectionModeLabel(config = getEmailRuntimeConfig()) {
   return config.secure ? 'SMTPS' : (config.requireTLS ? 'STARTTLS' : 'SMTP');
+}
+
+function buildEmailTransportLogContext(config = getEmailRuntimeConfig()) {
+  const safeConfig = config && typeof config === 'object' ? config : {};
+  return {
+    host: safeConfig.host || null,
+    port: safeConfig.port || null,
+    secure: !!safeConfig.secure,
+    requireTLS: !!safeConfig.requireTLS,
+    trustSystemCA: !!safeConfig.trustSystemCA,
+    allowSelfSigned: !!safeConfig.allowSelfSigned,
+    servername: safeConfig.servername || null,
+    customCAConfigured: !!String(safeConfig.caCert || '').trim()
+  };
 }
 
 function buildAppOriginFromRequest(req) {
@@ -1375,7 +1393,8 @@ async function sendWelcomeEmailToUser({ targetUser, createdByUser, customMessage
     logEmailFlowError('welcome-send', error, {
       targetUserId: safeTarget.id || null,
       recipientEmail: safeRecipientEmail,
-      subject: template.subject
+      subject: template.subject,
+      ...buildEmailTransportLogContext(emailConfig)
     });
     finalizeEmailDeliveryEvent(eventId, {
       status: 'error',
@@ -2338,13 +2357,19 @@ function buildEmailAdminState(req, { timeZone = 'America/Sao_Paulo' } = {}) {
   const latestEvent = recentEvents[0] || null;
   const testRecipient = normalizeEmail(req?.user?.email) || config.fromEmail || '';
 
+  const tlsHints = [];
+  if (config.trustSystemCA) tlsHints.push('CA do sistema');
+  if (String(config.caCert || '').trim()) tlsHints.push('CA extra');
+  if (config.allowSelfSigned) tlsHints.push('self-signed liberado');
+  if (config.servername) tlsHints.push(`SNI ${config.servername}`);
+
   return {
     config,
     configured,
     enabled: !!config.enabled,
     active: !!config.enabled && configured,
     hostLabel: config.host || 'Host não definido',
-    connectionLabel: `${getEmailConnectionModeLabel(config)} · porta ${config.port || (config.secure ? 465 : 587)}`,
+    connectionLabel: `${getEmailConnectionModeLabel(config)} · porta ${config.port || (config.secure ? 465 : 587)}${tlsHints.length ? ` · ${tlsHints.join(' · ')}` : ''}`,
     fromLabel: config.fromEmail ? `${config.fromName || 'AcerttaPay'} <${config.fromEmail}>` : 'Remetente não definido',
     loginUrl: buildLoginUrl(req),
     testRecipient,
@@ -3911,6 +3936,18 @@ function getFriendlyErrorDetails(error, { defaultMessage = null } = {}) {
   if (/too many SQL variables/i.test(rawMessage)) {
     details.status = 422;
     details.message = 'Essa seleção ficou grande demais para processar de uma vez. Tenta dividir em partes.';
+    return details;
+  }
+
+  if (/self-signed certificate/i.test(rawMessage) || ['DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN'].includes(details.code)) {
+    details.status = 422;
+    details.message = 'O SMTP respondeu com certificado próprio e o app barrou por segurança. O ideal é usar um certificado confiável no mailcow ou informar a CA na seção de e-mail do admin. Se for ambiente interno, dá para liberar self-signed como último recurso.';
+    return details;
+  }
+
+  if (/unable to verify the first certificate|unable to get local issuer certificate|UNABLE_TO_VERIFY_LEAF_SIGNATURE/i.test(rawMessage)) {
+    details.status = 422;
+    details.message = 'O app não conseguiu confiar na cadeia TLS do SMTP. Vale conferir a cadeia do certificado, ligar a confiança nas CAs do sistema ou informar a CA PEM na seção de e-mail.';
     return details;
   }
 
@@ -18283,8 +18320,7 @@ app.post('/admin/email/test-connection', ensureAuthenticated, async (req, res) =
     }
     logEmailFlowError('test-connection', error, {
       adminUserId: userId,
-      host: getEmailRuntimeConfig().host || null,
-      port: getEmailRuntimeConfig().port || null
+      ...buildEmailTransportLogContext(getEmailRuntimeConfig())
     });
     return renderAdmin(res, {
       error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui validar a conexão SMTP agora.' }),
@@ -18316,7 +18352,8 @@ app.post('/admin/email/send-test', ensureAuthenticated, async (req, res) => {
     }
     logEmailFlowError('admin-send-test', error, {
       adminUserId: userId,
-      recipientEmail: String(req.body.test_recipient_email || '').trim() || null
+      recipientEmail: String(req.body.test_recipient_email || '').trim() || null,
+      ...buildEmailTransportLogContext(getEmailRuntimeConfig())
     });
     return renderAdmin(res, {
       error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui mandar o e-mail de teste agora.' }),
@@ -18616,7 +18653,8 @@ app.post('/admin/users/:id/resend-welcome', ensureAuthenticated, async (req, res
     logEmailFlowError('admin-resend-welcome', error, {
       adminUserId: userId,
       targetUserId,
-      recipientEmail: targetUser?.email || null
+      recipientEmail: targetUser?.email || null,
+      ...buildEmailTransportLogContext(getEmailRuntimeConfig())
     });
     return renderAdmin(res, {
       error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui reenviar o e-mail de boas-vindas agora.' }),

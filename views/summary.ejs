@@ -219,12 +219,12 @@
                             <div data-summary-person-combined data-person-id="<%= pp.person_id %>" class="font-black text-indigo-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(pp.paid_cents || 0) %></div>
                             <div class="mt-1 flex flex-wrap justify-end gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400">
                               <% if (Number(pp.auto_paid_cents || 0) > 0) { %>
-                                <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pix <%= formatBRLFromCents(pp.auto_paid_cents || 0) %></span>
+                                <span class="inline-flex items-center whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pix <%= formatBRLFromCents(pp.auto_paid_cents || 0) %></span>
                               <% } %>
                               <% if (Number(pp.manual_paid_cents || 0) > 0) { %>
-                                <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">Ajuste <%= formatBRLFromCents(pp.manual_paid_cents || 0) %></span>
+                                <span class="inline-flex items-center whitespace-nowrap rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">Ajuste <%= formatBRLFromCents(pp.manual_paid_cents || 0) %></span>
                               <% } else { %>
-                                <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">Sem ajuste manual</span>
+                                <span class="inline-flex w-fit max-w-full items-center whitespace-nowrap rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">Sem ajuste manual</span>
                               <% } %>
                             </div>
                           </td>
@@ -233,7 +233,7 @@
                               value="<%= formatBRLFromCents(pp.manual_paid_cents || 0) %>" <%= isClosed ? 'disabled' : '' %>
                               data-money-mask data-summary-person-paid data-person-id="<%= pp.person_id %>"
                               class="op-summary-money-input text-right border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" />
-                            <p class="mt-2 text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400">Aqui entra só o ajuste manual. O Pix confirmado soma sozinho.</p>
+                            <p class="mt-2 text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400">Entrada Manual</p>
                           </td>
                           <td data-summary-person-remaining data-person-id="<%= pp.person_id %>"
                             class="px-4 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">

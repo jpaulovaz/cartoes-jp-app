@@ -61,12 +61,24 @@
     const offsetTop = Math.round((visualViewport && visualViewport.offsetTop) || 0);
     const keyboardInset = Math.max(0, Math.round((window.innerHeight || viewportHeight) - viewportHeight - offsetTop));
     const keyboardOpen = keyboardInset > 120;
+    const cozyViewport = viewportWidth <= 430;
+    const compactViewport = viewportWidth <= 390;
+    const tightViewport = viewportWidth <= 360;
+    const shortViewport = viewportHeight <= 760;
+    const viewportTier = tightViewport ? 'tight' : (compactViewport ? 'compact' : (cozyViewport ? 'cozy' : 'regular'));
 
     root.classList.toggle('op-ios', isIOS);
     root.classList.toggle('op-standalone', isStandalone);
     root.classList.toggle('op-ios-standalone', isIOS && isStandalone);
+    root.classList.toggle('op-vp-cozy', cozyViewport);
+    root.classList.toggle('op-vp-compact', compactViewport);
+    root.classList.toggle('op-vp-tight', tightViewport);
+    root.classList.toggle('op-vp-short', shortViewport);
     root.dataset.opPlatform = isIOS ? 'ios' : 'default';
     root.dataset.opDisplayMode = isStandalone ? 'standalone' : 'browser';
+    root.dataset.opViewportTier = viewportTier;
+    root.dataset.opViewportWidth = String(Math.max(viewportWidth, 0));
+    root.dataset.opViewportHeight = String(Math.max(viewportHeight, 0));
     root.style.setProperty('--op-app-height', `${Math.max(viewportHeight, 1)}px`);
     root.style.setProperty('--op-visual-viewport-height', `${Math.max(viewportHeight, 1)}px`);
     root.style.setProperty('--op-visual-viewport-width', `${Math.max(viewportWidth, 1)}px`);
@@ -76,7 +88,12 @@
       body.classList.toggle('op-ios', isIOS);
       body.classList.toggle('op-standalone', isStandalone);
       body.classList.toggle('op-ios-standalone', isIOS && isStandalone);
+      body.classList.toggle('op-vp-cozy', cozyViewport);
+      body.classList.toggle('op-vp-compact', compactViewport);
+      body.classList.toggle('op-vp-tight', tightViewport);
+      body.classList.toggle('op-vp-short', shortViewport);
       body.classList.toggle('op-virtual-keyboard-open', isIOS && keyboardOpen);
+      body.dataset.opViewportTier = viewportTier;
     }
   }
 
@@ -1346,11 +1363,11 @@
   }
 
   function getPushStatusMessage(state) {
-    if (state === 'enabled') return 'Tudo certo! Este aparelho já vai te chamar quando pintar novidade.';
-    if (state === 'blocked') return 'Os alertas foram bloqueados neste navegador. Para ligar de novo, libere a permissão nas configurações do navegador.';
-    if (state === 'unsupported') return 'Este navegador não consegue receber alertas por aqui, ou o recurso ainda não foi configurado.';
+    if (state === 'enabled') return 'Tudo certo! Este aparelho já recebe alertas.';
+    if (state === 'blocked') return 'Os alertas estão bloqueados neste navegador. Libere a permissão para voltar a receber.';
+    if (state === 'unsupported') return 'Este navegador ainda não consegue receber alertas por aqui.';
     if (state === 'loading') return 'Preparando os alertas deste aparelho...';
-    return 'Ligue os alertas neste aparelho e deixe o app te dar um toque quando algo mudar.';
+    return 'Ligue os alertas deste aparelho para receber novidades.';
   }
 
   function getToggleStateConfig(state) {
@@ -2735,4 +2752,374 @@
   } else {
     initAnalyticsTabs();
   }
+})();
+
+
+(function () {
+  const body = document.body;
+  if (!(body instanceof HTMLElement)) return;
+
+  const appPinEnabled = body.dataset.appPinEnabled === '1';
+  const appPinScreen = String(body.dataset.appPinScreen || 'app').toLowerCase();
+  if (!appPinEnabled || appPinScreen === 'lock') return;
+
+  const lockUrl = body.dataset.appPinLockUrl || '/lock/engage';
+  const touchUrl = body.dataset.appPinTouchUrl || '/lock/touch';
+  const idleSeconds = Math.max(0, Number(body.dataset.appPinIdleSeconds || 0) || 0);
+  const idleMs = idleSeconds > 0 ? idleSeconds * 1000 : 0;
+  const hiddenAtKey = 'op-app-pin-hidden-at';
+  const syncStorageKey = 'op-app-pin-sync';
+
+  function clearHiddenAtMarker() {
+    try {
+      window.sessionStorage.removeItem(hiddenAtKey);
+    } catch (_error) {}
+  }
+  const syncChannelName = 'op-app-pin';
+  const sourceId = `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const heartbeatGapMs = Math.min(30000, Math.max(10000, idleMs > 0 ? Math.floor(idleMs / 2) : 15000));
+  let idleTimer = null;
+  let touchTimer = null;
+  let lastTouchAt = 0;
+  let lastActivityAt = Date.now();
+  let lockInFlight = false;
+  let syncChannel = null;
+
+  function currentRelativeUrl() {
+    return `${window.location.pathname || '/'}${window.location.search || ''}${window.location.hash || ''}`;
+  }
+
+  function buildFallbackLockUrl(reason = 'locked') {
+    const params = new URLSearchParams();
+    params.set('reason', reason || 'locked');
+    params.set('next', currentRelativeUrl());
+    return `/lock?${params.toString()}`;
+  }
+
+  function redirectToLock(url) {
+    window.location.href = url || buildFallbackLockUrl('locked');
+  }
+
+  function openSyncChannel() {
+    try {
+      if (typeof window.BroadcastChannel === 'function') {
+        syncChannel = new window.BroadcastChannel(syncChannelName);
+        syncChannel.addEventListener('message', (event) => {
+          handleSyncPayload(event?.data || null);
+        });
+      }
+    } catch (_error) {
+      syncChannel = null;
+    }
+  }
+
+  function readStorageKey() {
+    try {
+      return window.localStorage;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function broadcastPinState(type, extra = {}) {
+    const payload = {
+      type,
+      at: Date.now(),
+      sourceId,
+      url: currentRelativeUrl(),
+      ...extra
+    };
+
+    if (syncChannel) {
+      try {
+        syncChannel.postMessage(payload);
+      } catch (_error) {}
+    }
+
+    const storage = readStorageKey();
+    if (!storage) return;
+    try {
+      storage.setItem(syncStorageKey, JSON.stringify(payload));
+    } catch (_error) {}
+  }
+
+  function handleSyncPayload(payload) {
+    if (!payload || payload.sourceId === sourceId) return;
+    const type = String(payload.type || '').trim().toLowerCase();
+    if (!type) return;
+
+    if (type === 'locked') {
+      if (lockInFlight) return;
+      const redirect = String(payload.redirect || '').trim() || buildFallbackLockUrl(payload.reason || 'locked');
+      redirectToLock(redirect);
+      return;
+    }
+
+    if (type === 'unlocked') {
+      if (lockInFlight) return;
+      clearHiddenAtMarker();
+      lastActivityAt = Date.now();
+      scheduleIdleLock();
+      scheduleTouchTimer();
+      touchServer(true);
+    }
+  }
+
+  window.addEventListener('storage', (event) => {
+    if (event.key !== syncStorageKey || !event.newValue) return;
+    try {
+      handleSyncPayload(JSON.parse(event.newValue));
+    } catch (_error) {}
+  });
+
+  openSyncChannel();
+
+  async function resolveLockRedirect(response, fallbackReason) {
+    let redirectUrl = response?.headers?.get('x-app-lock-redirect') || '';
+    if (!redirectUrl && response && typeof response.clone === 'function') {
+      try {
+        const payload = await response.clone().json();
+        redirectUrl = String(payload?.redirect || '').trim();
+      } catch (_error) {}
+    }
+    if (!redirectUrl) {
+      redirectUrl = buildFallbackLockUrl(fallbackReason || 'locked');
+    }
+    return redirectUrl;
+  }
+
+  async function handleLockedResponse(response, fallbackReason) {
+    if (!response) return false;
+    const locked = Number(response.status || 0) === 423 || response.headers.get('x-app-locked') === '1';
+    if (!locked) return false;
+    const redirectUrl = await resolveLockRedirect(response, fallbackReason);
+    broadcastPinState('locked', { reason: fallbackReason || 'locked', redirect: redirectUrl });
+    redirectToLock(redirectUrl);
+    return true;
+  }
+
+  function isSameOriginRequest(input) {
+    try {
+      const rawUrl = typeof input === 'string'
+        ? input
+        : input && typeof input === 'object' && 'url' in input
+          ? input.url
+          : '';
+      if (!rawUrl) return true;
+      return new URL(rawUrl, window.location.origin).origin === window.location.origin;
+    } catch (_error) {
+      return true;
+    }
+  }
+
+  const previousFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
+  if (previousFetch) {
+    window.fetch = async function (input, init = {}) {
+      const sameOrigin = isSameOriginRequest(input);
+      const headers = sameOrigin ? new Headers(init?.headers || {}) : null;
+      if (sameOrigin) {
+        if (!headers.has('X-AcerttaPay-Async')) {
+          headers.set('X-AcerttaPay-Async', '1');
+        }
+        if (!headers.has('X-Requested-With')) {
+          headers.set('X-Requested-With', 'fetch');
+        }
+      }
+      const response = await previousFetch(input, sameOrigin ? { ...init, headers } : init);
+      if (sameOrigin && await handleLockedResponse(response, 'locked')) {
+        const error = new Error('O app foi bloqueado por PIN.');
+        error.code = 'APP_PIN_LOCKED';
+        error.response = response;
+        throw error;
+      }
+      return response;
+    };
+  }
+
+  if (typeof window.XMLHttpRequest === 'function') {
+    const XHR = window.XMLHttpRequest;
+    const originalOpen = XHR.prototype.open;
+    const originalSend = XHR.prototype.send;
+
+    XHR.prototype.open = function (method, url, ...rest) {
+      this.__opPinWatchBound = false;
+      this.__opPinSameOrigin = isSameOriginRequest(url);
+      return originalOpen.call(this, method, url, ...rest);
+    };
+
+    XHR.prototype.send = function (...args) {
+      if (!this.__opPinWatchBound) {
+        this.__opPinWatchBound = true;
+        this.addEventListener('readystatechange', () => {
+          if (!this.__opPinSameOrigin || this.readyState !== 4) return;
+          const locked = Number(this.status || 0) === 423 || this.getResponseHeader('X-App-Locked') === '1';
+          if (!locked) return;
+          const redirectUrl = this.getResponseHeader('X-App-Lock-Redirect') || buildFallbackLockUrl('locked');
+          broadcastPinState('locked', { reason: 'locked', redirect: redirectUrl });
+          redirectToLock(redirectUrl);
+        });
+      }
+
+      if (this.__opPinSameOrigin) {
+        try {
+          this.setRequestHeader('X-AcerttaPay-Async', '1');
+          this.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        } catch (_error) {}
+      }
+
+      return originalSend.apply(this, args);
+    };
+  }
+
+  function clearIdleTimer() {
+    if (idleTimer) {
+      window.clearTimeout(idleTimer);
+      idleTimer = null;
+    }
+  }
+
+  function clearTouchTimer() {
+    if (touchTimer) {
+      window.clearTimeout(touchTimer);
+      touchTimer = null;
+    }
+  }
+
+  async function touchServer(force = false) {
+    if (lockInFlight) return;
+    const now = Date.now();
+    if (!force && now - lastTouchAt < heartbeatGapMs) return;
+    lastTouchAt = now;
+
+    try {
+      const response = await fetch(touchUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-AcerttaPay-Async': '1'
+        }
+      });
+      await handleLockedResponse(response, 'locked');
+    } catch (error) {
+      if (error?.code !== 'APP_PIN_LOCKED') {
+        console.warn('Não consegui atualizar o bloqueio por PIN agora.', error);
+      }
+    }
+  }
+
+  function scheduleTouchTimer() {
+    clearTouchTimer();
+    touchTimer = window.setTimeout(() => {
+      touchServer(true).finally(() => {
+        if (!lockInFlight) {
+          scheduleTouchTimer();
+        }
+      });
+    }, heartbeatGapMs);
+  }
+
+  async function lockNow(reason = 'manual', { keepalive = false } = {}) {
+    if (lockInFlight) return;
+    lockInFlight = true;
+    clearIdleTimer();
+    clearTouchTimer();
+
+    const payload = new URLSearchParams();
+    payload.set('reason', reason);
+    payload.set('return_to', currentRelativeUrl());
+
+    try {
+      const response = await fetch(lockUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-AcerttaPay-Async': '1'
+        },
+        body: payload.toString(),
+        keepalive
+      });
+      const redirectUrl = await resolveLockRedirect(response, reason);
+      broadcastPinState('locked', { reason, redirect: redirectUrl });
+      redirectToLock(redirectUrl);
+    } catch (_error) {
+      redirectToLock(buildFallbackLockUrl(reason));
+    }
+  }
+
+  function scheduleIdleLock() {
+    clearIdleTimer();
+    if (lockInFlight || idleMs <= 0) return;
+    const elapsedMs = Math.max(0, Date.now() - lastActivityAt);
+    const remainingMs = Math.max(0, idleMs - elapsedMs);
+    if (remainingMs <= 0) {
+      lockNow('idle');
+      return;
+    }
+    idleTimer = window.setTimeout(() => {
+      lockNow('idle');
+    }, remainingMs);
+  }
+
+  function markActivity() {
+    if (lockInFlight) return;
+    lastActivityAt = Date.now();
+    scheduleIdleLock();
+    scheduleTouchTimer();
+    touchServer(false);
+  }
+
+  function handleVisibilityReturn() {
+    const hiddenAt = Number(sessionStorage.getItem(hiddenAtKey) || 0);
+    sessionStorage.removeItem(hiddenAtKey);
+    if (lockInFlight) return;
+
+    if (idleSeconds === 0) {
+      if (hiddenAt) {
+        lockNow('background');
+        return;
+      }
+      scheduleTouchTimer();
+      touchServer(true);
+      return;
+    }
+
+    if ((hiddenAt && idleMs > 0 && (Date.now() - hiddenAt) >= idleMs) || (idleMs > 0 && (Date.now() - lastActivityAt) >= idleMs)) {
+      lockNow('background');
+      return;
+    }
+
+    scheduleIdleLock();
+    scheduleTouchTimer();
+    touchServer(true);
+  }
+
+  ['pointerdown', 'touchstart', 'mousedown'].forEach((eventName) => {
+    document.addEventListener(eventName, markActivity, { passive: true });
+  });
+  document.addEventListener('keydown', markActivity);
+
+  window.addEventListener('focus', handleVisibilityReturn, { passive: true });
+  window.addEventListener('pageshow', handleVisibilityReturn, { passive: true });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      sessionStorage.setItem(hiddenAtKey, String(Date.now()));
+      clearIdleTimer();
+      clearTouchTimer();
+      if (idleSeconds === 0) {
+        lockNow('background', { keepalive: true });
+      }
+      return;
+    }
+    handleVisibilityReturn();
+  });
+
+  clearHiddenAtMarker();
+  scheduleIdleLock();
+  scheduleTouchTimer();
+  broadcastPinState('unlocked');
+  touchServer(true);
 })();

@@ -32,6 +32,44 @@
       </div>
     <% } %>
 
+    <% const privateReminderRadar = privateDebtReminderSummary || { activeCount: 0, activeCents: 0, readyToArchiveCount: 0, readyToArchiveCents: 0, hasActive: false, hasReadyToArchive: false }; %>
+    <%
+      const visibleCardsPanel = (cardsPanel || []).filter((cp) => Number(cp?.total_cents || 0) > 0);
+      const visiblePersonPanel = (personPanel || []).filter((pp) => Number(pp?.total_cents || 0) > 0);
+      const detailRowsWithValue = (rows || []).filter((row) => Number(row?.total_cents || 0) > 0);
+      const visibleDetailCardIds = new Set(detailRowsWithValue.map((row) => Number(row?.card_id || 0)).filter(Boolean));
+      const visibleDetailCards = (cards || []).filter((card) => visibleDetailCardIds.has(Number(card?.id || 0)));
+      const visibleDetailPersonIds = new Set(detailRowsWithValue.map((row) => Number(row?.person_id || 0)).filter(Boolean));
+      const visibleDetailPeople = (people || []).filter((person) => visibleDetailPersonIds.has(Number(person?.id || 0)));
+    %>
+    <% if (privateReminderRadar.hasActive || privateReminderRadar.hasReadyToArchive) { %>
+      <div class="mb-8 rounded-3xl border border-cyan-200 bg-cyan-50/80 px-5 py-4 shadow-sm dark:border-cyan-800 dark:bg-cyan-900/20">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div class="min-w-0">
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-200">Radar privado</div>
+            <h3 class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white">Tem combinado fora do cartão pedindo sua lembrança</h3>
+            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
+              <% if (privateReminderRadar.hasActive) { %>
+                <span><strong><%= privateReminderRadar.activeCount %></strong> lembrete<%= privateReminderRadar.activeCount === 1 ? '' : 's' %> privado<%= privateReminderRadar.activeCount === 1 ? '' : 's' %> segue<%= privateReminderRadar.activeCount === 1 ? '' : 'm' %> em aberto, somando <strong><%= formatBRLFromCents(privateReminderRadar.activeCents) %></strong>.</span>
+              <% } %>
+              <% if (privateReminderRadar.hasReadyToArchive) { %>
+                <span class="<%= privateReminderRadar.hasActive ? 'ml-1' : '' %>"><strong><%= privateReminderRadar.readyToArchiveCount %></strong> já <%= privateReminderRadar.readyToArchiveCount === 1 ? 'pode' : 'podem' %> ir para o arquivo sem perder o histórico.</span>
+              <% } %>
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2 lg:justify-end">
+            <% if (privateReminderRadar.hasActive) { %>
+              <span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-bold text-emerald-700 dark:border-emerald-800 dark:bg-slate-900/70 dark:text-emerald-200"><%= privateReminderRadar.activeCount %> em aberto · <%= formatBRLFromCents(privateReminderRadar.activeCents) %></span>
+            <% } %>
+            <% if (privateReminderRadar.hasReadyToArchive) { %>
+              <span class="inline-flex items-center rounded-full border border-cyan-200 bg-white px-3 py-1 text-xs font-bold text-cyan-700 dark:border-cyan-800 dark:bg-slate-900/70 dark:text-cyan-200"><%= privateReminderRadar.readyToArchiveCount %> prontos para arquivo</span>
+            <% } %>
+            <a href="/shared-debts#private-reminders" class="inline-flex items-center justify-center rounded-2xl bg-cyan-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-cyan-700 dark:bg-cyan-500 dark:hover:bg-cyan-600">Abrir central</a>
+          </div>
+        </div>
+      </div>
+    <% } %>
+
     <% if (unassigned && unassigned.length> 0) { %>
       <div class="mb-8 p-5 rounded-2xl bg-amber-50 border border-amber-200 shadow-sm flex items-start gap-4">
         <div
@@ -72,13 +110,14 @@
               Como estão os cartões
             </h2>
             <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-              <% const cardsPanelTotals = cardsPanel.reduce((acc, cp) => {
+              <% const cardsPanelTotals = visibleCardsPanel.reduce((acc, cp) => {
                    acc.total_cents += cp.total_cents || 0;
                    acc.paid_cents += cp.paid_cents || 0;
                    acc.remaining_cents += (cp.total_cents || 0) - (cp.paid_cents || 0);
                    return acc;
                  }, { total_cents: 0, paid_cents: 0, remaining_cents: 0 }); %>
               <div data-summary-cards-panel>
+                <% if (visibleCardsPanel.length > 0) { %>
                 <div class="overflow-x-auto op-summary-scroll-shell">
                   <table class="w-full text-sm text-left">
                     <thead
@@ -92,7 +131,7 @@
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                      <% cardsPanel.forEach(cp=> {
+                      <% visibleCardsPanel.forEach(cp=> {
                         const falta = (cp.total_cents || 0) - (cp.paid_cents || 0);
                         %>
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors" data-summary-card-row data-card-id="<%= cp.card_id %>" data-total-cents="<%= cp.total_cents || 0 %>">
@@ -134,6 +173,11 @@
                     </tfoot>
                   </table>
                 </div>
+                <% } else { %>
+                  <div class="px-5 py-8 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">
+                    Nenhum cartão entrou na fatura deste mês por aqui, então esse quadro tira um respiro e fica vazio mesmo.
+                  </div>
+                <% } %>
               </div>
             </div>
           </div>
@@ -148,7 +192,7 @@
               Como está cada pessoa
             </h2>
             <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-              <% const personPanelTotals = personPanel.reduce((acc, pp) => {
+              <% const personPanelTotals = visiblePersonPanel.reduce((acc, pp) => {
                    acc.total_cents += pp.total_cents || 0;
                    acc.paid_cents += pp.paid_cents || 0;
                    acc.manual_paid_cents += pp.manual_paid_cents || 0;
@@ -156,13 +200,14 @@
                    acc.remaining_cents += (pp.total_cents || 0) - (pp.paid_cents || 0);
                    return acc;
                  }, { total_cents: 0, paid_cents: 0, manual_paid_cents: 0, auto_paid_cents: 0, remaining_cents: 0 });
-                 const hasAutoPersonPayments = personPanel.some((pp) => Number(pp.auto_paid_cents || 0) > 0); %>
+                 const hasAutoPersonPayments = visiblePersonPanel.some((pp) => Number(pp.auto_paid_cents || 0) > 0); %>
               <% if (hasAutoPersonPayments) { %>
                 <div class="border-b border-indigo-100 bg-indigo-50/80 px-5 py-4 text-sm font-medium leading-6 text-indigo-900 dark:border-indigo-900/40 dark:bg-indigo-950/20 dark:text-indigo-100">
                   💡 O Pix confirmado do cartão entra sozinho nessa conta. O campo editável continua sendo só o ajuste manual do mês.
                 </div>
               <% } %>
               <div data-summary-people-panel>
+                <% if (visiblePersonPanel.length > 0) { %>
                 <div class="overflow-x-auto op-summary-scroll-shell">
                   <table class="w-full text-sm text-left">
                     <thead
@@ -176,7 +221,7 @@
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                      <% personPanel.forEach(pp=> {
+                      <% visiblePersonPanel.forEach(pp=> {
                         const falta = (pp.total_cents || 0) - (pp.paid_cents || 0);
                         %>
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors" data-summary-person-row data-person-id="<%= pp.person_id %>" data-total-cents="<%= pp.total_cents || 0 %>" data-auto-paid-cents="<%= pp.auto_paid_cents || 0 %>">
@@ -190,12 +235,12 @@
                             <div data-summary-person-combined data-person-id="<%= pp.person_id %>" class="font-black text-indigo-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(pp.paid_cents || 0) %></div>
                             <div class="mt-1 flex flex-wrap justify-end gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400">
                               <% if (Number(pp.auto_paid_cents || 0) > 0) { %>
-                                <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pix <%= formatBRLFromCents(pp.auto_paid_cents || 0) %></span>
+                                <span class="inline-flex items-center whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pix <%= formatBRLFromCents(pp.auto_paid_cents || 0) %></span>
                               <% } %>
                               <% if (Number(pp.manual_paid_cents || 0) > 0) { %>
-                                <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">Ajuste <%= formatBRLFromCents(pp.manual_paid_cents || 0) %></span>
+                                <span class="inline-flex items-center whitespace-nowrap rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">Ajuste <%= formatBRLFromCents(pp.manual_paid_cents || 0) %></span>
                               <% } else { %>
-                                <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">Sem ajuste manual</span>
+                                <span class="inline-flex w-fit max-w-full items-center whitespace-nowrap rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">Sem ajuste manual</span>
                               <% } %>
                             </div>
                           </td>
@@ -204,7 +249,7 @@
                               value="<%= formatBRLFromCents(pp.manual_paid_cents || 0) %>" <%= isClosed ? 'disabled' : '' %>
                               data-money-mask data-summary-person-paid data-person-id="<%= pp.person_id %>"
                               class="op-summary-money-input text-right border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" />
-                            <p class="mt-2 text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400">Aqui entra só o ajuste manual. O Pix confirmado soma sozinho.</p>
+                            <p class="mt-2 text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400">Entrada Manual</p>
                           </td>
                           <td data-summary-person-remaining data-person-id="<%= pp.person_id %>"
                             class="px-4 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">
@@ -231,6 +276,11 @@
                     </tfoot>
                   </table>
                 </div>
+                <% } else { %>
+                  <div class="px-5 py-8 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">
+                    Quando ninguém estiver com valor em aberto neste mês, essa visão some da muvuca e deixa só o que realmente pede atenção.
+                  </div>
+                <% } %>
               </div>
             </div>
           </div>
@@ -245,12 +295,13 @@
           Resumo Detalhado (Pessoa x Cartão)
         </h2>
         <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-8">
+          <% if (visibleDetailPeople.length > 0 && visibleDetailCards.length > 0) { %>
           <div class="overflow-x-auto op-summary-scroll-shell">
             <table class="w-full text-sm text-left">
               <thead class="bg-slate-900 text-white font-bold text-xs uppercase tracking-wider">
                 <tr>
                   <th class="px-5 py-4 rounded-tl-3xl">Pessoa</th>
-                  <% cards.forEach(c=> { %>
+                  <% visibleDetailCards.forEach(c=> { %>
                     <th class="px-5 py-4 text-right">
                       <%= c.name %>
                     </th>
@@ -260,8 +311,8 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                <% people.forEach(p=> {
-                  const perRow = rows.filter(r => r.person_id === p.id);
+                <% visibleDetailPeople.forEach(p=> {
+                  const perRow = detailRowsWithValue.filter(r => r.person_id === p.id);
                   const byCard = {};
                   perRow.forEach(r => byCard[r.card_id] = r.total_cents);
                   const total = Object.values(byCard).reduce((a,b)=>a+b,0);
@@ -270,7 +321,7 @@
                     <td class="px-5 py-4 font-extrabold text-slate-800 dark:text-white text-base whitespace-nowrap">
                       <%= p.name %>
                     </td>
-                    <% cards.forEach(c=> { %>
+                    <% visibleDetailCards.forEach(c=> { %>
                       <td class="px-5 py-4 text-right font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap op-summary-amount-cell">
                         <%= formatBRLFromCents(byCard[c.id] || 0) %>
                       </td>
@@ -304,6 +355,11 @@
               </tbody>
             </table>
           </div>
+          <% } else { %>
+            <div class="px-5 py-8 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">
+              O resumo detalhado só aparece quando já existe valor distribuído entre pessoa e cartão neste mês.
+            </div>
+          <% } %>
         </div>
 
   </div>

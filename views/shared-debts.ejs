@@ -359,23 +359,80 @@
       : 'Lembretes sem fatura nem competência. Depois de aceitos, continuam no seu controle até o pagamento ser confirmado.';
   }
 
+  function privateReminderStatusMeta(item) {
+    switch (String(item?.status || '').trim()) {
+      case 'settled':
+        return { label: 'Recebido', classes: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200' };
+      case 'cancelled':
+        return { label: 'Encerrado', classes: 'border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200' };
+      default:
+        return { label: 'Em aberto', classes: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200' };
+    }
+  }
+
+  function privateReminderSecondaryLine(item) {
+    const parts = [];
+    if (item?.person_email_snapshot) parts.push(item.person_email_snapshot);
+    if (item?.person_phone_snapshot) parts.push(item.person_phone_snapshot);
+    if (item?.is_contact_detached) {
+      parts.push('contato removido de Amigos');
+    } else if (String(item?.current_person_status || '').trim().toLowerCase() === 'inactive' || Number(item?.current_person_active ?? 1) === 0) {
+      parts.push('contato inativo');
+    }
+    return parts.join(' · ');
+  }
+
+  function privateReminderCreatedLabel(item) {
+    return item?.created_at ? formatDateBR(item.created_at) : 'Data não informada';
+  }
+
+  function promisedPaymentLabel(value) {
+    return value ? formatDateBR(value) : 'Sem data combinada';
+  }
+
+  function privateReminderSettledLabel(item) {
+    return item?.settled_at ? formatDateBR(item.settled_at) : (item?.payment_date ? formatDateBR(item.payment_date) : 'Data não informada');
+  }
+
+  function shouldOpenPrivateReminderSection(items, regularSectionCount) {
+    if (!(items || []).length) return false;
+    if ((items || []).some(item => Number(item?.id || 0) === Number(privateReminderIdToHighlight || 0))) return true;
+    if ((items || []).some(item => String(item?.status || '').trim() === 'open')) return true;
+    return Number(regularSectionCount || 0) === 0;
+  }
+
+  function isPrivateReminderItem(item) {
+    return String(item?.kind || '').trim() === 'private_reminder';
+  }
+
   function canArchiveItem(item) {
+    if (isPrivateReminderItem(item)) {
+      return isArchiveMode ? Number(item?.is_archived || 0) > 0 : !!item?.is_archivable;
+    }
     return archiveEligibleStatusSet.has(String(item?.status || '').trim());
   }
 
   function archiveToggleAction(item) {
+    if (isPrivateReminderItem(item)) {
+      return isArchiveMode ? `/shared-debts/private/${item.id}/unarchive` : `/shared-debts/private/${item.id}/archive`;
+    }
     return isArchiveMode ? `/shared-debts/${item.id}/unarchive` : `/shared-debts/${item.id}/archive`;
   }
 
   function archiveToggleLabel(item) {
+    if (isPrivateReminderItem(item)) {
+      return isArchiveMode ? 'Restaurar lembrete' : 'Arquivar lembrete';
+    }
     return isArchiveMode ? 'Restaurar cobrança' : 'Arquivar cobrança';
   }
 
   function archiveToggleGroupLabel(items) {
     const count = (items || []).length;
+    const firstItem = (items || [])[0] || null;
+    const noun = isPrivateReminderItem(firstItem) ? countLabel(count, 'lembrete', 'lembretes') : countLabel(count, 'cobrança', 'cobranças');
     return isArchiveMode
-      ? `Restaurar ${countLabel(count, 'cobrança', 'cobranças')}`
-      : `Arquivar ${countLabel(count, 'cobrança', 'cobranças')}`;
+      ? `Restaurar ${noun}`
+      : `Arquivar ${noun}`;
   }
 
   function hasManualActionableItem(items, scope) {
@@ -453,9 +510,13 @@
   const currentPath = pagePath || (isArchiveMode ? '/shared-debts/archive' : '/shared-debts');
   const otherPath = counterpartPath || (isArchiveMode ? '/shared-debts' : '/shared-debts/archive');
   const archiveEligibleStatusSet = new Set(Array.isArray(archiveEligibleStatuses) ? archiveEligibleStatuses : []);
-  const archivedTotalVisible = (received || []).length + (sent || []).length;
   const trackingFilters = sharedDebtFilters || { envio: 'all', origin: 'all', installment: 'all' };
   const trackingFiltersActive = !!sharedDebtFiltersActive;
+  const manualDebtPeopleList = Array.isArray(manualDebtPeople) ? manualDebtPeople : [];
+  const manualDebtEligibleList = Array.isArray(manualDebtEligiblePeople) ? manualDebtEligiblePeople : [];
+  const rawPrivateReminderItems = Array.isArray(privateDebtReminders) ? privateDebtReminders : [];
+  const privateReminderItems = Array.isArray(privateDebtReminderTracking) ? privateDebtReminderTracking : rawPrivateReminderItems;
+  const privateReminderIdFocus = Number(privateReminderIdToHighlight || 0) || null;
   const receivedBaseItems = Array.isArray(receivedTracking) ? receivedTracking : (received || []);
   const sentBaseItems = Array.isArray(sentTracking) ? sentTracking : (sent || []);
   const receivedManualItems = receivedBaseItems.filter(isManualItem);
@@ -470,6 +531,12 @@
   const sentBatchCards = Array.isArray(sentPendingBatches) ? sentPendingBatches : [];
   const receivedManualSectionOpen = shouldOpenManualSection(receivedManualItems, 'received', receivedGroups.length);
   const sentManualSectionOpen = shouldOpenManualSection(sentManualItems, 'sent', sentGroups.length);
+  const sentPrivateReminderSectionOpen = shouldOpenPrivateReminderSection(privateReminderItems, sentManualItems.length + sentGroups.length);
+  const sentPrivateReminderOpenCount = countItems(privateReminderItems, item => String(item?.status || '').trim() === 'open');
+  const sentVisibleCount = sentBaseItems.length + privateReminderItems.length;
+  const sentTotalCount = (sent || []).length + rawPrivateReminderItems.length;
+  const sentHeroCount = (sent || []).length + rawPrivateReminderItems.length;
+  const archivedTotalVisible = (received || []).length + (sent || []).length + rawPrivateReminderItems.length;
   const receivedPendingCount = countItems(received, item => item.status === 'pending');
   const sentDecisionCount = countItems(sent, item => item.status === 'rejected_by_receiver');
   const sentReceiptCount = countItems(sent, item => item.status === 'accepted' && item.payment_marked_at);
@@ -743,7 +810,10 @@
   const receivedActionCount = (trackingFiltersActive ? receivedVisibleActionEntries : receivedAllActionEntries).length;
   const sentActionCount = (trackingFiltersActive ? sentVisibleActionEntries : sentAllActionEntries).length;
   const receivedScopeOpen = groupsContainFocus(receivedGroups, requestIdToHighlight, settlementIdToHighlight) || receivedHasActionableGroup || receivedManualSectionOpen;
-  const sentScopeOpen = groupsContainFocus(sentGroups, requestIdToHighlight, settlementIdToHighlight) || sentHasActionableGroup || sentManualSectionOpen;
+  const sentScopeOpen = groupsContainFocus(sentGroups, requestIdToHighlight, settlementIdToHighlight)
+    || sentHasActionableGroup
+    || sentManualSectionOpen
+    || sentPrivateReminderSectionOpen;
 
   function buildQuickActions() {
     const sourceReceivedItems = trackingFiltersActive ? receivedVisibleActionEntries : receivedAllActionEntries;
@@ -812,8 +882,14 @@
       </div>
       <div class="op-kpi-card text-center">
         <div class="op-kpi-card__label">Enviadas</div>
-        <div class="op-kpi-card__value"><%= sent.length %></div>
-        <div class="op-kpi-card__hint"><span class="md:hidden"><%= countLabel(rawSentGroups.length, 'mês', 'meses') %></span><span class="hidden md:inline"><%= countLabel(rawSentGroups.length, 'período', 'períodos') %></span></div>
+        <div class="op-kpi-card__value"><%= sentHeroCount %></div>
+        <div class="op-kpi-card__hint">
+          <% if (rawPrivateReminderItems.length) { %>
+            <span><%= countLabel(rawSentGroups.length, 'período', 'períodos') %> + <%= countLabel(rawPrivateReminderItems.length, 'privada', 'privadas') %></span>
+          <% } else { %>
+            <span class="md:hidden"><%= countLabel(rawSentGroups.length, 'mês', 'meses') %></span><span class="hidden md:inline"><%= countLabel(rawSentGroups.length, 'período', 'períodos') %></span>
+          <% } %>
+        </div>
       </div>
       <div class="op-kpi-card text-center">
         <% if (isArchiveMode) { %>
@@ -898,32 +974,34 @@
         <div class="max-w-2xl">
           <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Acerto fora do cartão</div>
           <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Cobrança avulsa</h2>
-          <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">Perfeita para aquele “depois você me manda” do almoço, do ingresso ou do Pix salvador. Sai com a data de hoje e continua aparecendo até a quitação.</p>
+          <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">Perfeita para aquele “depois você me manda” do almoço, do ingresso ou do Pix salvador. Agora você escolhe se a outra pessoa recebe no app ou se esse combinado fica só no seu radar.</p>
         </div>
 
         <div class="flex w-full flex-col gap-3 lg:max-w-sm lg:items-end">
           <button
             type="button"
             data-open-sheet="manual-shared-debt-sheet"
-            <%= manualDebtEligiblePeople && manualDebtEligiblePeople.length ? '' : 'disabled' %>
-            class="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition-all lg:w-auto <%= manualDebtEligiblePeople && manualDebtEligiblePeople.length ? 'hover:-translate-y-0.5 hover:bg-violet-700' : 'cursor-not-allowed opacity-60' %>">
+            <%= manualDebtPeopleList.length ? '' : 'disabled' %>
+            class="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition-all lg:w-auto <%= manualDebtPeopleList.length ? 'hover:-translate-y-0.5 hover:bg-violet-700' : 'cursor-not-allowed opacity-60' %>">
             <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
             </svg>
-            Enviar valor avulso
+            Novo lembrete avulso
           </button>
-          <p class="text-xs font-medium text-slate-500 dark:text-slate-400 lg:text-right">Poucos campos, sem data manual e sem misturar esse combinado com a fatura do cartão.</p>
+          <p class="text-xs font-medium text-slate-500 dark:text-slate-400 lg:text-right">Poucos campos, data de hoje automática e uma data combinada opcional para o radar não deixar esse combinado cochilar.</p>
         </div>
       </div>
 
-      <% if (!(manualDebtEligiblePeople && manualDebtEligiblePeople.length)) { %>
+      <% if (!manualDebtPeopleList.length) { %>
         <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-          Para enviar um valor avulso, você precisa ter pelo menos uma amizade ativa em <strong>Amigos</strong>. Assim o lembrete só vai para quem topou esse vínculo de verdade.
+          Para criar uma cobrança avulsa por aqui, você precisa ter pelo menos um contato ativo em <strong>Amigos</strong>. Criou o contato, voltou, e o fluxo já fica pronto para uso.
         </div>
       <% } else { %>
         <div class="mt-4 flex flex-wrap gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
-          <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200"><%= countLabel(manualDebtEligiblePeople.length, 'amizade pronta', 'amizades prontas') %> para receber</span>
+          <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200"><%= countLabel(manualDebtEligibleList.length, 'amizade pronta', 'amizades prontas') %> para receber no app</span>
+          <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200"><%= countLabel(manualDebtPeopleList.length, 'contato ativo', 'contatos ativos') %> para lembrete privado</span>
           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70">Data de hoje automática</span>
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70">Data combinada opcional</span>
           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70">Acompanha até quitar</span>
         </div>
       <% } %>
@@ -1022,33 +1100,53 @@
 
   <div id="manual-shared-debt-sheet" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
     <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
-    <div class="absolute inset-x-0 bottom-0 max-h-[90vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[84vh] sm:max-w-2xl sm:rounded-[32px]">
+    <div class="absolute inset-x-0 bottom-0 flex max-h-[90vh] flex-col overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[84vh] sm:max-w-2xl sm:rounded-[32px]">
       <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
         <div>
           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Cobrança avulsa</div>
           <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Mandar um lembrete sem cartão</h3>
-          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Vai com a data de hoje e segue visível até o pagamento ser confirmado.</p>
+          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Vai com a data de hoje e você ainda pode marcar uma data combinada para o app lembrar no dia certinho.</p>
         </div>
         <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar envio avulso">
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
       </div>
 
-      <form method="POST" action="/shared-debts/manual" class="max-h-[calc(90vh-92px)] overflow-y-auto space-y-4 px-5 py-4 sm:max-h-[calc(84vh-92px)]">
-        <div class="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-medium text-violet-800 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">
-          É um lembrete entre amizades do AcerttaPay: sem competência fixa, sem cartão no meio e com um recado opcional para deixar tudo claro.
+      <form method="POST" action="/shared-debts/manual" class="min-h-0 flex-1 overflow-y-auto px-5 py-4" data-manual-debt-form>
+        <div class="space-y-4" style="padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));">
+        <div class="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-medium text-violet-800 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200" data-manual-debt-mode-note>
+          Escolha como esse combinado vai viver por aqui: enviado para a outra pessoa no app ou guardado só no seu radar.
+        </div>
+
+        <div class="space-y-2">
+          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Como esse lembrete vai andar?</div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label class="cursor-pointer rounded-2xl border border-violet-200 bg-violet-50/70 px-4 py-3 transition-colors data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-60" data-manual-debt-mode-card="app">
+              <input type="radio" name="mode" value="app" class="sr-only" data-manual-debt-mode-input="app" checked>
+              <div class="text-sm font-black text-slate-900 dark:text-white">Recebe no app</div>
+              <div class="mt-1 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300">A outra pessoa recebe aviso, aceita por lá e o fluxo segue completo entre vocês.</div>
+            </label>
+            <label class="cursor-pointer rounded-2xl border border-slate-200 bg-white px-4 py-3 transition-colors data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-60 dark:border-slate-700 dark:bg-slate-800/80" data-manual-debt-mode-card="private">
+              <input type="radio" name="mode" value="private" class="sr-only" data-manual-debt-mode-input="private">
+              <div class="text-sm font-black text-slate-900 dark:text-white">Só acompanhar por aqui</div>
+              <div class="mt-1 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300">Vira um lembrete privado: ninguém recebe aviso e tudo fica só no seu app.</div>
+            </label>
+          </div>
         </div>
 
         <label class="block">
-          <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Quem vai receber esse lembrete?</span>
-          <select name="person_id" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" <%= manualDebtEligiblePeople && manualDebtEligiblePeople.length ? '' : 'disabled' %>>
-            <% (manualDebtEligiblePeople || []).forEach((person, index) => { %>
-              <option value="<%= person.id %>" <%= index === 0 ? 'selected' : '' %>><%= person.name %><%= person.linked_user_email ? ` · ${person.linked_user_email}` : '' %></option>
+          <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Com quem é esse combinado?</span>
+          <select name="person_id" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" data-manual-debt-person-select <%= manualDebtPeopleList.length ? '' : 'disabled' %>>
+            <% (manualDebtPeopleList || []).forEach((person, index) => { %>
+              <option value="<%= person.id %>" <%= index === 0 ? 'selected' : '' %> data-can-app="<%= person.can_share_charge && person.friendship_active ? '1' : '0' %>" data-has-app="<%= person.has_app_user ? '1' : '0' %>" data-friendship-active="<%= person.friendship_active ? '1' : '0' %>" data-email="<%= person.linked_user_email || person.email || '' %>" data-phone="<%= person.phone || '' %>"><%= person.name %><%= person.linked_user_email ? ` · ${person.linked_user_email}` : (person.email ? ` · ${person.email}` : '') %></option>
             <% }) %>
           </select>
+          <% if (!manualDebtPeopleList.length) { %>
+            <p class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">Sem contato ativo por aqui ainda. Dá para criar rapidinho em <a href="/people" class="font-bold text-violet-600 hover:text-violet-700 dark:text-violet-300 dark:hover:text-violet-200">Amigos</a>.</p>
+          <% } %>
         </label>
 
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 sm:grid-cols-3">
           <label class="block">
             <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor (R$)</span>
             <input type="text" name="amount" placeholder="0,00" required data-money-mask data-shared-debt-manual-focus inputmode="decimal" enterkeyhint="next" autocapitalize="off" autocomplete="off" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
@@ -1058,6 +1156,11 @@
             <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white">Hoje</div>
             <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Vai assim automaticamente para você não perder tempo.</div>
           </div>
+          <label class="block">
+            <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Data combinada (opcional)</span>
+            <input type="date" name="promised_payment_date" value="" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20">
+            <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Se marcar, o app lembra no dia e o radar não deixa esse combinado tirar férias.</div>
+          </label>
         </div>
 
         <label class="block">
@@ -1072,7 +1175,8 @@
 
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
           <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
-          <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600">Enviar lembrete</button>
+          <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600" data-manual-debt-submit>Enviar cobrança no app</button>
+        </div>
         </div>
       </form>
     </div>
@@ -1508,6 +1612,7 @@
             <option value="installment" <%= trackingFilters.origin === 'installment' ? 'selected' : '' %>>Parcelado</option>
             <option value="mixed" <%= trackingFilters.origin === 'mixed' ? 'selected' : '' %>>Misto</option>
             <option value="manual" <%= trackingFilters.origin === 'manual' ? 'selected' : '' %>>Lembrete avulso</option>
+            <option value="private" <%= trackingFilters.origin === 'private' ? 'selected' : '' %>>Privada · só pra mim</option>
           </select>
         </label>
         <label class="block">
@@ -1605,6 +1710,7 @@
                             <span>Enviado por <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.requester_name || item.requester_email || 'Usuário' %></span></span>
                             <span><%= itemDateLead(item) %> <span class="font-semibold text-slate-700 dark:text-slate-200"><%= itemDateValue(item) %></span></span>
                             <span><%= itemContextLabel(item) %> <span class="font-semibold text-slate-700 dark:text-slate-200"><%= itemContextValue(item) %></span></span>
+                            <% if (item.promised_payment_date) { %><span>Pagamento combinado <span class="font-semibold text-slate-700 dark:text-slate-200"><%= promisedPaymentLabel(item.promised_payment_date) %></span></span><% } %>
                           </div>
                         </div>
                         <div class="flex items-center justify-between gap-3 lg:block lg:text-right">
@@ -1619,7 +1725,7 @@
                     </summary>
 
                     <div class="px-5 pb-5 pt-1 space-y-4 border-t border-violet-200/70 dark:border-violet-900/40">
-                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                         <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemPeriodLabel(item) %></div>
                           <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= itemPeriodValue(item) %></div>
@@ -1631,6 +1737,11 @@
                         <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemContextLabel(item) %></div>
                           <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= itemContextValue(item) %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pagamento combinado</div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= promisedPaymentLabel(item.promised_payment_date) %></div>
+                          <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Se tiver data marcada, o alerta entra em campo no dia certinho.</div>
                         </div>
                         <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemObservacaoLabel(item) %></div>
@@ -2133,22 +2244,25 @@
             <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none"><%= isArchiveMode ? "Histórico arquivado do lado de quem enviou. Tudo o que já encerrou o papo dentro do app continua guardado aqui para consulta ou restauração." : "Cobranças que você enviou para aprovação, baixa e lembretes avulsos que continuam no radar até a quitação." %></p>
           </div>
           <div class="flex flex-wrap gap-2 sm:justify-end">
-            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= trackingFiltersActive ? `${countLabel(sentBaseItems.length, 'cobrança', 'cobranças')} de ${countLabel(sent.length, 'cobrança', 'cobranças')}` : countLabel(sent.length, 'cobrança', 'cobranças') %></span>
+            <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= trackingFiltersActive ? `${countLabel(sentVisibleCount, 'cobrança', 'cobranças')} de ${countLabel(sentTotalCount, 'cobrança', 'cobranças')}` : countLabel(sentTotalCount, 'cobrança', 'cobranças') %></span>
             <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><span class="md:hidden"><%= trackingFiltersActive ? `${countLabel(sentGroups.length, 'mês', 'meses')} de ${countLabel(rawSentGroups.length, 'mês', 'meses')}` : countLabel(sentGroups.length, 'mês', 'meses') %></span><span class="hidden md:inline"><%= trackingFiltersActive ? `${countLabel(sentGroups.length, 'período', 'períodos')} de ${countLabel(rawSentGroups.length, 'período', 'períodos')}` : countLabel(sentGroups.length, 'período', 'períodos') %></span></span>
             <% if (sentManualItems.length) { %>
               <span class="inline-flex items-center rounded-full border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20 px-3 py-1 text-xs font-bold text-violet-700 dark:text-violet-200"><%= countLabel(sentManualItems.length, 'avulsa', 'avulsas') %></span>
+            <% } %>
+            <% if (privateReminderItems.length) { %>
+              <span class="inline-flex items-center rounded-full border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20 px-3 py-1 text-xs font-bold text-cyan-700 dark:text-cyan-200"><%= countLabel(privateReminderItems.length, 'privada', 'privadas') %></span>
             <% } %>
           </div>
         </div>
       </summary>
 
       <div class="border-t border-slate-200 dark:border-slate-700">
-      <% if (!sentGroups.length && !sentManualItems.length) { %>
+      <% if (!sentGroups.length && !sentManualItems.length && !privateReminderItems.length) { %>
         <div class="px-5 py-5">
           <div class="op-empty-state op-empty-state--compact">
             <div class="op-empty-state__icon">📤</div>
             <div class="op-empty-state__title"><%= trackingFiltersActive ? "Nenhuma cobrança enviada combina com os filtros" : (isArchiveMode ? "Nenhuma cobrança enviada foi arquivada" : "Nenhuma solicitação enviada ainda") %></div>
-            <p class="op-empty-state__text"><%= trackingFiltersActive ? "Limpe ou ajuste os filtros para voltar a enxergar o acompanhamento enviado inteiro." : (isArchiveMode ? "Quando você arquivar cobranças enviadas encerradas, elas passam a morar aqui. Enquanto isso, a área está em paz de espírito." : "Quando você dividir uma compra ou mandar um lembrete avulso para alguém elegível, tudo aparece aqui.") %></p>
+            <p class="op-empty-state__text"><%= trackingFiltersActive ? "Limpe ou ajuste os filtros para voltar a enxergar o acompanhamento enviado inteiro." : (isArchiveMode ? "Quando você arquivar cobranças ou lembretes privados encerrados, eles passam a morar aqui. Enquanto isso, a área está em paz de espírito." : "Quando você dividir uma compra, mandar uma cobrança no app ou guardar um lembrete privado, tudo aparece aqui.") %></p>
           </div>
         </div>
       <% } else { %>
@@ -2196,6 +2310,7 @@
                             <span>Enviado para <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.receiver_name || item.receiver_email || item.receiver_email_snapshot || 'Usuário' %></span></span>
                             <span><%= itemDateLead(item) %> <span class="font-semibold text-slate-700 dark:text-slate-200"><%= itemDateValue(item) %></span></span>
                             <span><%= itemContextLabel(item) %> <span class="font-semibold text-slate-700 dark:text-slate-200"><%= itemContextValue(item) %></span></span>
+                            <% if (item.promised_payment_date) { %><span>Pagamento combinado <span class="font-semibold text-slate-700 dark:text-slate-200"><%= promisedPaymentLabel(item.promised_payment_date) %></span></span><% } %>
                           </div>
                         </div>
                         <div class="flex items-center justify-between gap-3 lg:block lg:text-right">
@@ -2210,7 +2325,7 @@
                     </summary>
 
                     <div class="px-5 pb-5 pt-1 space-y-4 border-t border-violet-200/70 dark:border-violet-900/40">
-                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                         <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemPeriodLabel(item) %></div>
                           <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= itemPeriodValue(item) %></div>
@@ -2222,6 +2337,11 @@
                         <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemContextLabel(item) %></div>
                           <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= itemContextValue(item) %></div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pagamento combinado</div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= promisedPaymentLabel(item.promised_payment_date) %></div>
+                          <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Se tiver data marcada, o alerta entra em campo no dia certinho.</div>
                         </div>
                         <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
                           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= itemObservacaoLabel(item) %></div>
@@ -2361,6 +2481,135 @@
                               </div>
                             <% }) %>
                           </div>
+                        </div>
+                      <% } %>
+                    </div>
+                  </details>
+                <% }) %>
+              </div>
+            </details>
+          <% } %>
+
+          <% if (privateReminderItems.length) { const privateReminderTotalCents = sumAmountCents(privateReminderItems); %>
+            <details id="private-reminders" class="rounded-3xl border border-cyan-200 bg-cyan-50/70 dark:border-cyan-800 dark:bg-cyan-900/10 overflow-hidden" <%= sentPrivateReminderSectionOpen ? 'open' : '' %>>
+              <summary class="list-none cursor-pointer px-5 py-4 bg-white/70 dark:bg-slate-950/30">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div class="text-xs font-bold uppercase tracking-[0.18em] text-cyan-600 dark:text-cyan-300">Privado · só você vê</div>
+                    <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= isArchiveMode ? 'Arquivo privado' : 'Só acompanhar por aqui' %></div>
+                    <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= isArchiveMode ? 'Lembretes privados já encerrados e guardados para consulta. Se quiser, você restaura e eles voltam para as ativas sem perder o contexto.' : 'Lembretes unilaterais para dinheiro emprestado, combinados fora da amizade do app ou só para manter o radar ligado sem avisar ninguém.' %></p>
+                  </div>
+                  <div class="flex flex-wrap gap-2 sm:justify-end">
+                    <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-xs font-bold text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200"><%= countLabel(privateReminderItems.length, 'lembrete privado', 'lembretes privados') %></span>
+                    <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= formatBRLFromCents(privateReminderTotalCents) %></span>
+                    <% if (sentPrivateReminderOpenCount) { %><span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200"><%= countLabel(sentPrivateReminderOpenCount, 'em aberto', 'em aberto') %></span><% } %>
+                  </div>
+                </div>
+              </summary>
+
+              <div class="divide-y divide-cyan-200/70 dark:divide-cyan-900/40 border-t border-cyan-200/70 dark:border-cyan-900/40">
+                <% privateReminderItems.forEach((item) => { const meta = privateReminderStatusMeta(item); const isHighlighted = privateReminderIdFocus && Number(privateReminderIdFocus) === Number(item.id); const secondaryLine = privateReminderSecondaryLine(item); %>
+                  <details id="private-reminder-<%= item.id %>" class="<%= isHighlighted ? 'bg-cyan-50/90 dark:bg-cyan-900/20' : 'bg-white/80 dark:bg-slate-900/20' %>" <%= isHighlighted ? 'open' : '' %>>
+                    <summary class="list-none cursor-pointer px-5 py-4">
+                      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="min-w-0 flex-1">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <h3 class="text-base font-bold text-slate-900 dark:text-white truncate"><%= item.description_snapshot %></h3>
+                            <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-[11px] font-bold text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200">Privado · só você vê</span>
+                            <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= meta.classes %>"><%= meta.label %></span>
+                          </div>
+                          <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium text-slate-500 dark:text-slate-400">
+                            <span>Com <span class="font-semibold text-slate-700 dark:text-slate-200"><%= item.display_name || item.person_name_snapshot || 'Contato' %></span></span>
+                            <span>Criado em <span class="font-semibold text-slate-700 dark:text-slate-200"><%= privateReminderCreatedLabel(item) %></span></span>
+                            <% if (item.promised_payment_date) { %><span>Pagamento combinado <span class="font-semibold text-slate-700 dark:text-slate-200"><%= promisedPaymentLabel(item.promised_payment_date) %></span></span><% } %>
+                            <% if (secondaryLine) { %><span><%= secondaryLine %></span><% } %>
+                          </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 lg:block lg:text-right">
+                          <div>
+                            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor</div>
+                            <div class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
+                          </div>
+                          <div class="text-sm font-bold text-cyan-600 dark:text-cyan-300">Ver detalhes</div>
+                        </div>
+                      </div>
+                    </summary>
+
+                    <div class="px-5 pb-5 pt-1 space-y-4 border-t border-cyan-200/70 dark:border-cyan-900/40">
+                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Contato</div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= item.display_name || item.person_name_snapshot || 'Contato' %></div>
+                          <% if (secondaryLine) { %><div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= secondaryLine %></div><% } %>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Modo</div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white">Só acompanhar por aqui</div>
+                          <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Nada é enviado para a outra pessoa automaticamente.</div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pagamento combinado</div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= promisedPaymentLabel(item.promised_payment_date) %></div>
+                          <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Se marcar uma data, o alerta entra no jogo no dia certo.</div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pagamento real</div>
+                          <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= item.payment_date ? formatDateBR(item.payment_date) : 'Sem data marcada' %></div>
+                          <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Opcional, só para o seu registro ficar redondinho.</div>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Recado</div>
+                          <div class="mt-1 text-sm font-medium text-slate-700 dark:text-slate-200"><%= item.request_note || '—' %></div>
+                        </div>
+                      </div>
+
+                      <% if (item.is_contact_detached) { %>
+                        <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm font-medium text-amber-800 dark:text-amber-200">Esse contato saiu de Amigos, mas o lembrete continua guardado por aqui com os dados da época para você não perder o histórico.</div>
+                      <% } %>
+
+                      <% if (item.status === 'open') { %>
+                        <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-4">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Confirme quando o dinheiro cair de verdade</div>
+                          <p class="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">Como esse lembrete é unilateral, o fechamento acontece por aqui mesmo. Quando o valor entrar, você marca o recebimento e ele sai do seu controle ativo.</p>
+                          <form method="POST" action="/shared-debts/private/<%= item.id %>/settle" class="mt-3 space-y-3">
+                            <div class="grid gap-3 sm:grid-cols-2">
+                              <label class="block">
+                                <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Data do pagamento (opcional)</span>
+                                <input type="date" name="payment_date" max="<%= todayIsoDate %>" value="<%= item.payment_date || '' %>" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20">
+                              </label>
+                              <div class="rounded-2xl border border-emerald-200/70 bg-white/80 px-4 py-3 dark:border-emerald-800/70 dark:bg-slate-900/50">
+                                <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor que sai do radar</div>
+                                <div class="mt-1 text-sm font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
+                                <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Assim que confirmar, esse valor deixa de pesar em <strong>Cobranças a receber</strong>.</div>
+                              </div>
+                            </div>
+                            <label class="block">
+                              <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação da liquidação (opcional)</span>
+                              <textarea name="note" rows="2" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20" placeholder="Ex.: Caiu no Pix e já conferi por aqui."></textarea>
+                            </label>
+                            <div class="flex justify-end">
+                              <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Confirmar recebimento</button>
+                            </div>
+                          </form>
+                        </div>
+                      <% } else if (item.status === 'settled') { %>
+                        <div class="rounded-2xl border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Lembrete recebido</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Esse combinado foi fechado em <strong><%= privateReminderSettledLabel(item) %></strong><% if (item.settlement_note) { %> com a observação <span class="font-semibold"><%= item.settlement_note %></span><% } %>.</div>
+                        </div>
+                      <% } else if (item.status === 'cancelled') { %>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Lembrete encerrado</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Esse lembrete foi encerrado e agora fica só para consulta por aqui.</div>
+                        </div>
+                      <% } %>
+
+                      <% if (canArchiveItem(item)) { %>
+                        <div class="flex justify-end">
+                          <form method="POST" action="<%= archiveToggleAction(item) %>" class="contents">
+                            <input type="hidden" name="return_to" value="<%= currentPath %>">
+                            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
+                          </form>
                         </div>
                       <% } %>
                     </div>
@@ -3627,6 +3876,94 @@
   }, true);
 
 
+  function setManualDebtModeCardState(card, active, disabled) {
+    if (!card) return;
+    const mode = card.getAttribute('data-manual-debt-mode-card');
+    const accent = mode === 'private'
+      ? (active ? 'border-cyan-200 bg-cyan-50 dark:border-cyan-800 dark:bg-cyan-900/20' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800/80')
+      : (active ? 'border-violet-200 bg-violet-50 dark:border-violet-800 dark:bg-violet-900/20' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800/80');
+    card.className = `rounded-2xl border px-4 py-3 transition-colors ${accent} ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`;
+    card.dataset.disabled = disabled ? 'true' : 'false';
+  }
+
+  function initManualDebtComposer() {
+    const form = document.querySelector('[data-manual-debt-form]');
+    if (!form) return;
+
+    const select = form.querySelector('[data-manual-debt-person-select]');
+    const noteBox = form.querySelector('[data-manual-debt-mode-note]');
+    const submitBtn = form.querySelector('[data-manual-debt-submit]');
+    const appInput = form.querySelector('[data-manual-debt-mode-input="app"]');
+    const privateInput = form.querySelector('[data-manual-debt-mode-input="private"]');
+    const appCard = form.querySelector('[data-manual-debt-mode-card="app"]');
+    const privateCard = form.querySelector('[data-manual-debt-mode-card="private"]');
+
+    const sync = () => {
+      const option = select?.selectedOptions?.[0] || null;
+      const hasContact = !!option;
+      const canApp = option?.dataset?.canApp === '1';
+      const hasApp = option?.dataset?.hasApp === '1';
+      const friendshipActive = option?.dataset?.friendshipActive === '1';
+
+      if (appInput) appInput.disabled = !canApp || !hasContact;
+      if (privateInput) privateInput.disabled = !hasContact;
+
+      if (!hasContact) {
+        if (submitBtn) submitBtn.disabled = true;
+        if (noteBox) {
+          noteBox.className = 'rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200';
+          noteBox.textContent = 'Sem contato ativo por aqui ainda. Criou em Amigos, voltou, e esse fluxo já fica pronto.';
+        }
+        setManualDebtModeCardState(appCard, false, true);
+        setManualDebtModeCardState(privateCard, false, true);
+        return;
+      }
+
+      if (appInput?.checked && appInput.disabled && privateInput && !privateInput.disabled) {
+        privateInput.checked = true;
+      }
+      if (!appInput?.checked && !privateInput?.checked) {
+        if (canApp && appInput) appInput.checked = true;
+        else if (privateInput) privateInput.checked = true;
+      }
+
+      const selectedMode = privateInput?.checked ? 'private' : 'app';
+      setManualDebtModeCardState(appCard, selectedMode === 'app', !!appInput?.disabled);
+      setManualDebtModeCardState(privateCard, selectedMode === 'private', !!privateInput?.disabled);
+
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = selectedMode === 'private' ? 'Salvar lembrete privado' : 'Enviar cobrança no app';
+      }
+
+      if (noteBox) {
+        if (selectedMode === 'private') {
+          noteBox.className = 'rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-800 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200';
+          if (canApp && friendshipActive) {
+            noteBox.textContent = 'Esse contato até pode receber no app, mas aqui o combinado fica só no seu radar. Nada é enviado para a outra pessoa.';
+          } else if (hasApp) {
+            noteBox.textContent = 'Essa pessoa até usa o app, mas esse lembrete vai ficar só com você por aqui. Sem amizade ativa, sem aviso automático e sem estresse.';
+          } else {
+            noteBox.textContent = 'Perfeito para quem não usa o app ou para aquele empréstimo que você só quer acompanhar por aqui. Nada é enviado para a outra pessoa.';
+          }
+        } else {
+          noteBox.className = 'rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-medium text-violet-800 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200';
+          noteBox.textContent = 'Vai como cobrança avulsa entre amizades do app: a outra pessoa recebe aviso, responde por lá e o combinado segue completo dentro do AcerttaPay.';
+        }
+      }
+    };
+
+    form.addEventListener('change', (event) => {
+      if (event.target === select || event.target === appInput || event.target === privateInput) {
+        sync();
+      }
+    });
+
+    sync();
+  }
+
+  initManualDebtComposer();
+
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       closeSharedDebtSheets();
@@ -3653,6 +3990,11 @@
     <% if (requestIdToHighlight) { %>
       const el = document.getElementById('request-<%= requestIdToHighlight %>');
       if (el) openRequestChain(el);
+    <% } %>
+
+    <% if (privateReminderIdToHighlight) { %>
+      const privateEl = document.getElementById('private-reminder-<%= privateReminderIdToHighlight %>');
+      if (privateEl) openRequestChain(privateEl);
     <% } %>
   });
 

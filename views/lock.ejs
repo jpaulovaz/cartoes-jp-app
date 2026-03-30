@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title><%= title || 'AcerttaPay | Desbloquear' %></title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#020617">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AcerttaPay">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] }
+        }
+      }
+    };
+    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  </script>
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    .op-pin-slot { width: 12px; height: 12px; border-radius: 999px; border: 2px solid rgba(148, 163, 184, 0.55); }
+    .dark .op-pin-slot { border-color: rgba(100, 116, 139, 0.8); }
+    .op-pin-slot.is-filled { background: rgb(15 23 42); border-color: rgb(15 23 42); }
+    .dark .op-pin-slot.is-filled { background: rgb(251 191 36); border-color: rgb(251 191 36); }
+    .op-pin-key { min-height: 60px; }
+    .op-pin-key[disabled] { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+    .op-lock-main {
+      padding-top: max(1rem, env(safe-area-inset-top, 0px));
+      padding-right: max(1rem, env(safe-area-inset-right, 0px));
+      padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+      padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    }
+    .op-lock-keypad-shell {
+      padding-bottom: max(0rem, env(safe-area-inset-bottom, 0px));
+    }
+    .op-passkey-feedback.hidden {
+      display: none;
+    }
+    body.op-mobile-native-keyboard .op-lock-keypad-shell {
+      display: none;
+    }
+    body.op-mobile-native-keyboard .op-lock-intro-copy,
+    body.op-mobile-native-keyboard .op-lock-pin-help {
+      display: none;
+    }
+    body.op-mobile-native-keyboard .op-lock-logo {
+      max-width: 148px;
+      margin-bottom: 0.8rem;
+    }
+    body.op-mobile-native-keyboard .op-lock-profile {
+      margin-bottom: 0.75rem;
+      padding: 0.75rem 0.8rem;
+      gap: 0.75rem;
+    }
+    body.op-mobile-native-keyboard .op-lock-profile-avatar {
+      width: 2.65rem;
+      height: 2.65rem;
+      border-radius: 1rem;
+    }
+    body.op-mobile-native-keyboard .op-lock-intro {
+      margin-bottom: 0.7rem;
+    }
+    body.op-mobile-native-keyboard .op-lock-form {
+      gap: 0.7rem;
+    }
+    body.op-mobile-native-keyboard .op-lock-pin-input {
+      padding-top: 0.8rem;
+      padding-bottom: 0.8rem;
+      font-size: 1.25rem;
+    }
+    body.op-mobile-native-keyboard .op-lock-slots {
+      margin-top: 0.55rem;
+    }
+    body.op-mobile-native-keyboard .op-lock-card-body {
+      padding-bottom: 0.95rem;
+    }
+    @media (max-width: 640px) {
+      .op-lock-main {
+        min-height: 100svh;
+        align-items: flex-start;
+        padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+        padding-right: max(0.85rem, env(safe-area-inset-right, 0px));
+        padding-bottom: max(0.85rem, env(safe-area-inset-bottom, 0px));
+        padding-left: max(0.85rem, env(safe-area-inset-left, 0px));
+      }
+      .op-lock-grid { gap: 0.85rem; }
+      .op-lock-card-body { padding: 1rem 1rem 1.1rem; }
+      .op-lock-logo { margin-bottom: 1rem; max-width: 170px; }
+      .op-lock-profile { margin-bottom: 0.85rem; gap: 0.75rem; padding: 0.85rem 0.9rem; border-radius: 20px; }
+      .op-lock-profile-avatar { width: 2.75rem; height: 2.75rem; border-radius: 1rem; }
+      .op-lock-profile-name { font-size: 1.375rem; line-height: 1.1; }
+      .op-lock-intro { margin-bottom: 0.85rem; }
+      .op-lock-intro-title { margin-top: 0.45rem; font-size: 1.375rem; line-height: 1.1; }
+      .op-lock-intro-copy { margin-top: 0.35rem; font-size: 0.875rem; line-height: 1.45; }
+      .op-lock-form { gap: 0.75rem; }
+      .op-lock-pin-input { padding-top: 0.85rem; padding-bottom: 0.85rem; font-size: 1.375rem; }
+      .op-lock-slots { margin-top: 0.6rem; }
+      .op-lock-pin-help { margin-top: 0.5rem; font-size: 0.72rem; line-height: 1.35; }
+      .op-lock-keypad-shell { gap: 0.6rem; padding-top: 0; }
+      .op-pin-key { min-height: 48px; }
+      .op-lock-actions { gap: 0.75rem; }
+      .op-lock-meta { margin-top: 0.85rem; font-size: 0.72rem; line-height: 1.4; }
+    }
+    @media (max-width: 640px) and (max-height: 860px) {
+      .op-lock-logo { max-width: 148px; margin-bottom: 0.85rem; }
+      .op-lock-profile { margin-bottom: 0.75rem; padding: 0.75rem 0.8rem; }
+      .op-lock-intro { margin-bottom: 0.7rem; }
+      .op-lock-intro-copy,
+      .op-lock-pin-help { display: none; }
+      .op-lock-keypad-shell { gap: 0.5rem; }
+      .op-pin-key { min-height: 44px; font-size: 1rem; }
+      .op-lock-card-body { padding-bottom: 1rem; }
+    }
+  </style>
+</head>
+<%
+  const pinState = appPinSecurity || {};
+  const pinGuard = appPinGuard || {};
+  const pinMinLength = Number(pinState.minLength || 4) || 4;
+  const pinMaxLength = Number(pinState.maxLength || 6) || 6;
+  const pinIdleLabel = pinState.idleLabel || '1 minuto';
+  const pinIdleOptions = Array.isArray(pinState.idleOptions) ? pinState.idleOptions : [];
+  const showRecoveryPanel = !!reauthFresh;
+  const guardRequiresReauth = !!pinGuard.requiresReauth;
+  const guardCooldownActive = !!pinGuard.cooldownActive;
+  const unlockTemporarilyDisabled = guardRequiresReauth || guardCooldownActive;
+  const recoveryMode = lockMode === 'recover' && showRecoveryPanel;
+  const safeNext = nextTarget || '/';
+  const displayName = (lockUser && lockUser.name) ? lockUser.name : 'Você';
+  const displayEmail = (lockUser && lockUser.email) ? lockUser.email : '';
+  const displayPhoto = (lockUser && lockUser.photo_url) ? lockUser.photo_url : '';
+  const flashType = flash && flash.type ? String(flash.type) : '';
+  const flashMessage = flash && flash.message ? String(flash.message) : '';
+  const guardNoticeTone = pinGuard.noticeTone || 'neutral';
+  const guardNoticeTitle = pinGuard.noticeTitle || '';
+  const guardNoticeMessage = pinGuard.noticeMessage || '';
+  const passkeyLock = appPasskeyLock || {};
+  const passkeyUnlockEnabled = !!passkeyLock.enabled;
+%>
+<body class="op-auth-page min-h-screen font-sans">
+  <main class="op-lock-main mx-auto flex min-h-screen w-full max-w-3xl items-center justify-center sm:p-6">
+    <div class="op-lock-grid grid w-full max-w-xl gap-4 sm:gap-5">
+      <section class="op-auth-shell w-full">
+        <div class="op-auth-card overflow-hidden">
+          <section class="op-lock-card-body relative z-10 px-6 py-7 lg:px-8 lg:py-9">
+            <img src="/logo.png" alt="AcerttaPay" class="op-lock-logo mx-auto mb-6 w-full max-w-[240px] drop-shadow-[0_18px_26px_rgba(37,99,235,0.16)] sm:max-w-[280px]">
+
+            <div class="op-lock-profile mx-auto mb-5 flex max-w-md items-center gap-4 rounded-[24px] border border-slate-200 bg-white/95 px-4 py-4 shadow-lg shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-950/80">
+              <% if (displayPhoto) { %>
+                <img src="<%= displayPhoto %>" alt="<%= displayName %>" class="op-lock-profile-avatar h-14 w-14 rounded-2xl object-cover ring-1 ring-slate-200 dark:ring-slate-700">
+              <% } else { %>
+                <div class="op-lock-profile-avatar inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-lg font-black text-white dark:bg-amber-500 dark:text-slate-950"><%= (displayName || 'V').charAt(0).toUpperCase() %></div>
+              <% } %>
+              <div class="min-w-0 flex-1">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Proteção por PIN</div>
+                <h1 class="op-lock-profile-name mt-1 truncate text-2xl font-black tracking-tight text-slate-900 dark:text-slate-50"><%= displayName %></h1>
+                <% if (displayEmail) { %>
+                  <p class="mt-1 truncate text-sm font-medium text-slate-500 dark:text-slate-400"><%= displayEmail %></p>
+                <% } %>
+              </div>
+            </div>
+
+            <% if (flashMessage) { %>
+              <div class="mb-5 rounded-[22px] border px-4 py-3 text-sm font-semibold <%= flashType === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-200' : flashType === 'info' ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/25 dark:text-sky-200' : 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/25 dark:text-red-200' %>" aria-live="polite">
+                <%= flashMessage %>
+              </div>
+            <% } %>
+
+            <% if (guardNoticeTitle && guardNoticeMessage) { %>
+              <div id="lockGuardNotice" class="mb-5 rounded-[22px] border px-4 py-3 text-sm font-semibold <%= guardNoticeTone === 'danger' ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/25 dark:text-rose-200' : guardNoticeTone === 'warning' ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-100' : 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/25 dark:text-sky-200' %>" aria-live="polite">
+                <div class="font-black"><%= guardNoticeTitle %></div>
+                <p class="mt-1 leading-6"><span data-lock-guard-message><%= guardNoticeMessage %></span><% if (guardCooldownActive) { %><span data-lock-countdown class="font-black"><%= pinGuard.cooldownRemainingLabel ? ` (${pinGuard.cooldownRemainingLabel})` : '' %></span><% } %></p>
+              </div>
+            <% } %>
+
+            <div class="op-lock-intro mb-5">
+              <div class="text-xs font-extrabold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Desbloqueio</div>
+              <h2 class="op-lock-intro-title mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-slate-50">Digite seu PIN para voltar</h2>
+              <p class="op-lock-intro-copy mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400"><%= lockMessage || 'Seu app está protegido por PIN. Digite os números para destravar.' %></p>
+            </div>
+
+            <form method="post" action="/lock/unlock" class="op-lock-form grid gap-4" id="appUnlockForm" autocomplete="off" novalidate>
+              <input type="hidden" name="next" value="<%= safeNext %>">
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">PIN do app</span>
+                <div class="relative">
+                  <input type="password" inputmode="numeric" enterkeyhint="done" autocomplete="one-time-code" pattern="[0-9]*" maxlength="<%= pinMaxLength %>" name="pin" id="lockPinInput" class="op-lock-pin-input w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-16 text-center text-2xl font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20 disabled:cursor-not-allowed disabled:opacity-60" placeholder="••••" required autofocus aria-describedby="lockPinHelp<%= guardNoticeTitle && guardNoticeMessage ? ' lockGuardNotice' : '' %>" <%= unlockTemporarilyDisabled ? 'disabled' : '' %>>
+                  <button type="button" id="lockPinVisibilityToggle" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500" <%= unlockTemporarilyDisabled ? 'disabled aria-disabled="true"' : '' %>>Ver</button>
+                </div>
+                <div id="lockPinSlots" class="op-lock-slots mt-3"></div>
+                <p id="lockPinHelp" class="op-lock-pin-help mt-3 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400">No desktop, vale usar o teclado físico também. Eu aceito de <%= pinMinLength %> a <%= pinMaxLength %> números.</p>
+              </label>
+
+              <div class="op-lock-keypad-shell grid grid-cols-3 gap-3 pt-1" id="lockPinPad" aria-label="Teclado numérico do PIN">
+                <% [1,2,3,4,5,6,7,8,9].forEach((digit) => { %>
+                  <button type="button" class="op-pin-key rounded-2xl border border-slate-200 bg-white px-4 py-3 text-lg font-black text-slate-800 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-900" data-pin-key="<%= digit %>" aria-label="Digitar <%= digit %>" <%= unlockTemporarilyDisabled ? 'disabled aria-disabled="true"' : '' %>><%= digit %></button>
+                <% }) %>
+                <button type="button" class="op-pin-key rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-slate-500 shadow-sm transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900" data-pin-action="clear" aria-label="Limpar PIN" <%= unlockTemporarilyDisabled ? 'disabled aria-disabled="true"' : '' %>>Limpar</button>
+                <button type="button" class="op-pin-key rounded-2xl border border-slate-200 bg-white px-4 py-3 text-lg font-black text-slate-800 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-900" data-pin-key="0" aria-label="Digitar 0" <%= unlockTemporarilyDisabled ? 'disabled aria-disabled="true"' : '' %>>0</button>
+                <button type="button" class="op-pin-key rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-slate-500 shadow-sm transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900" data-pin-action="backspace" aria-label="Apagar último dígito" <%= unlockTemporarilyDisabled ? 'disabled aria-disabled="true"' : '' %>>Apagar</button>
+              </div>
+
+              <button type="submit" id="unlockSubmit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400" <%= unlockTemporarilyDisabled ? 'disabled aria-disabled="true"' : '' %>>Desbloquear app</button>
+
+              <% if (passkeyUnlockEnabled) { %>
+                <button type="button" id="lockPasskeyButton" class="inline-flex w-full items-center justify-center rounded-2xl border border-violet-200 bg-white px-5 py-3 text-sm font-black text-violet-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-950 dark:text-violet-200 dark:hover:bg-slate-900">Usar PassKey</button>
+              <% } %>
+            </form>
+
+            <p id="lockPasskeyFeedback" class="op-passkey-feedback mt-3 text-center text-sm font-medium leading-6 <%= passkeyUnlockEnabled ? 'text-slate-600 dark:text-slate-300' : 'hidden text-slate-600 dark:text-slate-300' %>"><%= passkeyUnlockEnabled ? (passkeyLock.message || 'Se esse aparelho topar, a PassKey entra rapidinho por aqui.') : '' %></p>
+          </section>
+        </div>
+      </section>
+
+      <section class="rounded-[28px] border border-slate-200 bg-white/90 px-5 py-4 shadow-lg shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-900/80 sm:px-6 sm:py-5">
+        <div class="op-lock-actions grid gap-3 sm:grid-cols-2">
+          <a href="/lock/reauth/google" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-900">Esqueci o PIN</a>
+          <a href="/logout" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900">Sair da conta</a>
+        </div>
+
+        <% if (!showRecoveryPanel) { %>
+          <a href="/lock/reauth/google" class="mt-3 inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400">Confirmar com Google</a>
+        <% } %>
+
+        <p class="op-lock-meta mt-4 text-xs leading-6 text-slate-500 dark:text-slate-400">Hoje esse PIN está configurado para travar de novo <strong class="font-semibold text-slate-700 dark:text-slate-200"><%= pinIdleLabel %></strong>. Se você redefinir por aqui, o app volta destravado na sequência.</p>
+      </section>
+
+      <% if (showRecoveryPanel) { %>
+        <section class="rounded-[28px] border border-emerald-200 bg-emerald-50/80 p-5 shadow-lg shadow-slate-900/5 dark:border-emerald-900/70 dark:bg-emerald-900/20 sm:p-6">
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Conta confirmada</div>
+          <h3 class="mt-2 text-lg font-black text-slate-900 dark:text-white">Agora você pode trocar ou desligar o PIN</h3>
+          <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Sua conta Google já foi confirmada. Esse passe fica aberto por alguns minutinhos para você trocar ou desligar essa trava sem precisar do PIN atual.</p>
+
+          <form method="post" action="/lock/recovery/setup" class="mt-4 grid gap-4 rounded-[24px] border border-white/80 bg-white/90 p-4 dark:border-slate-800 dark:bg-slate-950/70" autocomplete="off" id="recoveryPinForm">
+            <input type="hidden" name="mode" value="create">
+            <input type="hidden" name="next" value="<%= safeNext %>">
+            <label class="block">
+              <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Novo PIN</span>
+              <div class="relative">
+                <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= pinMaxLength %>" name="pin" id="recoveryPinInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-16 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                <button type="button" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500" data-pin-visibility-toggle="recoveryPinInput">Ver</button>
+              </div>
+              <div class="mt-3" data-pin-slots="recoveryPinInput" data-max-length="<%= pinMaxLength %>"></div>
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Confirmar novo PIN</span>
+              <div class="relative">
+                <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= pinMaxLength %>" name="pin_confirm" id="recoveryPinConfirmInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-16 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                <button type="button" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500" data-pin-visibility-toggle="recoveryPinConfirmInput">Ver</button>
+              </div>
+              <div class="mt-3" data-pin-slots="recoveryPinConfirmInput" data-max-length="<%= pinMaxLength %>"></div>
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Novo tempo de bloqueio</span>
+              <select name="pin_idle_seconds" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-bold text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20">
+                <% pinIdleOptions.forEach((option) => { %>
+                  <option value="<%= option.value %>" <%= option.selected ? 'selected' : '' %>><%= option.label %></option>
+                <% }) %>
+              </select>
+            </label>
+
+            <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400">Salvar novo PIN</button>
+          </form>
+
+          <form method="post" action="/lock/recovery/disable" class="mt-4" id="recoveryDisableForm">
+            <input type="hidden" name="next" value="<%= safeNext %>">
+            <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 bg-white px-5 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-950 dark:text-rose-300 dark:hover:bg-rose-900/20">Desligar PIN por enquanto</button>
+          </form>
+        </section>
+      <% } %>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      const syncStorageKey = 'op-app-pin-sync';
+      const hiddenAtKey = 'op-app-pin-hidden-at';
+      const syncChannelName = 'op-app-pin';
+      const sourceId = `lock-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const unlockInput = document.getElementById('lockPinInput');
+      const unlockSlots = document.getElementById('lockPinSlots');
+      const unlockToggle = document.getElementById('lockPinVisibilityToggle');
+      const unlockForm = document.getElementById('appUnlockForm');
+      const unlockSubmit = document.getElementById('unlockSubmit');
+      const pinPad = document.getElementById('lockPinPad');
+      const guardNotice = document.getElementById('lockGuardNotice');
+      const guardMessage = document.querySelector('[data-lock-guard-message]');
+      const countdownNode = document.querySelector('[data-lock-countdown]');
+      const googleRecoveryLink = document.querySelector('a[href="/lock/reauth/google"]');
+      const passkeyButton = document.getElementById('lockPasskeyButton');
+      const passkeyFeedback = document.getElementById('lockPasskeyFeedback');
+      const focusTargetId = <%- JSON.stringify(recoveryMode ? 'recoveryPinInput' : 'lockPinInput') %>;
+      const pinMaxLength = <%= pinMaxLength %>;
+      const pinMinLength = <%= pinMinLength %>;
+      const nextUrl = <%- JSON.stringify(safeNext) %>;
+      const initialLockUrl = `${window.location.pathname || '/lock'}${window.location.search || ''}`;
+      const initialReason = <%- JSON.stringify(lockReason || 'locked') %>;
+      const unlockInitiallyDisabled = <%= unlockTemporarilyDisabled ? 'true' : 'false' %>;
+      const passkeyUnlockEnabled = <%= passkeyUnlockEnabled ? 'true' : 'false' %>;
+      const passkeyButtonLabel = 'Usar PassKey';
+      const requiresReauth = <%= guardRequiresReauth ? 'true' : 'false' %>;
+      const initialCooldownSeconds = <%= Number(pinGuard.cooldownRemainingSeconds || 0) %>;
+      let activeInput = unlockInput;
+      let unlockDisabled = unlockInitiallyDisabled;
+      let cooldownUntil = initialCooldownSeconds > 0 ? Date.now() + (initialCooldownSeconds * 1000) : 0;
+      let countdownTimer = null;
+      let syncChannel = null;
+
+      function clearHiddenAtMarker() {
+        try {
+          window.sessionStorage.removeItem(hiddenAtKey);
+        } catch (_error) {}
+      }
+
+      function shouldUseNativeKeyboardLayout() {
+        const userAgent = navigator.userAgent || '';
+        const isMobileOS = /Android|iPhone|iPad|iPod/i.test(userAgent);
+        const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+        const narrowViewport = window.matchMedia('(max-width: 640px)').matches;
+        return !!(isMobileOS || standalone || (coarsePointer && narrowViewport));
+      }
+
+      function syncNativeKeyboardLayout() {
+        const useNativeKeyboardLayout = shouldUseNativeKeyboardLayout();
+        document.body?.classList.toggle('op-mobile-native-keyboard', useNativeKeyboardLayout);
+        if (pinPad instanceof HTMLElement) {
+          pinPad.hidden = useNativeKeyboardLayout;
+          pinPad.setAttribute('aria-hidden', useNativeKeyboardLayout ? 'true' : 'false');
+        }
+      }
+
+      function focusInputField(input, { showKeyboard = false } = {}) {
+        if (!(input instanceof HTMLInputElement) || input.disabled) return;
+        try {
+          input.focus({ preventScroll: true });
+        } catch (_error) {
+          input.focus();
+        }
+
+        try {
+          const end = String(input.value || '').length;
+          input.setSelectionRange(end, end);
+        } catch (_error) {}
+
+        if (!showKeyboard) return;
+
+        try {
+          input.click();
+        } catch (_error) {}
+
+        const keyboard = navigator.virtualKeyboard;
+        if (keyboard && typeof keyboard.show === 'function') {
+          try {
+            keyboard.show();
+          } catch (_error) {}
+        }
+      }
+
+      function getInitialFocusTarget() {
+        const field = document.getElementById(focusTargetId);
+        return field instanceof HTMLInputElement ? field : null;
+      }
+
+      function requestInitialFocus({ showKeyboard = false } = {}) {
+        if (requiresReauth) {
+          googleRecoveryLink?.focus();
+          return;
+        }
+
+        if (unlockDisabled) return;
+
+        const focusTarget = getInitialFocusTarget();
+        if (!focusTarget) return;
+
+        window.requestAnimationFrame(() => {
+          focusInputField(focusTarget, { showKeyboard });
+        });
+      }
+
+      function normalizeDigits(input) {
+        if (!(input instanceof HTMLInputElement)) return '';
+        const digits = String(input.value || '').replace(/\D/g, '').slice(0, pinMaxLength);
+        if (digits !== input.value) input.value = digits;
+        return digits;
+      }
+
+      function renderSlots(container, input) {
+        if (!(container instanceof HTMLElement) || !(input instanceof HTMLInputElement)) return;
+        const digits = normalizeDigits(input);
+        container.innerHTML = `
+          <div class="flex items-center justify-center gap-2">${Array.from({ length: pinMaxLength }, (_, index) => `<span class="op-pin-slot ${index < digits.length ? 'is-filled' : ''}"></span>`).join('')}</div>
+          <div class="mt-2 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">${digits.length}/${pinMaxLength} dígitos</div>
+        `;
+      }
+
+      function bindSlotContainer(container) {
+        if (!(container instanceof HTMLElement)) return;
+        const inputId = container.getAttribute('data-pin-slots');
+        const input = document.getElementById(inputId || '');
+        if (!(input instanceof HTMLInputElement)) return;
+        const sync = () => renderSlots(container, input);
+        input.addEventListener('input', sync);
+        input.addEventListener('change', sync);
+        input.addEventListener('focus', () => { activeInput = input; });
+        sync();
+      }
+
+      function bindVisibilityToggle(button) {
+        if (!(button instanceof HTMLButtonElement)) return;
+        const target = document.getElementById(button.getAttribute('data-pin-visibility-toggle') || '');
+        if (!(target instanceof HTMLInputElement)) return;
+        const sync = () => {
+          const visible = target.type === 'text';
+          button.textContent = visible ? 'Ocultar' : 'Ver';
+          button.setAttribute('aria-pressed', visible ? 'true' : 'false');
+        };
+        button.addEventListener('click', () => {
+          if (button.disabled) return;
+          target.type = target.type === 'password' ? 'text' : 'password';
+          sync();
+          target.focus();
+          target.setSelectionRange?.(target.value.length, target.value.length);
+        });
+        sync();
+      }
+
+      function allUnlockControls() {
+        const controls = [];
+        if (unlockInput) controls.push(unlockInput);
+        if (unlockToggle) controls.push(unlockToggle);
+        if (unlockSubmit) controls.push(unlockSubmit);
+        if (pinPad) {
+          pinPad.querySelectorAll('button').forEach((button) => controls.push(button));
+        }
+        return controls;
+      }
+
+      function setUnlockControlsDisabled(disabled) {
+        unlockDisabled = !!disabled;
+        allUnlockControls().forEach((element) => {
+          if ('disabled' in element) {
+            element.disabled = !!disabled;
+            element.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+          }
+        });
+      }
+
+      function updateSlotsForInput(input) {
+        if (!(input instanceof HTMLInputElement)) return;
+        document.querySelectorAll(`[data-pin-slots="${input.id}"]`).forEach((container) => renderSlots(container, input));
+      }
+
+      function updateGuardNotice(message, countdownLabel = '') {
+        if (guardMessage instanceof HTMLElement && message) {
+          guardMessage.textContent = message;
+        }
+        if (countdownNode instanceof HTMLElement) {
+          countdownNode.textContent = countdownLabel ? ` (${countdownLabel})` : '';
+        }
+        if (guardNotice instanceof HTMLElement && message) {
+          guardNotice.classList.remove('hidden');
+        }
+      }
+
+      function formatCooldown(seconds) {
+        const totalSeconds = Math.max(0, Math.ceil(Number(seconds || 0) || 0));
+        if (!totalSeconds) return 'agora';
+        if (totalSeconds < 60) return `${totalSeconds} segundo${totalSeconds === 1 ? '' : 's'}`;
+        const totalMinutes = Math.ceil(totalSeconds / 60);
+        if (totalMinutes < 60) return `${totalMinutes} minuto${totalMinutes === 1 ? '' : 's'}`;
+        const totalHours = Math.ceil(totalMinutes / 60);
+        return `${totalHours} hora${totalHours === 1 ? '' : 's'}`;
+      }
+
+      function startCooldownCountdown() {
+        if (!cooldownUntil || requiresReauth) return;
+        if (countdownTimer) window.clearInterval(countdownTimer);
+        const tick = () => {
+          const remainingSeconds = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
+          if (remainingSeconds <= 0) {
+            cooldownUntil = 0;
+            if (countdownTimer) {
+              window.clearInterval(countdownTimer);
+              countdownTimer = null;
+            }
+            setUnlockControlsDisabled(false);
+            updateGuardNotice('Pode tentar de novo agora. Quando quiser, é só digitar o PIN.', '');
+            unlockInput?.focus();
+            return;
+          }
+          updateGuardNotice('Vou segurar novas tentativas por mais um tiquinho. Assim a proteção continua firme, sem pressa.', formatCooldown(remainingSeconds));
+          setUnlockControlsDisabled(true);
+        };
+        tick();
+        countdownTimer = window.setInterval(tick, 1000);
+      }
+
+      function appendDigit(target, digit) {
+        if (!(target instanceof HTMLInputElement) || unlockDisabled) return;
+        const currentValue = normalizeDigits(target);
+        if (!digit || currentValue.length >= pinMaxLength) return;
+        target.value = `${currentValue}${digit}`;
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      function clearDigits(target) {
+        if (!(target instanceof HTMLInputElement) || unlockDisabled) return;
+        target.value = '';
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      function backspaceDigit(target) {
+        if (!(target instanceof HTMLInputElement) || unlockDisabled) return;
+        const currentValue = normalizeDigits(target);
+        target.value = currentValue.slice(0, -1);
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      function requestUnlockSubmit() {
+        if (!(unlockForm instanceof HTMLFormElement) || unlockDisabled || requiresReauth) return;
+        const digits = normalizeDigits(unlockInput);
+        if (digits.length < pinMinLength) {
+          unlockInput?.focus();
+          return;
+        }
+        if (typeof unlockForm.requestSubmit === 'function') {
+          unlockForm.requestSubmit(unlockSubmit || undefined);
+        } else {
+          unlockForm.submit();
+        }
+      }
+
+      function handlePadButton(button) {
+        if (!(button instanceof HTMLButtonElement)) return;
+        const target = activeInput instanceof HTMLInputElement ? activeInput : unlockInput;
+        if (!(target instanceof HTMLInputElement)) return;
+        target.focus();
+        const action = button.getAttribute('data-pin-action');
+        const digit = button.getAttribute('data-pin-key');
+        if (action === 'clear') {
+          clearDigits(target);
+          return;
+        }
+        if (action === 'backspace') {
+          backspaceDigit(target);
+          return;
+        }
+        if (digit) {
+          appendDigit(target, digit);
+        }
+      }
+
+      function handlePhysicalKeyboard(event) {
+        if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+        const target = event.target;
+        const isEditingField = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || target?.isContentEditable;
+
+        if (!isEditingField && /^\d$/.test(event.key)) {
+          event.preventDefault();
+          appendDigit(activeInput instanceof HTMLInputElement ? activeInput : unlockInput, event.key);
+          return;
+        }
+
+        if (!isEditingField && (event.key === 'Backspace' || event.key === 'Delete')) {
+          event.preventDefault();
+          backspaceDigit(activeInput instanceof HTMLInputElement ? activeInput : unlockInput);
+          return;
+        }
+
+        if (!isEditingField && event.key === 'Enter') {
+          event.preventDefault();
+          requestUnlockSubmit();
+        }
+      }
+
+      function setPasskeyFeedback(message, tone = 'slate') {
+        if (!(passkeyFeedback instanceof HTMLElement)) return;
+        const safeMessage = String(message || '').trim();
+        passkeyFeedback.textContent = safeMessage;
+        passkeyFeedback.classList.remove('text-slate-600', 'text-violet-700', 'text-emerald-700', 'text-amber-700', 'text-rose-700', 'dark:text-slate-300', 'dark:text-violet-200', 'dark:text-emerald-200', 'dark:text-amber-200', 'dark:text-rose-200');
+        if (tone === 'violet') {
+          passkeyFeedback.classList.add('text-violet-700', 'dark:text-violet-200');
+        } else if (tone === 'emerald') {
+          passkeyFeedback.classList.add('text-emerald-700', 'dark:text-emerald-200');
+        } else if (tone === 'amber') {
+          passkeyFeedback.classList.add('text-amber-700', 'dark:text-amber-200');
+        } else if (tone === 'rose') {
+          passkeyFeedback.classList.add('text-rose-700', 'dark:text-rose-200');
+        } else {
+          passkeyFeedback.classList.add('text-slate-600', 'dark:text-slate-300');
+        }
+      }
+
+      function base64UrlToUint8Array(value) {
+        const safe = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+        const padded = safe + '='.repeat((4 - (safe.length % 4 || 4)) % 4);
+        const binary = window.atob(padded);
+        return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      }
+
+      function bufferToBase64Url(value) {
+        const bytes = value instanceof ArrayBuffer ? new Uint8Array(value) : value instanceof Uint8Array ? value : new Uint8Array([]);
+        let binary = '';
+        bytes.forEach((byte) => {
+          binary += String.fromCharCode(byte);
+        });
+        return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+      }
+
+      function toPublicKeyCredentialJSON(value) {
+        if (value instanceof ArrayBuffer) {
+          return bufferToBase64Url(value);
+        }
+        if (ArrayBuffer.isView(value)) {
+          return bufferToBase64Url(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+        }
+        if (Array.isArray(value)) {
+          return value.map((entry) => toPublicKeyCredentialJSON(entry));
+        }
+        if (value && typeof value === 'object') {
+          return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, toPublicKeyCredentialJSON(entry)]));
+        }
+        return value;
+      }
+
+      function serializeAuthenticatorResponse(response) {
+        if (!response || typeof response !== 'object') {
+          return {};
+        }
+
+        if (typeof response.toJSON === 'function') {
+          try {
+            return response.toJSON();
+          } catch (_error) {
+            // segue para o fallback manual logo abaixo
+          }
+        }
+
+        const payload = {
+          clientDataJSON: response.clientDataJSON ? bufferToBase64Url(response.clientDataJSON) : undefined
+        };
+
+        if ('attestationObject' in response && response.attestationObject) {
+          payload.attestationObject = bufferToBase64Url(response.attestationObject);
+        }
+
+        if ('authenticatorData' in response && response.authenticatorData) {
+          payload.authenticatorData = bufferToBase64Url(response.authenticatorData);
+        }
+
+        if ('signature' in response && response.signature) {
+          payload.signature = bufferToBase64Url(response.signature);
+        }
+
+        if ('userHandle' in response) {
+          payload.userHandle = response.userHandle ? bufferToBase64Url(response.userHandle) : null;
+        }
+
+        if (typeof response.getTransports === 'function') {
+          try {
+            const transports = response.getTransports();
+            if (Array.isArray(transports) && transports.length) {
+              payload.transports = transports.filter(Boolean);
+            }
+          } catch (_error) {
+            // alguns navegadores podem não deixar consultar isso aqui, então deixa quietinho
+          }
+        }
+
+        return payload;
+      }
+
+      function serializePublicKeyCredential(credential) {
+        if (!credential || typeof credential !== 'object') {
+          return {};
+        }
+
+        if (typeof credential.toJSON === 'function') {
+          try {
+            return credential.toJSON();
+          } catch (_error) {
+            // fallback manual para navegadores que tropeçam nessa serialização
+          }
+        }
+
+        const clientExtensionResults = typeof credential.getClientExtensionResults === 'function'
+          ? credential.getClientExtensionResults()
+          : undefined;
+
+        return {
+          id: String(credential.id || '').trim() || undefined,
+          rawId: credential.rawId ? bufferToBase64Url(credential.rawId) : undefined,
+          type: String(credential.type || '').trim() || 'public-key',
+          authenticatorAttachment: credential.authenticatorAttachment || undefined,
+          clientExtensionResults: clientExtensionResults && Object.keys(clientExtensionResults).length
+            ? toPublicKeyCredentialJSON(clientExtensionResults)
+            : undefined,
+          response: serializeAuthenticatorResponse(credential.response)
+        };
+      }
+
+      function decodeAuthenticationOptions(options) {
+        const publicKey = options ? JSON.parse(JSON.stringify(options)) : {};
+        if (publicKey.challenge) publicKey.challenge = base64UrlToUint8Array(publicKey.challenge);
+        if (Array.isArray(publicKey.allowCredentials)) {
+          publicKey.allowCredentials = publicKey.allowCredentials
+            .filter((credential) => credential && credential.id)
+            .map((credential) => ({
+              ...credential,
+              type: credential.type || 'public-key',
+              id: base64UrlToUint8Array(credential.id)
+            }));
+        }
+        return publicKey;
+      }
+
+      async function handlePasskeyUnlock() {
+        if (!(passkeyButton instanceof HTMLButtonElement) || passkeyButton.disabled) return;
+        if (!(window.PublicKeyCredential && window.isSecureContext && navigator.credentials && typeof navigator.credentials.get === 'function')) {
+          setPasskeyFeedback('Neste navegador ou endereço esse desbloqueio ainda não ficou disponível.', 'amber');
+          return;
+        }
+
+        passkeyButton.disabled = true;
+        passkeyButton.setAttribute('aria-disabled', 'true');
+        passkeyButton.textContent = 'Abrindo...';
+        setPasskeyFeedback('Preparando o desbloqueio deste aparelho...', 'violet');
+
+        try {
+          const optionsResponse = await fetch('/lock/passkey/options', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-AcerttaPay-Async': '1'
+            },
+            body: JSON.stringify({ next: nextUrl })
+          });
+          const optionsPayload = await optionsResponse.json().catch(() => ({}));
+          if (!optionsResponse.ok || !optionsPayload.ok || !optionsPayload.options) {
+            throw new Error(optionsPayload.message || 'Não consegui preparar o desbloqueio deste aparelho agora.');
+          }
+
+          const credential = await navigator.credentials.get({ publicKey: decodeAuthenticationOptions(optionsPayload.options) });
+          if (!(credential instanceof PublicKeyCredential)) {
+            throw new Error('Esse aparelho não confirmou o desbloqueio agora.');
+          }
+
+          const verifyResponse = await fetch('/lock/passkey/verify', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-AcerttaPay-Async': '1'
+            },
+            body: JSON.stringify({
+              ...serializePublicKeyCredential(credential),
+              next: nextUrl
+            })
+          });
+          const verifyPayload = await verifyResponse.json().catch(() => ({}));
+          if (!verifyResponse.ok || !verifyPayload.ok) {
+            throw new Error(verifyPayload.message || 'Não consegui confirmar esse desbloqueio agora.');
+          }
+
+          const redirectTo = verifyPayload.redirect || nextUrl || '/';
+          clearHiddenAtMarker();
+          setPasskeyFeedback('Pronto, deu para entrar com este aparelho.', 'emerald');
+          broadcastPinState('unlocked', { redirect: redirectTo });
+          window.location.href = redirectTo;
+        } catch (error) {
+          console.warn('[passkey-lock]', { name: error?.name || null, message: error?.message || null, raw: error || null });
+          const safeMessage = error && typeof error === 'object' && 'name' in error && error.name === 'NotAllowedError'
+            ? 'Tudo bem. Parece que esse desbloqueio foi cancelado antes de terminar.'
+            : (error && error.message) ? error.message : 'Não consegui destravar com este aparelho agora.';
+          setPasskeyFeedback(safeMessage, safeMessage.includes('cancelado') ? 'amber' : 'rose');
+        } finally {
+          if (passkeyButton instanceof HTMLButtonElement) {
+            passkeyButton.disabled = false;
+            passkeyButton.setAttribute('aria-disabled', 'false');
+            passkeyButton.textContent = passkeyButtonLabel;
+          }
+        }
+      }
+
+      function openSyncChannel() {
+        try {
+          if (typeof window.BroadcastChannel === 'function') {
+            syncChannel = new window.BroadcastChannel(syncChannelName);
+            syncChannel.addEventListener('message', (event) => {
+              handleSyncPayload(event?.data || null);
+            });
+          }
+        } catch (_error) {
+          syncChannel = null;
+        }
+      }
+
+      function getStorage() {
+        try {
+          return window.localStorage;
+        } catch (_error) {
+          return null;
+        }
+      }
+
+      function broadcastPinState(type, extra = {}) {
+        const payload = {
+          type,
+          at: Date.now(),
+          sourceId,
+          ...extra
+        };
+        if (syncChannel) {
+          try {
+            syncChannel.postMessage(payload);
+          } catch (_error) {}
+        }
+        const storage = getStorage();
+        if (!storage) return;
+        try {
+          storage.setItem(syncStorageKey, JSON.stringify(payload));
+        } catch (_error) {}
+      }
+
+      async function probeUnlockState() {
+        try {
+          const response = await fetch('/lock/touch', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-AcerttaPay-Async': '1'
+            }
+          });
+          if (Number(response.status || 0) === 204) {
+            window.location.href = nextUrl || '/';
+          }
+        } catch (_error) {}
+      }
+
+      function handleSyncPayload(payload) {
+        if (!payload || payload.sourceId === sourceId) return;
+        const type = String(payload.type || '').trim().toLowerCase();
+        if (type === 'unlocked') {
+          clearHiddenAtMarker();
+          probeUnlockState();
+        }
+      }
+
+      window.addEventListener('storage', (event) => {
+        if (event.key !== syncStorageKey || !event.newValue) return;
+        try {
+          handleSyncPayload(JSON.parse(event.newValue));
+        } catch (_error) {}
+      });
+
+      openSyncChannel();
+      clearHiddenAtMarker();
+      broadcastPinState('locked', { reason: initialReason || 'locked', redirect: initialLockUrl });
+      syncNativeKeyboardLayout();
+      window.addEventListener('resize', syncNativeKeyboardLayout);
+
+      if (unlockInput instanceof HTMLInputElement) {
+        unlockInput.addEventListener('input', () => renderSlots(unlockSlots, unlockInput));
+        unlockInput.addEventListener('focus', () => { activeInput = unlockInput; });
+        renderSlots(unlockSlots, unlockInput);
+      }
+
+      if (unlockToggle instanceof HTMLButtonElement && unlockInput instanceof HTMLInputElement) {
+        unlockToggle.setAttribute('data-pin-visibility-toggle', 'lockPinInput');
+        bindVisibilityToggle(unlockToggle);
+      }
+
+      document.querySelectorAll('[data-pin-slots]').forEach((container) => bindSlotContainer(container));
+      document.querySelectorAll('[data-pin-visibility-toggle]').forEach((button) => bindVisibilityToggle(button));
+      document.querySelectorAll('input[inputmode="numeric"]').forEach((input) => {
+        if (!(input instanceof HTMLInputElement)) return;
+        input.addEventListener('input', () => {
+          normalizeDigits(input);
+          updateSlotsForInput(input);
+        });
+        input.addEventListener('focus', () => { activeInput = input; });
+      });
+
+      if (pinPad instanceof HTMLElement && unlockInput instanceof HTMLInputElement) {
+        pinPad.addEventListener('click', (event) => {
+          const button = event.target instanceof HTMLElement ? event.target.closest('button') : null;
+          handlePadButton(button);
+        });
+      }
+
+      document.addEventListener('keydown', handlePhysicalKeyboard);
+
+      if (passkeyButton instanceof HTMLButtonElement) {
+        passkeyButton.textContent = passkeyButtonLabel;
+        if (!(window.PublicKeyCredential && window.isSecureContext && navigator.credentials && typeof navigator.credentials.get === 'function')) {
+          passkeyButton.disabled = true;
+          passkeyButton.setAttribute('aria-disabled', 'true');
+          setPasskeyFeedback('Neste navegador ou endereço esse desbloqueio ainda não ficou disponível.', 'amber');
+        } else if (passkeyUnlockEnabled) {
+          passkeyButton.addEventListener('click', () => {
+            handlePasskeyUnlock().catch(() => {});
+          });
+        }
+      }
+
+      if (unlockForm instanceof HTMLFormElement && unlockSubmit instanceof HTMLButtonElement) {
+        unlockForm.addEventListener('submit', (event) => {
+          if (unlockDisabled || requiresReauth) {
+            event.preventDefault();
+            return;
+          }
+          const digits = normalizeDigits(unlockInput);
+          if (digits.length < pinMinLength) {
+            event.preventDefault();
+            unlockInput.focus();
+            return;
+          }
+          clearHiddenAtMarker();
+          unlockSubmit.disabled = true;
+          unlockSubmit.textContent = 'Destravando...';
+        });
+      }
+
+      document.getElementById('recoveryPinForm')?.addEventListener('submit', (event) => {
+        const button = event.currentTarget.querySelector('button[type="submit"]');
+        if (button instanceof HTMLButtonElement) {
+          button.disabled = true;
+          button.textContent = 'Salvando...';
+        }
+      });
+
+      document.getElementById('recoveryDisableForm')?.addEventListener('submit', (event) => {
+        const button = event.currentTarget.querySelector('button[type="submit"]');
+        if (button instanceof HTMLButtonElement) {
+          button.disabled = true;
+          button.textContent = 'Desligando...';
+        }
+      });
+
+      if (requiresReauth) {
+        setUnlockControlsDisabled(true);
+      } else if (initialCooldownSeconds > 0) {
+        setUnlockControlsDisabled(true);
+        startCooldownCountdown();
+      } else {
+        setUnlockControlsDisabled(false);
+      }
+
+      window.addEventListener('pageshow', () => {
+        window.setTimeout(() => requestInitialFocus({ showKeyboard: true }), 30);
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          window.setTimeout(() => requestInitialFocus({ showKeyboard: false }), 30);
+        }
+      });
+
+      window.setTimeout(() => requestInitialFocus({ showKeyboard: true }), 40);
+      window.setTimeout(() => requestInitialFocus({ showKeyboard: true }), 220);
+    })();
+  </script>
+</body>
+</html>

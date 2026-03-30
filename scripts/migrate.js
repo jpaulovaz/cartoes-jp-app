@@ -5,6 +5,13 @@ function columnExists(table, col) {
   return cols.includes(col);
 }
 
+function tableExists(table) {
+  const row = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1")
+    .get(table);
+  return !!row;
+}
+
 // ===== TABELA DE USUÁRIOS (NOVA) =====
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
@@ -50,6 +57,166 @@ if (!columnExists("users", "google_photo_url")) {
 
 if (!columnExists("users", "profile_photo_mode")) {
   db.exec("ALTER TABLE users ADD COLUMN profile_photo_mode TEXT NOT NULL DEFAULT 'default';");
+}
+
+// ===== SEGURANCA DO APP =====
+db.exec(`
+CREATE TABLE IF NOT EXISTS user_security_settings (
+  user_id INTEGER PRIMARY KEY,
+  pin_enabled INTEGER NOT NULL DEFAULT 0,
+  pin_hash TEXT,
+  pin_salt TEXT,
+  pin_kdf TEXT NOT NULL DEFAULT 'scrypt-v1',
+  pin_idle_seconds INTEGER NOT NULL DEFAULT 60,
+  failed_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until TEXT,
+  last_changed_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+`);
+
+if (!columnExists("user_security_settings", "pin_enabled")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN pin_enabled INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("user_security_settings", "pin_hash")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN pin_hash TEXT;");
+}
+
+if (!columnExists("user_security_settings", "pin_salt")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN pin_salt TEXT;");
+}
+
+if (!columnExists("user_security_settings", "pin_kdf")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN pin_kdf TEXT NOT NULL DEFAULT 'scrypt-v1';");
+}
+
+if (!columnExists("user_security_settings", "pin_idle_seconds")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN pin_idle_seconds INTEGER NOT NULL DEFAULT 60;");
+}
+
+if (!columnExists("user_security_settings", "failed_attempts")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN failed_attempts INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("user_security_settings", "locked_until")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN locked_until TEXT;");
+}
+
+if (!columnExists("user_security_settings", "last_changed_at")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN last_changed_at TEXT;");
+}
+
+if (!columnExists("user_security_settings", "updated_at")) {
+  db.exec("ALTER TABLE user_security_settings ADD COLUMN updated_at TEXT;");
+}
+
+// ===== PREFERÊNCIAS DE NOTIFICAÇÃO DO USUÁRIO =====
+db.exec(`
+CREATE TABLE IF NOT EXISTS user_notification_preferences (
+  user_id INTEGER PRIMARY KEY,
+  friendship_activity INTEGER NOT NULL DEFAULT 1,
+  shared_debt_new INTEGER NOT NULL DEFAULT 1,
+  shared_debt_updates INTEGER NOT NULL DEFAULT 1,
+  shared_debt_payments INTEGER NOT NULL DEFAULT 1,
+  monthly_pix_updates INTEGER NOT NULL DEFAULT 1,
+  card_due_today INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+`);
+
+if (!columnExists("user_notification_preferences", "friendship_activity")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN friendship_activity INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("user_notification_preferences", "shared_debt_new")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_new INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("user_notification_preferences", "shared_debt_updates")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_updates INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("user_notification_preferences", "shared_debt_payments")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_payments INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("user_notification_preferences", "monthly_pix_updates")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN monthly_pix_updates INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("user_notification_preferences", "card_due_today")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN card_due_today INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("user_notification_preferences", "updated_at")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN updated_at TEXT;");
+}
+
+// ===== PASSKEYS / DESBLOQUEIO PELO APARELHO =====
+db.exec(`
+CREATE TABLE IF NOT EXISTS user_passkeys (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  label TEXT,
+  public_key TEXT NOT NULL,
+  counter INTEGER NOT NULL DEFAULT 0,
+  device_type TEXT,
+  backed_up INTEGER NOT NULL DEFAULT 0,
+  transports TEXT,
+  aaguid TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  last_used_at TEXT,
+  last_used_origin TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+`);
+
+if (!columnExists("user_passkeys", "label")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN label TEXT;");
+}
+
+if (!columnExists("user_passkeys", "public_key")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN public_key TEXT NOT NULL DEFAULT '';");
+}
+
+if (!columnExists("user_passkeys", "counter")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN counter INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("user_passkeys", "device_type")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN device_type TEXT;");
+}
+
+if (!columnExists("user_passkeys", "backed_up")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN backed_up INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("user_passkeys", "transports")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN transports TEXT;");
+}
+
+if (!columnExists("user_passkeys", "aaguid")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN aaguid TEXT;");
+}
+
+if (!columnExists("user_passkeys", "created_at")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN created_at TEXT NOT NULL DEFAULT '';");
+}
+
+if (!columnExists("user_passkeys", "updated_at")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN updated_at TEXT NOT NULL DEFAULT '';");
+}
+
+if (!columnExists("user_passkeys", "last_used_at")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN last_used_at TEXT;");
+}
+
+if (!columnExists("user_passkeys", "last_used_origin")) {
+  db.exec("ALTER TABLE user_passkeys ADD COLUMN last_used_origin TEXT;");
 }
 
 // ===== TABELAS EXISTENTES COM user_id =====
@@ -203,6 +370,7 @@ CREATE TABLE IF NOT EXISTS monthly_finances (
   formula TEXT,
   amount_cents INTEGER DEFAULT 0,
   amount_mode TEXT NOT NULL DEFAULT 'fixed',
+  carry_key TEXT,
   created_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (category_id) REFERENCES finance_categories(id)
@@ -223,6 +391,19 @@ CREATE TABLE IF NOT EXISTS monthly_finance_items (
 
 CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_finance_user ON monthly_finance_items(finance_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_user_date ON monthly_finance_items(user_id, item_date);
+
+CREATE TABLE IF NOT EXISTS monthly_finance_carry_exceptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  carry_key TEXT NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, carry_key, month, year),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_monthly_finance_carry_exceptions_user_period ON monthly_finance_carry_exceptions(user_id, year, month);
 
 CREATE TABLE IF NOT EXISTS scratchpad (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -295,6 +476,7 @@ CREATE TABLE IF NOT EXISTS shared_debt_requests (
   receiver_email_snapshot TEXT,
   receiver_name_snapshot TEXT,
   request_note TEXT,
+  promised_payment_date TEXT,
   response_note TEXT,
   payment_marked_at TEXT,
   payment_note TEXT,
@@ -357,6 +539,44 @@ CREATE TABLE IF NOT EXISTS shared_debt_events (
   created_at TEXT NOT NULL,
   FOREIGN KEY (request_id) REFERENCES shared_debt_requests(id),
   FOREIGN KEY (actor_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS private_debt_reminders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_user_id INTEGER NOT NULL,
+  person_id INTEGER,
+  linked_user_id_snapshot INTEGER,
+  person_name_snapshot TEXT NOT NULL,
+  person_email_snapshot TEXT,
+  person_phone_snapshot TEXT,
+  description_snapshot TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  request_note TEXT,
+  promised_payment_date TEXT,
+  settlement_note TEXT,
+  payment_date TEXT,
+  status TEXT NOT NULL DEFAULT 'open',
+  is_archived INTEGER NOT NULL DEFAULT 0,
+  archived_at TEXT,
+  restored_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  settled_at TEXT,
+  cancelled_at TEXT,
+  FOREIGN KEY (owner_user_id) REFERENCES users(id),
+  FOREIGN KEY (person_id) REFERENCES people(id),
+  FOREIGN KEY (linked_user_id_snapshot) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS manual_debt_due_alert_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  scope TEXT NOT NULL,
+  date_key TEXT NOT NULL,
+  payload_json TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, scope, date_key),
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS shared_debt_monthly_settlements (
@@ -516,6 +736,25 @@ CREATE TABLE IF NOT EXISTS scheduled_push_logs (
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS email_delivery_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,
+  target_user_id INTEGER,
+  recipient_email TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  provider_message_id TEXT,
+  error_message TEXT,
+  attempt_no INTEGER NOT NULL DEFAULT 1,
+  payload_json TEXT,
+  created_by_user_id INTEGER,
+  created_at TEXT NOT NULL,
+  sent_at TEXT,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (target_user_id) REFERENCES users(id),
+  FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS friend_requests (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   requester_user_id INTEGER NOT NULL,
@@ -579,6 +818,8 @@ CREATE TABLE IF NOT EXISTS app_settings (
 
 db.exec(`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id);`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_scheduled_push_logs_event_date ON scheduled_push_logs(event_type, date_key, user_id, sequence_no);`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_email_delivery_events_target_kind ON email_delivery_events(target_user_id, kind, created_at DESC);`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_email_delivery_events_status_created ON email_delivery_events(status, created_at DESC);`);
 
 db.exec("UPDATE users SET status = CASE WHEN trim(COALESCE(status, '')) = '' THEN 'active' ELSE lower(trim(status)) END;");
 db.exec("UPDATE people SET status = CASE WHEN trim(COALESCE(status, '')) = '' THEN CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END ELSE lower(trim(status)) END;");
@@ -669,6 +910,10 @@ if (!columnExists("shared_debt_requests", "payment_marked_at")) {
   db.exec("ALTER TABLE shared_debt_requests ADD COLUMN payment_marked_at TEXT;");
 }
 
+if (!columnExists("shared_debt_requests", "promised_payment_date")) {
+  db.exec("ALTER TABLE shared_debt_requests ADD COLUMN promised_payment_date TEXT;");
+}
+
 if (!columnExists("shared_debt_requests", "payment_note")) {
   db.exec("ALTER TABLE shared_debt_requests ADD COLUMN payment_note TEXT;");
 }
@@ -707,6 +952,25 @@ if (!columnExists("shared_debt_requests", "last_pix_amount_cents")) {
 
 if (!columnExists("shared_debt_requests", "pix_version")) {
   db.exec("ALTER TABLE shared_debt_requests ADD COLUMN pix_version INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("private_debt_reminders", "promised_payment_date")) {
+  db.exec("ALTER TABLE private_debt_reminders ADD COLUMN promised_payment_date TEXT;");
+}
+
+if (!tableExists("manual_debt_due_alert_logs")) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_debt_due_alert_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      scope TEXT NOT NULL,
+      date_key TEXT NOT NULL,
+      payload_json TEXT,
+      created_at TEXT NOT NULL,
+      UNIQUE(user_id, scope, date_key),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+  `);
 }
 
 if (!columnExists("shared_debt_payment_intents", "creditor_note")) {
@@ -892,11 +1156,18 @@ CREATE INDEX IF NOT EXISTS idx_shared_debts_requester_status ON shared_debt_requ
 CREATE INDEX IF NOT EXISTS idx_shared_debts_batch_id ON shared_debt_requests(batch_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debts_source_allocation ON shared_debt_requests(source_allocation_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debts_source_person ON shared_debt_requests(requester_user_id, source_transaction_id, source_person_id);
+CREATE INDEX IF NOT EXISTS idx_shared_debts_receiver_promised ON shared_debt_requests(receiver_user_id, promised_payment_date, status, request_kind);
+CREATE INDEX IF NOT EXISTS idx_shared_debts_requester_promised ON shared_debt_requests(requester_user_id, promised_payment_date, status, request_kind);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_receiver ON shared_debt_batches(receiver_user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batches(requester_user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_user_archived ON shared_debt_archives(user_id, is_archived, updated_at);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_request_user ON shared_debt_archives(request_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_events_request ON shared_debt_events(request_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_status ON private_debt_reminders(owner_user_id, status, is_archived, updated_at);
+CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_person ON private_debt_reminders(owner_user_id, person_id, status);
+CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_archived ON private_debt_reminders(owner_user_id, is_archived, updated_at);
+CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_promised ON private_debt_reminders(owner_user_id, promised_payment_date, status, is_archived);
+CREATE INDEX IF NOT EXISTS idx_manual_debt_due_alert_logs_date_scope ON manual_debt_due_alert_logs(date_key, scope, user_id);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_pair ON shared_debt_monthly_settlements(requester_user_id, receiver_user_id, year, month, request_kind);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_receiver ON shared_debt_monthly_settlements(receiver_user_id, year, month, request_kind);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_settlement_status ON shared_debt_payment_intents(settlement_id, status, created_at);
@@ -908,17 +1179,39 @@ CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_receiver_period ON shared
 CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_queue ON shared_debt_send_queue_items(queue_id, source_txn_date_snapshot, id);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_txn_person ON shared_debt_send_queue_items(requester_user_id, source_transaction_id, source_person_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at);
+CREATE INDEX IF NOT EXISTS idx_user_notification_preferences_updated ON user_notification_preferences(updated_at);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_status ON friend_requests(requester_user_id, status, created_at);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_target_status ON friend_requests(target_user_id, status, created_at);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_pair_status ON friend_requests(requester_user_id, target_user_id, status, created_at);
 CREATE INDEX IF NOT EXISTS idx_friendships_pair_status ON friendships(user_low_id, user_high_id, status);
 CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_person ON person_app_links(owner_user_id, person_id);
 CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_linked ON person_app_links(owner_user_id, linked_user_id);
+CREATE INDEX IF NOT EXISTS idx_user_passkeys_user_created ON user_passkeys(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_passkeys_user_last_used ON user_passkeys(user_id, last_used_at DESC);
 `);
 
 if (!columnExists("monthly_finances", "amount_mode")) {
   db.exec("ALTER TABLE monthly_finances ADD COLUMN amount_mode TEXT NOT NULL DEFAULT 'fixed';");
 }
+
+if (!columnExists("monthly_finances", "carry_key")) {
+  db.exec("ALTER TABLE monthly_finances ADD COLUMN carry_key TEXT;");
+}
+
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_monthly_finances_user_period_carry_key ON monthly_finances(user_id, month, year, carry_key) WHERE carry_key IS NOT NULL;");
+db.exec(`
+CREATE TABLE IF NOT EXISTS monthly_finance_carry_exceptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  carry_key TEXT NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, carry_key, month, year),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+`);
+db.exec("CREATE INDEX IF NOT EXISTS idx_monthly_finance_carry_exceptions_user_period ON monthly_finance_carry_exceptions(user_id, year, month);");
 
 const DEFAULT_PURCHASE_CATEGORIES = [
   'Mercado',

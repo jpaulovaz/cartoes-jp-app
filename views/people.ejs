@@ -31,6 +31,16 @@
   const selfPhoneDisplay = selfProfile?.phone_display || '';
   const selfPhoneStored = selfProfile?.phone_e164 || selfPhoneDisplay || '';
   const selfEmail = selfProfile?.email || '';
+  const appPinSecurityState = appPinSecurity || {};
+  const appPinEnabled = !!appPinSecurityState.enabled;
+  const appPinIdleLabel = appPinSecurityState.idleLabel || '1 minuto';
+  const appPinIdleOptions = Array.isArray(appPinSecurityState.idleOptions) ? appPinSecurityState.idleOptions : [];
+  const appPinMinLength = Number(appPinSecurityState.minLength || 4) || 4;
+  const appPinMaxLength = Number(appPinSecurityState.maxLength || 6) || 6;
+  const appPasskeyState = appPasskeys || {};
+  const appPasskeyItems = Array.isArray(appPasskeyState.items) ? appPasskeyState.items : [];
+  const appPasskeyCount = Number(appPasskeyState.count || 0) || 0;
+  const appPasskeyMaxCount = Number(appPasskeyState.maxCount || 0) || 0;
   const selfPixEnabled = !!selfProfile?.pix_enabled;
   const selfPixKeyType = selfProfile?.pix_key_type || '';
   const selfPixKeyValueInput = selfProfile?.pix_key_value_input || selfProfile?.pix_key_value || '';
@@ -38,6 +48,36 @@
   const selfPixCity = selfProfile?.pix_city || pixCityDefault;
   const selfPixLabel = selfProfile?.pix_label || '';
   const signatureMaxLength = Number(profileSignatureMaxLength || 60) || 60;
+  const notificationPreferenceState = notificationPreferences || {};
+  const notificationPreferenceGroups = Array.isArray(notificationPreferenceState.groups) ? notificationPreferenceState.groups : [];
+  const notificationPreferenceEnabledCount = Number(notificationPreferenceState.enabledCount || 0) || 0;
+  const notificationPreferenceTotalCount = Number(notificationPreferenceState.totalCount || 0) || notificationPreferenceGroups.length;
+  const notificationPreferenceCopy = {
+    friendship_activity: {
+      title: 'Amizades',
+      description: 'Pedidos, aceites e mudanças por aqui.'
+    },
+    shared_debt_new: {
+      title: 'Novas cobranças',
+      description: 'Quando chega cobrança, envio ou lembrete novo.'
+    },
+    shared_debt_updates: {
+      title: 'Respostas de cobranças',
+      description: 'Atualizações, aceites, recusas e revisões.'
+    },
+    shared_debt_payments: {
+      title: 'Pagamentos',
+      description: 'Quando alguém marca ou confirma pagamento.'
+    },
+    monthly_pix_updates: {
+      title: 'Pix do mês',
+      description: 'Pix informado, confirmado ou revisado.'
+    },
+    card_due_today: {
+      title: 'Fatura vencendo',
+      description: 'Lembrete no dia do vencimento do cartão.'
+    }
+  };
   const signatureVibeOptions = Array.isArray(profileSignatureVibeOptions) ? profileSignatureVibeOptions : [];
   const signatureVibeMap = new Map(signatureVibeOptions.map((option) => [String(option?.code || '').trim(), option]));
   const getSignatureVibeMeta = (value) => signatureVibeMap.get(String(value || '').trim()) || null;
@@ -53,22 +93,22 @@
   const renderPersonStatusChips = (person) => {
     const chips = [];
     const addChip = (classes, label) => {
-      chips.push(`<span class="inline-flex items-center whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-bold ${classes}">${label}</span>`);
+      chips.push(`<span class="inline-flex w-fit shrink-0 items-center whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-bold leading-4 ${classes}">${label}</span>`);
     };
 
     if (person.is_self) {
-      addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Seu perfil');
+      addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Você');
     }
 
     if (person.active) {
       addChip('border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200', 'Ativo');
     } else {
-      addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Inativo');
+      addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Pausado');
     }
 
     if (!person.is_self && person.has_app_user) {
-      addChip('border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200', 'Também usa o app');
-      addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix fica com a pessoa');
+      addChip('border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200', 'No app');
+      addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix no perfil');
     }
 
     if (!person.email) {
@@ -77,30 +117,30 @@
 
     if (person.is_self) {
       if (person.pix_enabled && person.pix_valid) {
-        addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix pronto');
+        addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix ok');
       } else if (person.pix_enabled && !person.pix_valid) {
-        addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pix pedindo ajuste');
+        addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pix pendente');
       }
     }
 
     if (!person.is_self && person.friendship_active) {
-      addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Amizade ativa');
+      addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Amigos');
       if (person.can_share_charge) {
-        addChip('border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200', 'Cobrança liberada');
+        addChip('border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200', 'Pode cobrar');
       } else if (!person.active) {
         addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Cobrança pausada');
       }
       if (person.linked_user_pix_ready) {
-        addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix pronto');
+        addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix ok');
       } else if (person.linked_user_pix_enabled) {
-        addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pix pedindo ajuste');
+        addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pix pendente');
       } else if (person.has_app_user) {
-        addChip('border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300', 'Pix ainda não pronto');
+        addChip('border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300', 'Pix pendente');
       }
     } else if (!person.is_self && person.friendship_state === 'pending_sent') {
       addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pedido enviado');
     } else if (!person.is_self && person.friendship_state === 'pending_received') {
-      addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Pedido recebido');
+      addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Te chamou');
     }
 
     return chips.join('');
@@ -110,8 +150,8 @@
     if (person && person.friendship_state === 'active') {
       return {
         key: 'friend',
-        label: 'Amizade ativa',
-        summary: 'Vocês já podem dividir e cobrar por aqui.',
+        label: 'Amigos',
+        summary: 'Já podem dividir e cobrar.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
         barClasses: 'from-emerald-400 via-cyan-400 to-sky-500'
       };
@@ -120,8 +160,8 @@
     if (person && person.friendship_state === 'pending_received') {
       return {
         key: 'pending',
-        label: 'Te chamou no app',
-        summary: 'Só falta você aceitar.',
+        label: 'Te chamou',
+        summary: 'Falta você aceitar.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
         barClasses: 'from-emerald-400 via-amber-300 to-orange-400'
       };
@@ -131,7 +171,7 @@
       return {
         key: 'pending',
         label: 'Convite enviado',
-        summary: 'O convite já foi. Agora é esperar a resposta.',
+        summary: 'Agora é esperar a resposta.',
         badgeClasses: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200',
         barClasses: 'from-amber-300 via-orange-400 to-rose-400'
       };
@@ -140,8 +180,8 @@
     if (person && person.friendship_state === 'discoverable') {
       return {
         key: 'discover',
-        label: 'Já está no app',
-        summary: 'Dá para mandar convite e virar amizade por aqui.',
+        label: 'No app',
+        summary: 'Dá para mandar convite.',
         badgeClasses: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200',
         barClasses: 'from-sky-400 via-cyan-400 to-violet-400'
       };
@@ -149,8 +189,8 @@
 
     return {
       key: 'local',
-      label: 'Só na sua lista',
-      summary: 'Por enquanto essa pessoa aparece só na sua lista.',
+      label: 'Na sua lista',
+      summary: 'Só aparece na sua lista.',
       badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300',
       barClasses: 'from-slate-300 via-slate-200 to-slate-400 dark:from-slate-600 dark:via-slate-500 dark:to-slate-700'
     };
@@ -159,24 +199,24 @@
   const getPixStateMeta = (person) => {
     if (person && person.friendship_active && person.linked_user_pix_ready) {
       return {
-        label: 'Pix pronto',
-        summary: 'Quando rolar pagamento, o app usa o Pix que essa pessoa deixou no perfil.',
+        label: 'Pix ok',
+        summary: 'Quando rolar pagamento, vai no Pix do perfil.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200'
       };
     }
 
     if (person && person.friendship_active && person.linked_user_pix_enabled) {
       return {
-        label: 'Falta ajuste',
-        summary: 'Essa pessoa já ligou o Pix, mas ainda falta terminar.',
+        label: 'Pix pendente',
+        summary: 'O Pix foi ligado, mas ainda não ficou pronto.',
         badgeClasses: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
       };
     }
 
     if (person && person.friendship_active && person.has_app_user) {
       return {
-        label: 'Ainda não deixou pronto',
-        summary: 'A amizade já está valendo, só falta a pessoa deixar o Pix pronto.',
+        label: 'Pix pendente',
+        summary: 'A amizade vale; o Pix ainda falta.',
         badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300'
       };
     }
@@ -184,14 +224,14 @@
     if (person && person.has_app_user) {
       return {
         label: 'Depois da amizade',
-        summary: 'Depois que a amizade for aceita, o Pix vem do perfil da pessoa.',
+        summary: 'Depois da amizade, o Pix vem do perfil.',
         badgeClasses: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200'
       };
     }
 
     return {
-      label: 'Só na sua lista',
-      summary: 'Sem Pix por aqui. Se a pessoa entrar no app, ela mesma cadastra do lado de lá.',
+      label: 'Sem Pix por aqui',
+      summary: 'Se ela entrar no app, cadastra o Pix do lado de lá.',
       badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300'
     };
   };
@@ -236,78 +276,72 @@
             <div class="absolute -left-10 top-0 h-28 w-28 rounded-full bg-amber-200/60 blur-3xl dark:bg-amber-500/20"></div>
             <div class="absolute right-0 top-6 h-24 w-24 rounded-full bg-sky-200/60 blur-3xl dark:bg-sky-500/20"></div>
           </div>
-          <div class="relative flex flex-col gap-5">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div class="flex min-w-0 flex-1 gap-4">
-                <div class="relative h-20 w-20 shrink-0">
-                  <% if (getAvatarUrl(selfProfile)) { %>
-                    <img src="<%= getAvatarUrl(selfProfile) %>" alt="<%= selfProfile.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-20 w-20 rounded-full object-cover ring-4 ring-white shadow-xl shadow-amber-500/10 dark:ring-slate-800">
-                  <% } else { %>
-                    <div class="flex h-20 w-20 items-center justify-center rounded-full bg-white text-2xl font-black text-amber-700 shadow-xl shadow-amber-500/10 dark:bg-slate-900 dark:text-amber-200"><%= getAvatarInitials(selfProfile) %></div>
-                  <% } %>
-                  <span class="absolute -bottom-1 -right-1 inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200 bg-white text-lg shadow-sm dark:border-amber-900 dark:bg-slate-900" title="Seu perfil">👑</span>
-                </div>
-
-                <div class="min-w-0 flex-1">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Seu perfil oficial</div>
-                  <h2 class="mt-2 truncate text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= selfProfile.name %></h2>
-                  <div class="mt-3 space-y-2 text-sm font-medium text-slate-600 dark:text-slate-300">
-                    <div class="flex items-start gap-2.5">
-                      <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white/90 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a2 2 0 011.897 1.368l1.516 4.547a2 2 0 01-.45 2.11l-2.07 2.07a16 16 0 006.364 6.364l2.07-2.07a2 2 0 012.11-.45l4.547 1.516A2 2 0 0121 15.72V19a2 2 0 01-2 2h-1C9.163 21 3 14.837 3 7V5z"></path></svg>
-                      </span>
-                      <span class="min-w-0 flex-1 leading-6"><%= selfPhoneDisplay ? selfPhoneDisplay : 'Telefone não informado por aqui ainda.' %></span>
-                    </div>
-                    <div class="flex items-start gap-2.5">
-                      <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white/90 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-16 8h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
-                      </span>
-                      <span class="min-w-0 flex-1 break-all leading-6"><%= selfEmail ? selfEmail : 'E-mail não informado por aqui ainda.' %></span>
-                    </div>
-                  </div>
-                  <div class="mt-4 flex flex-wrap gap-2">
-                    <%- renderPersonStatusChips(selfProfile) %>
-                  </div>
-                  <p class="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Esse é o seu espaço dentro do AcerttaPay. É daqui que saem suas informações quando você participa de cobranças e divisões.</p>
-                </div>
+          <div class="relative flex flex-col gap-4">
+            <div class="flex min-w-0 gap-4">
+              <div class="relative h-20 w-20 shrink-0">
+                <% if (getAvatarUrl(selfProfile)) { %>
+                  <img src="<%= getAvatarUrl(selfProfile) %>" alt="<%= selfProfile.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-20 w-20 rounded-full object-cover ring-4 ring-white shadow-xl shadow-amber-500/10 dark:ring-slate-800">
+                <% } else { %>
+                  <div class="flex h-20 w-20 items-center justify-center rounded-full bg-white text-2xl font-black text-amber-700 shadow-xl shadow-amber-500/10 dark:bg-slate-900 dark:text-amber-200"><%= getAvatarInitials(selfProfile) %></div>
+                <% } %>
+                <span class="absolute -bottom-1 -right-1 inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200 bg-white text-lg shadow-sm dark:border-amber-900 dark:bg-slate-900" title="Seu perfil">👑</span>
               </div>
 
-              <div class="grid grid-cols-2 gap-3 sm:w-[17rem] lg:shrink-0">
-                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Amizades</div>
-                  <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= activeFriendCount %></div>
+              <div class="min-w-0 flex-1">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Seu perfil oficial</div>
+                <h2 class="mt-2 truncate text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= selfProfile.name %></h2>
+                <div class="mt-3 space-y-2 text-[13px] font-medium text-slate-600 dark:text-slate-300">
+                  <div class="inline-flex w-fit max-w-full items-center gap-2 rounded-2xl border border-white/70 bg-white/75 px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
+                    <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white/90 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a2 2 0 011.897 1.368l1.516 4.547a2 2 0 01-.45 2.11l-2.07 2.07a16 16 0 006.364 6.364l2.07-2.07a2 2 0 012.11-.45l4.547 1.516A2 2 0 0121 15.72V19a2 2 0 01-2 2h-1C9.163 21 3 14.837 3 7V5z"></path></svg>
+                    </span>
+                    <span class="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap leading-5" title="<%= selfPhoneDisplay ? selfPhoneDisplay : 'Telefone não informado por aqui ainda.' %>"><%= selfPhoneDisplay ? selfPhoneDisplay : 'Telefone não informado por aqui ainda.' %></span>
+                  </div>
+                  <div class="inline-flex w-fit max-w-full items-center gap-2 rounded-2xl border border-white/80 bg-white/80 px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
+                    <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white/90 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-16 8h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+                    </span>
+                    <span class="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap leading-5" title="<%= selfEmail ? selfEmail : 'E-mail não informado por aqui ainda.' %>"><%= selfEmail ? selfEmail : 'E-mail não informado por aqui ainda.' %></span>
+                  </div>
                 </div>
-                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Contatos</div>
-                  <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= contactList.length %></div>
+                <div class="mt-4 flex flex-wrap gap-2">
+                  <%- renderPersonStatusChips(selfProfile) %>
                 </div>
-                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Convites</div>
-                  <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= pendingContactCount %></div>
+                <div class="mt-3 inline-flex max-w-full items-center gap-2 overflow-hidden rounded-full border border-white/80 bg-white/80 px-3 py-2 text-[13px] font-semibold leading-5 text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300 whitespace-nowrap">
+                  <span aria-hidden="true">✨</span>
+                  <span class="block min-w-0 max-w-full overflow-hidden text-ellipsis">Esse perfil aparece nas suas cobranças e divisões.</span>
                 </div>
-                <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Pix pronto</div>
-                  <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= selfProfile.pix_enabled && selfProfile.pix_valid ? 'Sim' : 'Não' %></div>
-                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Amizades</div>
+                <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= activeFriendCount %></div>
+              </div>
+              <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Contatos</div>
+                <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= contactList.length %></div>
+              </div>
+              <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Convites</div>
+                <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= pendingContactCount %></div>
+              </div>
+              <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-2.5 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Pix pronto</div>
+                <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= selfProfile.pix_enabled && selfProfile.pix_valid ? 'Sim' : 'Não' %></div>
               </div>
             </div>
           </div>
         </div>
 
         <div id="selfIdentityShell" class="border-t border-amber-100 p-5 dark:border-amber-900/40 sm:p-6">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Como você aparece</div>
-              <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seus dados por aqui</h3>
-              <p class="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Telefone e e-mail já ficam logo abaixo do seu nome. Quando quiser mexer, é só tocar em editar.</p>
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <span id="selfIdentityEditingBadge" class="hidden inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Modo edição</span>
-              <button type="button" id="selfIdentityEditButton" onclick="toggleSelfIdentityEdit()" class="inline-flex w-full items-center justify-center rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-black text-amber-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-amber-50 dark:border-amber-900 dark:bg-slate-900 dark:text-amber-200 dark:hover:bg-amber-900/20 sm:w-auto" aria-expanded="false" aria-controls="selfIdentityForm">
-                <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                Editar
-              </button>
-            </div>
+          <div class="flex flex-wrap items-center justify-end gap-2">
+            <span id="selfIdentityEditingBadge" class="hidden inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Modo edição</span>
+            <button type="button" id="selfIdentityEditButton" onclick="toggleSelfIdentityEdit()" class="inline-flex w-full items-center justify-center rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-black text-amber-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-amber-50 dark:border-amber-900 dark:bg-slate-900 dark:text-amber-200 dark:hover:bg-amber-900/20 sm:w-auto" aria-expanded="false" aria-controls="selfIdentityForm">
+              <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+              Editar
+            </button>
           </div>
 
           <form method="post" action="/people" id="selfIdentityForm" class="mt-5 hidden space-y-4" autocomplete="on">
@@ -372,6 +406,52 @@
               <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400 sm:w-auto">Salvar alterações</button>
             </div>
           </form>
+
+          <div id="selfNotificationPreferencesPanel" class="mt-4 space-y-4">
+            <div class="rounded-[26px] border border-sky-100 bg-sky-50/80 p-4 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="inline-flex items-center rounded-full border border-sky-200 bg-white/90 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-sky-700 shadow-sm dark:border-sky-800 dark:bg-slate-900/80 dark:text-sky-200">Seus alertas</span>
+                    <span class="inline-flex items-center rounded-full border border-white/80 bg-white/80 px-3 py-1 text-[11px] font-bold text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300"><%= notificationPreferenceEnabledCount %>/<%= notificationPreferenceTotalCount %> grupos ligados</span>
+                  </div>
+                </div>
+                <button type="button" data-push-toggle data-push-public-key="<%= pushPublicKey %>" data-push-status-target="#selfNotificationPushStatus" class="op-btn op-btn-warning-soft op-btn--compact ml-auto shrink-0 whitespace-nowrap px-4">Ativar alertas</button>
+              </div>
+              <h3 class="mt-3 text-lg font-black text-slate-900 dark:text-white">Escolha seus alertas</h3>
+              <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Os checks valem na sua conta. O botão ao lado liga só este aparelho.</p>
+              <p id="selfNotificationPushStatus" class="mt-2 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400">Ligue este aparelho para receber novidades.</p>
+            </div>
+
+            <form method="post" action="/people/notification-preferences" class="space-y-4">
+              <div class="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <% notificationPreferenceGroups.forEach((group, index) => { 
+                     const groupCopy = notificationPreferenceCopy[group.key] || {};
+                     const groupTitle = groupCopy.title || group.title;
+                     const groupDescription = groupCopy.description || group.description;
+                %>
+                  <label class="group flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-sky-50/60 dark:hover:bg-sky-950/20">
+                    <div class="min-w-0 flex-1">
+                      <div class="text-[13px] font-black text-slate-900 dark:text-white"><%= groupTitle %></div>
+                      <p class="mt-0.5 text-[11px] font-medium leading-4.5 text-slate-500 dark:text-slate-400"><%= groupDescription %></p>
+                    </div>
+                    <div class="flex shrink-0 items-center gap-3 pl-2">
+                      <span class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400"><%= group.enabled ? 'Ligado' : 'Pausado' %></span>
+                      <input type="checkbox" name="pref_<%= group.key %>" value="1" <%= group.enabled ? 'checked' : '' %> class="h-5 w-5 shrink-0 rounded-md border-slate-300 text-sky-600 focus:ring-sky-500 dark:border-slate-600 dark:bg-slate-950">
+                    </div>
+                  </label>
+                  <% if (index < notificationPreferenceGroups.length - 1) { %>
+                    <div class="mx-4 border-t border-slate-200/80 dark:border-slate-700/80"></div>
+                  <% } %>
+                <% }) %>
+              </div>
+
+              <div class="flex flex-col gap-3 rounded-[24px] border border-dashed border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/60 sm:flex-row sm:items-center sm:justify-between">
+                <p class="text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Os grupos ficam salvos na sua conta. O sininho do topo continua abrindo a central completa.</p>
+                <button type="submit" class="inline-flex w-full shrink-0 items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400 sm:w-auto whitespace-nowrap">Salvar alertas</button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
 
@@ -598,23 +678,225 @@
                 </label>
               </div>
 
-              <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+              <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                 <label class="block" data-self-pix-field>
                   <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nome que aparece no Pix</span>
                   <input name="pix_label" id="selfPixLabel" value="<%- selfPixLabel %>" class="w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" placeholder="Ex.: João - AcerttaPay">
                 </label>
 
-                <div class="grid gap-3 lg:justify-items-end">
+                <div class="flex flex-col gap-3 lg:items-end lg:self-end">
                   <div id="selfPixDormantHint" class="rounded-[24px] border border-dashed border-violet-200 bg-violet-50/70 px-4 py-4 text-sm font-medium leading-6 text-slate-600 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-slate-300 lg:max-w-[24rem] <%= selfPixEnabled ? 'hidden' : '' %>">
                     <div class="font-black text-slate-900 dark:text-white">Pode deixar desligado sem problema.</div>
                     <p class="mt-2">Quando quiser, é só ligar, preencher e salvar.</p>
                   </div>
-                  <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 sm:w-auto">Salvar meu Pix</button>
+                  <button type="submit" class="inline-flex w-full items-center justify-center self-start rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 sm:w-auto lg:self-end">Salvar meu Pix</button>
                 </div>
               </div>
             </div>
           </div>
         </form>
+
+        <section id="app-security" class="xl:col-span-2 rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Segurança do app</div>
+              <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">PIN e bloqueio por inatividade</h3>
+              <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Aqui você decide se o app pede um PIN numérico para abrir e depois de quanto tempo ele volta a travar sozinho.</p>
+            </div>
+            <% if (appPinEnabled) { %>
+              <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">PIN ligado</span>
+            <% } else { %>
+              <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">PIN desligado</span>
+            <% } %>
+          </div>
+
+          <div class="mt-5 grid gap-4">
+            <div class="grid gap-4 xl:grid-cols-2 xl:items-stretch">
+              <div class="h-full rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+                <div class="flex items-start gap-3">
+                  <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700" aria-hidden="true">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0-.967.784-1.75 1.75-1.75S15.5 10.033 15.5 11c0 .645-.35 1.208-.87 1.51-.358.208-.63.57-.63.98V15m-4-4V8a4 4 0 118 0v3m-10 0h12a1 1 0 011 1v7a1 1 0 01-1 1H7a1 1 0 01-1-1v-7a1 1 0 011-1z"></path></svg>
+                  </span>
+                  <div class="min-w-0 flex-1">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Resumo atual</div>
+                    <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
+                      <% if (appPinEnabled) { %>
+                        O app já pede PIN para destravar e hoje está configurado para bloquear <strong class="font-semibold text-slate-700 dark:text-slate-100"><%= appPinIdleLabel %></strong>.
+                      <% } else { %>
+                        Hoje ele abre direto, sem pedir PIN. Se quiser, você pode ligar essa proteção e deixar a tela financeira mais resguardada.
+                      <% } %>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex h-full flex-col rounded-[26px] border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+                <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                  <% if (!appPinEnabled) { %>
+                    <button type="button" data-app-pin-open="create" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400">Ativar PIN</button>
+                  <% } else { %>
+                    <button type="button" data-app-pin-open="change" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400">Trocar PIN</button>
+                    <form method="post" action="/lock/engage" class="contents sm:contents">
+                      <input type="hidden" name="reason" value="manual">
+                      <input type="hidden" name="return_to" value="/people#app-security">
+                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Bloquear agora</button>
+                    </form>
+                    <button type="button" data-app-pin-open="disable" class="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-white px-5 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Desligar PIN</button>
+                  <% } %>
+                </div>
+                <p class="mt-3 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Seu PIN pode ter de <%= appPinMinLength %> a <%= appPinMaxLength %> dígitos. A recomendação amiga é usar <strong class="font-semibold text-slate-700 dark:text-slate-100">6 números</strong> e fugir de combinações óbvias, tipo 1234, 0000 ou repeteco.</p>
+              </div>
+            </div>
+
+            <div class="grid gap-4 xl:grid-cols-2 xl:items-stretch">
+              <div class="h-full rounded-[26px] border border-sky-200/70 bg-sky-50/80 px-4 py-4 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20 sm:px-5">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Como isso se comporta</div>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Depois de ligado, o app trava sozinho ao abrir de novo ou quando passa do tempo que você escolher. Se esquecer o PIN, na tela de bloqueio dá para confirmar sua conta Google e redefinir por lá.</p>
+              </div>
+
+              <div class="h-full rounded-[26px] border border-dashed border-slate-200 bg-slate-50/70 px-4 py-4 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 sm:px-5">
+                <div class="font-black text-slate-900 dark:text-white">Dica boa para não se enrolar</div>
+                <p class="mt-2">Se em algum momento esse PIN sumir da cabeça, tenta destravar normalmente. Se não rolar, a tela de bloqueio oferece a saída com Google para você redefinir sem ficar preso.</p>
+              </div>
+            </div>
+
+            <div class="rounded-[26px] border border-violet-200/70 bg-violet-50/80 px-4 py-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20 sm:px-5">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Desbloqueio pelo aparelho</div>
+                    <span class="inline-flex items-center rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-black text-violet-700 dark:border-violet-800 dark:bg-slate-900/70 dark:text-violet-200"><%= appPasskeyCount %>/<%= appPasskeyMaxCount || 6 %> aparelhos</span>
+                  </div>
+                  <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Se o aparelho topar, dá para usar digital, rosto ou a proteção dele para abrir o app. O PIN continua ali como plano B.</p>
+                </div>
+                <% if (appPasskeyState.canRegister) { %>
+                  <button type="button" id="appPasskeyRegisterButton" class="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 sm:w-auto sm:shrink-0">Adicionar neste aparelho</button>
+                <% } else if (appPasskeyState.limitReached) { %>
+                  <div class="inline-flex items-center rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-bold text-amber-700 dark:border-amber-800 dark:bg-slate-900/70 dark:text-amber-200 sm:shrink-0">Você já chegou no limite de aparelhos por aqui.</div>
+                <% } %>
+              </div>
+
+              <p id="appPasskeyFeedback" class="mt-3 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= appPasskeyState.helpText || 'Quando quiser, dá para preparar este aparelho para destravar o app com um toque mais esperto.' %></p>
+
+              <% if (appPasskeyItems.length) { %>
+                <div class="mt-4 grid gap-3 lg:grid-cols-2">
+                  <% appPasskeyItems.forEach((item) => { %>
+                    <div class="h-full rounded-[22px] border border-white/80 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+                      <div class="flex h-full flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div class="min-w-0 flex-1">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <div class="truncate text-sm font-black text-slate-900 dark:text-white"><%= item.label %></div>
+                            <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= item.badgeTone === 'emerald' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200' : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300' %>"><%= item.badgeLabel %></span>
+                          </div>
+                          <div class="mt-2 grid gap-1 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400 sm:grid-cols-2">
+                            <p>Preparado em <strong class="font-semibold text-slate-700 dark:text-slate-200"><%= item.createdAtLabel || 'agora há pouco' %></strong></p>
+                            <p><%= item.hasBeenUsed ? 'Último uso em' : 'Ainda não foi usado para destravar' %> <strong class="font-semibold text-slate-700 dark:text-slate-200"><%= item.hasBeenUsed ? item.lastUsedAtLabel : '—' %></strong></p>
+                          </div>
+                        </div>
+                        <form method="post" action="/people/security/passkeys/<%= item.id %>/delete" data-confirm-prompt="Remover <%= item.label %> da lista de desbloqueio? O PIN continua funcionando normalmente." class="sm:shrink-0">
+                          <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20 sm:w-auto">Remover</button>
+                        </form>
+                      </div>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } %>
+            </div>
+          </div>
+        </section>
+
+        <div id="appPinManageModal" class="fixed inset-0 z-[130] hidden items-center justify-center overflow-y-auto p-4 sm:p-6" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="appPinManageTitle" aria-describedby="appPinManageHint appPinRulesHint">
+          <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" data-app-pin-close></div>
+          <div class="relative my-auto w-full max-w-lg rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Segurança do app</div>
+                <h4 id="appPinManageTitle" class="mt-2 text-lg font-black text-slate-900 dark:text-white">Criar PIN</h4>
+                <p id="appPinManageHint" class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Escolha um PIN numérico para proteger a abertura do app.</p>
+              </div>
+              <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800" data-app-pin-close aria-label="Fechar">✕</button>
+            </div>
+
+            <p id="appPinRulesHint" class="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs font-semibold leading-5 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-200">Para manter a proteção mais esperta, combinações muito óbvias como 1234, 0000 ou sequências repetidas não passam.</p>
+
+            <form method="post" action="/people/security/pin/setup" class="mt-5 grid gap-4" id="appPinManageForm" autocomplete="off">
+              <input type="hidden" name="mode" id="appPinManageMode" value="create">
+
+              <div id="appPinCurrentGroup" class="hidden">
+                <label class="block">
+                  <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">PIN atual</span>
+                  <div class="relative">
+                    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="current_pin" id="appPinCurrentInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-14 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••">
+                    <button type="button" data-app-pin-visibility-toggle data-target="appPinCurrentInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
+                  </div>
+                  <div class="mt-3" data-pin-slots data-input-id="appPinCurrentInput" data-max-length="<%= appPinMaxLength %>"></div>
+                </label>
+              </div>
+
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Novo PIN</span>
+                <div class="relative">
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="pin" id="appPinNewInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-14 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <button type="button" data-app-pin-visibility-toggle data-target="appPinNewInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
+                </div>
+                <div class="mt-3" data-pin-slots data-input-id="appPinNewInput" data-max-length="<%= appPinMaxLength %>"></div>
+              </label>
+
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Confirmar PIN</span>
+                <div class="relative">
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="pin_confirm" id="appPinConfirmInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-14 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <button type="button" data-app-pin-visibility-toggle data-target="appPinConfirmInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
+                </div>
+                <div class="mt-3" data-pin-slots data-input-id="appPinConfirmInput" data-max-length="<%= appPinMaxLength %>"></div>
+              </label>
+
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Depois de quanto tempo travar de novo</span>
+                <select name="pin_idle_seconds" id="appPinIdleSelect" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-bold text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20">
+                  <% appPinIdleOptions.forEach((option) => { %>
+                    <option value="<%= option.value %>" <%= option.selected ? 'selected' : '' %>><%= option.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button type="button" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto" data-app-pin-close>Cancelar</button>
+                <button type="submit" id="appPinManageSubmit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400 sm:w-auto">Salvar PIN</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div id="appPinDisableModal" class="fixed inset-0 z-[130] hidden items-center justify-center overflow-y-auto p-4 sm:p-6" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="appPinDisableTitle" aria-describedby="appPinDisableHint">
+          <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" data-app-pin-disable-close></div>
+          <div class="relative my-auto w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-rose-600 dark:text-rose-300">Desligar PIN</div>
+                <h4 id="appPinDisableTitle" class="mt-2 text-lg font-black text-slate-900 dark:text-white">Tem certeza que quer tirar essa camada?</h4>
+                <p id="appPinDisableHint" class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Para confirmar, me conta o PIN atual. Aí eu desligo essa proteção extra sem mexer na sua conta Google.</p>
+              </div>
+              <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800" data-app-pin-disable-close aria-label="Fechar">✕</button>
+            </div>
+
+            <form method="post" action="/people/security/pin/disable" class="mt-5 grid gap-4" id="appPinDisableForm" autocomplete="off">
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">PIN atual</span>
+                <div class="relative">
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="current_pin" id="appPinDisableInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-14 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <button type="button" data-app-pin-visibility-toggle data-target="appPinDisableInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
+                </div>
+                <div class="mt-3" data-pin-slots data-input-id="appPinDisableInput" data-max-length="<%= appPinMaxLength %>"></div>
+              </label>
+
+              <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button type="button" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto" data-app-pin-disable-close>Cancelar</button>
+                <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 bg-rose-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-rose-500/20 transition-all hover:-translate-y-0.5 hover:bg-rose-700 sm:w-auto">Desligar PIN</button>
+              </div>
+            </form>
+          </div>
+        </div>
     </section>
   <% } %>
 
@@ -800,15 +1082,15 @@
           <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Três passos, sem enrolação</h3>
           <div class="mt-5 grid gap-3 lg:grid-cols-3">
             <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-              <div class="text-sm font-black text-slate-900 dark:text-white">1. Salve o contato</div>
+              <div class="text-[13px] font-black text-slate-900 dark:text-white">1. Salve o contato</div>
               <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Nome, telefone e e-mail já dão conta do recado para essa pessoa entrar na sua rede.</p>
             </div>
             <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-              <div class="text-sm font-black text-slate-900 dark:text-white">2. Virem amigos por aqui</div>
+              <div class="text-[13px] font-black text-slate-900 dark:text-white">2. Virem amigos por aqui</div>
               <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando os dois aceitam, vocês conseguem usar cobranças entre si.</p>
             </div>
             <div class="rounded-[24px] border border-white/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-              <div class="text-sm font-black text-slate-900 dark:text-white">3. Pix vem do perfil da pessoa</div>
+              <div class="text-[13px] font-black text-slate-900 dark:text-white">3. Pix vem do perfil da pessoa</div>
               <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Você não precisa guardar a chave dos outros. Quando chegar a hora, o app usa o Pix que a própria pessoa deixou no perfil.</p>
             </div>
           </div>
@@ -851,25 +1133,25 @@
              const profileSignatureVisible = p.friendship_active && !!(p.profile_signature_text || p.profile_signature_vibe);
              let personHintText = '';
              if (!p.email) {
-               personHintText = 'Quer descobrir se essa pessoa também usa o app? Colocar um e-mail aqui já ajuda.';
+               personHintText = 'Com e-mail, fica mais fácil achar essa pessoa no app.';
              } else if (!p.has_app_user) {
-               personHintText = 'Ainda não encontramos essa pessoa no AcerttaPay com esse e-mail. Se ela entrar depois, o Pix continua sendo cadastrado por ela.';
+               personHintText = 'Ainda não achamos essa pessoa no app. Se ela entrar depois, o Pix continua sendo dela.';
              } else if (p.friendship_active && !p.active) {
-               personHintText = 'A amizade continua valendo, mas esse contato está desativado na sua lista. Se quiser usar de novo, é só reativar.';
+               personHintText = 'A amizade vale, mas esse contato está pausado.';
              } else if (p.friendship_active && p.linked_user_pix_ready) {
-               personHintText = 'Vocês já são amigos por aqui. Quando pintar pagamento, o app usa o Pix que essa pessoa deixou no perfil.';
+               personHintText = 'Quando rolar pagamento, o app usa o Pix do perfil dela.';
              } else if (p.friendship_active && p.linked_user_pix_enabled && !p.linked_user_pix_ready) {
-               personHintText = 'A amizade já está valendo, mas essa pessoa ainda está terminando o Pix no perfil.';
+               personHintText = 'A amizade vale, mas o Pix dela ainda está terminando.';
              } else if (p.friendship_active) {
-               personHintText = 'A amizade já está valendo. Agora só falta essa pessoa deixar o Pix pronto no perfil.';
+               personHintText = 'A amizade já vale. Só falta o Pix dela.';
              } else if (p.friendship_state === 'pending_sent') {
-               personHintText = 'O convite já foi enviado. Agora é esperar a resposta.';
+               personHintText = 'Convite enviado. Agora é esperar.';
              } else if (p.friendship_state === 'pending_received') {
-               personHintText = 'Essa pessoa já te chamou. É só aceitar e pronto.';
+               personHintText = 'Essa pessoa já te chamou. É só aceitar.';
              } else if (!p.active) {
-               personHintText = 'Esse contato usa o app, mas está desativado na sua lista. Reative quando quiser.';
+               personHintText = 'Esse contato usa o app, mas está pausado.';
              } else {
-               personHintText = 'O app já encontrou essa pessoa. Se fizer sentido, mande um pedido de amizade.';
+               personHintText = 'O app já encontrou essa pessoa. Se fizer sentido, mande convite.';
              }
         %>
           <article
@@ -878,124 +1160,128 @@
             data-search-text="<%= [p.name, p.phone_search_text, p.email, personState.label, personHintText, p.profile_signature_text, profileSignatureMeta?.label].filter(Boolean).join(' ') %>"
             class="group relative overflow-hidden rounded-[30px] border bg-white shadow-sm transition-all dark:bg-slate-800 <%= isHighlighted ? 'border-emerald-400 ring-2 ring-emerald-200 dark:border-emerald-500 dark:ring-emerald-900/70' : 'border-slate-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md dark:border-slate-700 dark:hover:border-slate-600' %>">
             <div class="h-1.5 bg-gradient-to-r <%= personState.barClasses %>"></div>
-            <div class="flex flex-col gap-5 p-5 sm:p-6">
-              <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                <div class="flex min-w-0 flex-1 gap-4 xl:pr-4">
-                  <div class="relative h-14 w-14 shrink-0">
-                    <% if (getAvatarUrl(p)) { %>
-                      <img src="<%= getAvatarUrl(p) %>" alt="<%= p.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-14 w-14 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700">
-                    <% } else { %>
-                      <div class="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-lg font-black text-slate-600 transition-colors group-hover:bg-sky-50 group-hover:text-sky-600 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:bg-sky-900/40"><%= getAvatarInitials(p) %></div>
-                    <% } %>
-                    <% if (p.friendship_active) { %>
-                      <span class="absolute -bottom-1 -right-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-emerald-200 bg-emerald-500 text-[13px] text-white shadow-sm dark:border-emerald-700" title="Amizade ativa">🔗</span>
-                    <% } %>
-                  </div>
-
-                  <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <h3 class="truncate text-xl font-black text-slate-900 dark:text-white"><%= p.name %></h3>
-                      <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= personState.badgeClasses %>"><%= personState.label %></span>
-                      <button type="button"
-                        data-id="<%= p.id %>"
-                        data-name="<%= p.name %>"
-                        data-phone="<%= p.phone_ui_national || '' %>"
-                        data-phone-country="<%= p.phone_ui_country || phoneDefaultCountryCode %>"
-                        data-email="<%= p.email || '' %>"
-                        onclick="editContactFromButton(this)"
-                        class="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-800 dark:hover:bg-sky-900/20 dark:hover:text-sky-200"
-                        aria-label="Editar contato"
-                        title="Editar contato">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                      </button>
-                    </div>
-                    <div class="mt-3 space-y-2 text-sm font-medium text-slate-600 dark:text-slate-300">
-                      <div class="flex items-start gap-2.5">
-                        <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50/80 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
-                          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a2 2 0 011.897 1.368l1.516 4.547a2 2 0 01-.45 2.11l-2.07 2.07a16 16 0 006.364 6.364l2.07-2.07a2 2 0 012.11-.45l4.547 1.516A2 2 0 0121 15.72V19a2 2 0 01-2 2h-1C9.163 21 3 14.837 3 7V5z"></path></svg>
-                        </span>
-                        <span class="min-w-0 flex-1 leading-6"><%= p.phone_display ? p.phone_display : 'Telefone não informado ainda.' %></span>
-                      </div>
-                      <div class="flex items-start gap-2.5">
-                        <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50/80 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
-                          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-16 8h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
-                        </span>
-                        <span class="min-w-0 flex-1 break-all leading-6"><%= p.email ? p.email : 'E-mail não informado ainda.' %></span>
-                      </div>
-                    </div>
-                    <p class="mt-3 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= personState.summary %></p>
-                    <div class="mt-4 flex flex-wrap gap-2">
-                      <%- renderPersonStatusChips(p) %>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="flex w-full flex-col gap-2 xl:w-[15rem] xl:shrink-0">
-                  <% if (p.friendship_state === 'active') { %>
-                    <form method="post" action="/people/<%= p.id %>/unfriend" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novas cobranças entre vocês param na hora.">
-                      <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Desfazer amizade</button>
-                    </form>
-                  <% } else if (p.friendship_state === 'pending_sent') { %>
-                    <form method="post" action="/friend-requests/<%= p.outgoing_friend_request_id %>/cancel">
-                      <button class="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-700 transition-all hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">Cancelar pedido</button>
-                    </form>
-                  <% } else if (p.friendship_state === 'pending_received') { %>
-                    <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
-                      <input type="hidden" name="action" value="accept">
-                      <button class="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">Aceitar amizade</button>
-                    </form>
-                    <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
-                      <input type="hidden" name="action" value="reject">
-                      <button class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Recusar</button>
-                    </form>
-                  <% } else if (p.has_app_user && p.active) { %>
-                    <form method="post" action="/people/<%= p.id %>/send-friend-request">
-                      <button class="w-full rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Enviar pedido de amizade</button>
-                    </form>
+            <div class="flex flex-col gap-4 p-5 sm:p-6">
+              <div class="flex min-w-0 gap-4">
+                <div class="relative h-14 w-14 shrink-0">
+                  <% if (getAvatarUrl(p)) { %>
+                    <img src="<%= getAvatarUrl(p) %>" alt="<%= p.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-14 w-14 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700">
                   <% } else { %>
-                    <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">Convite indisponível</div>
+                    <div class="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-lg font-black text-slate-600 transition-colors group-hover:bg-sky-50 group-hover:text-sky-600 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:bg-sky-900/40"><%= getAvatarInitials(p) %></div>
                   <% } %>
+                  <% if (p.friendship_active) { %>
+                    <span class="absolute -bottom-1 -right-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-emerald-200 bg-emerald-500 text-[13px] text-white shadow-sm dark:border-emerald-700" title="Amizade ativa">🔗</span>
+                  <% } %>
+                </div>
 
-                  <div class="grid gap-2 pt-1">
-                    <form method="post" action="/people/<%= p.id %>/toggle">
-                      <button class="w-full rounded-xl border bg-white px-3 py-2.5 text-xs font-bold shadow-sm transition-colors dark:bg-slate-900 <%= p.active ? 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20' : 'border-green-200 text-green-700 hover:bg-green-50 dark:border-green-900 dark:text-green-400 dark:hover:bg-green-900/20' %>"><%= p.active ? 'Desativar' : 'Reativar' %></button>
-                    </form>
-                    <form method="post" action="/people/<%= p.id %>/delete" data-confirm-prompt="Excluir <%= p.name %> da sua lista ativa? O passado continua salvo, mas a exclusão trava se ainda houver valor em aberto, Pix do mês em andamento ou cobrança guardada para enviar depois." data-confirm-phrase="Eu confirmo">
-                      <button class="w-full rounded-xl border border-red-200 bg-white px-3 py-2.5 text-xs font-bold text-red-700 shadow-sm transition-colors hover:bg-red-50 dark:border-red-900 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-900/20">Excluir da lista</button>
-                    </form>
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-start gap-2">
+                    <h3 class="min-w-0 flex-1 text-xl font-black text-slate-900 dark:text-white"><span class="block truncate"><%= p.name %></span></h3>
+                    <span class="inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[10.5px] font-bold <%= personState.badgeClasses %>"><%= personState.label %></span>
+                    <button type="button"
+                      data-id="<%= p.id %>"
+                      data-name="<%= p.name %>"
+                      data-phone="<%= p.phone_ui_national || '' %>"
+                      data-phone-country="<%= p.phone_ui_country || phoneDefaultCountryCode %>"
+                      data-email="<%= p.email || '' %>"
+                      onclick="editContactFromButton(this)"
+                      class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-800 dark:hover:bg-sky-900/20 dark:hover:text-sky-200"
+                      aria-label="Editar contato"
+                      title="Editar contato">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    </button>
+                  </div>
+
+                  <div class="mt-3 space-y-2 text-[13px] font-medium text-slate-600 dark:text-slate-300">
+                    <div class="inline-flex w-fit max-w-full items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
+                      <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50/80 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a2 2 0 011.897 1.368l1.516 4.547a2 2 0 01-.45 2.11l-2.07 2.07a16 16 0 006.364 6.364l2.07-2.07a2 2 0 012.11-.45l4.547 1.516A2 2 0 0121 15.72V19a2 2 0 01-2 2h-1C9.163 21 3 14.837 3 7V5z"></path></svg>
+                      </span>
+                      <span class="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap leading-5" title="<%= p.phone_display ? p.phone_display : 'Telefone não informado ainda.' %>"><%= p.phone_display ? p.phone_display : 'Telefone não informado ainda.' %></span>
+                    </div>
+                    <div class="inline-flex w-fit max-w-full items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
+                      <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50/80 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" aria-hidden="true">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-16 8h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+                      </span>
+                      <span class="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap leading-5" title="<%= p.email ? p.email : 'E-mail não informado ainda.' %>"><%= p.email ? p.email : 'E-mail não informado ainda.' %></span>
+                    </div>
+                  </div>
+
+                  <div class="mt-3 inline-flex max-w-full items-center gap-2 overflow-hidden rounded-full border border-slate-200 bg-slate-50/80 px-3 py-2 text-[13px] font-semibold leading-5 text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 whitespace-nowrap">
+                    <span aria-hidden="true">💬</span>
+                    <span class="block min-w-0 max-w-full overflow-hidden text-ellipsis"><%= personState.summary %></span>
                   </div>
                 </div>
               </div>
 
-              <div class="rounded-[24px] border border-violet-200/70 bg-violet-50/80 px-4 py-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20">
-                <div class="flex flex-wrap items-center gap-2">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600/80 dark:text-violet-300/80">Pix nas cobranças</div>
-                  <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= pixState.badgeClasses %>"><%= pixState.label %></span>
-                </div>
-                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= pixState.summary %></p>
+              <div class="flex flex-wrap gap-2">
+                <%- renderPersonStatusChips(p) %>
               </div>
 
-              <div class="rounded-[24px] border border-sky-100/70 bg-slate-50/90 px-4 py-4 shadow-sm shadow-sky-100/10 dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
-                <div class="flex items-start gap-3">
-                  <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-sky-600 shadow-sm ring-1 ring-sky-100 dark:bg-slate-800 dark:text-sky-300 dark:ring-slate-700" aria-hidden="true">
-                    <% if (profileSignatureVisible) { %>
-                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h6m5 8H6a2 2 0 01-2-2V6a2 2 0 012-2h7.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V18a2 2 0 01-2 2z"></path></svg>
-                    <% } else { %>
-                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    <% } %>
-                  </span>
-                  <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/70 dark:text-sky-300/80"><%= profileSignatureVisible ? 'Assinatura da pessoa' : 'Recadinho do app' %></div>
-                      <% if (profileSignatureVisible && profileSignatureMeta) { %>
-                        <span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-3 py-1 text-[11px] font-bold text-sky-700 dark:border-sky-800 dark:bg-slate-900 dark:text-sky-200"><%= profileSignatureMeta.label %></span>
+              <div class="flex flex-wrap items-center justify-end gap-2">
+                <% if (p.friendship_state === 'active') { %>
+                  <form method="post" action="/people/<%= p.id %>/unfriend" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novas cobranças entre vocês param na hora.">
+                    <button class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 shadow-sm transition-colors hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Desfazer amizade</button>
+                  </form>
+                <% } else if (p.friendship_state === 'pending_sent') { %>
+                  <form method="post" action="/friend-requests/<%= p.outgoing_friend_request_id %>/cancel">
+                    <button class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-700 shadow-sm transition-colors hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">Cancelar pedido</button>
+                  </form>
+                <% } else if (p.friendship_state === 'pending_received') { %>
+                  <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
+                    <input type="hidden" name="action" value="accept">
+                    <button class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm transition-colors hover:bg-emerald-700 dark:border-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400">Aceitar amizade</button>
+                  </form>
+                  <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
+                    <input type="hidden" name="action" value="reject">
+                    <button class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 shadow-sm transition-colors hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Recusar</button>
+                  </form>
+                <% } else if (p.has_app_user && p.active) { %>
+                  <form method="post" action="/people/<%= p.id %>/send-friend-request">
+                    <button class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border border-sky-600 bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-sm transition-colors hover:bg-sky-700 dark:border-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400">Enviar pedido</button>
+                  </form>
+                <% } else { %>
+                  <div class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">Convite indisponível</div>
+                <% } %>
+
+                <form method="post" action="/people/<%= p.id %>/toggle">
+                  <button class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border bg-white px-4 py-3 text-sm font-black shadow-sm transition-colors dark:bg-slate-900 <%= p.active ? 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20' : 'border-green-200 text-green-700 hover:bg-green-50 dark:border-green-900 dark:text-green-400 dark:hover:bg-green-900/20' %>"><%= p.active ? 'Desativar' : 'Reativar' %></button>
+                </form>
+                <form method="post" action="/people/<%= p.id %>/delete" data-confirm-prompt="Excluir <%= p.name %> da sua lista ativa? O passado continua salvo, mas a exclusão trava se ainda houver valor em aberto, Pix do mês em andamento ou cobrança guardada para enviar depois." data-confirm-phrase="Eu confirmo">
+                  <button class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border border-red-200 bg-white px-4 py-3 text-sm font-black text-red-700 shadow-sm transition-colors hover:bg-red-50 dark:border-red-900 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-900/20">Excluir da lista</button>
+                </form>
+              </div>
+
+              <div class="grid gap-3 xl:grid-cols-2">
+                <div class="rounded-[24px] border border-violet-200/70 bg-violet-50/80 px-4 py-3.5 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600/80 dark:text-violet-300/80">Pix nas cobranças</div>
+                    <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= pixState.badgeClasses %>"><%= pixState.label %></span>
+                  </div>
+                  <p class="mt-2 text-[13px] font-medium leading-5 text-slate-600 dark:text-slate-300"><%= pixState.summary %></p>
+                </div>
+
+                <div class="rounded-[24px] border border-sky-100/70 bg-slate-50/90 px-4 py-3.5 shadow-sm shadow-sky-100/10 dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+                  <div class="flex items-start gap-3">
+                    <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-sky-600 shadow-sm ring-1 ring-sky-100 dark:bg-slate-800 dark:text-sky-300 dark:ring-slate-700" aria-hidden="true">
+                      <% if (profileSignatureVisible) { %>
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h6m5 8H6a2 2 0 01-2-2V6a2 2 0 012-2h7.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V18a2 2 0 01-2 2z"></path></svg>
+                      <% } else { %>
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                      <% } %>
+                    </span>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/70 dark:text-sky-300/80"><%= profileSignatureVisible ? 'Assinatura da pessoa' : 'Recado do app' %></div>
+                        <% if (profileSignatureVisible && profileSignatureMeta) { %>
+                          <span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-3 py-1 text-[11px] font-bold text-sky-700 dark:border-sky-800 dark:bg-slate-900 dark:text-sky-200"><%= profileSignatureMeta.label %></span>
+                        <% } %>
+                      </div>
+                      <% if (profileSignatureVisible) { %>
+                        <p class="mt-1 text-[13px] font-medium leading-5 text-slate-600 dark:text-slate-300"><%= p.profile_signature_text || 'Essa pessoa preferiu mostrar só o status por aqui.' %></p>
+                      <% } else { %>
+                        <p class="mt-1 text-[13px] font-medium leading-5 text-slate-600 dark:text-slate-300"><%= personHintText %></p>
                       <% } %>
                     </div>
-                    <% if (profileSignatureVisible) { %>
-                      <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= p.profile_signature_text || 'Essa pessoa preferiu mostrar só o status por aqui.' %></p>
-                    <% } else { %>
-                      <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= personHintText %></p>
-                    <% } %>
                   </div>
                 </div>
               </div>
@@ -1228,6 +1514,7 @@
   function setSelfIdentityEditMode(isEditing, { resetValues = false, focusName = false } = {}) {
     const shell = document.getElementById('selfIdentityShell');
     const panel = document.getElementById('selfIdentityForm');
+    const notificationPanel = document.getElementById('selfNotificationPreferencesPanel');
     const trigger = document.getElementById('selfIdentityEditButton');
     const badge = document.getElementById('selfIdentityEditingBadge');
     if (!panel || !trigger) return;
@@ -1237,6 +1524,7 @@
     }
 
     panel.classList.toggle('hidden', !isEditing);
+    notificationPanel?.classList.toggle('hidden', isEditing);
     badge?.classList.toggle('hidden', !isEditing);
     shell?.classList.toggle('ring-2', isEditing);
     shell?.classList.toggle('ring-amber-200', isEditing);
@@ -1824,6 +2112,496 @@ function bindPixForm(prefix, options = {}) {
     });
   }
 
+
+  function createPinSlotMarkup(maxLength, filledCount) {
+    const total = Math.max(1, Number(maxLength || 0) || 6);
+    const active = Math.max(0, Math.min(total, Number(filledCount || 0) || 0));
+    return Array.from({ length: total }, (_, index) => {
+      const filled = index < active;
+      return `
+        <span class="inline-flex h-3 w-3 rounded-full border transition-all ${filled
+          ? 'border-slate-900 bg-slate-900 dark:border-amber-400 dark:bg-amber-400'
+          : 'border-slate-300 bg-transparent dark:border-slate-600'}"></span>
+      `;
+    }).join('');
+  }
+
+  function renderPinSlots(container, input) {
+    if (!(container instanceof HTMLElement) || !(input instanceof HTMLInputElement)) return;
+    const maxLength = Math.max(1, Number(container.dataset.maxLength || input.maxLength || 6) || 6);
+    const digits = String(input.value || '').replace(/\D/g, '').slice(0, maxLength);
+    if (digits !== input.value) {
+      input.value = digits;
+    }
+    container.innerHTML = `
+      <div class="flex items-center justify-center gap-2">${createPinSlotMarkup(maxLength, digits.length)}</div>
+      <div class="mt-2 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">${digits.length}/${maxLength} dígitos</div>
+    `;
+  }
+
+  function bindPinSlotPreview(container) {
+    if (!(container instanceof HTMLElement) || container.dataset.pinSlotsBound === '1') return;
+    const inputId = String(container.dataset.inputId || '').trim();
+    if (!inputId) return;
+    const input = document.getElementById(inputId);
+    if (!(input instanceof HTMLInputElement)) return;
+    const sync = () => renderPinSlots(container, input);
+    input.addEventListener('input', sync);
+    input.addEventListener('change', sync);
+    container.dataset.pinSlotsBound = '1';
+    sync();
+  }
+
+  function setupPinVisibilityToggles(root) {
+    const scope = root instanceof HTMLElement || root instanceof Document ? root : document;
+    scope.querySelectorAll('[data-app-pin-visibility-toggle]').forEach((button) => {
+      if (!(button instanceof HTMLButtonElement) || button.dataset.pinVisibilityBound === '1') return;
+      const target = document.getElementById(button.dataset.target || '');
+      if (!(target instanceof HTMLInputElement)) return;
+      const syncLabel = () => {
+        const visible = target.type === 'text';
+        button.textContent = visible ? 'Ocultar' : 'Ver';
+        button.setAttribute('aria-pressed', visible ? 'true' : 'false');
+      };
+      button.addEventListener('click', () => {
+        target.type = target.type === 'password' ? 'text' : 'password';
+        syncLabel();
+        target.focus();
+        target.setSelectionRange?.(target.value.length, target.value.length);
+      });
+      button.dataset.pinVisibilityBound = '1';
+      syncLabel();
+    });
+  }
+
+  function resetPinFieldState(root) {
+    if (!(root instanceof HTMLElement)) return;
+    root.querySelectorAll('input[inputmode="numeric"]').forEach((input) => {
+      if (!(input instanceof HTMLInputElement)) return;
+      input.value = String(input.value || '').replace(/\D/g, '');
+      input.type = 'password';
+    });
+    root.querySelectorAll('[data-app-pin-visibility-toggle]').forEach((button) => {
+      if (button instanceof HTMLButtonElement) {
+        button.textContent = 'Ver';
+        button.setAttribute('aria-pressed', 'false');
+      }
+    });
+    root.querySelectorAll('[data-pin-slots]').forEach((container) => bindPinSlotPreview(container));
+  }
+
+  function setPinModalVisibility(modal, isOpen) {
+    if (!(modal instanceof HTMLElement)) return;
+    modal.classList.toggle('hidden', !isOpen);
+    modal.classList.toggle('flex', isOpen);
+    modal.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+    document.body.classList.toggle('overflow-hidden', !!isOpen);
+  }
+
+  function bindAppPinSecurityControls() {
+    const manageModal = document.getElementById('appPinManageModal');
+    const disableModal = document.getElementById('appPinDisableModal');
+    if (!(manageModal instanceof HTMLElement) || !(disableModal instanceof HTMLElement)) return;
+
+    const manageForm = document.getElementById('appPinManageForm');
+    const manageTitle = document.getElementById('appPinManageTitle');
+    const manageHint = document.getElementById('appPinManageHint');
+    const manageModeInput = document.getElementById('appPinManageMode');
+    const currentGroup = document.getElementById('appPinCurrentGroup');
+    const currentInput = document.getElementById('appPinCurrentInput');
+    const newInput = document.getElementById('appPinNewInput');
+    const confirmInput = document.getElementById('appPinConfirmInput');
+    const idleSelect = document.getElementById('appPinIdleSelect');
+    const manageSubmit = document.getElementById('appPinManageSubmit');
+    const disableForm = document.getElementById('appPinDisableForm');
+    const disableInput = document.getElementById('appPinDisableInput');
+
+    if (!(manageForm instanceof HTMLFormElement) || !(disableForm instanceof HTMLFormElement) ||
+        !(manageTitle instanceof HTMLElement) || !(manageHint instanceof HTMLElement) ||
+        !(manageModeInput instanceof HTMLInputElement) || !(currentGroup instanceof HTMLElement) ||
+        !(newInput instanceof HTMLInputElement) || !(confirmInput instanceof HTMLInputElement) ||
+        !(idleSelect instanceof HTMLSelectElement) || !(manageSubmit instanceof HTMLButtonElement) ||
+        !(disableInput instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const openManageButtons = Array.from(document.querySelectorAll('[data-app-pin-open="create"], [data-app-pin-open="change"]'));
+    const openDisableButton = document.querySelector('[data-app-pin-open="disable"]');
+    const manageCloseButtons = Array.from(manageModal.querySelectorAll('[data-app-pin-close]'));
+    const disableCloseButtons = Array.from(disableModal.querySelectorAll('[data-app-pin-disable-close]'));
+    const selectedIdleOption = idleSelect.value;
+
+    manageModal.querySelectorAll('[data-pin-slots]').forEach((container) => bindPinSlotPreview(container));
+    disableModal.querySelectorAll('[data-pin-slots]').forEach((container) => bindPinSlotPreview(container));
+    setupPinVisibilityToggles(manageModal);
+    setupPinVisibilityToggles(disableModal);
+
+    const closeAll = () => {
+      setPinModalVisibility(manageModal, false);
+      setPinModalVisibility(disableModal, false);
+    };
+
+    const resetManageForm = () => {
+      manageForm.reset();
+      manageModeInput.value = 'create';
+      idleSelect.value = selectedIdleOption;
+      currentGroup.classList.add('hidden');
+      currentInput.required = false;
+      manageTitle.textContent = 'Criar PIN';
+      manageHint.textContent = 'Escolha um PIN numérico para proteger a abertura do app.';
+      manageSubmit.textContent = 'Salvar PIN';
+      resetPinFieldState(manageModal);
+    };
+
+    const openManage = (mode) => {
+      closeAll();
+      resetManageForm();
+      const safeMode = mode === 'change' ? 'change' : 'create';
+      manageModeInput.value = safeMode;
+      const changing = safeMode === 'change';
+      currentGroup.classList.toggle('hidden', !changing);
+      currentInput.required = changing;
+      manageTitle.textContent = changing ? 'Trocar PIN' : 'Criar PIN';
+      manageHint.textContent = changing
+        ? 'Confirme o PIN atual e depois escolha o novo jeitinho de destravar o app.'
+        : 'Escolha um PIN numérico para proteger a abertura do app.';
+      manageSubmit.textContent = changing ? 'Atualizar PIN' : 'Salvar PIN';
+      setPinModalVisibility(manageModal, true);
+      window.setTimeout(() => {
+        (changing ? currentInput : newInput).focus();
+      }, 40);
+    };
+
+    const resetDisableForm = () => {
+      disableForm.reset();
+      resetPinFieldState(disableModal);
+    };
+
+    const openDisable = () => {
+      closeAll();
+      resetDisableForm();
+      setPinModalVisibility(disableModal, true);
+      window.setTimeout(() => disableInput.focus(), 40);
+    };
+
+    openManageButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const mode = button.getAttribute('data-app-pin-open') || 'create';
+        openManage(mode);
+      });
+    });
+
+    if (openDisableButton instanceof HTMLButtonElement) {
+      openDisableButton.addEventListener('click', openDisable);
+    }
+
+    manageCloseButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        resetManageForm();
+        setPinModalVisibility(manageModal, false);
+      });
+    });
+
+    disableCloseButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        resetDisableForm();
+        setPinModalVisibility(disableModal, false);
+      });
+    });
+
+    manageModal.addEventListener('click', (event) => {
+      if (event.target === manageModal) {
+        resetManageForm();
+        setPinModalVisibility(manageModal, false);
+      }
+    });
+
+    disableModal.addEventListener('click', (event) => {
+      if (event.target === disableModal) {
+        resetDisableForm();
+        setPinModalVisibility(disableModal, false);
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      if (!manageModal.classList.contains('hidden')) {
+        resetManageForm();
+        setPinModalVisibility(manageModal, false);
+      }
+      if (!disableModal.classList.contains('hidden')) {
+        resetDisableForm();
+        setPinModalVisibility(disableModal, false);
+      }
+    });
+
+    manageForm.addEventListener('submit', () => {
+      manageSubmit.disabled = true;
+      manageSubmit.textContent = 'Salvando...';
+    });
+
+    disableForm.addEventListener('submit', (event) => {
+      const submitButton = disableForm.querySelector('button[type="submit"]');
+      if (submitButton instanceof HTMLButtonElement) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Desligando...';
+      }
+    });
+
+    resetManageForm();
+    resetDisableForm();
+  }
+
+
+  function bindAppPasskeySecurityControls() {
+    const registerButton = document.getElementById('appPasskeyRegisterButton');
+    const feedback = document.getElementById('appPasskeyFeedback');
+    if (!(feedback instanceof HTMLElement)) return;
+
+    const hasClientSupport = !!(window.PublicKeyCredential && window.isSecureContext && navigator.credentials && typeof navigator.credentials.create === 'function');
+
+    const setFeedback = (message, tone = 'slate') => {
+      const safeMessage = String(message || '').trim();
+      feedback.textContent = safeMessage;
+      feedback.classList.remove('text-slate-600', 'text-violet-700', 'text-emerald-700', 'text-amber-700', 'text-rose-700', 'dark:text-slate-300', 'dark:text-violet-200', 'dark:text-emerald-200', 'dark:text-amber-200', 'dark:text-rose-200');
+      if (tone === 'violet') {
+        feedback.classList.add('text-violet-700', 'dark:text-violet-200');
+      } else if (tone === 'emerald') {
+        feedback.classList.add('text-emerald-700', 'dark:text-emerald-200');
+      } else if (tone === 'amber') {
+        feedback.classList.add('text-amber-700', 'dark:text-amber-200');
+      } else if (tone === 'rose') {
+        feedback.classList.add('text-rose-700', 'dark:text-rose-200');
+      } else {
+        feedback.classList.add('text-slate-600', 'dark:text-slate-300');
+      }
+      feedback.classList.toggle('hidden', !safeMessage);
+    };
+
+    function base64UrlToUint8Array(value) {
+      const safe = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+      const padded = safe + '='.repeat((4 - (safe.length % 4 || 4)) % 4);
+      const binary = window.atob(padded);
+      return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    }
+
+    function bufferToBase64Url(value) {
+      const bytes = value instanceof ArrayBuffer ? new Uint8Array(value) : value instanceof Uint8Array ? value : new Uint8Array([]);
+      let binary = '';
+      bytes.forEach((byte) => {
+        binary += String.fromCharCode(byte);
+      });
+      return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+    }
+
+    function toPublicKeyCredentialJSON(value) {
+      if (value instanceof ArrayBuffer) {
+        return bufferToBase64Url(value);
+      }
+      if (ArrayBuffer.isView(value)) {
+        return bufferToBase64Url(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+      }
+      if (Array.isArray(value)) {
+        return value.map((entry) => toPublicKeyCredentialJSON(entry));
+      }
+      if (value && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, toPublicKeyCredentialJSON(entry)]));
+      }
+      return value;
+    }
+
+    function serializeAuthenticatorResponse(response) {
+      if (!response || typeof response !== 'object') {
+        return {};
+      }
+
+      if (typeof response.toJSON === 'function') {
+        try {
+          return response.toJSON();
+        } catch (_error) {
+          // segue para o fallback manual logo abaixo
+        }
+      }
+
+      const payload = {
+        clientDataJSON: response.clientDataJSON ? bufferToBase64Url(response.clientDataJSON) : undefined
+      };
+
+      if ('attestationObject' in response && response.attestationObject) {
+        payload.attestationObject = bufferToBase64Url(response.attestationObject);
+      }
+
+      if ('authenticatorData' in response && response.authenticatorData) {
+        payload.authenticatorData = bufferToBase64Url(response.authenticatorData);
+      }
+
+      if ('signature' in response && response.signature) {
+        payload.signature = bufferToBase64Url(response.signature);
+      }
+
+      if ('userHandle' in response) {
+        payload.userHandle = response.userHandle ? bufferToBase64Url(response.userHandle) : null;
+      }
+
+      if (typeof response.getTransports === 'function') {
+        try {
+          const transports = response.getTransports();
+          if (Array.isArray(transports) && transports.length) {
+            payload.transports = transports.filter(Boolean);
+          }
+        } catch (_error) {
+          // alguns navegadores podem não deixar consultar isso aqui, então deixa quietinho
+        }
+      }
+
+      return payload;
+    }
+
+    function serializePublicKeyCredential(credential) {
+      if (!credential || typeof credential !== 'object') {
+        return {};
+      }
+
+      if (typeof credential.toJSON === 'function') {
+        try {
+          return credential.toJSON();
+        } catch (_error) {
+          // fallback manual para navegadores que tropeçam nessa serialização
+        }
+      }
+
+      const clientExtensionResults = typeof credential.getClientExtensionResults === 'function'
+        ? credential.getClientExtensionResults()
+        : undefined;
+
+      return {
+        id: String(credential.id || '').trim() || undefined,
+        rawId: credential.rawId ? bufferToBase64Url(credential.rawId) : undefined,
+        type: String(credential.type || '').trim() || 'public-key',
+        authenticatorAttachment: credential.authenticatorAttachment || undefined,
+        clientExtensionResults: clientExtensionResults && Object.keys(clientExtensionResults).length
+          ? toPublicKeyCredentialJSON(clientExtensionResults)
+          : undefined,
+        response: serializeAuthenticatorResponse(credential.response)
+      };
+    }
+
+    function decodeRegistrationOptions(options) {
+      const publicKey = options ? JSON.parse(JSON.stringify(options)) : {};
+      if (publicKey.challenge) publicKey.challenge = base64UrlToUint8Array(publicKey.challenge);
+      if (publicKey.user && publicKey.user.id) publicKey.user.id = base64UrlToUint8Array(publicKey.user.id);
+      if (Array.isArray(publicKey.excludeCredentials)) {
+        publicKey.excludeCredentials = publicKey.excludeCredentials
+          .filter((credential) => credential && credential.id)
+          .map((credential) => ({
+            ...credential,
+            type: credential.type || 'public-key',
+            id: base64UrlToUint8Array(credential.id)
+          }));
+      }
+      return publicKey;
+    }
+
+    function buildPasskeyDeviceLabel() {
+      const parts = [];
+      const uaData = navigator.userAgentData || null;
+      const platform = uaData && uaData.platform ? uaData.platform : navigator.platform;
+      const safePlatform = String(platform || '').trim();
+      if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
+        parts.push('iPhone');
+      } else if (/android/i.test(navigator.userAgent)) {
+        parts.push('Android');
+      } else if (/mac/i.test(safePlatform)) {
+        parts.push('Mac');
+      } else if (/win/i.test(safePlatform)) {
+        parts.push('Windows');
+      } else if (/linux/i.test(safePlatform)) {
+        parts.push('Linux');
+      }
+      const standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+      if (standalone || navigator.standalone) {
+        parts.push('app');
+      }
+      return parts.join(' · ') || 'Este aparelho';
+    }
+
+    if (!(registerButton instanceof HTMLButtonElement)) {
+      if (!hasClientSupport && feedback.textContent.trim()) {
+        setFeedback('Se este navegador topar, depois você consegue preparar o desbloqueio por digital, rosto ou a proteção dele.', 'slate');
+      }
+      return;
+    }
+
+    if (!hasClientSupport) {
+      registerButton.disabled = true;
+      registerButton.setAttribute('aria-disabled', 'true');
+      setFeedback('Neste navegador ou endereço ainda não rolou liberar o desbloqueio pelo aparelho.', 'amber');
+      return;
+    }
+
+    registerButton.addEventListener('click', async () => {
+      if (registerButton.disabled) return;
+      const defaultLabel = buildPasskeyDeviceLabel();
+      registerButton.disabled = true;
+      registerButton.textContent = 'Preparando...';
+      setFeedback('Deixa comigo: estou preparando este aparelho.', 'violet');
+
+      try {
+        const optionsResponse = await fetch('/people/security/passkeys/register/options', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-AcerttaPay-Async': '1'
+          },
+          body: JSON.stringify({ label: defaultLabel })
+        });
+        const optionsPayload = await optionsResponse.json().catch(() => ({}));
+        if (!optionsResponse.ok || !optionsPayload.ok || !optionsPayload.options) {
+          throw new Error(optionsPayload.message || 'Não consegui preparar este aparelho agora.');
+        }
+
+        const credential = await navigator.credentials.create({ publicKey: decodeRegistrationOptions(optionsPayload.options) });
+        if (!(credential instanceof PublicKeyCredential)) {
+          throw new Error('Esse aparelho não devolveu o preparo completo agora.');
+        }
+
+        const verifyResponse = await fetch('/people/security/passkeys/register/verify', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-AcerttaPay-Async': '1'
+          },
+          body: JSON.stringify({
+            ...serializePublicKeyCredential(credential),
+            label: defaultLabel
+          })
+        });
+        const verifyPayload = await verifyResponse.json().catch(() => ({}));
+        if (!verifyResponse.ok || !verifyPayload.ok) {
+          throw new Error(verifyPayload.message || 'Não consegui confirmar este aparelho agora.');
+        }
+
+        setFeedback(verifyPayload.message || 'Pronto, este aparelho já entrou na sua lista de desbloqueio.', 'emerald');
+        window.setTimeout(() => {
+          window.location.href = '/people#app-security';
+        }, 240);
+      } catch (error) {
+        console.warn('[passkey-register]', { name: error?.name || null, message: error?.message || null, raw: error || null });
+        const safeMessage = error && typeof error === 'object' && 'name' in error && error.name === 'NotAllowedError'
+          ? 'Tudo certo. Parece que esse preparo foi cancelado antes de terminar.'
+          : (error && error.message) ? error.message : 'Não consegui preparar este aparelho agora.';
+        setFeedback(safeMessage, 'rose');
+      } finally {
+        registerButton.disabled = false;
+        registerButton.textContent = 'Adicionar neste aparelho';
+      }
+    });
+  }
+
   window.addEventListener('load', () => {
     bindPhoneField('self');
     bindPhoneField('contact');
@@ -1834,6 +2612,8 @@ function bindPixForm(prefix, options = {}) {
     bindNetworkDiscoveryControls();
     bindProfilePhotoForm();
     bindProfileSignatureForm();
+    bindAppPinSecurityControls();
+    bindAppPasskeySecurityControls();
 
     const highlighted = document.querySelector('[id^="friend-request-"][class*="ring-2"]');
     if (highlighted) {

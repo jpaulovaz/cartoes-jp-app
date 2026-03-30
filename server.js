@@ -76,12 +76,83 @@ const {
   normalizePhoneForWhatsapp,
   decoratePersonPhoneForView
 } = require('./src/phone');
+const {
+  APP_PIN_MIN_LENGTH,
+  APP_PIN_MAX_LENGTH,
+  APP_PIN_DEFAULT_IDLE_SECONDS,
+  APP_PIN_REAUTH_WINDOW_SECONDS,
+  APP_PIN_MAX_ATTEMPTS_BEFORE_REAUTH,
+  APP_PIN_IDLE_OPTIONS,
+  validatePinInput,
+  validateNewPinInput,
+  normalizePinIdleSeconds,
+  getPinIdleOptionLabel,
+  buildStoredPinPayload,
+  verifyStoredPin,
+  getPinFailurePolicy,
+  formatPinCooldownLabel
+} = require('./src/pinSecurity');
+const {
+  PASSKEY_MAX_CREDENTIALS_PER_USER,
+  PASSKEY_CHALLENGE_MAX_AGE_MS,
+  PASSKEY_RUNTIME_AVAILABLE,
+  buildPasskeyContext,
+  buildPasskeyUserHandle,
+  normalizePasskeyLabel,
+  generatePasskeyRegistrationOptions,
+  verifyPasskeyRegistrationResponse,
+  generatePasskeyAuthenticationOptions,
+  verifyPasskeyAuthenticationResponse
+} = require('./src/passkeySecurity');
+const {
+  getEmailRuntimeStatus,
+  logEmailRuntimeIssue,
+  verifyEmailTransport,
+  sendEmail
+} = require('./src/emailService');
+const {
+  buildWelcomeEmailTemplate,
+  buildTestEmailTemplate
+} = require('./src/emailTemplates');
+const {
+  PRIVATE_DEBT_STATUS_OPEN,
+  PRIVATE_DEBT_STATUS_SETTLED,
+  PRIVATE_DEBT_STATUS_CANCELLED,
+  PRIVATE_DEBT_ARCHIVABLE_STATUSES,
+  buildPrivateDebtPersonSnapshots,
+  mapPrivateDebtReminderRow,
+  sanitizePrivateDebtDescription,
+  sanitizePrivateDebtNote,
+  normalizePrivateDebtPaymentDate,
+  normalizePrivateDebtPromisedPaymentDate,
+  canArchivePrivateDebtStatus
+} = require('./src/privateDebtReminders');
 
 // --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
 require('./scripts/migrate.js');
 
 // --- OPCIONAL: EXECUTA SEED AUTOMÁTICO (comentar se não quiser dados de exemplo) ---
 // require('./scripts/seed.js');
+
+const EMAIL_RUNTIME_STATUS = getEmailRuntimeStatus();
+if (!EMAIL_RUNTIME_STATUS.available) {
+  console.warn('[email-runtime]', {
+    available: EMAIL_RUNTIME_STATUS.available,
+    module: EMAIL_RUNTIME_STATUS.module,
+    message: EMAIL_RUNTIME_STATUS.loadErrorMessage || 'nodemailer não carregou neste boot.',
+    code: EMAIL_RUNTIME_STATUS.loadErrorCode || null,
+    requireStack: EMAIL_RUNTIME_STATUS.requireStack
+  });
+}
+
+function logEmailFlowError(action, error, extra = {}) {
+  console.error('[email-error]', {
+    action,
+    message: error?.message || 'Erro de e-mail sem mensagem.',
+    code: error?.code || null,
+    ...extra
+  }, error?.stack || error);
+}
 
 const CARD_BRAND_OPTIONS = [
   { value: 'visa', label: 'Visa', asset: '/card-brands/visa.svg' },
@@ -165,9 +236,33 @@ try { db.prepare("ALTER TABLE users ADD COLUMN profile_photo_mode TEXT NOT NULL 
 try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_text TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_vibe TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS user_notification_preferences (
+    user_id INTEGER PRIMARY KEY,
+    friendship_activity INTEGER NOT NULL DEFAULT 1,
+    shared_debt_new INTEGER NOT NULL DEFAULT 1,
+    shared_debt_updates INTEGER NOT NULL DEFAULT 1,
+    shared_debt_payments INTEGER NOT NULL DEFAULT 1,
+    monthly_pix_updates INTEGER NOT NULL DEFAULT 1,
+    card_due_today INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
+
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN friendship_activity INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_new INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_updates INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_payments INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN monthly_pix_updates INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN card_due_today INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_txn_date_snapshot TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_marked_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN promised_payment_date TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_note TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN batch_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN request_kind TEXT NOT NULL DEFAULT 'card'").run(); } catch (e) { /* Coluna já existe */ }
@@ -223,6 +318,47 @@ db.prepare(`
     updated_at TEXT NOT NULL,
     UNIQUE(request_id, user_id),
     FOREIGN KEY (request_id) REFERENCES shared_debt_requests(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS private_debt_reminders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL,
+    person_id INTEGER,
+    linked_user_id_snapshot INTEGER,
+    person_name_snapshot TEXT NOT NULL,
+    person_email_snapshot TEXT,
+    person_phone_snapshot TEXT,
+    description_snapshot TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL,
+    request_note TEXT,
+    promised_payment_date TEXT,
+    settlement_note TEXT,
+    payment_date TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    is_archived INTEGER NOT NULL DEFAULT 0,
+    archived_at TEXT,
+    restored_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    settled_at TEXT,
+    cancelled_at TEXT,
+    FOREIGN KEY (owner_user_id) REFERENCES users(id),
+    FOREIGN KEY (person_id) REFERENCES people(id),
+    FOREIGN KEY (linked_user_id_snapshot) REFERENCES users(id)
+  )
+`).run();
+try { db.prepare("ALTER TABLE private_debt_reminders ADD COLUMN promised_payment_date TEXT").run(); } catch (e) { /* Coluna já existe */ }
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS manual_debt_due_alert_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    scope TEXT NOT NULL,
+    date_key TEXT NOT NULL,
+    payload_json TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(user_id, scope, date_key),
     FOREIGN KEY (user_id) REFERENCES users(id)
   )
 `).run();
@@ -432,11 +568,19 @@ db.prepare(`
 `).run();
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_scheduled_push_logs_event_date ON scheduled_push_logs(event_type, date_key, user_id, sequence_no)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_user_notification_preferences_updated ON user_notification_preferences(updated_at)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_requests_batch_id ON shared_debt_requests(batch_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_receiver ON shared_debt_batches(receiver_user_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batches(requester_user_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_user_archived ON shared_debt_archives(user_id, is_archived, updated_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_archives_request_user ON shared_debt_archives(request_id, user_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_status ON private_debt_reminders(owner_user_id, status, is_archived, updated_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_person ON private_debt_reminders(owner_user_id, person_id, status)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_archived ON private_debt_reminders(owner_user_id, is_archived, updated_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debts_receiver_promised ON shared_debt_requests(receiver_user_id, promised_payment_date, status, request_kind)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debts_requester_promised ON shared_debt_requests(requester_user_id, promised_payment_date, status, request_kind)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_promised ON private_debt_reminders(owner_user_id, promised_payment_date, status, is_archived)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_manual_debt_due_alert_logs_date_scope ON manual_debt_due_alert_logs(date_key, scope, user_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_pair ON shared_debt_monthly_settlements(requester_user_id, receiver_user_id, year, month, request_kind)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_receiver ON shared_debt_monthly_settlements(receiver_user_id, year, month, request_kind)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_settlement_status ON shared_debt_payment_intents(settlement_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
@@ -456,6 +600,21 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_linked O
 try { db.prepare("ALTER TABLE closed_months ADD COLUMN user_id INTEGER").run(); } catch (e) { /* Coluna já existe ou tabela ainda não precisava de ajuste */ }
 try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_closed_months_user_month_year ON closed_months(user_id, month, year)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN amount_mode TEXT NOT NULL DEFAULT 'fixed'").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN carry_key TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_monthly_finances_user_period_carry_key ON monthly_finances(user_id, month, year, carry_key) WHERE carry_key IS NOT NULL").run(); } catch (e) { /* Índice já existe */ }
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS monthly_finance_carry_exceptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    carry_key TEXT NOT NULL,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(user_id, carry_key, month, year),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_monthly_finance_carry_exceptions_user_period ON monthly_finance_carry_exceptions(user_id, year, month)").run(); } catch (e) { /* Índice já existe */ }
 db.prepare(`
   CREATE TABLE IF NOT EXISTS monthly_finance_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -765,8 +924,31 @@ db.prepare(`
   )
 `).run();
 
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS email_delivery_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    target_user_id INTEGER,
+    recipient_email TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    provider_message_id TEXT,
+    error_message TEXT,
+    attempt_no INTEGER NOT NULL DEFAULT 1,
+    payload_json TEXT,
+    created_by_user_id INTEGER,
+    created_at TEXT NOT NULL,
+    sent_at TEXT,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (target_user_id) REFERENCES users(id),
+    FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+  )
+`).run();
+
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_backup_runs_started_at ON backup_runs(started_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_backup_restores_started_at ON backup_restores(started_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_email_delivery_events_target_kind ON email_delivery_events(target_user_id, kind, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_email_delivery_events_status_created ON email_delivery_events(status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -813,6 +995,55 @@ const backupRestoresInsert = db.prepare(`
   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const backupRestoresSelectRecent = db.prepare(`SELECT * FROM backup_restores ORDER BY started_at DESC LIMIT ?`);
+const emailDeliveryEventsInsert = db.prepare(`
+  INSERT INTO email_delivery_events (
+    kind, target_user_id, recipient_email, subject, status, provider_message_id, error_message,
+    attempt_no, payload_json, created_by_user_id, created_at, sent_at, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const emailDeliveryEventsUpdateResult = db.prepare(`
+  UPDATE email_delivery_events
+     SET status = ?,
+         provider_message_id = ?,
+         error_message = ?,
+         sent_at = ?,
+         updated_at = ?,
+         payload_json = COALESCE(?, payload_json)
+   WHERE id = ?
+`);
+const emailDeliveryEventsSelectRecent = db.prepare(`
+  SELECT e.*, creator.name AS created_by_name, creator.email AS created_by_email, target.name AS target_user_name
+    FROM email_delivery_events e
+    LEFT JOIN users creator ON creator.id = e.created_by_user_id
+    LEFT JOIN users target ON target.id = e.target_user_id
+   ORDER BY e.created_at DESC, e.id DESC
+   LIMIT ?
+`);
+const emailDeliveryEventsCountAttemptsForUserKind = db.prepare(`
+  SELECT COUNT(*) AS total
+    FROM email_delivery_events
+   WHERE kind = ?
+     AND COALESCE(target_user_id, 0) = ?
+`);
+const emailDeliveryEventsSelectLatestWelcomeByUser = db.prepare(`
+  SELECT e.*
+    FROM email_delivery_events e
+   WHERE e.kind = 'welcome'
+     AND e.target_user_id = ?
+   ORDER BY e.created_at DESC, e.id DESC
+   LIMIT 1
+`);
+const emailDeliveryEventsSelectLatestWelcomeForUsers = db.prepare(`
+  SELECT e.*
+    FROM email_delivery_events e
+    INNER JOIN (
+      SELECT target_user_id, MAX(id) AS last_id
+        FROM email_delivery_events
+       WHERE kind = 'welcome'
+         AND target_user_id IS NOT NULL
+       GROUP BY target_user_id
+    ) latest ON latest.last_id = e.id
+`);
 
 let runtimeSettingsCache = {};
 let appSetupCompleted = false;
@@ -821,6 +1052,9 @@ let googleAuthConfigured = false;
 let scheduledDuePushSweepRunning = false;
 let duePushSchedulerInitialHandle = null;
 let duePushSchedulerIntervalHandle = null;
+let scheduledManualDebtDueSweepRunning = false;
+let manualDebtDueSchedulerInitialHandle = null;
+let manualDebtDueSchedulerIntervalHandle = null;
 let backupSchedulerHandle = null;
 let backupSchedulerNextRunAt = null;
 let backupJobRunning = false;
@@ -948,6 +1182,349 @@ function getPushRuntimeConfig() {
     repeatIntervalMinutes: getSettingInt('CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES', 0),
     checkIntervalMinutes: getSettingInt('CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES', 10)
   };
+}
+
+function getEmailRuntimeConfig() {
+  return {
+    enabled: getSettingBoolean('WELCOME_EMAIL_ENABLED', true),
+    host: getSettingText('MAIL_SMTP_HOST'),
+    port: getSettingInt('MAIL_SMTP_PORT', 587),
+    secure: getSettingBoolean('MAIL_SMTP_SECURE', false),
+    requireTLS: getSettingBoolean('MAIL_SMTP_REQUIRE_TLS', true),
+    trustSystemCA: getSettingBoolean('MAIL_SMTP_TRUST_SYSTEM_CA', false),
+    allowSelfSigned: getSettingBoolean('MAIL_SMTP_ALLOW_SELF_SIGNED', false),
+    servername: getSettingText('MAIL_SMTP_SERVERNAME'),
+    caCert: String(getSettingValue('MAIL_SMTP_CA_CERT') || ''),
+    user: getSettingText('MAIL_SMTP_USER'),
+    pass: getSettingText('MAIL_SMTP_PASS'),
+    fromEmail: getSettingText('MAIL_FROM_EMAIL'),
+    fromName: getSettingText('MAIL_FROM_NAME', 'AcerttaPay') || 'AcerttaPay',
+    replyTo: getSettingText('MAIL_REPLY_TO'),
+    welcomeSubject: getSettingText('WELCOME_EMAIL_SUBJECT', 'Seu acesso ao AcerttaPay foi liberado') || 'Seu acesso ao AcerttaPay foi liberado',
+    loginUrl: getSettingText('WELCOME_EMAIL_LOGIN_URL')
+  };
+}
+
+function isEmailConfigured(config = getEmailRuntimeConfig()) {
+  return !!(config.host && Number(config.port || 0) > 0 && config.user && config.pass && config.fromEmail);
+}
+
+function getEmailConnectionModeLabel(config = getEmailRuntimeConfig()) {
+  return config.secure ? 'SMTPS' : (config.requireTLS ? 'STARTTLS' : 'SMTP');
+}
+
+function buildEmailTransportLogContext(config = getEmailRuntimeConfig()) {
+  const safeConfig = config && typeof config === 'object' ? config : {};
+  return {
+    host: safeConfig.host || null,
+    port: safeConfig.port || null,
+    secure: !!safeConfig.secure,
+    requireTLS: !!safeConfig.requireTLS,
+    trustSystemCA: !!safeConfig.trustSystemCA,
+    allowSelfSigned: !!safeConfig.allowSelfSigned,
+    servername: safeConfig.servername || null,
+    customCAConfigured: !!String(safeConfig.caCert || '').trim()
+  };
+}
+
+function buildAppOriginFromRequest(req) {
+  const forwardedProto = String(req?.get?.('x-forwarded-proto') || '').split(',')[0].trim().toLowerCase();
+  const forwardedHost = String(req?.get?.('x-forwarded-host') || '').split(',')[0].trim();
+  const protocol = forwardedProto || (req?.secure ? 'https' : (req?.protocol ? String(req.protocol).trim().toLowerCase() : 'http'));
+  const host = forwardedHost || String(req?.get?.('host') || '').trim();
+  if (!host) return '';
+  return `${protocol}://${host}`;
+}
+
+function buildLoginUrl(req) {
+  const explicit = getSettingText('WELCOME_EMAIL_LOGIN_URL');
+  if (explicit) return explicit;
+  const origin = buildAppOriginFromRequest(req);
+  return origin ? `${origin}/login` : '/login';
+}
+
+function sanitizeAdminEmailMessage(value) {
+  return String(value || '').trim().slice(0, 280);
+}
+
+function summarizeEmailPayload(payload = {}) {
+  const safe = payload && typeof payload === 'object' ? payload : {};
+  return JSON.stringify({
+    loginUrl: String(safe.loginUrl || '').trim(),
+    subject: String(safe.subject || '').trim(),
+    preview: String(safe.preview || '').trim(),
+    customMessage: sanitizeAdminEmailMessage(safe.customMessage || ''),
+    accepted: Array.isArray(safe.accepted) ? safe.accepted.slice(0, 5) : [],
+    rejected: Array.isArray(safe.rejected) ? safe.rejected.slice(0, 5) : [],
+    response: String(safe.response || '').trim()
+  });
+}
+
+function createEmailDeliveryEvent({ kind, targetUserId = null, recipientEmail, subject, attemptNo = 1, status = 'pending', payload = null, createdByUserId = null }) {
+  const now = currentConfigTimestamp();
+  const result = emailDeliveryEventsInsert.run(
+    String(kind || 'welcome').trim() || 'welcome',
+    targetUserId ? Number(targetUserId) : null,
+    String(recipientEmail || '').trim(),
+    String(subject || '').trim(),
+    String(status || 'pending').trim() || 'pending',
+    null,
+    null,
+    Math.max(1, Number(attemptNo || 1) || 1),
+    payload ? summarizeEmailPayload(payload) : null,
+    createdByUserId ? Number(createdByUserId) : null,
+    now,
+    null,
+    now
+  );
+  return Number(result.lastInsertRowid || 0);
+}
+
+function finalizeEmailDeliveryEvent(eventId, { status, providerMessageId = '', errorMessage = '', payload = null } = {}) {
+  const now = currentConfigTimestamp();
+  const normalizedStatus = String(status || 'error').trim() || 'error';
+  const sentAt = normalizedStatus === 'sent' ? now : null;
+  emailDeliveryEventsUpdateResult.run(
+    normalizedStatus,
+    String(providerMessageId || '').trim() || null,
+    String(errorMessage || '').trim() || null,
+    sentAt,
+    now,
+    payload ? summarizeEmailPayload(payload) : null,
+    Number(eventId || 0)
+  );
+}
+
+function getNextWelcomeEmailAttemptNo(targetUserId) {
+  const safeUserId = Number(targetUserId || 0);
+  if (!safeUserId) return 1;
+  const row = emailDeliveryEventsCountAttemptsForUserKind.get('welcome', safeUserId);
+  return Math.max(1, Number(row?.total || 0) + 1);
+}
+
+function getLatestWelcomeEmailStatusMap() {
+  const rows = emailDeliveryEventsSelectLatestWelcomeForUsers.all();
+  const map = new Map();
+  rows.forEach((row) => {
+    map.set(Number(row.target_user_id || 0), row);
+  });
+  return map;
+}
+
+function mapEmailDeliveryStatus(row, { timeZone = 'America/Sao_Paulo' } = {}) {
+  if (!row) {
+    return {
+      key: 'never',
+      label: 'Nunca enviado',
+      tone: 'muted',
+      detail: 'Ainda não saiu nenhum boas-vindas daqui.',
+      sentAtLabel: '',
+      errorMessage: ''
+    };
+  }
+
+  const status = String(row.status || '').trim().toLowerCase();
+  if (status === 'sent') {
+    return {
+      key: row.attempt_no > 1 ? 'resent' : 'sent',
+      label: row.attempt_no > 1 ? 'Reenviado' : 'Enviado',
+      tone: 'success',
+      detail: row.sent_at ? `Última saída em ${formatAdminDateTime(row.sent_at, timeZone)}.` : 'Mensagem enviada com sucesso.',
+      sentAtLabel: row.sent_at ? formatAdminDateTime(row.sent_at, timeZone) : '',
+      errorMessage: ''
+    };
+  }
+
+  if (status === 'pending') {
+    return {
+      key: 'pending',
+      label: 'Na fila',
+      tone: 'warning',
+      detail: 'O disparo foi armado, mas ainda não confirmou a saída.',
+      sentAtLabel: '',
+      errorMessage: ''
+    };
+  }
+
+  return {
+    key: 'failed',
+    label: 'Falhou',
+    tone: 'warning',
+    detail: row.error_message || 'Não consegui mandar esse e-mail agora.',
+    sentAtLabel: '',
+    errorMessage: row.error_message || ''
+  };
+}
+
+function mapEmailDeliveryEventForAdmin(row, { timeZone = 'America/Sao_Paulo' } = {}) {
+  const status = mapEmailDeliveryStatus(row, { timeZone });
+  return {
+    ...row,
+    statusTone: status.tone,
+    statusLabel: status.label,
+    targetName: row.target_user_name || row.recipient_email || 'Destino',
+    createdByLabel: row.created_by_name || row.created_by_email || 'Admin',
+    createdAtLabel: formatAdminDateTime(row.created_at, timeZone),
+    sentAtLabel: row.sent_at ? formatAdminDateTime(row.sent_at, timeZone) : '',
+    errorMessage: row.error_message || ''
+  };
+}
+
+async function sendWelcomeEmailToUser({ targetUser, createdByUser, customMessage = '', req }) {
+  const emailConfig = getEmailRuntimeConfig();
+  if (!isEmailConfigured(emailConfig)) {
+    throw new Error('O SMTP ainda não está redondo. Preencha host, porta, usuário, senha e remetente antes de mandar o boas-vindas.');
+  }
+
+  const safeTarget = targetUser && typeof targetUser === 'object' ? targetUser : {};
+  const safeRecipientEmail = normalizeEmail(safeTarget.email);
+  if (!safeRecipientEmail) {
+    throw new Error('Esse acesso ainda está sem e-mail válido para receber o boas-vindas.');
+  }
+
+  const template = buildWelcomeEmailTemplate({
+    appName: 'AcerttaPay',
+    recipientName: safeTarget.name || safeRecipientEmail.split('@')[0],
+    adminName: createdByUser?.name || createdByUser?.email || '',
+    loginUrl: buildLoginUrl(req),
+    role: safeTarget.role || 'user',
+    customMessage: sanitizeAdminEmailMessage(customMessage),
+    subject: emailConfig.welcomeSubject
+  });
+  const attemptNo = getNextWelcomeEmailAttemptNo(safeTarget.id);
+  const eventId = createEmailDeliveryEvent({
+    kind: 'welcome',
+    targetUserId: safeTarget.id,
+    recipientEmail: safeRecipientEmail,
+    subject: template.subject,
+    attemptNo,
+    payload: {
+      loginUrl: buildLoginUrl(req),
+      preview: template.preview,
+      customMessage: sanitizeAdminEmailMessage(customMessage),
+      subject: template.subject
+    },
+    createdByUserId: createdByUser?.id || null
+  });
+
+  try {
+    const sendResult = await sendEmail(emailConfig, {
+      to: safeRecipientEmail,
+      subject: template.subject,
+      html: template.html,
+      text: template.text
+    });
+
+    finalizeEmailDeliveryEvent(eventId, {
+      status: 'sent',
+      providerMessageId: sendResult.messageId,
+      payload: {
+        loginUrl: buildLoginUrl(req),
+        preview: template.preview,
+        customMessage: sanitizeAdminEmailMessage(customMessage),
+        subject: template.subject,
+        accepted: sendResult.accepted,
+        rejected: sendResult.rejected,
+        response: sendResult.response
+      }
+    });
+
+    return {
+      eventId,
+      attemptNo,
+      sent: true,
+      messageId: sendResult.messageId,
+      subject: template.subject
+    };
+  } catch (error) {
+    logEmailFlowError('welcome-send', error, {
+      targetUserId: safeTarget.id || null,
+      recipientEmail: safeRecipientEmail,
+      subject: template.subject,
+      ...buildEmailTransportLogContext(emailConfig)
+    });
+    finalizeEmailDeliveryEvent(eventId, {
+      status: 'error',
+      errorMessage: error?.message || 'Não consegui mandar esse e-mail agora.',
+      payload: {
+        loginUrl: buildLoginUrl(req),
+        preview: template.preview,
+        customMessage: sanitizeAdminEmailMessage(customMessage),
+        subject: template.subject
+      }
+    });
+    throw error;
+  }
+}
+
+async function sendAdminTestEmail({ recipientEmail, createdByUser, req }) {
+  const emailConfig = getEmailRuntimeConfig();
+  if (!isEmailConfigured(emailConfig)) {
+    throw new Error('Complete host, porta, usuário, senha e remetente antes de testar o e-mail.');
+  }
+
+  const safeRecipientEmail = normalizeEmail(recipientEmail);
+  if (!safeRecipientEmail) {
+    throw new Error('Me passa um e-mail de teste válido para eu acertar o alvo.');
+  }
+
+  const template = buildTestEmailTemplate({
+    appName: 'AcerttaPay',
+    recipientName: createdByUser?.name || safeRecipientEmail.split('@')[0],
+    adminName: createdByUser?.name || createdByUser?.email || '',
+    loginUrl: buildLoginUrl(req)
+  });
+  const eventId = createEmailDeliveryEvent({
+    kind: 'test',
+    recipientEmail: safeRecipientEmail,
+    subject: template.subject,
+    attemptNo: 1,
+    payload: {
+      loginUrl: buildLoginUrl(req),
+      preview: template.preview,
+      subject: template.subject
+    },
+    createdByUserId: createdByUser?.id || null
+  });
+
+  try {
+    const sendResult = await sendEmail(emailConfig, {
+      to: safeRecipientEmail,
+      subject: template.subject,
+      html: template.html,
+      text: template.text
+    });
+
+    finalizeEmailDeliveryEvent(eventId, {
+      status: 'sent',
+      providerMessageId: sendResult.messageId,
+      payload: {
+        loginUrl: buildLoginUrl(req),
+        preview: template.preview,
+        subject: template.subject,
+        accepted: sendResult.accepted,
+        rejected: sendResult.rejected,
+        response: sendResult.response
+      }
+    });
+
+    return {
+      eventId,
+      messageId: sendResult.messageId,
+      subject: template.subject
+    };
+  } catch (error) {
+    finalizeEmailDeliveryEvent(eventId, {
+      status: 'error',
+      errorMessage: error?.message || 'Não consegui mandar esse e-mail de teste agora.',
+      payload: {
+        loginUrl: buildLoginUrl(req),
+        preview: template.preview,
+        subject: template.subject
+      }
+    });
+    throw error;
+  }
 }
 
 function getInactivityTimeoutMs() {
@@ -1820,6 +2397,52 @@ function buildBackupAdminState() {
   };
 }
 
+function buildEmailAdminState(req, { timeZone = 'America/Sao_Paulo' } = {}) {
+  const config = getEmailRuntimeConfig();
+  const configured = isEmailConfigured(config);
+  const recentEvents = emailDeliveryEventsSelectRecent.all(8).map((row) => mapEmailDeliveryEventForAdmin(row, { timeZone }));
+  const latestEvent = recentEvents[0] || null;
+  const testRecipient = normalizeEmail(req?.user?.email) || config.fromEmail || '';
+
+  const tlsHints = [];
+  if (config.trustSystemCA) tlsHints.push('CA do sistema');
+  if (String(config.caCert || '').trim()) tlsHints.push('CA extra');
+  if (config.allowSelfSigned) tlsHints.push('self-signed liberado');
+  if (config.servername) tlsHints.push(`SNI ${config.servername}`);
+
+  return {
+    config,
+    configured,
+    enabled: !!config.enabled,
+    active: !!config.enabled && configured,
+    hostLabel: config.host || 'Host não definido',
+    connectionLabel: `${getEmailConnectionModeLabel(config)} · porta ${config.port || (config.secure ? 465 : 587)}${tlsHints.length ? ` · ${tlsHints.join(' · ')}` : ''}`,
+    fromLabel: config.fromEmail ? `${config.fromName || 'AcerttaPay'} <${config.fromEmail}>` : 'Remetente não definido',
+    loginUrl: buildLoginUrl(req),
+    testRecipient,
+    recentEvents,
+    latestEvent,
+    helperStatus: !config.enabled
+      ? 'O SMTP pode até estar pronto, mas o envio automático de boas-vindas está em folga.'
+      : configured
+        ? 'Tudo pronto para o admin mandar boas-vindas, testar a conexão e reenviar quando precisar.'
+        : 'Faltam os ingredientes do SMTP para o e-mail entrar em campo.'
+  };
+}
+
+function buildAdminUsers() {
+  const users = getAllUsers();
+  const statusMap = getLatestWelcomeEmailStatusMap();
+  return users.map((row) => {
+    const latestWelcome = statusMap.get(Number(row.id || 0)) || null;
+    return {
+      ...row,
+      welcomeEmailStatus: mapEmailDeliveryStatus(latestWelcome),
+      welcomeEmailEvent: latestWelcome
+    };
+  });
+}
+
 
 function clearCardDueTodayPushScheduler() {
   if (duePushSchedulerInitialHandle) {
@@ -1830,6 +2453,32 @@ function clearCardDueTodayPushScheduler() {
     clearInterval(duePushSchedulerIntervalHandle);
     duePushSchedulerIntervalHandle = null;
   }
+}
+
+function clearManualDebtDueScheduler() {
+  if (manualDebtDueSchedulerInitialHandle) {
+    clearTimeout(manualDebtDueSchedulerInitialHandle);
+    manualDebtDueSchedulerInitialHandle = null;
+  }
+  if (manualDebtDueSchedulerIntervalHandle) {
+    clearInterval(manualDebtDueSchedulerIntervalHandle);
+    manualDebtDueSchedulerIntervalHandle = null;
+  }
+}
+
+function restartManualDebtDueScheduler() {
+  clearManualDebtDueScheduler();
+
+  const config = getManualDebtDueRuntimeConfig();
+  const intervalMs = Math.max(1, config.checkIntervalMinutes) * 60 * 1000;
+
+  manualDebtDueSchedulerInitialHandle = setTimeout(() => {
+    runManualDebtDueAlertSweep().catch(err => console.error('Falha no agendamento inicial da data combinada:', err?.message || err));
+  }, 15000);
+
+  manualDebtDueSchedulerIntervalHandle = setInterval(() => {
+    runManualDebtDueAlertSweep().catch(err => console.error('Falha no agendamento recorrente da data combinada:', err?.message || err));
+  }, intervalMs);
 }
 
 function restartCardDueTodayPushScheduler() {
@@ -1857,6 +2506,7 @@ function refreshRuntimeSettings({ restartScheduler = true } = {}) {
   configureGoogleStrategy();
   if (restartScheduler) {
     restartCardDueTodayPushScheduler();
+    restartManualDebtDueScheduler();
     restartBackupScheduler();
   }
   return runtimeSettingsCache;
@@ -1883,6 +2533,8 @@ function updateAppSettings(entries, updatedByUserId = null) {
 function buildAdminStatusCards() {
   const googleReady = isGoogleAuthConfigured();
   const whatsappReady = !!(getSettingText('EVOLUTION_API_URL') && getSettingText('EVOLUTION_API_KEY') && getSettingText('EVOLUTION_INSTANCE_NAME'));
+  const emailConfig = getEmailRuntimeConfig();
+  const emailConfigured = isEmailConfigured(emailConfig);
   const pushReady = isPushConfigured();
   const timeoutMinutes = getSettingInt('INACTIVITY_TIMEOUT_MINUTES', 0);
   const duePushEnabled = getSettingBoolean('CARD_DUE_PUSH_ENABLED', true);
@@ -1925,6 +2577,17 @@ function buildAdminStatusCards() {
       text: whatsappReady
         ? 'A ponte com a Evolution está montada e pronta para mandar resumos.'
         : 'Sem URL, key ou instância completas o WhatsApp continua no banco de reservas.'
+    },
+    {
+      key: 'email',
+      title: 'E-mail de boas-vindas',
+      tone: emailConfigured ? (emailConfig.enabled ? 'success' : 'muted') : 'warning',
+      status: !emailConfigured ? 'Falta tempero' : (emailConfig.enabled ? 'Prontinho' : 'Configurado, mas pausado'),
+      text: !emailConfigured
+        ? 'Ainda faltam host, porta, usuário, senha ou remetente para o convite sair por e-mail.'
+        : emailConfig.enabled
+          ? 'O SMTP está preparado para mandar boas-vindas e testes sem depender de gambiarras.'
+          : 'O SMTP está configurado, mas o disparo automático do boas-vindas está desligado nesta rodada.'
     },
     {
       key: 'push',
@@ -2393,20 +3056,22 @@ function ensureDefaultOwnerPerson(userId, preferredName, preferredEmail = null) 
 }
 
 function renderAdmin(res, { error = null, success = null, activeSection = 'access' } = {}) {
-  return res.render('admin', {
+  return safeRenderView(res, 'admin', {
     title: 'AcerttaPay | Administração',
-    users: getAllUsers(),
+    users: buildAdminUsers(),
     error,
     success,
     activeSection,
     settingsSections: buildAdminSettingsSections(),
     statusCards: buildAdminStatusCards(),
     backupPanel: buildBackupAdminState(),
+    emailPanel: buildEmailAdminState(res?.req, { timeZone: getBackupRuntimeConfig().timeZone }),
     totalConfigItems: SETTING_DEFINITIONS.length,
     autoReloadCount: SETTING_DEFINITIONS.filter((item) => !item.restartRequired).length,
     restartRequiredCount: SETTING_DEFINITIONS.filter((item) => item.restartRequired).length,
     googleConfigured: isGoogleAuthConfigured(),
-    pushConfigured: isPushConfigured()
+    pushConfigured: isPushConfigured(),
+    emailConfigured: isEmailConfigured(getEmailRuntimeConfig())
   });
 }
 
@@ -2421,7 +3086,7 @@ function buildSetupFormSeed(overrides = {}) {
 }
 
 function renderSetup(res, { error = null, success = null, form = {} } = {}) {
-  return res.render('setup', {
+  return safeRenderView(res, 'setup', {
     title: 'AcerttaPay | Primeira configuração',
     error,
     success,
@@ -2444,6 +3109,973 @@ function setImportReport(req, report) {
 function setImportFormSeed(req, seed) {
   if (!req.session) return;
   req.session.importFormSeed = seed || null;
+}
+
+function setImportPreview(req, preview) {
+  if (!req.session) return;
+  req.session.importPreview = preview || null;
+}
+
+function clearImportPreview(req) {
+  if (!req.session) return;
+  delete req.session.importPreview;
+}
+
+function setNoStoreHeaders(res) {
+  if (!res || typeof res.set !== 'function') return;
+  if (res.headersSent || res.writableEnded) return;
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+}
+
+function safeRenderView(res, view, locals = {}) {
+  if (!res || typeof res.render !== 'function') return null;
+  if (res.headersSent || res.writableEnded) return null;
+  return res.render(view, locals);
+}
+
+const USER_NOTIFICATION_PREFERENCE_GROUPS = Object.freeze([
+  {
+    key: 'friendship_activity',
+    title: 'Amizades',
+    description: 'Pedidos, aceitações, recusas e quando uma amizade muda de fase por aqui.'
+  },
+  {
+    key: 'shared_debt_new',
+    title: 'Novas cobranças e lembretes',
+    description: 'Quando chega cobrança compartilhada, envio em lote ou lembrete avulso novo.'
+  },
+  {
+    key: 'shared_debt_updates',
+    title: 'Atualizações e respostas de cobranças',
+    description: 'Quando alguém atualiza, aceita, recusa ou pede uma segunda olhada.'
+  },
+  {
+    key: 'shared_debt_payments',
+    title: 'Pagamentos',
+    description: 'Quando alguém marca como pago ou confirma que o valor já caiu certinho.'
+  },
+  {
+    key: 'monthly_pix_updates',
+    title: 'Pix do mês',
+    description: 'Avisos sobre Pix informado, confirmado ou devolvido para revisão.'
+  },
+  {
+    key: 'card_due_today',
+    title: 'Vencimento da fatura',
+    description: 'Lembretes do dia em que uma fatura vence neste aparelho.'
+  }
+]);
+
+const USER_NOTIFICATION_PREFERENCE_KEYS = USER_NOTIFICATION_PREFERENCE_GROUPS.map((group) => group.key);
+const USER_NOTIFICATION_PREFERENCE_DEFAULTS = Object.freeze(USER_NOTIFICATION_PREFERENCE_KEYS.reduce((acc, key) => {
+  acc[key] = 1;
+  return acc;
+}, {}));
+
+function getDefaultUserNotificationPreferences(userId = null) {
+  return {
+    user_id: Number(userId || 0) || null,
+    ...USER_NOTIFICATION_PREFERENCE_DEFAULTS,
+    updated_at: null
+  };
+}
+
+function normalizeNotificationPreferenceToggle(value) {
+  if (value === true || value === 1) return 1;
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return ['1', 'true', 'on', 'yes', 'sim'].includes(normalized) ? 1 : 0;
+}
+
+function getUserNotificationPreferences(userId) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return getDefaultUserNotificationPreferences(null);
+
+  const row = db.prepare(`
+    SELECT user_id, friendship_activity, shared_debt_new, shared_debt_updates,
+           shared_debt_payments, monthly_pix_updates, card_due_today, updated_at
+    FROM user_notification_preferences
+    WHERE user_id = ?
+    LIMIT 1
+  `).get(safeUserId);
+
+  if (!row) return getDefaultUserNotificationPreferences(safeUserId);
+
+  const merged = {
+    ...getDefaultUserNotificationPreferences(safeUserId),
+    ...row
+  };
+
+  USER_NOTIFICATION_PREFERENCE_KEYS.forEach((key) => {
+    merged[key] = normalizeNotificationPreferenceToggle(merged[key]);
+  });
+
+  return merged;
+}
+
+function upsertUserNotificationPreferences(userId, overrides = {}) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) throw new Error('Não encontrei o usuário para salvar as preferências de alerta.');
+
+  const current = getUserNotificationPreferences(safeUserId);
+  const next = {
+    ...current,
+    ...overrides,
+    user_id: safeUserId,
+    updated_at: nowIso()
+  };
+
+  USER_NOTIFICATION_PREFERENCE_KEYS.forEach((key) => {
+    next[key] = normalizeNotificationPreferenceToggle(next[key]);
+  });
+
+  db.prepare(`
+    INSERT INTO user_notification_preferences (
+      user_id, friendship_activity, shared_debt_new, shared_debt_updates,
+      shared_debt_payments, monthly_pix_updates, card_due_today, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      friendship_activity = excluded.friendship_activity,
+      shared_debt_new = excluded.shared_debt_new,
+      shared_debt_updates = excluded.shared_debt_updates,
+      shared_debt_payments = excluded.shared_debt_payments,
+      monthly_pix_updates = excluded.monthly_pix_updates,
+      card_due_today = excluded.card_due_today,
+      updated_at = excluded.updated_at
+  `).run(
+    next.user_id,
+    next.friendship_activity,
+    next.shared_debt_new,
+    next.shared_debt_updates,
+    next.shared_debt_payments,
+    next.monthly_pix_updates,
+    next.card_due_today,
+    next.updated_at
+  );
+
+  return next;
+}
+
+function buildUserNotificationPreferenceViewModel(userId) {
+  const preferences = getUserNotificationPreferences(userId);
+  const groups = USER_NOTIFICATION_PREFERENCE_GROUPS.map((group) => ({
+    ...group,
+    enabled: Number(preferences[group.key] || 0) !== 0
+  }));
+
+  return {
+    updatedAt: preferences.updated_at || null,
+    enabledCount: groups.filter((group) => group.enabled).length,
+    totalCount: groups.length,
+    groups
+  };
+}
+
+function resolveNotificationPreferenceGroupKey({ groupKey = null, type = null, title = null, relatedType = null } = {}) {
+  const explicitKey = String(groupKey || '').trim();
+  if (USER_NOTIFICATION_PREFERENCE_KEYS.includes(explicitKey)) return explicitKey;
+
+  const safeType = String(type || '').trim();
+  const safeRelatedType = String(relatedType || '').trim();
+  const safeTitle = String(title || '').trim().toLowerCase();
+
+  if (safeType === 'friend_request' || safeType === 'friendship_update') return 'friendship_activity';
+  if (safeRelatedType === 'shared_debt_payment_intent' || safeTitle.includes('pix do mes') || safeTitle.includes('pix do mês')) return 'monthly_pix_updates';
+  if (safeTitle.includes('pagamento')) return 'shared_debt_payments';
+  if (safeTitle.includes('atualiz') || safeTitle.includes('aceit') || safeTitle.includes('recus') || safeTitle.includes('contest') || safeTitle.includes('revis')) return 'shared_debt_updates';
+  if (safeType === 'shared_debt_batch' || safeType === 'shared_debt_request') return 'shared_debt_new';
+
+  return null;
+}
+
+function isUserNotificationGroupEnabled(userId, groupKey) {
+  const resolvedKey = resolveNotificationPreferenceGroupKey({ groupKey });
+  if (!resolvedKey) return true;
+  const preferences = getUserNotificationPreferences(userId);
+  return Number(preferences[resolvedKey] || 0) !== 0;
+}
+
+function getPinPepper() {
+  return String(BOOTSTRAP_SESSION_SECRET || 'acerttapay-app-lock').trim() || 'acerttapay-app-lock';
+}
+
+function getDefaultUserSecuritySettings(userId = null) {
+  return {
+    user_id: Number(userId || 0) || null,
+    pin_enabled: 0,
+    pin_hash: '',
+    pin_salt: '',
+    pin_kdf: 'scrypt-v1',
+    pin_idle_seconds: APP_PIN_DEFAULT_IDLE_SECONDS,
+    failed_attempts: 0,
+    locked_until: null,
+    last_changed_at: null,
+    updated_at: null
+  };
+}
+
+function getUserSecuritySettings(userId) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return getDefaultUserSecuritySettings(null);
+
+  const row = db.prepare(`
+    SELECT user_id,
+           COALESCE(pin_enabled, 0) AS pin_enabled,
+           pin_hash,
+           pin_salt,
+           COALESCE(pin_kdf, 'scrypt-v1') AS pin_kdf,
+           COALESCE(pin_idle_seconds, ${APP_PIN_DEFAULT_IDLE_SECONDS}) AS pin_idle_seconds,
+           COALESCE(failed_attempts, 0) AS failed_attempts,
+           locked_until,
+           last_changed_at,
+           updated_at
+    FROM user_security_settings
+    WHERE user_id = ?
+    LIMIT 1
+  `).get(safeUserId);
+
+  if (!row) {
+    return getDefaultUserSecuritySettings(safeUserId);
+  }
+
+  return {
+    user_id: safeUserId,
+    pin_enabled: Number(row.pin_enabled || 0) !== 0 ? 1 : 0,
+    pin_hash: String(row.pin_hash || '').trim(),
+    pin_salt: String(row.pin_salt || '').trim(),
+    pin_kdf: String(row.pin_kdf || 'scrypt-v1').trim() || 'scrypt-v1',
+    pin_idle_seconds: normalizePinIdleSeconds(row.pin_idle_seconds),
+    failed_attempts: Number(row.failed_attempts || 0) || 0,
+    locked_until: row.locked_until || null,
+    last_changed_at: row.last_changed_at || null,
+    updated_at: row.updated_at || null
+  };
+}
+
+function upsertUserSecuritySettings(userId, overrides = {}) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) throw new Error('Não encontrei o usuário para salvar a segurança do app.');
+
+  const current = getUserSecuritySettings(safeUserId);
+  const next = {
+    ...current,
+    ...overrides
+  };
+
+  next.user_id = safeUserId;
+  next.pin_enabled = Number(next.pin_enabled || 0) !== 0 ? 1 : 0;
+  next.pin_hash = next.pin_hash ? String(next.pin_hash).trim() : null;
+  next.pin_salt = next.pin_salt ? String(next.pin_salt).trim() : null;
+  next.pin_kdf = String(next.pin_kdf || 'scrypt-v1').trim() || 'scrypt-v1';
+  next.pin_idle_seconds = normalizePinIdleSeconds(next.pin_idle_seconds);
+  next.failed_attempts = Math.max(0, Number(next.failed_attempts || 0) || 0);
+  next.locked_until = next.locked_until || null;
+  next.last_changed_at = next.last_changed_at || current.last_changed_at || null;
+  next.updated_at = next.updated_at || nowIso();
+
+  db.prepare(`
+    INSERT INTO user_security_settings (
+      user_id, pin_enabled, pin_hash, pin_salt, pin_kdf, pin_idle_seconds,
+      failed_attempts, locked_until, last_changed_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      pin_enabled = excluded.pin_enabled,
+      pin_hash = excluded.pin_hash,
+      pin_salt = excluded.pin_salt,
+      pin_kdf = excluded.pin_kdf,
+      pin_idle_seconds = excluded.pin_idle_seconds,
+      failed_attempts = excluded.failed_attempts,
+      locked_until = excluded.locked_until,
+      last_changed_at = excluded.last_changed_at,
+      updated_at = excluded.updated_at
+  `).run(
+    next.user_id,
+    next.pin_enabled,
+    next.pin_hash,
+    next.pin_salt,
+    next.pin_kdf,
+    next.pin_idle_seconds,
+    next.failed_attempts,
+    next.locked_until,
+    next.last_changed_at,
+    next.updated_at
+  );
+
+  return getUserSecuritySettings(safeUserId);
+}
+
+function buildAppPinViewModel(settings = null, { reauthFresh = false } = {}) {
+  const source = settings || getDefaultUserSecuritySettings(null);
+  const idleSeconds = normalizePinIdleSeconds(source.pin_idle_seconds);
+  return {
+    enabled: Number(source.pin_enabled || 0) !== 0,
+    idleSeconds,
+    idleLabel: getPinIdleOptionLabel(idleSeconds),
+    idleOptions: APP_PIN_IDLE_OPTIONS.map((option) => ({
+      value: Number(option.value),
+      label: option.label,
+      selected: Number(option.value) === idleSeconds
+    })),
+    minLength: APP_PIN_MIN_LENGTH,
+    maxLength: APP_PIN_MAX_LENGTH,
+    reauthFresh: !!reauthFresh
+  };
+}
+
+function enableUserAppPin(userId, pin, idleSeconds) {
+  const preparedPin = validateNewPinInput(pin);
+  if (!preparedPin.ok) {
+    throw new Error(preparedPin.reason || 'Não consegui preparar esse PIN agora.');
+  }
+
+  const now = nowIso();
+  const stored = buildStoredPinPayload(preparedPin.value, { pepper: getPinPepper() });
+  return upsertUserSecuritySettings(userId, {
+    pin_enabled: 1,
+    pin_hash: stored.hash,
+    pin_salt: stored.salt,
+    pin_kdf: stored.kdf,
+    pin_idle_seconds: normalizePinIdleSeconds(idleSeconds),
+    failed_attempts: 0,
+    locked_until: null,
+    last_changed_at: now,
+    updated_at: now
+  });
+}
+
+function disableUserAppPin(userId) {
+  const now = nowIso();
+  const current = getUserSecuritySettings(userId);
+  return upsertUserSecuritySettings(userId, {
+    pin_enabled: 0,
+    pin_hash: null,
+    pin_salt: null,
+    pin_kdf: 'scrypt-v1',
+    pin_idle_seconds: normalizePinIdleSeconds(current.pin_idle_seconds),
+    failed_attempts: 0,
+    locked_until: null,
+    last_changed_at: now,
+    updated_at: now
+  });
+}
+
+function verifyUserAppPin(userId, pin) {
+  const settings = getUserSecuritySettings(userId);
+  if (!settings.pin_enabled || !settings.pin_hash || !settings.pin_salt) {
+    return false;
+  }
+  return verifyStoredPin(pin, { hash: settings.pin_hash, salt: settings.pin_salt }, { pepper: getPinPepper() });
+}
+
+function getUserAppPinGuardState(userId) {
+  const settings = getUserSecuritySettings(userId);
+  const failedAttempts = Math.max(0, Number(settings.failed_attempts || 0) || 0);
+  const policy = getPinFailurePolicy(failedAttempts);
+  const lockedUntilMs = settings.locked_until ? Date.parse(settings.locked_until) : 0;
+  const safeLockedUntilMs = Number.isFinite(lockedUntilMs) ? lockedUntilMs : 0;
+  const cooldownActive = !policy.requiresReauth && safeLockedUntilMs > Date.now();
+  const cooldownSeconds = cooldownActive ? Math.max(1, Math.ceil((safeLockedUntilMs - Date.now()) / 1000)) : 0;
+
+  if (!policy.requiresReauth && settings.locked_until && !cooldownActive) {
+    upsertUserSecuritySettings(userId, {
+      locked_until: null,
+      updated_at: nowIso()
+    });
+    settings.locked_until = null;
+  }
+
+  return {
+    settings,
+    failedAttempts,
+    cooldownActive,
+    cooldownSeconds,
+    cooldownLabel: cooldownSeconds > 0 ? formatPinCooldownLabel(cooldownSeconds) : '',
+    requiresReauth: policy.requiresReauth,
+    attemptsUntilPause: failedAttempts >= 5 ? 0 : Math.max(0, 5 - failedAttempts),
+    policy
+  };
+}
+
+function buildUserAppPinFailureMessage(guardState) {
+  if (guardState?.requiresReauth) {
+    return 'Por segurança, esse PIN entrou em pausa depois de muitas tentativas. Confirma sua conta Google para trocar ou desligar a proteção.';
+  }
+  if (guardState?.cooldownActive) {
+    return `PIN não bateu por aqui. Agora vou te dar ${guardState.cooldownLabel} antes da próxima tentativa.`;
+  }
+  if (Number(guardState?.attemptsUntilPause || 0) === 1) {
+    return 'PIN não bateu por aqui. Mais uma tentativa errada e eu dou uma pausa curtinha de 30 segundos.';
+  }
+  return 'PIN não bateu por aqui. Confere os números e tenta de novo.';
+}
+
+function buildAppPinGuardViewModel(userId) {
+  const guardState = getUserAppPinGuardState(userId);
+  let noticeTone = 'neutral';
+  let noticeTitle = '';
+  let noticeMessage = '';
+
+  if (guardState.requiresReauth) {
+    noticeTone = 'danger';
+    noticeTitle = 'Confirmação extra pedida';
+    noticeMessage = 'Depois de várias tentativas, eu pedi um reforço de segurança. Confirma sua conta Google para trocar ou desligar o PIN.';
+  } else if (guardState.cooldownActive) {
+    noticeTone = 'warning';
+    noticeTitle = 'Hora de dar uma respirada';
+    noticeMessage = `Vou segurar novas tentativas por ${guardState.cooldownLabel}. Assim a proteção continua firme, sem pressa.`;
+  } else if (Number(guardState.attemptsUntilPause || 0) === 1) {
+    noticeTone = 'caution';
+    noticeTitle = 'Só mais uma antes da pausinha';
+    noticeMessage = 'Se a próxima tentativa também escapar, eu faço uma pausa curtinha de 30 segundos antes de liberar de novo.';
+  }
+
+  return {
+    failedAttempts: guardState.failedAttempts,
+    cooldownActive: guardState.cooldownActive,
+    cooldownRemainingSeconds: guardState.cooldownSeconds,
+    cooldownRemainingLabel: guardState.cooldownLabel,
+    requiresReauth: guardState.requiresReauth,
+    attemptsUntilPause: guardState.attemptsUntilPause,
+    maxAttemptsBeforeReauth: APP_PIN_MAX_ATTEMPTS_BEFORE_REAUTH,
+    noticeTone,
+    noticeTitle,
+    noticeMessage
+  };
+}
+
+function registerUserAppPinFailure(userId) {
+  const settings = getUserSecuritySettings(userId);
+  const nextFailedAttempts = Math.max(0, Number(settings.failed_attempts || 0) || 0) + 1;
+  const policy = getPinFailurePolicy(nextFailedAttempts);
+  const nextLockedUntil = policy.requiresReauth || policy.cooldownSeconds <= 0
+    ? null
+    : new Date(Date.now() + (policy.cooldownSeconds * 1000)).toISOString();
+
+  upsertUserSecuritySettings(userId, {
+    failed_attempts: nextFailedAttempts,
+    locked_until: nextLockedUntil,
+    updated_at: nowIso()
+  });
+
+  return getUserAppPinGuardState(userId);
+}
+
+function resetUserAppPinFailures(userId) {
+  const settings = getUserSecuritySettings(userId);
+  if (!Number(settings.failed_attempts || 0) && !settings.locked_until) return;
+  upsertUserSecuritySettings(userId, {
+    failed_attempts: 0,
+    locked_until: null,
+    updated_at: nowIso()
+  });
+}
+
+function sanitizeInternalRedirectTarget(rawValue, fallback = '/') {
+  const raw = String(rawValue || '').trim();
+  const safeFallback = String(fallback || '/').trim() || '/';
+
+  if (!raw) return safeFallback;
+  if (!raw.startsWith('/')) return safeFallback;
+  if (raw.startsWith('//')) return safeFallback;
+  if (/^\/auth\/google(?:\/callback)?/i.test(raw)) return safeFallback;
+  if (/^\/logout/i.test(raw)) return safeFallback;
+  if (/^\/lock(?:$|\?)/i.test(raw)) return safeFallback;
+  return raw;
+}
+
+function ensureAppLockSession(req) {
+  if (!req.session) return null;
+  if (!req.session.appLock || typeof req.session.appLock !== 'object') {
+    req.session.appLock = {
+      unlocked: false,
+      lastActiveAt: 0,
+      unlockedAt: 0,
+      lockedAt: 0,
+      reason: '',
+      returnTo: ''
+    };
+  }
+  return req.session.appLock;
+}
+
+function clearAppLockSession(req) {
+  if (!req.session) return;
+  delete req.session.appLock;
+}
+
+function persistSessionState(req) {
+  return new Promise((resolve, reject) => {
+    if (!req.session || typeof req.session.save !== 'function') {
+      resolve();
+      return;
+    }
+    req.session.save((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+function lockAppSession(req, { reason = 'manual', returnTo = '' } = {}) {
+  const state = ensureAppLockSession(req);
+  if (!state) return null;
+  state.unlocked = false;
+  state.lastActiveAt = 0;
+  state.unlockedAt = 0;
+  state.lockedAt = Date.now();
+  state.reason = String(reason || 'manual').trim() || 'manual';
+  state.returnTo = sanitizeInternalRedirectTarget(returnTo, '');
+  return state;
+}
+
+function unlockAppSession(req, { clearReturnTo = false } = {}) {
+  const state = ensureAppLockSession(req);
+  if (!state) return null;
+  const now = Date.now();
+  state.unlocked = true;
+  state.lastActiveAt = now;
+  state.unlockedAt = now;
+  state.lockedAt = 0;
+  state.reason = '';
+  if (clearReturnTo) {
+    state.returnTo = '';
+  }
+  return state;
+}
+
+function touchAppSession(req) {
+  const state = ensureAppLockSession(req);
+  if (!state || !state.unlocked) return state;
+  state.lastActiveAt = Date.now();
+  return state;
+}
+
+function getAppSessionState(req) {
+  const state = ensureAppLockSession(req);
+  return state || { unlocked: false, lastActiveAt: 0, unlockedAt: 0, lockedAt: 0, reason: '', returnTo: '' };
+}
+
+function clearPinReauthSession(req) {
+  if (!req.session) return;
+  delete req.session.appPinReauth;
+  delete req.session.appPinReauthFlow;
+}
+
+function startPinReauthSession(req, { returnTo = '/lock?mode=recover' } = {}) {
+  if (!req.session || !req.user?.id) return;
+  req.session.appPinReauthFlow = {
+    userId: Number(req.user.id || 0),
+    returnTo: sanitizeInternalRedirectTarget(returnTo, '/lock?mode=recover'),
+    startedAt: Date.now()
+  };
+}
+
+function grantPinReauthSession(req, userId, { returnTo = '/lock?mode=recover' } = {}) {
+  if (!req.session) return;
+  req.session.appPinReauth = {
+    userId: Number(userId || 0),
+    returnTo: sanitizeInternalRedirectTarget(returnTo, '/lock?mode=recover'),
+    grantedAt: Date.now(),
+    expiresAt: Date.now() + (APP_PIN_REAUTH_WINDOW_SECONDS * 1000)
+  };
+  delete req.session.appPinReauthFlow;
+}
+
+function hasFreshPinReauthSession(req, userId) {
+  const payload = req.session?.appPinReauth;
+  if (!payload) return false;
+  if (Number(payload.userId || 0) !== Number(userId || 0)) return false;
+  return Number(payload.expiresAt || 0) > Date.now();
+}
+
+function clearExpiredPinReauthSession(req, userId) {
+  if (!req.session?.appPinReauth) return;
+  if (!hasFreshPinReauthSession(req, userId)) {
+    delete req.session.appPinReauth;
+  }
+}
+
+function buildAppLockRedirectUrl(req, { reason = 'locked', returnTo = null } = {}) {
+  const params = new URLSearchParams();
+  const target = sanitizeInternalRedirectTarget(returnTo || req.originalUrl || req.path || '/', '');
+  if (reason) params.set('reason', String(reason));
+  if (target) params.set('next', target);
+  const suffix = params.toString();
+  return suffix ? `/lock?${suffix}` : '/lock';
+}
+
+function buildAppLockRecoveryUrl(req, { reason = 'locked', returnTo = null } = {}) {
+  const params = new URLSearchParams();
+  const target = sanitizeInternalRedirectTarget(returnTo || req.originalUrl || req.path || '/', '');
+  params.set('mode', 'recover');
+  if (reason) params.set('reason', String(reason));
+  if (target) params.set('next', target);
+  return `/lock?${params.toString()}`;
+}
+
+function pinLockMessageForReason(reason) {
+  const safeReason = String(reason || '').trim().toLowerCase();
+  if (safeReason === 'idle' || safeReason === 'background') {
+    return 'Travei o app por inatividade. Digite seu PIN para voltar a ver seus dados.';
+  }
+  if (safeReason === 'reauth-mismatch') {
+    return 'Para redefinir o PIN, confirme com a mesma conta Google que está usando aqui no app.';
+  }
+  if (safeReason === 'manual') {
+    return 'App bloqueado como você pediu. Digite seu PIN e seguimos o baile.';
+  }
+  return 'Seu app está protegido por PIN. Digite os números para destravar.';
+}
+
+function respondWithAppLock(req, res, { reason = 'locked', returnTo = null } = {}) {
+  lockAppSession(req, { reason, returnTo: returnTo || req.originalUrl || req.path || '' });
+  const redirectUrl = buildAppLockRedirectUrl(req, { reason, returnTo });
+  const message = pinLockMessageForReason(reason);
+
+  setNoStoreHeaders(res);
+
+  if (isAjaxLikeRequest(req)) {
+    res.set('X-App-Locked', '1');
+    res.set('X-App-Lock-Redirect', redirectUrl);
+    return res.status(423).json({
+      ok: false,
+      appLocked: true,
+      redirect: redirectUrl,
+      message
+    });
+  }
+
+  return res.redirect(redirectUrl);
+}
+
+function handleAppPinGate(req, res, settings) {
+  if (!settings || !settings.pin_enabled) {
+    clearAppLockSession(req);
+    clearExpiredPinReauthSession(req, req.user?.id);
+    return null;
+  }
+
+  clearExpiredPinReauthSession(req, req.user?.id);
+
+  const state = getAppSessionState(req);
+  const idleSeconds = normalizePinIdleSeconds(settings.pin_idle_seconds);
+  const idleMs = idleSeconds > 0 ? idleSeconds * 1000 : 0;
+  const lastActiveAt = Number(state.lastActiveAt || 0);
+
+  if (state.unlocked && idleMs > 0 && lastActiveAt && (Date.now() - lastActiveAt) >= idleMs) {
+    return respondWithAppLock(req, res, { reason: 'idle', returnTo: req.originalUrl || req.path || '' });
+  }
+
+  if (!state.unlocked) {
+    return respondWithAppLock(req, res, { reason: state.reason || 'locked', returnTo: req.originalUrl || req.path || '' });
+  }
+
+  touchAppSession(req);
+  return null;
+}
+
+function normalizePinConfirmationPayload(newPinValue, confirmPinValue) {
+  const preparedPin = validatePinInput(newPinValue);
+  if (!preparedPin.ok) return preparedPin;
+
+  const preparedConfirm = validatePinInput(confirmPinValue);
+  if (!preparedConfirm.ok) {
+    return { ok: false, value: '', reason: 'Preciso da confirmação do PIN para garantir que vocês dois estão combinando.' };
+  }
+
+  if (preparedPin.value !== preparedConfirm.value) {
+    return { ok: false, value: '', reason: 'Os dois PINs não bateram. Digita de novo que eu confiro daqui.' };
+  }
+
+  return { ok: true, value: preparedPin.value };
+}
+
+function normalizePinMode(value) {
+  const safeValue = String(value || '').trim().toLowerCase();
+  if (safeValue === 'change') return 'change';
+  return 'create';
+}
+
+function saveUserAppPinFromRequest(userId, req, { allowReauthOverride = false } = {}) {
+  const settings = getUserSecuritySettings(userId);
+  const mode = normalizePinMode(req.body.mode || (settings.pin_enabled ? 'change' : 'create'));
+  const confirmation = normalizePinConfirmationPayload(req.body.pin, req.body.pin_confirm);
+  if (!confirmation.ok) {
+    throw new Error(confirmation.reason || 'Não consegui validar esse PIN agora.');
+  }
+
+  const idleSeconds = normalizePinIdleSeconds(req.body.pin_idle_seconds);
+  const canBypassCurrentPin = allowReauthOverride && hasFreshPinReauthSession(req, userId);
+
+  if (settings.pin_enabled && mode === 'change' && !canBypassCurrentPin) {
+    const currentPinCheck = validatePinInput(req.body.current_pin);
+    if (!currentPinCheck.ok || !verifyUserAppPin(userId, currentPinCheck.value)) {
+      throw new Error('Para trocar o PIN, me confirma o PIN atual primeiro.');
+    }
+  }
+
+  const saved = enableUserAppPin(userId, confirmation.value, idleSeconds);
+  resetUserAppPinFailures(userId);
+  unlockAppSession(req);
+  if (allowReauthOverride) {
+    clearPinReauthSession(req);
+  }
+  return saved;
+}
+
+function disableUserAppPinFromRequest(userId, req, { allowReauthOverride = false } = {}) {
+  const settings = getUserSecuritySettings(userId);
+  if (!settings.pin_enabled) {
+    clearAppLockSession(req);
+    if (allowReauthOverride) clearPinReauthSession(req);
+    return settings;
+  }
+
+  const canBypassCurrentPin = allowReauthOverride && hasFreshPinReauthSession(req, userId);
+  if (!canBypassCurrentPin) {
+    const currentPinCheck = validatePinInput(req.body.current_pin);
+    if (!currentPinCheck.ok || !verifyUserAppPin(userId, currentPinCheck.value)) {
+      throw new Error('Para desligar o PIN, me confirma o PIN atual antes.');
+    }
+  }
+
+  const updated = disableUserAppPin(userId);
+  clearAppLockSession(req);
+  clearPinReauthSession(req);
+  return updated;
+}
+
+function ensurePasskeySessionState(req) {
+  if (!req?.session) return null;
+  if (!req.session.appPasskey) {
+    req.session.appPasskey = {};
+  }
+  return req.session.appPasskey;
+}
+
+function clearExpiredPasskeySessionFlow(req, key) {
+  const state = ensurePasskeySessionState(req);
+  if (!state || !state[key]) return null;
+  const createdAt = Number(state[key].createdAt || 0) || 0;
+  if (createdAt && (Date.now() - createdAt) <= PASSKEY_CHALLENGE_MAX_AGE_MS) {
+    return state[key];
+  }
+  delete state[key];
+  return null;
+}
+
+function setPasskeySessionFlow(req, key, payload) {
+  const state = ensurePasskeySessionState(req);
+  if (!state) return null;
+  state[key] = {
+    ...payload,
+    createdAt: Date.now()
+  };
+  return state[key];
+}
+
+function consumePasskeySessionFlow(req, key) {
+  const state = ensurePasskeySessionState(req);
+  if (!state) return null;
+  const entry = clearExpiredPasskeySessionFlow(req, key);
+  delete state[key];
+  return entry || null;
+}
+
+function listUserPasskeys(userId) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return [];
+  return db.prepare(`
+    SELECT id, user_id, label, public_key, counter, device_type, backed_up, transports, aaguid,
+           created_at, updated_at, last_used_at, last_used_origin
+    FROM user_passkeys
+    WHERE user_id = ?
+    ORDER BY COALESCE(last_used_at, created_at) DESC, created_at DESC
+  `).all(safeUserId).map((row) => ({
+    id: String(row.id || '').trim(),
+    user_id: safeUserId,
+    label: normalizePasskeyLabel(row.label || '', 'Este aparelho'),
+    public_key: String(row.public_key || '').trim(),
+    counter: Number(row.counter || 0) || 0,
+    device_type: String(row.device_type || '').trim(),
+    backed_up: Number(row.backed_up || 0) !== 0 ? 1 : 0,
+    transports: row.transports ? (() => { try { return JSON.parse(row.transports); } catch (_error) { return []; } })() : [],
+    aaguid: String(row.aaguid || '').trim(),
+    created_at: row.created_at || null,
+    updated_at: row.updated_at || null,
+    last_used_at: row.last_used_at || null,
+    last_used_origin: row.last_used_origin || null
+  }));
+}
+
+function getUserPasskey(userId, credentialId) {
+  const safeId = String(credentialId || '').trim();
+  if (!safeId) return null;
+  return listUserPasskeys(userId).find((entry) => entry.id === safeId) || null;
+}
+
+function saveUserPasskey(userId, payload) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) {
+    throw new Error('Não encontrei quem vai receber esse desbloqueio pelo aparelho.');
+  }
+
+  const safeId = String(payload?.id || '').trim();
+  const safePublicKey = String(payload?.public_key || '').trim();
+  if (!safeId || !safePublicKey) {
+    throw new Error('Não consegui guardar esse aparelho agora.');
+  }
+
+  const now = nowIso();
+  db.prepare(`
+    INSERT INTO user_passkeys (
+      id, user_id, label, public_key, counter, device_type, backed_up, transports, aaguid,
+      created_at, updated_at, last_used_at, last_used_origin
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      user_id = excluded.user_id,
+      label = excluded.label,
+      public_key = excluded.public_key,
+      counter = excluded.counter,
+      device_type = excluded.device_type,
+      backed_up = excluded.backed_up,
+      transports = excluded.transports,
+      aaguid = excluded.aaguid,
+      updated_at = excluded.updated_at
+  `).run(
+    safeId,
+    safeUserId,
+    normalizePasskeyLabel(payload.label || '', 'Este aparelho'),
+    safePublicKey,
+    Number(payload.counter || 0) || 0,
+    String(payload.device_type || '').trim() || null,
+    Number(payload.backed_up || 0) !== 0 ? 1 : 0,
+    JSON.stringify(Array.isArray(payload.transports) ? payload.transports.filter(Boolean) : []),
+    String(payload.aaguid || '').trim() || null,
+    now,
+    now,
+    null,
+    null
+  );
+
+  return getUserPasskey(safeUserId, safeId);
+}
+
+function deleteUserPasskey(userId, credentialId) {
+  const safeUserId = Number(userId || 0);
+  const safeId = String(credentialId || '').trim();
+  if (!safeUserId || !safeId) return 0;
+  return db.prepare(`DELETE FROM user_passkeys WHERE user_id = ? AND id = ?`).run(safeUserId, safeId).changes || 0;
+}
+
+function touchUserPasskeyUsage(userId, credentialId, { counter = 0, origin = '' } = {}) {
+  const safeUserId = Number(userId || 0);
+  const safeId = String(credentialId || '').trim();
+  if (!safeUserId || !safeId) return;
+  db.prepare(`
+    UPDATE user_passkeys
+    SET counter = ?, updated_at = ?, last_used_at = ?, last_used_origin = ?
+    WHERE user_id = ? AND id = ?
+  `).run(
+    Number(counter || 0) || 0,
+    nowIso(),
+    nowIso(),
+    String(origin || '').trim() || null,
+    safeUserId,
+    safeId
+  );
+}
+
+function formatPasskeyDateTimeLabel(value) {
+  if (!value) return '';
+  const parsed = dayjs(value);
+  if (!parsed.isValid()) return '';
+  return parsed.tz('America/Sao_Paulo').format('DD/MM/YYYY [às] HH:mm');
+}
+
+function buildPasskeyBadge(passkey) {
+  if (Number(passkey?.backed_up || 0) !== 0) {
+    return { label: 'Sincronizada', tone: 'emerald' };
+  }
+  return { label: 'Local', tone: 'slate' };
+}
+
+function buildPasskeyManagementViewModel(req, userId, pinSettings = null) {
+  const settings = pinSettings || getUserSecuritySettings(userId);
+  const context = buildPasskeyContext(req);
+  const passkeys = listUserPasskeys(userId);
+  const items = passkeys.map((entry) => {
+    const badge = buildPasskeyBadge(entry);
+    return {
+      id: entry.id,
+      label: entry.label,
+      createdAtLabel: formatPasskeyDateTimeLabel(entry.created_at),
+      lastUsedAtLabel: formatPasskeyDateTimeLabel(entry.last_used_at),
+      badgeLabel: badge.label,
+      badgeTone: badge.tone,
+      hasBeenUsed: !!entry.last_used_at
+    };
+  });
+
+  let helpText = '';
+  if (!settings.pin_enabled) {
+    helpText = 'Primeiro liga o PIN. Aí sim dá para preparar o desbloqueio pelo aparelho como atalho bonitinho.';
+  } else if (!context.available) {
+    helpText = context.disabledMessage || 'Esse desbloqueio ainda não ficou disponível neste ambiente.';
+  } else if (!items.length) {
+    helpText = 'Quando quiser, dá para preparar este aparelho para destravar o app com digital, rosto ou a proteção dele.';
+  } else {
+    helpText = 'Se o aparelho topar, você pode usar esse atalho junto com o PIN. Um complementa o outro, sem drama.';
+  }
+
+  return {
+    runtimeAvailable: PASSKEY_RUNTIME_AVAILABLE,
+    serverReady: context.available,
+    secureContext: context.secureContext,
+    disabledReason: context.disabledReason || '',
+    disabledMessage: context.disabledMessage || '',
+    pinEnabled: Number(settings.pin_enabled || 0) !== 0,
+    canRegister: Number(settings.pin_enabled || 0) !== 0 && context.available && items.length < PASSKEY_MAX_CREDENTIALS_PER_USER,
+    limitReached: items.length >= PASSKEY_MAX_CREDENTIALS_PER_USER,
+    count: items.length,
+    maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER,
+    items,
+    helpText,
+    rpLabel: context.rpID || '',
+    originLabel: context.origin || ''
+  };
+}
+
+function buildPasskeyLockViewModel(req, userId, pinSettings = null) {
+  const settings = pinSettings || getUserSecuritySettings(userId);
+  const context = buildPasskeyContext(req);
+  const passkeys = listUserPasskeys(userId);
+  const enabled = Number(settings.pin_enabled || 0) !== 0 && context.available && passkeys.length > 0;
+
+  let message = '';
+  if (!Number(settings.pin_enabled || 0)) {
+    message = 'O desbloqueio pelo aparelho entra em cena junto com o PIN.';
+  } else if (!passkeys.length) {
+    message = 'Se quiser, depois dá para preparar este aparelho lá em Amigos > Segurança do app.';
+  } else if (!context.available) {
+    message = context.disabledMessage || 'Hoje o desbloqueio pelo aparelho não ficou disponível neste endereço.';
+  } else {
+    message = 'Se o seu aparelho topar, você pode entrar com digital, rosto ou a proteção dele e deixar o PIN como plano B.';
+  }
+
+  return {
+    enabled,
+    available: context.available,
+    runtimeAvailable: PASSKEY_RUNTIME_AVAILABLE,
+    secureContext: context.secureContext,
+    count: passkeys.length,
+    message,
+    disabledMessage: context.disabledMessage || ''
+  };
 }
 
 function normalizeErrorStatus(error, fallback = 500) {
@@ -2542,6 +4174,18 @@ function getFriendlyErrorDetails(error, { defaultMessage = null } = {}) {
     return details;
   }
 
+  if (/self-signed certificate/i.test(rawMessage) || ['DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN'].includes(details.code)) {
+    details.status = 422;
+    details.message = 'O SMTP respondeu com certificado próprio e o app barrou por segurança. O ideal é usar um certificado confiável no mailcow ou informar a CA na seção de e-mail do admin. Se for ambiente interno, dá para liberar self-signed como último recurso.';
+    return details;
+  }
+
+  if (/unable to verify the first certificate|unable to get local issuer certificate|UNABLE_TO_VERIFY_LEAF_SIGNATURE/i.test(rawMessage)) {
+    details.status = 422;
+    details.message = 'O app não conseguiu confiar na cadeia TLS do SMTP. Vale conferir a cadeia do certificado, ligar a confiança nas CAs do sistema ou informar a CA PEM na seção de e-mail.';
+    return details;
+  }
+
   if (details.status == 401) {
     details.message = rawMessage || 'Sua sessão saiu para respirar. Faz login de novo e seguimos.';
     return details;
@@ -2601,7 +4245,8 @@ function logFriendlyRouteError(req, error, details) {
 }
 
 function renderFriendlyErrorPage(res, { status = 500, message, actionHref = '/', actionLabel = 'Voltar para o app' } = {}) {
-  return res.status(status).render('error', {
+  res.status(status);
+  return safeRenderView(res, 'error', {
     title: 'AcerttaPay | Opa',
     errorTitle: status >= 500 ? 'Deu uma tropeçada por aqui' : 'Tem um ajuste pedindo atenção',
     errorMessage: message,
@@ -2744,30 +4389,52 @@ function expireDeletedAccessSession(req, res) {
 }
 
 // ===== MIDDLEWARE DE AUTENTICAÇÃO =====
-function ensureAuthenticated(req, res, next) {
-  if (!req.isAuthenticated()) {
-    return res.redirect(isInitialSetupRequired() ? '/setup' : '/login');
-  }
+function buildEnsureAuthenticated({ skipPinLock = false } = {}) {
+  return function ensureAuthenticatedMiddleware(req, res, next) {
+    if (!req.isAuthenticated()) {
+      return res.redirect(isInitialSetupRequired() ? '/setup' : '/login');
+    }
 
-  const currentUser = getUserRecord(req.user?.id, { includeDeleted: false });
-  if (!currentUser) {
-    return expireDeletedAccessSession(req, res);
-  }
+    const currentUser = getUserRecord(req.user?.id, { includeDeleted: false });
+    if (!currentUser) {
+      return expireDeletedAccessSession(req, res);
+    }
 
-  req.user = {
-    ...req.user,
-    id: currentUser.id,
-    email: currentUser.email,
-    name: currentUser.name,
-    role: currentUser.role,
-    can_import: Number(currentUser.can_import ?? 1),
-    status: currentUser.status,
-    google_photo_url: currentUser.google_photo_url || '',
-    profile_photo_url: currentUser.profile_photo_url || ''
+    const pinSettings = getUserSecuritySettings(currentUser.id);
+
+    req.user = {
+      ...req.user,
+      id: currentUser.id,
+      email: currentUser.email,
+      name: currentUser.name,
+      role: currentUser.role,
+      can_import: Number(currentUser.can_import ?? 1),
+      status: currentUser.status,
+      google_photo_url: currentUser.google_photo_url || '',
+      profile_photo_url: currentUser.profile_photo_url || '',
+      pin_enabled: Number(pinSettings.pin_enabled || 0) !== 0 ? 1 : 0,
+      pin_idle_seconds: pinSettings.pin_idle_seconds
+    };
+
+    req.appPinSettings = pinSettings;
+
+    if (Number(pinSettings.pin_enabled || 0) !== 0) {
+      setNoStoreHeaders(res);
+    }
+
+    if (!skipPinLock) {
+      const lockResponse = handleAppPinGate(req, res, pinSettings);
+      if (lockResponse) {
+        return lockResponse;
+      }
+    }
+
+    return next();
   };
-
-  return next();
 }
+
+const ensureAuthenticated = buildEnsureAuthenticated();
+const ensureAuthenticatedIgnoringPin = buildEnsureAuthenticated({ skipPinLock: true });
 
 function ensureCanImport(req, res, next) {
   if (!req.isAuthenticated()) {
@@ -2886,22 +4553,22 @@ app.get('/login', (req, res) => {
   let notice = null;
 
   if (String(req.query.reason || '').trim().toLowerCase() === 'idle') {
-    error = 'Sua sessão expirou por inatividade. Faça login novamente.';
+    error = 'Fiquei um tempinho sem te ver por aqui, então fechei a porta por segurança. Entra de novo e seguimos.';
   } else if (String(req.query.error || '').trim().toLowerCase() === 'auth_failed') {
-    error = 'Não foi possível concluir a autenticação. Tente novamente.';
+    error = 'Não consegui te trazer com o Google agora. Tenta mais uma vez que eu ajeito daqui.';
   } else if (String(req.query.error || '').trim().toLowerCase() === 'google_not_configured') {
-    error = 'O login com Google ainda não está configurado. Ajuste isso na área Admin antes de sair distribuindo logins.';
+    error = 'O botão de entrar com Google ainda não foi ligado por aqui. Vale ajustar isso primeiro em Administração.';
   }
 
   if (String(req.query.setup || '').trim().toLowerCase() === 'done') {
-    notice = 'Casa arrumada. Agora é só entrar com o Google do admin inaugural e seguir o baile.';
+    notice = 'Tudo pronto por aqui. Agora é só entrar com a conta principal do Google e começar.';
   }
 
-  res.render('login_oauth', { error, notice });
+  return safeRenderView(res, 'login_oauth', { error, notice });
 });
 
 app.get(['/privacy-policy', '/politica-de-privacidade'], (req, res) => {
-  res.render('privacy-policy', {
+  return safeRenderView(res, 'privacy-policy', {
     updatedAt: '14/03/2026'
   });
 });
@@ -2927,9 +4594,32 @@ const handleGoogleCallback = (req, res, next) => {
     return res.redirect('/login?error=google_not_configured');
   }
 
-  return passport.authenticate('google', {
-    successRedirect: '/',
-    failureRedirect: '/login?error=auth_failed'
+  return passport.authenticate('google', (error, user) => {
+    if (error || !user) {
+      return res.redirect('/login?error=auth_failed');
+    }
+
+    const reauthFlow = req.session?.appPinReauthFlow || null;
+    if (reauthFlow && Number(reauthFlow.userId || 0) > 0 && Number(user.id || 0) !== Number(reauthFlow.userId || 0)) {
+      clearPinReauthSession(req);
+      setFlash(req, 'error', 'Para redefinir o PIN, confirme com a mesma conta Google que está usando aqui no app.');
+      return res.redirect('/lock?reason=reauth-mismatch');
+    }
+
+    return req.logIn(user, (loginError) => {
+      if (loginError) {
+        return next(loginError);
+      }
+
+      if (reauthFlow && Number(reauthFlow.userId || 0) > 0) {
+        const returnTo = sanitizeInternalRedirectTarget(reauthFlow.returnTo, '/lock?mode=recover');
+        grantPinReauthSession(req, user.id, { returnTo });
+        setFlash(req, 'success', 'Conta confirmada com o Google. Agora você pode redefinir ou desligar o PIN por alguns minutinhos.');
+        return res.redirect(returnTo || '/lock?mode=recover');
+      }
+
+      return res.redirect('/');
+    });
   })(req, res, next);
 };
 
@@ -2983,6 +4673,8 @@ app.use((req, res, next) => {
   res.locals.appVersion = APP_VERSION;
   res.locals.cardBrandOptions = CARD_BRAND_OPTIONS;
   res.locals.getCardBrandMeta = getCardBrandMeta;
+  res.locals.currentPath = req.path || '/';
+  res.locals.appPin = buildAppPinViewModel(getDefaultUserSecuritySettings(null));
   const now = dayjs();
   res.locals.dashboardHref = `/detalhamento/${now.year()}/${now.month() + 1}`;
 
@@ -3014,11 +4706,13 @@ app.use((req, res, next) => {
       req.user.profile_signature_vibe = normalizeProfileSignatureVibe(currentUser.profile_signature_vibe || '');
     }
 
+    const pinSettings = getUserSecuritySettings(req.user.id);
     res.locals.user = req.user;
     res.locals.userAvatar = getAvatarPayload(req.user, req.user.name || req.user.email);
     res.locals.userId = req.user.id;
     res.locals.isAdmin = req.user.role === 'admin';
     res.locals.canImport = Number(req.user.can_import ?? 1) !== 0;
+    res.locals.appPin = buildAppPinViewModel(pinSettings, { reauthFresh: hasFreshPinReauthSession(req, req.user.id) });
 
     try {
       const selfProfile = ensureSelfPerson(req.user.id, currentUser?.name || req.user.name || req.user.email, currentUser?.email || req.user.email);
@@ -3616,6 +5310,9 @@ function detectSharedDebtOriginKindFromRows(rows) {
 }
 
 const SHARED_DEBT_ARCHIVABLE_STATUSES = new Set(['settled', 'cancelled', 'rejection_accepted_by_sender', 'rejection_contested_by_sender']);
+const PRIVATE_DEBT_ARCHIVABLE_STATUS_SQL = PRIVATE_DEBT_ARCHIVABLE_STATUSES
+  .map((status) => `'${String(status).replace(/'/g, "''")}'`)
+  .join(', ');
 
 function normalizeSharedDebtBatchStatus(value) {
   const normalized = String(value || '').trim().toLowerCase();
@@ -4136,6 +5833,7 @@ function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
   const requestIdToHighlight = Number(query?.request) || null;
   const batchIdToHighlight = Number(query?.batch) || null;
   const settlementIdToHighlight = Number(query?.settlement) || null;
+  const privateReminderIdToHighlight = Number(query?.private) || null;
   const archivedRequestIds = getSharedDebtArchivedRequestIdSet(userId);
   const receivedWithPixMeta = attachSharedDebtPixMeta(getSharedDebtRequestsReceived(userId), userId);
   const sentWithPixMeta = attachSharedDebtPixMeta(getSharedDebtRequestsSent(userId), userId);
@@ -4151,6 +5849,10 @@ function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
   const sharedDebtFiltersActive = hasActiveSharedDebtTrackingFilters(sharedDebtFilters);
   const receivedTracking = filterSharedDebtTrackingItems(received, sharedDebtFilters);
   const sentTracking = filterSharedDebtTrackingItems(sent, sharedDebtFilters);
+  const allPrivateDebtReminders = getPrivateDebtReminderRowsForOwner(userId, { includeArchived: true });
+  const privateDebtReminders = allPrivateDebtReminders.filter((item) => archiveMode ? Number(item?.is_archived || 0) > 0 : Number(item?.is_archived || 0) === 0);
+  const privateDebtReminderTracking = filterPrivateDebtReminderTrackingItems(privateDebtReminders, sharedDebtFilters);
+  const archivedPrivateReminderCount = allPrivateDebtReminders.filter((item) => Number(item?.is_archived || 0) > 0).length;
   const receivedPendingBatches = archiveMode ? [] : buildSharedDebtBatchCards(received, 'received').filter(batch => batch.pendingCount > 0);
   const sentPendingBatches = archiveMode ? [] : buildSharedDebtBatchCards(sent, 'sent').filter(batch => batch.pendingCount > 0);
   const eventsByRequest = getSharedDebtEventsByRequestIds([
@@ -4162,8 +5864,11 @@ function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
     requestIdToHighlight,
     batchIdToHighlight,
     settlementIdToHighlight,
+    privateReminderIdToHighlight,
     received,
     sent,
+    privateDebtReminders,
+    privateDebtReminderTracking,
     receivedPendingBatches,
     sentPendingBatches,
     receivedTracking,
@@ -4173,17 +5878,20 @@ function buildSharedDebtsPagePayload(userId, query = {}, archiveMode = false) {
     draftSendQueues: archiveMode ? [] : getSharedDebtSendQueueDraftsForUser(userId),
     draftSendQueueSummary: archiveMode ? { queueCount: 0, itemCount: 0, totalCents: 0 } : getSharedDebtSendQueueDraftSummary(userId),
     manualDebtEligiblePeople: archiveMode ? [] : getManualSharedDebtEligiblePeople(userId),
+    manualDebtPeople: archiveMode ? [] : getPrivateDebtReminderSelectablePeople(userId),
     eventsByRequest,
     archiveMode,
+    todayIsoDate: dayjs().tz(getManualDebtDueRuntimeConfig().timezone).format('YYYY-MM-DD'),
     cardMonthlySettlements: Array.from(new Map([
       ...receivedSettlementMeta.snapshots.map((snapshot) => [snapshot.settlementKey || buildSharedDebtCardMonthlySettlementKey({ requesterUserId: snapshot.requesterUserId, receiverUserId: snapshot.receiverUserId, month: snapshot.month, year: snapshot.year }), snapshot]),
       ...sentSettlementMeta.snapshots.map((snapshot) => [snapshot.settlementKey || buildSharedDebtCardMonthlySettlementKey({ requesterUserId: snapshot.requesterUserId, receiverUserId: snapshot.receiverUserId, month: snapshot.month, year: snapshot.year }), snapshot])
     ]).values()).filter(Boolean),
     pagePath: archiveMode ? '/shared-debts/archive' : '/shared-debts',
     counterpartPath: archiveMode ? '/shared-debts' : '/shared-debts/archive',
-    archiveTotalCount: archivedReceivedCount + archivedSentCount,
+    archiveTotalCount: archivedReceivedCount + archivedSentCount + archivedPrivateReminderCount,
     archivedReceivedCount,
     archivedSentCount,
+    archivedPrivateReminderCount,
     archiveEligibleStatuses: Array.from(SHARED_DEBT_ARCHIVABLE_STATUSES)
   };
 }
@@ -4205,7 +5913,7 @@ function renderSharedDebtsPage(req, res, { archiveMode = false } = {}) {
   }
 
   const payload = buildSharedDebtsPagePayload(userId, req.query, archiveMode);
-  return res.render('shared-debts', {
+  return safeRenderView(res, 'shared-debts', {
     title: archiveMode ? 'AcerttaPay | Arquivo de cobranças' : 'AcerttaPay | Cobranças',
     ...payload,
     formatBRLFromCents,
@@ -4469,7 +6177,8 @@ function flushSharedDebtBatchNotifications(context) {
       }),
       href: `/shared-debts?batch=${entry.batchId}`,
       relatedType: 'shared_debt_batch',
-      relatedId: entry.batchId
+      relatedId: entry.batchId,
+      groupKey: 'shared_debt_new'
     });
   });
 }
@@ -4635,6 +6344,104 @@ function sumFinanceItemCents(items) {
   return (Array.isArray(items) ? items : []).reduce((sum, item) => sum + Number(item?.amount_cents || 0), 0);
 }
 
+function normalizeMonthlyFinanceCarryKey(value) {
+  const normalized = String(value || '').trim();
+  return normalized ? normalized.slice(0, 64) : '';
+}
+
+function createMonthlyFinanceCarryKey() {
+  if (typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return crypto.randomBytes(16).toString('hex');
+}
+
+function getPreviousMonthYear(month, year) {
+  let prevMonth = Number(month) - 1;
+  let prevYear = Number(year);
+  if (prevMonth < 1) {
+    prevMonth = 12;
+    prevYear -= 1;
+  }
+  return { month: prevMonth, year: prevYear };
+}
+
+function syncMonthlyFinanceCarryForward(userId, month, year) {
+  const { month: prevMonth, year: prevYear } = getPreviousMonthYear(month, year);
+
+  const previousRows = db.prepare(`
+    SELECT id, type, category_id, description, amount_mode, carry_key
+    FROM monthly_finances
+    WHERE user_id = ? AND month = ? AND year = ?
+      AND carry_key IS NOT NULL AND TRIM(carry_key) <> ''
+    ORDER BY id ASC
+  `).all(userId, prevMonth, prevYear).map((row) => ({
+    ...row,
+    amount_mode: normalizeFinanceAmountMode(row.amount_mode),
+    carry_key: normalizeMonthlyFinanceCarryKey(row.carry_key)
+  })).filter((row) => row.carry_key);
+
+  if (!previousRows.length) {
+    return 0;
+  }
+
+  const currentCarryKeys = new Set(
+    db.prepare(`
+      SELECT carry_key
+      FROM monthly_finances
+      WHERE user_id = ? AND month = ? AND year = ?
+        AND carry_key IS NOT NULL AND TRIM(carry_key) <> ''
+    `).all(userId, month, year)
+      .map((row) => normalizeMonthlyFinanceCarryKey(row.carry_key))
+      .filter(Boolean)
+  );
+
+  const blockedCarryKeys = new Set(
+    db.prepare(`
+      SELECT carry_key
+      FROM monthly_finance_carry_exceptions
+      WHERE user_id = ? AND month = ? AND year = ?
+    `).all(userId, month, year)
+      .map((row) => normalizeMonthlyFinanceCarryKey(row.carry_key))
+      .filter(Boolean)
+  );
+
+  const insertClone = db.prepare(`
+    INSERT OR IGNORE INTO monthly_finances (user_id, month, year, type, category_id, description, formula, amount_cents, amount_mode, carry_key, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, '', 0, ?, ?, ?)
+  `);
+
+  const currentNowIso = nowIso();
+  let insertedCount = 0;
+
+  db.transaction(() => {
+    for (const row of previousRows) {
+      if (currentCarryKeys.has(row.carry_key) || blockedCarryKeys.has(row.carry_key)) {
+        continue;
+      }
+
+      const result = insertClone.run(
+        userId,
+        month,
+        year,
+        row.type,
+        row.category_id ?? null,
+        row.description ?? '',
+        row.amount_mode,
+        row.carry_key,
+        currentNowIso
+      );
+
+      if (Number(result.changes || 0) > 0) {
+        currentCarryKeys.add(row.carry_key);
+        insertedCount += 1;
+      }
+    }
+  })();
+
+  return insertedCount;
+}
+
 function ensureMonthlyFinanceScaffold(userId, month, year) {
   const alreadyInitialized = !!db.prepare(`
     SELECT 1
@@ -4662,15 +6469,15 @@ function ensureMonthlyFinanceScaffold(userId, month, year) {
   );
 
   const selectPrevious = db.prepare(`
-    SELECT type, category_id, description, amount_mode
+    SELECT type, category_id, description, amount_mode, carry_key
     FROM monthly_finances
     WHERE user_id = ? AND month = ? AND year = ? AND type = ?
     ORDER BY id ASC
   `);
 
   const insertClone = db.prepare(`
-    INSERT INTO monthly_finances (user_id, month, year, type, category_id, description, formula, amount_cents, amount_mode, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, '', 0, ?, ?)
+    INSERT INTO monthly_finances (user_id, month, year, type, category_id, description, formula, amount_cents, amount_mode, carry_key, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, '', 0, ?, ?, ?)
   `);
 
   const nowIso = new Date().toISOString();
@@ -4689,6 +6496,7 @@ function ensureMonthlyFinanceScaffold(userId, month, year) {
           row.category_id ?? null,
           row.description ?? "",
           normalizeFinanceAmountMode(row.amount_mode),
+          normalizeMonthlyFinanceCarryKey(row.carry_key) || null,
           nowIso
         );
       }
@@ -5943,6 +7751,126 @@ function getManualSharedDebtEligiblePeople(userId) {
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' }));
 }
 
+function getPrivateDebtReminderSelectablePeople(userId) {
+  return getPeopleAll(userId)
+    .filter(person => person && Number(person.active || 0) !== 0 && !person.is_self)
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' }));
+}
+
+function normalizeManualSharedDebtMode(value) {
+  return String(value || '').trim().toLowerCase() === 'private' ? 'private' : 'app';
+}
+
+function createPrivateDebtReminder({ ownerUserId, person, description, amountCents, note = null, promisedPaymentDate = null, createdAt = null }) {
+  const cleanOwnerUserId = Number(ownerUserId || 0);
+  const cleanAmountCents = Math.max(0, Number(amountCents || 0));
+  if (!cleanOwnerUserId || !person || !cleanAmountCents) return null;
+
+  const snapshots = buildPrivateDebtPersonSnapshots(person);
+  const now = createdAt || nowIso();
+  const cleanDescription = sanitizePrivateDebtDescription(description, 120);
+  const cleanNote = sanitizePrivateDebtNote(note, 400);
+  const cleanPromisedPaymentDate = normalizePrivateDebtPromisedPaymentDate(promisedPaymentDate);
+  if (!cleanDescription) return null;
+
+  const info = db.prepare(`
+    INSERT INTO private_debt_reminders (
+      owner_user_id,
+      person_id,
+      linked_user_id_snapshot,
+      person_name_snapshot,
+      person_email_snapshot,
+      person_phone_snapshot,
+      description_snapshot,
+      amount_cents,
+      request_note,
+      promised_payment_date,
+      status,
+      is_archived,
+      created_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', 0, ?, ?)
+  `).run(
+    cleanOwnerUserId,
+    snapshots.personId,
+    snapshots.linkedUserIdSnapshot,
+    snapshots.personNameSnapshot,
+    snapshots.personEmailSnapshot,
+    snapshots.personPhoneSnapshot,
+    cleanDescription,
+    cleanAmountCents,
+    cleanNote,
+    cleanPromisedPaymentDate,
+    now,
+    now
+  );
+
+  return Number(info.lastInsertRowid || 0) || null;
+}
+
+function getPrivateDebtReminderRowForOwner(ownerUserId, reminderId, { includeArchived = true } = {}) {
+  const safeOwnerUserId = Number(ownerUserId || 0);
+  const safeReminderId = Number(reminderId || 0);
+  if (!safeOwnerUserId || !safeReminderId) return null;
+
+  const where = ['r.owner_user_id = ?', 'r.id = ?'];
+  const params = [safeOwnerUserId, safeReminderId];
+  if (!includeArchived) {
+    where.push('COALESCE(r.is_archived, 0) = 0');
+  }
+
+  const row = db.prepare(`
+    SELECT
+      r.*,
+      p.name AS current_person_name,
+      COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS current_person_status,
+      COALESCE(p.active, 1) AS current_person_active
+    FROM private_debt_reminders r
+    LEFT JOIN people p ON p.id = r.person_id AND p.user_id = r.owner_user_id
+    WHERE ${where.join(' AND ')}
+    LIMIT 1
+  `).get(...params);
+
+  return row ? mapPrivateDebtReminderRow(row) : null;
+}
+
+function buildPrivateDebtReminderTrackingSearchText(item = {}) {
+  const createdDateText = item?.created_at ? formatDateBR(item.created_at) : '';
+  const promisedDateText = item?.promised_payment_date ? formatDateBR(item.promised_payment_date) : '';
+  const paymentDateText = item?.payment_date ? formatDateBR(item.payment_date) : '';
+
+  return normalizeSharedDebtSearchTerm([
+    item?.description_snapshot,
+    item?.request_note,
+    item?.settlement_note,
+    item?.display_name,
+    item?.person_name_snapshot,
+    item?.person_email_snapshot,
+    item?.person_phone_snapshot,
+    item?.current_person_name,
+    item?.status,
+    'privado',
+    createdDateText,
+    promisedDateText,
+    paymentDateText,
+    'data combinada',
+    'pagamento combinado'
+  ].filter(Boolean).join(' '));
+}
+
+function filterPrivateDebtReminderTrackingItems(items = [], filters = {}) {
+  const normalized = normalizeSharedDebtTrackingFilters(filters);
+  const searchTerm = normalizeSharedDebtSearchTerm(normalized.q || '');
+
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    if (normalized.envio === 'grouped') return false;
+    if (normalized.origin !== 'all' && normalized.origin !== 'private') return false;
+    if (normalized.installment === 'yes') return false;
+    if (searchTerm && !buildPrivateDebtReminderTrackingSearchText(item).includes(searchTerm)) return false;
+    return true;
+  });
+}
+
 function upsertPushSubscription(userId, subscription) {
   const endpoint = String(subscription?.endpoint || '').trim();
   if (!endpoint) return false;
@@ -6218,6 +8146,8 @@ async function runCardDueTodayPushSweep() {
 
     const users = getUsersWithPushSubscriptions();
     for (const userId of users) {
+      if (!isUserNotificationGroupEnabled(userId, 'card_due_today')) continue;
+
       const cardsDueToday = getPendingDueTodayCardsForUser(userId, zonedNow);
       if (!cardsDueToday.length) continue;
 
@@ -6256,6 +8186,10 @@ function startCardDueTodayPushScheduler() {
   restartCardDueTodayPushScheduler();
 }
 
+function startManualDebtDueScheduler() {
+  restartManualDebtDueScheduler();
+}
+
 function queuePushNotification(userId, payload) {
   if (!isPushConfigured()) return;
 
@@ -6264,9 +8198,14 @@ function queuePushNotification(userId, payload) {
     .catch(err => console.error('Falha ao disparar push notification:', err?.message || err));
 }
 
-function createNotification({ userId, type, title, body = null, href = null, relatedType = null, relatedId = null }) {
+function createNotification({ userId, type, title, body = null, href = null, relatedType = null, relatedId = null, groupKey = null }) {
   const targetUser = getUserRecord(userId, { includeDeleted: false });
   if (!targetUser) return null;
+
+  const resolvedGroupKey = resolveNotificationPreferenceGroupKey({ groupKey, type, title, relatedType });
+  if (resolvedGroupKey && !isUserNotificationGroupEnabled(targetUser.id, resolvedGroupKey)) {
+    return null;
+  }
 
   const result = db.prepare(`
     INSERT INTO notifications (user_id, type, title, body, href, is_read, related_type, related_id, created_at)
@@ -6277,6 +8216,292 @@ function createNotification({ userId, type, title, body = null, href = null, rel
   queuePushNotification(targetUser.id, { title, body, href, tag: pushTag });
 
   return result;
+}
+
+
+function normalizeManualDebtDueScope(value = '') {
+  return String(value || '').trim().toLowerCase() === 'pay' ? 'pay' : 'receive';
+}
+
+function normalizeManualDebtDueUserIds(userIds = null) {
+  const source = Array.isArray(userIds) ? userIds : (userIds == null ? [] : [userIds]);
+  const ids = Array.from(new Set(source.map((value) => Number(value || 0)).filter(Boolean)));
+  return ids.length ? ids : null;
+}
+
+function getManualDebtDueRuntimeConfig() {
+  const pushConfig = getPushRuntimeConfig();
+  return {
+    timezone: pushConfig.timezone || 'America/Sao_Paulo',
+    hour: Math.max(0, Math.min(23, Number(pushConfig.hour || 0))),
+    minute: Math.max(0, Math.min(59, Number(pushConfig.minute || 0))),
+    checkIntervalMinutes: Math.max(1, Number(pushConfig.checkIntervalMinutes || 10) || 10)
+  };
+}
+
+function getManualDebtDueScheduleContext(reference = dayjs()) {
+  const config = getManualDebtDueRuntimeConfig();
+  const now = dayjs(reference).tz(config.timezone);
+  const scheduledAt = now.startOf('day').hour(config.hour).minute(config.minute).second(0).millisecond(0);
+  return {
+    config,
+    now,
+    scheduledAt,
+    dateKey: now.format('YYYY-MM-DD')
+  };
+}
+
+function getManualDebtDueBucketsForDate(dateKey, { userIds = null } = {}) {
+  const safeDateKey = String(dateKey || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(safeDateKey)) return new Map();
+
+  const filteredUserIds = normalizeManualDebtDueUserIds(userIds);
+  const payUserFilterSql = filteredUserIds ? ` AND r.receiver_user_id IN (${filteredUserIds.map(() => '?').join(', ')})` : '';
+  const receiveUserFilterSql = filteredUserIds ? ` AND r.requester_user_id IN (${filteredUserIds.map(() => '?').join(', ')})` : '';
+  const privateUserFilterSql = filteredUserIds ? ` AND r.owner_user_id IN (${filteredUserIds.map(() => '?').join(', ')})` : '';
+
+  const payRows = db.prepare(`
+    SELECT
+      r.id,
+      r.receiver_user_id AS target_user_id,
+      'pay' AS scope,
+      'shared_request' AS item_kind,
+      r.description_snapshot,
+      r.amount_cents,
+      u.name AS counterpart_name,
+      u.email AS counterpart_email
+    FROM shared_debt_requests r
+    JOIN users u ON u.id = r.requester_user_id
+    LEFT JOIN shared_debt_archives a
+      ON a.request_id = r.id
+     AND a.user_id = r.receiver_user_id
+    WHERE r.request_kind = 'manual'
+      AND r.promised_payment_date = ?
+      AND r.status IN ('pending', 'accepted')
+      AND r.payment_marked_at IS NULL
+      AND COALESCE(a.is_archived, 0) = 0
+      ${payUserFilterSql}
+    ORDER BY r.created_at ASC, r.id ASC
+  `).all(safeDateKey, ...(filteredUserIds || []));
+
+  const receiveRows = db.prepare(`
+    SELECT
+      r.id,
+      r.requester_user_id AS target_user_id,
+      'receive' AS scope,
+      'shared_request' AS item_kind,
+      r.description_snapshot,
+      r.amount_cents,
+      u.name AS counterpart_name,
+      u.email AS counterpart_email
+    FROM shared_debt_requests r
+    JOIN users u ON u.id = r.receiver_user_id
+    LEFT JOIN shared_debt_archives a
+      ON a.request_id = r.id
+     AND a.user_id = r.requester_user_id
+    WHERE r.request_kind = 'manual'
+      AND r.promised_payment_date = ?
+      AND r.status IN ('pending', 'accepted')
+      AND r.payment_marked_at IS NULL
+      AND COALESCE(a.is_archived, 0) = 0
+      ${receiveUserFilterSql}
+    ORDER BY r.created_at ASC, r.id ASC
+  `).all(safeDateKey, ...(filteredUserIds || []));
+
+  const privateRows = db.prepare(`
+    SELECT
+      r.id,
+      r.owner_user_id AS target_user_id,
+      'receive' AS scope,
+      'private_reminder' AS item_kind,
+      r.description_snapshot,
+      r.amount_cents,
+      COALESCE(r.person_name_snapshot, p.name, 'Contato') AS counterpart_name,
+      COALESCE(r.person_email_snapshot, p.email) AS counterpart_email
+    FROM private_debt_reminders r
+    LEFT JOIN people p ON p.id = r.person_id AND p.user_id = r.owner_user_id
+    WHERE r.promised_payment_date = ?
+      AND r.status = 'open'
+      AND COALESCE(r.is_archived, 0) = 0
+      ${privateUserFilterSql}
+    ORDER BY r.created_at ASC, r.id ASC
+  `).all(safeDateKey, ...(filteredUserIds || []));
+
+  const buckets = new Map();
+  const append = (row) => {
+    const userId = Number(row?.target_user_id || 0);
+    if (!userId) return;
+    if (!buckets.has(userId)) {
+      buckets.set(userId, { userId, pay: [], receive: [] });
+    }
+    const entry = buckets.get(userId);
+    entry[normalizeManualDebtDueScope(row?.scope)].push({
+      id: Number(row?.id || 0) || null,
+      item_kind: String(row?.item_kind || 'shared_request').trim() || 'shared_request',
+      description_snapshot: String(row?.description_snapshot || '').trim(),
+      amount_cents: Math.max(0, Number(row?.amount_cents || 0) || 0),
+      counterpart_name: String(row?.counterpart_name || '').trim() || null,
+      counterpart_email: String(row?.counterpart_email || '').trim() || null
+    });
+  };
+
+  [...payRows, ...receiveRows, ...privateRows].forEach(append);
+  return buckets;
+}
+
+function hasManualDebtDueAlertLog({ userId, scope, dateKey }) {
+  const safeUserId = Number(userId || 0);
+  const safeScope = normalizeManualDebtDueScope(scope);
+  const safeDateKey = String(dateKey || '').trim();
+  if (!safeUserId || !/^\d{4}-\d{2}-\d{2}$/.test(safeDateKey)) return false;
+
+  const row = db.prepare(`
+    SELECT id
+    FROM manual_debt_due_alert_logs
+    WHERE user_id = ? AND scope = ? AND date_key = ?
+    LIMIT 1
+  `).get(safeUserId, safeScope, safeDateKey);
+
+  return !!row;
+}
+
+function recordManualDebtDueAlertLog({ userId, scope, dateKey, payload = null }) {
+  const safeUserId = Number(userId || 0);
+  const safeScope = normalizeManualDebtDueScope(scope);
+  const safeDateKey = String(dateKey || '').trim();
+  if (!safeUserId || !/^\d{4}-\d{2}-\d{2}$/.test(safeDateKey)) return false;
+
+  const info = db.prepare(`
+    INSERT OR IGNORE INTO manual_debt_due_alert_logs (user_id, scope, date_key, payload_json, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(safeUserId, safeScope, safeDateKey, payload ? JSON.stringify(payload) : null, nowIso());
+
+  return Number(info.changes || 0) > 0;
+}
+
+function buildManualDebtDueCounterpartPreview(items = []) {
+  const names = Array.from(new Set(
+    (Array.isArray(items) ? items : [])
+      .map((item) => String(item?.counterpart_name || item?.counterpart_email || '').trim())
+      .filter(Boolean)
+  ));
+
+  if (!names.length) return '';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} e ${names[1]}`;
+  return `${names[0]}, ${names[1]} e mais ${names.length - 2}`;
+}
+
+function resolveManualDebtDueHref(scope, items = []) {
+  const safeScope = normalizeManualDebtDueScope(scope);
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!list.length) return '/shared-debts';
+
+  if (list.length === 1) {
+    const item = list[0];
+    if (item.item_kind === 'private_reminder') return `/shared-debts?private=${item.id}`;
+    return `/shared-debts?request=${item.id}`;
+  }
+
+  if (safeScope === 'pay') return '/shared-debts#received';
+
+  const kinds = Array.from(new Set(list.map((item) => item.item_kind)));
+  if (kinds.length === 1 && kinds[0] === 'private_reminder') return '/shared-debts#private-reminders';
+  if (kinds.length === 1 && kinds[0] === 'shared_request') return '/shared-debts#sent';
+  return '/shared-debts';
+}
+
+function buildManualDebtDueNotificationPayload(scope, items = [], dateKey = null) {
+  const safeScope = normalizeManualDebtDueScope(scope);
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  const totalCents = list.reduce((sum, item) => sum + Math.max(0, Number(item?.amount_cents || 0) || 0), 0);
+  const counterpartPreview = buildManualDebtDueCounterpartPreview(list);
+  const href = resolveManualDebtDueHref(safeScope, list);
+
+  if (list.length === 1) {
+    const item = list[0];
+    const counterpart = item.counterpart_name || item.counterpart_email || 'alguém';
+    const description = item.description_snapshot || 'esse combinado';
+    return {
+      title: safeScope === 'pay' ? 'Hoje é o dia combinado para pagar' : 'Hoje é o dia combinado para receber',
+      body: safeScope === 'pay'
+        ? `Tem ${formatBRLFromCents(item.amount_cents)} combinado com ${counterpart} em ${description}.`
+        : `Tem ${formatBRLFromCents(item.amount_cents)} combinado com ${counterpart} em ${description} batendo hoje.`,
+      href,
+      relatedType: item.item_kind === 'private_reminder' ? 'private_debt_reminder' : 'shared_debt_request',
+      relatedId: item.id || null,
+      payloadMeta: { scope: safeScope, dateKey, totalCents, count: 1, itemKind: item.item_kind }
+    };
+  }
+
+  return {
+    title: safeScope === 'pay' ? 'Hoje tem combinados para pagar' : 'Hoje tem combinados para receber',
+    body: `São ${formatCountLabel(list.length, 'combinado', 'combinados')} batendo hoje, somando ${formatBRLFromCents(totalCents)}${counterpartPreview ? ` com ${counterpartPreview}` : ''}.`,
+    href,
+    relatedType: list.every((item) => item.item_kind === 'private_reminder') ? 'private_debt_reminder' : 'shared_debt_request',
+    relatedId: list.length === 1 ? list[0].id || null : null,
+    payloadMeta: { scope: safeScope, dateKey, totalCents, count: list.length }
+  };
+}
+
+function buildManualDebtDueDashboardAlert(scope, items = [], dateKey = null) {
+  const payload = buildManualDebtDueNotificationPayload(scope, items, dateKey);
+  return {
+    type: normalizeManualDebtDueScope(scope) === 'pay' ? 'warning' : 'info',
+    icon: normalizeManualDebtDueScope(scope) === 'pay' ? '💸' : '📥',
+    title: normalizeManualDebtDueScope(scope) === 'pay'
+      ? 'Tem combinado batendo hoje para pagar'
+      : 'Tem combinado batendo hoje para receber',
+    description: payload.body,
+    href: payload.href
+  };
+}
+
+async function deliverManualDebtDueAlertsForDate(dateKey, { userIds = null } = {}) {
+  const buckets = getManualDebtDueBucketsForDate(dateKey, { userIds });
+  let deliveredCount = 0;
+
+  for (const [userId, bucket] of buckets.entries()) {
+    for (const scope of ['pay', 'receive']) {
+      const items = Array.isArray(bucket?.[scope]) ? bucket[scope] : [];
+      if (!items.length) continue;
+      if (hasManualDebtDueAlertLog({ userId, scope, dateKey })) continue;
+
+      const payload = buildManualDebtDueNotificationPayload(scope, items, dateKey);
+      const result = createNotification({
+        userId,
+        type: 'shared_debt_request',
+        title: payload.title,
+        body: payload.body,
+        href: payload.href,
+        relatedType: payload.relatedType,
+        relatedId: payload.relatedId,
+        groupKey: 'shared_debt_payments'
+      });
+
+      if (result) {
+        recordManualDebtDueAlertLog({ userId, scope, dateKey, payload: payload.payloadMeta });
+        deliveredCount += 1;
+      }
+    }
+  }
+
+  return deliveredCount;
+}
+
+async function runManualDebtDueAlertSweep() {
+  if (scheduledManualDebtDueSweepRunning) return;
+  scheduledManualDebtDueSweepRunning = true;
+
+  try {
+    const { now, scheduledAt, dateKey } = getManualDebtDueScheduleContext();
+    if (now.isBefore(scheduledAt)) return;
+    await deliverManualDebtDueAlertsForDate(dateKey);
+  } catch (error) {
+    console.error('Falha no sweep de alertas da data combinada:', error?.message || error);
+  } finally {
+    scheduledManualDebtDueSweepRunning = false;
+  }
 }
 
 function getUnreadNotificationCount(userId) {
@@ -7014,7 +9239,8 @@ function sendSharedDebtDraftQueue(userId, queueId) {
     }),
     href: `/shared-debts?batch=${batchId}`,
     relatedType: 'shared_debt_batch',
-    relatedId: batchId
+    relatedId: batchId,
+    groupKey: 'shared_debt_new'
   });
 
   return {
@@ -7231,7 +9457,8 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
               body: `${requesterDisplayName} ajustou a cobrança de ${formatBRLFromCents(row.share_cents)} (${txn.description}).`,
               href: `/shared-debts?request=${existing.id}`,
               relatedType: 'shared_debt_request',
-              relatedId: existing.id
+              relatedId: existing.id,
+              groupKey: 'shared_debt_updates'
             });
           }
         }
@@ -7305,7 +9532,8 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
               body: `${requesterDisplayName} te enviou uma cobrança de ${formatBRLFromCents(row.share_cents)} (${txn.description}).`,
               href: `/shared-debts?request=${requestId}`,
               relatedType: 'shared_debt_request',
-              relatedId: requestId
+              relatedId: requestId,
+              groupKey: 'shared_debt_new'
             });
           }
         }
@@ -7891,7 +10119,7 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
   const cards = getActiveCards(userId).map(({ id, name, close_day, due_day, brand }) => ({ id, name, close_day, due_day, brand }));
   const purchaseCategories = getPurchaseCategories(userId);
 
-  res.render("home", {
+  return safeRenderView(res, "home", {
     groupedRecent: groupedRecentDisplay,
     featuredOpenGroup,
     formatBRLFromCents,
@@ -8039,6 +10267,159 @@ app.get("/month/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
 
   return sendMonthTransactionsCsv(res, userId, month, year);
 });
+
+function buildPrivateDebtReminderSnapshotsForPerson(ownerUserId, personId) {
+  const safeOwnerUserId = Number(ownerUserId || 0);
+  const safePersonId = Number(personId || 0);
+  if (!safeOwnerUserId || !safePersonId) return null;
+
+  const person = db.prepare(`
+    SELECT
+      p.id,
+      p.name,
+      p.email,
+      p.phone,
+      p.deleted_label,
+      pal.linked_user_id
+    FROM people p
+    LEFT JOIN person_app_links pal ON pal.owner_user_id = p.user_id AND pal.person_id = p.id
+    WHERE p.id = ? AND p.user_id = ?
+    LIMIT 1
+  `).get(safePersonId, safeOwnerUserId);
+
+  if (!person) return null;
+  return buildPrivateDebtPersonSnapshots(person);
+}
+
+function getPrivateDebtReminderRowsForOwner(ownerUserId, { includeArchived = false, statuses = null } = {}) {
+  const safeOwnerUserId = Number(ownerUserId || 0);
+  if (!safeOwnerUserId) return [];
+
+  const where = ['r.owner_user_id = ?'];
+  const params = [safeOwnerUserId];
+
+  if (!includeArchived) {
+    where.push('COALESCE(r.is_archived, 0) = 0');
+  }
+
+  const normalizedStatuses = Array.isArray(statuses)
+    ? Array.from(new Set(statuses
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean)
+      .filter((value) => [PRIVATE_DEBT_STATUS_OPEN, PRIVATE_DEBT_STATUS_SETTLED, PRIVATE_DEBT_STATUS_CANCELLED].includes(value))))
+    : [];
+
+  if (normalizedStatuses.length) {
+    where.push(`r.status IN (${normalizedStatuses.map(() => '?').join(', ')})`);
+    params.push(...normalizedStatuses);
+  }
+
+  const rows = db.prepare(`
+    SELECT
+      r.*,
+      p.name AS current_person_name,
+      COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) AS current_person_status,
+      COALESCE(p.active, 1) AS current_person_active
+    FROM private_debt_reminders r
+    LEFT JOIN people p ON p.id = r.person_id AND p.user_id = r.owner_user_id
+    WHERE ${where.join(' AND ')}
+    ORDER BY
+      CASE r.status
+        WHEN 'open' THEN 0
+        WHEN 'settled' THEN 1
+        WHEN 'cancelled' THEN 2
+        ELSE 3
+      END,
+      COALESCE(r.updated_at, r.created_at) DESC,
+      r.id DESC
+  `).all(...params);
+
+  return rows.map((row) => mapPrivateDebtReminderRow(row));
+}
+
+function getOpenPrivateDebtReceivableSummary(userId) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) {
+    return { totalCount: 0, totalCents: 0 };
+  }
+
+  const row = db.prepare(`
+    SELECT
+      COUNT(*) AS total_requests,
+      COALESCE(SUM(amount_cents), 0) AS total_cents
+    FROM private_debt_reminders
+    WHERE owner_user_id = ?
+      AND status = 'open'
+      AND COALESCE(is_archived, 0) = 0
+  `).get(safeUserId) || { total_requests: 0, total_cents: 0 };
+
+  return {
+    totalCount: Math.max(0, Number(row.total_requests || 0)),
+    totalCents: Math.max(0, Number(row.total_cents || 0))
+  };
+}
+
+function getPrivateDebtReminderDashboardSummary(ownerUserId) {
+  const safeOwnerUserId = Number(ownerUserId || 0);
+  if (!safeOwnerUserId) {
+    return {
+      activeCount: 0,
+      activeCents: 0,
+      readyToArchiveCount: 0,
+      readyToArchiveCents: 0,
+      archivedCount: 0,
+      archivedCents: 0,
+      hasActive: false,
+      hasReadyToArchive: false,
+      hasArchived: false
+    };
+  }
+
+  const row = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN COALESCE(is_archived, 0) = 0 AND status = 'open' THEN 1 ELSE 0 END), 0) AS active_count,
+      COALESCE(SUM(CASE WHEN COALESCE(is_archived, 0) = 0 AND status = 'open' THEN amount_cents ELSE 0 END), 0) AS active_cents,
+      COALESCE(SUM(CASE WHEN COALESCE(is_archived, 0) = 0 AND status IN (${PRIVATE_DEBT_ARCHIVABLE_STATUS_SQL}) THEN 1 ELSE 0 END), 0) AS ready_to_archive_count,
+      COALESCE(SUM(CASE WHEN COALESCE(is_archived, 0) = 0 AND status IN (${PRIVATE_DEBT_ARCHIVABLE_STATUS_SQL}) THEN amount_cents ELSE 0 END), 0) AS ready_to_archive_cents,
+      COALESCE(SUM(CASE WHEN COALESCE(is_archived, 0) = 1 THEN 1 ELSE 0 END), 0) AS archived_count,
+      COALESCE(SUM(CASE WHEN COALESCE(is_archived, 0) = 1 THEN amount_cents ELSE 0 END), 0) AS archived_cents
+    FROM private_debt_reminders
+    WHERE owner_user_id = ?
+  `).get(safeOwnerUserId) || {};
+
+  const activeCount = Math.max(0, Number(row.active_count || 0));
+  const activeCents = Math.max(0, Number(row.active_cents || 0));
+  const readyToArchiveCount = Math.max(0, Number(row.ready_to_archive_count || 0));
+  const readyToArchiveCents = Math.max(0, Number(row.ready_to_archive_cents || 0));
+  const archivedCount = Math.max(0, Number(row.archived_count || 0));
+  const archivedCents = Math.max(0, Number(row.archived_cents || 0));
+
+  return {
+    activeCount,
+    activeCents,
+    readyToArchiveCount,
+    readyToArchiveCents,
+    archivedCount,
+    archivedCents,
+    hasActive: activeCount > 0,
+    hasReadyToArchive: readyToArchiveCount > 0,
+    hasArchived: archivedCount > 0
+  };
+}
+
+function detachPrivateDebtRemindersFromPerson(ownerUserId, personId) {
+  const safeOwnerUserId = Number(ownerUserId || 0);
+  const safePersonId = Number(personId || 0);
+  if (!safeOwnerUserId || !safePersonId) return;
+
+  db.prepare(`
+    UPDATE private_debt_reminders
+    SET person_id = NULL,
+        updated_at = ?
+    WHERE owner_user_id = ?
+      AND person_id = ?
+  `).run(nowIso(), safeOwnerUserId, safePersonId);
+}
 
 function getSharedDebtRequestsReceived(userId) {
   return db.prepare(`
@@ -8235,12 +10616,15 @@ function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
 
   const cardOwed = buildCardSideSummary('owed');
   const cardReceivable = buildCardSideSummary('receivable');
+  const privateReceivable = getOpenPrivateDebtReceivableSummary(userId);
 
   return {
     owedCents: Number(manualOwed.total_cents || 0) + cardOwed.totalCents,
     owedCount: Number(manualOwed.total_requests || 0) + cardOwed.totalCount,
-    receivableCents: Number(manualReceivable.total_cents || 0) + cardReceivable.totalCents,
-    receivableCount: Number(manualReceivable.total_requests || 0) + cardReceivable.totalCount
+    receivableCents: Number(manualReceivable.total_cents || 0) + cardReceivable.totalCents + privateReceivable.totalCents,
+    receivableCount: Number(manualReceivable.total_requests || 0) + cardReceivable.totalCount + privateReceivable.totalCount,
+    privateReceivableCents: privateReceivable.totalCents,
+    privateReceivableCount: privateReceivable.totalCount
   };
 }
 
@@ -8261,7 +10645,7 @@ function normalizeSharedDebtTrackingFilters(query = {}) {
 
   return {
     envio: ['all', 'single', 'grouped'].includes(envio) ? envio : 'all',
-    origin: ['all', 'single', 'multiple', 'installment', 'mixed', 'manual'].includes(origin) ? origin : 'all',
+    origin: ['all', 'single', 'multiple', 'installment', 'mixed', 'manual', 'private'].includes(origin) ? origin : 'all',
     installment: ['all', 'yes', 'no'].includes(installment) ? installment : 'all',
     q
   };
@@ -8283,6 +10667,7 @@ function buildSharedDebtTrackingSearchText(item = {}) {
     ? monthLabel(item.source_due_month, item.source_due_year)
     : '';
   const txnDateText = item?.source_txn_date ? formatDateBR(item.source_txn_date) : '';
+  const promisedDateText = item?.promised_payment_date ? formatDateBR(item.promised_payment_date) : '';
 
   return normalizeSharedDebtSearchTerm([
     item?.description_snapshot,
@@ -8298,7 +10683,10 @@ function buildSharedDebtTrackingSearchText(item = {}) {
     item?.batch_origin_kind,
     item?.status,
     monthText,
-    txnDateText
+    txnDateText,
+    promisedDateText,
+    'data combinada',
+    'pagamento combinado'
   ].filter(Boolean).join(' '));
 }
 
@@ -8458,6 +10846,80 @@ app.post('/shared-debts/:id/unarchive', ensureAuthenticated, (req, res) => {
   return res.redirect(fallbackRedirect);
 });
 
+app.post('/shared-debts/private/:id/archive', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const reminderId = Number(req.params.id || 0);
+  const fallbackRedirect = resolveSharedDebtViewPath(req.body.return_to, redirectBackOr(req, '/shared-debts'));
+
+  if (!reminderId) {
+    setFlash(req, 'error', 'Ops, esse lembrete privado não parece válido.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const reminder = getPrivateDebtReminderRowForOwner(userId, reminderId, { includeArchived: true });
+  if (!reminder) {
+    setFlash(req, 'error', 'Lembrete privado não encontrado.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (Number(reminder.is_archived || 0) > 0) {
+    setFlash(req, 'info', 'Esse lembrete privado já estava curtindo o arquivo.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (!canArchivePrivateDebtStatus(reminder.status)) {
+    setFlash(req, 'info', 'Esse lembrete privado ainda está em aberto, então continua nas ativas até você confirmar o recebimento.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const now = nowIso();
+  db.prepare(`
+    UPDATE private_debt_reminders
+    SET is_archived = 1,
+        archived_at = ?,
+        restored_at = NULL,
+        updated_at = ?
+    WHERE id = ? AND owner_user_id = ?
+  `).run(now, now, reminderId, userId);
+
+  setFlash(req, 'success', 'Lembrete privado arquivado. A central respirou e o histórico continuou intacto.');
+  return res.redirect(fallbackRedirect);
+});
+
+app.post('/shared-debts/private/:id/unarchive', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const reminderId = Number(req.params.id || 0);
+  const fallbackRedirect = resolveSharedDebtViewPath(req.body.return_to, redirectBackOr(req, '/shared-debts/archive'));
+
+  if (!reminderId) {
+    setFlash(req, 'error', 'Ops, esse lembrete privado não parece válido.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const reminder = getPrivateDebtReminderRowForOwner(userId, reminderId, { includeArchived: true });
+  if (!reminder) {
+    setFlash(req, 'error', 'Lembrete privado não encontrado.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  if (Number(reminder.is_archived || 0) === 0) {
+    setFlash(req, 'info', 'Esse lembrete privado já está nas ativas.');
+    return res.redirect(fallbackRedirect);
+  }
+
+  const now = nowIso();
+  db.prepare(`
+    UPDATE private_debt_reminders
+    SET is_archived = 0,
+        restored_at = ?,
+        updated_at = ?
+    WHERE id = ? AND owner_user_id = ?
+  `).run(now, now, reminderId, userId);
+
+  setFlash(req, 'success', 'Lembrete privado restaurado. Ele voltou para as ativas sem perder o fio da meada.');
+  return res.redirect(fallbackRedirect);
+});
+
 app.post('/shared-debts/bulk/archive', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const requestIds = parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id);
@@ -8571,18 +11033,22 @@ app.post('/shared-debts/draft-queues/:id/discard', ensureAuthenticated, (req, re
 
 app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
+  const mode = normalizeManualSharedDebtMode(req.body.mode || req.body.delivery_mode || req.body.kind);
   const personId = Number(req.body.person_id || 0);
-  const description = String(req.body.description || '').trim();
-  const note = String(req.body.note || '').trim() || null;
+  const description = sanitizePrivateDebtDescription(req.body.description || '', 120);
+  const note = sanitizePrivateDebtNote(req.body.note || '', 400);
+  const promisedPaymentDate = normalizePrivateDebtPromisedPaymentDate(req.body.promised_payment_date || req.body.promisedPaymentDate || null);
   const amountCents = centsFromPtBrMoney(req.body.amount);
 
   if (!personId) {
-    setFlash(req, 'error', 'Escolha uma amizade para enviar esse lembrete avulso.');
+    setFlash(req, 'error', mode === 'private'
+      ? 'Escolha um contato para guardar esse lembrete privado.'
+      : 'Escolha uma amizade para enviar esse lembrete avulso.');
     return res.redirect('/shared-debts');
   }
 
   if (!description) {
-    setFlash(req, 'error', 'Dê um nome curto para essa cobrança avulsa antes de enviar.');
+    setFlash(req, 'error', 'Dê um nome curto para esse combinado antes de continuar.');
     return res.redirect('/shared-debts');
   }
 
@@ -8591,9 +11057,41 @@ app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
     return res.redirect('/shared-debts');
   }
 
+  if (mode === 'private') {
+    const person = getPrivateDebtReminderSelectablePeople(userId).find(entry => Number(entry.id || 0) === personId);
+    if (!person) {
+      setFlash(req, 'error', 'Esse contato não está disponível para virar lembrete privado agora.');
+      return res.redirect('/shared-debts');
+    }
+
+    const reminderId = createPrivateDebtReminder({
+      ownerUserId: userId,
+      person,
+      description,
+      amountCents,
+      note,
+      promisedPaymentDate,
+      createdAt: nowIso()
+    });
+
+    if (!reminderId) {
+      setFlash(req, 'error', 'Não consegui guardar esse lembrete privado agora. Tenta de novo em um instantinho.');
+      return res.redirect('/shared-debts');
+    }
+
+    const receiverName = person.name || person.linked_user_name || person.linked_user_email || 'esse contato';
+    const promisedLabel = promisedPaymentDate ? ` Pagamento combinado para ${formatDateBR(promisedPaymentDate)}.` : '';
+    if (person.can_share_charge && person.friendship_active) {
+      setFlash(req, 'success', `Lembrete privado criado para ${receiverName}. Fica só no seu app, sem avisar a outra pessoa.${promisedLabel}`);
+    } else {
+      setFlash(req, 'success', `Lembrete privado criado para ${receiverName}. Agora ele entra no seu controle até você confirmar o recebimento.${promisedLabel}`);
+    }
+    return res.redirect(`/shared-debts?private=${reminderId}`);
+  }
+
   const person = getManualSharedDebtEligiblePeople(userId).find(entry => Number(entry.id || 0) === personId);
   if (!person) {
-    setFlash(req, 'error', 'Essa amizade não está pronta para receber cobrança avulsa agora.');
+    setFlash(req, 'error', 'Essa amizade não está pronta para receber cobrança avulsa agora. Se preferir, dá para guardar como lembrete privado só no seu app.');
     return res.redirect('/shared-debts');
   }
 
@@ -8621,9 +11119,9 @@ app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
       requester_user_id, requester_person_id, receiver_user_id, source_person_id,
       source_transaction_id, source_allocation_id, source_due_month, source_due_year, source_txn_date_snapshot,
       card_id, card_name_snapshot, description_snapshot, amount_cents,
-      receiver_email_snapshot, receiver_name_snapshot, request_note, response_note,
+      receiver_email_snapshot, receiver_name_snapshot, request_note, promised_payment_date, response_note,
       status, batch_id, request_kind, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, NULL, NULL, ?, ?, ?, ?, ?, NULL, 'pending', ?, 'manual', ?, ?)
+    ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, NULL, 'pending', ?, 'manual', ?, ?)
   `).run(
     userId,
     requesterPerson?.id || null,
@@ -8635,6 +11133,7 @@ app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
     receiverEmail,
     receiverName,
     note,
+    promisedPaymentDate,
     batchId,
     now,
     now
@@ -8651,11 +11150,66 @@ app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
     body: `${actorName} te enviou um lembrete de ${formatBRLFromCents(amountCents)} (${description}).${buildNoteSuffix(note, 'Recado')}`,
     href: `/shared-debts?request=${requestId}`,
     relatedType: 'shared_debt_request',
-    relatedId: requestId
+    relatedId: requestId,
+    groupKey: 'shared_debt_new'
   });
 
-  setFlash(req, 'success', `Pronto! O lembrete avulso para ${receiverName} já foi enviado com a data de hoje.`);
+  setFlash(req, 'success', `Pronto! O lembrete avulso para ${receiverName} já foi enviado com a data de hoje.${promisedPaymentDate ? ` Pagamento combinado para ${formatDateBR(promisedPaymentDate)}.` : ''}`);
   return res.redirect(`/shared-debts?request=${requestId}`);
+});
+
+app.post('/shared-debts/private/:id/settle', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const reminderId = Number(req.params.id || 0);
+  const note = sanitizePrivateDebtNote(req.body.note || '', 400);
+  const paymentDate = normalizePrivateDebtPaymentDate(req.body.payment_date || req.body.paymentDate || null);
+
+  if (!reminderId) {
+    setFlash(req, 'error', 'Esse lembrete privado não parece válido.');
+    return res.redirect('/shared-debts');
+  }
+
+  const reminder = getPrivateDebtReminderRowForOwner(userId, reminderId, { includeArchived: false });
+  if (!reminder) {
+    setFlash(req, 'error', 'Não encontrei esse lembrete privado por aqui.');
+    return res.redirect('/shared-debts');
+  }
+
+  if (reminder.status === PRIVATE_DEBT_STATUS_SETTLED) {
+    setFlash(req, 'info', 'Esse lembrete privado já estava quitado.');
+    return res.redirect(`/shared-debts?private=${reminderId}`);
+  }
+
+  if (reminder.status !== PRIVATE_DEBT_STATUS_OPEN) {
+    setFlash(req, 'info', 'Esse lembrete privado não está aberto para confirmação agora.');
+    return res.redirect(`/shared-debts?private=${reminderId}`);
+  }
+
+  const now = nowIso();
+  db.prepare(`
+    UPDATE private_debt_reminders
+    SET status = ?,
+        settlement_note = ?,
+        payment_date = ?,
+        settled_at = ?,
+        updated_at = ?
+    WHERE id = ?
+      AND owner_user_id = ?
+      AND status = ?
+      AND COALESCE(is_archived, 0) = 0
+  `).run(
+    PRIVATE_DEBT_STATUS_SETTLED,
+    note,
+    paymentDate,
+    now,
+    now,
+    reminderId,
+    userId,
+    PRIVATE_DEBT_STATUS_OPEN
+  );
+
+  setFlash(req, 'success', `Boa! O lembrete privado com ${reminder.display_name || 'esse contato'} foi marcado como recebido.`);
+  return res.redirect(`/shared-debts?private=${reminderId}`);
 });
 
 app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) => {
@@ -8743,7 +11297,8 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
       body,
       href: firstRequestId ? `/shared-debts?request=${firstRequestId}` : '/shared-debts',
       relatedType: 'shared_debt_batch',
-      relatedId: batchId
+      relatedId: batchId,
+      groupKey: 'shared_debt_updates'
     });
   })();
 
@@ -8820,7 +11375,8 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
       body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
-      relatedId: requestId
+      relatedId: requestId,
+      groupKey: 'shared_debt_updates'
     });
   })();
 
@@ -8903,7 +11459,8 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
       body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
-      relatedId: requestId
+      relatedId: requestId,
+      groupKey: 'shared_debt_updates'
     });
   })();
 
@@ -9193,7 +11750,8 @@ app.post('/shared-debts/monthly-settlements/:id/report-payment', ensureAuthentic
       body: `${actorName} avisou um Pix de ${formatBRLFromCents(intentAmountCents)} para ${monthLabel(settlementRow.month, settlementRow.year)}.${buildNoteSuffix(note)}`,
       href: `/shared-debts?settlement=${settlementId}`,
       relatedType: 'shared_debt_payment_intent',
-      relatedId: intentId
+      relatedId: intentId,
+      groupKey: 'monthly_pix_updates'
     });
   })();
 
@@ -9369,7 +11927,8 @@ app.post('/shared-debts/monthly-settlements/:id/confirm-payment', ensureAuthenti
       body: `${actorName} confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. ${buildSharedDebtCardMonthlyIntentResultSummary(preview)}${buildNoteSuffix(note)}`,
       href: `/shared-debts?settlement=${settlementId}`,
       relatedType: 'shared_debt_payment_intent',
-      relatedId: intentId
+      relatedId: intentId,
+      groupKey: 'monthly_pix_updates'
     });
   })();
 
@@ -9463,7 +12022,8 @@ app.post('/shared-debts/monthly-settlements/:id/reject-payment', ensureAuthentic
       body: `${actorName} não confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. O valor voltou para o saldo aberto dessa carteira.${buildNoteSuffix(note)}`,
       href: `/shared-debts?settlement=${settlementId}`,
       relatedType: 'shared_debt_payment_intent',
-      relatedId: intentId
+      relatedId: intentId,
+      groupKey: 'monthly_pix_updates'
     });
   })();
 
@@ -9664,7 +12224,8 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
       body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
-      relatedId: requestId
+      relatedId: requestId,
+      groupKey: 'shared_debt_payments'
     });
   })();
 
@@ -9738,7 +12299,8 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
       body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
-      relatedId: requestId
+      relatedId: requestId,
+      groupKey: 'shared_debt_payments'
     });
   })();
 
@@ -9807,7 +12369,8 @@ app.post('/shared-debts/bulk/mark-paid', ensureAuthenticated, (req, res) => {
         body,
         href: group.batchId ? `/shared-debts?batch=${group.batchId}` : `/shared-debts?request=${firstRow.id}`,
         relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
-        relatedId: group.batchId || firstRow.id
+        relatedId: group.batchId || firstRow.id,
+        groupKey: 'shared_debt_payments'
       });
     });
   })();
@@ -9876,7 +12439,8 @@ app.post('/shared-debts/bulk/confirm-receipt', ensureAuthenticated, (req, res) =
         body,
         href: group.batchId ? `/shared-debts?batch=${group.batchId}` : `/shared-debts?request=${firstRow.id}`,
         relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
-        relatedId: group.batchId || firstRow.id
+        relatedId: group.batchId || firstRow.id,
+        groupKey: 'shared_debt_payments'
       });
     });
   })();
@@ -10214,6 +12778,7 @@ function offboardContactFromActiveExperience(ownerUserId, personId) {
     }
 
     archivePendingFriendRequestsForSourcePerson(ownerUserId, personId, 'archived_by_contact_delete');
+    detachPrivateDebtRemindersFromPerson(ownerUserId, personId);
     db.prepare(`DELETE FROM person_app_links WHERE owner_user_id = ? AND person_id = ?`).run(ownerUserId, personId);
     tombstonePersonRecord(ownerUserId, personId);
   })();
@@ -10234,6 +12799,7 @@ function offboardUserAccess(actorUserId, targetUserId) {
     db.prepare(`DELETE FROM push_subscriptions WHERE user_id = ?`).run(targetUserId);
     db.prepare(`DELETE FROM scheduled_push_logs WHERE user_id = ?`).run(targetUserId);
     db.prepare(`DELETE FROM notifications WHERE user_id = ?`).run(targetUserId);
+    db.prepare(`DELETE FROM user_notification_preferences WHERE user_id = ?`).run(targetUserId);
     tombstoneUserRecord(targetUserId);
   })();
 }
@@ -10340,7 +12906,7 @@ app.get("/people", ensureAuthenticated, (req, res) => {
   const pendingFriendRequests = getPendingReceivedFriendRequests(userId);
   const highlightedFriendRequestId = Number(req.query.friendRequest || req.query.friend_request || 0) || null;
 
-  res.render("people", {
+  return safeRenderView(res, "people", {
     selfPerson,
     contacts,
     people: contacts,
@@ -10355,8 +12921,29 @@ app.get("/people", ensureAuthenticated, (req, res) => {
     phoneDefaultCountry: DEFAULT_PHONE_COUNTRY,
     profileSignatureVibeOptions: PROFILE_SIGNATURE_VIBE_OPTIONS,
     profileSignatureMaxLength: PROFILE_SIGNATURE_MAX_LENGTH,
+    appPinSecurity: buildAppPinViewModel(getUserSecuritySettings(userId), { reauthFresh: hasFreshPinReauthSession(req, userId) }),
+    appPasskeys: buildPasskeyManagementViewModel(req, userId),
+    notificationPreferences: buildUserNotificationPreferenceViewModel(userId),
     title: "Amigos"
   });
+});
+
+app.post('/people/notification-preferences', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const nextValues = USER_NOTIFICATION_PREFERENCE_KEYS.reduce((acc, key) => {
+      acc[key] = normalizeNotificationPreferenceToggle(req.body[`pref_${key}`]);
+      return acc;
+    }, {});
+
+    upsertUserNotificationPreferences(userId, nextValues);
+    setFlash(req, 'success', 'Pronto! Seus alertas por assunto ficaram salvos do seu jeitinho.');
+  } catch (error) {
+    setFlash(req, 'error', error?.message || 'Não consegui salvar suas preferências de alerta agora.');
+  }
+
+  return res.redirect('/people#my-profile');
 });
 
 app.post("/people", ensureAuthenticated, (req, res) => {
@@ -10566,6 +13153,473 @@ app.post("/people", ensureAuthenticated, (req, res) => {
   setFlash(req, 'success', successMessage);
   return res.redirect(redirectTarget);
 });
+app.post('/people/security/pin/setup', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const currentSettings = getUserSecuritySettings(userId);
+  const redirectTarget = '/people#app-security';
+
+  try {
+    saveUserAppPinFromRequest(userId, req, { allowReauthOverride: false });
+    setFlash(req, 'success', currentSettings.pin_enabled
+      ? 'PIN atualizado e app protegido do jeitinho novo.'
+      : 'PIN ligado com sucesso. Agora seu app já sabe a hora de pedir proteção.');
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui salvar seu PIN agora.');
+  }
+
+  return res.redirect(redirectTarget);
+});
+
+app.post('/people/security/pin/disable', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const redirectTarget = '/people#app-security';
+
+  try {
+    disableUserAppPinFromRequest(userId, req, { allowReauthOverride: false });
+    setFlash(req, 'success', 'PIN desligado por aqui. O app volta a abrir sem essa trava extra.');
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui desligar o PIN agora.');
+  }
+
+  return res.redirect(redirectTarget);
+});
+
+
+app.post('/people/security/passkeys/register/options', ensureAuthenticated, async (req, res) => {
+  setNoStoreHeaders(res);
+  const userId = req.user.id;
+  const settings = getUserSecuritySettings(userId);
+
+  if (!settings.pin_enabled) {
+    return res.status(422).json({ ok: false, message: 'Primeiro liga o PIN. Aí eu consigo preparar o desbloqueio pelo aparelho.' });
+  }
+
+  const context = buildPasskeyContext(req);
+  if (!context.available) {
+    return res.status(422).json({ ok: false, message: context.disabledMessage || 'Esse desbloqueio ainda não ficou disponível neste ambiente.' });
+  }
+
+  const currentPasskeys = listUserPasskeys(userId);
+  if (currentPasskeys.length >= PASSKEY_MAX_CREDENTIALS_PER_USER) {
+    return res.status(409).json({ ok: false, message: `Você já preparou ${PASSKEY_MAX_CREDENTIALS_PER_USER} aparelhos por aqui. Se quiser abrir espaço, é só remover um deles.` });
+  }
+
+  try {
+    const friendlyLabel = normalizePasskeyLabel(req.body?.label || '', 'Este aparelho');
+    const options = await generatePasskeyRegistrationOptions({
+      rpName: context.rpName,
+      rpID: context.rpID,
+      userID: buildPasskeyUserHandle(userId, getPinPepper()),
+      userName: String(req.user.email || `user-${userId}@acerttapay.local`).trim(),
+      userDisplayName: String(req.user.name || req.user.email || 'Você').trim(),
+      excludeCredentials: currentPasskeys
+    });
+
+    setPasskeySessionFlow(req, 'register', {
+      userId: Number(userId || 0),
+      challenge: options.challenge,
+      origin: context.origin,
+      rpID: context.rpID,
+      label: friendlyLabel
+    });
+
+    return res.json({
+      ok: true,
+      options,
+      label: friendlyLabel,
+      count: currentPasskeys.length,
+      maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER
+    });
+  } catch (error) {
+    return res.status(normalizeErrorStatus(error, 500)).json({
+      ok: false,
+      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui preparar esse aparelho agora.' })
+    });
+  }
+});
+
+app.post('/people/security/passkeys/register/verify', ensureAuthenticated, async (req, res) => {
+  setNoStoreHeaders(res);
+  const userId = req.user.id;
+  const flow = consumePasskeySessionFlow(req, 'register');
+
+  if (!flow || Number(flow.userId || 0) !== Number(userId || 0)) {
+    return res.status(410).json({ ok: false, message: 'Esse preparo perdeu a validade. Começa de novo que eu acompanho daqui.' });
+  }
+
+  try {
+    const verification = await verifyPasskeyRegistrationResponse({
+      response: req.body,
+      expectedChallenge: flow.challenge,
+      expectedOrigin: String(flow.origin || '').trim(),
+      expectedRPID: String(flow.rpID || '').trim()
+    });
+
+    if (!verification.verified || !verification.credential) {
+      return res.status(422).json({ ok: false, message: 'Não consegui confirmar esse aparelho agora. Vamos tentar de novo?' });
+    }
+
+    const currentPasskeys = listUserPasskeys(userId);
+    if (currentPasskeys.length >= PASSKEY_MAX_CREDENTIALS_PER_USER) {
+      return res.status(409).json({ ok: false, message: `Você já preparou ${PASSKEY_MAX_CREDENTIALS_PER_USER} aparelhos por aqui. Se quiser abrir espaço, é só remover um deles.` });
+    }
+
+    const saved = saveUserPasskey(userId, {
+      ...verification.credential,
+      label: normalizePasskeyLabel(req.body?.label || flow.label || '', 'Este aparelho')
+    });
+
+    return res.json({
+      ok: true,
+      message: `Pronto, ${saved?.label || 'este aparelho'} já pode entrar em cena no desbloqueio.`,
+      count: listUserPasskeys(userId).length
+    });
+  } catch (error) {
+    return res.status(normalizeErrorStatus(error, 500)).json({
+      ok: false,
+      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui confirmar esse aparelho agora.' })
+    });
+  }
+});
+
+app.post('/people/security/passkeys/:id/delete', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const passkey = getUserPasskey(userId, req.params.id);
+
+  if (!passkey) {
+    setFlash(req, 'error', 'Esse aparelho já tinha saído da lista por aqui.');
+    return res.redirect('/people#app-security');
+  }
+
+  deleteUserPasskey(userId, req.params.id);
+  setFlash(req, 'success', `${passkey.label || 'Esse aparelho'} saiu da lista de desbloqueio.`);
+  return res.redirect('/people#app-security');
+});
+
+app.post('/lock/passkey/options', ensureAuthenticatedIgnoringPin, async (req, res) => {
+  setNoStoreHeaders(res);
+  const userId = req.user.id;
+  const settings = getUserSecuritySettings(userId);
+
+  if (!settings.pin_enabled) {
+    return res.status(422).json({ ok: false, message: 'O desbloqueio pelo aparelho entra em cena junto com o PIN.' });
+  }
+
+  const context = buildPasskeyContext(req);
+  if (!context.available) {
+    return res.status(422).json({ ok: false, message: context.disabledMessage || 'Hoje esse desbloqueio não ficou disponível neste endereço.' });
+  }
+
+  const passkeys = listUserPasskeys(userId);
+  if (!passkeys.length) {
+    return res.status(404).json({ ok: false, message: 'Ainda não há nenhum aparelho preparado para esse atalho.' });
+  }
+
+  try {
+    const options = await generatePasskeyAuthenticationOptions({
+      rpID: context.rpID,
+      allowCredentials: passkeys
+    });
+
+    setPasskeySessionFlow(req, 'unlock', {
+      userId: Number(userId || 0),
+      challenge: options.challenge,
+      origin: context.origin,
+      rpID: context.rpID
+    });
+
+    return res.json({ ok: true, options });
+  } catch (error) {
+    return res.status(normalizeErrorStatus(error, 500)).json({
+      ok: false,
+      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui preparar o desbloqueio pelo aparelho agora.' })
+    });
+  }
+});
+
+app.post('/lock/passkey/verify', ensureAuthenticatedIgnoringPin, async (req, res) => {
+  setNoStoreHeaders(res);
+  const userId = req.user.id;
+  const settings = getUserSecuritySettings(userId);
+
+  if (!settings.pin_enabled) {
+    clearAppLockSession(req);
+    return res.status(200).json({ ok: true, redirect: sanitizeInternalRedirectTarget(req.body?.next || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/') });
+  }
+
+  const state = getAppSessionState(req);
+  const redirectTarget = sanitizeInternalRedirectTarget(req.body?.next || state.returnTo || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
+  const flow = consumePasskeySessionFlow(req, 'unlock');
+
+  if (!flow || Number(flow.userId || 0) !== Number(userId || 0)) {
+    return res.status(410).json({ ok: false, message: 'Esse desbloqueio perdeu a validade. Tenta mais uma vez que eu preparo de novo.' });
+  }
+
+  const credentialId = String(req.body?.id || '').trim();
+  const passkey = getUserPasskey(userId, credentialId);
+  if (!credentialId || !passkey) {
+    return res.status(404).json({ ok: false, message: 'Não encontrei esse aparelho na sua lista de desbloqueio.' });
+  }
+
+  try {
+    const verification = await verifyPasskeyAuthenticationResponse({
+      response: req.body,
+      expectedChallenge: flow.challenge,
+      expectedOrigin: String(flow.origin || '').trim(),
+      expectedRPID: String(flow.rpID || '').trim(),
+      passkey
+    });
+
+    if (!verification.verified) {
+      return res.status(422).json({ ok: false, message: 'Esse desbloqueio não foi confirmado agora. Pode tentar de novo ou seguir pelo PIN.' });
+    }
+
+    touchUserPasskeyUsage(userId, passkey.id, {
+      counter: verification.newCounter,
+      origin: String(flow.origin || '').trim()
+    });
+    resetUserAppPinFailures(userId);
+    unlockAppSession(req, { clearReturnTo: true });
+    await persistSessionState(req);
+
+    return res.json({ ok: true, redirect: redirectTarget });
+  } catch (error) {
+    return res.status(normalizeErrorStatus(error, 500)).json({
+      ok: false,
+      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui confirmar esse desbloqueio agora. Você também pode seguir pelo PIN.' })
+    });
+  }
+});
+
+app.get('/lock', ensureAuthenticatedIgnoringPin, (req, res) => {
+  const userId = req.user.id;
+  const settings = getUserSecuritySettings(userId);
+
+  if (!settings.pin_enabled) {
+    clearAppLockSession(req);
+    clearPinReauthSession(req);
+    return res.redirect(res.locals.dashboardHref || '/');
+  }
+
+  setNoStoreHeaders(res);
+  clearExpiredPinReauthSession(req, userId);
+  const reauthFresh = hasFreshPinReauthSession(req, userId);
+  const state = getAppSessionState(req);
+  const nextTarget = sanitizeInternalRedirectTarget(req.query.next || state.returnTo || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
+  const sessionState = ensureAppLockSession(req);
+  if (sessionState && nextTarget) {
+    sessionState.returnTo = nextTarget;
+  }
+
+  if (state.unlocked && !reauthFresh) {
+    return res.redirect(nextTarget || res.locals.dashboardHref || '/');
+  }
+
+  const currentUser = getUserRecord(userId, { includeDeleted: false }) || req.user || {};
+  const guardView = buildAppPinGuardViewModel(userId);
+  const lockMode = String(req.query.mode || '').trim().toLowerCase() === 'recover' && reauthFresh ? 'recover' : 'unlock';
+  const baseLockMessage = pinLockMessageForReason(req.query.reason || state.reason || '');
+  const lockMessage = guardView.requiresReauth || guardView.cooldownActive
+    ? guardView.noticeMessage || baseLockMessage
+    : baseLockMessage;
+
+  return safeRenderView(res, 'lock', {
+    title: 'AcerttaPay | Desbloquear',
+    lockUser: {
+      name: currentUser.name || req.user.name || req.user.email || 'Você',
+      email: currentUser.email || req.user.email || '',
+      photo_url: getEffectiveProfilePhoto(currentUser)
+    },
+    appPinSecurity: buildAppPinViewModel(settings, { reauthFresh }),
+    appPinGuard: guardView,
+    appPasskeyLock: buildPasskeyLockViewModel(req, userId, settings),
+    lockReason: String(req.query.reason || state.reason || '').trim().toLowerCase(),
+    lockMessage,
+    nextTarget,
+    lockMode,
+    reauthFresh
+  });
+});
+
+app.post('/lock/unlock', ensureAuthenticatedIgnoringPin, (req, res) => {
+  const userId = req.user.id;
+  const settings = getUserSecuritySettings(userId);
+
+  if (!settings.pin_enabled) {
+    clearAppLockSession(req);
+    const redirectTarget = sanitizeInternalRedirectTarget(req.body.next || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
+    if (isAjaxLikeRequest(req)) {
+      return res.json({ ok: true, redirect: redirectTarget });
+    }
+    return res.redirect(redirectTarget);
+  }
+
+  const redirectTarget = sanitizeInternalRedirectTarget(req.body.next || getAppSessionState(req).returnTo || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
+  const recoveryRedirectTarget = buildAppLockRecoveryUrl(req, { reason: 'locked', returnTo: redirectTarget });
+  const preGuardState = getUserAppPinGuardState(userId);
+
+  if (preGuardState.requiresReauth) {
+    const message = 'Por segurança, esse PIN entrou em pausa. Confirma sua conta Google para trocar ou desligar a proteção.';
+    if (isAjaxLikeRequest(req)) {
+      return res.status(423).json({ ok: false, message, requiresReauth: true, redirect: recoveryRedirectTarget });
+    }
+    setFlash(req, 'error', message);
+    return res.redirect(recoveryRedirectTarget);
+  }
+
+  if (preGuardState.cooldownActive) {
+    const message = `Segura ${preGuardState.cooldownLabel} que eu volto a liberar novas tentativas.`;
+    if (isAjaxLikeRequest(req)) {
+      return res.status(429).json({ ok: false, message, retryAfter: preGuardState.cooldownSeconds, redirect: buildAppLockRedirectUrl(req, { reason: 'locked', returnTo: redirectTarget }) });
+    }
+    setFlash(req, 'error', message);
+    return res.redirect(buildAppLockRedirectUrl(req, { reason: 'locked', returnTo: redirectTarget }));
+  }
+
+  const pinCheck = validatePinInput(req.body.pin);
+
+  if (!pinCheck.ok || !verifyUserAppPin(userId, pinCheck.value)) {
+    const postGuardState = registerUserAppPinFailure(userId);
+    const message = buildUserAppPinFailureMessage(postGuardState);
+    if (isAjaxLikeRequest(req)) {
+      return res.status(postGuardState.requiresReauth ? 423 : postGuardState.cooldownActive ? 429 : 422).json({
+        ok: false,
+        message,
+        requiresReauth: postGuardState.requiresReauth,
+        retryAfter: postGuardState.cooldownActive ? postGuardState.cooldownSeconds : 0,
+        redirect: postGuardState.requiresReauth
+          ? recoveryRedirectTarget
+          : buildAppLockRedirectUrl(req, { reason: 'locked', returnTo: redirectTarget })
+      });
+    }
+    setFlash(req, 'error', message);
+    return res.redirect(postGuardState.requiresReauth
+      ? recoveryRedirectTarget
+      : buildAppLockRedirectUrl(req, { reason: 'locked', returnTo: redirectTarget }));
+  }
+
+  resetUserAppPinFailures(userId);
+  unlockAppSession(req);
+  const sessionState = ensureAppLockSession(req);
+  if (sessionState) sessionState.returnTo = '';
+
+  if (isAjaxLikeRequest(req)) {
+    return res.json({ ok: true, redirect: redirectTarget });
+  }
+
+  return res.redirect(redirectTarget);
+});
+
+app.post('/lock/engage', ensureAuthenticatedIgnoringPin, (req, res) => {
+  const reason = String(req.body.reason || req.query.reason || 'manual').trim().toLowerCase() || 'manual';
+  const returnTo = sanitizeInternalRedirectTarget(req.body.return_to || req.query.return_to || req.get('referer') || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
+  lockAppSession(req, { reason, returnTo });
+  const redirectTarget = buildAppLockRedirectUrl(req, { reason, returnTo });
+  setNoStoreHeaders(res);
+
+  if (isAjaxLikeRequest(req)) {
+    return res.json({ ok: true, redirect: redirectTarget });
+  }
+
+  return res.redirect(redirectTarget);
+});
+
+app.post('/lock/touch', ensureAuthenticatedIgnoringPin, (req, res) => {
+  const userId = req.user.id;
+  const settings = getUserSecuritySettings(userId);
+
+  setNoStoreHeaders(res);
+
+  if (!settings.pin_enabled) {
+    clearAppLockSession(req);
+    return res.status(204).end();
+  }
+
+  const guardState = getUserAppPinGuardState(userId);
+  if (guardState.requiresReauth) {
+    res.set('X-App-Locked', '1');
+    res.set('X-App-Lock-Redirect', buildAppLockRecoveryUrl(req, { reason: 'locked', returnTo: getAppSessionState(req).returnTo || res.locals.dashboardHref || '/' }));
+    return res.status(423).json({ ok: false, appLocked: true, requiresReauth: true, redirect: buildAppLockRecoveryUrl(req, { reason: 'locked', returnTo: getAppSessionState(req).returnTo || res.locals.dashboardHref || '/' }) });
+  }
+
+  const state = getAppSessionState(req);
+  const idleSeconds = normalizePinIdleSeconds(settings.pin_idle_seconds);
+  const idleMs = idleSeconds > 0 ? idleSeconds * 1000 : 0;
+  const lastActiveAt = Number(state.lastActiveAt || 0);
+
+  if (state.unlocked && idleMs > 0 && lastActiveAt && (Date.now() - lastActiveAt) >= idleMs) {
+    return respondWithAppLock(req, res, { reason: 'idle', returnTo: state.returnTo || res.locals.dashboardHref || '/' });
+  }
+
+  if (!state.unlocked) {
+    res.set('X-App-Locked', '1');
+    res.set('X-App-Lock-Redirect', buildAppLockRedirectUrl(req, { reason: state.reason || 'locked', returnTo: state.returnTo || res.locals.dashboardHref || '/' }));
+    return res.status(423).json({ ok: false, appLocked: true, redirect: buildAppLockRedirectUrl(req, { reason: state.reason || 'locked', returnTo: state.returnTo || res.locals.dashboardHref || '/' }) });
+  }
+
+  touchAppSession(req);
+  return res.status(204).end();
+});
+
+app.get('/lock/reauth/google', ensureAuthenticatedIgnoringPin, (req, res, next) => {
+  const settings = getUserSecuritySettings(req.user.id);
+  if (!settings.pin_enabled) {
+    return res.redirect(res.locals.dashboardHref || '/');
+  }
+
+  if (!isGoogleAuthConfigured()) {
+    setFlash(req, 'error', 'O login com Google não está pronto por aqui para confirmar essa redefinição agora.');
+    return res.redirect('/lock');
+  }
+
+  startPinReauthSession(req, { returnTo: '/lock?mode=recover' });
+  return passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    prompt: 'select_account',
+    loginHint: req.user.email
+  })(req, res, next);
+});
+
+app.post('/lock/recovery/setup', ensureAuthenticatedIgnoringPin, (req, res) => {
+  const userId = req.user.id;
+  const redirectTarget = sanitizeInternalRedirectTarget(req.body.next || getAppSessionState(req).returnTo || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
+
+  if (!hasFreshPinReauthSession(req, userId)) {
+    setFlash(req, 'error', 'Antes de redefinir o PIN, preciso que você confirme sua conta Google de novo.');
+    return res.redirect('/lock');
+  }
+
+  try {
+    saveUserAppPinFromRequest(userId, req, { allowReauthOverride: true });
+    const sessionState = ensureAppLockSession(req);
+    if (sessionState) sessionState.returnTo = '';
+    setFlash(req, 'success', 'Novo PIN salvo com sucesso. Agora o app já pode destravar com ele.');
+    return res.redirect(redirectTarget);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui redefinir o PIN agora.');
+    return res.redirect('/lock?mode=recover');
+  }
+});
+
+app.post('/lock/recovery/disable', ensureAuthenticatedIgnoringPin, (req, res) => {
+  const userId = req.user.id;
+  const redirectTarget = sanitizeInternalRedirectTarget(req.body.next || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
+
+  if (!hasFreshPinReauthSession(req, userId)) {
+    setFlash(req, 'error', 'Antes de desligar o PIN, preciso que você confirme sua conta Google de novo.');
+    return res.redirect('/lock');
+  }
+
+  try {
+    disableUserAppPinFromRequest(userId, req, { allowReauthOverride: true });
+    setFlash(req, 'success', 'PIN desligado depois da confirmação com Google.');
+    return res.redirect(redirectTarget);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui desligar o PIN agora.');
+    return res.redirect('/lock?mode=recover');
+  }
+});
+
 app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const personId = Number(req.params.id);
@@ -10651,7 +13705,8 @@ app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
     body: `${requester?.name || person.name || 'Alguém'} quer virar seu contato de confiança no AcerttaPay.`,
     href: `/people?friendRequest=${requestId}`,
     relatedType: 'friend_request',
-    relatedId: requestId
+    relatedId: requestId,
+    groupKey: 'friendship_activity'
   });
 
   setFlash(req, 'success', `Pedido enviado para ${person.name}. Agora é só esperar o outro lado dar o joinha.`);
@@ -10739,7 +13794,8 @@ app.post('/friend-requests/:id/respond', ensureAuthenticated, (req, res) => {
         body: `${targetUser?.name || 'Essa pessoa'} aceitou seu pedido. Agora vocês já podem trocar cobranças automáticas com mais privacidade.`,
         href: '/people',
         relatedType: 'friend_request',
-        relatedId: requestId
+        relatedId: requestId,
+        groupKey: 'friendship_activity'
       });
     })();
 
@@ -10760,7 +13816,8 @@ app.post('/friend-requests/:id/respond', ensureAuthenticated, (req, res) => {
     body: `${targetUser?.name || 'Essa pessoa'} preferiu não ativar a amizade agora.`,
     href: '/people',
     relatedType: 'friend_request',
-    relatedId: requestId
+    relatedId: requestId,
+    groupKey: 'friendship_activity'
   });
 
   setFlash(req, 'success', 'Pedido recusado. Nada mudou nas cobranças e a vida segue leve.');
@@ -10819,7 +13876,8 @@ app.post('/people/:id/unfriend', ensureAuthenticated, (req, res) => {
     body: `${actor?.name || 'Um contato'} desfez a amizade no AcerttaPay. O histórico continua, mas novos envios automáticos param por aqui.`,
     href: '/people',
     relatedType: 'friendship',
-    relatedId: friendship.id
+    relatedId: friendship.id,
+    groupKey: 'friendship_activity'
   });
 
   setFlash(req, 'success', `Amizade com ${person.name} desfeita. O histórico ficou salvo, mas novos envios automáticos param daqui pra frente.`);
@@ -10929,7 +13987,7 @@ app.post("/people/:id/delete", ensureAuthenticated, (req, res) => {
 // Cards
 app.get("/cards", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  res.render("cards", { cards: getCards(userId) });
+  return safeRenderView(res, "cards", { cards: getCards(userId) });
 });
 
 app.post("/cards", ensureAuthenticated, (req, res) => {
@@ -11200,14 +14258,356 @@ function buildImportReport(month, year, importedCount, skippedExistingGroups, re
   };
 }
 
+function formatImportPreviewDateLabel(value) {
+  const safeValue = String(value || '').trim();
+  if (!safeValue) return 'Sem data';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(safeValue)) return formatDateBR(safeValue);
+  return safeValue;
+}
+
+function buildImportDayAmountKey({ txnDate, amountCents }) {
+  return [String(txnDate || '').trim(), Number(amountCents) || 0].join('::');
+}
+
+function formatImportPreviewCardNumberLabel(cardNumber) {
+  const normalized = normalizeImportCardNumber(cardNumber).replace(/\D/g, '');
+  if (!normalized) return 'Final nao informado';
+  if (normalized.length <= 4) return `Final ${normalized}`;
+  return `Final ${normalized.slice(-4)}`;
+}
+
+function compareImportPreviewItems(a, b) {
+  const dateA = String(a?.isoDate || '');
+  const dateB = String(b?.isoDate || '');
+  if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+  const amountA = Number(a?.amountCents || 0);
+  const amountB = Number(b?.amountCents || 0);
+  if (amountA !== amountB) return amountB - amountA;
+
+  const descA = normalizeImportDuplicateText(a?.description);
+  const descB = normalizeImportDuplicateText(b?.description);
+  if (descA !== descB) return descA.localeCompare(descB, 'pt-BR');
+
+  return Number(a?.sourceIndex || 0) - Number(b?.sourceIndex || 0);
+}
+
+function buildImportPreviewItem(txn, sourceIndex) {
+  const isoDate = toISOFromBRDate(txn.txn_date) || String(txn.txn_date || '').trim() || null;
+  const description = String(txn.description || '').trim() || '(sem descricao)';
+  const amountCents = Number(txn.amount_cents) || 0;
+  const cardNumber = normalizeImportCardNumber(txn.card_number) || null;
+
+  return {
+    id: `item_${sourceIndex + 1}`,
+    sourceIndex: Number(sourceIndex) || 0,
+    isoDate,
+    dateLabel: formatImportPreviewDateLabel(isoDate || txn.txn_date),
+    description,
+    amountCents,
+    amountLabel: formatBRLFromCents(amountCents),
+    cardNumber,
+    cardNumberLabel: formatImportPreviewCardNumberLabel(cardNumber),
+    raw: txn.raw || {}
+  };
+}
+
+function getExistingImportMonthRows(userId, cardId, month, year) {
+  const rows = db.prepare(`
+    SELECT t.id, t.import_id, t.txn_date, t.description, t.amount_cents, t.card_number
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.user_id = ?
+      AND t.card_id = ?
+      AND ${EFFECTIVE_DUE_MONTH_SQL} = ?
+      AND ${EFFECTIVE_DUE_YEAR_SQL} = ?
+    ORDER BY t.txn_date IS NULL ASC, t.txn_date ASC, t.amount_cents DESC, t.id ASC
+  `).all(userId, cardId, month, year);
+
+  return rows.map((row) => ({
+    id: Number(row.id),
+    txnDate: String(row.txn_date || '').trim() || null,
+    dateLabel: formatImportPreviewDateLabel(row.txn_date),
+    description: String(row.description || '').trim() || '(sem descricao)',
+    amountCents: Number(row.amount_cents) || 0,
+    amountLabel: formatBRLFromCents(Number(row.amount_cents) || 0),
+    cardNumber: normalizeImportCardNumber(row.card_number) || null,
+    cardNumberLabel: formatImportPreviewCardNumberLabel(row.card_number),
+    originLabel: Number(row.import_id || 0) > 0 ? 'Ja importada' : 'Lancada manualmente'
+  }));
+}
+
+function countExactExistingMatchesForImportItem(item, matches, cardId, month, year) {
+  if (!Array.isArray(matches) || !matches.length) return 0;
+
+  const fingerprint = buildImportDuplicateFingerprint({
+    cardId,
+    month,
+    year,
+    txnDate: item.isoDate,
+    description: item.description,
+    amountCents: item.amountCents,
+    cardNumber: item.cardNumber
+  });
+
+  return matches.reduce((total, row) => {
+    const candidateFingerprint = buildImportDuplicateFingerprint({
+      cardId,
+      month,
+      year,
+      txnDate: row.txnDate,
+      description: row.description,
+      amountCents: row.amountCents,
+      cardNumber: row.cardNumber
+    });
+    return total + (candidateFingerprint === fingerprint ? 1 : 0);
+  }, 0);
+}
+
+function buildImportPreviewSummary({ parsedCount, parsedTotalCents, existingCount, existingTotalCents, autoCount, autoTotalCents, appDuplicateCandidates, csvDuplicateGroups }) {
+  const appDuplicateCount = appDuplicateCandidates.length;
+  const appDuplicateTotalCents = appDuplicateCandidates.reduce((sum, candidate) => sum + Number(candidate.amountCents || 0), 0);
+  const csvDuplicateGroupCount = csvDuplicateGroups.length;
+  const csvDuplicateLineCount = csvDuplicateGroups.reduce((sum, group) => sum + Number(group.occurrenceCount || 0), 0);
+  const csvDuplicateTotalCents = csvDuplicateGroups.reduce((sum, group) => sum + Number(group.groupTotalCents || 0), 0);
+  const defaultCsvCount = csvDuplicateGroups.reduce((sum, group) => sum + Number(group.defaultKeepCount || 0), 0);
+  const defaultCsvTotalCents = csvDuplicateGroups.reduce((sum, group) => sum + (Number(group.amountCents || 0) * Number(group.defaultKeepCount || 0)), 0);
+  const defaultFinalCount = autoCount + defaultCsvCount;
+  const defaultFinalTotalCents = autoTotalCents + defaultCsvTotalCents;
+  const projectedCardCount = existingCount + defaultFinalCount;
+  const projectedCardTotalCents = existingTotalCents + defaultFinalTotalCents;
+
+  return {
+    parsedCount,
+    parsedTotalCents,
+    parsedTotalLabel: formatBRLFromCents(parsedTotalCents),
+    existingCount,
+    existingTotalCents,
+    existingTotalLabel: formatBRLFromCents(existingTotalCents),
+    autoCount,
+    autoTotalCents,
+    autoTotalLabel: formatBRLFromCents(autoTotalCents),
+    appDuplicateCount,
+    appDuplicateTotalCents,
+    appDuplicateTotalLabel: formatBRLFromCents(appDuplicateTotalCents),
+    csvDuplicateGroupCount,
+    csvDuplicateLineCount,
+    csvDuplicateTotalCents,
+    csvDuplicateTotalLabel: formatBRLFromCents(csvDuplicateTotalCents),
+    defaultFinalCount,
+    defaultFinalTotalCents,
+    defaultFinalTotalLabel: formatBRLFromCents(defaultFinalTotalCents),
+    projectedCardCount,
+    projectedCardTotalCents,
+    projectedCardTotalLabel: formatBRLFromCents(projectedCardTotalCents)
+  };
+}
+
+function buildImportPreviewData({ userId, cardId, cardName, month, year, originalFilename, txns }) {
+  const items = txns.map((txn, index) => buildImportPreviewItem(txn, index));
+  const itemMap = new Map(items.map((item) => [item.id, item]));
+  const existingRows = getExistingImportMonthRows(userId, cardId, month, year);
+  const existingByDayAmount = new Map();
+
+  for (const row of existingRows) {
+    const key = buildImportDayAmountKey({ txnDate: row.txnDate, amountCents: row.amountCents });
+    if (!existingByDayAmount.has(key)) existingByDayAmount.set(key, []);
+    existingByDayAmount.get(key).push(row);
+  }
+
+  const csvGroupsByFingerprint = new Map();
+  for (const item of items) {
+    const fingerprint = buildImportDuplicateFingerprint({
+      cardId,
+      month,
+      year,
+      txnDate: item.isoDate,
+      description: item.description,
+      amountCents: item.amountCents,
+      cardNumber: item.cardNumber
+    });
+    if (!csvGroupsByFingerprint.has(fingerprint)) csvGroupsByFingerprint.set(fingerprint, []);
+    csvGroupsByFingerprint.get(fingerprint).push(item.id);
+  }
+
+  const csvDuplicateGroups = [];
+  const csvGroupIdByItemId = new Map();
+
+  for (const itemIds of csvGroupsByFingerprint.values()) {
+    if (itemIds.length <= 1) continue;
+    const groupItems = itemIds.map((itemId) => itemMap.get(itemId)).filter(Boolean).sort(compareImportPreviewItems);
+    if (!groupItems.length) continue;
+
+    const representative = groupItems[0];
+    const existingMatches = existingByDayAmount.get(buildImportDayAmountKey({ txnDate: representative.isoDate, amountCents: representative.amountCents })) || [];
+    const defaultKeepCount = Math.max(0, Math.min(groupItems.length, groupItems.length - existingMatches.length));
+    const exactMatchCount = countExactExistingMatchesForImportItem(representative, existingMatches, cardId, month, year);
+    const groupId = `csv_group_${csvDuplicateGroups.length + 1}`;
+
+    groupItems.forEach((item) => csvGroupIdByItemId.set(item.id, groupId));
+
+    csvDuplicateGroups.push({
+      id: groupId,
+      representativeItemId: representative.id,
+      itemIds: groupItems.map((item) => item.id),
+      occurrenceCount: groupItems.length,
+      defaultKeepCount,
+      amountCents: representative.amountCents,
+      amountLabel: representative.amountLabel,
+      groupTotalCents: representative.amountCents * groupItems.length,
+      groupTotalLabel: formatBRLFromCents(representative.amountCents * groupItems.length),
+      existingMatchCount: existingMatches.length,
+      exactMatchCount,
+      existingMatches
+    });
+  }
+
+  const appDuplicateCandidates = [];
+  const autoItemIds = [];
+
+  const sortedItems = items.slice().sort(compareImportPreviewItems);
+  for (const item of sortedItems) {
+    if (csvGroupIdByItemId.has(item.id)) continue;
+
+    const existingMatches = existingByDayAmount.get(buildImportDayAmountKey({ txnDate: item.isoDate, amountCents: item.amountCents })) || [];
+    if (existingMatches.length) {
+      const exactMatchCount = countExactExistingMatchesForImportItem(item, existingMatches, cardId, month, year);
+      appDuplicateCandidates.push({
+        id: `app_group_${appDuplicateCandidates.length + 1}`,
+        itemId: item.id,
+        amountCents: item.amountCents,
+        amountLabel: item.amountLabel,
+        existingMatchCount: existingMatches.length,
+        exactMatchCount,
+        existingMatches
+      });
+      continue;
+    }
+
+    autoItemIds.push(item.id);
+  }
+
+  const autoItems = autoItemIds.map((itemId) => itemMap.get(itemId)).filter(Boolean);
+  const parsedCount = items.length;
+  const parsedTotalCents = items.reduce((sum, item) => sum + Number(item.amountCents || 0), 0);
+  const existingCount = existingRows.length;
+  const existingTotalCents = existingRows.reduce((sum, row) => sum + Number(row.amountCents || 0), 0);
+  const autoCount = autoItems.length;
+  const autoTotalCents = autoItems.reduce((sum, item) => sum + Number(item.amountCents || 0), 0);
+
+  return {
+    id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex'),
+    createdAt: nowIso(),
+    originalFilename: originalFilename || 'fatura.csv',
+    cardId,
+    cardName,
+    month,
+    year,
+    periodLabel: monthLabel(month, year),
+    formSeed: { cardId, month, year },
+    items,
+    autoItemIds,
+    appDuplicateCandidates,
+    csvDuplicateGroups,
+    summary: buildImportPreviewSummary({
+      parsedCount,
+      parsedTotalCents,
+      existingCount,
+      existingTotalCents,
+      autoCount,
+      autoTotalCents,
+      appDuplicateCandidates,
+      csvDuplicateGroups
+    })
+  };
+}
+
+function resolveImportPreviewSelection(preview, body) {
+  const safeBody = body || {};
+  const selectedIds = [];
+  const seenIds = new Set();
+  const itemMap = new Map((preview?.items || []).map((item) => [item.id, item]));
+
+  const pushItemId = (itemId) => {
+    if (!itemId || seenIds.has(itemId)) return;
+    if (!itemMap.has(itemId)) return;
+    seenIds.add(itemId);
+    selectedIds.push(itemId);
+  };
+
+  for (const itemId of preview?.autoItemIds || []) {
+    pushItemId(itemId);
+  }
+
+  for (const candidate of preview?.appDuplicateCandidates || []) {
+    if (String(safeBody[`keep_app_${candidate.id}`] || '') === '1') {
+      pushItemId(candidate.itemId);
+    }
+  }
+
+  for (const group of preview?.csvDuplicateGroups || []) {
+    const rawKeepCount = safeBody[`keep_csv_${group.id}`];
+    const fallbackKeepCount = Number(group.defaultKeepCount || 0);
+    let keepCount = Number(rawKeepCount);
+    if (!Number.isInteger(keepCount)) keepCount = fallbackKeepCount;
+    keepCount = Math.max(0, Math.min(Number(group.occurrenceCount || 0), keepCount));
+
+    for (const itemId of (group.itemIds || []).slice(0, keepCount)) {
+      pushItemId(itemId);
+    }
+  }
+
+  return selectedIds
+    .map((itemId) => itemMap.get(itemId))
+    .filter(Boolean)
+    .sort((a, b) => Number(a.sourceIndex || 0) - Number(b.sourceIndex || 0));
+}
+
+function buildImportConfirmationMessage(preview, importedCount) {
+  const periodLabel = preview?.periodLabel || monthLabel(preview?.month, preview?.year);
+  if (importedCount <= 0) {
+    return {
+      type: 'info',
+      message: `Nada ficou marcado para entrar em ${periodLabel}. A previa continua aberta para voce ajustar.`
+    };
+  }
+
+  const summary = preview?.summary || {};
+  const reviewedParts = [];
+  if (Number(summary.appDuplicateCount || 0) > 0) {
+    reviewedParts.push(formatCountLabel(summary.appDuplicateCount, 'suspeita no app', 'suspeitas no app'));
+  }
+  if (Number(summary.csvDuplicateGroupCount || 0) > 0) {
+    reviewedParts.push(formatCountLabel(summary.csvDuplicateGroupCount, 'grupo repetido no CSV', 'grupos repetidos no CSV'));
+  }
+
+  const baseMessage = importedCount === 1
+    ? `1 compra entrou em ${periodLabel}.`
+    : `${importedCount} compras entraram em ${periodLabel}.`;
+
+  if (!reviewedParts.length) {
+    return { type: 'success', message: `${baseMessage} Tudo certinho por aqui.` };
+  }
+
+  return {
+    type: 'success',
+    message: `${baseMessage} Revisei ${reviewedParts.join(' e ')} com voce antes de confirmar.`
+  };
+}
+
 // Import
 app.get("/import", ensureAuthenticated, ensureCanImport, (req, res) => {
   const userId = req.user.id;
-  res.render("import", {
+  const preview = req.session?.importPreview || null;
+  const formSeed = preview?.formSeed || res.locals.importFormSeed || null;
+
+  return safeRenderView(res, "import", {
     cards: getActiveCards(userId),
     error: null,
-    formSeed: res.locals.importFormSeed || null,
-    importReport: res.locals.importReport || null
+    formSeed,
+    importReport: res.locals.importReport || null,
+    importPreview: preview,
+    formatBRLFromCents
   });
 });
 
@@ -11216,82 +14616,79 @@ app.post("/import", ensureAuthenticated, ensureCanImport, upload.single("csvfile
   const cards = getActiveCards(userId);
 
   try {
+    clearImportPreview(req);
+
     const cardId = Number(req.body.card_id);
     const month = Number(req.body.month);
     const year = Number(req.body.year);
     const formSeed = { cardId, month, year };
 
     if (!req.file) throw new Error("Envie um arquivo CSV.");
-    if (!cardId) throw new Error("Selecione o cartão.");
-    if (!month || month < 1 || month > 12) throw new Error("Mês inválido.");
-    if (!year || year < 2000 || year > 2100) throw new Error("Ano inválido.");
+    if (!cardId) throw new Error("Selecione o cartao.");
+    if (!month || month < 1 || month > 12) throw new Error("Mes invalido.");
+    if (!year || year < 2000 || year > 2100) throw new Error("Ano invalido.");
 
     const card = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(cardId, userId);
-    if (!card) throw new Error("Cartão inválido ou desativado.");
+    if (!card) throw new Error("Cartao invalido ou desativado.");
 
     const txns = parseCsvByCardName(card.name, req.file.buffer);
-    const existingCounts = getExistingImportFingerprintCounts(userId, cardId, month, year);
-    const csvCounts = new Map();
-    const repeatedCsvGroups = new Map();
-    const skippedExistingGroups = new Map();
-    const itemsToInsert = [];
+    const preview = buildImportPreviewData({
+      userId,
+      cardId,
+      cardName: card.name,
+      month,
+      year,
+      originalFilename: req.file.originalname,
+      txns
+    });
 
-    for (const txn of txns) {
-      const isoDate = toISOFromBRDate(txn.txn_date) || String(txn.txn_date || "").trim() || null;
-      const fingerprint = buildImportDuplicateFingerprint({
-        cardId,
-        month,
-        year,
-        txnDate: isoDate,
-        description: txn.description,
-        amountCents: txn.amount_cents,
-        cardNumber: txn.card_number
-      });
+    setImportPreview(req, preview);
+    setImportFormSeed(req, formSeed);
+    setFlash(req, 'info', `Analisei ${formatCountLabel(preview.summary.parsedCount, 'compra', 'compras')} de ${preview.periodLabel}. Agora e so revisar e confirmar.`);
+    return res.redirect('/import');
+  } catch (e) {
+    clearImportPreview(req);
+    res.status(400).render("import", {
+      cards,
+      error: e.message || String(e),
+      formSeed: {
+        cardId: Number(req.body.card_id) || null,
+        month: Number(req.body.month) || null,
+        year: Number(req.body.year) || null
+      },
+      importReport: null,
+      importPreview: null,
+      formatBRLFromCents
+    });
+  }
+});
 
-      const nextCsvCount = (csvCounts.get(fingerprint) || 0) + 1;
-      csvCounts.set(fingerprint, nextCsvCount);
+app.post('/import/confirm', ensureAuthenticated, ensureCanImport, (req, res) => {
+  const userId = req.user.id;
+  const preview = req.session?.importPreview || null;
+  const previewId = String(req.body.preview_id || '').trim();
 
-      if (nextCsvCount > 1) {
-        const repeatedGroup = repeatedCsvGroups.get(fingerprint) || buildImportDuplicateGroupItem({
-          txnDate: isoDate,
-          description: txn.description,
-          amountCents: txn.amount_cents,
-          cardNumber: txn.card_number,
-          csvCount: nextCsvCount
-        });
-        repeatedGroup.csvCount = nextCsvCount;
-        repeatedCsvGroups.set(fingerprint, repeatedGroup);
-      }
+  if (!preview || !previewId || preview.id !== previewId) {
+    clearImportPreview(req);
+    setFlash(req, 'error', 'A revisao dessa fatura nao esta mais disponivel. Manda o CSV de novo e a gente refaz o pente-fino.');
+    return res.redirect('/import');
+  }
 
-      const existingCount = existingCounts.get(fingerprint) || 0;
-      if (nextCsvCount <= existingCount) {
-        const skippedGroup = skippedExistingGroups.get(fingerprint) || buildImportDuplicateGroupItem({
-          txnDate: isoDate,
-          description: txn.description,
-          amountCents: txn.amount_cents,
-          cardNumber: txn.card_number,
-          existingCount,
-          csvCount: nextCsvCount,
-          count: 0
-        });
-        skippedGroup.count += 1;
-        skippedGroup.existingCount = existingCount;
-        skippedGroup.csvCount = nextCsvCount;
-        skippedExistingGroups.set(fingerprint, skippedGroup);
-        continue;
-      }
+  try {
+    const card = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(preview.cardId, userId);
+    if (!card) throw new Error('Esse cartao nao esta mais disponivel para receber a importacao.');
 
-      itemsToInsert.push({
-        ...txn,
-        isoDate
-      });
+    const selectedItems = resolveImportPreviewSelection(preview, req.body);
+    if (!selectedItems.length) {
+      setFlash(req, 'info', 'Nenhuma compra ficou marcada para entrar. Ajuste a revisao e confirme de novo.');
+      return res.redirect('/import');
     }
 
     const createImportWithTransactions = db.transaction((items) => {
       const info = db.prepare(`
         INSERT INTO imports(user_id, card_id, month, year, created_at, original_filename)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run(userId, cardId, month, year, nowIso(), req.file.originalname);
+      `).run(userId, preview.cardId, preview.month, preview.year, nowIso(), preview.originalFilename || 'fatura.csv');
 
       const insTxn = db.prepare(`
         INSERT INTO transactions(user_id, import_id, card_id, txn_date, description, amount_cents, card_number, raw_json, created_at)
@@ -11302,64 +14699,42 @@ app.post("/import", ensureAuthenticated, ensureCanImport, upload.single("csvfile
         insTxn.run(
           userId,
           info.lastInsertRowid,
-          cardId,
+          preview.cardId,
           item.isoDate || null,
           item.description,
-          item.amount_cents,
-          item.card_number || null,
+          item.amountCents,
+          item.cardNumber || null,
           JSON.stringify(item.raw || {}),
           nowIso()
         );
       }
     });
 
-    if (itemsToInsert.length) {
-      createImportWithTransactions(itemsToInsert);
-    }
-
-    const skippedExistingList = Array.from(skippedExistingGroups.values()).map((group) => ({
-      ...group,
-      csvCount: csvCounts.get(buildImportDuplicateFingerprint({
-        cardId,
-        month,
-        year,
-        txnDate: group.txnDate,
-        description: group.description,
-        amountCents: group.amountCents,
-        cardNumber: group.cardNumber
-      })) || group.csvCount || group.count,
-      existingCount: group.existingCount || 0
-    }));
-    const repeatedCsvList = Array.from(repeatedCsvGroups.values());
-    const skippedExistingCount = skippedExistingList.reduce((sum, item) => sum + Number(item.count || 0), 0);
-    const feedback = buildImportFeedbackMessage(month, year, itemsToInsert.length, skippedExistingCount, repeatedCsvList.length);
-
+    createImportWithTransactions(selectedItems);
+    const feedback = buildImportConfirmationMessage(preview, selectedItems.length);
+    clearImportPreview(req);
+    setImportFormSeed(req, preview.formSeed || null);
     setFlash(req, feedback.type, feedback.message);
-    setImportFormSeed(req, formSeed);
-
-    if (skippedExistingCount > 0) {
-      setImportReport(req, buildImportReport(month, year, itemsToInsert.length, skippedExistingList, repeatedCsvList));
-      return res.redirect("/import");
-    }
-
-    setImportReport(req, null);
-    if (itemsToInsert.length > 0) {
-      return res.redirect(`/month/${year}/${month}`);
-    }
-
-    return res.redirect("/import");
-  } catch (e) {
-    res.status(400).render("import", {
-      cards,
-      error: e.message || String(e),
-      formSeed: {
-        cardId: Number(req.body.card_id) || null,
-        month: Number(req.body.month) || null,
-        year: Number(req.body.year) || null
-      },
-      importReport: null
-    });
+    return res.redirect(`/month/${preview.year}/${preview.month}`);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Nao consegui confirmar essa importacao agora.');
+    return res.redirect('/import');
   }
+});
+
+app.post('/import/preview/cancel', ensureAuthenticated, ensureCanImport, (req, res) => {
+  const preview = req.session?.importPreview || null;
+  const previewId = String(req.body.preview_id || '').trim();
+
+  if (!preview || !previewId || preview.id !== previewId) {
+    clearImportPreview(req);
+    return res.redirect('/import');
+  }
+
+  setImportFormSeed(req, preview.formSeed || null);
+  clearImportPreview(req);
+  setFlash(req, 'info', 'Fechei essa previa. O formulario continua preenchido para voce ajustar o que quiser.');
+  return res.redirect('/import');
 });
 
 function buildOrder(sort, dir) {
@@ -11418,6 +14793,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 
   syncRecurringTransactions(userId, currentYear, currentMonth);
   ensureMonthlyFinanceScaffold(userId, currentMonth, currentYear);
+  syncMonthlyFinanceCarryForward(userId, currentMonth, currentYear);
 
   const owner = getSelfPerson(userId) || ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
   if (!owner) return res.status(400).send("Ajuste seu perfil em Amigos antes de seguir por aqui.");
@@ -11574,7 +14950,39 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     });
   }
 
-  const today = dayjs();
+  const privateDebtReminderSummary = getPrivateDebtReminderDashboardSummary(userId);
+  if (privateDebtReminderSummary.hasActive || privateDebtReminderSummary.hasReadyToArchive) {
+    const descriptionParts = [];
+    if (privateDebtReminderSummary.hasActive) {
+      descriptionParts.push(`${formatCountLabel(privateDebtReminderSummary.activeCount, 'lembrete privado segue', 'lembretes privados seguem')} em aberto, somando ${formatBRLFromCents(privateDebtReminderSummary.activeCents)}.`);
+    }
+    if (privateDebtReminderSummary.hasReadyToArchive) {
+      descriptionParts.push(`${formatCountLabel(privateDebtReminderSummary.readyToArchiveCount, 'lembrete já pode', 'lembretes já podem')} ir para o arquivo.`);
+    }
+
+    alerts.push({
+      type: privateDebtReminderSummary.hasActive ? 'info' : 'success',
+      icon: privateDebtReminderSummary.hasActive ? '🧾' : '🗂️',
+      title: privateDebtReminderSummary.hasActive
+        ? (privateDebtReminderSummary.activeCount === 1 ? 'Tem 1 lembrete privado em aberto' : 'Tem lembretes privados em aberto')
+        : (privateDebtReminderSummary.readyToArchiveCount === 1 ? 'Tem 1 lembrete privado pronto para arquivo' : 'Tem lembretes privados prontos para arquivo'),
+      description: `${descriptionParts.join(' ')} Esse radar existe só no seu app.`,
+      href: '/shared-debts#private-reminders'
+    });
+  }
+
+  const manualDebtDueContext = getManualDebtDueScheduleContext();
+  const today = manualDebtDueContext.now;
+  const todayManualDebtBucket = getManualDebtDueBucketsForDate(manualDebtDueContext.dateKey, { userIds: [userId] }).get(userId) || { pay: [], receive: [] };
+
+  if ((todayManualDebtBucket.pay || []).length) {
+    alerts.push(buildManualDebtDueDashboardAlert('pay', todayManualDebtBucket.pay, manualDebtDueContext.dateKey));
+  }
+
+  if ((todayManualDebtBucket.receive || []).length) {
+    alerts.push(buildManualDebtDueDashboardAlert('receive', todayManualDebtBucket.receive, manualDebtDueContext.dateKey));
+  }
+
   const isCurrentReferenceMonth = currentYear === today.year() && currentMonth === (today.month() + 1);
 
   if (isCurrentReferenceMonth) {
@@ -11726,7 +15134,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     }
   }
 
-  res.render("detalhamento", {
+  return safeRenderView(res, "detalhamento", {
     title: "Meu Detalhamento",
     year: currentYear,
     month: currentMonth,
@@ -11900,7 +15308,7 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   const draftQueueSummaryForMonth = getSharedDebtSendQueueDraftSummary(userId, { month, year });
 
-  res.render("month", {
+  return safeRenderView(res, "month", {
     month,
     year,
     txns,
@@ -12179,7 +15587,7 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
     Number(txn.card_id || 0)
   ]);
 
-  res.render("txn", {
+  return safeRenderView(res, "txn", {
     txn,
     people,
     selected,
@@ -14251,6 +17659,7 @@ function buildMonthlyReviewViewModel(userId, month, year) {
   const personalMerchantRanking = getPersonMerchantRanking(userId, selfPersonId, month, year, 6);
   const personalMerchantSuggestions = getPersonMerchantSuggestions(userId, selfPersonId, month, year, 4);
   const cardMonthlyTrend = getCardMonthlyTrend(userId, month, year, 6);
+  const privateDebtReminderSummary = getPrivateDebtReminderDashboardSummary(userId);
   const personalCardShareCents = Number(selfPersonPanel?.total_cents || 0);
   const personalPaidCents = Number(selfPersonPanel?.paid_cents || 0);
   const personalRemainingCents = Math.max(0, personalCardShareCents - personalPaidCents);
@@ -14355,6 +17764,7 @@ function buildMonthlyReviewViewModel(userId, month, year) {
     selfPerson,
     isClosed,
     summaryCharts,
+    privateDebtReminderSummary,
     previousSummaryRef: shiftMonth(year, month, -1),
     nextSummaryRef: shiftMonth(year, month, 1)
   };
@@ -14367,7 +17777,7 @@ app.get("/analytics/:year/:month", ensureAuthenticated, (req, res) => {
   const { month, year } = parsed;
 
   const viewModel = buildMonthlyReviewViewModel(userId, month, year);
-  res.render("analytics", {
+  return safeRenderView(res, "analytics", {
     ...viewModel,
     formatBRLFromCents
   });
@@ -14380,7 +17790,7 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
   const { month, year } = parsed;
 
   const viewModel = buildMonthlyReviewViewModel(userId, month, year);
-  res.render("summary", {
+  return safeRenderView(res, "summary", {
     ...viewModel,
     formatBRLFromCents
   });
@@ -14869,7 +18279,7 @@ app.get("/share/:year/:month/:personId", ensureAuthenticated, async (req, res) =
     remainingCents: exportData.remaining_cents
   });
 
-  res.render("share", { month, year, itemOrder, shareContext, ...exportData, formatBRLFromCents });
+  return safeRenderView(res, "share", { month, year, itemOrder, shareContext, ...exportData, formatBRLFromCents });
 });
 
 app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, async (req, res) => {
@@ -14901,7 +18311,7 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, async (req, res
     remainingCents: exportData.remaining_cents
   });
 
-  res.render("whatsapp", { month, year, itemOrder, shareContext, ...exportData, person: decoratedPerson, formatBRLFromCents });
+  return safeRenderView(res, "whatsapp", { month, year, itemOrder, shareContext, ...exportData, person: decoratedPerson, formatBRLFromCents });
 });
 
 function maskPhoneForLog(rawPhone) {
@@ -15206,10 +18616,11 @@ app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) =>
 
     const nowIso = new Date().toISOString();
     const totalCents = amountMode === 'variable' ? sumFinanceItemCents(items) : 0;
+    const carryKey = createMonthlyFinanceCarryKey();
 
     const insertFinance = db.prepare(`
-      INSERT INTO monthly_finances (user_id, month, year, type, description, formula, amount_cents, amount_mode, created_at)
-      VALUES (?, ?, ?, ?, ?, '', ?, ?, ?)
+      INSERT INTO monthly_finances (user_id, month, year, type, description, formula, amount_cents, amount_mode, carry_key, created_at)
+      VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, ?)
     `);
 
     const insertItem = db.prepare(`
@@ -15218,7 +18629,7 @@ app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) =>
     `);
 
     const financeId = db.transaction(() => {
-      const result = insertFinance.run(userId, month, year, type, description, totalCents, amountMode, nowIso);
+      const result = insertFinance.run(userId, month, year, type, description, totalCents, amountMode, carryKey, nowIso);
       const createdFinanceId = Number(result.lastInsertRowid);
 
       if (amountMode === 'variable') {
@@ -15341,7 +18752,17 @@ app.post("/finances/delete/:id", ensureAuthenticated, (req, res) => {
     return res.status(423).json({ error: getMonthLockMessage(Number(row.month), Number(row.year)) });
   }
 
+  const carryKey = normalizeMonthlyFinanceCarryKey(row.carry_key);
+  const deletedAt = nowIso();
+
   db.transaction(() => {
+    if (carryKey) {
+      db.prepare(`
+        INSERT OR IGNORE INTO monthly_finance_carry_exceptions (user_id, carry_key, month, year, created_at)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(userId, carryKey, Number(row.month), Number(row.year), deletedAt);
+    }
+
     db.prepare("DELETE FROM monthly_finance_items WHERE finance_id = ? AND user_id = ?").run(req.params.id, userId);
     db.prepare("DELETE FROM monthly_finances WHERE id = ? AND user_id = ?").run(req.params.id, userId);
   })();
@@ -15473,9 +18894,80 @@ app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
       }
     }
 
+    if (sectionKey === 'email') {
+      const emailConfig = getEmailRuntimeConfig();
+      if (emailConfig.enabled && !isEmailConfigured(emailConfig)) {
+        success += ' O bloco já salvou, mas ainda faltam host, porta, usuário, senha ou remetente para o e-mail entrar em campo.';
+      }
+    }
+
     return renderAdmin(res, { success, activeSection: sectionKey });
   } catch (err) {
     return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui salvar essa seção agora.' }), activeSection: sectionKey });
+  }
+});
+
+app.post('/admin/email/test-connection', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  try {
+    const emailConfig = getEmailRuntimeConfig();
+    if (!isEmailConfigured(emailConfig)) {
+      throw new Error('Antes do teste, complete host, porta, usuário, senha e remetente do SMTP.');
+    }
+    await verifyEmailTransport(emailConfig);
+    return renderAdmin(res, {
+      success: `Conexão SMTP validada com sucesso em ${emailConfig.host}:${emailConfig.port}. O correio está com a chuteira amarrada.`,
+      activeSection: 'email'
+    });
+  } catch (error) {
+    if (error?.code === 'EMAIL_RUNTIME_MISSING') {
+      logEmailRuntimeIssue('admin-test-connection');
+    }
+    logEmailFlowError('test-connection', error, {
+      adminUserId: userId,
+      ...buildEmailTransportLogContext(getEmailRuntimeConfig())
+    });
+    return renderAdmin(res, {
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui validar a conexão SMTP agora.' }),
+      activeSection: 'email'
+    });
+  }
+});
+
+app.post('/admin/email/send-test', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  try {
+    const currentAdmin = getUserRecord(userId, { includeDeleted: false }) || req.user;
+    const result = await sendAdminTestEmail({
+      recipientEmail: req.body.test_recipient_email,
+      createdByUser: currentAdmin,
+      req
+    });
+    return renderAdmin(res, {
+      success: `E-mail de teste enviado com sucesso${result.messageId ? ` (messageId ${result.messageId})` : ''}. Agora o SMTP já mostrou que sabe o caminho.`,
+      activeSection: 'email'
+    });
+  } catch (error) {
+    if (error?.code === 'EMAIL_RUNTIME_MISSING') {
+      logEmailRuntimeIssue('admin-send-test');
+    }
+    logEmailFlowError('admin-send-test', error, {
+      adminUserId: userId,
+      recipientEmail: String(req.body.test_recipient_email || '').trim() || null,
+      ...buildEmailTransportLogContext(getEmailRuntimeConfig())
+    });
+    return renderAdmin(res, {
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui mandar o e-mail de teste agora.' }),
+      activeSection: 'email'
+    });
   }
 });
 
@@ -15669,12 +19161,14 @@ app.get('/admin/backup/download/:backupId/:slot', ensureAuthenticated, (req, res
 });
 
 
-app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
+app.post("/admin/add-user", ensureAuthenticated, async (req, res) => {
   const userId = req.user.id;
   const safeEmail = normalizeEmail(req.body.email);
   const safeName = String(req.body.name || '').trim();
   const safeRole = String(req.body.role || 'user') === 'admin' ? 'admin' : 'user';
   const canImport = req.body.can_import ? 1 : 0;
+  const wantsWelcomeEmail = !!req.body.send_welcome_email;
+  const safeAdminMessage = sanitizeAdminEmailMessage(req.body.welcome_admin_message);
 
   if (!isAdminUser(userId)) {
     return res.status(403).send('Acesso negado.');
@@ -15693,14 +19187,88 @@ app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
     db.prepare("INSERT INTO users (email, name, role, can_import, created_at) VALUES (?, ?, ?, ?, ?)")
       .run(safeEmail, safeName || safeEmail.split('@')[0], safeRole, canImport, dayjs().toISOString());
 
-    const newUser = db.prepare("SELECT id FROM users WHERE email = ?").get(safeEmail);
+    const newUser = db.prepare("SELECT id, email, name, role, can_import FROM users WHERE email = ?").get(safeEmail);
     const insertCat = db.prepare("INSERT OR IGNORE INTO finance_categories (user_id, name) VALUES (?, ?)");
     DEFAULT_FINANCE_CATEGORIES.forEach(cat => insertCat.run(newUser.id, cat));
     ensurePurchaseCategoriesForUser(newUser.id);
 
-    return renderAdmin(res, { success: `Usuário ${safeEmail} adicionado com sucesso!` });
+    let success = `Usuário ${safeEmail} adicionado com sucesso!`;
+    const emailConfig = getEmailRuntimeConfig();
+    if (wantsWelcomeEmail) {
+      if (!emailConfig.enabled) {
+        success += ' O acesso foi criado, mas o envio automático de boas-vindas está pausado nas configurações.';
+      } else {
+        try {
+          const currentAdmin = getUserRecord(userId, { includeDeleted: false }) || req.user;
+          await sendWelcomeEmailToUser({
+            targetUser: newUser,
+            createdByUser: currentAdmin,
+            customMessage: safeAdminMessage,
+            req
+          });
+          success += ' O e-mail de boas-vindas já saiu no embalo.';
+        } catch (emailError) {
+          if (emailError?.code === 'EMAIL_RUNTIME_MISSING') {
+            logEmailRuntimeIssue('admin-create-user-welcome');
+          }
+          logEmailFlowError('admin-create-user-welcome', emailError, {
+            adminUserId: userId,
+            targetUserId: newUser?.id || null,
+            recipientEmail: newUser?.email || null
+          });
+          success += ` O acesso foi criado, mas o e-mail tropeçou: ${getFriendlyErrorMessage(emailError, { defaultMessage: 'não consegui mandar agora' })}`;
+        }
+      }
+    }
+
+    return renderAdmin(res, { success, activeSection: 'access' });
   } catch (err) {
-    return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui adicionar esse usuário agora.' }) });
+    return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui adicionar esse usuário agora.' }), activeSection: 'access' });
+  }
+});
+
+app.post('/admin/users/:id/resend-welcome', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  const targetUserId = Number(req.params.id);
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+    return renderAdmin(res, { error: 'Usuário inválido.', activeSection: 'access' });
+  }
+
+  const targetUser = getUserRecord(targetUserId, { includeDeleted: false });
+  if (!targetUser) {
+    return renderAdmin(res, { error: 'Usuário não encontrado.', activeSection: 'access' });
+  }
+
+  try {
+    const currentAdmin = getUserRecord(userId, { includeDeleted: false }) || req.user;
+    await sendWelcomeEmailToUser({
+      targetUser,
+      createdByUser: currentAdmin,
+      customMessage: '',
+      req
+    });
+    return renderAdmin(res, {
+      success: `Boas-vindas reenviado para ${targetUser.email}. Agora o convite foi de novo para o correio.`,
+      activeSection: 'access'
+    });
+  } catch (error) {
+    if (error?.code === 'EMAIL_RUNTIME_MISSING') {
+      logEmailRuntimeIssue('admin-resend-welcome');
+    }
+    logEmailFlowError('admin-resend-welcome', error, {
+      adminUserId: userId,
+      targetUserId,
+      recipientEmail: targetUser?.email || null,
+      ...buildEmailTransportLogContext(getEmailRuntimeConfig())
+    });
+    return renderAdmin(res, {
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui reenviar o e-mail de boas-vindas agora.' }),
+      activeSection: 'access'
+    });
   }
 });
 
@@ -15808,7 +19376,7 @@ app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
 app.use((req, res, next) => {
   if (res.headersSent) return next();
   res.status(404);
-  return res.render('error', {
+  return safeRenderView(res, 'error', {
     title: 'AcerttaPay | Opa',
     errorTitle: 'Deu uma tropeçadinha no caminho',
     errorMessage: 'Essa página não apareceu por aqui. Bora voltar para um cantinho conhecido do app?',
@@ -15833,4 +19401,5 @@ const PORT = BOOTSTRAP_PORT || 3001;
 app.listen(PORT, () => {
   console.log(`✅ Rodando em http://localhost:${PORT}`);
   startCardDueTodayPushScheduler();
+  startManualDebtDueScheduler();
 });

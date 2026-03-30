@@ -22,6 +22,29 @@
   --op-mobile-bottom-clearance: calc(5.75rem + var(--op-bottom-safe));
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body * {
+  min-width: 0;
+}
+
+img,
+svg,
+video,
+canvas,
+iframe {
+  max-width: 100%;
+}
+
+html,
+body {
+  overflow-x: clip;
+}
+
 html {
   min-height: 100%;
   min-height: var(--op-app-height);
@@ -5515,6 +5538,22 @@ html.dark .op-card-brand-preview {
 
 
 /* ===== Analytics graph layout refresh ===== */
+.op-screen--analytics .op-analytics-chip {
+  width: fit-content;
+  max-width: 100%;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  text-wrap: nowrap;
+}
+
+@media (max-width: 640px) {
+  .op-screen--analytics .op-analytics-chip {
+    padding-inline: 0.7rem;
+    letter-spacing: 0.14em;
+  }
+}
+
 .op-analytics-graph-grid {
   align-items: start;
 }
@@ -6082,4 +6121,268 @@ html.dark .op-analytics-line-hint {
   .op-analytics-donut-summary-card {
     padding: 0.8rem 0.9rem;
   }
+}
+
+/* Adaptive density sweep for Android/PWA/iOS display size changes */
+:where(.op-app-main, .op-page-shell, .op-screen, .op-page-hero, .op-surface-card, .op-form-card, .op-auth-card, .op-doc-card) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+:where(.op-app-main .overflow-x-auto, .op-summary-scroll-shell, .op-desktop-nav, .op-mobile-chip-row) {
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.op-vp-cozy {
+  font-size: 15px;
+}
+
+html.op-vp-compact {
+  font-size: 14.5px;
+}
+
+html.op-vp-tight {
+  font-size: 14px;
+}
+
+html.op-vp-cozy header {
+  padding-left: max(0.55rem, calc(var(--op-left-safe) + 0.2rem)) !important;
+  padding-right: max(0.55rem, calc(var(--op-right-safe) + 0.2rem)) !important;
+}
+
+html.op-vp-cozy .op-topbar-shell {
+  margin-top: 0.45rem;
+  padding: 0.7rem;
+  border-radius: 24px;
+}
+
+html.op-vp-cozy .op-app-main {
+  padding-top: 1rem !important;
+  padding-left: max(0.8rem, calc(var(--op-left-safe) + 0.28rem)) !important;
+  padding-right: max(0.8rem, calc(var(--op-right-safe) + 0.28rem)) !important;
+}
+
+html.op-vp-cozy .op-page-hero {
+  padding: 1rem;
+  gap: 0.9rem;
+  border-radius: 24px;
+}
+
+html.op-vp-cozy .op-page-hero__title {
+  line-height: 1.1;
+}
+
+html.op-vp-cozy .op-page-hero__subtitle {
+  font-size: 0.92rem;
+  line-height: 1.58;
+}
+
+html.op-vp-cozy .op-btn {
+  min-height: 46px;
+  padding: 0.75rem 1rem;
+}
+
+html.op-vp-cozy .op-utility-btn {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 16px;
+}
+
+html.op-vp-cozy .op-bottom-nav {
+  padding-inline: 0.7rem;
+}
+
+html.op-vp-cozy .op-bottom-nav__inner {
+  gap: 0.35rem;
+  padding: 0.45rem;
+  border-radius: 22px;
+}
+
+html.op-vp-cozy .op-bottom-nav__link {
+  min-width: 4.2rem;
+  min-height: 52px;
+  padding-inline: 0.55rem;
+  font-size: 0.62rem;
+}
+
+html.op-vp-cozy .op-bottom-nav__icon {
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 0.76rem;
+}
+
+html.op-vp-cozy .op-kpi-strip {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+}
+
+html.op-vp-compact .op-app-main .whitespace-nowrap {
+  white-space: normal !important;
+  text-wrap: balance;
+}
+
+html.op-vp-compact .op-app-main .truncate {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+html.op-vp-compact .op-app-main [class*="min-w-["] {
+  min-width: 0 !important;
+}
+
+html.op-vp-compact .op-page-hero__meta .badge,
+html.op-vp-compact .badge {
+  white-space: normal;
+  line-height: 1.3;
+}
+
+html.op-vp-tight .op-page-hero__actions,
+html.op-vp-tight .op-month-hero-actions__row,
+html.op-vp-tight .op-admin-hero-actions,
+html.op-vp-tight .op-tab-strip {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  width: 100%;
+}
+
+html.op-vp-tight .op-page-hero__actions > *,
+html.op-vp-tight .op-month-hero-actions__row > *,
+html.op-vp-tight .op-admin-hero-actions > *,
+html.op-vp-tight .op-tab-strip > * {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+html.op-vp-tight .op-app-main .grid.grid-cols-2 {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+html.op-vp-tight .op-mobile-topbar-row {
+  gap: 0.45rem;
+}
+
+html.op-vp-tight .op-mobile-brand-card {
+  padding-inline: 0.75rem;
+}
+
+html.op-vp-tight .op-mobile-brand-card > img,
+html.op-vp-tight .op-mobile-brand-card .h-12.w-12 {
+  width: 2.6rem !important;
+  height: 2.6rem !important;
+}
+
+html.op-vp-tight .op-page-hero,
+html.op-vp-tight .op-auth-card,
+html.op-vp-tight .op-doc-card {
+  border-radius: 22px;
+}
+
+html.op-vp-short .op-page-hero {
+  padding-top: 0.95rem;
+  padding-bottom: 0.95rem;
+}
+
+html.op-vp-short .op-app-main {
+  padding-top: 0.9rem !important;
+}
+
+
+
+/* Orgulho: keep the default geometry and spacing, swapping only the palette accents */
+html[data-theme-style="orgulho"] body.op-shell::before,
+html[data-theme-style="orgulho"] body.op-shell::after,
+html[data-theme-style="orgulho"] .op-screen::before,
+html[data-theme-style="orgulho"] .op-empty-state::after,
+html[data-theme-style="orgulho"] .op-inline-alert::after {
+  display: none;
+}
+
+html[data-theme-style="orgulho"] .op-topbar-shell {
+  box-shadow: 0 14px 34px rgba(2, 6, 23, 0.28);
+}
+
+html.dark[data-theme-style="orgulho"] .op-topbar-shell {
+  box-shadow: 0 14px 34px rgba(2, 6, 23, 0.34);
+}
+
+html[data-theme-style="orgulho"] .op-page-hero,
+html[data-theme-style="orgulho"] .op-kpi-card,
+html[data-theme-style="orgulho"] .op-surface-card,
+html[data-theme-style="orgulho"] .op-admin-status-panel,
+html[data-theme-style="orgulho"] .op-empty-state,
+html[data-theme-style="orgulho"] .op-notification-item,
+html[data-theme-style="orgulho"] .op-style-center-panel,
+html[data-theme-style="orgulho"] .op-notification-center,
+html[data-theme-style="orgulho"] .op-form-card,
+html[data-theme-style="orgulho"] .op-inline-alert,
+html[data-theme-style="orgulho"] .op-month-selection-toolbar,
+html[data-theme-style="orgulho"] [data-month-sheet-surface],
+html[data-theme-style="orgulho"] [data-shared-debts-sheet] > div:last-child {
+  box-shadow: var(--op-shadow) !important;
+}
+
+html.dark[data-theme-style="orgulho"] .op-page-hero,
+html.dark[data-theme-style="orgulho"] .op-kpi-card,
+html.dark[data-theme-style="orgulho"] .op-surface-card,
+html.dark[data-theme-style="orgulho"] .op-admin-status-panel,
+html.dark[data-theme-style="orgulho"] .op-empty-state,
+html.dark[data-theme-style="orgulho"] .op-notification-item,
+html.dark[data-theme-style="orgulho"] .op-style-center-panel,
+html.dark[data-theme-style="orgulho"] .op-notification-center,
+html.dark[data-theme-style="orgulho"] .op-form-card,
+html.dark[data-theme-style="orgulho"] .op-inline-alert,
+html.dark[data-theme-style="orgulho"] .op-month-selection-toolbar,
+html.dark[data-theme-style="orgulho"] [data-month-sheet-surface],
+html.dark[data-theme-style="orgulho"] [data-shared-debts-sheet] > div:last-child {
+  box-shadow: 0 24px 54px rgba(2, 6, 23, 0.24) !important;
+}
+
+html[data-theme-style="orgulho"] .op-screen--month .op-page-hero,
+html[data-theme-style="orgulho"] .op-screen--shared-debts .op-page-hero,
+html[data-theme-style="orgulho"] .op-screen--summary .op-page-hero,
+html[data-theme-style="orgulho"] .op-screen--detalhamento .op-page-hero,
+html[data-theme-style="orgulho"] .op-screen--home .op-page-hero,
+html[data-theme-style="orgulho"] .op-screen--txn .op-page-hero {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 248, 252, 0.86));
+}
+
+html.dark[data-theme-style="orgulho"] .op-screen--month .op-page-hero,
+html.dark[data-theme-style="orgulho"] .op-screen--shared-debts .op-page-hero,
+html.dark[data-theme-style="orgulho"] .op-screen--summary .op-page-hero,
+html.dark[data-theme-style="orgulho"] .op-screen--detalhamento .op-page-hero,
+html.dark[data-theme-style="orgulho"] .op-screen--home .op-page-hero,
+html.dark[data-theme-style="orgulho"] .op-screen--txn .op-page-hero {
+  background: linear-gradient(180deg, rgba(39, 22, 57, 0.9), rgba(28, 18, 44, 0.82));
+}
+
+html[data-theme-style="orgulho"] .op-screen--shared-debts .op-kpi-card:nth-child(1),
+html[data-theme-style="orgulho"] .op-screen--shared-debts .op-kpi-card:nth-child(2),
+html[data-theme-style="orgulho"] .op-screen--shared-debts .op-kpi-card:nth-child(3) {
+  background: rgba(255, 255, 255, 0.88);
+}
+
+html.dark[data-theme-style="orgulho"] .op-screen--shared-debts .op-kpi-card:nth-child(1),
+html.dark[data-theme-style="orgulho"] .op-screen--shared-debts .op-kpi-card:nth-child(2),
+html.dark[data-theme-style="orgulho"] .op-screen--shared-debts .op-kpi-card:nth-child(3) {
+  background: rgba(39, 22, 57, 0.78);
+}
+
+html[data-theme-style="orgulho"] .op-screen--month .op-month-row:hover,
+html[data-theme-style="orgulho"] .op-screen--month .op-month-row:focus-visible {
+  transform: none;
+  box-shadow: none;
+}
+
+html[data-theme-style="orgulho"] .op-bottom-nav,
+html.dark[data-theme-style="orgulho"] .op-bottom-nav {
+  background: transparent;
+}
+
+html[data-theme-style="orgulho"] .op-bottom-nav__inner {
+  box-shadow: 0 20px 50px rgba(2, 6, 23, 0.3);
+}
+
+html.dark[data-theme-style="orgulho"] .op-bottom-nav__inner {
+  box-shadow: 0 20px 50px rgba(2, 6, 23, 0.36);
 }

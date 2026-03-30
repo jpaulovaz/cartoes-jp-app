@@ -96,17 +96,22 @@ const {
   PASSKEY_MAX_CREDENTIALS_PER_USER,
   PASSKEY_CHALLENGE_MAX_AGE_MS,
   PASSKEY_RUNTIME_AVAILABLE,
-  PASSKEY_SUPPORTED_ALGORITHM_IDS,
   buildPasskeyContext,
   buildPasskeyUserHandle,
   normalizePasskeyLabel,
-  normalizePasskeyCredentialId,
-  collectPasskeyCredentialIdCandidates,
   generatePasskeyRegistrationOptions,
   verifyPasskeyRegistrationResponse,
   generatePasskeyAuthenticationOptions,
   verifyPasskeyAuthenticationResponse
 } = require('./src/passkeySecurity');
+const {
+  verifyEmailTransport,
+  sendEmail
+} = require('./src/emailService');
+const {
+  buildWelcomeEmailTemplate,
+  buildTestEmailTemplate
+} = require('./src/emailTemplates');
 const {
   PRIVATE_DEBT_STATUS_OPEN,
   PRIVATE_DEBT_STATUS_SETTLED,
@@ -853,8 +858,31 @@ db.prepare(`
   )
 `).run();
 
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS email_delivery_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    target_user_id INTEGER,
+    recipient_email TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    provider_message_id TEXT,
+    error_message TEXT,
+    attempt_no INTEGER NOT NULL DEFAULT 1,
+    payload_json TEXT,
+    created_by_user_id INTEGER,
+    created_at TEXT NOT NULL,
+    sent_at TEXT,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (target_user_id) REFERENCES users(id),
+    FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+  )
+`).run();
+
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_backup_runs_started_at ON backup_runs(started_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_backup_restores_started_at ON backup_restores(started_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_email_delivery_events_target_kind ON email_delivery_events(target_user_id, kind, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_email_delivery_events_status_created ON email_delivery_events(status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -901,6 +929,55 @@ const backupRestoresInsert = db.prepare(`
   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const backupRestoresSelectRecent = db.prepare(`SELECT * FROM backup_restores ORDER BY started_at DESC LIMIT ?`);
+const emailDeliveryEventsInsert = db.prepare(`
+  INSERT INTO email_delivery_events (
+    kind, target_user_id, recipient_email, subject, status, provider_message_id, error_message,
+    attempt_no, payload_json, created_by_user_id, created_at, sent_at, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const emailDeliveryEventsUpdateResult = db.prepare(`
+  UPDATE email_delivery_events
+     SET status = ?,
+         provider_message_id = ?,
+         error_message = ?,
+         sent_at = ?,
+         updated_at = ?,
+         payload_json = COALESCE(?, payload_json)
+   WHERE id = ?
+`);
+const emailDeliveryEventsSelectRecent = db.prepare(`
+  SELECT e.*, creator.name AS created_by_name, creator.email AS created_by_email, target.name AS target_user_name
+    FROM email_delivery_events e
+    LEFT JOIN users creator ON creator.id = e.created_by_user_id
+    LEFT JOIN users target ON target.id = e.target_user_id
+   ORDER BY e.created_at DESC, e.id DESC
+   LIMIT ?
+`);
+const emailDeliveryEventsCountAttemptsForUserKind = db.prepare(`
+  SELECT COUNT(*) AS total
+    FROM email_delivery_events
+   WHERE kind = ?
+     AND COALESCE(target_user_id, 0) = ?
+`);
+const emailDeliveryEventsSelectLatestWelcomeByUser = db.prepare(`
+  SELECT e.*
+    FROM email_delivery_events e
+   WHERE e.kind = 'welcome'
+     AND e.target_user_id = ?
+   ORDER BY e.created_at DESC, e.id DESC
+   LIMIT 1
+`);
+const emailDeliveryEventsSelectLatestWelcomeForUsers = db.prepare(`
+  SELECT e.*
+    FROM email_delivery_events e
+    INNER JOIN (
+      SELECT target_user_id, MAX(id) AS last_id
+        FROM email_delivery_events
+       WHERE kind = 'welcome'
+         AND target_user_id IS NOT NULL
+       GROUP BY target_user_id
+    ) latest ON latest.last_id = e.id
+`);
 
 let runtimeSettingsCache = {};
 let appSetupCompleted = false;
@@ -1036,6 +1113,325 @@ function getPushRuntimeConfig() {
     repeatIntervalMinutes: getSettingInt('CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES', 0),
     checkIntervalMinutes: getSettingInt('CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES', 10)
   };
+}
+
+function getEmailRuntimeConfig() {
+  return {
+    enabled: getSettingBoolean('WELCOME_EMAIL_ENABLED', true),
+    host: getSettingText('MAIL_SMTP_HOST'),
+    port: getSettingInt('MAIL_SMTP_PORT', 587),
+    secure: getSettingBoolean('MAIL_SMTP_SECURE', false),
+    requireTLS: getSettingBoolean('MAIL_SMTP_REQUIRE_TLS', true),
+    user: getSettingText('MAIL_SMTP_USER'),
+    pass: getSettingText('MAIL_SMTP_PASS'),
+    fromEmail: getSettingText('MAIL_FROM_EMAIL'),
+    fromName: getSettingText('MAIL_FROM_NAME', 'AcerttaPay') || 'AcerttaPay',
+    replyTo: getSettingText('MAIL_REPLY_TO'),
+    welcomeSubject: getSettingText('WELCOME_EMAIL_SUBJECT', 'Seu acesso ao AcerttaPay foi liberado') || 'Seu acesso ao AcerttaPay foi liberado',
+    loginUrl: getSettingText('WELCOME_EMAIL_LOGIN_URL')
+  };
+}
+
+function isEmailConfigured(config = getEmailRuntimeConfig()) {
+  return !!(config.host && Number(config.port || 0) > 0 && config.user && config.pass && config.fromEmail);
+}
+
+function getEmailConnectionModeLabel(config = getEmailRuntimeConfig()) {
+  return config.secure ? 'SMTPS' : (config.requireTLS ? 'STARTTLS' : 'SMTP');
+}
+
+function buildAppOriginFromRequest(req) {
+  const forwardedProto = String(req?.get?.('x-forwarded-proto') || '').split(',')[0].trim().toLowerCase();
+  const forwardedHost = String(req?.get?.('x-forwarded-host') || '').split(',')[0].trim();
+  const protocol = forwardedProto || (req?.secure ? 'https' : (req?.protocol ? String(req.protocol).trim().toLowerCase() : 'http'));
+  const host = forwardedHost || String(req?.get?.('host') || '').trim();
+  if (!host) return '';
+  return `${protocol}://${host}`;
+}
+
+function buildLoginUrl(req) {
+  const explicit = getSettingText('WELCOME_EMAIL_LOGIN_URL');
+  if (explicit) return explicit;
+  const origin = buildAppOriginFromRequest(req);
+  return origin ? `${origin}/login` : '/login';
+}
+
+function sanitizeAdminEmailMessage(value) {
+  return String(value || '').trim().slice(0, 280);
+}
+
+function summarizeEmailPayload(payload = {}) {
+  const safe = payload && typeof payload === 'object' ? payload : {};
+  return JSON.stringify({
+    loginUrl: String(safe.loginUrl || '').trim(),
+    subject: String(safe.subject || '').trim(),
+    preview: String(safe.preview || '').trim(),
+    customMessage: sanitizeAdminEmailMessage(safe.customMessage || ''),
+    accepted: Array.isArray(safe.accepted) ? safe.accepted.slice(0, 5) : [],
+    rejected: Array.isArray(safe.rejected) ? safe.rejected.slice(0, 5) : [],
+    response: String(safe.response || '').trim()
+  });
+}
+
+function createEmailDeliveryEvent({ kind, targetUserId = null, recipientEmail, subject, attemptNo = 1, status = 'pending', payload = null, createdByUserId = null }) {
+  const now = currentConfigTimestamp();
+  const result = emailDeliveryEventsInsert.run(
+    String(kind || 'welcome').trim() || 'welcome',
+    targetUserId ? Number(targetUserId) : null,
+    String(recipientEmail || '').trim(),
+    String(subject || '').trim(),
+    String(status || 'pending').trim() || 'pending',
+    null,
+    null,
+    Math.max(1, Number(attemptNo || 1) || 1),
+    payload ? summarizeEmailPayload(payload) : null,
+    createdByUserId ? Number(createdByUserId) : null,
+    now,
+    null,
+    now
+  );
+  return Number(result.lastInsertRowid || 0);
+}
+
+function finalizeEmailDeliveryEvent(eventId, { status, providerMessageId = '', errorMessage = '', payload = null } = {}) {
+  const now = currentConfigTimestamp();
+  const normalizedStatus = String(status || 'error').trim() || 'error';
+  const sentAt = normalizedStatus === 'sent' ? now : null;
+  emailDeliveryEventsUpdateResult.run(
+    normalizedStatus,
+    String(providerMessageId || '').trim() || null,
+    String(errorMessage || '').trim() || null,
+    sentAt,
+    now,
+    payload ? summarizeEmailPayload(payload) : null,
+    Number(eventId || 0)
+  );
+}
+
+function getNextWelcomeEmailAttemptNo(targetUserId) {
+  const safeUserId = Number(targetUserId || 0);
+  if (!safeUserId) return 1;
+  const row = emailDeliveryEventsCountAttemptsForUserKind.get('welcome', safeUserId);
+  return Math.max(1, Number(row?.total || 0) + 1);
+}
+
+function getLatestWelcomeEmailStatusMap() {
+  const rows = emailDeliveryEventsSelectLatestWelcomeForUsers.all();
+  const map = new Map();
+  rows.forEach((row) => {
+    map.set(Number(row.target_user_id || 0), row);
+  });
+  return map;
+}
+
+function mapEmailDeliveryStatus(row, { timeZone = 'America/Sao_Paulo' } = {}) {
+  if (!row) {
+    return {
+      key: 'never',
+      label: 'Nunca enviado',
+      tone: 'muted',
+      detail: 'Ainda não saiu nenhum boas-vindas daqui.',
+      sentAtLabel: '',
+      errorMessage: ''
+    };
+  }
+
+  const status = String(row.status || '').trim().toLowerCase();
+  if (status === 'sent') {
+    return {
+      key: row.attempt_no > 1 ? 'resent' : 'sent',
+      label: row.attempt_no > 1 ? 'Reenviado' : 'Enviado',
+      tone: 'success',
+      detail: row.sent_at ? `Última saída em ${formatAdminDateTime(row.sent_at, timeZone)}.` : 'Mensagem enviada com sucesso.',
+      sentAtLabel: row.sent_at ? formatAdminDateTime(row.sent_at, timeZone) : '',
+      errorMessage: ''
+    };
+  }
+
+  if (status === 'pending') {
+    return {
+      key: 'pending',
+      label: 'Na fila',
+      tone: 'warning',
+      detail: 'O disparo foi armado, mas ainda não confirmou a saída.',
+      sentAtLabel: '',
+      errorMessage: ''
+    };
+  }
+
+  return {
+    key: 'failed',
+    label: 'Falhou',
+    tone: 'warning',
+    detail: row.error_message || 'Não consegui mandar esse e-mail agora.',
+    sentAtLabel: '',
+    errorMessage: row.error_message || ''
+  };
+}
+
+function mapEmailDeliveryEventForAdmin(row, { timeZone = 'America/Sao_Paulo' } = {}) {
+  const status = mapEmailDeliveryStatus(row, { timeZone });
+  return {
+    ...row,
+    statusTone: status.tone,
+    statusLabel: status.label,
+    targetName: row.target_user_name || row.recipient_email || 'Destino',
+    createdByLabel: row.created_by_name || row.created_by_email || 'Admin',
+    createdAtLabel: formatAdminDateTime(row.created_at, timeZone),
+    sentAtLabel: row.sent_at ? formatAdminDateTime(row.sent_at, timeZone) : '',
+    errorMessage: row.error_message || ''
+  };
+}
+
+async function sendWelcomeEmailToUser({ targetUser, createdByUser, customMessage = '', req }) {
+  const emailConfig = getEmailRuntimeConfig();
+  if (!isEmailConfigured(emailConfig)) {
+    throw new Error('O SMTP ainda não está redondo. Preencha host, porta, usuário, senha e remetente antes de mandar o boas-vindas.');
+  }
+
+  const safeTarget = targetUser && typeof targetUser === 'object' ? targetUser : {};
+  const safeRecipientEmail = normalizeEmail(safeTarget.email);
+  if (!safeRecipientEmail) {
+    throw new Error('Esse acesso ainda está sem e-mail válido para receber o boas-vindas.');
+  }
+
+  const template = buildWelcomeEmailTemplate({
+    appName: 'AcerttaPay',
+    recipientName: safeTarget.name || safeRecipientEmail.split('@')[0],
+    adminName: createdByUser?.name || createdByUser?.email || '',
+    loginUrl: buildLoginUrl(req),
+    role: safeTarget.role || 'user',
+    customMessage: sanitizeAdminEmailMessage(customMessage),
+    subject: emailConfig.welcomeSubject
+  });
+  const attemptNo = getNextWelcomeEmailAttemptNo(safeTarget.id);
+  const eventId = createEmailDeliveryEvent({
+    kind: 'welcome',
+    targetUserId: safeTarget.id,
+    recipientEmail: safeRecipientEmail,
+    subject: template.subject,
+    attemptNo,
+    payload: {
+      loginUrl: buildLoginUrl(req),
+      preview: template.preview,
+      customMessage: sanitizeAdminEmailMessage(customMessage),
+      subject: template.subject
+    },
+    createdByUserId: createdByUser?.id || null
+  });
+
+  try {
+    const sendResult = await sendEmail(emailConfig, {
+      to: safeRecipientEmail,
+      subject: template.subject,
+      html: template.html,
+      text: template.text
+    });
+
+    finalizeEmailDeliveryEvent(eventId, {
+      status: 'sent',
+      providerMessageId: sendResult.messageId,
+      payload: {
+        loginUrl: buildLoginUrl(req),
+        preview: template.preview,
+        customMessage: sanitizeAdminEmailMessage(customMessage),
+        subject: template.subject,
+        accepted: sendResult.accepted,
+        rejected: sendResult.rejected,
+        response: sendResult.response
+      }
+    });
+
+    return {
+      eventId,
+      attemptNo,
+      sent: true,
+      messageId: sendResult.messageId,
+      subject: template.subject
+    };
+  } catch (error) {
+    finalizeEmailDeliveryEvent(eventId, {
+      status: 'error',
+      errorMessage: error?.message || 'Não consegui mandar esse e-mail agora.',
+      payload: {
+        loginUrl: buildLoginUrl(req),
+        preview: template.preview,
+        customMessage: sanitizeAdminEmailMessage(customMessage),
+        subject: template.subject
+      }
+    });
+    throw error;
+  }
+}
+
+async function sendAdminTestEmail({ recipientEmail, createdByUser, req }) {
+  const emailConfig = getEmailRuntimeConfig();
+  if (!isEmailConfigured(emailConfig)) {
+    throw new Error('Complete host, porta, usuário, senha e remetente antes de testar o e-mail.');
+  }
+
+  const safeRecipientEmail = normalizeEmail(recipientEmail);
+  if (!safeRecipientEmail) {
+    throw new Error('Me passa um e-mail de teste válido para eu acertar o alvo.');
+  }
+
+  const template = buildTestEmailTemplate({
+    appName: 'AcerttaPay',
+    recipientName: createdByUser?.name || safeRecipientEmail.split('@')[0],
+    adminName: createdByUser?.name || createdByUser?.email || '',
+    loginUrl: buildLoginUrl(req)
+  });
+  const eventId = createEmailDeliveryEvent({
+    kind: 'test',
+    recipientEmail: safeRecipientEmail,
+    subject: template.subject,
+    attemptNo: 1,
+    payload: {
+      loginUrl: buildLoginUrl(req),
+      preview: template.preview,
+      subject: template.subject
+    },
+    createdByUserId: createdByUser?.id || null
+  });
+
+  try {
+    const sendResult = await sendEmail(emailConfig, {
+      to: safeRecipientEmail,
+      subject: template.subject,
+      html: template.html,
+      text: template.text
+    });
+
+    finalizeEmailDeliveryEvent(eventId, {
+      status: 'sent',
+      providerMessageId: sendResult.messageId,
+      payload: {
+        loginUrl: buildLoginUrl(req),
+        preview: template.preview,
+        subject: template.subject,
+        accepted: sendResult.accepted,
+        rejected: sendResult.rejected,
+        response: sendResult.response
+      }
+    });
+
+    return {
+      eventId,
+      messageId: sendResult.messageId,
+      subject: template.subject
+    };
+  } catch (error) {
+    finalizeEmailDeliveryEvent(eventId, {
+      status: 'error',
+      errorMessage: error?.message || 'Não consegui mandar esse e-mail de teste agora.',
+      payload: {
+        loginUrl: buildLoginUrl(req),
+        preview: template.preview,
+        subject: template.subject
+      }
+    });
+    throw error;
+  }
 }
 
 function getInactivityTimeoutMs() {
@@ -1908,6 +2304,46 @@ function buildBackupAdminState() {
   };
 }
 
+function buildEmailAdminState(req, { timeZone = 'America/Sao_Paulo' } = {}) {
+  const config = getEmailRuntimeConfig();
+  const configured = isEmailConfigured(config);
+  const recentEvents = emailDeliveryEventsSelectRecent.all(8).map((row) => mapEmailDeliveryEventForAdmin(row, { timeZone }));
+  const latestEvent = recentEvents[0] || null;
+  const testRecipient = normalizeEmail(req?.user?.email) || config.fromEmail || '';
+
+  return {
+    config,
+    configured,
+    enabled: !!config.enabled,
+    active: !!config.enabled && configured,
+    hostLabel: config.host || 'Host não definido',
+    connectionLabel: `${getEmailConnectionModeLabel(config)} · porta ${config.port || (config.secure ? 465 : 587)}`,
+    fromLabel: config.fromEmail ? `${config.fromName || 'AcerttaPay'} <${config.fromEmail}>` : 'Remetente não definido',
+    loginUrl: buildLoginUrl(req),
+    testRecipient,
+    recentEvents,
+    latestEvent,
+    helperStatus: !config.enabled
+      ? 'O SMTP pode até estar pronto, mas o envio automático de boas-vindas está em folga.'
+      : configured
+        ? 'Tudo pronto para o admin mandar boas-vindas, testar a conexão e reenviar quando precisar.'
+        : 'Faltam os ingredientes do SMTP para o e-mail entrar em campo.'
+  };
+}
+
+function buildAdminUsers() {
+  const users = getAllUsers();
+  const statusMap = getLatestWelcomeEmailStatusMap();
+  return users.map((row) => {
+    const latestWelcome = statusMap.get(Number(row.id || 0)) || null;
+    return {
+      ...row,
+      welcomeEmailStatus: mapEmailDeliveryStatus(latestWelcome),
+      welcomeEmailEvent: latestWelcome
+    };
+  });
+}
+
 
 function clearCardDueTodayPushScheduler() {
   if (duePushSchedulerInitialHandle) {
@@ -1971,6 +2407,8 @@ function updateAppSettings(entries, updatedByUserId = null) {
 function buildAdminStatusCards() {
   const googleReady = isGoogleAuthConfigured();
   const whatsappReady = !!(getSettingText('EVOLUTION_API_URL') && getSettingText('EVOLUTION_API_KEY') && getSettingText('EVOLUTION_INSTANCE_NAME'));
+  const emailConfig = getEmailRuntimeConfig();
+  const emailConfigured = isEmailConfigured(emailConfig);
   const pushReady = isPushConfigured();
   const timeoutMinutes = getSettingInt('INACTIVITY_TIMEOUT_MINUTES', 0);
   const duePushEnabled = getSettingBoolean('CARD_DUE_PUSH_ENABLED', true);
@@ -2013,6 +2451,17 @@ function buildAdminStatusCards() {
       text: whatsappReady
         ? 'A ponte com a Evolution está montada e pronta para mandar resumos.'
         : 'Sem URL, key ou instância completas o WhatsApp continua no banco de reservas.'
+    },
+    {
+      key: 'email',
+      title: 'E-mail de boas-vindas',
+      tone: emailConfigured ? (emailConfig.enabled ? 'success' : 'muted') : 'warning',
+      status: !emailConfigured ? 'Falta tempero' : (emailConfig.enabled ? 'Prontinho' : 'Configurado, mas pausado'),
+      text: !emailConfigured
+        ? 'Ainda faltam host, porta, usuário, senha ou remetente para o convite sair por e-mail.'
+        : emailConfig.enabled
+          ? 'O SMTP está preparado para mandar boas-vindas e testes sem depender de gambiarras.'
+          : 'O SMTP está configurado, mas o disparo automático do boas-vindas está desligado nesta rodada.'
     },
     {
       key: 'push',
@@ -2483,18 +2932,20 @@ function ensureDefaultOwnerPerson(userId, preferredName, preferredEmail = null) 
 function renderAdmin(res, { error = null, success = null, activeSection = 'access' } = {}) {
   return safeRenderView(res, 'admin', {
     title: 'AcerttaPay | Administração',
-    users: getAllUsers(),
+    users: buildAdminUsers(),
     error,
     success,
     activeSection,
     settingsSections: buildAdminSettingsSections(),
     statusCards: buildAdminStatusCards(),
     backupPanel: buildBackupAdminState(),
+    emailPanel: buildEmailAdminState(res?.req, { timeZone: getBackupRuntimeConfig().timeZone }),
     totalConfigItems: SETTING_DEFINITIONS.length,
     autoReloadCount: SETTING_DEFINITIONS.filter((item) => !item.restartRequired).length,
     restartRequiredCount: SETTING_DEFINITIONS.filter((item) => item.restartRequired).length,
     googleConfigured: isGoogleAuthConfigured(),
-    pushConfigured: isPushConfigured()
+    pushConfigured: isPushConfigured(),
+    emailConfigured: isEmailConfigured(getEmailRuntimeConfig())
   });
 }
 
@@ -3141,42 +3592,27 @@ function listUserPasskeys(userId) {
     FROM user_passkeys
     WHERE user_id = ?
     ORDER BY COALESCE(last_used_at, created_at) DESC, created_at DESC
-  `).all(safeUserId).map((row) => {
-    const dbId = String(row.id || '').trim();
-    const normalizedId = normalizePasskeyCredentialId(dbId) || dbId;
-    return {
-      id: normalizedId,
-      db_id: dbId,
-      id_candidates: collectPasskeyCredentialIdCandidates(dbId, normalizedId),
-      user_id: safeUserId,
-      label: normalizePasskeyLabel(row.label || '', 'Este aparelho'),
-      public_key: String(row.public_key || '').trim(),
-      counter: Number(row.counter || 0) || 0,
-      device_type: String(row.device_type || '').trim(),
-      backed_up: Number(row.backed_up || 0) !== 0 ? 1 : 0,
-      transports: row.transports ? (() => { try { return JSON.parse(row.transports); } catch (_error) { return []; } })() : [],
-      aaguid: String(row.aaguid || '').trim(),
-      created_at: row.created_at || null,
-      updated_at: row.updated_at || null,
-      last_used_at: row.last_used_at || null,
-      last_used_origin: row.last_used_origin || null
-    };
-  });
-}
-
-function findUserPasskeyInList(passkeys, credentialId) {
-  const candidates = collectPasskeyCredentialIdCandidates(credentialId);
-  if (!candidates.length) return null;
-  return (Array.isArray(passkeys) ? passkeys : []).find((entry) => {
-    const entryCandidates = Array.isArray(entry?.id_candidates) && entry.id_candidates.length
-      ? entry.id_candidates
-      : collectPasskeyCredentialIdCandidates(entry?.db_id, entry?.id);
-    return candidates.some((candidate) => entryCandidates.includes(candidate));
-  }) || null;
+  `).all(safeUserId).map((row) => ({
+    id: String(row.id || '').trim(),
+    user_id: safeUserId,
+    label: normalizePasskeyLabel(row.label || '', 'Este aparelho'),
+    public_key: String(row.public_key || '').trim(),
+    counter: Number(row.counter || 0) || 0,
+    device_type: String(row.device_type || '').trim(),
+    backed_up: Number(row.backed_up || 0) !== 0 ? 1 : 0,
+    transports: row.transports ? (() => { try { return JSON.parse(row.transports); } catch (_error) { return []; } })() : [],
+    aaguid: String(row.aaguid || '').trim(),
+    created_at: row.created_at || null,
+    updated_at: row.updated_at || null,
+    last_used_at: row.last_used_at || null,
+    last_used_origin: row.last_used_origin || null
+  }));
 }
 
 function getUserPasskey(userId, credentialId) {
-  return findUserPasskeyInList(listUserPasskeys(userId), credentialId);
+  const safeId = String(credentialId || '').trim();
+  if (!safeId) return null;
+  return listUserPasskeys(userId).find((entry) => entry.id === safeId) || null;
 }
 
 function saveUserPasskey(userId, payload) {
@@ -3185,97 +3621,58 @@ function saveUserPasskey(userId, payload) {
     throw new Error('Não encontrei quem vai receber esse desbloqueio pelo aparelho.');
   }
 
-  const rawId = payload?.id
-    || payload?.credential_id
-    || payload?.credentialId
-    || payload?.rawId
-    || '';
-  const safeId = normalizePasskeyCredentialId(rawId) || String(rawId || '').trim();
-  const safePublicKey = String(
-    payload?.public_key
-    || payload?.publicKey
-    || payload?.credential_public_key
-    || payload?.credentialPublicKey
-    || ''
-  ).trim();
-  const safeCounter = Number(
-    payload?.counter
-    ?? payload?.sign_count
-    ?? payload?.signCount
-    ?? 0
-  ) || 0;
-  const safeDeviceType = String(payload?.device_type || payload?.deviceType || '').trim() || null;
-  const safeBackedUp = Number(payload?.backed_up ?? payload?.backedUp ?? 0) !== 0 ? 1 : 0;
-  const safeTransports = Array.isArray(payload?.transports)
-    ? payload.transports.filter(Boolean)
-    : [];
-  const safeAaguid = String(payload?.aaguid || payload?.aaguid || '').trim() || null;
-
+  const safeId = String(payload?.id || '').trim();
+  const safePublicKey = String(payload?.public_key || '').trim();
   if (!safeId || !safePublicKey) {
     throw new Error('Não consegui guardar esse aparelho agora.');
   }
 
-  const existingPasskey = getUserPasskey(safeUserId, rawId || safeId);
-  const existingDbId = String(existingPasskey?.db_id || '').trim();
   const now = nowIso();
-
-  const persistPasskey = db.transaction(() => {
-    if (existingDbId && existingDbId !== safeId) {
-      db.prepare(`DELETE FROM user_passkeys WHERE user_id = ? AND id = ?`).run(safeUserId, existingDbId);
-    }
-
-    db.prepare(`
-      INSERT INTO user_passkeys (
-        id, user_id, label, public_key, counter, device_type, backed_up, transports, aaguid,
-        created_at, updated_at, last_used_at, last_used_origin
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        user_id = excluded.user_id,
-        label = excluded.label,
-        public_key = excluded.public_key,
-        counter = excluded.counter,
-        device_type = excluded.device_type,
-        backed_up = excluded.backed_up,
-        transports = excluded.transports,
-        aaguid = excluded.aaguid,
-        updated_at = excluded.updated_at
-    `).run(
-      safeId,
-      safeUserId,
-      normalizePasskeyLabel(payload.label || '', 'Este aparelho'),
-      safePublicKey,
-      safeCounter,
-      safeDeviceType,
-      safeBackedUp,
-      JSON.stringify(safeTransports),
-      safeAaguid,
-      now,
-      now,
-      null,
-      null
-    );
-  });
-
-  persistPasskey();
+  db.prepare(`
+    INSERT INTO user_passkeys (
+      id, user_id, label, public_key, counter, device_type, backed_up, transports, aaguid,
+      created_at, updated_at, last_used_at, last_used_origin
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      user_id = excluded.user_id,
+      label = excluded.label,
+      public_key = excluded.public_key,
+      counter = excluded.counter,
+      device_type = excluded.device_type,
+      backed_up = excluded.backed_up,
+      transports = excluded.transports,
+      aaguid = excluded.aaguid,
+      updated_at = excluded.updated_at
+  `).run(
+    safeId,
+    safeUserId,
+    normalizePasskeyLabel(payload.label || '', 'Este aparelho'),
+    safePublicKey,
+    Number(payload.counter || 0) || 0,
+    String(payload.device_type || '').trim() || null,
+    Number(payload.backed_up || 0) !== 0 ? 1 : 0,
+    JSON.stringify(Array.isArray(payload.transports) ? payload.transports.filter(Boolean) : []),
+    String(payload.aaguid || '').trim() || null,
+    now,
+    now,
+    null,
+    null
+  );
 
   return getUserPasskey(safeUserId, safeId);
 }
 
 function deleteUserPasskey(userId, credentialId) {
   const safeUserId = Number(userId || 0);
-  if (!safeUserId) return 0;
-  const passkey = getUserPasskey(safeUserId, credentialId);
-  const dbId = String(passkey?.db_id || '').trim();
-  if (!dbId) return 0;
-  return db.prepare(`DELETE FROM user_passkeys WHERE user_id = ? AND id = ?`).run(safeUserId, dbId).changes || 0;
+  const safeId = String(credentialId || '').trim();
+  if (!safeUserId || !safeId) return 0;
+  return db.prepare(`DELETE FROM user_passkeys WHERE user_id = ? AND id = ?`).run(safeUserId, safeId).changes || 0;
 }
 
 function touchUserPasskeyUsage(userId, credentialId, { counter = 0, origin = '' } = {}) {
   const safeUserId = Number(userId || 0);
-  if (!safeUserId) return;
-  const passkey = getUserPasskey(safeUserId, credentialId);
-  const dbId = String(passkey?.db_id || '').trim();
-  if (!dbId) return;
+  const safeId = String(credentialId || '').trim();
+  if (!safeUserId || !safeId) return;
   db.prepare(`
     UPDATE user_passkeys
     SET counter = ?, updated_at = ?, last_used_at = ?, last_used_origin = ?
@@ -3286,7 +3683,7 @@ function touchUserPasskeyUsage(userId, credentialId, { counter = 0, origin = '' 
     nowIso(),
     String(origin || '').trim() || null,
     safeUserId,
-    dbId
+    safeId
   );
 }
 
@@ -3348,98 +3745,6 @@ function buildPasskeyManagementViewModel(req, userId, pinSettings = null) {
     rpLabel: context.rpID || '',
     originLabel: context.origin || ''
   };
-}
-
-function previewPasskeyValue(value, { head = 12, tail = 8 } = {}) {
-  const safe = String(value || '').trim();
-  if (!safe) return null;
-  if (safe.length <= (head + tail + 1)) return safe;
-  return `${safe.slice(0, head)}…${safe.slice(-tail)}`;
-}
-
-function summarizePasskeyCredentialLookup(passkeys = [], credentialId = '') {
-  const requestedCandidates = collectPasskeyCredentialIdCandidates(credentialId);
-  return {
-    requestedId: previewPasskeyValue(credentialId),
-    requestedCandidates: requestedCandidates.map((value) => previewPasskeyValue(value)).filter(Boolean),
-    knownPasskeys: (Array.isArray(passkeys) ? passkeys : []).map((entry) => ({
-      label: entry?.label || null,
-      id: previewPasskeyValue(entry?.id),
-      dbId: previewPasskeyValue(entry?.db_id),
-      candidates: Array.isArray(entry?.id_candidates)
-        ? entry.id_candidates.map((value) => previewPasskeyValue(value)).filter(Boolean)
-        : []
-    }))
-  };
-}
-
-function summarizePasskeyRequestBody(body = {}) {
-  const response = body && typeof body === 'object' ? (body.response || {}) : {};
-  return {
-    id: previewPasskeyValue(body?.id),
-    rawId: previewPasskeyValue(body?.rawId),
-    type: String(body?.type || '').trim() || null,
-    transports: Array.isArray(response?.transports) ? response.transports.filter(Boolean) : [],
-    clientDataJSONLength: String(response?.clientDataJSON || '').length || 0,
-    attestationObjectLength: String(response?.attestationObject || '').length || 0,
-    authenticatorDataLength: String(response?.authenticatorData || '').length || 0,
-    signatureLength: String(response?.signature || '').length || 0,
-    userHandleLength: String(response?.userHandle || '').length || 0
-  };
-}
-
-function logPasskeyFlowFailure(req, phase, error, context = null, body = null, extras = {}) {
-  const payload = {
-    requestId: req?.requestId || 'sem-id',
-    phase,
-    method: req?.method,
-    path: req?.originalUrl || req?.path,
-    userId: req?.user?.id || null,
-    host: req?.get?.('host') || null,
-    forwardedHost: req?.get?.('x-forwarded-host') || null,
-    forwardedProto: req?.get?.('x-forwarded-proto') || null,
-    secureContext: context?.secureContext ?? null,
-    available: context?.available ?? null,
-    origin: context?.origin || null,
-    rpID: context?.rpID || null,
-    supportedAlgorithmIDs: Array.isArray(PASSKEY_SUPPORTED_ALGORITHM_IDS) ? PASSKEY_SUPPORTED_ALGORITHM_IDS.join(',') : null,
-    message: error?.message || null,
-    code: error?.code || null,
-    details: summarizePasskeyRequestBody(body),
-    ...extras
-  };
-
-  console.error('[passkey-error]', payload, error?.stack || error);
-}
-
-function getFriendlyPasskeyErrorMessage(error, fallbackMessage = 'Não consegui confirmar esse aparelho agora.') {
-  const rawMessage = String(error?.message || '').trim();
-
-  if (/Missing credential ID/i.test(rawMessage)) {
-    return 'Esse navegador devolveu a confirmação do aparelho incompleta por aqui. Ajustei a conversa com a passkey para enviar os dados certinhos.';
-  }
-
-  if (/Unexpected registration response origin|Unexpected authentication response origin/i.test(rawMessage)) {
-    return 'O app e esse aparelho não combinaram certinho o endereço seguro do desbloqueio. Vale conferir o HTTPS e o endereço oficial do app.';
-  }
-
-  if (/rp id|rpidhash|rp id hash|expectedRPID|matchExpectedRPID/i.test(rawMessage)) {
-    return 'O endereço de confiança desse desbloqueio não bateu com o esperado pelo servidor. Vale revisar o domínio oficial configurado para as passkeys.';
-  }
-
-  if (/Unexpected public key alg/i.test(rawMessage)) {
-    return 'Esse aparelho tentou usar um formato de chave que o servidor ainda não tinha liberado. Agora ele já conversa melhor com passkeys mais novos.';
-  }
-
-  if (/User verification was required/i.test(rawMessage)) {
-    return 'Esse aparelho não confirmou sua identidade com a proteção dele agora. Tenta de novo validando com biometria, rosto ou PIN do aparelho.';
-  }
-
-  if (/challenge/i.test(rawMessage)) {
-    return 'Esse preparo perdeu o timing no meio do caminho. Tenta de novo que eu gero outro na hora.';
-  }
-
-  return getFriendlyErrorMessage(error, { defaultMessage: fallbackMessage });
 }
 
 function buildPasskeyLockViewModel(req, userId, pinSettings = null) {
@@ -12275,7 +12580,6 @@ app.post('/people/security/passkeys/register/verify', ensureAuthenticated, async
   setNoStoreHeaders(res);
   const userId = req.user.id;
   const flow = consumePasskeySessionFlow(req, 'register');
-  const context = buildPasskeyContext(req);
 
   if (!flow || Number(flow.userId || 0) !== Number(userId || 0)) {
     return res.status(410).json({ ok: false, message: 'Esse preparo perdeu a validade. Começa de novo que eu acompanho daqui.' });
@@ -12309,19 +12613,9 @@ app.post('/people/security/passkeys/register/verify', ensureAuthenticated, async
       count: listUserPasskeys(userId).length
     });
   } catch (error) {
-    logPasskeyFlowFailure(req, 'register-verify', error, {
-      ...context,
-      origin: String(flow.origin || '').trim() || context.origin || '',
-      rpID: String(flow.rpID || '').trim() || context.rpID || ''
-    }, req.body, {
-      flowCreatedAt: Number(flow.createdAt || 0) || null,
-      flowOrigin: String(flow.origin || '').trim() || null,
-      flowRpID: String(flow.rpID || '').trim() || null
-    });
-
     return res.status(normalizeErrorStatus(error, 500)).json({
       ok: false,
-      message: getFriendlyPasskeyErrorMessage(error, 'Não consegui confirmar esse aparelho agora.')
+      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui confirmar esse aparelho agora.' })
     });
   }
 });
@@ -12385,7 +12679,6 @@ app.post('/lock/passkey/verify', ensureAuthenticatedIgnoringPin, async (req, res
   setNoStoreHeaders(res);
   const userId = req.user.id;
   const settings = getUserSecuritySettings(userId);
-  const context = buildPasskeyContext(req);
 
   if (!settings.pin_enabled) {
     clearAppLockSession(req);
@@ -12400,22 +12693,9 @@ app.post('/lock/passkey/verify', ensureAuthenticatedIgnoringPin, async (req, res
     return res.status(410).json({ ok: false, message: 'Esse desbloqueio perdeu a validade. Tenta mais uma vez que eu preparo de novo.' });
   }
 
-  const passkeys = listUserPasskeys(userId);
-  const credentialId = normalizePasskeyCredentialId(req.body?.id || req.body?.rawId || '') || String(req.body?.id || req.body?.rawId || '').trim();
-  const passkey = findUserPasskeyInList(passkeys, credentialId);
+  const credentialId = String(req.body?.id || '').trim();
+  const passkey = getUserPasskey(userId, credentialId);
   if (!credentialId || !passkey) {
-    logPasskeyFlowFailure(req, 'lock-lookup', new Error('Passkey not found in unlock list'), {
-      ...context,
-      origin: String(flow.origin || '').trim() || context.origin || '',
-      rpID: String(flow.rpID || '').trim() || context.rpID || ''
-    }, req.body, {
-      flowCreatedAt: Number(flow.createdAt || 0) || null,
-      flowOrigin: String(flow.origin || '').trim() || null,
-      flowRpID: String(flow.rpID || '').trim() || null,
-      passkeyCount: passkeys.length,
-      credentialLookup: summarizePasskeyCredentialLookup(passkeys, credentialId)
-    });
-
     return res.status(404).json({ ok: false, message: 'Não encontrei esse aparelho na sua lista de desbloqueio.' });
   }
 
@@ -12441,19 +12721,9 @@ app.post('/lock/passkey/verify', ensureAuthenticatedIgnoringPin, async (req, res
 
     return res.json({ ok: true, redirect: redirectTarget });
   } catch (error) {
-    logPasskeyFlowFailure(req, 'lock-verify', error, {
-      ...context,
-      origin: String(flow.origin || '').trim() || context.origin || '',
-      rpID: String(flow.rpID || '').trim() || context.rpID || ''
-    }, req.body, {
-      flowCreatedAt: Number(flow.createdAt || 0) || null,
-      flowOrigin: String(flow.origin || '').trim() || null,
-      flowRpID: String(flow.rpID || '').trim() || null
-    });
-
     return res.status(normalizeErrorStatus(error, 500)).json({
       ok: false,
-      message: getFriendlyPasskeyErrorMessage(error, 'Não consegui confirmar esse desbloqueio agora. Você também pode seguir pelo PIN.')
+      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui confirmar esse desbloqueio agora. Você também pode seguir pelo PIN.' })
     });
   }
 });
@@ -17934,9 +18204,65 @@ app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
       }
     }
 
+    if (sectionKey === 'email') {
+      const emailConfig = getEmailRuntimeConfig();
+      if (emailConfig.enabled && !isEmailConfigured(emailConfig)) {
+        success += ' O bloco já salvou, mas ainda faltam host, porta, usuário, senha ou remetente para o e-mail entrar em campo.';
+      }
+    }
+
     return renderAdmin(res, { success, activeSection: sectionKey });
   } catch (err) {
     return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui salvar essa seção agora.' }), activeSection: sectionKey });
+  }
+});
+
+app.post('/admin/email/test-connection', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  try {
+    const emailConfig = getEmailRuntimeConfig();
+    if (!isEmailConfigured(emailConfig)) {
+      throw new Error('Antes do teste, complete host, porta, usuário, senha e remetente do SMTP.');
+    }
+    await verifyEmailTransport(emailConfig);
+    return renderAdmin(res, {
+      success: `Conexão SMTP validada com sucesso em ${emailConfig.host}:${emailConfig.port}. O correio está com a chuteira amarrada.`,
+      activeSection: 'email'
+    });
+  } catch (error) {
+    return renderAdmin(res, {
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui validar a conexão SMTP agora.' }),
+      activeSection: 'email'
+    });
+  }
+});
+
+app.post('/admin/email/send-test', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  try {
+    const currentAdmin = getUserRecord(userId, { includeDeleted: false }) || req.user;
+    const result = await sendAdminTestEmail({
+      recipientEmail: req.body.test_recipient_email,
+      createdByUser: currentAdmin,
+      req
+    });
+    return renderAdmin(res, {
+      success: `E-mail de teste enviado com sucesso${result.messageId ? ` (messageId ${result.messageId})` : ''}. Agora o SMTP já mostrou que sabe o caminho.`,
+      activeSection: 'email'
+    });
+  } catch (error) {
+    return renderAdmin(res, {
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui mandar o e-mail de teste agora.' }),
+      activeSection: 'email'
+    });
   }
 });
 
@@ -18130,12 +18456,14 @@ app.get('/admin/backup/download/:backupId/:slot', ensureAuthenticated, (req, res
 });
 
 
-app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
+app.post("/admin/add-user", ensureAuthenticated, async (req, res) => {
   const userId = req.user.id;
   const safeEmail = normalizeEmail(req.body.email);
   const safeName = String(req.body.name || '').trim();
   const safeRole = String(req.body.role || 'user') === 'admin' ? 'admin' : 'user';
   const canImport = req.body.can_import ? 1 : 0;
+  const wantsWelcomeEmail = !!req.body.send_welcome_email;
+  const safeAdminMessage = sanitizeAdminEmailMessage(req.body.welcome_admin_message);
 
   if (!isAdminUser(userId)) {
     return res.status(403).send('Acesso negado.');
@@ -18154,14 +18482,71 @@ app.post("/admin/add-user", ensureAuthenticated, (req, res) => {
     db.prepare("INSERT INTO users (email, name, role, can_import, created_at) VALUES (?, ?, ?, ?, ?)")
       .run(safeEmail, safeName || safeEmail.split('@')[0], safeRole, canImport, dayjs().toISOString());
 
-    const newUser = db.prepare("SELECT id FROM users WHERE email = ?").get(safeEmail);
+    const newUser = db.prepare("SELECT id, email, name, role, can_import FROM users WHERE email = ?").get(safeEmail);
     const insertCat = db.prepare("INSERT OR IGNORE INTO finance_categories (user_id, name) VALUES (?, ?)");
     DEFAULT_FINANCE_CATEGORIES.forEach(cat => insertCat.run(newUser.id, cat));
     ensurePurchaseCategoriesForUser(newUser.id);
 
-    return renderAdmin(res, { success: `Usuário ${safeEmail} adicionado com sucesso!` });
+    let success = `Usuário ${safeEmail} adicionado com sucesso!`;
+    const emailConfig = getEmailRuntimeConfig();
+    if (wantsWelcomeEmail) {
+      if (!emailConfig.enabled) {
+        success += ' O acesso foi criado, mas o envio automático de boas-vindas está pausado nas configurações.';
+      } else {
+        try {
+          const currentAdmin = getUserRecord(userId, { includeDeleted: false }) || req.user;
+          await sendWelcomeEmailToUser({
+            targetUser: newUser,
+            createdByUser: currentAdmin,
+            customMessage: safeAdminMessage,
+            req
+          });
+          success += ' O e-mail de boas-vindas já saiu no embalo.';
+        } catch (emailError) {
+          success += ` O acesso foi criado, mas o e-mail tropeçou: ${getFriendlyErrorMessage(emailError, { defaultMessage: 'não consegui mandar agora' })}`;
+        }
+      }
+    }
+
+    return renderAdmin(res, { success, activeSection: 'access' });
   } catch (err) {
-    return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui adicionar esse usuário agora.' }) });
+    return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui adicionar esse usuário agora.' }), activeSection: 'access' });
+  }
+});
+
+app.post('/admin/users/:id/resend-welcome', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  const targetUserId = Number(req.params.id);
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+    return renderAdmin(res, { error: 'Usuário inválido.', activeSection: 'access' });
+  }
+
+  const targetUser = getUserRecord(targetUserId, { includeDeleted: false });
+  if (!targetUser) {
+    return renderAdmin(res, { error: 'Usuário não encontrado.', activeSection: 'access' });
+  }
+
+  try {
+    const currentAdmin = getUserRecord(userId, { includeDeleted: false }) || req.user;
+    await sendWelcomeEmailToUser({
+      targetUser,
+      createdByUser: currentAdmin,
+      customMessage: '',
+      req
+    });
+    return renderAdmin(res, {
+      success: `Boas-vindas reenviado para ${targetUser.email}. Agora o convite foi de novo para o correio.`,
+      activeSection: 'access'
+    });
+  } catch (error) {
+    return renderAdmin(res, {
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui reenviar o e-mail de boas-vindas agora.' }),
+      activeSection: 'access'
+    });
   }
 });
 

@@ -673,6 +673,25 @@ CREATE TABLE IF NOT EXISTS scheduled_push_logs (
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS email_delivery_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,
+  target_user_id INTEGER,
+  recipient_email TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  provider_message_id TEXT,
+  error_message TEXT,
+  attempt_no INTEGER NOT NULL DEFAULT 1,
+  payload_json TEXT,
+  created_by_user_id INTEGER,
+  created_at TEXT NOT NULL,
+  sent_at TEXT,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (target_user_id) REFERENCES users(id),
+  FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS friend_requests (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   requester_user_id INTEGER NOT NULL,
@@ -736,6 +755,8 @@ CREATE TABLE IF NOT EXISTS app_settings (
 
 db.exec(`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id);`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_scheduled_push_logs_event_date ON scheduled_push_logs(event_type, date_key, user_id, sequence_no);`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_email_delivery_events_target_kind ON email_delivery_events(target_user_id, kind, created_at DESC);`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_email_delivery_events_status_created ON email_delivery_events(status, created_at DESC);`);
 
 db.exec("UPDATE users SET status = CASE WHEN trim(COALESCE(status, '')) = '' THEN 'active' ELSE lower(trim(status)) END;");
 db.exec("UPDATE people SET status = CASE WHEN trim(COALESCE(status, '')) = '' THEN CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END ELSE lower(trim(status)) END;");

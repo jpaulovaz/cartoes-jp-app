@@ -13,6 +13,7 @@
   };
   const activeSectionKey = typeof activeSection !== 'undefined' && activeSection ? activeSection : 'access';
   const backupState = typeof backupPanel !== 'undefined' && backupPanel ? backupPanel : null;
+  const emailState = typeof emailPanel !== 'undefined' && emailPanel ? emailPanel : null;
   const adminGuideUrl = backupState && backupState.guideUrl ? backupState.guideUrl : '/admin/guide';
   const navItems = [{ key: 'access', title: 'Acessos', description: 'Quem entra no app' }].concat((settingsSections || []).map(section => ({
     key: section.key,
@@ -22,6 +23,7 @@
   const statusIconByKey = {
     google: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 5v14m7-7H5"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M16.5 7.5A5.5 5.5 0 0012 5a5.5 5.5 0 00-4.5 2.5"></path></svg>',
     whatsapp: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M8 17l-2.5 1 .8-2.3A7 7 0 1119 12a7 7 0 01-11 5z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M10 10.5c.4 1.2 1.3 2.1 2.5 2.5"></path></svg>',
+    email: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M4 7h16v10a2 2 0 01-2 2H6a2 2 0 01-2-2V7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M4 8l8 6 8-6"></path></svg>',
     push: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M15 17h5l-1.4-1.4a2 2 0 01-.6-1.4V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M9 17a3 3 0 006 0"></path></svg>',
     backup: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M4 7a2 2 0 012-2h12a2 2 0 012 2v3H4V7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M4 10h16v7a2 2 0 01-2 2H6a2 2 0 01-2-2v-7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M9 14h6"></path></svg>',
     session: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 3l7 4v5c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V7l7-4z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 9v3l2 2"></path></svg>'
@@ -191,13 +193,14 @@
         </div>
 
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[920px] text-sm text-left">
+          <table class="w-full min-w-[1120px] text-sm text-left">
             <thead class="bg-slate-50 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-[11px] tracking-wider">
               <tr>
                 <th class="px-4 py-4 text-center">Usuário</th>
                 <th class="px-4 py-4 text-center">Email</th>
                 <th class="px-4 py-4 text-center">Nível</th>
                 <th class="px-4 py-4 text-center">Importação</th>
+                <th class="px-4 py-4 text-center">Boas-vindas</th>
                 <th class="px-4 py-4 text-center">Criado em</th>
                 <th class="px-4 py-4 text-center">Último acesso</th>
                 <th class="px-4 py-4 text-center">Ações</th>
@@ -226,6 +229,13 @@
                         <span class="inline-flex min-w-[104px] items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">Bloqueada</span>
                       <% } %>
                     </td>
+                    <td class="px-4 py-4 text-center">
+                      <% const welcomeTone = toneBadgeClasses[u.welcomeEmailStatus?.tone || 'muted'] || toneBadgeClasses.muted; %>
+                      <span class="inline-flex min-w-[118px] items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold border <%= welcomeTone %>"><%= u.welcomeEmailStatus?.label || 'Nunca enviado' %></span>
+                      <div class="mt-2 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-slate-400 max-w-[190px] mx-auto">
+                        <%= u.welcomeEmailStatus?.detail || 'Ainda sem disparo de e-mail.' %>
+                      </div>
+                    </td>
                     <td class="px-4 py-4 text-center font-medium text-slate-600 dark:text-slate-300"><%= u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '-' %></td>
                     <td class="px-4 py-4 text-center font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap"><%= u.last_login ? new Date(u.last_login).toLocaleString('pt-BR') : 'Nunca acessou' %></td>
                     <td class="px-4 py-4 text-right">
@@ -244,6 +254,21 @@
                           Ajustar
                         </button>
 
+                        <button type="button"
+                          data-copy-login-url
+                          data-login-url="<%= emailState && emailState.loginUrl ? emailState.loginUrl : '/login' %>"
+                          class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700 transition-colors bg-white dark:bg-slate-800 shadow-sm">
+                          <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16h8M8 12h8m-5-8H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V9l-5-5z"></path></svg>
+                          Copiar link
+                        </button>
+
+                        <form action="/admin/users/<%= u.id %>/resend-welcome" method="POST">
+                          <button type="submit" class="inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-bold border border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900 dark:text-emerald-300 dark:hover:bg-emerald-900/20 transition-colors bg-white dark:bg-slate-800 shadow-sm">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16v12H4z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6l8 5 8-5"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 20h8"></path></svg>
+                            Reenviar boas-vindas
+                          </button>
+                        </form>
+
                         <% if (!isSelf) { %>
                           <form action="/admin/remove-user/<%= u.id %>" method="POST" onsubmit="return confirm('Excluir esse acesso da área ativa? O histórico continua salvo, mas a exclusão trava se ainda houver cobrança aberta, Pix do mês em andamento ou rascunho na caixa de saída.')">
                             <button type="submit" class="inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-bold border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors bg-white dark:bg-slate-800 shadow-sm">
@@ -260,7 +285,7 @@
                 <% }) %>
               <% } else { %>
                 <tr>
-                  <td colspan="7" class="px-4 py-6">
+                  <td colspan="8" class="px-4 py-6">
                     <div class="op-empty-state op-empty-state--compact">
                       <div class="op-empty-state__icon">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v6m3-3h-6m-6 6H5a2 2 0 01-2-2V8a2 2 0 012-2h4l2-2h2l2 2h4a2 2 0 012 2v4"></path></svg>
@@ -391,6 +416,114 @@
               </button>
             </div>
           </form>
+          <% if (section.key === 'email' && emailState) { %>
+            <div class="space-y-6 px-6 pb-8 sm:px-8">
+              <div class="grid gap-4 xl:grid-cols-[minmax(0,1.05fr),minmax(320px,0.95fr)]">
+                <div class="rounded-3xl border <%= emailState.active ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20' : emailState.configured ? 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800' : 'border-amber-200 bg-amber-50/70 dark:border-amber-900/60 dark:bg-amber-950/20' %> p-5">
+                  <div class="text-xs font-black uppercase tracking-[0.18em] <%= emailState.active ? 'text-emerald-600 dark:text-emerald-300' : emailState.configured ? 'text-violet-500 dark:text-violet-300' : 'text-amber-600 dark:text-amber-300' %>">Saúde do e-mail</div>
+                  <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white"><%= emailState.active ? 'Convites no jogo' : emailState.configured ? 'SMTP pronto, mas pausado' : 'Configuração pendente' %></h3>
+                  <p class="mt-3 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300"><%= emailState.helperStatus %></p>
+                  <div class="mt-4 flex flex-wrap gap-2 text-xs font-black text-slate-600 dark:text-slate-300">
+                    <span class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-1"><%= emailState.hostLabel %></span>
+                    <span class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-1"><%= emailState.connectionLabel %></span>
+                  </div>
+                  <div class="mt-4 grid gap-3 sm:grid-cols-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/40 p-4">
+                      <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Remetente</div>
+                      <div class="mt-2 break-all"><%= emailState.fromLabel %></div>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/40 p-4">
+                      <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Link de entrada</div>
+                      <div class="mt-2 break-all"><%= emailState.loginUrl || '/login' %></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="space-y-4">
+                  <form action="/admin/email/test-connection" method="POST" class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5 space-y-3">
+                    <div>
+                      <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Teste rápido</div>
+                      <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Validar conexão SMTP</h3>
+                      <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">Confere host, porta, TLS e credenciais sem disparar convite para ninguém.</p>
+                    </div>
+                    <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-blue-500 dark:hover:bg-blue-400">
+                      Testar conexão
+                    </button>
+                  </form>
+
+                  <form action="/admin/email/send-test" method="POST" class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5 space-y-3">
+                    <div>
+                      <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Entrega real</div>
+                      <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Mandar e-mail de teste</h3>
+                      <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">Útil para conferir caixa de entrada, spam e o jeitão do template no mundo real.</p>
+                    </div>
+                    <label class="block">
+                      <span class="block text-xs font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Destino do teste</span>
+                      <input type="email" name="test_recipient_email" value="<%= emailState.testRecipient || '' %>" required
+                        class="mt-3 w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium text-slate-800 dark:text-slate-100">
+                    </label>
+                    <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200 dark:hover:bg-emerald-950/40">
+                      Enviar e-mail de teste
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Histórico</div>
+                    <h3 class="mt-1 text-lg font-black tracking-tight text-slate-900 dark:text-white">Últimos disparos do correio</h3>
+                  </div>
+                  <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Aqui aparecem testes e boas-vindas mais recentes para o admin não pilotar no escuro.</p>
+                </div>
+                <div class="overflow-x-auto rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                  <table class="w-full min-w-[900px] text-sm text-left">
+                    <thead class="bg-slate-50 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-[11px] tracking-wider">
+                      <tr>
+                        <th class="px-4 py-4 text-center">Quando</th>
+                        <th class="px-4 py-4 text-center">Tipo</th>
+                        <th class="px-4 py-4 text-center">Destino</th>
+                        <th class="px-4 py-4 text-center">Status</th>
+                        <th class="px-4 py-4 text-center">Resumo</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                      <% if (emailState.recentEvents && emailState.recentEvents.length > 0) { %>
+                        <% emailState.recentEvents.forEach((event) => { %>
+                          <tr class="align-top hover:bg-slate-50/70 dark:hover:bg-slate-700/30 transition-colors">
+                            <td class="px-4 py-4 text-slate-700 dark:text-slate-200 font-semibold whitespace-nowrap"><%= event.createdAtLabel %></td>
+                            <td class="px-4 py-4 text-slate-600 dark:text-slate-300"><%= event.kind === 'test' ? 'Teste' : 'Boas-vindas' %></td>
+                            <td class="px-4 py-4 text-slate-600 dark:text-slate-300">
+                              <div class="font-bold text-slate-800 dark:text-white"><%= event.targetName %></div>
+                              <div class="mt-1 text-xs text-slate-500 dark:text-slate-400"><%= event.recipient_email %></div>
+                            </td>
+                            <td class="px-4 py-4 text-center">
+                              <% const eventTone = toneBadgeClasses[event.statusTone || 'muted'] || toneBadgeClasses.muted; %>
+                              <span class="inline-flex min-w-[118px] items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold border <%= eventTone %>"><%= event.statusLabel %></span>
+                            </td>
+                            <td class="px-4 py-4 text-slate-600 dark:text-slate-300">
+                              <div><%= event.subject %></div>
+                              <% if (event.errorMessage) { %>
+                                <div class="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300"><%= event.errorMessage %></div>
+                              <% } else if (event.sentAtLabel) { %>
+                                <div class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">Saiu em <%= event.sentAtLabel %></div>
+                              <% } %>
+                            </td>
+                          </tr>
+                        <% }) %>
+                      <% } else { %>
+                        <tr>
+                          <td colspan="5" class="px-4 py-8 text-center text-sm font-medium text-slate-500 dark:text-slate-400">Ainda não rolou nenhum disparo de e-mail por aqui.</td>
+                        </tr>
+                      <% } %>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          <% } %>
+
           <% if (section.key === 'backup' && backupState) { %>
             <div class="border-t border-slate-100 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/20 p-6 sm:p-8 space-y-6">
               <div class="grid gap-4 xl:grid-cols-3">
@@ -654,6 +787,28 @@
         </span>
       </label>
 
+      <div id="welcomeEmailControls" class="space-y-3">
+        <label class="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 <%= emailState && emailState.active ? '' : 'opacity-70' %>">
+          <input type="checkbox" id="send_welcome_email" name="send_welcome_email" value="1" <%= emailState && emailState.active ? 'checked' : '' %> <%= emailState && emailState.active ? '' : 'disabled' %>
+            class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-800">
+          <span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Enviar e-mail de boas-vindas agora</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
+              Esse aviso não cria senha. A pessoa entra com o Google usando este e-mail.
+              <% if (!(emailState && emailState.active)) { %>
+                Para ligar isso de verdade, vale acertar o SMTP na seção de E-mail transacional.
+              <% } %>
+            </span>
+          </span>
+        </label>
+
+        <label class="block rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3">
+          <span class="block text-xs font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Recado do admin (opcional)</span>
+          <textarea id="welcome_admin_message" name="welcome_admin_message" rows="3" maxlength="280" placeholder="Se quiser, deixa um recado curto e amigável para acompanhar o convite."
+            class="mt-3 w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium text-slate-800 dark:text-slate-100"></textarea>
+        </label>
+      </div>
+
       <div class="flex flex-col sm:flex-row gap-3 pt-2">
         <button type="button" onclick="closeAddUserModal()"
           class="flex-1 px-5 py-3 rounded-xl font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all">
@@ -678,6 +833,11 @@
   const nameField = document.getElementById('name');
   const roleField = document.getElementById('role');
   const canImportField = document.getElementById('can_import');
+  const sendWelcomeEmailField = document.getElementById('send_welcome_email');
+  const welcomeAdminMessageField = document.getElementById('welcome_admin_message');
+  const welcomeEmailControls = document.getElementById('welcomeEmailControls');
+  const emailWelcomeAvailable = <%- JSON.stringify(!!(emailState && emailState.active)) %>;
+  const defaultLoginUrl = <%- JSON.stringify(emailState && emailState.loginUrl ? emailState.loginUrl : '/login') %>;
   const activeAdminSection = <%- JSON.stringify(activeSectionKey) %>;
 
   function configureUserModalForAdd() {
@@ -690,6 +850,15 @@
     nameField.value = '';
     roleField.value = 'user';
     canImportField.checked = true;
+    if (welcomeEmailControls) welcomeEmailControls.classList.remove('hidden');
+    if (sendWelcomeEmailField) {
+      sendWelcomeEmailField.checked = !!emailWelcomeAvailable;
+      sendWelcomeEmailField.disabled = !emailWelcomeAvailable;
+    }
+    if (welcomeAdminMessageField) {
+      welcomeAdminMessageField.value = '';
+      welcomeAdminMessageField.disabled = false;
+    }
   }
 
   function openAddUserModal() {
@@ -707,6 +876,13 @@
     nameField.value = button.dataset.userName || '';
     roleField.value = button.dataset.userRole || 'user';
     canImportField.checked = button.dataset.userCanImport === '1';
+    if (welcomeEmailControls) welcomeEmailControls.classList.add('hidden');
+    if (sendWelcomeEmailField) {
+      sendWelcomeEmailField.checked = false;
+    }
+    if (welcomeAdminMessageField) {
+      welcomeAdminMessageField.value = '';
+    }
     addUserModal.classList.remove('hidden');
   }
 
@@ -734,6 +910,31 @@
       const revealing = input.type === 'password';
       input.type = revealing ? 'text' : 'password';
       button.textContent = revealing ? 'Esconder' : 'Mostrar';
+    });
+  });
+
+  document.querySelectorAll('[data-copy-login-url]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const loginUrl = button.dataset.loginUrl || defaultLoginUrl;
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(loginUrl);
+        } else {
+          const helper = document.createElement('textarea');
+          helper.value = loginUrl;
+          document.body.appendChild(helper);
+          helper.select();
+          document.execCommand('copy');
+          helper.remove();
+        }
+        const previous = button.textContent;
+        button.textContent = 'Link copiado';
+        setTimeout(() => {
+          button.textContent = previous;
+        }, 1800);
+      } catch (_error) {
+        window.prompt('Copia e leva com carinho este link:', loginUrl);
+      }
     });
   });
 

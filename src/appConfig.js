@@ -14,6 +14,13 @@ const SETTING_SECTIONS = [
     icon: 'whatsapp'
   },
   {
+    key: 'email',
+    title: 'E-mail transacional',
+    eyebrow: 'Convites e boas-vindas',
+    description: 'Configura o SMTP para o admin disparar boas-vindas, testar a conexão e reenviar convites sem tropeço.',
+    icon: 'mail'
+  },
+  {
     key: 'push',
     title: 'Alertas e push',
     eyebrow: 'Sininho ligado',
@@ -124,6 +131,146 @@ const SETTING_DEFINITIONS = [
     monospace: true,
     required: false,
     autoReload: true
+  },
+  {
+    key: 'WELCOME_EMAIL_ENABLED',
+    section: 'email',
+    label: 'Enviar boas-vindas por e-mail',
+    helper: 'Liga o disparo do convite de boas-vindas no fluxo do admin. Mesmo desligado, você ainda pode testar a conexão.',
+    input: 'switch',
+    defaultValue: '1',
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'MAIL_SMTP_HOST',
+    section: 'email',
+    label: 'Host SMTP',
+    helper: 'Endereço do servidor SMTP do Mailcow, como mail.seudominio.com.',
+    input: 'text',
+    defaultValue: '',
+    placeholder: 'mail.seudominio.com',
+    monospace: true,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'MAIL_SMTP_PORT',
+    section: 'email',
+    label: 'Porta SMTP',
+    helper: 'Normalmente 587 com STARTTLS ou 465 com TLS implícito.',
+    input: 'number',
+    defaultValue: '587',
+    min: 1,
+    max: 65535,
+    step: 1,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'MAIL_SMTP_SECURE',
+    section: 'email',
+    label: 'Usar TLS implícito',
+    helper: 'Ative para conexão segura nativa na porta 465. Desligado costuma casar com a 587 + STARTTLS.',
+    input: 'switch',
+    defaultValue: '0',
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'MAIL_SMTP_REQUIRE_TLS',
+    section: 'email',
+    label: 'Exigir STARTTLS',
+    helper: 'Quando a conexão não for implícita, pede que o servidor suba o TLS antes do envio.',
+    input: 'switch',
+    defaultValue: '1',
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'MAIL_SMTP_USER',
+    section: 'email',
+    label: 'Usuário SMTP',
+    helper: 'Conta da caixa que vai mandar os e-mails. O ideal é uma conta dedicada do tipo acesso@seudominio.com.',
+    input: 'text',
+    defaultValue: '',
+    placeholder: 'acesso@seudominio.com',
+    monospace: true,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'MAIL_SMTP_PASS',
+    section: 'email',
+    label: 'Senha SMTP',
+    helper: 'Senha da caixa SMTP. Se a conta usar 2FA, prefira uma app password.',
+    input: 'password',
+    defaultValue: '',
+    placeholder: 'Cole a senha da caixa SMTP',
+    secret: true,
+    monospace: true,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'MAIL_FROM_EMAIL',
+    section: 'email',
+    label: 'E-mail remetente',
+    helper: 'Endereço que vai aparecer como remetente do boas-vindas.',
+    input: 'text',
+    defaultValue: '',
+    placeholder: 'acesso@seudominio.com',
+    monospace: true,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'MAIL_FROM_NAME',
+    section: 'email',
+    label: 'Nome do remetente',
+    helper: 'Exemplo: OrganizaPay ou Time AcerttaPay.',
+    input: 'text',
+    defaultValue: 'AcerttaPay',
+    placeholder: 'AcerttaPay',
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'MAIL_REPLY_TO',
+    section: 'email',
+    label: 'Reply-to (opcional)',
+    helper: 'Se quiser que as respostas caiam em outra caixa, informe aqui.',
+    input: 'text',
+    defaultValue: '',
+    placeholder: 'ola@seudominio.com',
+    monospace: true,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'WELCOME_EMAIL_SUBJECT',
+    section: 'email',
+    label: 'Assunto padrão do boas-vindas',
+    helper: 'Assunto usado quando o admin não personaliza nada. Curto, direto e sem novela.',
+    input: 'text',
+    defaultValue: 'Seu acesso ao AcerttaPay foi liberado',
+    placeholder: 'Seu acesso ao AcerttaPay foi liberado',
+    required: false,
+    autoReload: true,
+    fullWidth: true
+  },
+  {
+    key: 'WELCOME_EMAIL_LOGIN_URL',
+    section: 'email',
+    label: 'Link de entrada (opcional)',
+    helper: 'Se ficar em branco, o app monta o link com base no endereço atual do Admin.',
+    input: 'url',
+    defaultValue: '',
+    placeholder: 'https://acerttapay.com.br/login',
+    monospace: true,
+    required: false,
+    autoReload: true,
+    fullWidth: true
   },
   {
     key: 'VAPID_PUBLIC_KEY',
@@ -542,6 +689,19 @@ function sanitizeSettingValue(definition, rawValue) {
 
   if (definition.key === 'SESSION_SECRET' && value && value.length < 16) {
     throw new Error('O segredo da sessão precisa ter pelo menos 16 caracteres para não cochilar no ponto.');
+  }
+
+  if (['MAIL_FROM_EMAIL', 'MAIL_REPLY_TO', 'MAIL_SMTP_USER'].includes(definition.key) && value) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(value)) {
+      throw new Error(`${definition.label} precisa ser um e-mail válido.`);
+    }
+  }
+
+  if (definition.key === 'MAIL_SMTP_HOST' && value) {
+    if (/\s/.test(value) || value.includes('/')) {
+      throw new Error('O host SMTP precisa ser só o endereço do servidor, sem barras nem espaços.');
+    }
   }
 
   if (definition.key === 'BACKUP_TIMEZONE' && value) {

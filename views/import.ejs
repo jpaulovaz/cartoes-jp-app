@@ -191,20 +191,20 @@
               <div class="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></div>
               <div class="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.parsedCount || 0 %> linha(s) lida(s)</div>
             </div>
-            <div class="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Suspeitas no app</div>
-              <div class="mt-2 text-2xl font-black text-amber-900 dark:text-amber-100"><%= previewSummary.appDuplicateTotalLabel || formatBRLFromCents(0) %></div>
-              <div class="mt-1 text-sm font-semibold text-amber-700/80 dark:text-amber-200/80"><%= previewSummary.appDuplicateCount || 0 %> compra(s) para revisar</div>
-            </div>
-            <div class="rounded-[24px] border border-sky-200 bg-sky-50 px-4 py-4 dark:border-sky-900/60 dark:bg-sky-950/20">
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Repetidas no CSV</div>
-              <div class="mt-2 text-2xl font-black text-sky-900 dark:text-sky-100"><%= previewSummary.csvDuplicateTotalLabel || formatBRLFromCents(0) %></div>
-              <div class="mt-1 text-sm font-semibold text-sky-700/80 dark:text-sky-200/80"><%= previewSummary.csvDuplicateGroupCount || 0 %> grupo(s) em revisao</div>
+            <div class="rounded-[24px] border border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70">
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Ja estava no cartao</div>
+              <div class="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100"><%= previewSummary.existingTotalLabel || formatBRLFromCents(0) %></div>
+              <div class="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.existingCount || 0 %> compra(s) ja no mes</div>
             </div>
             <div class="rounded-[24px] border border-emerald-200 bg-emerald-50 px-4 py-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Selecionado agora</div>
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Vai entrar agora</div>
               <div class="mt-2 text-2xl font-black text-emerald-900 dark:text-emerald-100" data-final-total><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
-              <div class="mt-1 text-sm font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultFinalCount || 0 %></span> compra(s) vao entrar</div>
+              <div class="mt-1 text-sm font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultFinalCount || 0 %></span> compra(s) nesta confirmacao</div>
+            </div>
+            <div class="rounded-[24px] border border-violet-200 bg-violet-50 px-4 py-4 dark:border-violet-900/60 dark:bg-violet-950/20">
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">O cartao fica em</div>
+              <div class="mt-2 text-2xl font-black text-violet-900 dark:text-violet-100" data-projected-total><%= previewSummary.projectedCardTotalLabel || formatBRLFromCents(0) %></div>
+              <div class="mt-1 text-sm font-semibold text-violet-700/80 dark:text-violet-200/80"><span data-projected-count><%= previewSummary.projectedCardCount || 0 %></span> compra(s) no mes depois da importacao</div>
             </div>
           </div>
         </div>
@@ -229,7 +229,7 @@
           </div>
         </div>
 
-        <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8 sm:py-6" data-review-tab-container data-default-tab="<%= defaultReviewTab %>" data-file-total-cents="<%= previewSummary.parsedTotalCents || 0 %>">
+        <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8 sm:py-6" data-review-tab-container data-default-tab="<%= defaultReviewTab %>" data-file-total-cents="<%= previewSummary.parsedTotalCents || 0 %>" data-existing-total-cents="<%= previewSummary.existingTotalCents || 0 %>" data-existing-count="<%= previewSummary.existingCount || 0 %>">
           <section data-review-tab-panel="app" class="space-y-4">
             <% if (!previewAppCandidates.length) { %>
               <div class="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
@@ -389,16 +389,21 @@
           </section>
 
           <section data-review-tab-panel="final" class="hidden space-y-4">
-            <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.8fr)]">
+            <div class="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(280px,0.95fr)]">
               <div class="rounded-[28px] border border-emerald-200 bg-emerald-50/80 p-5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
                 <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Vai ser importado</div>
                 <div class="mt-2 text-3xl font-black text-emerald-900 dark:text-emerald-100" data-final-total><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
                 <div class="mt-1 text-sm font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultFinalCount || 0 %></span> compra(s) vao entrar nessa confirmacao.</div>
               </div>
+              <div class="rounded-[28px] border border-violet-200 bg-violet-50/80 p-5 dark:border-violet-900/60 dark:bg-violet-950/20">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">O cartao fica em</div>
+                <div class="mt-2 text-3xl font-black text-violet-900 dark:text-violet-100" data-projected-total><%= previewSummary.projectedCardTotalLabel || formatBRLFromCents(0) %></div>
+                <div class="mt-1 text-sm font-semibold text-violet-700/80 dark:text-violet-200/80"><span data-projected-count><%= previewSummary.projectedCardCount || 0 %></span> compra(s) no mes depois de gravar.</div>
+              </div>
               <div class="rounded-[28px] border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-950/70">
                 <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Comparacao com o arquivo</div>
                 <div class="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></div>
-                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300" data-final-diff-text>Esse total compara o que voce selecionou agora com o valor completo do arquivo.</p>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300" data-final-diff-text>Agora a comparacao usa o total que o cartao vai ter depois da importacao, nao so o que entrou nesta rodada.</p>
               </div>
             </div>
 
@@ -474,7 +479,7 @@
 
         <div class="border-t border-slate-200 px-5 py-4 dark:border-slate-800 sm:px-8 sm:py-5">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div class="text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Se o total final nao bater com o arquivo, tudo bem quando parte da fatura ja foi lancada manualmente. O objetivo aqui eh te dar o espelho antes de gravar.</div>
+            <div class="text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Agora o espelho compara o valor do arquivo com o total que esse cartao vai ter depois da importacao. Assim fica mais facil decidir se a fatura fechada realmente vai bater.</div>
             <div class="flex flex-col gap-3 sm:flex-row">
               <button type="button" data-import-review-close class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800">
                 Voltar ao formulario
@@ -517,10 +522,14 @@
     const finalCountTargets = Array.from(modal.querySelectorAll('[data-final-count]'));
     const finalTotalTargets = Array.from(modal.querySelectorAll('[data-final-total]'));
     const finalTotalSecondaryTargets = Array.from(modal.querySelectorAll('[data-final-total-secondary]'));
+    const projectedCountTargets = Array.from(modal.querySelectorAll('[data-projected-count]'));
+    const projectedTotalTargets = Array.from(modal.querySelectorAll('[data-projected-total]'));
     const diffText = modal.querySelector('[data-final-diff-text]');
     const emptyState = modal.querySelector('[data-final-empty-state]');
     const confirmButtons = Array.from(modal.querySelectorAll('[data-import-review-confirm]'));
     const fileTotalCents = Number(tabContainer?.dataset.fileTotalCents || 0);
+    const existingTotalCents = Number(tabContainer?.dataset.existingTotalCents || 0);
+    const existingCount = Number(tabContainer?.dataset.existingCount || 0);
     const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
     function formatMoney(cents) {
@@ -602,16 +611,26 @@
         target.textContent = formatMoney(selectedTotalCents);
       });
 
-      const diff = selectedTotalCents - fileTotalCents;
+      const projectedCount = existingCount + selectedCount;
+      const projectedTotalCents = existingTotalCents + selectedTotalCents;
+
+      projectedCountTargets.forEach((target) => {
+        target.textContent = String(projectedCount);
+      });
+      projectedTotalTargets.forEach((target) => {
+        target.textContent = formatMoney(projectedTotalCents);
+      });
+
+      const diff = projectedTotalCents - fileTotalCents;
       if (diffText) {
         if (diff === 0) {
-          diffText.textContent = 'Boa! O total selecionado bate certinho com o valor do arquivo.';
+          diffText.textContent = 'Boa! Depois da importacao, o total do cartao bate certinho com o valor do arquivo.';
           diffText.className = 'mt-2 text-sm font-medium leading-6 text-emerald-700 dark:text-emerald-300';
         } else if (diff < 0) {
-          diffText.textContent = 'O total selecionado ficou ' + formatMoney(Math.abs(diff)) + ' abaixo do arquivo. Isso pode fazer sentido se parte da fatura ja estava no app.';
+          diffText.textContent = 'Depois da importacao, o cartao ainda fica ' + formatMoney(Math.abs(diff)) + ' abaixo do arquivo. Vale revisar se faltou alguma compra ou se parte da fatura caiu em outro mes.';
           diffText.className = 'mt-2 text-sm font-medium leading-6 text-amber-700 dark:text-amber-300';
         } else {
-          diffText.textContent = 'O total selecionado passou ' + formatMoney(diff) + ' do arquivo. Vale revisar para nao deixar compra em dobro.';
+          diffText.textContent = 'Depois da importacao, o cartao fica ' + formatMoney(diff) + ' acima do arquivo. Vale revisar para nao deixar compra em dobro ou lancamento manual sobrando.';
           diffText.className = 'mt-2 text-sm font-medium leading-6 text-rose-700 dark:text-rose-300';
         }
       }

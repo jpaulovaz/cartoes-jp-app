@@ -13778,7 +13778,7 @@ function countExactExistingMatchesForImportItem(item, matches, cardId, month, ye
   }, 0);
 }
 
-function buildImportPreviewSummary({ parsedCount, parsedTotalCents, autoCount, autoTotalCents, appDuplicateCandidates, csvDuplicateGroups }) {
+function buildImportPreviewSummary({ parsedCount, parsedTotalCents, existingCount, existingTotalCents, autoCount, autoTotalCents, appDuplicateCandidates, csvDuplicateGroups }) {
   const appDuplicateCount = appDuplicateCandidates.length;
   const appDuplicateTotalCents = appDuplicateCandidates.reduce((sum, candidate) => sum + Number(candidate.amountCents || 0), 0);
   const csvDuplicateGroupCount = csvDuplicateGroups.length;
@@ -13788,11 +13788,16 @@ function buildImportPreviewSummary({ parsedCount, parsedTotalCents, autoCount, a
   const defaultCsvTotalCents = csvDuplicateGroups.reduce((sum, group) => sum + (Number(group.amountCents || 0) * Number(group.defaultKeepCount || 0)), 0);
   const defaultFinalCount = autoCount + defaultCsvCount;
   const defaultFinalTotalCents = autoTotalCents + defaultCsvTotalCents;
+  const projectedCardCount = existingCount + defaultFinalCount;
+  const projectedCardTotalCents = existingTotalCents + defaultFinalTotalCents;
 
   return {
     parsedCount,
     parsedTotalCents,
     parsedTotalLabel: formatBRLFromCents(parsedTotalCents),
+    existingCount,
+    existingTotalCents,
+    existingTotalLabel: formatBRLFromCents(existingTotalCents),
     autoCount,
     autoTotalCents,
     autoTotalLabel: formatBRLFromCents(autoTotalCents),
@@ -13805,7 +13810,10 @@ function buildImportPreviewSummary({ parsedCount, parsedTotalCents, autoCount, a
     csvDuplicateTotalLabel: formatBRLFromCents(csvDuplicateTotalCents),
     defaultFinalCount,
     defaultFinalTotalCents,
-    defaultFinalTotalLabel: formatBRLFromCents(defaultFinalTotalCents)
+    defaultFinalTotalLabel: formatBRLFromCents(defaultFinalTotalCents),
+    projectedCardCount,
+    projectedCardTotalCents,
+    projectedCardTotalLabel: formatBRLFromCents(projectedCardTotalCents)
   };
 }
 
@@ -13896,6 +13904,8 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
   const autoItems = autoItemIds.map((itemId) => itemMap.get(itemId)).filter(Boolean);
   const parsedCount = items.length;
   const parsedTotalCents = items.reduce((sum, item) => sum + Number(item.amountCents || 0), 0);
+  const existingCount = existingRows.length;
+  const existingTotalCents = existingRows.reduce((sum, row) => sum + Number(row.amountCents || 0), 0);
   const autoCount = autoItems.length;
   const autoTotalCents = autoItems.reduce((sum, item) => sum + Number(item.amountCents || 0), 0);
 
@@ -13916,6 +13926,8 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
     summary: buildImportPreviewSummary({
       parsedCount,
       parsedTotalCents,
+      existingCount,
+      existingTotalCents,
       autoCount,
       autoTotalCents,
       appDuplicateCandidates,

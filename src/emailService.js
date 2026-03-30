@@ -1,8 +1,34 @@
 let nodemailer = null;
+let nodemailerLoadError = null;
 try {
   nodemailer = require('nodemailer');
-} catch (_error) {
+} catch (error) {
   nodemailer = null;
+  nodemailerLoadError = error;
+}
+
+function getEmailRuntimeStatus() {
+  return {
+    available: !!nodemailer,
+    module: 'nodemailer',
+    loadErrorMessage: nodemailerLoadError?.message || null,
+    loadErrorCode: nodemailerLoadError?.code || null,
+    requireStack: Array.isArray(nodemailerLoadError?.requireStack) ? nodemailerLoadError.requireStack : []
+  };
+}
+
+function logEmailRuntimeIssue(action = 'runtime-check', extra = {}) {
+  const status = getEmailRuntimeStatus();
+  console.warn('[email-runtime]', {
+    action,
+    available: status.available,
+    module: status.module,
+    message: status.loadErrorMessage || 'nodemailer não carregou neste boot.',
+    code: status.loadErrorCode,
+    requireStack: status.requireStack,
+    ...extra
+  });
+  return status;
 }
 
 function normalizePort(value, fallback = 587) {
@@ -125,6 +151,8 @@ module.exports = {
   normalizePort,
   normalizeBoolean,
   formatAddress,
+  getEmailRuntimeStatus,
+  logEmailRuntimeIssue,
   verifyEmailTransport,
   sendEmail
 };

@@ -1,6 +1,6 @@
 {
   "name": "acerttapay-app",
-  "version": "3.6.17",
+  "version": "3.6.18",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

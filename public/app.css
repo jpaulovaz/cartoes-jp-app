@@ -5538,6 +5538,22 @@ html.dark .op-card-brand-preview {
 
 
 /* ===== Analytics graph layout refresh ===== */
+.op-screen--analytics .op-analytics-chip {
+  width: fit-content;
+  max-width: 100%;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  text-wrap: nowrap;
+}
+
+@media (max-width: 640px) {
+  .op-screen--analytics .op-analytics-chip {
+    padding-inline: 0.7rem;
+    letter-spacing: 0.14em;
+  }
+}
+
 .op-analytics-graph-grid {
   align-items: start;
 }

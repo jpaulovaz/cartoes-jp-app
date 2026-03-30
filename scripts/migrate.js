@@ -5,6 +5,13 @@ function columnExists(table, col) {
   return cols.includes(col);
 }
 
+function tableExists(table) {
+  const row = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1")
+    .get(table);
+  return !!row;
+}
+
 // ===== TABELA DE USUÁRIOS (NOVA) =====
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (

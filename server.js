@@ -3317,6 +3317,22 @@ function clearAppLockSession(req) {
   delete req.session.appLock;
 }
 
+function persistSessionState(req) {
+  return new Promise((resolve, reject) => {
+    if (!req.session || typeof req.session.save !== 'function') {
+      resolve();
+      return;
+    }
+    req.session.save((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
 function lockAppSession(req, { reason = 'manual', returnTo = '' } = {}) {
   const state = ensureAppLockSession(req);
   if (!state) return null;
@@ -12718,6 +12734,7 @@ app.post('/lock/passkey/verify', ensureAuthenticatedIgnoringPin, async (req, res
     });
     resetUserAppPinFailures(userId);
     unlockAppSession(req, { clearReturnTo: true });
+    await persistSessionState(req);
 
     return res.json({ ok: true, redirect: redirectTarget });
   } catch (error) {

@@ -293,6 +293,7 @@
   <script>
     (function () {
       const syncStorageKey = 'op-app-pin-sync';
+      const hiddenAtKey = 'op-app-pin-hidden-at';
       const syncChannelName = 'op-app-pin';
       const sourceId = `lock-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       const unlockInput = document.getElementById('lockPinInput');
@@ -323,6 +324,12 @@
       let cooldownUntil = initialCooldownSeconds > 0 ? Date.now() + (initialCooldownSeconds * 1000) : 0;
       let countdownTimer = null;
       let syncChannel = null;
+
+      function clearHiddenAtMarker() {
+        try {
+          window.sessionStorage.removeItem(hiddenAtKey);
+        } catch (_error) {}
+      }
 
       function shouldUseNativeKeyboardLayout() {
         const userAgent = navigator.userAgent || '';
@@ -779,6 +786,7 @@
           }
 
           const redirectTo = verifyPayload.redirect || nextUrl || '/';
+          clearHiddenAtMarker();
           setPasskeyFeedback('Pronto, deu para entrar com este aparelho.', 'emerald');
           broadcastPinState('unlocked', { redirect: redirectTo });
           window.location.href = redirectTo;
@@ -857,6 +865,7 @@
         if (!payload || payload.sourceId === sourceId) return;
         const type = String(payload.type || '').trim().toLowerCase();
         if (type === 'unlocked') {
+          clearHiddenAtMarker();
           probeUnlockState();
         }
       }
@@ -869,6 +878,7 @@
       });
 
       openSyncChannel();
+      clearHiddenAtMarker();
       broadcastPinState('locked', { reason: initialReason || 'locked', redirect: initialLockUrl });
       syncNativeKeyboardLayout();
       window.addEventListener('resize', syncNativeKeyboardLayout);
@@ -929,6 +939,7 @@
             unlockInput.focus();
             return;
           }
+          clearHiddenAtMarker();
           unlockSubmit.disabled = true;
           unlockSubmit.textContent = 'Destravando...';
         });

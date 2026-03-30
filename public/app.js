@@ -2769,6 +2769,12 @@
   const idleMs = idleSeconds > 0 ? idleSeconds * 1000 : 0;
   const hiddenAtKey = 'op-app-pin-hidden-at';
   const syncStorageKey = 'op-app-pin-sync';
+
+  function clearHiddenAtMarker() {
+    try {
+      window.sessionStorage.removeItem(hiddenAtKey);
+    } catch (_error) {}
+  }
   const syncChannelName = 'op-app-pin';
   const sourceId = `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const heartbeatGapMs = Math.min(30000, Math.max(10000, idleMs > 0 ? Math.floor(idleMs / 2) : 15000));
@@ -2851,6 +2857,7 @@
 
     if (type === 'unlocked') {
       if (lockInFlight) return;
+      clearHiddenAtMarker();
       lastActivityAt = Date.now();
       scheduleIdleLock();
       scheduleTouchTimer();
@@ -3110,6 +3117,7 @@
     handleVisibilityReturn();
   });
 
+  clearHiddenAtMarker();
   scheduleIdleLock();
   scheduleTouchTimer();
   broadcastPinState('unlocked');

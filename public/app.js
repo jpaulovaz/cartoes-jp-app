@@ -61,12 +61,24 @@
     const offsetTop = Math.round((visualViewport && visualViewport.offsetTop) || 0);
     const keyboardInset = Math.max(0, Math.round((window.innerHeight || viewportHeight) - viewportHeight - offsetTop));
     const keyboardOpen = keyboardInset > 120;
+    const cozyViewport = viewportWidth <= 430;
+    const compactViewport = viewportWidth <= 390;
+    const tightViewport = viewportWidth <= 360;
+    const shortViewport = viewportHeight <= 760;
+    const viewportTier = tightViewport ? 'tight' : (compactViewport ? 'compact' : (cozyViewport ? 'cozy' : 'regular'));
 
     root.classList.toggle('op-ios', isIOS);
     root.classList.toggle('op-standalone', isStandalone);
     root.classList.toggle('op-ios-standalone', isIOS && isStandalone);
+    root.classList.toggle('op-vp-cozy', cozyViewport);
+    root.classList.toggle('op-vp-compact', compactViewport);
+    root.classList.toggle('op-vp-tight', tightViewport);
+    root.classList.toggle('op-vp-short', shortViewport);
     root.dataset.opPlatform = isIOS ? 'ios' : 'default';
     root.dataset.opDisplayMode = isStandalone ? 'standalone' : 'browser';
+    root.dataset.opViewportTier = viewportTier;
+    root.dataset.opViewportWidth = String(Math.max(viewportWidth, 0));
+    root.dataset.opViewportHeight = String(Math.max(viewportHeight, 0));
     root.style.setProperty('--op-app-height', `${Math.max(viewportHeight, 1)}px`);
     root.style.setProperty('--op-visual-viewport-height', `${Math.max(viewportHeight, 1)}px`);
     root.style.setProperty('--op-visual-viewport-width', `${Math.max(viewportWidth, 1)}px`);
@@ -76,7 +88,12 @@
       body.classList.toggle('op-ios', isIOS);
       body.classList.toggle('op-standalone', isStandalone);
       body.classList.toggle('op-ios-standalone', isIOS && isStandalone);
+      body.classList.toggle('op-vp-cozy', cozyViewport);
+      body.classList.toggle('op-vp-compact', compactViewport);
+      body.classList.toggle('op-vp-tight', tightViewport);
+      body.classList.toggle('op-vp-short', shortViewport);
       body.classList.toggle('op-virtual-keyboard-open', isIOS && keyboardOpen);
+      body.dataset.opViewportTier = viewportTier;
     }
   }
 

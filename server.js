@@ -235,6 +235,29 @@ try { db.prepare("ALTER TABLE users ADD COLUMN profile_photo_mode TEXT NOT NULL 
 try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_text TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_vibe TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS user_notification_preferences (
+    user_id INTEGER PRIMARY KEY,
+    friendship_activity INTEGER NOT NULL DEFAULT 1,
+    shared_debt_new INTEGER NOT NULL DEFAULT 1,
+    shared_debt_updates INTEGER NOT NULL DEFAULT 1,
+    shared_debt_payments INTEGER NOT NULL DEFAULT 1,
+    monthly_pix_updates INTEGER NOT NULL DEFAULT 1,
+    card_due_today INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
+
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN friendship_activity INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_new INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_updates INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_payments INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN monthly_pix_updates INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN card_due_today INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_txn_date_snapshot TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN payment_marked_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -529,6 +552,7 @@ db.prepare(`
 `).run();
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_scheduled_push_logs_event_date ON scheduled_push_logs(event_type, date_key, user_id, sequence_no)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_user_notification_preferences_updated ON user_notification_preferences(updated_at)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_requests_batch_id ON shared_debt_requests(batch_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_receiver ON shared_debt_batches(receiver_user_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_batches_requester ON shared_debt_batches(requester_user_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
@@ -3059,6 +3083,167 @@ function safeRenderView(res, view, locals = {}) {
   if (!res || typeof res.render !== 'function') return null;
   if (res.headersSent || res.writableEnded) return null;
   return res.render(view, locals);
+}
+
+const USER_NOTIFICATION_PREFERENCE_GROUPS = Object.freeze([
+  {
+    key: 'friendship_activity',
+    title: 'Amizades',
+    description: 'Pedidos, aceitações, recusas e quando uma amizade muda de fase por aqui.'
+  },
+  {
+    key: 'shared_debt_new',
+    title: 'Novas cobranças e lembretes',
+    description: 'Quando chega cobrança compartilhada, envio em lote ou lembrete avulso novo.'
+  },
+  {
+    key: 'shared_debt_updates',
+    title: 'Atualizações e respostas de cobranças',
+    description: 'Quando alguém atualiza, aceita, recusa ou pede uma segunda olhada.'
+  },
+  {
+    key: 'shared_debt_payments',
+    title: 'Pagamentos',
+    description: 'Quando alguém marca como pago ou confirma que o valor já caiu certinho.'
+  },
+  {
+    key: 'monthly_pix_updates',
+    title: 'Pix do mês',
+    description: 'Avisos sobre Pix informado, confirmado ou devolvido para revisão.'
+  },
+  {
+    key: 'card_due_today',
+    title: 'Vencimento da fatura',
+    description: 'Lembretes do dia em que uma fatura vence neste aparelho.'
+  }
+]);
+
+const USER_NOTIFICATION_PREFERENCE_KEYS = USER_NOTIFICATION_PREFERENCE_GROUPS.map((group) => group.key);
+const USER_NOTIFICATION_PREFERENCE_DEFAULTS = Object.freeze(USER_NOTIFICATION_PREFERENCE_KEYS.reduce((acc, key) => {
+  acc[key] = 1;
+  return acc;
+}, {}));
+
+function getDefaultUserNotificationPreferences(userId = null) {
+  return {
+    user_id: Number(userId || 0) || null,
+    ...USER_NOTIFICATION_PREFERENCE_DEFAULTS,
+    updated_at: null
+  };
+}
+
+function normalizeNotificationPreferenceToggle(value) {
+  if (value === true || value === 1) return 1;
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return ['1', 'true', 'on', 'yes', 'sim'].includes(normalized) ? 1 : 0;
+}
+
+function getUserNotificationPreferences(userId) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return getDefaultUserNotificationPreferences(null);
+
+  const row = db.prepare(`
+    SELECT user_id, friendship_activity, shared_debt_new, shared_debt_updates,
+           shared_debt_payments, monthly_pix_updates, card_due_today, updated_at
+    FROM user_notification_preferences
+    WHERE user_id = ?
+    LIMIT 1
+  `).get(safeUserId);
+
+  if (!row) return getDefaultUserNotificationPreferences(safeUserId);
+
+  const merged = {
+    ...getDefaultUserNotificationPreferences(safeUserId),
+    ...row
+  };
+
+  USER_NOTIFICATION_PREFERENCE_KEYS.forEach((key) => {
+    merged[key] = normalizeNotificationPreferenceToggle(merged[key]);
+  });
+
+  return merged;
+}
+
+function upsertUserNotificationPreferences(userId, overrides = {}) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) throw new Error('Não encontrei o usuário para salvar as preferências de alerta.');
+
+  const current = getUserNotificationPreferences(safeUserId);
+  const next = {
+    ...current,
+    ...overrides,
+    user_id: safeUserId,
+    updated_at: nowIso()
+  };
+
+  USER_NOTIFICATION_PREFERENCE_KEYS.forEach((key) => {
+    next[key] = normalizeNotificationPreferenceToggle(next[key]);
+  });
+
+  db.prepare(`
+    INSERT INTO user_notification_preferences (
+      user_id, friendship_activity, shared_debt_new, shared_debt_updates,
+      shared_debt_payments, monthly_pix_updates, card_due_today, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      friendship_activity = excluded.friendship_activity,
+      shared_debt_new = excluded.shared_debt_new,
+      shared_debt_updates = excluded.shared_debt_updates,
+      shared_debt_payments = excluded.shared_debt_payments,
+      monthly_pix_updates = excluded.monthly_pix_updates,
+      card_due_today = excluded.card_due_today,
+      updated_at = excluded.updated_at
+  `).run(
+    next.user_id,
+    next.friendship_activity,
+    next.shared_debt_new,
+    next.shared_debt_updates,
+    next.shared_debt_payments,
+    next.monthly_pix_updates,
+    next.card_due_today,
+    next.updated_at
+  );
+
+  return next;
+}
+
+function buildUserNotificationPreferenceViewModel(userId) {
+  const preferences = getUserNotificationPreferences(userId);
+  const groups = USER_NOTIFICATION_PREFERENCE_GROUPS.map((group) => ({
+    ...group,
+    enabled: Number(preferences[group.key] || 0) !== 0
+  }));
+
+  return {
+    updatedAt: preferences.updated_at || null,
+    enabledCount: groups.filter((group) => group.enabled).length,
+    totalCount: groups.length,
+    groups
+  };
+}
+
+function resolveNotificationPreferenceGroupKey({ groupKey = null, type = null, title = null, relatedType = null } = {}) {
+  const explicitKey = String(groupKey || '').trim();
+  if (USER_NOTIFICATION_PREFERENCE_KEYS.includes(explicitKey)) return explicitKey;
+
+  const safeType = String(type || '').trim();
+  const safeRelatedType = String(relatedType || '').trim();
+  const safeTitle = String(title || '').trim().toLowerCase();
+
+  if (safeType === 'friend_request' || safeType === 'friendship_update') return 'friendship_activity';
+  if (safeRelatedType === 'shared_debt_payment_intent' || safeTitle.includes('pix do mes') || safeTitle.includes('pix do mês')) return 'monthly_pix_updates';
+  if (safeTitle.includes('pagamento')) return 'shared_debt_payments';
+  if (safeTitle.includes('atualiz') || safeTitle.includes('aceit') || safeTitle.includes('recus') || safeTitle.includes('contest') || safeTitle.includes('revis')) return 'shared_debt_updates';
+  if (safeType === 'shared_debt_batch' || safeType === 'shared_debt_request') return 'shared_debt_new';
+
+  return null;
+}
+
+function isUserNotificationGroupEnabled(userId, groupKey) {
+  const resolvedKey = resolveNotificationPreferenceGroupKey({ groupKey });
+  if (!resolvedKey) return true;
+  const preferences = getUserNotificationPreferences(userId);
+  return Number(preferences[resolvedKey] || 0) !== 0;
 }
 
 function getPinPepper() {
@@ -5942,7 +6127,8 @@ function flushSharedDebtBatchNotifications(context) {
       }),
       href: `/shared-debts?batch=${entry.batchId}`,
       relatedType: 'shared_debt_batch',
-      relatedId: entry.batchId
+      relatedId: entry.batchId,
+      groupKey: 'shared_debt_new'
     });
   });
 }
@@ -7903,6 +8089,8 @@ async function runCardDueTodayPushSweep() {
 
     const users = getUsersWithPushSubscriptions();
     for (const userId of users) {
+      if (!isUserNotificationGroupEnabled(userId, 'card_due_today')) continue;
+
       const cardsDueToday = getPendingDueTodayCardsForUser(userId, zonedNow);
       if (!cardsDueToday.length) continue;
 
@@ -7949,9 +8137,14 @@ function queuePushNotification(userId, payload) {
     .catch(err => console.error('Falha ao disparar push notification:', err?.message || err));
 }
 
-function createNotification({ userId, type, title, body = null, href = null, relatedType = null, relatedId = null }) {
+function createNotification({ userId, type, title, body = null, href = null, relatedType = null, relatedId = null, groupKey = null }) {
   const targetUser = getUserRecord(userId, { includeDeleted: false });
   if (!targetUser) return null;
+
+  const resolvedGroupKey = resolveNotificationPreferenceGroupKey({ groupKey, type, title, relatedType });
+  if (resolvedGroupKey && !isUserNotificationGroupEnabled(targetUser.id, resolvedGroupKey)) {
+    return null;
+  }
 
   const result = db.prepare(`
     INSERT INTO notifications (user_id, type, title, body, href, is_read, related_type, related_id, created_at)
@@ -8699,7 +8892,8 @@ function sendSharedDebtDraftQueue(userId, queueId) {
     }),
     href: `/shared-debts?batch=${batchId}`,
     relatedType: 'shared_debt_batch',
-    relatedId: batchId
+    relatedId: batchId,
+    groupKey: 'shared_debt_new'
   });
 
   return {
@@ -8916,7 +9110,8 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
               body: `${requesterDisplayName} ajustou a cobrança de ${formatBRLFromCents(row.share_cents)} (${txn.description}).`,
               href: `/shared-debts?request=${existing.id}`,
               relatedType: 'shared_debt_request',
-              relatedId: existing.id
+              relatedId: existing.id,
+              groupKey: 'shared_debt_updates'
             });
           }
         }
@@ -8990,7 +9185,8 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
               body: `${requesterDisplayName} te enviou uma cobrança de ${formatBRLFromCents(row.share_cents)} (${txn.description}).`,
               href: `/shared-debts?request=${requestId}`,
               relatedType: 'shared_debt_request',
-              relatedId: requestId
+              relatedId: requestId,
+              groupKey: 'shared_debt_new'
             });
           }
         }
@@ -10599,7 +10795,8 @@ app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
     body: `${actorName} te enviou um lembrete de ${formatBRLFromCents(amountCents)} (${description}).${buildNoteSuffix(note, 'Recado')}`,
     href: `/shared-debts?request=${requestId}`,
     relatedType: 'shared_debt_request',
-    relatedId: requestId
+    relatedId: requestId,
+    groupKey: 'shared_debt_new'
   });
 
   setFlash(req, 'success', `Pronto! O lembrete avulso para ${receiverName} já foi enviado com a data de hoje.`);
@@ -10745,7 +10942,8 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
       body,
       href: firstRequestId ? `/shared-debts?request=${firstRequestId}` : '/shared-debts',
       relatedType: 'shared_debt_batch',
-      relatedId: batchId
+      relatedId: batchId,
+      groupKey: 'shared_debt_updates'
     });
   })();
 
@@ -10822,7 +11020,8 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
       body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
-      relatedId: requestId
+      relatedId: requestId,
+      groupKey: 'shared_debt_updates'
     });
   })();
 
@@ -10905,7 +11104,8 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
       body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
-      relatedId: requestId
+      relatedId: requestId,
+      groupKey: 'shared_debt_updates'
     });
   })();
 
@@ -11195,7 +11395,8 @@ app.post('/shared-debts/monthly-settlements/:id/report-payment', ensureAuthentic
       body: `${actorName} avisou um Pix de ${formatBRLFromCents(intentAmountCents)} para ${monthLabel(settlementRow.month, settlementRow.year)}.${buildNoteSuffix(note)}`,
       href: `/shared-debts?settlement=${settlementId}`,
       relatedType: 'shared_debt_payment_intent',
-      relatedId: intentId
+      relatedId: intentId,
+      groupKey: 'monthly_pix_updates'
     });
   })();
 
@@ -11371,7 +11572,8 @@ app.post('/shared-debts/monthly-settlements/:id/confirm-payment', ensureAuthenti
       body: `${actorName} confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. ${buildSharedDebtCardMonthlyIntentResultSummary(preview)}${buildNoteSuffix(note)}`,
       href: `/shared-debts?settlement=${settlementId}`,
       relatedType: 'shared_debt_payment_intent',
-      relatedId: intentId
+      relatedId: intentId,
+      groupKey: 'monthly_pix_updates'
     });
   })();
 
@@ -11465,7 +11667,8 @@ app.post('/shared-debts/monthly-settlements/:id/reject-payment', ensureAuthentic
       body: `${actorName} não confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. O valor voltou para o saldo aberto dessa carteira.${buildNoteSuffix(note)}`,
       href: `/shared-debts?settlement=${settlementId}`,
       relatedType: 'shared_debt_payment_intent',
-      relatedId: intentId
+      relatedId: intentId,
+      groupKey: 'monthly_pix_updates'
     });
   })();
 
@@ -11666,7 +11869,8 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
       body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
-      relatedId: requestId
+      relatedId: requestId,
+      groupKey: 'shared_debt_payments'
     });
   })();
 
@@ -11740,7 +11944,8 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
       body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
-      relatedId: requestId
+      relatedId: requestId,
+      groupKey: 'shared_debt_payments'
     });
   })();
 
@@ -11809,7 +12014,8 @@ app.post('/shared-debts/bulk/mark-paid', ensureAuthenticated, (req, res) => {
         body,
         href: group.batchId ? `/shared-debts?batch=${group.batchId}` : `/shared-debts?request=${firstRow.id}`,
         relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
-        relatedId: group.batchId || firstRow.id
+        relatedId: group.batchId || firstRow.id,
+        groupKey: 'shared_debt_payments'
       });
     });
   })();
@@ -11878,7 +12084,8 @@ app.post('/shared-debts/bulk/confirm-receipt', ensureAuthenticated, (req, res) =
         body,
         href: group.batchId ? `/shared-debts?batch=${group.batchId}` : `/shared-debts?request=${firstRow.id}`,
         relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
-        relatedId: group.batchId || firstRow.id
+        relatedId: group.batchId || firstRow.id,
+        groupKey: 'shared_debt_payments'
       });
     });
   })();
@@ -12237,6 +12444,7 @@ function offboardUserAccess(actorUserId, targetUserId) {
     db.prepare(`DELETE FROM push_subscriptions WHERE user_id = ?`).run(targetUserId);
     db.prepare(`DELETE FROM scheduled_push_logs WHERE user_id = ?`).run(targetUserId);
     db.prepare(`DELETE FROM notifications WHERE user_id = ?`).run(targetUserId);
+    db.prepare(`DELETE FROM user_notification_preferences WHERE user_id = ?`).run(targetUserId);
     tombstoneUserRecord(targetUserId);
   })();
 }
@@ -12360,8 +12568,27 @@ app.get("/people", ensureAuthenticated, (req, res) => {
     profileSignatureMaxLength: PROFILE_SIGNATURE_MAX_LENGTH,
     appPinSecurity: buildAppPinViewModel(getUserSecuritySettings(userId), { reauthFresh: hasFreshPinReauthSession(req, userId) }),
     appPasskeys: buildPasskeyManagementViewModel(req, userId),
+    notificationPreferences: buildUserNotificationPreferenceViewModel(userId),
     title: "Amigos"
   });
+});
+
+app.post('/people/notification-preferences', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const nextValues = USER_NOTIFICATION_PREFERENCE_KEYS.reduce((acc, key) => {
+      acc[key] = normalizeNotificationPreferenceToggle(req.body[`pref_${key}`]);
+      return acc;
+    }, {});
+
+    upsertUserNotificationPreferences(userId, nextValues);
+    setFlash(req, 'success', 'Pronto! Seus alertas por assunto ficaram salvos do seu jeitinho.');
+  } catch (error) {
+    setFlash(req, 'error', error?.message || 'Não consegui salvar suas preferências de alerta agora.');
+  }
+
+  return res.redirect('/people#my-profile');
 });
 
 app.post("/people", ensureAuthenticated, (req, res) => {
@@ -13123,7 +13350,8 @@ app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
     body: `${requester?.name || person.name || 'Alguém'} quer virar seu contato de confiança no AcerttaPay.`,
     href: `/people?friendRequest=${requestId}`,
     relatedType: 'friend_request',
-    relatedId: requestId
+    relatedId: requestId,
+    groupKey: 'friendship_activity'
   });
 
   setFlash(req, 'success', `Pedido enviado para ${person.name}. Agora é só esperar o outro lado dar o joinha.`);
@@ -13211,7 +13439,8 @@ app.post('/friend-requests/:id/respond', ensureAuthenticated, (req, res) => {
         body: `${targetUser?.name || 'Essa pessoa'} aceitou seu pedido. Agora vocês já podem trocar cobranças automáticas com mais privacidade.`,
         href: '/people',
         relatedType: 'friend_request',
-        relatedId: requestId
+        relatedId: requestId,
+        groupKey: 'friendship_activity'
       });
     })();
 
@@ -13232,7 +13461,8 @@ app.post('/friend-requests/:id/respond', ensureAuthenticated, (req, res) => {
     body: `${targetUser?.name || 'Essa pessoa'} preferiu não ativar a amizade agora.`,
     href: '/people',
     relatedType: 'friend_request',
-    relatedId: requestId
+    relatedId: requestId,
+    groupKey: 'friendship_activity'
   });
 
   setFlash(req, 'success', 'Pedido recusado. Nada mudou nas cobranças e a vida segue leve.');
@@ -13291,7 +13521,8 @@ app.post('/people/:id/unfriend', ensureAuthenticated, (req, res) => {
     body: `${actor?.name || 'Um contato'} desfez a amizade no AcerttaPay. O histórico continua, mas novos envios automáticos param por aqui.`,
     href: '/people',
     relatedType: 'friendship',
-    relatedId: friendship.id
+    relatedId: friendship.id,
+    groupKey: 'friendship_activity'
   });
 
   setFlash(req, 'success', `Amizade com ${person.name} desfeita. O histórico ficou salvo, mas novos envios automáticos param daqui pra frente.`);

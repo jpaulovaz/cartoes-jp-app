@@ -105,6 +105,49 @@ if (!columnExists("user_security_settings", "updated_at")) {
   db.exec("ALTER TABLE user_security_settings ADD COLUMN updated_at TEXT;");
 }
 
+// ===== PREFERÊNCIAS DE NOTIFICAÇÃO DO USUÁRIO =====
+db.exec(`
+CREATE TABLE IF NOT EXISTS user_notification_preferences (
+  user_id INTEGER PRIMARY KEY,
+  friendship_activity INTEGER NOT NULL DEFAULT 1,
+  shared_debt_new INTEGER NOT NULL DEFAULT 1,
+  shared_debt_updates INTEGER NOT NULL DEFAULT 1,
+  shared_debt_payments INTEGER NOT NULL DEFAULT 1,
+  monthly_pix_updates INTEGER NOT NULL DEFAULT 1,
+  card_due_today INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+`);
+
+if (!columnExists("user_notification_preferences", "friendship_activity")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN friendship_activity INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("user_notification_preferences", "shared_debt_new")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_new INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("user_notification_preferences", "shared_debt_updates")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_updates INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("user_notification_preferences", "shared_debt_payments")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_payments INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("user_notification_preferences", "monthly_pix_updates")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN monthly_pix_updates INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("user_notification_preferences", "card_due_today")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN card_due_today INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("user_notification_preferences", "updated_at")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN updated_at TEXT;");
+}
+
 // ===== PASSKEYS / DESBLOQUEIO PELO APARELHO =====
 db.exec(`
 CREATE TABLE IF NOT EXISTS user_passkeys (
@@ -1089,6 +1132,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_receiver_period ON shared
 CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_queue ON shared_debt_send_queue_items(queue_id, source_txn_date_snapshot, id);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_txn_person ON shared_debt_send_queue_items(requester_user_id, source_transaction_id, source_person_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at);
+CREATE INDEX IF NOT EXISTS idx_user_notification_preferences_updated ON user_notification_preferences(updated_at);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_status ON friend_requests(requester_user_id, status, created_at);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_target_status ON friend_requests(target_user_id, status, created_at);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_pair_status ON friend_requests(requester_user_id, target_user_id, status, created_at);

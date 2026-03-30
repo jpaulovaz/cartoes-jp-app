@@ -105,6 +105,8 @@ const {
   verifyPasskeyAuthenticationResponse
 } = require('./src/passkeySecurity');
 const {
+  getEmailRuntimeStatus,
+  logEmailRuntimeIssue,
   verifyEmailTransport,
   sendEmail
 } = require('./src/emailService');
@@ -130,6 +132,26 @@ require('./scripts/migrate.js');
 
 // --- OPCIONAL: EXECUTA SEED AUTOMÁTICO (comentar se não quiser dados de exemplo) ---
 // require('./scripts/seed.js');
+
+const EMAIL_RUNTIME_STATUS = getEmailRuntimeStatus();
+if (!EMAIL_RUNTIME_STATUS.available) {
+  console.warn('[email-runtime]', {
+    available: EMAIL_RUNTIME_STATUS.available,
+    module: EMAIL_RUNTIME_STATUS.module,
+    message: EMAIL_RUNTIME_STATUS.loadErrorMessage || 'nodemailer não carregou neste boot.',
+    code: EMAIL_RUNTIME_STATUS.loadErrorCode || null,
+    requireStack: EMAIL_RUNTIME_STATUS.requireStack
+  });
+}
+
+function logEmailFlowError(action, error, extra = {}) {
+  console.error('[email-error]', {
+    action,
+    message: error?.message || 'Erro de e-mail sem mensagem.',
+    code: error?.code || null,
+    ...extra
+  }, error?.stack || error);
+}
 
 const CARD_BRAND_OPTIONS = [
   { value: 'visa', label: 'Visa', asset: '/card-brands/visa.svg' },
@@ -1350,6 +1372,11 @@ async function sendWelcomeEmailToUser({ targetUser, createdByUser, customMessage
       subject: template.subject
     };
   } catch (error) {
+    logEmailFlowError('welcome-send', error, {
+      targetUserId: safeTarget.id || null,
+      recipientEmail: safeRecipientEmail,
+      subject: template.subject
+    });
     finalizeEmailDeliveryEvent(eventId, {
       status: 'error',
       errorMessage: error?.message || 'Não consegui mandar esse e-mail agora.',
@@ -18251,6 +18278,14 @@ app.post('/admin/email/test-connection', ensureAuthenticated, async (req, res) =
       activeSection: 'email'
     });
   } catch (error) {
+    if (error?.code === 'EMAIL_RUNTIME_MISSING') {
+      logEmailRuntimeIssue('admin-test-connection');
+    }
+    logEmailFlowError('test-connection', error, {
+      adminUserId: userId,
+      host: getEmailRuntimeConfig().host || null,
+      port: getEmailRuntimeConfig().port || null
+    });
     return renderAdmin(res, {
       error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui validar a conexão SMTP agora.' }),
       activeSection: 'email'
@@ -18276,6 +18311,13 @@ app.post('/admin/email/send-test', ensureAuthenticated, async (req, res) => {
       activeSection: 'email'
     });
   } catch (error) {
+    if (error?.code === 'EMAIL_RUNTIME_MISSING') {
+      logEmailRuntimeIssue('admin-send-test');
+    }
+    logEmailFlowError('admin-send-test', error, {
+      adminUserId: userId,
+      recipientEmail: String(req.body.test_recipient_email || '').trim() || null
+    });
     return renderAdmin(res, {
       error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui mandar o e-mail de teste agora.' }),
       activeSection: 'email'
@@ -18520,6 +18562,14 @@ app.post("/admin/add-user", ensureAuthenticated, async (req, res) => {
           });
           success += ' O e-mail de boas-vindas já saiu no embalo.';
         } catch (emailError) {
+          if (emailError?.code === 'EMAIL_RUNTIME_MISSING') {
+            logEmailRuntimeIssue('admin-create-user-welcome');
+          }
+          logEmailFlowError('admin-create-user-welcome', emailError, {
+            adminUserId: userId,
+            targetUserId: newUser?.id || null,
+            recipientEmail: newUser?.email || null
+          });
           success += ` O acesso foi criado, mas o e-mail tropeçou: ${getFriendlyErrorMessage(emailError, { defaultMessage: 'não consegui mandar agora' })}`;
         }
       }
@@ -18560,6 +18610,14 @@ app.post('/admin/users/:id/resend-welcome', ensureAuthenticated, async (req, res
       activeSection: 'access'
     });
   } catch (error) {
+    if (error?.code === 'EMAIL_RUNTIME_MISSING') {
+      logEmailRuntimeIssue('admin-resend-welcome');
+    }
+    logEmailFlowError('admin-resend-welcome', error, {
+      adminUserId: userId,
+      targetUserId,
+      recipientEmail: targetUser?.email || null
+    });
     return renderAdmin(res, {
       error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui reenviar o e-mail de boas-vindas agora.' }),
       activeSection: 'access'

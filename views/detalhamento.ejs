@@ -8,13 +8,16 @@
             if (f.type === 'expense') expCents += f.amount_cents;
         });
 
-        const debtModule = sharedDebtDetailModuleSummary || {};
-        const debtModulePay = debtModule.pay || {};
-        const debtModuleReceive = debtModule.receive || {};
-        const debtModuleManual = debtModule.manual || {};
-        const debtModuleCard = debtModule.card || {};
-        const debtModuleChips = Array.isArray(debtModule.chips) ? debtModule.chips : [];
-        const debtModuleHasSignal = !!debtModule.hasAnySignal;
+        const cardHealthModule = cardHealthDetailModuleSummary || {};
+        const cardHealthCurrent = cardHealthModule.current || {};
+        const cardHealthFuture = cardHealthModule.future || {};
+        const cardHealthThird = cardHealthModule.thirdParties || {};
+        const cardHealthRadar = cardHealthModule.radar || {};
+        const cardHealthChips = Array.isArray(cardHealthModule.chips) ? cardHealthModule.chips : [];
+        const cardHealthCompact = cardHealthModule.compact || {};
+        const cardHealthUseCompact = !!cardHealthModule.useCompactState;
+        const cardHealthPrimaryCta = cardHealthModule.primaryCta || { href: `/summary/${year}/${month}`, label: 'Fechamento do mês' };
+        const cardHealthSecondaryCta = cardHealthModule.secondaryCta || { href: '/geral', label: 'Ver cartões' };
         const saldoCents = incCents - expCents - cardTotalCents;
 
         let prevM = parseInt(month, 10) - 1;
@@ -59,21 +62,22 @@
         }
 
 
-        function formatModuleCountLabel(count, singular, plural) {
-            const safeCount = Math.max(0, Number(count || 0));
-            return `${safeCount} ${safeCount === 1 ? singular : plural}`;
-        }
-
-        function debtHeaderChipClasses(tone) {
+        function healthChipClasses(tone) {
             if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100';
             if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100';
             return 'border-slate-200 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-900/70 dark:text-slate-200';
         }
 
-        function debtStatusPillClasses(tone) {
-            if (tone === 'warning') return 'bg-amber-50/95 text-amber-950';
-            if (tone === 'success') return 'bg-emerald-50/95 text-emerald-950';
-            return 'bg-white/15 text-white';
+        function healthCompactBadgeClasses(tone) {
+            if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100';
+            if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100';
+            return 'border-slate-200 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-900/70 dark:text-slate-200';
+        }
+
+        function healthRadarItemClasses(tone) {
+            if (tone === 'warning') return 'border-amber-200 bg-amber-50/80 dark:border-amber-800 dark:bg-amber-900/20';
+            if (tone === 'success') return 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-900/20';
+            return 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/60';
         }
     %>
 
@@ -266,49 +270,24 @@
                         </h3>
                     </div>
                 </div>
-
-                <%
-                    const debtManualTotalCount = Number(debtModuleManual.totalCount || 0);
-                    const debtManualPrivateCount = Number(debtModuleManual.privateActiveCount || 0);
-                    const debtManualBilateralCount = Number(debtModuleManual.bilateralCount || 0);
-                    const debtCardItemCount = Number(debtModuleCard.itemCount || 0);
-                    const debtCardSettlementCount = Number(debtModuleCard.settlementCount || 0);
-
-                    const debtPayCountText = Number(debtModulePay.count || 0) > 0
-                        ? `${formatModuleCountLabel(Number(debtModulePay.count || 0), 'pendência em aberto', 'pendências em aberto')}`
-                        : 'Sem valor aberto por agora.';
-                    const debtReceiveCountText = Number(debtModuleReceive.count || 0) > 0
-                        ? `${formatModuleCountLabel(Number(debtModuleReceive.count || 0), 'pendência em aberto', 'pendências em aberto')}`
-                        : 'Sem valor aberto por agora.';
-                    const debtManualCountText = debtManualTotalCount > 0
-                        ? `${formatModuleCountLabel(debtManualTotalCount, 'pendência avulsa no radar', 'pendências avulsas no radar')}`
-                        : 'Nenhum combinado avulso aberto por agora.';
-                    const debtManualSubText = debtManualPrivateCount > 0
-                        ? `Inclui ${formatModuleCountLabel(debtManualPrivateCount, 'lembrete privado só seu', 'lembretes privados só seus')}.`
-                        : (debtManualBilateralCount > 0 ? 'Tudo que foi combinado fora do cartão aparece aqui.' : 'Sem lembrete privado puxando a manga no momento.');
-                    const debtCardCountText = debtCardItemCount > 0
-                        ? `${formatModuleCountLabel(debtCardItemCount, 'item/mensalidade em aberto', 'itens/mensalidades em aberto')}`
-                        : 'Nenhum acerto de cartão em aberto por enquanto.';
-                    const debtCardSubText = debtCardSettlementCount > 0
-                        ? `Espalhados em ${formatModuleCountLabel(debtCardSettlementCount, 'carteira do mês', 'carteiras do mês')}.`
-                        : 'Quando pintar acerto de cartão, ele aterrissa aqui.';
-                %>
-
                 <section class="mt-6 mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:mt-7 lg:mt-8">
                     <div class="border-b border-slate-200 bg-slate-50/90 px-5 py-5 dark:border-slate-700 dark:bg-slate-900/70 sm:px-6">
-                        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                             <div class="min-w-0">
-                                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Cobranças e acertos</div>
-                                <h2 class="mt-1 text-xl font-extrabold text-slate-900 dark:text-white">Cobranças e acertos</h2>
-                                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Esses valores ficam separados do saldo do mês, então o topo continua mostrando só a saúde real do seu bolso.</p>
+                                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300"><%= cardHealthModule.eyebrow || 'Saúde dos cartões' %></div>
+                                <h2 class="mt-1 text-xl font-extrabold text-slate-900 dark:text-white"><%= cardHealthModule.title || 'Saúde dos cartões' %></h2>
+                                <p class="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= cardHealthModule.subtitle || 'Aqui entra a visão operacional do crédito: fatura do mês, próximos meses, o pedaço que depende de terceiros e o que pede sua mão agora.' %></p>
                             </div>
-                            <a href="<%= debtModule.headerHref || '/shared-debts' %>" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Abrir central</a>
+                            <div class="flex flex-col gap-2 sm:flex-row">
+                                <a href="<%= cardHealthPrimaryCta.href || `/summary/${year}/${month}` %>" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"><%= cardHealthPrimaryCta.label || 'Fechamento do mês' %></a>
+                                <a href="<%= cardHealthSecondaryCta.href || '/geral' %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= cardHealthSecondaryCta.label || 'Ver cartões' %></a>
+                            </div>
                         </div>
 
-                        <% if (debtModuleHasSignal && debtModuleChips.length) { %>
+                        <% if (cardHealthChips.length) { %>
                             <div class="mt-4 flex flex-wrap gap-2">
-                                <% debtModuleChips.forEach((chip) => { %>
-                                    <a href="<%= chip.href || (debtModule.headerHref || '/shared-debts') %>" class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold tracking-[0.02em] <%= debtHeaderChipClasses(chip.tone) %>">
+                                <% cardHealthChips.forEach((chip) => { %>
+                                    <a href="<%= chip.href || cardHealthPrimaryCta.href || `/summary/${year}/${month}` %>" class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold tracking-[0.02em] <%= healthChipClasses(chip.tone) %>">
                                         <%= chip.label %>
                                     </a>
                                 <% }) %>
@@ -316,93 +295,146 @@
                         <% } %>
                     </div>
 
-                    <% if (debtModuleHasSignal) { %>
-                        <div class="space-y-4 p-4 sm:p-6">
-                            <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                <a href="<%= debtModulePay.href || '/shared-debts#received' %>" class="group block rounded-3xl border border-sky-600 bg-gradient-to-br from-sky-500 to-sky-600 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
-                                    <div class="flex items-start justify-between gap-4">
-                                        <div class="min-w-0">
-                                            <p class="text-xs font-bold uppercase tracking-wider opacity-80">Pra pagar</p>
-                                            <h3 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(debtModulePay.amountCents || 0)) %></h3>
-                                            <p class="mt-2 text-sm font-semibold opacity-90"><%= debtPayCountText %></p>
-                                            <span class="mt-3 inline-flex max-w-full rounded-full px-3 py-1 text-[11px] font-bold leading-5 <%= debtStatusPillClasses((debtModulePay.status || {}).tone) %>"><%= (debtModulePay.status || {}).label || 'Sem susto desse lado.' %></span>
-                                            <p class="mt-3 text-[11px] font-medium opacity-80">Fica no radar, mas não entra no saldo do topo.</p>
-                                            <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= debtModulePay.ctaLabel || 'Ver recebidas' %></p>
-                                        </div>
-                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">🧾</div>
-                                    </div>
-                                </a>
-
-                                <a href="<%= debtModuleReceive.href || '/shared-debts#sent' %>" class="group block rounded-3xl border border-cyan-700 bg-gradient-to-br from-cyan-600 to-cyan-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
-                                    <div class="flex items-start justify-between gap-4">
-                                        <div class="min-w-0">
-                                            <p class="text-xs font-bold uppercase tracking-wider opacity-80">Pra receber</p>
-                                            <h3 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(debtModuleReceive.amountCents || 0)) %></h3>
-                                            <p class="mt-2 text-sm font-semibold opacity-90"><%= debtReceiveCountText %></p>
-                                            <span class="mt-3 inline-flex max-w-full rounded-full px-3 py-1 text-[11px] font-bold leading-5 <%= debtStatusPillClasses((debtModuleReceive.status || {}).tone) %>"><%= (debtModuleReceive.status || {}).label || 'Tudo tranquilo do lado de cá.' %></span>
-                                            <p class="mt-3 text-[11px] font-medium opacity-80">Recebível não vira respiro antecipado por aqui.</p>
-                                            <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= debtModuleReceive.ctaLabel || 'Ver enviadas' %></p>
-                                        </div>
-                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">💸</div>
-                                    </div>
-                                </a>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                <a href="<%= debtModuleManual.href || '/shared-debts' %>" class="group block rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm transition-transform hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/40">
-                                    <div class="flex items-start justify-between gap-4">
-                                        <div class="min-w-0">
-                                            <p class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Avulsas</p>
-                                            <div class="mt-3 grid grid-cols-2 gap-3">
-                                                <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-800/70">
-                                                    <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Pra pagar</p>
-                                                    <p class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(Number(debtModuleManual.owedCents || 0)) %></p>
-                                                </div>
-                                                <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-800/70">
-                                                    <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Pra receber</p>
-                                                    <p class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(Number(debtModuleManual.receivableCents || 0)) %></p>
-                                                </div>
+                    <% if (cardHealthUseCompact) { %>
+                        <div class="p-4 sm:p-6">
+                            <div class="rounded-3xl border px-5 py-6 sm:px-6 <%= cardHealthCompact.tone === 'success' ? 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-900/20' : 'border-slate-200 bg-slate-50/80 dark:border-slate-600 dark:bg-slate-900/50' %>">
+                                <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                                    <div class="min-w-0">
+                                        <h3 class="text-lg font-extrabold <%= cardHealthCompact.tone === 'success' ? 'text-emerald-900 dark:text-emerald-100' : 'text-slate-900 dark:text-white' %>"><%= cardHealthCompact.title || 'Seu painel de cartão está quietinho.' %></h3>
+                                        <p class="mt-2 max-w-3xl text-sm font-medium leading-6 <%= cardHealthCompact.tone === 'success' ? 'text-emerald-900/80 dark:text-emerald-100/80' : 'text-slate-500 dark:text-slate-400' %>"><%= cardHealthCompact.description || 'Quando entrar fatura, mês futuro ou rateio com terceiros, esse bloco acorda sem bagunçar o topo.' %></p>
+                                        <% if (Array.isArray(cardHealthCompact.badges) && cardHealthCompact.badges.length) { %>
+                                            <div class="mt-4 flex flex-wrap gap-2">
+                                                <% cardHealthCompact.badges.forEach((badge) => { %>
+                                                    <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold tracking-[0.02em] <%= healthCompactBadgeClasses(badge.tone) %>"><%= badge.label %></span>
+                                                <% }) %>
                                             </div>
-                                            <p class="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-200"><%= debtManualCountText %></p>
-                                            <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= debtManualSubText %></p>
-                                            <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">Abrir central</p>
-                                        </div>
-                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-2xl text-white dark:bg-slate-100 dark:text-slate-900">🤝</div>
+                                        <% } %>
                                     </div>
-                                </a>
-
-                                <a href="<%= debtModuleCard.href || '/shared-debts' %>" class="group block rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm transition-transform hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/40">
-                                    <div class="flex items-start justify-between gap-4">
-                                        <div class="min-w-0">
-                                            <p class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">No cartão</p>
-                                            <div class="mt-3 grid grid-cols-2 gap-3">
-                                                <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-800/70">
-                                                    <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Pra pagar</p>
-                                                    <p class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(Number(debtModuleCard.owedCents || 0)) %></p>
-                                                </div>
-                                                <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-800/70">
-                                                    <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Pra receber</p>
-                                                    <p class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(Number(debtModuleCard.receivableCents || 0)) %></p>
-                                                </div>
-                                            </div>
-                                            <p class="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-200"><%= debtCardCountText %></p>
-                                            <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= debtCardSubText %></p>
-                                            <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">Abrir central</p>
-                                        </div>
-                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-2xl text-white dark:bg-slate-100 dark:text-slate-900">💳</div>
+                                    <div class="flex flex-col gap-2 sm:flex-row">
+                                        <a href="<%= cardHealthPrimaryCta.href || `/summary/${year}/${month}` %>" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"><%= cardHealthPrimaryCta.label || 'Fechamento do mês' %></a>
+                                        <a href="<%= cardHealthSecondaryCta.href || '/geral' %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= cardHealthSecondaryCta.label || 'Ver cartões' %></a>
                                     </div>
-                                </a>
+                                </div>
                             </div>
                         </div>
                     <% } else { %>
-                        <div class="p-4 sm:p-6">
-                            <div class="rounded-3xl border border-dashed border-slate-300 bg-slate-50/80 px-5 py-6 dark:border-slate-600 dark:bg-slate-900/50 sm:px-6">
-                                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                                    <div>
-                                        <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">Sem cobranças abertas por aqui. Seu mês segue limpinho.</h3>
-                                        <p class="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Se pintar algum combinado, ele pousa aqui sem mexer no saldo do topo e sem bagunçar o retrato real do mês.</p>
+                        <div class="space-y-4 p-4 sm:p-6">
+                            <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                                <a href="<%= cardHealthCurrent.ctaHref || cardHealthPrimaryCta.href || `/summary/${year}/${month}` %>" class="group block overflow-hidden rounded-3xl border border-blue-700 bg-gradient-to-br from-sky-600 via-blue-600 to-indigo-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5 xl:col-span-2">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Fatura do mês</p>
+                                            <h3 class="mt-2 text-2xl font-black sm:text-[2rem]"><%= formatBRLFromCents(Number(cardHealthCurrent.totalCents || 0)) %></h3>
+                                            <p class="mt-2 text-sm font-semibold opacity-90"><%= cardHealthCurrent.countLabel || 'Sem cartão puxando esta referência.' %></p>
+                                        </div>
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">💳</div>
                                     </div>
-                                    <a href="<%= debtModule.headerHref || '/shared-debts' %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir central</a>
+                                    <div class="mt-4 h-2 w-full rounded-full bg-white/15">
+                                        <div class="h-2 rounded-full bg-white" style="width: <%= Math.max(0, Math.min(100, Number(cardHealthCurrent.progressPct || 0))) %>%"></div>
+                                    </div>
+                                    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                        <div class="rounded-2xl bg-white/10 px-3 py-3 backdrop-blur-sm">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] opacity-70">Já pago</p>
+                                            <p class="mt-2 text-lg font-black"><%= formatBRLFromCents(Number(cardHealthCurrent.paidCents || 0)) %></p>
+                                        </div>
+                                        <div class="rounded-2xl bg-white/10 px-3 py-3 backdrop-blur-sm">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] opacity-70">Falta</p>
+                                            <p class="mt-2 text-lg font-black"><%= formatBRLFromCents(Number(cardHealthCurrent.remainingCents || 0)) %></p>
+                                        </div>
+                                        <div class="rounded-2xl bg-white/10 px-3 py-3 backdrop-blur-sm">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] opacity-70">Próx. vencimento</p>
+                                            <p class="mt-2 text-lg font-black"><%= cardHealthCurrent.nextDueLabel || '--/--' %></p>
+                                            <% if (cardHealthCurrent.nextDueCardName) { %>
+                                                <p class="mt-1 text-[11px] font-semibold opacity-75"><%= cardHealthCurrent.nextDueCardName %></p>
+                                            <% } %>
+                                        </div>
+                                    </div>
+                                    <p class="mt-4 text-sm font-medium leading-6 opacity-90"><%= cardHealthCurrent.pressureLabel || 'Sem cartão pressionando o mês por aqui.' %></p>
+                                    <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= cardHealthCurrent.ctaLabel || 'Abrir fechamento' %></p>
+                                </a>
+
+                                <a href="<%= cardHealthFuture.ctaHref || '/geral' %>" class="group block rounded-3xl border border-cyan-700 bg-gradient-to-br from-cyan-600 via-sky-600 to-blue-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Próximas faturas</p>
+                                            <h3 class="mt-2 text-2xl font-black sm:text-[1.85rem]"><%= formatBRLFromCents(Number(cardHealthFuture.totalCents || 0)) %></h3>
+                                            <p class="mt-2 text-sm font-semibold opacity-90"><%= cardHealthFuture.countLabel || 'Nenhuma competência futura aberta por enquanto.' %></p>
+                                        </div>
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">🗓️</div>
+                                    </div>
+                                    <div class="mt-4 grid grid-cols-2 gap-3">
+                                        <div class="rounded-2xl bg-white/10 px-3 py-3 backdrop-blur-sm">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] opacity-70">Competências</p>
+                                            <p class="mt-2 text-lg font-black"><%= Number(cardHealthFuture.monthCount || 0) %></p>
+                                        </div>
+                                        <div class="rounded-2xl bg-white/10 px-3 py-3 backdrop-blur-sm">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] opacity-70">Primeira parada</p>
+                                            <p class="mt-2 text-lg font-black"><%= cardHealthFuture.firstLabel || '--/--' %></p>
+                                        </div>
+                                    </div>
+                                    <p class="mt-4 text-sm font-medium leading-6 opacity-90"><%= cardHealthFuture.leadLabel || 'Quando os próximos meses aparecerem em /geral, eles pousam aqui.' %></p>
+                                    <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= cardHealthFuture.ctaLabel || 'Ver próximos meses' %></p>
+                                </a>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                                <a href="<%= cardHealthThird.ctaHref || `/summary/${year}/${month}` %>" class="group block rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm transition-transform hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/40">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Com terceiros</p>
+                                            <h3 class="mt-2 text-2xl font-black text-slate-900 dark:text-white sm:text-[1.85rem]"><%= formatBRLFromCents(Number(cardHealthThird.totalCents || 0)) %></h3>
+                                            <p class="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200"><%= cardHealthThird.countLabel || 'Sem rateio com terceiros neste mês.' %></p>
+                                        </div>
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-2xl text-white dark:bg-slate-100 dark:text-slate-900">🤝</div>
+                                    </div>
+                                    <div class="mt-4 h-2 w-full rounded-full bg-slate-200 dark:bg-slate-700">
+                                        <div class="h-2 rounded-full bg-indigo-500" style="width: <%= Math.max(0, Math.min(100, Number(cardHealthThird.progressPct || 0))) %>%"></div>
+                                    </div>
+                                    <div class="mt-4 grid grid-cols-2 gap-3">
+                                        <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Já entrou</p>
+                                            <p class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(Number(cardHealthThird.paidCents || 0)) %></p>
+                                        </div>
+                                        <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Ainda falta</p>
+                                            <p class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(Number(cardHealthThird.remainingCents || 0)) %></p>
+                                        </div>
+                                    </div>
+                                    <p class="mt-4 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400"><%= cardHealthThird.highlightLabel || 'Quando alguém participar da conta, o retrato aparece aqui.' %></p>
+                                    <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300"><%= cardHealthThird.ctaLabel || 'Ver pessoas do mês' %></p>
+                                </a>
+
+                                <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Radar do cartão</p>
+                                            <h3 class="mt-2 text-2xl font-black text-slate-900 dark:text-white sm:text-[1.85rem]"><%= Number(cardHealthRadar.signalCount || 0) > 0 ? `${Number(cardHealthRadar.signalCount || 0)} sinal${Number(cardHealthRadar.signalCount || 0) === 1 ? '' : 's'}` : 'Tudo no trilho' %></h3>
+                                            <p class="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200"><%= cardHealthRadar.signalLabel || 'Sem susto operacional por agora.' %></p>
+                                        </div>
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-2xl text-white dark:bg-slate-100 dark:text-slate-900">🚦</div>
+                                    </div>
+
+                                    <% if (cardHealthRadar.items && cardHealthRadar.items.length) { %>
+                                        <div class="mt-4 grid gap-3">
+                                            <% cardHealthRadar.items.forEach((item) => { %>
+                                                <a href="<%= item.href || cardHealthRadar.ctaHref || `/month/${year}/${month}` %>" class="block rounded-2xl border px-4 py-3 <%= healthRadarItemClasses(item.tone) %>">
+                                                    <div class="flex items-start gap-3">
+                                                        <div class="text-lg leading-none"><%= item.icon || '•' %></div>
+                                                        <div class="min-w-0">
+                                                            <p class="text-sm font-extrabold text-slate-900 dark:text-white"><%= item.title %></p>
+                                                            <p class="mt-1 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300"><%= item.description %></p>
+                                                        </div>
+                                                    </div>
+                                                </a>
+                                            <% }) %>
+                                        </div>
+                                    <% } else { %>
+                                        <div class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm font-medium leading-6 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-100">
+                                            Sem vencimento estourando, sem compra sem dono e sem cartão fechando hoje. Pode seguir o baile.
+                                        </div>
+                                    <% } %>
+
+                                    <a href="<%= cardHealthRadar.ctaHref || `/month/${year}/${month}` %>" class="mt-4 inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= cardHealthRadar.ctaLabel || 'Abrir mês' %></a>
                                 </div>
                             </div>
                         </div>

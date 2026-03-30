@@ -15149,6 +15149,500 @@ function buildOverduePaymentAlertDescription(items) {
     : preview.join(' ');
 }
 
+function buildCardHealthDetailModuleSummary(userId, month, year, {
+  visibleCards = null,
+  statementByCard = null,
+  cardTotalsMap = null,
+  isClosed = false,
+  today = dayjs()
+} = {}) {
+  const safeUserId = Number(userId || 0);
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  const referenceToday = dayjs(today).isValid() ? dayjs(today).startOf('day') : dayjs().startOf('day');
+
+  const baseSummary = {
+    eyebrow: 'Saúde dos cartões',
+    title: 'Saúde dos cartões',
+    subtitle: 'Aqui entra a visão operacional do crédito: fatura do mês, próximos meses, o pedaço que depende de terceiros e o que pede sua mão agora.',
+    primaryCta: {
+      href: `/summary/${safeYear}/${safeMonth}`,
+      label: 'Fechamento do mês'
+    },
+    secondaryCta: {
+      href: '/geral',
+      label: 'Ver cartões'
+    },
+    chips: [],
+    hasAnyData: false,
+    useCompactState: true,
+    isAllClear: false,
+    compact: {
+      tone: 'default',
+      title: 'Seu painel de cartão está quietinho.',
+      description: 'Quando entrar fatura, mês futuro ou rateio com terceiros, esse bloco acorda sem bagunçar o topo.',
+      badges: [
+        { tone: 'default', label: 'Sem fatura aberta' },
+        { tone: 'default', label: 'Sem próximo mês puxando' },
+        { tone: 'default', label: 'Sem radar urgente' }
+      ]
+    },
+    current: {
+      totalCents: 0,
+      paidCents: 0,
+      remainingCents: 0,
+      progressPct: 0,
+      cardCount: 0,
+      countLabel: 'Sem cartão puxando esta referência.',
+      nextDueLabel: null,
+      nextDueCardName: null,
+      pressureLabel: 'Sem cartão pressionando o mês por aqui.',
+      ctaHref: `/summary/${safeYear}/${safeMonth}`,
+      ctaLabel: 'Abrir fechamento'
+    },
+    future: {
+      totalCents: 0,
+      paidCents: 0,
+      remainingCents: 0,
+      monthCount: 0,
+      countLabel: 'Nenhuma competência futura aberta por enquanto.',
+      firstLabel: null,
+      leadLabel: 'Quando os próximos meses aparecerem em /geral, eles pousam aqui.',
+      ctaHref: '/geral',
+      ctaLabel: 'Ver próximos meses'
+    },
+    thirdParties: {
+      totalCents: 0,
+      paidCents: 0,
+      remainingCents: 0,
+      progressPct: 0,
+      personCount: 0,
+      countLabel: 'Sem rateio com terceiros neste mês.',
+      highlightLabel: 'Quando alguém participar da conta, o retrato aparece aqui.',
+      ctaHref: `/summary/${safeYear}/${safeMonth}`,
+      ctaLabel: 'Ver pessoas do mês'
+    },
+    radar: {
+      signalCount: 0,
+      signalLabel: 'Sem susto operacional por agora.',
+      items: [],
+      ctaHref: `/month/${safeYear}/${safeMonth}`,
+      ctaLabel: 'Abrir mês'
+    }
+  };
+
+  if (!safeUserId || !safeMonth || !safeYear) {
+    return baseSummary;
+  }
+
+  const cards = Array.isArray(visibleCards) ? visibleCards : getVisibleCardsForMonth(safeUserId, safeMonth, safeYear);
+
+  let localCardTotalsMap = cardTotalsMap instanceof Map ? cardTotalsMap : null;
+  if (!localCardTotalsMap) {
+    const cardTotalsRows = db.prepare(`
+      SELECT t.card_id, SUM(t.amount_cents) AS total_cents
+      FROM transactions t
+      LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+      WHERE t.user_id = ?
+        AND (
+          (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+          (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+        )
+      GROUP BY t.card_id
+    `).all(safeUserId, safeMonth, safeYear, safeMonth, safeYear);
+    localCardTotalsMap = new Map(cardTotalsRows.map((row) => [Number(row.card_id || 0), Math.max(0, Number(row.total_cents || 0))]));
+  }
+
+  let localStatementByCard = statementByCard instanceof Map ? statementByCard : null;
+  if (!localStatementByCard) {
+    const statementRows = db.prepare(`
+      SELECT card_id, computed_due_date, override_due_date, paid_cents
+      FROM card_statements
+      WHERE user_id = ? AND month = ? AND year = ?
+    `).all(safeUserId, safeMonth, safeYear);
+    localStatementByCard = new Map(statementRows.map((row) => [Number(row.card_id || 0), row]));
+  }
+
+  const currentCards = cards
+    .map((card) => {
+      const safeCardId = Number(card?.id || 0);
+      const stmt = localStatementByCard.get(safeCardId);
+      const computedDueDate = computeDueDate({
+        year: safeYear,
+        month: safeMonth,
+        dueDay: card?.due_day,
+        holidayScope: card?.holiday_scope || 'BR'
+      });
+      const dueDate = stmt?.override_due_date || stmt?.computed_due_date || computedDueDate || null;
+      const totalCents = Math.max(0, Number(localCardTotalsMap.get(safeCardId) || 0));
+      const paidCents = Math.max(0, Number(stmt?.paid_cents || 0));
+      const remainingCents = Math.max(0, totalCents - paidCents);
+      const diffDays = dueDate ? dayjs(dueDate).startOf('day').diff(referenceToday, 'day') : null;
+      return {
+        card_id: safeCardId,
+        card_name: card?.name || 'Cartão',
+        total_cents: totalCents,
+        paid_cents: paidCents,
+        remaining_cents: remainingCents,
+        due_date: dueDate,
+        diff_days: diffDays,
+        close_day: normalizeDayNumber(card?.close_day),
+        due_day: normalizeDayNumber(card?.due_day)
+      };
+    })
+    .filter((item) => item.total_cents > 0 || item.paid_cents > 0)
+    .sort((a, b) => {
+      const aTime = a.due_date ? dayjs(a.due_date).valueOf() : Number.MAX_SAFE_INTEGER;
+      const bTime = b.due_date ? dayjs(b.due_date).valueOf() : Number.MAX_SAFE_INTEGER;
+      if (aTime !== bTime) return aTime - bTime;
+      return a.card_name.localeCompare(b.card_name, 'pt-BR', { sensitivity: 'base' });
+    });
+
+  const currentTotals = currentCards.reduce((acc, item) => {
+    acc.totalCents += Number(item.total_cents || 0);
+    acc.paidCents += Number(item.paid_cents || 0);
+    acc.remainingCents += Number(item.remaining_cents || 0);
+    return acc;
+  }, { totalCents: 0, paidCents: 0, remainingCents: 0 });
+
+  const nextDueCard = currentCards.find((item) => item.due_date && item.remaining_cents > 0)
+    || currentCards.find((item) => item.due_date)
+    || null;
+
+  const pressureCard = currentCards.reduce((best, item) => {
+    if (!best) return item;
+    const itemWeight = Number(item.remaining_cents || 0) > 0 ? Number(item.remaining_cents || 0) : Number(item.total_cents || 0);
+    const bestWeight = Number(best.remaining_cents || 0) > 0 ? Number(best.remaining_cents || 0) : Number(best.total_cents || 0);
+    if (itemWeight !== bestWeight) return itemWeight > bestWeight ? item : best;
+    return item.card_name.localeCompare(best.card_name, 'pt-BR', { sensitivity: 'base' }) < 0 ? item : best;
+  }, null);
+
+  baseSummary.current = {
+    totalCents: currentTotals.totalCents,
+    paidCents: currentTotals.paidCents,
+    remainingCents: currentTotals.remainingCents,
+    progressPct: currentTotals.totalCents > 0 ? Math.max(0, Math.min(100, Math.round((currentTotals.paidCents / currentTotals.totalCents) * 100))) : 0,
+    cardCount: currentCards.length,
+    countLabel: currentCards.length > 0
+      ? formatCountLabel(currentCards.length, 'cartão entrou nesta fatura', 'cartões entraram nesta fatura')
+      : 'Sem cartão puxando esta referência.',
+    nextDueLabel: nextDueCard?.due_date ? dayjs(nextDueCard.due_date).format('DD/MM') : null,
+    nextDueCardName: nextDueCard?.card_name || null,
+    pressureLabel: pressureCard
+      ? (Number(pressureCard.remaining_cents || 0) > 0
+        ? `${pressureCard.card_name} é o que mais puxa agora, com ${formatBRLFromCents(pressureCard.remaining_cents)} ainda faltando.`
+        : `${pressureCard.card_name} levou a maior fatia da fatura, com ${formatBRLFromCents(pressureCard.total_cents)}.`)
+      : 'Sem cartão pressionando o mês por aqui.',
+    ctaHref: `/summary/${safeYear}/${safeMonth}`,
+    ctaLabel: currentTotals.totalCents > 0 ? 'Abrir fechamento' : 'Revisar fechamento'
+  };
+
+  const personAllocationRows = db.prepare(`
+    SELECT a.person_id, SUM(a.share_cents) AS total_cents
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+    GROUP BY a.person_id
+  `).all(safeUserId, safeMonth, safeYear, safeMonth, safeYear);
+
+  const personTotalsMap = new Map(personAllocationRows.map((row) => [Number(row.person_id || 0), Math.max(0, Number(row.total_cents || 0))]));
+  const paymentBreakdownMap = getCombinedPersonPaymentBreakdownMap(safeUserId, safeMonth, safeYear);
+  const visiblePeople = getVisiblePeopleForMonth(safeUserId, safeMonth, safeYear, { includePayments: true });
+
+  const thirdPartyRows = visiblePeople
+    .filter((person) => !isSelfPersonRow(person))
+    .map((person) => {
+      const personId = Number(person?.id || 0);
+      const paymentBreakdown = paymentBreakdownMap.get(personId) || { manualCents: 0, autoCents: 0, totalPaidCents: 0 };
+      const totalCents = Math.max(0, Number(personTotalsMap.get(personId) || 0));
+      const paidCents = Math.max(0, Number(paymentBreakdown.totalPaidCents || 0));
+      return {
+        person_id: personId,
+        person_name: person?.name || 'Pessoa',
+        total_cents: totalCents,
+        paid_cents: paidCents,
+        remaining_cents: Math.max(0, totalCents - paidCents)
+      };
+    })
+    .filter((item) => item.total_cents > 0 || item.paid_cents > 0)
+    .sort((a, b) => {
+      if (Number(b.remaining_cents || 0) !== Number(a.remaining_cents || 0)) {
+        return Number(b.remaining_cents || 0) - Number(a.remaining_cents || 0);
+      }
+      if (Number(b.total_cents || 0) !== Number(a.total_cents || 0)) {
+        return Number(b.total_cents || 0) - Number(a.total_cents || 0);
+      }
+      return a.person_name.localeCompare(b.person_name, 'pt-BR', { sensitivity: 'base' });
+    });
+
+  const thirdPartyTotals = thirdPartyRows.reduce((acc, item) => {
+    acc.totalCents += Number(item.total_cents || 0);
+    acc.paidCents += Number(item.paid_cents || 0);
+    acc.remainingCents += Number(item.remaining_cents || 0);
+    return acc;
+  }, { totalCents: 0, paidCents: 0, remainingCents: 0 });
+
+  const leadThirdParty = thirdPartyRows[0] || null;
+
+  baseSummary.thirdParties = {
+    totalCents: thirdPartyTotals.totalCents,
+    paidCents: thirdPartyTotals.paidCents,
+    remainingCents: thirdPartyTotals.remainingCents,
+    progressPct: thirdPartyTotals.totalCents > 0 ? Math.max(0, Math.min(100, Math.round((thirdPartyTotals.paidCents / thirdPartyTotals.totalCents) * 100))) : 0,
+    personCount: thirdPartyRows.length,
+    countLabel: thirdPartyRows.length > 0
+      ? formatCountLabel(thirdPartyRows.length, 'pessoa entrou nesse rateio', 'pessoas entraram nesse rateio')
+      : 'Sem rateio com terceiros neste mês.',
+    highlightLabel: leadThirdParty
+      ? (Number(leadThirdParty.remaining_cents || 0) > 0
+        ? `${leadThirdParty.person_name} ainda tem ${formatBRLFromCents(leadThirdParty.remaining_cents)} nessa rodada.`
+        : `${leadThirdParty.person_name} já ficou em dia nessa rodada.`)
+      : 'Quando alguém participar da conta, o retrato aparece aqui.',
+    ctaHref: `/summary/${safeYear}/${safeMonth}`,
+    ctaLabel: thirdPartyRows.length > 0 ? 'Ver pessoas do mês' : 'Abrir fechamento'
+  };
+
+  const futureTransactionRows = db.prepare(`
+    SELECT effective_due_year AS year, effective_due_month AS month, COALESCE(SUM(amount_cents), 0) AS total_cents
+    FROM (
+      SELECT
+        t.amount_cents,
+        ${EFFECTIVE_DUE_MONTH_SQL} AS effective_due_month,
+        ${EFFECTIVE_DUE_YEAR_SQL} AS effective_due_year
+      FROM transactions t
+      LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+      WHERE t.user_id = ?
+    ) grouped
+    WHERE effective_due_year > ? OR (effective_due_year = ? AND effective_due_month > ?)
+    GROUP BY effective_due_year, effective_due_month
+    ORDER BY effective_due_year ASC, effective_due_month ASC
+  `).all(safeUserId, safeYear, safeYear, safeMonth);
+
+  const futurePaidRows = db.prepare(`
+    SELECT year, month, COALESCE(SUM(paid_cents), 0) AS paid_cents
+    FROM card_statements
+    WHERE user_id = ?
+      AND (year > ? OR (year = ? AND month > ?))
+    GROUP BY year, month
+  `).all(safeUserId, safeYear, safeYear, safeMonth);
+
+  const futurePaidMap = new Map(futurePaidRows.map((row) => [monthKey(row.month, row.year), Math.max(0, Number(row.paid_cents || 0))]));
+  const closedMonths = getClosedMonthsSet(safeUserId);
+
+  const futureGroups = futureTransactionRows
+    .map((row) => {
+      const groupMonth = Number(row.month || 0);
+      const groupYear = Number(row.year || 0);
+      if (!groupMonth || !groupYear) return null;
+      if (closedMonths.has(monthKey(groupMonth, groupYear))) return null;
+      const totalCents = Math.max(0, Number(row.total_cents || 0));
+      const paidCents = Math.max(0, Number(futurePaidMap.get(monthKey(groupMonth, groupYear)) || 0));
+      return {
+        month: groupMonth,
+        year: groupYear,
+        label: monthLabel(groupMonth, groupYear),
+        total_cents: totalCents,
+        paid_cents: paidCents,
+        remaining_cents: Math.max(0, totalCents - paidCents)
+      };
+    })
+    .filter(Boolean);
+
+  const futureTotals = futureGroups.reduce((acc, item) => {
+    acc.totalCents += Number(item.total_cents || 0);
+    acc.paidCents += Number(item.paid_cents || 0);
+    acc.remainingCents += Number(item.remaining_cents || 0);
+    return acc;
+  }, { totalCents: 0, paidCents: 0, remainingCents: 0 });
+
+  const firstFutureGroup = futureGroups[0] || null;
+  const leadFutureGroup = futureGroups.reduce((best, item) => {
+    if (!best) return item;
+    if (Number(item.total_cents || 0) !== Number(best.total_cents || 0)) {
+      return Number(item.total_cents || 0) > Number(best.total_cents || 0) ? item : best;
+    }
+    return compareMonthYear(item.year, item.month, best.year, best.month) < 0 ? item : best;
+  }, null);
+
+  baseSummary.future = {
+    totalCents: futureTotals.totalCents,
+    paidCents: futureTotals.paidCents,
+    remainingCents: futureTotals.remainingCents,
+    monthCount: futureGroups.length,
+    countLabel: futureGroups.length > 0
+      ? formatCountLabel(futureGroups.length, 'competência futura já está aberta', 'competências futuras já estão abertas')
+      : 'Nenhuma competência futura aberta por enquanto.',
+    firstLabel: firstFutureGroup?.label || null,
+    leadLabel: leadFutureGroup
+      ? `${leadFutureGroup.label} carrega a maior fatia à frente, com ${formatBRLFromCents(leadFutureGroup.total_cents)}.`
+      : 'Quando os próximos meses aparecerem em /geral, eles pousam aqui.',
+    ctaHref: '/geral',
+    ctaLabel: futureGroups.length > 0 ? 'Ver próximos meses' : 'Abrir cartões'
+  };
+
+  const unassignedRow = !isClosed
+    ? (db.prepare(`
+        SELECT COUNT(*) AS total_count, COALESCE(SUM(t.amount_cents), 0) AS total_cents
+        FROM transactions t
+        LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+        WHERE t.user_id = ?
+          AND (
+            (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+            (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id
+          )
+      `).get(safeUserId, safeMonth, safeYear, safeMonth, safeYear) || { total_count: 0, total_cents: 0 })
+    : { total_count: 0, total_cents: 0 };
+
+  const unassignedCount = Math.max(0, Number(unassignedRow?.total_count || 0));
+  const unassignedCents = Math.max(0, Number(unassignedRow?.total_cents || 0));
+
+  const isCurrentReferenceMonth = safeYear === referenceToday.year() && safeMonth === (referenceToday.month() + 1);
+  const currentCardMap = new Map(currentCards.map((item) => [item.card_id, item]));
+
+  const closingTodayCards = isCurrentReferenceMonth
+    ? cards
+      .map((card) => {
+        const currentCard = currentCardMap.get(Number(card?.id || 0));
+        return {
+          card_name: card?.name || 'Cartão',
+          close_day: normalizeDayNumber(card?.close_day),
+          total_cents: Number(currentCard?.total_cents || 0)
+        };
+      })
+      .filter((item) => Number(item.close_day || 0) > 0 && Math.min(Number(item.close_day || 0), referenceToday.daysInMonth()) === referenceToday.date() && Number(item.total_cents || 0) > 0)
+    : [];
+
+  const dueSoonCards = isCurrentReferenceMonth
+    ? currentCards.filter((item) => item.due_date && Number(item.remaining_cents || 0) > 0 && Number(item.diff_days) >= 0 && Number(item.diff_days) <= 2)
+    : [];
+
+  const overdueCards = isCurrentReferenceMonth
+    ? currentCards.filter((item) => item.due_date && Number(item.remaining_cents || 0) > 0 && Number(item.diff_days) < 0)
+    : [];
+
+  const radarItems = [];
+
+  if (overdueCards.length) {
+    radarItems.push({
+      tone: 'warning',
+      priority: 40,
+      icon: '🚨',
+      label: overdueCards.length === 1 ? '1 fatura vencida' : `${overdueCards.length} faturas vencidas`,
+      title: overdueCards.length === 1 ? 'Fatura vencida com pendência' : 'Faturas vencidas com pendência',
+      description: buildOverduePaymentAlertDescription(overdueCards),
+      href: `/summary/${safeYear}/${safeMonth}`
+    });
+  }
+
+  if (unassignedCount > 0) {
+    radarItems.push({
+      tone: 'warning',
+      priority: 35,
+      icon: '👥',
+      label: unassignedCount === 1 ? '1 compra sem dono' : `${unassignedCount} compras sem dono`,
+      title: unassignedCount === 1 ? 'Compra sem dono no mês' : 'Compras sem dono no mês',
+      description: `${formatCountLabel(unassignedCount, 'item ainda não foi dividido', 'itens ainda não foram divididos')}, somando ${formatBRLFromCents(unassignedCents)}.`,
+      href: `/month/${safeYear}/${safeMonth}?f_allocated=nao`
+    });
+  }
+
+  if (dueSoonCards.length) {
+    const preview = dueSoonCards.slice(0, 3).map((item) => `${item.card_name} (${dayjs(item.due_date).format('DD/MM')})`).join(', ');
+    const extraCount = dueSoonCards.length - Math.min(dueSoonCards.length, 3);
+    radarItems.push({
+      tone: 'warning',
+      priority: 30,
+      icon: '📅',
+      label: dueSoonCards.length === 1 ? '1 vence em até 2 dias' : `${dueSoonCards.length} vencem em até 2 dias`,
+      title: dueSoonCards.length === 1 ? 'Vencimento em até 2 dias' : 'Vencimentos em até 2 dias',
+      description: extraCount > 0 ? `${preview} e mais ${formatCountLabel(extraCount, 'fatura chegando', 'faturas chegando')}.` : preview,
+      href: `/summary/${safeYear}/${safeMonth}`
+    });
+  }
+
+  if (closingTodayCards.length) {
+    const preview = closingTodayCards.slice(0, 3).map((item) => item.card_name).join(', ');
+    const extraCount = closingTodayCards.length - Math.min(closingTodayCards.length, 3);
+    radarItems.push({
+      tone: 'info',
+      priority: 20,
+      icon: '⏰',
+      label: closingTodayCards.length === 1 ? '1 fecha hoje' : `${closingTodayCards.length} fecham hoje`,
+      title: closingTodayCards.length === 1 ? 'Cartão fecha hoje' : 'Cartões fecham hoje',
+      description: extraCount > 0 ? `${preview} e mais ${formatCountLabel(extraCount, 'cartão', 'cartões')} fecham hoje.` : `${preview} ${closingTodayCards.length === 1 ? 'fecha' : 'fecham'} hoje.`,
+      href: `/month/${safeYear}/${safeMonth}`
+    });
+  }
+
+  radarItems.sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0));
+
+  baseSummary.radar = {
+    signalCount: radarItems.length,
+    signalLabel: radarItems.length > 0
+      ? formatCountLabel(radarItems.length, 'sinal pedindo sua mão', 'sinais pedindo sua mão')
+      : 'Sem susto operacional por agora.',
+    items: radarItems.slice(0, 4),
+    ctaHref: radarItems[0]?.href || `/month/${safeYear}/${safeMonth}`,
+    ctaLabel: radarItems.length > 0 ? 'Resolver agora' : 'Abrir mês'
+  };
+
+  baseSummary.hasAnyData = currentTotals.totalCents > 0
+    || currentTotals.paidCents > 0
+    || futureTotals.totalCents > 0
+    || thirdPartyTotals.totalCents > 0
+    || radarItems.length > 0;
+
+  baseSummary.isAllClear = !radarItems.length
+    && currentTotals.remainingCents === 0
+    && futureTotals.totalCents === 0
+    && thirdPartyTotals.remainingCents === 0
+    && (currentTotals.totalCents > 0 || thirdPartyTotals.totalCents > 0);
+
+  baseSummary.useCompactState = !baseSummary.hasAnyData || baseSummary.isAllClear;
+
+  if (baseSummary.isAllClear) {
+    baseSummary.chips = [{ tone: 'success', label: 'cartões em dia', href: `/summary/${safeYear}/${safeMonth}` }];
+    baseSummary.compact = {
+      tone: 'success',
+      title: 'Cartões redondinhos por aqui.',
+      description: 'A fatura desse mês já está domada e não há próximo mês aberto puxando assunto. Dá pra respirar sem promessa furada.',
+      badges: [
+        { tone: 'success', label: currentTotals.totalCents > 0 ? 'Fatura do mês em dia' : 'Sem fatura aberta' },
+        { tone: 'success', label: 'Sem próximo mês aberto' },
+        { tone: 'success', label: thirdPartyTotals.remainingCents > 0 ? 'Terceiros no radar' : 'Terceiros zerados' }
+      ]
+    };
+  } else if (!baseSummary.hasAnyData) {
+    baseSummary.compact = {
+      tone: 'default',
+      title: 'Seu painel de cartão está quietinho.',
+      description: 'Quando entrar fatura, mês futuro ou rateio com terceiros, esse bloco acorda sem bagunçar o topo.',
+      badges: [
+        { tone: 'default', label: 'Sem fatura aberta' },
+        { tone: 'default', label: 'Sem próximo mês puxando' },
+        { tone: 'default', label: 'Sem radar urgente' }
+      ]
+    };
+  } else {
+    baseSummary.chips = radarItems.slice(0, 3).map((item) => ({
+      tone: item.tone,
+      label: item.label,
+      href: item.href
+    }));
+  }
+
+  return baseSummary;
+}
+
+
 app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const { year, month } = req.params;
@@ -15215,9 +15709,6 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     WHERE user_id = ? AND month = ? AND year = ?
   `).all(userId, currentMonth, currentYear);
   const statementByCard = new Map(statementRows.map(row => [row.card_id, row]));
-
-  const sharedDebtSummary = getAcceptedSharedDebtSummaryForMonth(userId, currentMonth, currentYear);
-  const sharedDebtDetailModuleSummary = getSharedDebtDetailModuleSummary(userId, currentMonth, currentYear);
 
   const alerts = [];
   const pendingFriendRequests = db.prepare(`
@@ -15339,6 +15830,14 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const manualDebtDueContext = getManualDebtDueScheduleContext();
   const today = manualDebtDueContext.now;
   const todayManualDebtBucket = getManualDebtDueBucketsForDate(manualDebtDueContext.dateKey, { userIds: [userId] }).get(userId) || { pay: [], receive: [] };
+
+  const cardHealthDetailModuleSummary = buildCardHealthDetailModuleSummary(userId, currentMonth, currentYear, {
+    visibleCards,
+    statementByCard,
+    cardTotalsMap,
+    isClosed,
+    today
+  });
 
   if ((todayManualDebtBucket.pay || []).length) {
     alerts.push(buildManualDebtDueDashboardAlert('pay', todayManualDebtBucket.pay, manualDebtDueContext.dateKey));
@@ -15513,8 +16012,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     alerts,
     cards,
     purchaseCategories,
-    sharedDebtSummary,
-    sharedDebtDetailModuleSummary
+    cardHealthDetailModuleSummary
   });
 });
 

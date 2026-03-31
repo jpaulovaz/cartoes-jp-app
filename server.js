@@ -13816,68 +13816,11 @@ app.post('/purchase-categories/:id/restore', ensureAuthenticated, (req, res) => 
   return res.redirect(redirectBackOr(req, '/month'));
 });
 
-app.post('/people/profile-photo', ensureAuthenticated, (req, res) => {
-  profilePhotoUpload.single('profile_photo')(req, res, async (error) => {
-    const userId = req.user.id;
-    const uploadedPath = req.file ? `/uploads/profile-photos/${req.file.filename}` : '';
-    if (error) {
-      if (uploadedPath) await removeManagedProfilePhoto(uploadedPath);
-      setFlash(req, 'error', error.message || 'Não consegui salvar sua foto agora.');
-      return res.redirect('/people');
-    }
+function resolvePeopleSettingsRedirectTarget(req, fallback = '/people') {
+  return sanitizeInternalRedirectTarget(req.body?.return_to || req.query?.return_to || '', fallback);
+}
 
-    if (!uploadedPath) {
-      setFlash(req, 'error', 'Escolha uma imagem antes de salvar a foto do perfil.');
-      return res.redirect('/people');
-    }
-
-    try {
-      const currentUser = getUserRecord(userId, { includeDeleted: false });
-      db.prepare("UPDATE users SET profile_photo_url = ?, profile_photo_mode = 'manual' WHERE id = ?").run(uploadedPath, userId);
-      req.user.profile_photo_url = uploadedPath;
-      req.user.profile_photo_mode = 'manual';
-      if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
-      setFlash(req, 'success', 'Foto nova no crachá! Já deixei seu perfil mais reconhecível por aqui.');
-    } catch (err) {
-      await removeManagedProfilePhoto(uploadedPath);
-      setFlash(req, 'error', 'A foto tropeçou no caminho. Tenta de novo daqui a pouquinho.');
-    }
-
-    return res.redirect('/people#profile-photo');
-  });
-});
-
-app.post('/people/profile-photo/use-default', ensureAuthenticated, async (req, res) => {
-  const userId = req.user.id;
-  try {
-    const currentUser = getUserRecord(userId, { includeDeleted: false });
-    db.prepare("UPDATE users SET profile_photo_url = NULL, profile_photo_mode = 'default' WHERE id = ?").run(userId);
-    req.user.profile_photo_url = '';
-    req.user.profile_photo_mode = 'default';
-    if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
-    setFlash(req, 'success', currentUser?.google_photo_url && !looksLikeGoogleDefaultAvatar(currentUser.google_photo_url) ? 'Voltei para sua foto do Google aqui no app.' : 'Voltei para o visual padrão com o ícone do app no cabeçalho.');
-  } catch (error) {
-    setFlash(req, 'error', 'Não consegui voltar para o padrão agora.');
-  }
-  return res.redirect('/people#profile-photo');
-});
-
-app.post('/people/profile-photo/remove', ensureAuthenticated, async (req, res) => {
-  const userId = req.user.id;
-  try {
-    const currentUser = getUserRecord(userId, { includeDeleted: false });
-    db.prepare("UPDATE users SET profile_photo_url = NULL, profile_photo_mode = 'none' WHERE id = ?").run(userId);
-    req.user.profile_photo_url = '';
-    req.user.profile_photo_mode = 'none';
-    if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
-    setFlash(req, 'success', 'Pronto, escondi sua foto por aqui e deixei o app no modo sem avatar.');
-  } catch (error) {
-    setFlash(req, 'error', 'Não consegui remover a foto agora.');
-  }
-  return res.redirect('/people#profile-photo');
-});
-
-app.get("/people", ensureAuthenticated, (req, res) => {
+function buildPeoplePageViewModel(req) {
   const userId = req.user.id;
   ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
   const allPeople = getPeopleAll(userId).map((person) => decoratePersonPhoneForView(person, { fallbackCountry: DEFAULT_PHONE_COUNTRY }));
@@ -13907,7 +13850,7 @@ app.get("/people", ensureAuthenticated, (req, res) => {
   const pendingFriendRequests = getPendingReceivedFriendRequests(userId);
   const highlightedFriendRequestId = Number(req.query.friendRequest || req.query.friend_request || 0) || null;
 
-  return safeRenderView(res, "people", {
+  return {
     selfPerson,
     contacts: contactsWithComprasComigoBadge,
     people: contactsWithComprasComigoBadge,
@@ -13924,8 +13867,85 @@ app.get("/people", ensureAuthenticated, (req, res) => {
     profileSignatureMaxLength: PROFILE_SIGNATURE_MAX_LENGTH,
     appPinSecurity: buildAppPinViewModel(getUserSecuritySettings(userId), { reauthFresh: hasFreshPinReauthSession(req, userId) }),
     appPasskeys: buildPasskeyManagementViewModel(req, userId),
-    notificationPreferences: buildUserNotificationPreferenceViewModel(userId),
+    notificationPreferences: buildUserNotificationPreferenceViewModel(userId)
+  };
+}
+
+app.post('/people/profile-photo', ensureAuthenticated, (req, res) => {
+  profilePhotoUpload.single('profile_photo')(req, res, async (error) => {
+    const userId = req.user.id;
+    const uploadedPath = req.file ? `/uploads/profile-photos/${req.file.filename}` : '';
+    const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#profile-photo');
+    if (error) {
+      if (uploadedPath) await removeManagedProfilePhoto(uploadedPath);
+      setFlash(req, 'error', error.message || 'Não consegui salvar sua foto agora.');
+      return res.redirect(redirectTarget);
+    }
+
+    if (!uploadedPath) {
+      setFlash(req, 'error', 'Escolha uma imagem antes de salvar a foto do perfil.');
+      return res.redirect(redirectTarget);
+    }
+
+    try {
+      const currentUser = getUserRecord(userId, { includeDeleted: false });
+      db.prepare("UPDATE users SET profile_photo_url = ?, profile_photo_mode = 'manual' WHERE id = ?").run(uploadedPath, userId);
+      req.user.profile_photo_url = uploadedPath;
+      req.user.profile_photo_mode = 'manual';
+      if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
+      setFlash(req, 'success', 'Foto nova no crachá! Já deixei seu perfil mais reconhecível por aqui.');
+    } catch (err) {
+      await removeManagedProfilePhoto(uploadedPath);
+      setFlash(req, 'error', 'A foto tropeçou no caminho. Tenta de novo daqui a pouquinho.');
+    }
+
+    return res.redirect(redirectTarget);
+  });
+});
+
+app.post('/people/profile-photo/use-default', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#profile-photo');
+  try {
+    const currentUser = getUserRecord(userId, { includeDeleted: false });
+    db.prepare("UPDATE users SET profile_photo_url = NULL, profile_photo_mode = 'default' WHERE id = ?").run(userId);
+    req.user.profile_photo_url = '';
+    req.user.profile_photo_mode = 'default';
+    if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
+    setFlash(req, 'success', currentUser?.google_photo_url && !looksLikeGoogleDefaultAvatar(currentUser.google_photo_url) ? 'Voltei para sua foto do Google aqui no app.' : 'Voltei para o visual padrão com o ícone do app no cabeçalho.');
+  } catch (error) {
+    setFlash(req, 'error', 'Não consegui voltar para o padrão agora.');
+  }
+  return res.redirect(redirectTarget);
+});
+
+app.post('/people/profile-photo/remove', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#profile-photo');
+  try {
+    const currentUser = getUserRecord(userId, { includeDeleted: false });
+    db.prepare("UPDATE users SET profile_photo_url = NULL, profile_photo_mode = 'none' WHERE id = ?").run(userId);
+    req.user.profile_photo_url = '';
+    req.user.profile_photo_mode = 'none';
+    if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
+    setFlash(req, 'success', 'Pronto, escondi sua foto por aqui e deixei o app no modo sem avatar.');
+  } catch (error) {
+    setFlash(req, 'error', 'Não consegui remover a foto agora.');
+  }
+  return res.redirect(redirectTarget);
+});
+
+app.get("/people", ensureAuthenticated, (req, res) => {
+  return safeRenderView(res, "people", {
+    ...buildPeoplePageViewModel(req),
     title: "Amigos"
+  });
+});
+
+app.get('/settings', ensureAuthenticated, (req, res) => {
+  return safeRenderView(res, 'settings', {
+    ...buildPeoplePageViewModel(req),
+    title: 'AcerttaPay | Configurações'
   });
 });
 
@@ -14016,7 +14036,7 @@ app.post('/people/notification-preferences', ensureAuthenticated, (req, res) => 
     setFlash(req, 'error', error?.message || 'Não consegui salvar suas preferências de alerta agora.');
   }
 
-  return res.redirect('/people#my-profile');
+  return res.redirect(resolvePeopleSettingsRedirectTarget(req, '/settings#alerts'));
 });
 
 app.post("/people", ensureAuthenticated, (req, res) => {
@@ -14042,9 +14062,12 @@ app.post("/people", ensureAuthenticated, (req, res) => {
     : null;
   const isSelfTarget = isSelfPersonRow(targetPerson);
   const requestedSection = isSelfTarget ? String(req.body.profile_section || '').trim().toLowerCase() : '';
-  const redirectTarget = isSelfTarget
-    ? (requestedSection === 'pix' ? '/people#self-pix-config' : requestedSection === 'signature' ? '/people#profile-signature' : '/people#my-profile')
+  const defaultRedirectTarget = isSelfTarget
+    ? (requestedSection === 'pix' ? '/settings#pix' : requestedSection === 'signature' ? '/people#profile-signature' : '/settings#profile')
     : '/people#network-lounge';
+  const redirectTarget = isSelfTarget
+    ? resolvePeopleSettingsRedirectTarget(req, defaultRedirectTarget)
+    : defaultRedirectTarget;
 
   const currentName = targetPerson ? String(targetPerson.name || '').trim() : '';
   const currentPhone = targetPerson ? String(targetPerson.phone || '').trim() : '';
@@ -14114,7 +14137,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
 
   if (id && !targetPerson) {
     setFlash(req, 'error', 'Não encontrei essa pessoa por aqui para atualizar.');
-    return res.redirect('/people');
+    return res.redirect(resolvePeopleSettingsRedirectTarget(req, '/people'));
   }
 
   if (isSelfTarget && requestedSection === 'signature') {
@@ -14229,7 +14252,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
 app.post('/people/security/pin/setup', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const currentSettings = getUserSecuritySettings(userId);
-  const redirectTarget = '/people#app-security';
+  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#security');
 
   try {
     saveUserAppPinFromRequest(userId, req, { allowReauthOverride: false });
@@ -14246,7 +14269,7 @@ app.post('/people/security/pin/setup', ensureAuthenticated, (req, res) => {
 
 app.post('/people/security/pin/idle', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const redirectTarget = '/people#app-security';
+  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#security');
 
   try {
     const updated = updateUserAppPinIdleSecondsFromRequest(userId, req, { allowReauthOverride: false });
@@ -14260,7 +14283,7 @@ app.post('/people/security/pin/idle', ensureAuthenticated, (req, res) => {
 
 app.post('/people/security/pin/disable', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const redirectTarget = '/people#app-security';
+  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#security');
 
   try {
     disableUserAppPinFromRequest(userId, req, { allowReauthOverride: false });
@@ -14374,14 +14397,16 @@ app.post('/people/security/passkeys/:id/delete', ensureAuthenticated, (req, res)
   const userId = req.user.id;
   const passkey = getUserPasskey(userId, req.params.id);
 
+  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#security');
+
   if (!passkey) {
     setFlash(req, 'error', 'Esse aparelho já tinha saído da lista por aqui.');
-    return res.redirect('/people#app-security');
+    return res.redirect(redirectTarget);
   }
 
   deleteUserPasskey(userId, req.params.id);
   setFlash(req, 'success', `${passkey.label || 'Esse aparelho'} saiu da lista de desbloqueio.`);
-  return res.redirect('/people#app-security');
+  return res.redirect(redirectTarget);
 });
 
 app.post('/lock/passkey/options', ensureAuthenticatedIgnoringPin, async (req, res) => {

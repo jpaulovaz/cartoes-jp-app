@@ -90,6 +90,10 @@
     const source = String((person && person.name) || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
     return source.length ? source.map((part) => part.charAt(0).toUpperCase()).join('') : 'OP';
   };
+  const personActionItemClass = 'min-w-0 w-full sm:w-[calc(50%-0.25rem)] xl:w-[160px]';
+  const personActionButtonBaseClass = 'inline-flex min-h-[60px] w-full items-center justify-center rounded-2xl border px-4 py-3 text-center text-sm font-black leading-tight shadow-sm transition-colors';
+  const personActionLabelClass = 'block max-w-[7rem] whitespace-normal text-center leading-[1.05rem]';
+  const personActionContentClass = 'inline-flex max-w-full flex-wrap items-center justify-center gap-2';
 
   const renderPersonStatusChips = (person) => {
     const chips = [];
@@ -697,36 +701,50 @@
                 <%- renderPersonStatusChips(p) %>
               </div>
 
-              <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <div class="flex flex-wrap gap-2 sm:justify-end">
                 <% if (p.friendship_state === 'active') { %>
-                  <form method="post" action="/people/<%= p.id %>/unfriend" class="min-w-0" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novas cobranças entre vocês param na hora.">
-                    <button class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 shadow-sm transition-colors hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Desfazer amizade</button>
+                  <form method="post" action="/people/<%= p.id %>/unfriend" class="<%= personActionItemClass %>" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novas cobranças entre vocês param na hora.">
+                    <button class="<%= personActionButtonBaseClass %> border-rose-200 bg-white text-rose-700 hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">
+                      <span class="<%= personActionLabelClass %>">Desfazer amizade</span>
+                    </button>
                   </form>
                 <% } else if (p.friendship_state === 'pending_sent') { %>
-                  <form method="post" action="/friend-requests/<%= p.outgoing_friend_request_id %>/cancel" class="min-w-0">
-                    <button class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-700 shadow-sm transition-colors hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">Cancelar pedido</button>
+                  <form method="post" action="/friend-requests/<%= p.outgoing_friend_request_id %>/cancel" class="<%= personActionItemClass %>">
+                    <button class="<%= personActionButtonBaseClass %> border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">
+                      <span class="<%= personActionLabelClass %>">Cancelar pedido</span>
+                    </button>
                   </form>
                 <% } else if (p.friendship_state === 'pending_received') { %>
-                  <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond" class="min-w-0">
+                  <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond" class="<%= personActionItemClass %>">
                     <input type="hidden" name="action" value="accept">
-                    <button class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm transition-colors hover:bg-emerald-700 dark:border-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400">Aceitar amizade</button>
+                    <button class="<%= personActionButtonBaseClass %> border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 dark:border-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400">
+                      <span class="<%= personActionLabelClass %>">Aceitar amizade</span>
+                    </button>
                   </form>
-                  <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond" class="min-w-0">
+                  <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond" class="<%= personActionItemClass %>">
                     <input type="hidden" name="action" value="reject">
-                    <button class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 shadow-sm transition-colors hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Recusar</button>
+                    <button class="<%= personActionButtonBaseClass %> border-rose-200 bg-white text-rose-700 hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">
+                      <span class="<%= personActionLabelClass %>">Recusar</span>
+                    </button>
                   </form>
                 <% } else if (p.has_app_user && p.active) { %>
-                  <form method="post" action="/people/<%= p.id %>/send-friend-request" class="min-w-0">
-                    <button class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-sky-600 bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-sm transition-colors hover:bg-sky-700 dark:border-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400">Enviar pedido</button>
+                  <form method="post" action="/people/<%= p.id %>/send-friend-request" class="<%= personActionItemClass %>">
+                    <button class="<%= personActionButtonBaseClass %> border-sky-600 bg-sky-600 text-white hover:bg-sky-700 dark:border-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400">
+                      <span class="<%= personActionLabelClass %>">Enviar pedido</span>
+                    </button>
                   </form>
                 <% } else { %>
-                  <div class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">Convite indisponível</div>
+                  <div class="<%= personActionItemClass %>">
+                    <div class="<%= personActionButtonBaseClass %> border-dashed border-slate-200 bg-slate-50/60 text-xs font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">
+                      <span class="<%= personActionLabelClass %>">Convite indisponível</span>
+                    </div>
+                  </div>
                 <% } %>
 
                 <% if (p.friendship_active && p.has_app_user) { %>
-                  <a href="/people/<%= p.id %>/compras-comigo" class="inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-center text-sm font-black leading-none text-violet-700 shadow-sm transition-colors hover:bg-violet-100 dark:border-violet-900 dark:bg-violet-900/20 dark:text-violet-200 dark:hover:bg-violet-900/35" title="<%= (p.compras_comigo_badge_count || 0) > 0 ? `${p.compras_comigo_badge_count} item(ns) pedindo sua ação nessa amizade.` : 'Abrir a leitura mensal das compras em que você entrou nessa amizade.' %>">
-                    <span class="inline-flex items-center justify-center gap-2 leading-none">
-                      <span class="block leading-none">Compras comigo</span>
+                  <a href="/people/<%= p.id %>/compras-comigo" class="<%= personActionItemClass %> <%= personActionButtonBaseClass %> border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-900 dark:bg-violet-900/20 dark:text-violet-200 dark:hover:bg-violet-900/35" title="<%= (p.compras_comigo_badge_count || 0) > 0 ? `${p.compras_comigo_badge_count} item(ns) pedindo sua ação nessa amizade.` : 'Abrir a leitura mensal das compras em que você entrou nessa amizade.' %>">
+                    <span class="<%= personActionContentClass %>">
+                      <span class="<%= personActionLabelClass %>">Compras comigo</span>
                       <% if ((p.compras_comigo_badge_count || 0) > 0) { %>
                         <span class="inline-flex min-w-[1.65rem] items-center justify-center rounded-full border border-violet-200 bg-white px-2 py-0.5 text-[11px] font-black leading-none text-violet-700 shadow-sm dark:border-violet-800 dark:bg-violet-950/60 dark:text-violet-200"><%= p.compras_comigo_badge_count %></span>
                       <% } %>
@@ -734,11 +752,15 @@
                   </a>
                 <% } %>
 
-                <form method="post" action="/people/<%= p.id %>/toggle" class="min-w-0">
-                  <button class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border bg-white px-4 py-3 text-sm font-black shadow-sm transition-colors dark:bg-slate-900 <%= p.active ? 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20' : 'border-green-200 text-green-700 hover:bg-green-50 dark:border-green-900 dark:text-green-400 dark:hover:bg-green-900/20' %>"><%= p.active ? 'Desativar' : 'Reativar' %></button>
+                <form method="post" action="/people/<%= p.id %>/toggle" class="<%= personActionItemClass %>">
+                  <button class="<%= personActionButtonBaseClass %> bg-white dark:bg-slate-900 <%= p.active ? 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20' : 'border-green-200 text-green-700 hover:bg-green-50 dark:border-green-900 dark:text-green-400 dark:hover:bg-green-900/20' %>">
+                    <span class="<%= personActionLabelClass %>"><%= p.active ? 'Desativar' : 'Reativar' %></span>
+                  </button>
                 </form>
-                <form method="post" action="/people/<%= p.id %>/delete" class="min-w-0" data-confirm-prompt="Excluir <%= p.name %> da sua lista ativa? O passado continua salvo, mas a exclusão trava se ainda houver valor em aberto, Pix do mês em andamento ou cobrança guardada para enviar depois." data-confirm-phrase="Eu confirmo">
-                  <button class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-red-200 bg-white px-4 py-3 text-sm font-black text-red-700 shadow-sm transition-colors hover:bg-red-50 dark:border-red-900 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-900/20">Excluir da lista</button>
+                <form method="post" action="/people/<%= p.id %>/delete" class="<%= personActionItemClass %>" data-confirm-prompt="Excluir <%= p.name %> da sua lista ativa? O passado continua salvo, mas a exclusão trava se ainda houver valor em aberto, Pix do mês em andamento ou cobrança guardada para enviar depois." data-confirm-phrase="Eu confirmo">
+                  <button class="<%= personActionButtonBaseClass %> border-red-200 bg-white text-red-700 hover:bg-red-50 dark:border-red-900 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-900/20">
+                    <span class="<%= personActionLabelClass %>">Excluir da lista</span>
+                  </button>
                 </form>
               </div>
 

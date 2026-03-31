@@ -15,6 +15,12 @@
         const cardHealthRadar = cardHealthModule.radar || {};
         const cardHealthChips = Array.isArray(cardHealthModule.chips) ? cardHealthModule.chips : [];
         const cardHealthCompact = cardHealthModule.compact || {};
+        const cardHealthPremium = cardHealthModule.premium || {};
+        const cardHealthPremiumLimit = cardHealthPremium.limit || {};
+        const cardHealthPremiumTrend = cardHealthPremium.trend || {};
+        const cardHealthPremiumConcentration = cardHealthPremium.concentration || {};
+        const cardHealthTrendPoints = Array.isArray(cardHealthPremiumTrend.points) ? cardHealthPremiumTrend.points : [];
+        const cardHealthShowPremiumStrip = !!cardHealthPremium.hasAnyData;
         const cardHealthUseCompact = !!cardHealthModule.useCompactState;
         const cardHealthPrimaryCta = cardHealthModule.primaryCta || { href: `/summary/${year}/${month}`, label: 'Fechamento do mês' };
         const cardHealthSecondaryCta = cardHealthModule.secondaryCta || { href: '/geral', label: 'Ver cartões' };
@@ -65,19 +71,36 @@
         function healthChipClasses(tone) {
             if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100';
             if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100';
+            if (tone === 'info') return 'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-100';
             return 'border-slate-200 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-900/70 dark:text-slate-200';
         }
 
         function healthCompactBadgeClasses(tone) {
             if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100';
             if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100';
+            if (tone === 'info') return 'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-100';
             return 'border-slate-200 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-900/70 dark:text-slate-200';
         }
 
         function healthRadarItemClasses(tone) {
             if (tone === 'warning') return 'border-amber-200 bg-amber-50/80 dark:border-amber-800 dark:bg-amber-900/20';
             if (tone === 'success') return 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-900/20';
+            if (tone === 'info') return 'border-sky-200 bg-sky-50/80 dark:border-sky-800 dark:bg-sky-900/20';
             return 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/60';
+        }
+
+        function healthPremiumPanelClasses(tone) {
+            if (tone === 'warning') return 'border-amber-200 bg-amber-50/80 dark:border-amber-800 dark:bg-amber-900/20';
+            if (tone === 'success') return 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-900/20';
+            if (tone === 'info') return 'border-sky-200 bg-sky-50/80 dark:border-sky-800 dark:bg-sky-900/20';
+            return 'border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-900/50';
+        }
+
+        function healthPremiumBadgeClasses(tone) {
+            if (tone === 'warning') return 'border-amber-200 bg-amber-100/80 text-amber-900 dark:border-amber-700 dark:bg-amber-900/35 dark:text-amber-100';
+            if (tone === 'success') return 'border-emerald-200 bg-emerald-100/80 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/35 dark:text-emerald-100';
+            if (tone === 'info') return 'border-sky-200 bg-sky-100/80 text-sky-900 dark:border-sky-700 dark:bg-sky-900/35 dark:text-sky-100';
+            return 'border-slate-200 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-900/70 dark:text-slate-200';
         }
     %>
 
@@ -295,8 +318,118 @@
                         <% } %>
                     </div>
 
-                    <% if (cardHealthUseCompact) { %>
-                        <div class="p-4 sm:p-6">
+                    <div class="space-y-4 p-4 sm:p-6">
+                        <% if (cardHealthShowPremiumStrip) { %>
+                            <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                                <a href="<%= cardHealthPremiumLimit.ctaHref || '/cards' %>" class="group block rounded-3xl border p-5 shadow-sm transition-transform hover:-translate-y-0.5 <%= healthPremiumPanelClasses(cardHealthPremiumLimit.tone) %>">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400"><%= cardHealthPremiumLimit.title || 'Uso do limite' %></p>
+                                            <h3 class="mt-2 text-2xl font-black text-slate-900 dark:text-white sm:text-[1.85rem]"><%= cardHealthPremiumLimit.headline || 'Sem limite informado' %></h3>
+                                            <p class="mt-2 text-sm font-semibold leading-6 text-slate-700 dark:text-slate-200"><%= cardHealthPremiumLimit.valueLabel || 'Quando você guardar os limites em Cartões, o app para de chutar e começa a medir de verdade.' %></p>
+                                        </div>
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/70 text-2xl text-slate-900 dark:bg-slate-900/60 dark:text-white">🏦</div>
+                                    </div>
+
+                                    <div class="mt-4 h-2.5 w-full rounded-full bg-white/70 dark:bg-slate-950/40">
+                                        <div class="h-2.5 rounded-full <%= cardHealthPremiumLimit.tone === 'warning' ? 'bg-amber-500' : cardHealthPremiumLimit.tone === 'success' ? 'bg-emerald-500' : cardHealthPremiumLimit.tone === 'info' ? 'bg-sky-500' : 'bg-slate-500' %>" style="width: <%= Math.max(0, Math.min(100, Number(cardHealthPremiumLimit.progressPct || 0))) %>%"></div>
+                                    </div>
+
+                                    <div class="mt-4 grid grid-cols-2 gap-3">
+                                        <div class="rounded-2xl border border-white/70 bg-white/70 px-3 py-3 dark:border-slate-700 dark:bg-slate-900/50">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Em aberto</p>
+                                            <p class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(Number(cardHealthPremiumLimit.exposureCents || 0)) %></p>
+                                        </div>
+                                        <div class="rounded-2xl border border-white/70 bg-white/70 px-3 py-3 dark:border-slate-700 dark:bg-slate-900/50">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500"><%= Number(cardHealthPremiumLimit.availableCents || 0) >= 0 ? 'Ainda livre' : 'Acima do teto' %></p>
+                                            <p class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(Math.abs(Number(cardHealthPremiumLimit.availableCents || 0))) %></p>
+                                        </div>
+                                    </div>
+
+                                    <p class="mt-4 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= cardHealthPremiumLimit.coverageLabel || 'Sem limite guardado por aqui.' %></p>
+                                    <p class="mt-3 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= cardHealthPremiumLimit.description || 'Por enquanto eu só enxergo valor e vencimento. O teto do cartão ainda não entrou na conversa.' %></p>
+
+                                    <% if (Array.isArray(cardHealthPremiumLimit.badges) && cardHealthPremiumLimit.badges.length) { %>
+                                        <div class="mt-4 flex flex-wrap gap-2">
+                                            <% cardHealthPremiumLimit.badges.forEach((badge) => { %>
+                                                <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold tracking-[0.02em] <%= healthPremiumBadgeClasses(badge.tone) %>"><%= badge.label %></span>
+                                            <% }) %>
+                                        </div>
+                                    <% } %>
+
+                                    <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-700 dark:text-slate-200"><%= cardHealthPremiumLimit.ctaLabel || 'Informar limites' %></p>
+                                </a>
+
+                                <a href="<%= cardHealthPremiumTrend.ctaHref || '/geral' %>" class="group block rounded-3xl border p-5 shadow-sm transition-transform hover:-translate-y-0.5 <%= healthPremiumPanelClasses(cardHealthPremiumTrend.tone) %>">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400"><%= cardHealthPremiumTrend.title || 'Ritmo dos últimos 6 meses' %></p>
+                                            <h3 class="mt-2 text-2xl font-black text-slate-900 dark:text-white sm:text-[1.85rem]"><%= cardHealthPremiumTrend.headline || 'Histórico curtinho ainda' %></h3>
+                                            <p class="mt-2 text-sm font-semibold leading-6 text-slate-700 dark:text-slate-200"><%= cardHealthPremiumTrend.valueLabel || 'Quando o app tiver mais voltas de fatura, ele desenha a curva por aqui.' %></p>
+                                        </div>
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/70 text-2xl text-slate-900 dark:bg-slate-900/60 dark:text-white">📈</div>
+                                    </div>
+
+                                    <div class="mt-4 rounded-2xl border border-white/70 bg-white/70 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/50">
+                                        <% if (cardHealthTrendPoints.length) { %>
+                                            <div class="grid h-24 grid-cols-6 items-end gap-2">
+                                                <% cardHealthTrendPoints.forEach((point) => { %>
+                                                    <div class="flex h-full flex-col items-center justify-end gap-2">
+                                                        <div class="flex h-20 w-full items-end">
+                                                            <div class="w-full rounded-t-2xl <%= point.is_current ? 'bg-slate-900 dark:bg-white' : cardHealthPremiumTrend.tone === 'warning' ? 'bg-amber-400/90 dark:bg-amber-300/90' : cardHealthPremiumTrend.tone === 'success' ? 'bg-emerald-400/90 dark:bg-emerald-300/90' : cardHealthPremiumTrend.tone === 'info' ? 'bg-sky-400/90 dark:bg-sky-300/90' : 'bg-slate-300 dark:bg-slate-600' %>" style="height: <%= Math.max(12, Math.min(100, Number(point.intensityPct || 0))) %>%"></div>
+                                                        </div>
+                                                        <div class="text-[11px] font-bold <%= point.is_current ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400' %>"><%= point.shortLabel || String(point.month).padStart(2, '0') %></div>
+                                                    </div>
+                                                <% }) %>
+                                            </div>
+                                        <% } else { %>
+                                            <div class="rounded-2xl border border-dashed border-slate-300 px-4 py-6 text-sm font-medium leading-6 text-slate-500 dark:border-slate-600 dark:text-slate-400">Mais alguns ciclos e esse gráfico já para de ser trailer e vira filme.</div>
+                                        <% } %>
+                                    </div>
+
+                                    <p class="mt-4 text-sm font-semibold text-slate-700 dark:text-slate-200"><%= cardHealthPremiumTrend.deltaLabel || 'Sem comparação suficiente por enquanto.' %></p>
+                                    <p class="mt-3 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= cardHealthPremiumTrend.description || 'Com alguns meses de estrada, o bloco começa a mostrar se a carteira está subindo, estável ou aliviando.' %></p>
+                                    <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-700 dark:text-slate-200"><%= cardHealthPremiumTrend.ctaLabel || 'Abrir cartões' %></p>
+                                </a>
+
+                                <a href="<%= cardHealthPremiumConcentration.ctaHref || `/summary/${year}/${month}` %>" class="group block rounded-3xl border p-5 shadow-sm transition-transform hover:-translate-y-0.5 <%= healthPremiumPanelClasses(cardHealthPremiumConcentration.tone) %>">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400"><%= cardHealthPremiumConcentration.title || 'Concentração por cartão' %></p>
+                                            <h3 class="mt-2 text-2xl font-black text-slate-900 dark:text-white sm:text-[1.85rem]"><%= cardHealthPremiumConcentration.headline || 'Ainda sem concentração' %></h3>
+                                            <p class="mt-2 text-sm font-semibold leading-6 text-slate-700 dark:text-slate-200"><%= cardHealthPremiumConcentration.valueLabel || 'Quando mais de um cartão entrar no mês, eu mostro quem está puxando mais a fila.' %></p>
+                                        </div>
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/70 text-2xl text-slate-900 dark:bg-slate-900/60 dark:text-white">🎛️</div>
+                                    </div>
+
+                                    <% if (Array.isArray(cardHealthPremiumConcentration.items) && cardHealthPremiumConcentration.items.length) { %>
+                                        <div class="mt-4 space-y-3">
+                                            <% cardHealthPremiumConcentration.items.forEach((item) => { %>
+                                                <div class="rounded-2xl border border-white/70 bg-white/70 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/50">
+                                                    <div class="flex items-start justify-between gap-3">
+                                                        <div class="min-w-0">
+                                                            <p class="text-sm font-extrabold text-slate-900 dark:text-white"><%= item.label %></p>
+                                                            <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= item.detailLabel %></p>
+                                                        </div>
+                                                        <div class="text-right">
+                                                            <p class="text-sm font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(Number(item.totalCents || 0)) %></p>
+                                                            <p class="mt-1 text-[11px] font-bold text-slate-500 dark:text-slate-400"><%= item.shareLabel %></p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            <% }) %>
+                                        </div>
+                                    <% } else { %>
+                                        <div class="mt-4 rounded-2xl border border-dashed border-slate-300 px-4 py-6 text-sm font-medium leading-6 text-slate-500 dark:border-slate-600 dark:text-slate-400">Quando mais de um cartão puxar a referência, o app mostra aqui quem virou protagonista e quem ficou de coadjuvante.</div>
+                                    <% } %>
+
+                                    <p class="mt-4 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= cardHealthPremiumConcentration.description || 'Isso ajuda a ver se a carteira está espalhada ou se um cartão virou dono da festa.' %></p>
+                                    <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-700 dark:text-slate-200"><%= cardHealthPremiumConcentration.ctaLabel || 'Abrir por cartão' %></p>
+                                </a>
+                            </div>
+                        <% } %>
+
+                        <% if (cardHealthUseCompact) { %>
                             <div class="rounded-3xl border px-5 py-6 sm:px-6 <%= cardHealthCompact.tone === 'success' ? 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-900/20' : 'border-slate-200 bg-slate-50/80 dark:border-slate-600 dark:bg-slate-900/50' %>">
                                 <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                                     <div class="min-w-0">
@@ -316,9 +449,7 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    <% } else { %>
-                        <div class="space-y-4 p-4 sm:p-6">
+                        <% } else { %>
                             <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
                                 <a href="<%= cardHealthCurrent.ctaHref || cardHealthPrimaryCta.href || `/summary/${year}/${month}` %>" class="group block overflow-hidden rounded-3xl border border-blue-700 bg-gradient-to-br from-sky-600 via-blue-600 to-indigo-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5 xl:col-span-2">
                                     <div class="flex items-start justify-between gap-4">
@@ -437,8 +568,8 @@
                                     <a href="<%= cardHealthRadar.ctaHref || `/month/${year}/${month}` %>" class="mt-4 inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= cardHealthRadar.ctaLabel || 'Abrir mês' %></a>
                                 </div>
                             </div>
-                        </div>
-                    <% } %>
+                        <% } %>
+                    </div>
                 </section>
 
                 <% if (alerts && alerts.length) { %>

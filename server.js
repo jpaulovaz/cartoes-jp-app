@@ -11025,6 +11025,484 @@ function getSharedDebtDetailModuleSummary(userId, month, year) {
   return summary;
 }
 
+
+function getPeopleComprasComigoContact(userId, personId) {
+  const safeUserId = Number(userId || 0);
+  const safePersonId = Number(personId || 0);
+  if (!safeUserId || !safePersonId) return null;
+
+  return getPeopleAll(safeUserId).find((person) => Number(person?.id || 0) === safePersonId) || null;
+}
+
+function isPeopleComprasComigoOpenStatus(status = 'pending') {
+  const normalized = String(status || 'pending').trim().toLowerCase();
+  return ['pending', 'accepted', 'rejected_by_receiver', 'rejection_contested_by_sender'].includes(normalized);
+}
+
+function getIsoMonthRank(dateValue = null) {
+  if (!dateValue) return null;
+  const parsed = dayjs(dateValue);
+  if (!parsed.isValid()) return null;
+  return (parsed.year() * 100) + (parsed.month() + 1);
+}
+
+function getPeopleComprasComigoManualStartRank(item = {}) {
+  return getIsoMonthRank(item?.created_at || item?.source_txn_date || item?.updated_at || null);
+}
+
+function getPeopleComprasComigoManualHistoryRank(item = {}) {
+  return getIsoMonthRank(
+    item?.resolved_at
+      || item?.settled_at
+      || item?.cancelled_at
+      || item?.responded_at
+      || item?.updated_at
+      || item?.created_at
+      || null
+  );
+}
+
+function getPeopleComprasComigoCurrentRank() {
+  const now = dayjs();
+  return (now.year() * 100) + (now.month() + 1);
+}
+
+function isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item = {}, month, year, tab = 'open') {
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  if (!safeMonth || !safeYear) return false;
+
+  const requestKind = normalizeSharedDebtRequestKind(item?.request_kind);
+  const targetRank = (safeYear * 100) + safeMonth;
+  const wantsOpen = String(tab || 'open').trim().toLowerCase() !== 'history';
+  const isOpen = isPeopleComprasComigoOpenStatus(item?.status);
+
+  if (requestKind === 'card') {
+    const dueMonth = Number(item?.source_due_month || 0);
+    const dueYear = Number(item?.source_due_year || 0);
+    if (!dueMonth || !dueYear) return false;
+    const dueRank = (dueYear * 100) + dueMonth;
+    if (dueRank != targetRank) return false;
+    return wantsOpen ? isOpen : !isOpen;
+  }
+
+  const startRank = getPeopleComprasComigoManualStartRank(item);
+  if (!startRank) return false;
+
+  if (wantsOpen) {
+    if (!isOpen) return false;
+    return targetRank >= startRank;
+  }
+
+  if (isOpen) return false;
+  const historyRank = getPeopleComprasComigoManualHistoryRank(item) || startRank;
+  return historyRank === targetRank;
+}
+
+function getPeopleComprasComigoRelevantMonthRanks(items = []) {
+  const currentRank = getPeopleComprasComigoCurrentRank();
+  const ranks = new Set([currentRank]);
+
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const requestKind = normalizeSharedDebtRequestKind(item?.request_kind);
+    if (requestKind === 'card') {
+      const month = Number(item?.source_due_month || 0);
+      const year = Number(item?.source_due_year || 0);
+      if (month && year) ranks.add((year * 100) + month);
+      return;
+    }
+
+    const startRank = getPeopleComprasComigoManualStartRank(item);
+    if (startRank) ranks.add(startRank);
+
+    if (isPeopleComprasComigoOpenStatus(item?.status)) {
+      ranks.add(currentRank);
+      return;
+    }
+
+    const historyRank = getPeopleComprasComigoManualHistoryRank(item);
+    if (historyRank) ranks.add(historyRank);
+  });
+
+  return Array.from(ranks).filter(Boolean).sort((a, b) => b - a);
+}
+
+function rankToMonthYear(rank) {
+  const safeRank = Number(rank || 0);
+  if (!safeRank) return null;
+  const year = Math.floor(safeRank / 100);
+  const month = safeRank % 100;
+  if (!parseMonthYear(month, year)) return null;
+  return { year, month };
+}
+
+function getPeopleComprasComigoPrimaryActionMeta(item = {}) {
+  const requestId = Number(item?.id || 0);
+  const settlementId = Number(item?.card_monthly_settlement_id || 0);
+  const isCard = normalizeSharedDebtRequestKind(item?.request_kind) === 'card';
+  const requestHref = requestId ? `/shared-debts?request=${requestId}` : '/shared-debts';
+  const settlementHref = settlementId ? `/shared-debts?settlement=${settlementId}` : requestHref;
+  const status = String(item?.status || 'pending').trim().toLowerCase();
+
+  if (status === 'pending') {
+    return { label: 'Abrir para responder', href: requestHref };
+  }
+
+  if (status === 'accepted') {
+    if (item?.payment_marked_at) {
+      return {
+        label: isCard && settlementId ? 'Abrir carteira do mês' : 'Abrir para acompanhar',
+        href: isCard && settlementId ? settlementHref : requestHref
+      };
+    }
+
+    return {
+      label: isCard && settlementId ? 'Abrir carteira do mês' : 'Abrir para informar pagamento',
+      href: isCard && settlementId ? settlementHref : requestHref
+    };
+  }
+
+  if (status === 'rejection_contested_by_sender') {
+    return { label: 'Abrir contestação', href: requestHref };
+  }
+
+  if (status === 'rejected_by_receiver') {
+    return { label: 'Abrir para acompanhar', href: requestHref };
+  }
+
+  return { label: 'Abrir no histórico', href: requestHref };
+}
+
+function getPeopleComprasComigoStatusMeta(item = {}) {
+  const status = String(item?.status || 'pending').trim().toLowerCase();
+  const totalCents = Math.max(0, Number(item?.amount_cents || 0));
+  const paidCents = Math.min(totalCents, Math.max(0, Number(item?.amount_paid_cents || 0)));
+
+  if (status === 'accepted' && item?.payment_marked_at) {
+    return {
+      key: 'accepted_paid_marked',
+      label: 'Pago aguardando confirmação',
+      tone: 'info',
+      classes: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200'
+    };
+  }
+
+  if (status === 'accepted' && paidCents > 0 && paidCents < totalCents) {
+    return {
+      key: 'accepted_partial',
+      label: 'Parcial',
+      tone: 'warning',
+      classes: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
+    };
+  }
+
+  switch (status) {
+    case 'accepted':
+      return {
+        key: 'accepted',
+        label: 'Pra eu pagar',
+        tone: 'success',
+        classes: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200'
+      };
+    case 'rejected_by_receiver':
+      return {
+        key: 'rejected_by_receiver',
+        label: 'Rejeição aguardando decisão',
+        tone: 'warning',
+        classes: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
+      };
+    case 'rejection_contested_by_sender':
+      return {
+        key: 'rejection_contested_by_sender',
+        label: 'Contestação em andamento',
+        tone: 'warning',
+        classes: 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-200'
+      };
+    case 'rejection_accepted_by_sender':
+      return {
+        key: 'rejection_accepted_by_sender',
+        label: 'Rejeição encerrada',
+        tone: 'muted',
+        classes: 'border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+      };
+    case 'cancelled':
+      return {
+        key: 'cancelled',
+        label: 'Cancelada',
+        tone: 'muted',
+        classes: 'border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+      };
+    case 'settled':
+      return {
+        key: 'settled',
+        label: 'Concluído',
+        tone: 'info',
+        classes: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200'
+      };
+    default:
+      return {
+        key: 'pending',
+        label: 'Aguardando meu aceite',
+        tone: 'primary',
+        classes: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200'
+      };
+  }
+}
+
+function getPeopleComprasComigoHint(item = {}, contactName = 'essa amizade') {
+  const status = String(item?.status || 'pending').trim().toLowerCase();
+  const isCard = normalizeSharedDebtRequestKind(item?.request_kind) === 'card';
+  const mediumLabel = isCard ? 'compra no cartão' : 'combinado avulso';
+
+  if (status === 'pending') {
+    return `${contactName} te envolveu nessa ${mediumLabel} e ainda falta o seu aceite.`;
+  }
+
+  if (status === 'accepted' && item?.payment_marked_at) {
+    return `Você já avisou o pagamento. Agora falta o ok final de ${contactName}.`;
+  }
+
+  if (status === 'accepted') {
+    return `Essa cobrança já foi aceita e agora o próximo passo mora no seu pagamento.`;
+  }
+
+  if (status === 'rejected_by_receiver') {
+    return `Você recusou essa cobrança e agora a bola está com ${contactName}.`;
+  }
+
+  if (status === 'rejection_contested_by_sender') {
+    return `${contactName} contestou a recusa. Se quiser revisar o contexto, é só abrir a cobrança.`;
+  }
+
+  if (status === 'rejection_accepted_by_sender') {
+    return `${contactName} aceitou a recusa e esse item saiu de cena.`;
+  }
+
+  if (status === 'cancelled') {
+    return 'Essa cobrança foi cancelada e ficou só no histórico.';
+  }
+
+  return 'Pagamento confirmado. Esse item já encerrou a conversa financeira de vocês.';
+}
+
+function decoratePeopleComprasComigoItem(item = {}, { contactName = 'essa amizade', viewedMonth = 0, viewedYear = 0 } = {}) {
+  const requestKind = normalizeSharedDebtRequestKind(item?.request_kind);
+  const statusMeta = getPeopleComprasComigoStatusMeta(item);
+  const actionMeta = getPeopleComprasComigoPrimaryActionMeta(item);
+  const totalCents = Math.max(0, Number(item?.amount_cents || 0));
+  let paidCents = Math.max(0, Number(item?.amount_paid_cents || 0));
+  if (String(item?.status || '').trim().toLowerCase() === 'settled' && paidCents < totalCents) paidCents = totalCents;
+  if (paidCents > totalCents) paidCents = totalCents;
+  const pendingCents = Math.max(0, totalCents - paidCents);
+  const createdRank = getPeopleComprasComigoManualStartRank(item);
+  const createdMonthInfo = rankToMonthYear(createdRank);
+  const historyRank = getPeopleComprasComigoManualHistoryRank(item);
+  const historyMonthInfo = rankToMonthYear(historyRank);
+  const createdAtLabel = item?.created_at ? formatDateBR(item.created_at) : null;
+  const sourceDateLabel = item?.source_txn_date ? formatDateBR(item.source_txn_date) : createdAtLabel;
+  const promisedDateLabel = item?.promised_payment_date ? formatDateBR(item.promised_payment_date) : null;
+  const paymentDateLabel = item?.payment_marked_at ? formatDateBR(item.payment_marked_at) : (item?.payment_date ? formatDateBR(item.payment_date) : null);
+  const dueLabel = item?.source_due_month && item?.source_due_year ? monthLabel(item.source_due_month, item.source_due_year) : null;
+  const viewedRank = Number(viewedYear || 0) && Number(viewedMonth || 0) ? ((Number(viewedYear) * 100) + Number(viewedMonth)) : null;
+  const isCarriedManual = requestKind === 'manual' && createdRank && viewedRank && viewedRank > createdRank && isPeopleComprasComigoOpenStatus(item?.status);
+
+  const detailPieces = [];
+  if (requestKind === 'card') {
+    detailPieces.push(item?.card_name_snapshot ? `Cartão ${item.card_name_snapshot}` : 'Compra no cartão');
+    if (dueLabel) detailPieces.push(`Fatura ${dueLabel}`);
+  } else {
+    detailPieces.push('Cobrança avulsa');
+    if (createdAtLabel) detailPieces.push(`Criada em ${createdAtLabel}`);
+  }
+
+  if (requestKind === 'manual' && isCarriedManual && createdMonthInfo) {
+    detailPieces.push(`Segue viva desde ${monthLabel(createdMonthInfo.month, createdMonthInfo.year)}`);
+  }
+
+  const metaRows = [];
+  if (sourceDateLabel) {
+    metaRows.push({ label: requestKind === 'card' ? 'Compra lançada em' : 'Criada em', value: sourceDateLabel });
+  }
+  if (promisedDateLabel) {
+    metaRows.push({ label: 'Pagamento combinado', value: promisedDateLabel });
+  }
+  if (paymentDateLabel && String(item?.status || '').trim().toLowerCase() === 'accepted' && item?.payment_marked_at) {
+    metaRows.push({ label: 'Pagamento avisado em', value: paymentDateLabel });
+  } else if (paymentDateLabel && String(item?.status || '').trim().toLowerCase() === 'settled') {
+    metaRows.push({ label: 'Fechado em', value: paymentDateLabel });
+  } else if (requestKind === 'manual' && !isPeopleComprasComigoOpenStatus(item?.status) && historyMonthInfo) {
+    metaRows.push({ label: 'Entrou no histórico em', value: monthLabel(historyMonthInfo.month, historyMonthInfo.year) });
+  }
+
+  const myActionNeeded = statusMeta.key === 'pending' || statusMeta.key === 'accepted' || statusMeta.key === 'accepted_partial';
+  const waitingOtherSide = ['accepted_paid_marked', 'rejected_by_receiver', 'rejection_contested_by_sender'].includes(statusMeta.key);
+
+  return {
+    ...item,
+    request_kind: requestKind,
+    total_cents: totalCents,
+    amount_paid_cents: paidCents,
+    amount_pending_cents: pendingCents,
+    statusMeta,
+    actionMeta,
+    detailLine: detailPieces.join(' · '),
+    hint: getPeopleComprasComigoHint(item, contactName),
+    createdMonthLabel: createdMonthInfo ? monthLabel(createdMonthInfo.month, createdMonthInfo.year) : null,
+    historyMonthLabel: historyMonthInfo ? monthLabel(historyMonthInfo.month, historyMonthInfo.year) : null,
+    metaRows,
+    sourceDateLabel,
+    promisedDateLabel,
+    paymentDateLabel,
+    isCard: requestKind === 'card',
+    isManual: requestKind === 'manual',
+    isCarriedManual,
+    myActionNeeded,
+    waitingOtherSide
+  };
+}
+
+function sortPeopleComprasComigoOpenItems(items = []) {
+  const priority = (item = {}) => {
+    const key = String(item?.statusMeta?.key || '').trim();
+    switch (key) {
+      case 'pending': return 0;
+      case 'accepted': return 1;
+      case 'accepted_partial': return 1;
+      case 'accepted_paid_marked': return 2;
+      case 'rejected_by_receiver': return 3;
+      case 'rejection_contested_by_sender': return 4;
+      default: return 5;
+    }
+  };
+
+  const stamp = (item = {}) => {
+    const candidates = [
+      item?.promised_payment_date,
+      item?.source_txn_date,
+      item?.created_at,
+      item?.updated_at
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+      const parsed = dayjs(candidate);
+      if (parsed.isValid()) return parsed.valueOf();
+    }
+
+    return 0;
+  };
+
+  return (Array.isArray(items) ? items.slice() : []).sort((a, b) => {
+    const weightDiff = priority(a) - priority(b);
+    if (weightDiff !== 0) return weightDiff;
+    return stamp(b) - stamp(a);
+  });
+}
+
+function sortPeopleComprasComigoHistoryItems(items = []) {
+  const historyStamp = (item = {}) => {
+    const candidates = [
+      item?.resolved_at,
+      item?.settled_at,
+      item?.cancelled_at,
+      item?.responded_at,
+      item?.updated_at,
+      item?.created_at
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+      const parsed = dayjs(candidate);
+      if (parsed.isValid()) return parsed.valueOf();
+    }
+
+    return 0;
+  };
+
+  return (Array.isArray(items) ? items.slice() : []).sort((a, b) => historyStamp(b) - historyStamp(a));
+}
+
+function buildPeopleComprasComigoLedger(userId, personId, month, year) {
+  const safeUserId = Number(userId || 0);
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  if (!safeUserId || !safeMonth || !safeYear) {
+    throw new Error('Competência inválida para abrir as compras com essa amizade.');
+  }
+
+  const contact = getPeopleComprasComigoContact(safeUserId, personId);
+  if (!contact) {
+    throw new Error('Não encontrei esse contato por aqui.');
+  }
+
+  if (!contact.friendship_active || !Number(contact.linked_user_id || 0)) {
+    throw new Error('Essa amizade ainda não está pronta para abrir as compras por aqui.');
+  }
+
+  const archivedRequestIds = getSharedDebtArchivedRequestIdSet(safeUserId);
+  const received = attachSharedDebtCardMonthlyMeta(
+    attachSharedDebtPixMeta(getSharedDebtRequestsReceived(safeUserId), safeUserId)
+  ).items.filter((item) => {
+    const requestId = Number(item?.id || 0);
+    return Number(item?.requester_user_id || 0) === Number(contact.linked_user_id || 0)
+      && !archivedRequestIds.has(requestId);
+  });
+
+  const openItems = sortPeopleComprasComigoOpenItems(
+    received
+      .filter((item) => isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, safeMonth, safeYear, 'open'))
+      .map((item) => decoratePeopleComprasComigoItem(item, { contactName: contact.name || contact.linked_user_name || 'essa amizade', viewedMonth: safeMonth, viewedYear: safeYear }))
+  );
+
+  const historyItems = sortPeopleComprasComigoHistoryItems(
+    received
+      .filter((item) => isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, safeMonth, safeYear, 'history'))
+      .map((item) => decoratePeopleComprasComigoItem(item, { contactName: contact.name || contact.linked_user_name || 'essa amizade', viewedMonth: safeMonth, viewedYear: safeYear }))
+  );
+
+  const availableRanks = getPeopleComprasComigoRelevantMonthRanks(received);
+  const summary = {
+    openAmountCents: openItems.reduce((sum, item) => {
+      if (!['pending', 'accepted', 'accepted_partial', 'accepted_paid_marked'].includes(String(item?.statusMeta?.key || ''))) return sum;
+      const amount = String(item?.statusMeta?.key || '') === 'accepted_paid_marked'
+        ? Math.max(0, Number(item?.total_cents || 0))
+        : Math.max(0, Number(item?.amount_pending_cents || item?.total_cents || 0));
+      return sum + amount;
+    }, 0),
+    needsMyActionCount: openItems.filter((item) => item?.myActionNeeded).length,
+    waitingOtherSideCount: openItems.filter((item) => item?.waitingOtherSide).length,
+    openCount: openItems.length,
+    historyCount: historyItems.length
+  };
+
+  return {
+    contact,
+    openItems,
+    historyItems,
+    availableRanks,
+    summary
+  };
+}
+
+function getPreferredPeopleComprasComigoMonth(userId, personId) {
+  const contact = getPeopleComprasComigoContact(userId, personId);
+  if (!contact || !contact.friendship_active || !Number(contact.linked_user_id || 0)) return null;
+
+  const archivedRequestIds = getSharedDebtArchivedRequestIdSet(userId);
+  const received = getSharedDebtRequestsReceived(userId).filter((item) => {
+    const requestId = Number(item?.id || 0);
+    return Number(item?.requester_user_id || 0) === Number(contact.linked_user_id || 0)
+      && !archivedRequestIds.has(requestId);
+  });
+
+  const today = dayjs();
+  const current = { year: today.year(), month: today.month() + 1 };
+  const currentHasItems = received.some((item) => isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, current.month, current.year, 'open') || isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, current.month, current.year, 'history'));
+  if (currentHasItems || !received.length) return current;
+
+  const ranks = getPeopleComprasComigoRelevantMonthRanks(received);
+  const preferred = rankToMonthYear(ranks[0]);
+  return preferred || current;
+}
+
 function normalizeSharedDebtSearchTerm(value = '') {
   return String(value || '')
     .normalize('NFD')
@@ -13322,6 +13800,78 @@ app.get("/people", ensureAuthenticated, (req, res) => {
     notificationPreferences: buildUserNotificationPreferenceViewModel(userId),
     title: "Amigos"
   });
+});
+
+
+app.get('/people/:id/compras-comigo', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const personId = Number(req.params.id || 0);
+
+  if (!personId) {
+    setFlash(req, 'error', 'Esse atalho de amizade chegou sem endereço.');
+    return res.redirect('/people');
+  }
+
+  try {
+    const preferred = getPreferredPeopleComprasComigoMonth(userId, personId);
+    if (!preferred) {
+      setFlash(req, 'error', 'Essa amizade ainda não está pronta para abrir as compras por aqui.');
+      return res.redirect('/people');
+    }
+
+    return res.redirect(`/people/${personId}/compras-comigo/${preferred.year}/${preferred.month}`);
+  } catch (error) {
+    setFlash(req, 'error', error?.message || 'Não consegui abrir esse resumo agora.');
+    return res.redirect('/people');
+  }
+});
+
+app.get('/people/:id/compras-comigo/:year/:month', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const personId = Number(req.params.id || 0);
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send('Mês/ano inválidos.');
+
+  const tab = String(req.query.tab || 'open').trim().toLowerCase() === 'history' ? 'history' : 'open';
+
+  try {
+    const ledger = buildPeopleComprasComigoLedger(userId, personId, parsed.month, parsed.year);
+    const contact = ledger.contact;
+    const prevMonth = shiftMonth(parsed.year, parsed.month, -1);
+    const nextMonth = shiftMonth(parsed.year, parsed.month, 1);
+    const now = dayjs();
+    const currentMonth = { year: now.year(), month: now.month() + 1 };
+    const isCurrentMonth = currentMonth.year === parsed.year && currentMonth.month === parsed.month;
+    const basePath = `/people/${personId}/compras-comigo/${parsed.year}/${parsed.month}`;
+    const currentMonthPath = `/people/${personId}/compras-comigo/${currentMonth.year}/${currentMonth.month}`;
+
+    return safeRenderView(res, 'people-compras-comigo', {
+      title: `AcerttaPay | Compras comigo · ${contact.name || 'Amizade'}`,
+      person: contact,
+      contact,
+      month: parsed.month,
+      year: parsed.year,
+      monthLabel,
+      formatBRLFromCents,
+      formatDateBR,
+      openItems: ledger.openItems,
+      historyItems: ledger.historyItems,
+      summary: ledger.summary,
+      activeTab: tab,
+      availableRanks: ledger.availableRanks,
+      previousMonthHref: `/people/${personId}/compras-comigo/${prevMonth.year}/${prevMonth.month}?tab=${tab}`,
+      nextMonthHref: `/people/${personId}/compras-comigo/${nextMonth.year}/${nextMonth.month}?tab=${tab}`,
+      currentMonthHref: `${currentMonthPath}?tab=${tab}`,
+      openTabHref: `${basePath}?tab=open`,
+      historyTabHref: `${basePath}?tab=history`,
+      backHref: '/people#network-lounge',
+      sharedDebtsHref: '/shared-debts#received',
+      isCurrentMonth
+    });
+  } catch (error) {
+    setFlash(req, 'error', error?.message || 'Não consegui abrir as compras dessa amizade agora.');
+    return res.redirect('/people');
+  }
 });
 
 app.post('/people/notification-preferences', ensureAuthenticated, (req, res) => {

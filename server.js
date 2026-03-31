@@ -14065,9 +14065,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
   const defaultRedirectTarget = isSelfTarget
     ? (requestedSection === 'pix' ? '/settings#pix' : requestedSection === 'signature' ? '/people#profile-signature' : '/settings#profile')
     : '/people#network-lounge';
-  const redirectTarget = isSelfTarget
-    ? resolvePeopleSettingsRedirectTarget(req, defaultRedirectTarget)
-    : defaultRedirectTarget;
+  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, defaultRedirectTarget);
 
   const currentName = targetPerson ? String(targetPerson.name || '').trim() : '';
   const currentPhone = targetPerson ? String(targetPerson.phone || '').trim() : '';

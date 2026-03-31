@@ -380,13 +380,13 @@
           <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Esse recado curtinho aparece logo abaixo do seu nome para quem já é seu amigo por aqui.</p>
         </div>
 
-        <form method="post" action="/people" id="profileSignatureForm" class="mt-5 grid gap-4 border-t border-sky-100 pt-5 dark:border-sky-900/40">
+        <form method="post" action="/people" id="profileSignatureForm" class="mt-5 flex flex-1 flex-col gap-4 border-t border-sky-100 pt-5 dark:border-sky-900/40">
           <input type="hidden" name="id" value="<%= selfProfile.id %>">
           <input type="hidden" name="profile_section" value="signature">
           <input type="hidden" name="return_to" value="/people#my-profile">
           <input type="hidden" name="profile_signature_vibe" id="profileSignatureVibe" value="<%= selfSignatureVibe %>">
 
-          <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+          <div class="grid gap-4">
             <label class="block">
               <div class="mb-2 flex items-center justify-between gap-3">
                 <span class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Recado rápido</span>
@@ -395,8 +395,6 @@
               <input type="text" name="profile_signature_text" id="profileSignatureText" value="<%- selfSignatureText %>" maxlength="<%= signatureMaxLength %>" autocomplete="off" class="w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20" placeholder="Ex.: Pix ligado e coração tranquilo 😄">
               <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Até <%= signatureMaxLength %> caracteres, em uma linha só. Só quem já é seu amigo por aqui vê isso.</p>
             </label>
-
-            <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Salvar assinatura</button>
           </div>
 
           <div>
@@ -406,6 +404,10 @@
                 <button type="button" data-signature-vibe-option data-vibe-code="<%= option.code %>" class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-bold transition-all <%= selected ? 'border-sky-600 bg-sky-600 text-white shadow-lg shadow-sky-500/15 dark:border-sky-400 dark:bg-sky-400 dark:text-slate-950' : 'border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-800 dark:hover:bg-sky-900/20 dark:hover:text-sky-200' %>"><%= option.label %></button>
               <% }) %>
             </div>
+          </div>
+
+          <div class="mt-auto flex justify-end pt-2">
+            <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 sm:w-auto">Salvar assinatura</button>
           </div>
         </form>
       </article>
@@ -688,34 +690,34 @@
                 <%- renderPersonStatusChips(p) %>
               </div>
 
-              <div class="flex flex-wrap items-center justify-end gap-2">
+              <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 <% if (p.friendship_state === 'active') { %>
-                  <form method="post" action="/people/<%= p.id %>/unfriend" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novas cobranças entre vocês param na hora.">
-                    <button class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 shadow-sm transition-colors hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Desfazer amizade</button>
+                  <form method="post" action="/people/<%= p.id %>/unfriend" class="min-w-0" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novas cobranças entre vocês param na hora.">
+                    <button class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 shadow-sm transition-colors hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Desfazer amizade</button>
                   </form>
                 <% } else if (p.friendship_state === 'pending_sent') { %>
-                  <form method="post" action="/friend-requests/<%= p.outgoing_friend_request_id %>/cancel">
-                    <button class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-700 shadow-sm transition-colors hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">Cancelar pedido</button>
+                  <form method="post" action="/friend-requests/<%= p.outgoing_friend_request_id %>/cancel" class="min-w-0">
+                    <button class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-700 shadow-sm transition-colors hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">Cancelar pedido</button>
                   </form>
                 <% } else if (p.friendship_state === 'pending_received') { %>
-                  <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
+                  <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond" class="min-w-0">
                     <input type="hidden" name="action" value="accept">
-                    <button class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm transition-colors hover:bg-emerald-700 dark:border-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400">Aceitar amizade</button>
+                    <button class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm transition-colors hover:bg-emerald-700 dark:border-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400">Aceitar amizade</button>
                   </form>
-                  <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond">
+                  <form method="post" action="/friend-requests/<%= p.incoming_friend_request_id %>/respond" class="min-w-0">
                     <input type="hidden" name="action" value="reject">
-                    <button class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 shadow-sm transition-colors hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Recusar</button>
+                    <button class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 shadow-sm transition-colors hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Recusar</button>
                   </form>
                 <% } else if (p.has_app_user && p.active) { %>
-                  <form method="post" action="/people/<%= p.id %>/send-friend-request">
-                    <button class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border border-sky-600 bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-sm transition-colors hover:bg-sky-700 dark:border-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400">Enviar pedido</button>
+                  <form method="post" action="/people/<%= p.id %>/send-friend-request" class="min-w-0">
+                    <button class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-sky-600 bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-sm transition-colors hover:bg-sky-700 dark:border-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400">Enviar pedido</button>
                   </form>
                 <% } else { %>
-                  <div class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">Convite indisponível</div>
+                  <div class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">Convite indisponível</div>
                 <% } %>
 
                 <% if (p.friendship_active && p.has_app_user) { %>
-                  <a href="/people/<%= p.id %>/compras-comigo" class="inline-flex min-h-[48px] items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-black text-violet-700 shadow-sm transition-colors hover:bg-violet-100 dark:border-violet-900 dark:bg-violet-900/20 dark:text-violet-200 dark:hover:bg-violet-900/35" title="<%= (p.compras_comigo_badge_count || 0) > 0 ? `${p.compras_comigo_badge_count} item(ns) pedindo sua ação nessa amizade.` : 'Abrir a leitura mensal das compras em que você entrou nessa amizade.' %>">
+                  <a href="/people/<%= p.id %>/compras-comigo" class="inline-flex min-h-[48px] w-full items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-black text-violet-700 shadow-sm transition-colors hover:bg-violet-100 dark:border-violet-900 dark:bg-violet-900/20 dark:text-violet-200 dark:hover:bg-violet-900/35" title="<%= (p.compras_comigo_badge_count || 0) > 0 ? `${p.compras_comigo_badge_count} item(ns) pedindo sua ação nessa amizade.` : 'Abrir a leitura mensal das compras em que você entrou nessa amizade.' %>">
                     <span>Compras comigo</span>
                     <% if ((p.compras_comigo_badge_count || 0) > 0) { %>
                       <span class="inline-flex min-w-[1.65rem] items-center justify-center rounded-full border border-violet-200 bg-white px-2 py-0.5 text-[11px] font-black text-violet-700 shadow-sm dark:border-violet-800 dark:bg-violet-950/60 dark:text-violet-200"><%= p.compras_comigo_badge_count %></span>
@@ -723,11 +725,11 @@
                   </a>
                 <% } %>
 
-                <form method="post" action="/people/<%= p.id %>/toggle">
-                  <button class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border bg-white px-4 py-3 text-sm font-black shadow-sm transition-colors dark:bg-slate-900 <%= p.active ? 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20' : 'border-green-200 text-green-700 hover:bg-green-50 dark:border-green-900 dark:text-green-400 dark:hover:bg-green-900/20' %>"><%= p.active ? 'Desativar' : 'Reativar' %></button>
+                <form method="post" action="/people/<%= p.id %>/toggle" class="min-w-0">
+                  <button class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border bg-white px-4 py-3 text-sm font-black shadow-sm transition-colors dark:bg-slate-900 <%= p.active ? 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20' : 'border-green-200 text-green-700 hover:bg-green-50 dark:border-green-900 dark:text-green-400 dark:hover:bg-green-900/20' %>"><%= p.active ? 'Desativar' : 'Reativar' %></button>
                 </form>
-                <form method="post" action="/people/<%= p.id %>/delete" data-confirm-prompt="Excluir <%= p.name %> da sua lista ativa? O passado continua salvo, mas a exclusão trava se ainda houver valor em aberto, Pix do mês em andamento ou cobrança guardada para enviar depois." data-confirm-phrase="Eu confirmo">
-                  <button class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border border-red-200 bg-white px-4 py-3 text-sm font-black text-red-700 shadow-sm transition-colors hover:bg-red-50 dark:border-red-900 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-900/20">Excluir da lista</button>
+                <form method="post" action="/people/<%= p.id %>/delete" class="min-w-0" data-confirm-prompt="Excluir <%= p.name %> da sua lista ativa? O passado continua salvo, mas a exclusão trava se ainda houver valor em aberto, Pix do mês em andamento ou cobrança guardada para enviar depois." data-confirm-phrase="Eu confirmo">
+                  <button class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-red-200 bg-white px-4 py-3 text-sm font-black text-red-700 shadow-sm transition-colors hover:bg-red-50 dark:border-red-900 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-900/20">Excluir da lista</button>
                 </form>
               </div>
 

@@ -256,6 +256,21 @@ body.op-notification-center-open {
   text-align: center;
 }
 
+
+@media (min-width: 768px) and (orientation: portrait) {
+  .op-topbar-desktop {
+    display: none !important;
+  }
+
+  .op-topbar-mobile {
+    display: block !important;
+  }
+
+  .op-topbar-mobile .op-mobile-chip-row {
+    display: flex;
+  }
+}
+
 .op-utility-btn--notify {
   position: relative;
   overflow: visible;

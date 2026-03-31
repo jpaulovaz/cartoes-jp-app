@@ -741,6 +741,7 @@
                       <input type="hidden" name="return_to" value="/people#app-security">
                       <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Bloquear agora</button>
                     </form>
+                    <button type="button" data-app-pin-open="idle" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Tempo de bloqueio</button>
                     <button type="button" data-app-pin-open="disable" class="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-white px-5 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Desligar PIN</button>
                   <% } %>
                 </div>
@@ -826,7 +827,7 @@
                 <label class="block">
                   <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">PIN atual</span>
                   <div class="relative">
-                    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="current_pin" id="appPinCurrentInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-14 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••">
+                    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="current_pin" id="appPinCurrentInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-14 py-3.5 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••">
                     <button type="button" data-app-pin-visibility-toggle data-target="appPinCurrentInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
                   </div>
                   <div class="mt-3" data-pin-slots data-input-id="appPinCurrentInput" data-max-length="<%= appPinMaxLength %>"></div>
@@ -836,7 +837,7 @@
               <label class="block">
                 <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Novo PIN</span>
                 <div class="relative">
-                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="pin" id="appPinNewInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-14 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="pin" id="appPinNewInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-14 py-3.5 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
                   <button type="button" data-app-pin-visibility-toggle data-target="appPinNewInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
                 </div>
                 <div class="mt-3" data-pin-slots data-input-id="appPinNewInput" data-max-length="<%= appPinMaxLength %>"></div>
@@ -845,7 +846,7 @@
               <label class="block">
                 <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Confirmar PIN</span>
                 <div class="relative">
-                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="pin_confirm" id="appPinConfirmInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-14 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="pin_confirm" id="appPinConfirmInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-14 py-3.5 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
                   <button type="button" data-app-pin-visibility-toggle data-target="appPinConfirmInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
                 </div>
                 <div class="mt-3" data-pin-slots data-input-id="appPinConfirmInput" data-max-length="<%= appPinMaxLength %>"></div>
@@ -868,6 +869,46 @@
           </div>
         </div>
 
+
+        <div id="appPinIdleModal" class="fixed inset-0 z-[130] hidden items-center justify-center overflow-y-auto p-4 sm:p-6" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="appPinIdleTitle" aria-describedby="appPinIdleHint">
+          <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" data-app-pin-idle-close></div>
+          <div class="relative my-auto w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">Tempo de bloqueio</div>
+                <h4 id="appPinIdleTitle" class="mt-2 text-lg font-black text-slate-900 dark:text-white">Quer mudar quando o app trava de novo?</h4>
+                <p id="appPinIdleHint" class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Escolha o novo tempo e me confirma o PIN atual. Aí eu troco essa régua sem precisar mexer na senha.</p>
+              </div>
+              <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800" data-app-pin-idle-close aria-label="Fechar">✕</button>
+            </div>
+
+            <form method="post" action="/people/security/pin/idle" class="mt-5 grid gap-4" id="appPinIdleForm" autocomplete="off">
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">PIN atual</span>
+                <div class="relative">
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="current_pin" id="appPinIdleCurrentInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-14 py-3.5 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <button type="button" data-app-pin-visibility-toggle data-target="appPinIdleCurrentInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
+                </div>
+                <div class="mt-3" data-pin-slots data-input-id="appPinIdleCurrentInput" data-max-length="<%= appPinMaxLength %>"></div>
+              </label>
+
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Depois de quanto tempo travar de novo</span>
+                <select name="pin_idle_seconds" id="appPinIdleManageSelect" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-bold text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20">
+                  <% appPinIdleOptions.forEach((option) => { %>
+                    <option value="<%= option.value %>" <%= option.selected ? 'selected' : '' %>><%= option.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button type="button" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto" data-app-pin-idle-close>Cancelar</button>
+                <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400 sm:w-auto">Atualizar tempo</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
         <div id="appPinDisableModal" class="fixed inset-0 z-[130] hidden items-center justify-center overflow-y-auto p-4 sm:p-6" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="appPinDisableTitle" aria-describedby="appPinDisableHint">
           <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" data-app-pin-disable-close></div>
           <div class="relative my-auto w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
@@ -884,7 +925,7 @@
               <label class="block">
                 <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">PIN atual</span>
                 <div class="relative">
-                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="current_pin" id="appPinDisableInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 pr-14 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="current_pin" id="appPinDisableInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-14 py-3.5 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
                   <button type="button" data-app-pin-visibility-toggle data-target="appPinDisableInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
                 </div>
                 <div class="mt-3" data-pin-slots data-input-id="appPinDisableInput" data-max-length="<%= appPinMaxLength %>"></div>
@@ -2134,7 +2175,7 @@ function bindPixForm(prefix, options = {}) {
       input.value = digits;
     }
     container.innerHTML = `
-      <div class="flex items-center justify-center gap-2">${createPinSlotMarkup(maxLength, digits.length)}</div>
+      <div class="mx-auto flex w-fit items-center justify-center gap-2">${createPinSlotMarkup(maxLength, digits.length)}</div>
       <div class="mt-2 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">${digits.length}/${maxLength} dígitos</div>
     `;
   }
@@ -2201,7 +2242,8 @@ function bindPixForm(prefix, options = {}) {
   function bindAppPinSecurityControls() {
     const manageModal = document.getElementById('appPinManageModal');
     const disableModal = document.getElementById('appPinDisableModal');
-    if (!(manageModal instanceof HTMLElement) || !(disableModal instanceof HTMLElement)) return;
+    const idleModal = document.getElementById('appPinIdleModal');
+    if (!(manageModal instanceof HTMLElement) || !(disableModal instanceof HTMLElement) || !(idleModal instanceof HTMLElement)) return;
 
     const manageForm = document.getElementById('appPinManageForm');
     const manageTitle = document.getElementById('appPinManageTitle');
@@ -2215,30 +2257,39 @@ function bindPixForm(prefix, options = {}) {
     const manageSubmit = document.getElementById('appPinManageSubmit');
     const disableForm = document.getElementById('appPinDisableForm');
     const disableInput = document.getElementById('appPinDisableInput');
+    const idleForm = document.getElementById('appPinIdleForm');
+    const idleInput = document.getElementById('appPinIdleCurrentInput');
+    const idleManageSelect = document.getElementById('appPinIdleManageSelect');
 
-    if (!(manageForm instanceof HTMLFormElement) || !(disableForm instanceof HTMLFormElement) ||
+    if (!(manageForm instanceof HTMLFormElement) || !(disableForm instanceof HTMLFormElement) || !(idleForm instanceof HTMLFormElement) ||
         !(manageTitle instanceof HTMLElement) || !(manageHint instanceof HTMLElement) ||
         !(manageModeInput instanceof HTMLInputElement) || !(currentGroup instanceof HTMLElement) ||
         !(newInput instanceof HTMLInputElement) || !(confirmInput instanceof HTMLInputElement) ||
         !(idleSelect instanceof HTMLSelectElement) || !(manageSubmit instanceof HTMLButtonElement) ||
-        !(disableInput instanceof HTMLInputElement)) {
+        !(disableInput instanceof HTMLInputElement) || !(idleInput instanceof HTMLInputElement) ||
+        !(idleManageSelect instanceof HTMLSelectElement)) {
       return;
     }
 
     const openManageButtons = Array.from(document.querySelectorAll('[data-app-pin-open="create"], [data-app-pin-open="change"]'));
     const openDisableButton = document.querySelector('[data-app-pin-open="disable"]');
+    const openIdleButton = document.querySelector('[data-app-pin-open="idle"]');
     const manageCloseButtons = Array.from(manageModal.querySelectorAll('[data-app-pin-close]'));
     const disableCloseButtons = Array.from(disableModal.querySelectorAll('[data-app-pin-disable-close]'));
+    const idleCloseButtons = Array.from(idleModal.querySelectorAll('[data-app-pin-idle-close]'));
     const selectedIdleOption = idleSelect.value;
 
     manageModal.querySelectorAll('[data-pin-slots]').forEach((container) => bindPinSlotPreview(container));
     disableModal.querySelectorAll('[data-pin-slots]').forEach((container) => bindPinSlotPreview(container));
+    idleModal.querySelectorAll('[data-pin-slots]').forEach((container) => bindPinSlotPreview(container));
     setupPinVisibilityToggles(manageModal);
     setupPinVisibilityToggles(disableModal);
+    setupPinVisibilityToggles(idleModal);
 
     const closeAll = () => {
       setPinModalVisibility(manageModal, false);
       setPinModalVisibility(disableModal, false);
+      setPinModalVisibility(idleModal, false);
     };
 
     const resetManageForm = () => {
@@ -2284,6 +2335,19 @@ function bindPixForm(prefix, options = {}) {
       window.setTimeout(() => disableInput.focus(), 40);
     };
 
+    const resetIdleForm = () => {
+      idleForm.reset();
+      idleManageSelect.value = selectedIdleOption;
+      resetPinFieldState(idleModal);
+    };
+
+    const openIdle = () => {
+      closeAll();
+      resetIdleForm();
+      setPinModalVisibility(idleModal, true);
+      window.setTimeout(() => idleInput.focus(), 40);
+    };
+
     openManageButtons.forEach((button) => {
       button.addEventListener('click', () => {
         const mode = button.getAttribute('data-app-pin-open') || 'create';
@@ -2293,6 +2357,10 @@ function bindPixForm(prefix, options = {}) {
 
     if (openDisableButton instanceof HTMLButtonElement) {
       openDisableButton.addEventListener('click', openDisable);
+    }
+
+    if (openIdleButton instanceof HTMLButtonElement) {
+      openIdleButton.addEventListener('click', openIdle);
     }
 
     manageCloseButtons.forEach((button) => {
@@ -2306,6 +2374,13 @@ function bindPixForm(prefix, options = {}) {
       button.addEventListener('click', () => {
         resetDisableForm();
         setPinModalVisibility(disableModal, false);
+      });
+    });
+
+    idleCloseButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        resetIdleForm();
+        setPinModalVisibility(idleModal, false);
       });
     });
 
@@ -2323,6 +2398,13 @@ function bindPixForm(prefix, options = {}) {
       }
     });
 
+    idleModal.addEventListener('click', (event) => {
+      if (event.target === idleModal) {
+        resetIdleForm();
+        setPinModalVisibility(idleModal, false);
+      }
+    });
+
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
       if (!manageModal.classList.contains('hidden')) {
@@ -2333,6 +2415,10 @@ function bindPixForm(prefix, options = {}) {
         resetDisableForm();
         setPinModalVisibility(disableModal, false);
       }
+      if (!idleModal.classList.contains('hidden')) {
+        resetIdleForm();
+        setPinModalVisibility(idleModal, false);
+      }
     });
 
     manageForm.addEventListener('submit', () => {
@@ -2340,7 +2426,7 @@ function bindPixForm(prefix, options = {}) {
       manageSubmit.textContent = 'Salvando...';
     });
 
-    disableForm.addEventListener('submit', (event) => {
+    disableForm.addEventListener('submit', () => {
       const submitButton = disableForm.querySelector('button[type="submit"]');
       if (submitButton instanceof HTMLButtonElement) {
         submitButton.disabled = true;
@@ -2348,8 +2434,17 @@ function bindPixForm(prefix, options = {}) {
       }
     });
 
+    idleForm.addEventListener('submit', () => {
+      const submitButton = idleForm.querySelector('button[type="submit"]');
+      if (submitButton instanceof HTMLButtonElement) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Atualizando...';
+      }
+    });
+
     resetManageForm();
     resetDisableForm();
+    resetIdleForm();
   }
 
 

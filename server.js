@@ -3827,6 +3827,38 @@ function saveUserAppPinFromRequest(userId, req, { allowReauthOverride = false } 
   return saved;
 }
 
+
+function updateUserAppPinIdleSecondsFromRequest(userId, req, { allowReauthOverride = false } = {}) {
+  const settings = getUserSecuritySettings(userId);
+  if (!settings.pin_enabled) {
+    throw new Error('Primeiro liga o PIN. Aí eu consigo salvar o tempo de bloqueio.');
+  }
+
+  const idleSeconds = normalizePinIdleSeconds(req.body.pin_idle_seconds);
+  const canBypassCurrentPin = allowReauthOverride && hasFreshPinReauthSession(req, userId);
+
+  if (!canBypassCurrentPin) {
+    const currentPinCheck = validatePinInput(req.body.current_pin);
+    if (!currentPinCheck.ok || !verifyUserAppPin(userId, currentPinCheck.value)) {
+      throw new Error('Para mudar o tempo de bloqueio, me confirma o PIN atual primeiro.');
+    }
+  }
+
+  const updated = upsertUserSecuritySettings(userId, {
+    pin_idle_seconds: idleSeconds,
+    failed_attempts: 0,
+    locked_until: null,
+    updated_at: nowIso()
+  });
+
+  resetUserAppPinFailures(userId);
+  touchAppSession(req);
+  if (allowReauthOverride) {
+    clearPinReauthSession(req);
+  }
+  return updated;
+}
+
 function disableUserAppPinFromRequest(userId, req, { allowReauthOverride = false } = {}) {
   const settings = getUserSecuritySettings(userId);
   if (!settings.pin_enabled) {
@@ -13529,6 +13561,21 @@ app.post('/people/security/pin/setup', ensureAuthenticated, (req, res) => {
       : 'PIN ligado com sucesso. Agora seu app já sabe a hora de pedir proteção.');
   } catch (error) {
     setFlash(req, 'error', error.message || 'Não consegui salvar seu PIN agora.');
+  }
+
+  return res.redirect(redirectTarget);
+});
+
+
+app.post('/people/security/pin/idle', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const redirectTarget = '/people#app-security';
+
+  try {
+    const updated = updateUserAppPinIdleSecondsFromRequest(userId, req, { allowReauthOverride: false });
+    setFlash(req, 'success', `Tempo de bloqueio atualizado. Agora o app volta a pedir PIN em ${getPinIdleOptionLabel(updated.pin_idle_seconds)}.`);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui atualizar o tempo de bloqueio agora.');
   }
 
   return res.redirect(redirectTarget);

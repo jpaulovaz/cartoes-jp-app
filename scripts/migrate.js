@@ -229,7 +229,6 @@ CREATE TABLE IF NOT EXISTS cards (
   close_day INTEGER,
   holiday_scope TEXT,
   brand TEXT,
-  limit_cents INTEGER,
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT,
   UNIQUE(user_id, name),
@@ -857,10 +856,6 @@ if (!columnExists("cards", "close_day")) {
 
 if (!columnExists("cards", "brand")) {
   db.exec("ALTER TABLE cards ADD COLUMN brand TEXT;");
-}
-
-if (!columnExists("cards", "limit_cents")) {
-  db.exec("ALTER TABLE cards ADD COLUMN limit_cents INTEGER;");
 }
 
 if (!columnExists("people", "email")) {

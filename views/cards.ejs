@@ -5,10 +5,10 @@
       <div>
         <span class="op-page-hero__eyebrow">Base do app</span>
         <h1 class="op-page-hero__title mt-4">Cartões</h1>
-        <p class="op-page-hero__subtitle mt-3">Deixe fechamento, vencimento e limite redondinhos para o app fazer as contas sem drama.</p>
+        <p class="op-page-hero__subtitle mt-3">Deixe fechamento e vencimento redondinhos para o app fazer as contas sem drama.</p>
         <div class="op-page-hero__meta mt-4">
           <span class="badge"><%= cards ? cards.length : 0 %> cartão(ões)</span>
-          <span class="badge">Fechamento, vencimento e limite em um só lugar</span>
+          <span class="badge">Fechamento e vencimento em um só lugar</span>
         </div>
       </div>
     </section>
@@ -24,7 +24,7 @@
         </div>
 
         <div class="grid md:grid-cols-12 gap-3 items-end">
-          <div class="md:col-span-4">
+          <div class="md:col-span-5">
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Nome do cartão</label>
             <input id="card-form-name" name="name"
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-slate-900 dark:text-white"
@@ -42,13 +42,7 @@
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-slate-900 dark:text-white"
               placeholder="Dia" />
           </div>
-          <div class="md:col-span-2">
-            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Limite (opcional)</label>
-            <input id="card-form-limit" name="limit_cents" type="text" data-money-mask inputmode="numeric"
-              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-slate-900 dark:text-white"
-              placeholder="0,00" />
-          </div>
-          <div class="md:col-span-2">
+          <div class="md:col-span-3">
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Bandeira (opcional)</label>
             <select id="card-form-brand" name="brand" class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-slate-900 dark:text-white">
               <option value="">Sem informar por enquanto</option>
@@ -76,7 +70,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
-          Se o vencimento cair em fim de semana ou feriado nacional, o app joga para o próximo dia útil. E, se você contar o limite, o painel de saúde dos cartões passa a medir uso real sem chute.
+          Se o vencimento cair em fim de semana ou feriado nacional, o app joga para o próximo dia útil. O fechamento ajuda a sugerir em qual fatura a compra entra.
         </p>
       </form>
 
@@ -108,15 +102,12 @@
                         <span><%= brandMeta.label %></span>
                       </span>
                     <% } %>
-                    <div class="flex flex-wrap gap-2">
+                    <div class="flex flex-wrap sm:flex-nowrap gap-2">
                       <span class="inline-flex flex-1 min-w-0 items-center justify-center sm:justify-start px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 whitespace-nowrap">
                         Fecha: <span class="ml-1"><%= c.close_day ? 'Dia ' + c.close_day : 'A definir' %></span>
                       </span>
                       <span class="inline-flex flex-1 min-w-0 items-center justify-center sm:justify-start px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 whitespace-nowrap">
                         Vence: <span class="ml-1"><%= c.due_day ? 'Dia ' + c.due_day : 'A definir' %></span>
-                      </span>
-                      <span class="inline-flex min-w-0 items-center justify-center sm:justify-start px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 whitespace-nowrap">
-                        Limite: <span class="ml-1"><%= Number(c.limit_cents || 0) > 0 ? formatBRLFromCents(c.limit_cents) : 'Sem informar' %></span>
                       </span>
                     </div>
                   </div>
@@ -137,7 +128,6 @@
                 data-card-close-day="<%= c.close_day || '' %>"
                 data-card-due-day="<%= c.due_day || '' %>"
                 data-card-brand="<%= c.brand || '' %>"
-                data-card-limit-cents="<%= Number(c.limit_cents || 0) %>"
                 class="op-btn op-btn-info op-btn--block">
                 Editar Cartão
               </button>
@@ -180,7 +170,6 @@
       const closeDayInput = document.getElementById('card-form-close-day');
       const dueDayInput = document.getElementById('card-form-due-day');
       const brandInput = document.getElementById('card-form-brand');
-      const limitInput = document.getElementById('card-form-limit');
       const title = document.getElementById('card-form-title');
       const subtitle = document.getElementById('card-form-subtitle');
       const submitLabel = document.getElementById('card-form-submit-label');
@@ -216,12 +205,6 @@
           closeDayInput.value = button.dataset.cardCloseDay || '';
           dueDayInput.value = button.dataset.cardDueDay || '';
           brandInput.value = button.dataset.cardBrand || '';
-          if (limitInput) {
-            const cents = Number(button.dataset.cardLimitCents || 0);
-            limitInput.value = cents > 0 && window.OPMoneyMask && typeof window.OPMoneyMask.formatFromCents === 'function'
-              ? window.OPMoneyMask.formatFromCents(cents)
-              : '';
-          }
           title.textContent = editState.title;
           subtitle.textContent = editState.subtitle;
           submitLabel.textContent = editState.submit;

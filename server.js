@@ -226,7 +226,6 @@ try { db.prepare("ALTER TABLE people ADD COLUMN deleted_label TEXT").run(); } ca
 try { db.prepare("ALTER TABLE cards ADD COLUMN active INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN close_day INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE cards ADD COLUMN brand TEXT").run(); } catch (e) { /* Coluna já existe */ }
-try { db.prepare("ALTER TABLE cards ADD COLUMN limit_cents INTEGER").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN can_import INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN deleted_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
@@ -4970,14 +4969,6 @@ function coerceMoneyValueToCents(rawValue, fallback = 0) {
   return Math.max(0, Number(fallback || 0));
 }
 
-function normalizeCardLimitCents(rawValue) {
-  if (rawValue === null || rawValue === undefined) return null;
-  const raw = String(rawValue || '').trim();
-  if (!raw) return null;
-  const cents = coerceMoneyValueToCents(raw, 0);
-  return cents > 0 ? cents : null;
-}
-
 function getSharedDebtCardMonthlySettlementRowById(settlementId) {
   const safeSettlementId = Number(settlementId || 0);
   if (!safeSettlementId) return null;
@@ -6963,7 +6954,7 @@ function removeFutureRecurringTransactions(userId, ruleId, fromYear, fromMonth, 
 
 function getCards(userId) {
   return db.prepare(`
-    SELECT id, name, due_day, close_day, holiday_scope, brand, limit_cents, COALESCE(active, 1) AS active
+    SELECT id, name, due_day, close_day, holiday_scope, brand, COALESCE(active, 1) AS active
     FROM cards
     WHERE user_id = ?
     ORDER BY COALESCE(active, 1) DESC, name
@@ -6972,7 +6963,7 @@ function getCards(userId) {
 
 function getActiveCards(userId) {
   return db.prepare(`
-    SELECT id, name, due_day, close_day, holiday_scope, brand, limit_cents, COALESCE(active, 1) AS active
+    SELECT id, name, due_day, close_day, holiday_scope, brand, COALESCE(active, 1) AS active
     FROM cards
     WHERE user_id = ? AND COALESCE(active, 1) = 1
     ORDER BY name
@@ -6985,7 +6976,7 @@ function getCardsByIds(userId, ids) {
 
   const placeholders = uniqueIds.map(() => "?").join(", ");
   return db.prepare(`
-    SELECT id, name, due_day, close_day, holiday_scope, brand, limit_cents, COALESCE(active, 1) AS active
+    SELECT id, name, due_day, close_day, holiday_scope, brand, COALESCE(active, 1) AS active
     FROM cards
     WHERE user_id = ? AND id IN (${placeholders})
     ORDER BY COALESCE(active, 1) DESC, name
@@ -14370,7 +14361,6 @@ app.post("/cards", ensureAuthenticated, (req, res) => {
   const dueDay = normalizeDayNumber(req.body.due_day);
   const closeDay = normalizeDayNumber(req.body.close_day);
   const brand = normalizeCardBrand(req.body.brand) || null;
-  const limitCents = normalizeCardLimitCents(req.body.limit_cents ?? req.body.limit);
 
   if (!name) {
     setFlash(req, 'error', 'Me conta o nome do cartão antes de salvar.');
@@ -14389,8 +14379,8 @@ app.post("/cards", ensureAuthenticated, (req, res) => {
       return res.redirect("/cards");
     }
 
-    db.prepare("UPDATE cards SET name = ?, due_day = ?, close_day = ?, brand = ?, limit_cents = ? WHERE id = ? AND user_id = ?")
-      .run(name, dueDay, closeDay, brand, limitCents, editId, userId);
+    db.prepare("UPDATE cards SET name = ?, due_day = ?, close_day = ?, brand = ? WHERE id = ? AND user_id = ?")
+      .run(name, dueDay, closeDay, brand, editId, userId);
 
     setFlash(req, 'success', `${name} ficou atualizado direitinho.`);
     return res.redirect("/cards");
@@ -14401,8 +14391,8 @@ app.post("/cards", ensureAuthenticated, (req, res) => {
     return res.redirect("/cards");
   }
 
-  db.prepare("INSERT INTO cards(user_id, name, due_day, close_day, holiday_scope, brand, limit_cents) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .run(userId, name, dueDay, closeDay, "BR", brand, limitCents);
+  db.prepare("INSERT INTO cards(user_id, name, due_day, close_day, holiday_scope, brand) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(userId, name, dueDay, closeDay, "BR", brand);
 
   setFlash(req, 'success', `${name} entrou na carteira direitinho.`);
   return res.redirect("/cards");
@@ -14424,8 +14414,8 @@ app.post("/cards/:id/update", ensureAuthenticated, (req, res) => {
     return res.redirect('/cards');
   }
 
-  db.prepare("UPDATE cards SET name = ?, due_day = ?, close_day = ?, brand = ?, limit_cents = ? WHERE id = ? AND user_id = ?")
-    .run(name, normalizeDayNumber(req.body.due_day), normalizeDayNumber(req.body.close_day), normalizeCardBrand(req.body.brand) || null, normalizeCardLimitCents(req.body.limit_cents ?? req.body.limit), cardId, userId);
+  db.prepare("UPDATE cards SET name = ?, due_day = ?, close_day = ?, brand = ? WHERE id = ? AND user_id = ?")
+    .run(name, normalizeDayNumber(req.body.due_day), normalizeDayNumber(req.body.close_day), normalizeCardBrand(req.body.brand) || null, cardId, userId);
 
   setFlash(req, 'success', `${name} ficou atualizado direitinho.`);
   return res.redirect("/cards");
@@ -15159,41 +15149,6 @@ function buildOverduePaymentAlertDescription(items) {
     : preview.join(' ');
 }
 
-function formatPercentageValue(value, digits = 0) {
-  const safeValue = Number(value || 0);
-  if (!Number.isFinite(safeValue)) {
-    return digits > 0 ? `0,${'0'.repeat(digits)}%` : '0%';
-  }
-  return `${safeValue.toLocaleString('pt-BR', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits
-  })}%`;
-}
-
-function getCardHealthPremiumToneFromUtilization(value) {
-  const safeValue = Number(value || 0);
-  if (safeValue >= 90) return 'warning';
-  if (safeValue >= 70) return 'info';
-  if (safeValue > 0) return 'success';
-  return 'default';
-}
-
-function getCardHealthPremiumToneFromConcentration(value) {
-  const safeValue = Number(value || 0);
-  if (safeValue >= 70) return 'warning';
-  if (safeValue >= 50) return 'info';
-  if (safeValue > 0) return 'success';
-  return 'default';
-}
-
-function getCardHealthPremiumToneFromTrend(deltaPct) {
-  const safeValue = Number(deltaPct || 0);
-  if (safeValue >= 15) return 'warning';
-  if (safeValue <= -10) return 'success';
-  if (Math.abs(safeValue) >= 6) return 'info';
-  return 'default';
-}
-
 function buildCardHealthDetailModuleSummary(userId, month, year, {
   visibleCards = null,
   statementByCard = null,
@@ -15273,49 +15228,6 @@ function buildCardHealthDetailModuleSummary(userId, month, year, {
       items: [],
       ctaHref: `/month/${safeYear}/${safeMonth}`,
       ctaLabel: 'Abrir mês'
-    },
-    premium: {
-      hasAnyData: false,
-      limit: {
-        hasAnyData: false,
-        tone: 'default',
-        title: 'Uso do limite',
-        headline: 'Sem limite informado',
-        valueLabel: 'Quando você guardar os limites em Cartões, o app para de chutar e começa a medir de verdade.',
-        description: 'Por enquanto eu só enxergo valor e vencimento. O teto do cartão ainda não entrou na conversa.',
-        coverageLabel: 'Sem limite guardado por aqui.',
-        progressPct: 0,
-        utilizationPct: 0,
-        totalLimitCents: 0,
-        exposureCents: 0,
-        availableCents: 0,
-        badges: [],
-        ctaHref: '/cards',
-        ctaLabel: 'Informar limites'
-      },
-      trend: {
-        hasAnyData: false,
-        tone: 'default',
-        title: 'Ritmo dos últimos 6 meses',
-        headline: 'Histórico curtinho ainda',
-        valueLabel: 'Quando o app tiver mais voltas de fatura, ele desenha a curva por aqui.',
-        deltaLabel: 'Sem comparação suficiente por enquanto.',
-        description: 'Com alguns meses de estrada, o bloco começa a mostrar se a carteira está subindo, estável ou aliviando.',
-        points: [],
-        ctaHref: '/geral',
-        ctaLabel: 'Abrir cartões'
-      },
-      concentration: {
-        hasAnyData: false,
-        tone: 'default',
-        title: 'Concentração por cartão',
-        headline: 'Ainda sem concentração',
-        valueLabel: 'Quando mais de um cartão entrar no mês, eu mostro quem está puxando mais a fila.',
-        description: 'Isso ajuda a ver se a carteira está espalhada ou se um cartão virou dono da festa.',
-        items: [],
-        ctaHref: `/summary/${safeYear}/${safeMonth}`,
-        ctaLabel: 'Abrir por cartão'
-      }
     }
   };
 
@@ -15324,7 +15236,6 @@ function buildCardHealthDetailModuleSummary(userId, month, year, {
   }
 
   const cards = Array.isArray(visibleCards) ? visibleCards : getVisibleCardsForMonth(safeUserId, safeMonth, safeYear);
-  const activeCards = getActiveCards(safeUserId);
 
   let localCardTotalsMap = cardTotalsMap instanceof Map ? cardTotalsMap : null;
   if (!localCardTotalsMap) {
@@ -15376,8 +15287,7 @@ function buildCardHealthDetailModuleSummary(userId, month, year, {
         due_date: dueDate,
         diff_days: diffDays,
         close_day: normalizeDayNumber(card?.close_day),
-        due_day: normalizeDayNumber(card?.due_day),
-        limit_cents: Math.max(0, Number(card?.limit_cents || 0))
+        due_day: normalizeDayNumber(card?.due_day)
       };
     })
     .filter((item) => item.total_cents > 0 || item.paid_cents > 0)
@@ -15684,301 +15594,6 @@ function buildCardHealthDetailModuleSummary(userId, month, year, {
     ctaLabel: radarItems.length > 0 ? 'Resolver agora' : 'Abrir mês'
   };
 
-  const portfolioCardMap = new Map();
-  [...activeCards, ...cards].forEach((card) => {
-    const safeCardId = Number(card?.id || 0);
-    if (!safeCardId || portfolioCardMap.has(safeCardId)) return;
-    portfolioCardMap.set(safeCardId, card);
-  });
-  const portfolioCards = Array.from(portfolioCardMap.values());
-
-  const exposureRows = db.prepare(`
-    SELECT card_id, effective_due_year AS year, effective_due_month AS month, COALESCE(SUM(amount_cents), 0) AS total_cents
-    FROM (
-      SELECT
-        t.card_id,
-        t.amount_cents,
-        ${EFFECTIVE_DUE_MONTH_SQL} AS effective_due_month,
-        ${EFFECTIVE_DUE_YEAR_SQL} AS effective_due_year
-      FROM transactions t
-      LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
-      WHERE t.user_id = ?
-    ) grouped
-    WHERE effective_due_year > ? OR (effective_due_year = ? AND effective_due_month >= ?)
-    GROUP BY card_id, effective_due_year, effective_due_month
-  `).all(safeUserId, safeYear, safeYear, safeMonth);
-
-  const exposurePaidRows = db.prepare(`
-    SELECT card_id, year, month, COALESCE(SUM(paid_cents), 0) AS paid_cents
-    FROM card_statements
-    WHERE user_id = ?
-      AND (year > ? OR (year = ? AND month >= ?))
-    GROUP BY card_id, year, month
-  `).all(safeUserId, safeYear, safeYear, safeMonth);
-
-  const exposurePaidMap = new Map(exposurePaidRows.map((row) => [`${Number(row.card_id || 0)}:${monthKey(row.month, row.year)}`, Math.max(0, Number(row.paid_cents || 0))]));
-  const exposureByCard = new Map();
-
-  exposureRows.forEach((row) => {
-    const safeCardId = Number(row.card_id || 0);
-    const groupMonth = Number(row.month || 0);
-    const groupYear = Number(row.year || 0);
-    if (!safeCardId || !groupMonth || !groupYear) return;
-    const refKey = monthKey(groupMonth, groupYear);
-    const isFutureRef = compareMonthYear(groupYear, groupMonth, safeYear, safeMonth) > 0;
-    if (isFutureRef && closedMonths.has(refKey)) return;
-    const totalCents = Math.max(0, Number(row.total_cents || 0));
-    const paidCents = Math.max(0, Number(exposurePaidMap.get(`${safeCardId}:${refKey}`) || 0));
-    const remainingCents = Math.max(0, totalCents - paidCents);
-    if (remainingCents <= 0) return;
-    exposureByCard.set(safeCardId, Math.max(0, Number(exposureByCard.get(safeCardId) || 0)) + remainingCents);
-  });
-
-  const portfolioRows = portfolioCards
-    .map((card) => {
-      const safeCardId = Number(card?.id || 0);
-      const limitCents = Math.max(0, Number(card?.limit_cents || 0));
-      const exposureCents = Math.max(0, Number(exposureByCard.get(safeCardId) || 0));
-      const utilizationPct = limitCents > 0 ? Math.round((exposureCents / limitCents) * 100) : null;
-      return {
-        card_id: safeCardId,
-        card_name: card?.name || 'Cartão',
-        limit_cents: limitCents,
-        exposure_cents: exposureCents,
-        available_cents: limitCents > 0 ? (limitCents - exposureCents) : null,
-        utilization_pct: utilizationPct
-      };
-    })
-    .filter((row) => row.limit_cents > 0 || row.exposure_cents > 0)
-    .sort((a, b) => {
-      const utilA = Number(a.utilization_pct ?? -1);
-      const utilB = Number(b.utilization_pct ?? -1);
-      if (utilB !== utilA) return utilB - utilA;
-      if (Number(b.exposure_cents || 0) !== Number(a.exposure_cents || 0)) {
-        return Number(b.exposure_cents || 0) - Number(a.exposure_cents || 0);
-      }
-      return a.card_name.localeCompare(b.card_name, 'pt-BR', { sensitivity: 'base' });
-    });
-
-  const informedPortfolioRows = portfolioRows.filter((row) => Number(row.limit_cents || 0) > 0);
-  const totalLimitCents = informedPortfolioRows.reduce((acc, row) => acc + Number(row.limit_cents || 0), 0);
-  const totalExposureCents = informedPortfolioRows.reduce((acc, row) => acc + Number(row.exposure_cents || 0), 0);
-  const availablePortfolioCents = totalLimitCents - totalExposureCents;
-  const portfolioUtilizationPct = totalLimitCents > 0 ? Math.round((totalExposureCents / totalLimitCents) * 100) : 0;
-  const informedCardCount = informedPortfolioRows.length;
-  const portfolioCardCount = portfolioCards.length;
-  const leadingUtilizationCard = informedPortfolioRows.find((row) => Number(row.exposure_cents || 0) > 0) || informedPortfolioRows[0] || null;
-  const limitTone = getCardHealthPremiumToneFromUtilization(portfolioUtilizationPct);
-
-  let limitDescription = 'Por enquanto eu só enxergo valor e vencimento. O teto do cartão ainda não entrou na conversa.';
-  if (informedCardCount > 0 && totalExposureCents <= 0) {
-    limitDescription = 'Os limites já estão guardados e, nesta referência, nenhum cartão ficou ocupando saldo aberto.';
-  } else if (informedCardCount > 0 && portfolioUtilizationPct >= 90) {
-    limitDescription = leadingUtilizationCard
-      ? `${leadingUtilizationCard.card_name} já encostou em ${formatPercentageValue(leadingUtilizationCard.utilization_pct)} do limite. Vale ficar de olho antes de a carteira pedir arrego.`
-      : 'Os limites já estão bem ocupados por aqui. Vale revisar se essa fatura ainda cabe sem aperto.';
-  } else if (informedCardCount > 0 && portfolioUtilizationPct >= 70) {
-    limitDescription = leadingUtilizationCard
-      ? `${leadingUtilizationCard.card_name} é o cartão mais pressionado agora. Ainda está dentro da faixa, mas já merece olho vivo.`
-      : 'O uso do limite já ganhou peso. Ainda não é susto, mas já não está em modo férias.';
-  } else if (informedCardCount > 0) {
-    limitDescription = leadingUtilizationCard && Number(leadingUtilizationCard.exposure_cents || 0) > 0
-      ? `${leadingUtilizationCard.card_name} puxa a maior ocupação agora, mas a carteira ainda tem respiro para manobra.`
-      : 'O uso do limite segue leve por aqui. Ainda dá para ver a carteira respirando sem drama.';
-  }
-
-  baseSummary.premium.limit = {
-    hasAnyData: informedCardCount > 0,
-    tone: limitTone,
-    title: 'Uso do limite',
-    headline: informedCardCount > 0 ? `${formatPercentageValue(portfolioUtilizationPct)} usado` : 'Sem limite informado',
-    valueLabel: informedCardCount > 0
-      ? `${formatBRLFromCents(totalExposureCents)} ocupando ${formatBRLFromCents(totalLimitCents)} de teto informado.`
-      : 'Quando você guardar os limites em Cartões, o app para de chutar e começa a medir de verdade.',
-    description: limitDescription,
-    coverageLabel: informedCardCount > 0
-      ? `${formatCountLabel(informedCardCount, 'cartão já contou o limite', 'cartões já contaram o limite')}${portfolioCardCount > informedCardCount ? ` · ${formatCountLabel(portfolioCardCount - informedCardCount, 'um segue sem teto', 'seguem sem teto')}` : ''}.`
-      : 'Sem limite guardado por aqui.',
-    progressPct: Math.max(0, Math.min(100, portfolioUtilizationPct)),
-    utilizationPct: portfolioUtilizationPct,
-    totalLimitCents,
-    exposureCents: totalExposureCents,
-    availableCents: availablePortfolioCents,
-    badges: [
-      ...(informedCardCount > 0 ? [{ tone: limitTone, label: availablePortfolioCents >= 0 ? `${formatBRLFromCents(availablePortfolioCents)} livres` : `${formatBRLFromCents(Math.abs(availablePortfolioCents))} acima do teto` }] : []),
-      ...(informedCardCount > 0 ? [{ tone: 'default', label: `${informedCardCount}/${portfolioCardCount || informedCardCount} com limite` }] : []),
-      ...(leadingUtilizationCard ? [{ tone: limitTone, label: `${leadingUtilizationCard.card_name} em ${formatPercentageValue(leadingUtilizationCard.utilization_pct || 0)}` }] : [])
-    ],
-    ctaHref: '/cards',
-    ctaLabel: informedCardCount > 0 ? 'Ajustar limites' : 'Informar limites'
-  };
-
-  const cardTrend = getCardMonthlyTrend(safeUserId, safeMonth, safeYear, 6);
-  const trendPoints = (cardTrend.refs || []).map((ref) => {
-    const refKey = monthKey(ref.month, ref.year);
-    const totalCents = (cardTrend.cards || []).reduce((sum, card) => {
-      const point = Array.isArray(card.series) ? card.series.find((item) => monthKey(item.month, item.year) === refKey) : null;
-      return sum + Number(point?.total_cents || 0);
-    }, 0);
-    return {
-      month: ref.month,
-      year: ref.year,
-      label: monthLabel(ref.month, ref.year),
-      shortLabel: `${String(ref.month).padStart(2, '0')}`,
-      total_cents: totalCents,
-      is_current: ref.month === safeMonth && ref.year === safeYear
-    };
-  });
-  const trendPeakCents = trendPoints.reduce((best, point) => Math.max(best, Number(point.total_cents || 0)), 0);
-  const trendPointsWithIntensity = trendPoints.map((point) => ({
-    ...point,
-    intensityPct: trendPeakCents > 0 ? Math.max(12, Math.round((Number(point.total_cents || 0) / trendPeakCents) * 100)) : 0
-  }));
-  const currentTrendPoint = trendPointsWithIntensity.find((point) => point.is_current) || trendPointsWithIntensity[trendPointsWithIntensity.length - 1] || null;
-  const previousTrendPoints = trendPointsWithIntensity.filter((point) => !point.is_current);
-  const averageTrendCents = previousTrendPoints.length > 0
-    ? Math.round(previousTrendPoints.reduce((sum, point) => sum + Number(point.total_cents || 0), 0) / previousTrendPoints.length)
-    : 0;
-  const rawTrendDeltaPct = averageTrendCents > 0
-    ? (((Number(currentTrendPoint?.total_cents || 0) - averageTrendCents) / averageTrendCents) * 100)
-    : (Number(currentTrendPoint?.total_cents || 0) > 0 ? 100 : 0);
-  const trendDeltaPct = Number.isFinite(rawTrendDeltaPct) ? Math.round(rawTrendDeltaPct) : 0;
-  const trendTone = getCardHealthPremiumToneFromTrend(trendDeltaPct);
-  const trendPeakPoint = trendPointsWithIntensity.reduce((best, point) => {
-    if (!best) return point;
-    if (Number(point.total_cents || 0) !== Number(best.total_cents || 0)) {
-      return Number(point.total_cents || 0) > Number(best.total_cents || 0) ? point : best;
-    }
-    return compareMonthYear(point.year, point.month, best.year, best.month) < 0 ? point : best;
-  }, null);
-  const hasTrendData = trendPointsWithIntensity.some((point) => Number(point.total_cents || 0) > 0);
-
-  let trendHeadline = 'Histórico curtinho ainda';
-  let trendValueLabel = 'Quando o app tiver mais voltas de fatura, ele desenha a curva por aqui.';
-  let trendDeltaLabel = 'Sem comparação suficiente por enquanto.';
-  let trendDescription = 'Com alguns meses de estrada, o bloco começa a mostrar se a carteira está subindo, estável ou aliviando.';
-
-  if (hasTrendData) {
-    const currentTrendCents = Number(currentTrendPoint?.total_cents || 0);
-    if (!previousTrendPoints.length) {
-      trendHeadline = currentTrendCents > 0 ? 'Primeira curva na mão' : 'Histórico curtinho ainda';
-      trendValueLabel = currentTrendCents > 0 ? `Agora: ${formatBRLFromCents(currentTrendCents)}` : 'Ainda sem fatura para comparar.';
-      trendDeltaLabel = 'Mais um ou dois meses e a comparação fica mais esperta.';
-      trendDescription = currentTrendCents > 0
-        ? `${currentTrendPoint.label} é o primeiro mês com volume suficiente para começar a desenhar o ritmo da carteira.`
-        : trendDescription;
-    } else if (Math.abs(trendDeltaPct) < 6) {
-      trendHeadline = 'Bem perto da média';
-      trendValueLabel = `Agora: ${formatBRLFromCents(currentTrendCents)}`;
-      trendDeltaLabel = `Média recente em ${formatBRLFromCents(averageTrendCents)}.`;
-      trendDescription = trendPeakPoint
-        ? `A carteira vem andando sem guinada brusca. O pico recente foi ${trendPeakPoint.label}, com ${formatBRLFromCents(trendPeakPoint.total_cents)}.`
-        : 'A carteira vem andando sem guinada brusca.';
-    } else if (trendDeltaPct > 0) {
-      trendHeadline = `${formatPercentageValue(Math.abs(trendDeltaPct))} acima da média`;
-      trendValueLabel = `Agora: ${formatBRLFromCents(currentTrendCents)}`;
-      trendDeltaLabel = `Média recente em ${formatBRLFromCents(averageTrendCents)}.`;
-      trendDescription = trendPeakPoint
-        ? `${currentTrendPoint.label} está mais pesado que o costume. O pico recente ficou em ${trendPeakPoint.label}, com ${formatBRLFromCents(trendPeakPoint.total_cents)}.`
-        : `${currentTrendPoint.label} está mais pesado que o costume.`;
-    } else {
-      trendHeadline = `${formatPercentageValue(Math.abs(trendDeltaPct))} abaixo da média`;
-      trendValueLabel = `Agora: ${formatBRLFromCents(currentTrendCents)}`;
-      trendDeltaLabel = `Média recente em ${formatBRLFromCents(averageTrendCents)}.`;
-      trendDescription = trendPeakPoint
-        ? `${currentTrendPoint.label} veio mais leve que a média recente. O ponto mais puxado continua sendo ${trendPeakPoint.label}, com ${formatBRLFromCents(trendPeakPoint.total_cents)}.`
-        : `${currentTrendPoint.label} veio mais leve que a média recente.`;
-    }
-  }
-
-  baseSummary.premium.trend = {
-    hasAnyData: hasTrendData,
-    tone: trendTone,
-    title: 'Ritmo dos últimos 6 meses',
-    headline: trendHeadline,
-    valueLabel: trendValueLabel,
-    deltaLabel: trendDeltaLabel,
-    description: trendDescription,
-    points: trendPointsWithIntensity,
-    ctaHref: '/geral',
-    ctaLabel: hasTrendData ? 'Comparar meses' : 'Abrir cartões'
-  };
-
-  const concentrationRows = currentCards
-    .map((item) => {
-      const safeExposureCents = Math.max(0, Number(exposureByCard.get(Number(item.card_id || 0)) || 0));
-      const safeLimitCents = Math.max(0, Number(portfolioCardMap.get(Number(item.card_id || 0))?.limit_cents || item.limit_cents || 0));
-      const sharePct = currentTotals.totalCents > 0 ? Math.round((Number(item.total_cents || 0) / currentTotals.totalCents) * 100) : 0;
-      const utilizationPct = safeLimitCents > 0 ? Math.round((safeExposureCents / safeLimitCents) * 100) : null;
-      return {
-        card_id: Number(item.card_id || 0),
-        card_name: item.card_name,
-        total_cents: Math.max(0, Number(item.total_cents || 0)),
-        share_pct: sharePct,
-        exposure_cents: safeExposureCents,
-        limit_cents: safeLimitCents,
-        utilization_pct: utilizationPct
-      };
-    })
-    .filter((item) => Number(item.total_cents || 0) > 0)
-    .sort((a, b) => {
-      if (Number(b.total_cents || 0) !== Number(a.total_cents || 0)) {
-        return Number(b.total_cents || 0) - Number(a.total_cents || 0);
-      }
-      return a.card_name.localeCompare(b.card_name, 'pt-BR', { sensitivity: 'base' });
-    });
-
-  const concentrationLeader = concentrationRows[0] || null;
-  const topTwoSharePct = concentrationRows.length > 1
-    ? Math.round(((Number(concentrationRows[0].total_cents || 0) + Number(concentrationRows[1].total_cents || 0)) / Math.max(1, currentTotals.totalCents)) * 100)
-    : Number(concentrationLeader?.share_pct || 0);
-  const concentrationTone = getCardHealthPremiumToneFromConcentration(concentrationLeader?.share_pct || 0);
-
-  let concentrationHeadline = 'Ainda sem concentração';
-  let concentrationValueLabel = 'Quando mais de um cartão entrar no mês, eu mostro quem está puxando mais a fila.';
-  let concentrationDescription = 'Isso ajuda a ver se a carteira está espalhada ou se um cartão virou dono da festa.';
-
-  if (concentrationLeader) {
-    concentrationHeadline = `${concentrationLeader.card_name} com ${formatPercentageValue(concentrationLeader.share_pct)}`;
-    concentrationValueLabel = concentrationRows.length > 1
-      ? `Os 2 primeiros já somam ${formatPercentageValue(topTwoSharePct)} da referência.`
-      : `${concentrationLeader.card_name} está levando a referência sozinho.`;
-    if (concentrationLeader.share_pct >= 70) {
-      concentrationDescription = `${concentrationLeader.card_name} está puxando quase tudo nesta fatura. Pode ser ok por estratégia, mas é bom ver se a carteira não ficou dependente demais dele.`;
-    } else if (topTwoSharePct >= 80) {
-      concentrationDescription = `Os dois cartões que mais pesam já seguram ${formatPercentageValue(topTwoSharePct)} do mês. A carteira ainda respira, mas já ficou menos espalhada.`;
-    } else {
-      concentrationDescription = `${concentrationLeader.card_name} lidera a referência, mas a carteira segue relativamente distribuída entre os cartões ativos.`;
-    }
-  }
-
-  baseSummary.premium.concentration = {
-    hasAnyData: concentrationRows.length > 0,
-    tone: concentrationTone,
-    title: 'Concentração por cartão',
-    headline: concentrationHeadline,
-    valueLabel: concentrationValueLabel,
-    description: concentrationDescription,
-    items: concentrationRows.slice(0, 3).map((item) => ({
-      label: item.card_name,
-      totalCents: item.total_cents,
-      shareLabel: `${formatPercentageValue(item.share_pct)} da referência`,
-      detailLabel: item.limit_cents > 0
-        ? `${formatBRLFromCents(item.exposure_cents)} ocupando ${formatPercentageValue(item.utilization_pct || 0)} do limite.`
-        : 'Limite não informado para esse cartão.'
-    })),
-    ctaHref: `/summary/${safeYear}/${safeMonth}`,
-    ctaLabel: concentrationRows.length > 0 ? 'Abrir por cartão' : 'Abrir fechamento'
-  };
-
-  baseSummary.premium.hasAnyData = baseSummary.premium.limit.hasAnyData
-    || baseSummary.premium.trend.hasAnyData
-    || baseSummary.premium.concentration.hasAnyData;
-
-  if (baseSummary.premium.hasAnyData) {
-    baseSummary.subtitle = 'Aqui entra a visão operacional do crédito: fatura, próximos meses, terceiros e, agora, limite, ritmo e concentração sem misturar promessa com dinheiro real.';
-  }
-
   baseSummary.hasAnyData = currentTotals.totalCents > 0
     || currentTotals.paidCents > 0
     || futureTotals.totalCents > 0
@@ -15989,69 +15604,39 @@ function buildCardHealthDetailModuleSummary(userId, month, year, {
     && currentTotals.remainingCents === 0
     && futureTotals.totalCents === 0
     && thirdPartyTotals.remainingCents === 0
-    && (currentTotals.totalCents > 0 || thirdPartyTotals.totalCents > 0 || baseSummary.premium.limit.hasAnyData);
+    && (currentTotals.totalCents > 0 || thirdPartyTotals.totalCents > 0);
 
   baseSummary.useCompactState = !baseSummary.hasAnyData || baseSummary.isAllClear;
 
   if (baseSummary.isAllClear) {
-    const compactBadges = [
-      { tone: currentTotals.totalCents > 0 ? 'success' : 'default', label: currentTotals.totalCents > 0 ? 'Fatura do mês em dia' : 'Sem fatura aberta' },
-      { tone: 'success', label: 'Sem próximo mês aberto' },
-      { tone: thirdPartyTotals.remainingCents > 0 ? 'warning' : 'success', label: thirdPartyTotals.remainingCents > 0 ? 'Terceiros no radar' : 'Terceiros zerados' }
-    ];
-    if (baseSummary.premium.limit.hasAnyData) {
-      compactBadges[0] = { tone: baseSummary.premium.limit.tone, label: `${formatPercentageValue(portfolioUtilizationPct)} do limite usado` };
-    }
     baseSummary.chips = [{ tone: 'success', label: 'cartões em dia', href: `/summary/${safeYear}/${safeMonth}` }];
     baseSummary.compact = {
       tone: 'success',
       title: 'Cartões redondinhos por aqui.',
       description: 'A fatura desse mês já está domada e não há próximo mês aberto puxando assunto. Dá pra respirar sem promessa furada.',
-      badges: compactBadges
+      badges: [
+        { tone: 'success', label: currentTotals.totalCents > 0 ? 'Fatura do mês em dia' : 'Sem fatura aberta' },
+        { tone: 'success', label: 'Sem próximo mês aberto' },
+        { tone: 'success', label: thirdPartyTotals.remainingCents > 0 ? 'Terceiros no radar' : 'Terceiros zerados' }
+      ]
     };
   } else if (!baseSummary.hasAnyData) {
-    const emptyBadges = [];
-    if (baseSummary.premium.limit.hasAnyData) {
-      emptyBadges.push({ tone: baseSummary.premium.limit.tone, label: `${formatPercentageValue(portfolioUtilizationPct)} do limite usado` });
-    }
-    if (baseSummary.premium.trend.hasAnyData && currentTrendPoint) {
-      emptyBadges.push({ tone: baseSummary.premium.trend.tone, label: `${currentTrendPoint.label} em ${formatBRLFromCents(currentTrendPoint.total_cents)}` });
-    }
-    if (baseSummary.premium.concentration.hasAnyData && concentrationLeader) {
-      emptyBadges.push({ tone: baseSummary.premium.concentration.tone, label: `${concentrationLeader.card_name} com ${formatPercentageValue(concentrationLeader.share_pct)}` });
-    }
-    while (emptyBadges.length < 3) {
-      emptyBadges.push([
+    baseSummary.compact = {
+      tone: 'default',
+      title: 'Seu painel de cartão está quietinho.',
+      description: 'Quando entrar fatura, mês futuro ou rateio com terceiros, esse bloco acorda sem bagunçar o topo.',
+      badges: [
         { tone: 'default', label: 'Sem fatura aberta' },
         { tone: 'default', label: 'Sem próximo mês puxando' },
         { tone: 'default', label: 'Sem radar urgente' }
-      ][emptyBadges.length]);
-    }
-    baseSummary.compact = {
-      tone: 'default',
-      title: baseSummary.premium.hasAnyData ? 'A carteira está calma, mas já dá para ler o fundo do palco.' : 'Seu painel de cartão está quietinho.',
-      description: baseSummary.premium.hasAnyData
-        ? 'Mesmo sem urgência no mês, o app já começa a contar limite, ritmo e concentração para você não pilotar no escuro.'
-        : 'Quando entrar fatura, mês futuro ou rateio com terceiros, esse bloco acorda sem bagunçar o topo.',
-      badges: emptyBadges.slice(0, 3)
+      ]
     };
   } else {
-    const premiumChips = [];
-    if (!radarItems.length && baseSummary.premium.limit.hasAnyData && portfolioUtilizationPct >= 80) {
-      premiumChips.push({ tone: baseSummary.premium.limit.tone, label: `${formatPercentageValue(portfolioUtilizationPct)} do limite usado`, href: '/cards' });
-    }
-    if (!radarItems.length && baseSummary.premium.concentration.hasAnyData && Number(concentrationLeader?.share_pct || 0) >= 70) {
-      premiumChips.push({ tone: baseSummary.premium.concentration.tone, label: `${concentrationLeader.card_name} concentra ${formatPercentageValue(concentrationLeader.share_pct)}`, href: `/summary/${safeYear}/${safeMonth}` });
-    }
-    if (radarItems.length) {
-      baseSummary.chips = radarItems.slice(0, 3).map((item) => ({
-        tone: item.tone,
-        label: item.label,
-        href: item.href
-      }));
-    } else {
-      baseSummary.chips = premiumChips.slice(0, 3);
-    }
+    baseSummary.chips = radarItems.slice(0, 3).map((item) => ({
+      tone: item.tone,
+      label: item.label,
+      href: item.href
+    }));
   }
 
   return baseSummary;

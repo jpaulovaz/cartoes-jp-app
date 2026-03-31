@@ -16246,6 +16246,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const today = manualDebtDueContext.now;
   const todayManualDebtBucket = getManualDebtDueBucketsForDate(manualDebtDueContext.dateKey, { userIds: [userId] }).get(userId) || { pay: [], receive: [] };
 
+  const sharedDebtDetailModuleSummary = getSharedDebtDetailModuleSummary(userId, currentMonth, currentYear);
   const cardHealthDetailModuleSummary = buildCardHealthDetailModuleSummary(userId, currentMonth, currentYear, {
     visibleCards,
     statementByCard,
@@ -16427,6 +16428,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     alerts,
     cards,
     purchaseCategories,
+    sharedDebtDetailModuleSummary,
     cardHealthDetailModuleSummary
   });
 });

@@ -8,6 +8,14 @@
             if (f.type === 'expense') expCents += f.amount_cents;
         });
 
+        const sharedDebtTrailModule = sharedDebtDetailModuleSummary || {};
+        const sharedDebtTrailPay = sharedDebtTrailModule.pay || {};
+        const sharedDebtTrailReceive = sharedDebtTrailModule.receive || {};
+        const sharedDebtTrailManual = sharedDebtTrailModule.manual || {};
+        const sharedDebtTrailCard = sharedDebtTrailModule.card || {};
+        const sharedDebtTrailChips = Array.isArray(sharedDebtTrailModule.chips) ? sharedDebtTrailModule.chips : [];
+        const sharedDebtTrailHeaderHref = sharedDebtTrailModule.headerHref || '/shared-debts';
+
         const cardHealthModule = cardHealthDetailModuleSummary || {};
         const cardHealthCurrent = cardHealthModule.current || {};
         const cardHealthFuture = cardHealthModule.future || {};
@@ -67,6 +75,52 @@
             return totalItems === 1 ? '1 lançamento somando esse total' : `${totalItems} lançamentos somando esse total`;
         }
 
+
+        function sharedDebtTrailChipClasses(tone) {
+            if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100';
+            if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100';
+            if (tone === 'info') return 'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-100';
+            return 'border-slate-200 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-900/70 dark:text-slate-200';
+        }
+
+        function buildSharedDebtTrailCountLabel(count) {
+            const total = Number(count || 0);
+            if (total <= 0) return 'Nenhuma cobrança em aberto por aqui';
+            return total === 1 ? '1 cobrança em aberto por aqui' : `${total} cobranças em aberto por aqui`;
+        }
+
+        function buildSharedDebtTrailBreakdown(scope) {
+            const parts = [];
+
+            if (scope === 'pay') {
+                const cardCount = Number(sharedDebtTrailCard.owedItemCount || 0);
+                const manualCount = Number(sharedDebtTrailManual.owedCount || 0);
+
+                if (cardCount > 0) parts.push(cardCount === 1 ? '1 item do cartão' : `${cardCount} itens do cartão`);
+                if (manualCount > 0) parts.push(manualCount === 1 ? '1 cobrança avulsa' : `${manualCount} cobranças avulsas`);
+            } else {
+                const cardCount = Number(sharedDebtTrailCard.receivableItemCount || 0);
+                const manualCount = Number(sharedDebtTrailManual.receivableCount || 0);
+                const privateCount = Number(sharedDebtTrailManual.privateActiveCount || 0);
+
+                if (cardCount > 0) parts.push(cardCount === 1 ? '1 item do cartão' : `${cardCount} itens do cartão`);
+                if (manualCount > 0) parts.push(manualCount === 1 ? '1 cobrança avulsa' : `${manualCount} cobranças avulsas`);
+                if (privateCount > 0) parts.push(privateCount === 1 ? '1 lembrete privado' : `${privateCount} lembretes privados`);
+            }
+
+            if (!parts.length) return 'Fica só no lembrete. Não entra no saldo do topo.';
+            return `${parts.join(' • ')}. Fica só no lembrete. Não entra no saldo do topo.`;
+        }
+
+        function buildSharedDebtTrailCtaLabel(scope) {
+            if (scope === 'pay') return 'Abrir cobranças recebidas';
+            const receiveHref = String(sharedDebtTrailReceive.href || '');
+            const hasOnlyPrivate = Number(sharedDebtTrailManual.receivableCount || 0) === 0
+                && Number(sharedDebtTrailCard.receivableItemCount || 0) === 0
+                && Number(sharedDebtTrailManual.privateActiveCount || 0) > 0;
+            if (hasOnlyPrivate || receiveHref.includes('#private-reminders')) return 'Abrir lembretes privados';
+            return 'Abrir cobranças enviadas';
+        }
 
         function healthChipClasses(tone) {
             if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100';
@@ -293,7 +347,60 @@
                         </h3>
                     </div>
                 </div>
-                <section class="mt-6 mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:mt-7 lg:mt-8">
+
+                <section class="mt-8 mb-8 space-y-4">
+                    <div class="overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 p-[1px] shadow-sm">
+                        <div class="flex flex-col gap-3 rounded-[calc(1.5rem-1px)] bg-[rgba(34,16,56,0.96)] px-5 py-4 text-white sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+                            <div class="min-w-0">
+                                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-200/90">Trilho de cobranças</div>
+                                <p class="mt-1 text-sm font-medium leading-6 text-slate-100">Cobranças ficam num trilho à parte: o que você tem para pagar ou receber aparece aqui embaixo como lembrete, sem mexer no respiro real do mês ali em cima.</p>
+                            </div>
+                            <a href="<%= sharedDebtTrailHeaderHref %>" class="inline-flex items-center justify-center rounded-2xl bg-white px-4 py-2.5 text-sm font-bold text-slate-900 shadow-sm transition-colors hover:bg-slate-100">Abrir central</a>
+                        </div>
+                    </div>
+
+                    <% if (sharedDebtTrailChips.length) { %>
+                        <div class="flex flex-wrap gap-2">
+                            <% sharedDebtTrailChips.forEach((chip) => { %>
+                                <a href="<%= chip.href || sharedDebtTrailHeaderHref %>" class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold tracking-[0.02em] <%= sharedDebtTrailChipClasses(chip.tone) %>">
+                                    <%= chip.label %>
+                                </a>
+                            <% }) %>
+                        </div>
+                    <% } %>
+
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <a href="<%= sharedDebtTrailPay.href || '/shared-debts#received' %>" class="group block rounded-3xl border border-sky-600 bg-gradient-to-br from-sky-500 via-sky-600 to-blue-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
+                            <div class="flex items-start justify-between gap-4">
+                                <div class="min-w-0">
+                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Cobranças pra pagar</p>
+                                    <h2 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(sharedDebtTrailPay.amountCents || 0)) %></h2>
+                                    <p class="mt-2 text-sm font-semibold opacity-95"><%= buildSharedDebtTrailCountLabel(sharedDebtTrailPay.count) %></p>
+                                    <p class="mt-2 text-[13px] font-semibold leading-5 opacity-95"><%= (sharedDebtTrailPay.status && sharedDebtTrailPay.status.label) || 'Nada puxando seu mês desse lado.' %></p>
+                                    <p class="mt-2 text-[11px] font-medium leading-5 opacity-80"><%= buildSharedDebtTrailBreakdown('pay') %></p>
+                                    <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= buildSharedDebtTrailCtaLabel('pay') %></p>
+                                </div>
+                                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">🧾</div>
+                            </div>
+                        </a>
+
+                        <a href="<%= sharedDebtTrailReceive.href || '/shared-debts#sent' %>" class="group block rounded-3xl border border-cyan-700 bg-gradient-to-br from-cyan-600 via-cyan-600 to-blue-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
+                            <div class="flex items-start justify-between gap-4">
+                                <div class="min-w-0">
+                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Cobranças pra receber</p>
+                                    <h2 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(sharedDebtTrailReceive.amountCents || 0)) %></h2>
+                                    <p class="mt-2 text-sm font-semibold opacity-95"><%= buildSharedDebtTrailCountLabel(sharedDebtTrailReceive.count) %></p>
+                                    <p class="mt-2 text-[13px] font-semibold leading-5 opacity-95"><%= (sharedDebtTrailReceive.status && sharedDebtTrailReceive.status.label) || 'Nada pendurado do lado de cá.' %></p>
+                                    <p class="mt-2 text-[11px] font-medium leading-5 opacity-80"><%= buildSharedDebtTrailBreakdown('receive') %></p>
+                                    <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= buildSharedDebtTrailCtaLabel('receive') %></p>
+                                </div>
+                                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">💸</div>
+                            </div>
+                        </a>
+                    </div>
+                </section>
+
+                <section class="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                     <div class="border-b border-slate-200 bg-slate-50/90 px-5 py-5 dark:border-slate-700 dark:bg-slate-900/70 sm:px-6">
                         <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                             <div class="min-w-0">

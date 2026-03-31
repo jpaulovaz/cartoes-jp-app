@@ -7789,7 +7789,7 @@ function createPrivateDebtReminder({ ownerUserId, person, description, amountCen
       is_archived,
       created_at,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', 0, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', 0, ?, ?)
   `).run(
     cleanOwnerUserId,
     snapshots.personId,

@@ -3158,10 +3158,15 @@ html[data-theme-style="confete"] body.op-shell::after {
   background: radial-gradient(circle, rgba(251, 113, 133, 0.16), transparent 70%);
 }
 
-html[data-theme-style="confete"] header,
 html[data-theme-style="confete"] .op-app-main {
   position: relative;
   z-index: 1;
+}
+
+html[data-theme-style="confete"] header.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
 
 html[data-theme-style="confete"] .op-bottom-nav {
@@ -3985,10 +3990,15 @@ html[data-theme-style="orgulho"] body.op-shell::after {
   background: radial-gradient(circle, rgba(251, 113, 133, 0.16), transparent 70%);
 }
 
-html[data-theme-style="orgulho"] header,
 html[data-theme-style="orgulho"] .op-app-main {
   position: relative;
   z-index: 1;
+}
+
+html[data-theme-style="orgulho"] header.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
 
 html[data-theme-style="orgulho"] .op-bottom-nav {

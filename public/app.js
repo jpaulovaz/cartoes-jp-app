@@ -1370,32 +1370,38 @@
     return 'Ligue os alertas deste aparelho para receber novidades.';
   }
 
-  function getToggleStateConfig(state) {
+  function getPushToggleVariant(button) {
+    const variant = String(button?.dataset?.pushToggleVariant || '').trim().toLowerCase();
+    return variant === 'compact' || variant === 'inline' ? 'compact' : 'block';
+  }
+
+  function getToggleStateConfig(state, variant = 'block') {
+    const sizeClass = variant === 'compact' ? 'op-btn--compact' : 'op-btn--block';
     const states = {
       idle: {
         html: `${iconBell}Ativar alertas`,
         disabled: false,
-        className: 'op-btn op-btn-warning-soft op-btn--block'
+        className: `op-btn op-btn-warning-soft ${sizeClass}`
       },
       blocked: {
         html: `${iconBlocked}Alertas bloqueados`,
         disabled: true,
-        className: 'op-btn op-btn-danger-soft op-btn--block'
+        className: `op-btn op-btn-danger-soft ${sizeClass}`
       },
       enabled: {
         html: `${iconBellOff}Desligar alertas`,
         disabled: false,
-        className: 'op-btn op-btn-success op-btn--block'
+        className: `op-btn op-btn-success ${sizeClass}`
       },
       loading: {
         html: `${iconSpinner}Preparando...`,
         disabled: true,
-        className: 'op-btn op-btn-muted op-btn--block'
+        className: `op-btn op-btn-muted ${sizeClass}`
       },
       unsupported: {
         html: `${iconBlocked}Alertas indisponíveis`,
         disabled: true,
-        className: 'op-btn op-btn-muted op-btn--block'
+        className: `op-btn op-btn-muted ${sizeClass}`
       }
     };
 
@@ -1507,7 +1513,7 @@
   function setPushToggleState(button, statusEl, state) {
     if (!(button instanceof HTMLButtonElement)) return;
 
-    const chosen = getToggleStateConfig(state);
+    const chosen = getToggleStateConfig(state, getPushToggleVariant(button));
     button.innerHTML = chosen.html;
     button.disabled = chosen.disabled;
     button.className = chosen.className;

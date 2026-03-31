@@ -36,6 +36,17 @@
     if (personEntry && personEntry.linked_user_photo_url) return String(personEntry.linked_user_photo_url);
     return '';
   }
+
+  function quickActionClasses(action) {
+    const tone = String(action && action.tone ? action.tone : 'primary');
+    if (tone === 'success') {
+      return 'border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 dark:border-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400';
+    }
+    if (tone === 'danger') {
+      return 'border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20';
+    }
+    return 'border border-violet-600 bg-violet-600 text-white hover:bg-violet-700 dark:border-violet-500 dark:bg-violet-500 dark:hover:bg-violet-400';
+  }
 %>
 
 <div class="op-screen op-screen--month mx-auto max-w-7xl space-y-6 pb-24">
@@ -129,6 +140,12 @@
   <% } else { %>
     <div class="grid gap-4">
       <% visibleItems.forEach((item) => { %>
+        <% const quickActions = Array.isArray(item.quickActions) ? item.quickActions : []; %>
+        <% const requestHref = `/shared-debts?request=${item.id}`; %>
+        <% const actionHref = item.actionMeta && item.actionMeta.href ? String(item.actionMeta.href) : requestHref; %>
+        <% const actionLabel = actionHref === requestHref && quickActions.length ? 'Abrir conversa completa' : (item.actionMeta && item.actionMeta.label ? item.actionMeta.label : 'Abrir na cobrança'); %>
+        <% const actionIsSettlementHref = actionHref.indexOf('?settlement=') !== -1; %>
+        <% const quickActionHasSameHref = quickActions.some((action) => action && action.kind === 'link' && String(action.href || '') === actionHref); %>
         <article class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition-all dark:border-slate-700 dark:bg-slate-800 sm:p-6">
           <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div class="min-w-0 flex-1">
@@ -176,11 +193,33 @@
             </div>
 
             <div class="flex shrink-0 flex-col gap-2 lg:w-[16rem]">
-              <a href="<%= item.actionMeta.href %>" class="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-violet-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-colors hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-400"><%= item.actionMeta.label %></a>
-              <% if (item.isCard && item.card_monthly_settlement_id && String(item.actionMeta.href || '').indexOf('?settlement=') === -1) { %>
+              <% if (quickActions.length) { %>
+                <div class="grid gap-2 <%= quickActions.length > 1 ? 'sm:grid-cols-2 lg:grid-cols-1' : '' %>">
+                  <% quickActions.forEach((action) => { %>
+                    <% if (action.kind === 'form') { %>
+                      <form method="POST" action="<%= action.action %>" <%= action.confirmPrompt ? `data-confirm-prompt="${action.confirmPrompt}"` : '' %>>
+                        <% (action.fields || []).forEach((field) => { %>
+                          <input type="hidden" name="<%= field.name %>" value="<%= field.value %>">
+                        <% }) %>
+                        <button type="submit" class="inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl px-4 py-3 text-sm font-black shadow-sm transition-colors <%= quickActionClasses(action) %>"><%= action.label %></button>
+                      </form>
+                    <% } else { %>
+                      <a href="<%= action.href %>" class="inline-flex min-h-[48px] items-center justify-center rounded-2xl px-4 py-3 text-sm font-black shadow-sm transition-colors <%= quickActionClasses(action) %>"><%= action.label %></a>
+                    <% } %>
+                  <% }) %>
+                </div>
+              <% } %>
+
+              <% if (!quickActionHasSameHref) { %>
+                <a href="<%= actionHref %>" class="inline-flex min-h-[48px] items-center justify-center rounded-2xl <%= quickActions.length ? 'border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800' : 'bg-violet-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-400' %> transition-colors"><%= actionLabel %></a>
+              <% } %>
+
+              <% if (item.isCard && item.card_monthly_settlement_id && !actionIsSettlementHref) { %>
                 <a href="/shared-debts?settlement=<%= item.card_monthly_settlement_id %>" class="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Abrir carteira do mês</a>
               <% } %>
-              <a href="/shared-debts?request=<%= item.id %>" class="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Ver na cobrança</a>
+              <% if (actionHref !== requestHref) { %>
+                <a href="<%= requestHref %>" class="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Ver na cobrança</a>
+              <% } %>
             </div>
           </div>
         </article>

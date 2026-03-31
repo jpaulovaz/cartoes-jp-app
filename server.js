@@ -11145,7 +11145,7 @@ function getPeopleComprasComigoPrimaryActionMeta(item = {}) {
   const status = String(item?.status || 'pending').trim().toLowerCase();
 
   if (status === 'pending') {
-    return { label: 'Abrir para responder', href: requestHref };
+    return { label: 'Ver detalhes antes de responder', href: requestHref };
   }
 
   if (status === 'accepted') {
@@ -11157,20 +11157,72 @@ function getPeopleComprasComigoPrimaryActionMeta(item = {}) {
     }
 
     return {
-      label: isCard && settlementId ? 'Abrir carteira do mês' : 'Abrir para informar pagamento',
+      label: isCard && settlementId ? 'Abrir carteira do mês' : 'Abrir na cobrança',
       href: isCard && settlementId ? settlementHref : requestHref
     };
   }
 
   if (status === 'rejection_contested_by_sender') {
-    return { label: 'Abrir contestação', href: requestHref };
+    return { label: 'Revisar contestação', href: requestHref };
   }
 
   if (status === 'rejected_by_receiver') {
-    return { label: 'Abrir para acompanhar', href: requestHref };
+    return { label: 'Acompanhar decisão', href: requestHref };
   }
 
   return { label: 'Abrir no histórico', href: requestHref };
+}
+
+function getPeopleComprasComigoQuickActions(item = {}) {
+  const requestId = Number(item?.id || 0);
+  if (!requestId) return [];
+
+  const requestKind = normalizeSharedDebtRequestKind(item?.request_kind);
+  const settlementId = Number(item?.card_monthly_settlement_id || 0);
+  const statusMeta = getPeopleComprasComigoStatusMeta(item);
+  const statusKey = String(statusMeta?.key || '').trim();
+  const requestHref = `/shared-debts?request=${requestId}`;
+  const settlementHref = settlementId ? `/shared-debts?settlement=${settlementId}` : requestHref;
+
+  if (statusKey === 'pending') {
+    return [
+      {
+        kind: 'form',
+        action: `/shared-debts/${requestId}/respond`,
+        fields: [{ name: 'action', value: 'accept' }],
+        label: 'Aceitar',
+        tone: 'success'
+      },
+      {
+        kind: 'form',
+        action: `/shared-debts/${requestId}/respond`,
+        fields: [{ name: 'action', value: 'reject' }],
+        label: 'Recusar',
+        tone: 'danger',
+        confirmPrompt: 'Recusar essa cobrança agora? Ela continua no radar até quem enviou decidir o próximo passo.'
+      }
+    ];
+  }
+
+  if ((statusKey === 'accepted' || statusKey === 'accepted_partial') && requestKind === 'manual') {
+    return [{
+      kind: 'form',
+      action: `/shared-debts/${requestId}/mark-paid`,
+      label: statusKey === 'accepted_partial' ? 'Informar restante pago' : 'Informar pagamento',
+      tone: 'primary'
+    }];
+  }
+
+  if ((statusKey === 'accepted' || statusKey === 'accepted_partial') && requestKind === 'card') {
+    return [{
+      kind: 'link',
+      href: settlementHref,
+      label: statusKey === 'accepted_partial' ? 'Pagar restante do mês' : 'Pagar este mês',
+      tone: 'primary'
+    }];
+  }
+
+  return [];
 }
 
 function getPeopleComprasComigoStatusMeta(item = {}) {
@@ -11289,6 +11341,7 @@ function decoratePeopleComprasComigoItem(item = {}, { contactName = 'essa amizad
   const requestKind = normalizeSharedDebtRequestKind(item?.request_kind);
   const statusMeta = getPeopleComprasComigoStatusMeta(item);
   const actionMeta = getPeopleComprasComigoPrimaryActionMeta(item);
+  const quickActions = getPeopleComprasComigoQuickActions(item);
   const totalCents = Math.max(0, Number(item?.amount_cents || 0));
   let paidCents = Math.max(0, Number(item?.amount_paid_cents || 0));
   if (String(item?.status || '').trim().toLowerCase() === 'settled' && paidCents < totalCents) paidCents = totalCents;
@@ -11345,6 +11398,7 @@ function decoratePeopleComprasComigoItem(item = {}, { contactName = 'essa amizad
     amount_pending_cents: pendingCents,
     statusMeta,
     actionMeta,
+    quickActions,
     detailLine: detailPieces.join(' · '),
     hint: getPeopleComprasComigoHint(item, contactName),
     createdMonthLabel: createdMonthInfo ? monthLabel(createdMonthInfo.month, createdMonthInfo.year) : null,
@@ -11359,6 +11413,59 @@ function decoratePeopleComprasComigoItem(item = {}, { contactName = 'essa amizad
     myActionNeeded,
     waitingOtherSide
   };
+}
+
+function buildPeopleComprasComigoBadgeMap(userId, people = []) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return new Map();
+
+  const eligiblePeople = (Array.isArray(people) ? people : [])
+    .filter((person) => person && person.friendship_active && Number(person.linked_user_id || 0) > 0 && !person.is_self);
+
+  if (!eligiblePeople.length) return new Map();
+
+  const linkedUserToPersonId = new Map();
+  eligiblePeople.forEach((person) => {
+    linkedUserToPersonId.set(Number(person.linked_user_id || 0), Number(person.id || 0));
+  });
+
+  const archivedRequestIds = getSharedDebtArchivedRequestIdSet(safeUserId);
+  const counts = new Map();
+
+  getSharedDebtRequestsReceived(safeUserId).forEach((item) => {
+    const requestId = Number(item?.id || 0);
+    if (!requestId || archivedRequestIds.has(requestId)) return;
+
+    const personId = linkedUserToPersonId.get(Number(item?.requester_user_id || 0));
+    if (!personId) return;
+
+    const statusMeta = getPeopleComprasComigoStatusMeta(item);
+    const statusKey = String(statusMeta?.key || '').trim();
+    const bucket = counts.get(personId) || {
+      needsMyActionCount: 0,
+      openCount: 0,
+      waitingOtherSideCount: 0
+    };
+
+    if (isPeopleComprasComigoOpenStatus(item?.status)) bucket.openCount += 1;
+    if (['pending', 'accepted', 'accepted_partial'].includes(statusKey)) bucket.needsMyActionCount += 1;
+    else if (['accepted_paid_marked', 'rejected_by_receiver', 'rejection_contested_by_sender'].includes(statusKey)) bucket.waitingOtherSideCount += 1;
+
+    counts.set(personId, bucket);
+  });
+
+  eligiblePeople.forEach((person) => {
+    const personId = Number(person.id || 0);
+    if (!counts.has(personId)) {
+      counts.set(personId, {
+        needsMyActionCount: 0,
+        openCount: 0,
+        waitingOtherSideCount: 0
+      });
+    }
+  });
+
+  return counts;
 }
 
 function sortPeopleComprasComigoOpenItems(items = []) {
@@ -12091,6 +12198,8 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
   const batchId = Number(req.params.id);
   const action = String(req.body.action || '').trim().toLowerCase();
   const note = String(req.body.note || '').trim() || null;
+  const fallbackRedirect = batchId ? `/shared-debts?batch=${batchId}` : '/shared-debts';
+  const redirectTo = redirectBackOr(req, fallbackRedirect);
 
   if (!batchId) {
     setFlash(req, 'error', 'Ops, esse envio não é válido.');
@@ -12099,7 +12208,7 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
 
   if (!['accept', 'reject'].includes(action)) {
     setFlash(req, 'error', 'Essa ação não combina com esse envio.');
-    return res.redirect(`/shared-debts?batch=${batchId}`);
+    return res.redirect(redirectTo);
   }
 
   const batchRow = db.prepare(`
@@ -12112,7 +12221,7 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
 
   if (!batchRow) {
     setFlash(req, 'error', 'Envio não encontrado.');
-    return res.redirect('/shared-debts');
+    return res.redirect(redirectTo);
   }
 
   const pendingItems = db.prepare(`
@@ -12126,7 +12235,7 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
 
   if (!pendingItems.length) {
     setFlash(req, 'info', 'Este envio não possui mais cobranças pendentes para você.');
-    return res.redirect(`/shared-debts?batch=${batchId}`);
+    return res.redirect(redirectTo);
   }
 
   const actor = getUserRecord(userId);
@@ -12179,7 +12288,7 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
   setFlash(req, 'success', accepted
     ? `Pronto! Você aceitou ${chargeCountLabel} deste envio.`
     : `Pronto! Você recusou ${chargeCountLabel} deste envio.`);
-  return res.redirect(`/shared-debts?batch=${batchId}`);
+  return res.redirect(redirectTo);
 });
 
 app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
@@ -12187,6 +12296,8 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
   const requestId = Number(req.params.id);
   const action = String(req.body.action || '').trim().toLowerCase();
   const note = String(req.body.note || '').trim() || null;
+  const fallbackRedirect = requestId ? `/shared-debts?request=${requestId}` : '/shared-debts';
+  const redirectTo = redirectBackOr(req, fallbackRedirect);
 
   if (!requestId) {
     setFlash(req, 'error', 'Ops, essa solicitação não é válida.');
@@ -12195,7 +12306,7 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
 
   if (!['accept', 'reject'].includes(action)) {
     setFlash(req, 'error', 'Essa ação não combina com essa solicitação.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   const requestRow = db.prepare(`
@@ -12208,12 +12319,12 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
 
   if (!requestRow) {
     setFlash(req, 'error', 'Ops, não encontrei essa solicitação.');
-    return res.redirect('/shared-debts');
+    return res.redirect(redirectTo);
   }
 
   if (requestRow.status !== 'pending') {
     setFlash(req, 'info', 'Essa solicitação já tinha sido resolvida antes.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   const actor = getUserRecord(userId);
@@ -12255,7 +12366,7 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
   })();
 
   setFlash(req, 'success', accepted ? 'Pronto! Você aceitou essa solicitação.' : 'Pronto! Você recusou essa solicitação.');
-  return res.redirect(`/shared-debts?request=${requestId}`);
+  return res.redirect(redirectTo);
 });
 
 app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
@@ -12263,6 +12374,8 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
   const requestId = Number(req.params.id);
   const action = String(req.body.action || '').trim().toLowerCase();
   const note = String(req.body.note || '').trim() || null;
+  const fallbackRedirect = requestId ? `/shared-debts?request=${requestId}` : '/shared-debts';
+  const redirectTo = redirectBackOr(req, fallbackRedirect);
 
   if (!requestId) {
     setFlash(req, 'error', 'Ops, essa solicitação não é válida.');
@@ -12271,7 +12384,7 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
 
   if (!['accept_rejection', 'contest_rejection'].includes(action)) {
     setFlash(req, 'error', 'Essa ação não combina com essa solicitação.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   const requestRow = db.prepare(`
@@ -12284,12 +12397,12 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
 
   if (!requestRow) {
     setFlash(req, 'error', 'Ops, não encontrei essa solicitação.');
-    return res.redirect('/shared-debts');
+    return res.redirect(redirectTo);
   }
 
   if (requestRow.status !== 'rejected_by_receiver') {
     setFlash(req, 'info', 'Essa solicitação não está esperando uma decisão de quem enviou.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   const actor = getUserRecord(userId);
@@ -12339,7 +12452,7 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
   })();
 
   setFlash(req, 'success', acceptingRejection ? 'Pronto! Você aceitou a recusa e encerrou essa cobrança.' : 'Pronto! Você contestou a recusa dessa cobrança.');
-  return res.redirect(`/shared-debts?request=${requestId}`);
+  return res.redirect(redirectTo);
 });
 
 app.get('/shared-debts/monthly-settlements/:id/prepare', ensureAuthenticated, (req, res) => {
@@ -13027,6 +13140,8 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const requestId = Number(req.params.id);
   const note = String(req.body.note || '').trim() || null;
+  const fallbackRedirect = requestId ? `/shared-debts?request=${requestId}` : '/shared-debts';
+  const redirectTo = redirectBackOr(req, fallbackRedirect);
 
   if (!requestId) {
     setFlash(req, 'error', 'Ops, essa solicitação não é válida.');
@@ -13043,7 +13158,7 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
 
   if (!requestRow) {
     setFlash(req, 'error', 'Ops, não encontrei essa solicitação.');
-    return res.redirect('/shared-debts');
+    return res.redirect(redirectTo);
   }
 
   const requestKind = normalizeSharedDebtRequestKind(requestRow.request_kind);
@@ -13056,22 +13171,22 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
     });
     const redirectHref = snapshot?.id ? `/shared-debts?settlement=${snapshot.id}` : `/shared-debts?request=${requestId}`;
     setFlash(req, 'info', 'Agora o pagamento do cartão anda pela carteira do mês. Abre a competência e usa “Pagar este mês”.');
-    return res.redirect(redirectHref);
+    return res.redirect(redirectBackOr(req, redirectHref));
   }
 
   if (requestRow.status === 'settled') {
     setFlash(req, 'info', 'Essa cobrança já foi encerrada antes.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   if (requestRow.status !== 'accepted') {
     setFlash(req, 'info', 'Só dá para marcar pagamento em solicitações já aceitas.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   if (requestRow.payment_marked_at) {
     setFlash(req, 'info', 'O pagamento dessa solicitação já foi avisado e agora está esperando confirmação.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   const actor = getUserRecord(userId);
@@ -13104,13 +13219,15 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
   })();
 
   setFlash(req, 'success', 'Pronto! Agora quem enviou a cobrança já pode confirmar o recebimento.');
-  return res.redirect(`/shared-debts?request=${requestId}`);
+  return res.redirect(redirectTo);
 });
 
 app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const requestId = Number(req.params.id);
   const note = String(req.body.note || '').trim() || null;
+  const fallbackRedirect = requestId ? `/shared-debts?request=${requestId}` : '/shared-debts';
+  const redirectTo = redirectBackOr(req, fallbackRedirect);
 
   if (!requestId) {
     setFlash(req, 'error', 'Ops, essa solicitação não é válida.');
@@ -13127,22 +13244,22 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
 
   if (!requestRow) {
     setFlash(req, 'error', 'Ops, não encontrei essa solicitação.');
-    return res.redirect('/shared-debts');
+    return res.redirect(redirectTo);
   }
 
   if (requestRow.status === 'settled') {
     setFlash(req, 'info', 'Essa cobrança já foi encerrada antes.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   if (requestRow.status !== 'accepted') {
     setFlash(req, 'info', 'Só dá para encerrar solicitações já aceitas.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   if (!requestRow.payment_marked_at) {
     setFlash(req, 'info', 'Essa cobrança ainda não foi marcada como paga por quem recebeu.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   const actor = getUserRecord(userId);
@@ -13179,7 +13296,7 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
   })();
 
   setFlash(req, 'success', 'Pronto! Recebimento confirmado e cobrança encerrada.');
-  return res.redirect(`/shared-debts?request=${requestId}`);
+  return res.redirect(redirectTo);
 });
 
 
@@ -13777,13 +13894,23 @@ app.get("/people", ensureAuthenticated, (req, res) => {
     selfPerson.has_profile_signature = !!(selfPerson.profile_signature_text || selfPerson.profile_signature_vibe);
   }
   const contacts = allPeople.filter((person) => person && !person.is_self);
+  const comprasComigoBadgeMap = buildPeopleComprasComigoBadgeMap(userId, contacts);
+  const contactsWithComprasComigoBadge = contacts.map((person) => {
+    const badge = comprasComigoBadgeMap.get(Number(person.id || 0)) || {};
+    return {
+      ...person,
+      compras_comigo_badge_count: Math.max(0, Number(badge.needsMyActionCount || 0)),
+      compras_comigo_open_count: Math.max(0, Number(badge.openCount || 0)),
+      compras_comigo_waiting_count: Math.max(0, Number(badge.waitingOtherSideCount || 0))
+    };
+  });
   const pendingFriendRequests = getPendingReceivedFriendRequests(userId);
   const highlightedFriendRequestId = Number(req.query.friendRequest || req.query.friend_request || 0) || null;
 
   return safeRenderView(res, "people", {
     selfPerson,
-    contacts,
-    people: contacts,
+    contacts: contactsWithComprasComigoBadge,
+    people: contactsWithComprasComigoBadge,
     pendingFriendRequests,
     highlightedFriendRequestId,
     pixStateOptions: PIX_STATE_OPTIONS,

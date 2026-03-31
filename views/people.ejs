@@ -1285,7 +1285,12 @@
                 <% } %>
 
                 <% if (p.friendship_active && p.has_app_user) { %>
-                  <a href="/people/<%= p.id %>/compras-comigo" class="inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-black text-violet-700 shadow-sm transition-colors hover:bg-violet-100 dark:border-violet-900 dark:bg-violet-900/20 dark:text-violet-200 dark:hover:bg-violet-900/35">Compras comigo</a>
+                  <a href="/people/<%= p.id %>/compras-comigo" class="inline-flex min-h-[48px] items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-black text-violet-700 shadow-sm transition-colors hover:bg-violet-100 dark:border-violet-900 dark:bg-violet-900/20 dark:text-violet-200 dark:hover:bg-violet-900/35" title="<%= (p.compras_comigo_badge_count || 0) > 0 ? `${p.compras_comigo_badge_count} item(ns) pedindo sua ação nessa amizade.` : 'Abrir a leitura mensal das compras em que você entrou nessa amizade.' %>">
+                    <span>Compras comigo</span>
+                    <% if ((p.compras_comigo_badge_count || 0) > 0) { %>
+                      <span class="inline-flex min-w-[1.65rem] items-center justify-center rounded-full border border-violet-200 bg-white px-2 py-0.5 text-[11px] font-black text-violet-700 shadow-sm dark:border-violet-800 dark:bg-violet-950/60 dark:text-violet-200"><%= p.compras_comigo_badge_count %></span>
+                    <% } %>
+                  </a>
                 <% } %>
 
                 <form method="post" action="/people/<%= p.id %>/toggle">

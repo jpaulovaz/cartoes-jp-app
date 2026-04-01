@@ -6680,23 +6680,30 @@ function syncMonthlyFinanceCarryForward(userId, month, year) {
   `).all(userId, prevMonth, prevYear).map((row) => ({
     ...row,
     amount_mode: normalizeFinanceAmountMode(row.amount_mode),
-    carry_key: normalizeMonthlyFinanceCarryKey(row.carry_key)
+    carry_key: normalizeMonthlyFinanceCarryKey(row.carry_key),
+    day_of_month: normalizeFinanceDayOfMonth(row.day_of_month),
+    schedule_kind: normalizeFinanceDayOfMonth(row.day_of_month) ? normalizeFinanceScheduleKind(row.schedule_kind, row.type) : null
   })).filter((row) => row.carry_key);
 
   if (!previousRows.length) {
     return 0;
   }
 
-  const currentCarryKeys = new Set(
-    db.prepare(`
-      SELECT carry_key
-      FROM monthly_finances
-      WHERE user_id = ? AND month = ? AND year = ?
-        AND carry_key IS NOT NULL AND TRIM(carry_key) <> ''
-    `).all(userId, month, year)
-      .map((row) => normalizeMonthlyFinanceCarryKey(row.carry_key))
-      .filter(Boolean)
-  );
+  const currentRows = db.prepare(`
+    SELECT id, type, amount_mode, carry_key, day_of_month, schedule_kind
+    FROM monthly_finances
+    WHERE user_id = ? AND month = ? AND year = ?
+      AND carry_key IS NOT NULL AND TRIM(carry_key) <> ''
+  `).all(userId, month, year).map((row) => ({
+    ...row,
+    amount_mode: normalizeFinanceAmountMode(row.amount_mode),
+    carry_key: normalizeMonthlyFinanceCarryKey(row.carry_key),
+    day_of_month: normalizeFinanceDayOfMonth(row.day_of_month),
+    schedule_kind: normalizeFinanceDayOfMonth(row.day_of_month) ? normalizeFinanceScheduleKind(row.schedule_kind, row.type) : null
+  })).filter((row) => row.carry_key);
+
+  const currentRowsByCarryKey = new Map(currentRows.map((row) => [row.carry_key, row]));
+  const currentCarryKeys = new Set(currentRowsByCarryKey.keys());
 
   const blockedCarryKeys = new Set(
     db.prepare(`
@@ -6712,13 +6719,44 @@ function syncMonthlyFinanceCarryForward(userId, month, year) {
     INSERT OR IGNORE INTO monthly_finances (user_id, month, year, type, category_id, description, formula, amount_cents, amount_mode, carry_key, day_of_month, schedule_kind, created_at)
     VALUES (?, ?, ?, ?, ?, ?, '', 0, ?, ?, ?, ?, ?)
   `);
+  const updateExistingSchedule = db.prepare(`
+    UPDATE monthly_finances
+    SET day_of_month = ?, schedule_kind = ?
+    WHERE id = ? AND user_id = ?
+  `);
 
   const currentNowIso = nowIso();
   let insertedCount = 0;
+  let updatedCount = 0;
 
   db.transaction(() => {
     for (const row of previousRows) {
-      if (currentCarryKeys.has(row.carry_key) || blockedCarryKeys.has(row.carry_key)) {
+      if (blockedCarryKeys.has(row.carry_key)) {
+        continue;
+      }
+
+      const currentRow = currentRowsByCarryKey.get(row.carry_key) || null;
+      if (currentRow) {
+        const previousDay = normalizeFinanceDayOfMonth(row.day_of_month);
+        const currentDay = normalizeFinanceDayOfMonth(currentRow.day_of_month);
+        const previousKind = previousDay ? normalizeFinanceScheduleKind(row.schedule_kind, row.type) : null;
+        const currentKind = currentDay ? normalizeFinanceScheduleKind(currentRow.schedule_kind, currentRow.type) : null;
+
+        const shouldBackfillSchedule = currentRow.amount_mode === 'fixed'
+          && previousDay
+          && ((!currentDay) || (currentDay === previousDay && previousKind && currentKind !== previousKind));
+
+        if (shouldBackfillSchedule) {
+          const result = updateExistingSchedule.run(previousDay, previousKind, currentRow.id, userId);
+          if (Number(result.changes || 0) > 0) {
+            currentRowsByCarryKey.set(row.carry_key, {
+              ...currentRow,
+              day_of_month: previousDay,
+              schedule_kind: previousKind
+            });
+            updatedCount += 1;
+          }
+        }
         continue;
       }
 
@@ -6731,19 +6769,27 @@ function syncMonthlyFinanceCarryForward(userId, month, year) {
         row.description ?? '',
         row.amount_mode,
         row.carry_key,
-        normalizeFinanceDayOfMonth(row.day_of_month),
-        row.day_of_month ? normalizeFinanceScheduleKind(row.schedule_kind, row.type) : null,
+        row.day_of_month,
+        row.schedule_kind,
         currentNowIso
       );
 
       if (Number(result.changes || 0) > 0) {
         currentCarryKeys.add(row.carry_key);
+        currentRowsByCarryKey.set(row.carry_key, {
+          id: Number(result.lastInsertRowid || 0),
+          type: row.type,
+          amount_mode: row.amount_mode,
+          carry_key: row.carry_key,
+          day_of_month: row.day_of_month,
+          schedule_kind: row.schedule_kind
+        });
         insertedCount += 1;
       }
     }
   })();
 
-  return insertedCount;
+  return insertedCount + updatedCount;
 }
 
 function ensureMonthlyFinanceScaffold(userId, month, year) {

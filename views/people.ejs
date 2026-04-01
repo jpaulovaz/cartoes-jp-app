@@ -99,19 +99,16 @@
       chips.push(`<span class="inline-flex w-fit shrink-0 items-center whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-bold leading-4 ${classes}">${label}</span>`);
     };
 
-    if (person.is_self) {
-      addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Você');
+    if (!person.is_self) {
+      if (person.active) {
+        addChip('border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200', 'Ativo');
+      } else {
+        addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Pausado');
+      }
     }
 
-    if (person.active) {
-      addChip('border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200', 'Ativo');
-    } else {
-      addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Pausado');
-    }
-
-    if (!person.is_self && person.has_app_user) {
+    if (!person.is_self && person.friendship_state === 'discoverable' && person.has_app_user) {
       addChip('border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200', 'No app');
-      addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix no perfil');
     }
 
     if (!person.email) {

@@ -10322,8 +10322,6 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
 
   const cards = getActiveCards(userId).map(({ id, name, close_day, due_day, brand }) => ({ id, name, close_day, due_day, brand }));
   const purchaseCategories = getPurchaseCategories(userId);
-  const expensePaymentProgress = buildExpensePaymentProgress(userId, currentMonth, currentYear, finances);
-  const cardPaymentProgress = buildSelfCardPaymentProgress(userId, currentMonth, currentYear, { ownerPersonId: owner.id, totalCents: Number(cardTotal?.total || 0) });
 
   return safeRenderView(res, "home", {
     groupedRecent: groupedRecentDisplay,
@@ -16610,6 +16608,11 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const visibleCards = getVisibleCardsForMonth(userId, currentMonth, currentYear);
   const cards = getActiveCards(userId).map(({ id, name, close_day, due_day, brand }) => ({ id, name, close_day, due_day, brand }));
   const purchaseCategories = getPurchaseCategories(userId);
+  const expensePaymentProgress = buildExpensePaymentProgress(userId, currentMonth, currentYear, finances);
+  const cardPaymentProgress = buildSelfCardPaymentProgress(userId, currentMonth, currentYear, {
+    ownerPersonId: owner.id,
+    totalCents: Number(cardTotal?.total || 0)
+  });
 
   const cardTotalsRows = db.prepare(`
     SELECT t.card_id, SUM(t.amount_cents) AS total_cents

@@ -121,6 +121,39 @@
             return `${baseLabel} · ${paymentState.paidItemCount} de ${totalItems} pagos`;
         }
 
+        function getFinanceScheduleMeta(fin) {
+            return (fin && fin.schedule_meta) ? fin.schedule_meta : {};
+        }
+
+        function financeScheduleChipClasses(fin, scheduleMeta) {
+            const tone = String((scheduleMeta && scheduleMeta.tone) || '').trim();
+            const isToday = !!(scheduleMeta && scheduleMeta.isToday);
+            if (isToday) {
+                return fin.type === 'expense'
+                    ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100'
+                    : 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-100';
+            }
+            if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100';
+            if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100';
+            if (tone === 'info') return 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-100';
+            return 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200';
+        }
+
+        function financeScheduleButtonClasses(fin, scheduleMeta) {
+            const isToday = !!(scheduleMeta && scheduleMeta.isToday);
+            const hasSchedule = !!(scheduleMeta && scheduleMeta.hasSchedule);
+            if (isToday) {
+                return fin.type === 'expense'
+                    ? 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100 dark:hover:bg-amber-900/40'
+                    : 'border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-100 dark:hover:bg-sky-900/40';
+            }
+            if (hasSchedule) {
+                return fin.type === 'expense'
+                    ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-200 dark:hover:bg-rose-900/30'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:bg-emerald-900/30';
+            }
+            return 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800';
+        }
 
         function sharedDebtTrailChipClasses(tone) {
             if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100';
@@ -632,7 +665,7 @@
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
                     <div class="space-y-8">
-                        <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <div id="grana-entra" class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                             <div class="bg-slate-900 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <h5 class="text-white font-bold">✨ Grana que entra</h5>
@@ -653,7 +686,7 @@
                                 <% } else { %>
                                     <div data-no-month-swipe>
                                         <div class="divide-y divide-slate-100 dark:divide-slate-700">
-                                            <% incomeFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); %>
+                                            <% incomeFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); const scheduleMeta = getFinanceScheduleMeta(fin); %>
                                                 <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-2 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:gap-x-3">
                                                     <div class="min-w-0 space-y-2">
                                                         <input type="text" <%= isClosed ? 'disabled' : '' %> class="w-full min-w-0 bg-transparent border-b border-transparent text-sm font-semibold text-slate-800 focus:border-blue-500 outline-none dark:text-slate-200 disabled:opacity-60 sm:text-base sm:font-medium" value="<%= getDesc(fin) %>" onchange="updateRow(<%= fin.id %>, 'description', this.value)">
@@ -663,7 +696,17 @@
                                                                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10"></path></svg>
                                                                     Vários lançamentos
                                                                 </span>
+                                                                <% if (scheduleMeta.label) { %>
+                                                                    <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold <%= financeScheduleChipClasses(fin, scheduleMeta) %>"><%= scheduleMeta.label %></span>
+                                                                <% } %>
                                                                 <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400"><%= getVariableHint(fin) %></span>
+                                                            </div>
+                                                        <% } else { %>
+                                                            <div class="flex flex-wrap items-center gap-2" data-fixed-finance-meta-group>
+                                                                <button type="button" onclick="openFixedEditor(<%= fin.id %>)" class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold transition-colors <%= financeScheduleButtonClasses(fin, scheduleMeta) %>">
+                                                                    <%= scheduleMeta.buttonLabel || 'Adicionar dia' %>
+                                                                </button>
+                                                                <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400"><%= scheduleMeta.isToday ? 'É hoje que essa entrada entra no radar.' : (scheduleMeta.helperLabel || 'Data opcional para os alertas do mês.') %></span>
                                                             </div>
                                                         <% } %>
                                                     </div>
@@ -688,7 +731,7 @@
                             </div>
                         </div>
 
-                        <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <div id="grana-sai" class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                             <div class="bg-slate-800 dark:bg-slate-900 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <h5 class="text-white font-bold">🧾 Grana que sai</h5>
@@ -709,7 +752,7 @@
                                 <% } else { %>
                                     <div data-no-month-swipe>
                                         <div class="divide-y divide-slate-100 dark:divide-slate-700">
-                                            <% expenseFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); const paymentState = buildFinancePaymentState(fin); %>
+                                            <% expenseFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); const paymentState = buildFinancePaymentState(fin); const scheduleMeta = getFinanceScheduleMeta(fin); %>
                                                 <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-2 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:gap-x-3">
                                                     <div class="min-w-0 space-y-2">
                                                         <input type="text" <%= isClosed ? 'disabled' : '' %> class="w-full min-w-0 bg-transparent border-b border-transparent text-sm font-semibold text-slate-800 focus:border-rose-500 outline-none dark:text-slate-200 disabled:opacity-60 sm:text-base sm:font-medium" value="<%= getDesc(fin) %>" onchange="updateRow(<%= fin.id %>, 'description', this.value)">
@@ -723,6 +766,9 @@
                                                                     <span class="op-paid-summary-chip <%= paymentState.isComplete ? 'is-complete' : '' %>">
                                                                         <%= paymentState.paidItemCount %> de <%= paymentState.totalItemCount %> pagos
                                                                     </span>
+                                                                <% } %>
+                                                                <% if (scheduleMeta.label) { %>
+                                                                    <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold <%= financeScheduleChipClasses(fin, scheduleMeta) %>"><%= scheduleMeta.label %></span>
                                                                 <% } %>
                                                                 <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400"><%= getVariableHint(fin) %></span>
                                                             </div>
@@ -742,6 +788,10 @@
                                                                     </span>
                                                                     <span class="op-paid-toggle__text" data-fixed-finance-paid-label><%= paymentState.isPaid ? 'Pago' : 'Marcar pago' %></span>
                                                                 </label>
+                                                                <button type="button" onclick="openFixedEditor(<%= fin.id %>)" class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold transition-colors <%= financeScheduleButtonClasses(fin, scheduleMeta) %>">
+                                                                    <%= scheduleMeta.buttonLabel || 'Adicionar dia' %>
+                                                                </button>
+                                                                <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400"><%= scheduleMeta.isToday ? 'É hoje que essa saída entra no radar.' : (scheduleMeta.helperLabel || 'Data opcional para os alertas do mês.') %></span>
                                                             </div>
                                                         <% } %>
                                                     </div>
@@ -821,7 +871,25 @@
 
                                 <div id="finance-fixed-panel" class="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/60">
                                     <div class="text-sm font-bold text-slate-800 dark:text-white">Modo rápido na área</div>
-                                    <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Esse item vai nascer como valor único. Você salva o nome agora, ajusta o valor direto na lista e depois marca o check quando o pagamento bater.</p>
+                                    <p id="finance-fixed-copy" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Esse item vai nascer como valor único. Se quiser, já deixe o dia marcado para os alertas do mês. O valor continua sendo ajustado direto na lista.</p>
+                                    <div class="mt-4 grid gap-4 md:grid-cols-[140px_minmax(0,1fr)] md:items-start">
+                                        <div>
+                                            <label for="finance-fixed-day-input" class="mb-2 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Dia</label>
+                                            <input id="finance-fixed-day-input" type="number" min="1" max="31" inputmode="numeric" class="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white" placeholder="Ex: 5">
+                                            <p class="mt-2 text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400">Opcional. Se ficar em branco, o legado segue tranquilo e sem alerta.</p>
+                                        </div>
+                                        <div id="finance-fixed-kind-shell">
+                                            <label for="finance-fixed-kind-input" class="mb-2 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Esse dia significa</label>
+                                            <select id="finance-fixed-kind-input" class="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white">
+                                                <option value="due">Vence nesse dia</option>
+                                                <option value="pay">Pago nesse dia</option>
+                                            </select>
+                                            <p class="mt-2 text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400">Só vale para saídas. Em entradas, a leitura vira automaticamente “recebo nesse dia”.</p>
+                                        </div>
+                                    </div>
+                                    <div class="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-[11px] font-medium leading-5 text-sky-800 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-100">
+                                        Dica boa: se você marcar dia 31, nos meses curtinhos o app usa o último dia disponível sem bagunçar a rotina.
+                                    </div>
                                 </div>
 
                                 <div id="finance-variable-panel" class="hidden space-y-4">
@@ -911,6 +979,10 @@
                     totalPreview: document.getElementById('finance-total-preview'),
                     totalCaption: document.getElementById('finance-total-caption'),
                     fixedPanel: document.getElementById('finance-fixed-panel'),
+                    fixedCopy: document.getElementById('finance-fixed-copy'),
+                    fixedDayInput: document.getElementById('finance-fixed-day-input'),
+                    fixedKindShell: document.getElementById('finance-fixed-kind-shell'),
+                    fixedKindInput: document.getElementById('finance-fixed-kind-input'),
                     variablePanel: document.getElementById('finance-variable-panel'),
                     variableEmpty: document.getElementById('finance-variable-empty'),
                     itemsList: document.getElementById('finance-items-list'),
@@ -1026,6 +1098,30 @@
                     if (!value) return 'Sem data';
                     const parsed = new Date(`${value}T12:00:00`);
                     return Number.isNaN(parsed.getTime()) ? 'Sem data' : parsed.toLocaleDateString('pt-BR');
+                }
+
+                function normalizeFixedDayInputValue(value) {
+                    const raw = String(value ?? '').trim();
+                    if (!raw) return null;
+                    const parsed = Number(raw);
+                    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 31) {
+                        throw new Error('Escolha um dia entre 1 e 31 ou deixe em branco para seguir sem data.');
+                    }
+                    return parsed;
+                }
+
+                function resetFixedFinanceFields() {
+                    if (financeRefs.fixedDayInput) financeRefs.fixedDayInput.value = '';
+                    if (financeRefs.fixedKindInput) financeRefs.fixedKindInput.value = 'due';
+                }
+
+                function populateFixedFinanceFields(finance = {}) {
+                    if (financeRefs.fixedDayInput) {
+                        financeRefs.fixedDayInput.value = finance.day_of_month ? String(finance.day_of_month) : '';
+                    }
+                    if (financeRefs.fixedKindInput) {
+                        financeRefs.fixedKindInput.value = finance.schedule_kind === 'pay' ? 'pay' : 'due';
+                    }
                 }
 
                 function createDeletePreviewCard({ title, meta, amountCents }) {
@@ -1287,6 +1383,9 @@
                     const isCreate = financeModalState.action === 'create';
                     const isVariableMode = financeModalState.amountMode === 'variable';
                     const isIncome = financeModalState.financeType === 'income';
+                    const isExpense = financeModalState.financeType === 'expense';
+                    const isEditVariable = financeModalState.action === 'edit-variable';
+                    const isEditFixed = financeModalState.action === 'edit-fixed';
 
                     if (financeRefs.modeGroup) {
                         financeRefs.modeGroup.classList.toggle('hidden', !isCreate);
@@ -1296,6 +1395,9 @@
                     }
                     if (financeRefs.variablePanel) {
                         financeRefs.variablePanel.classList.toggle('hidden', !isVariableMode);
+                    }
+                    if (financeRefs.fixedKindShell) {
+                        financeRefs.fixedKindShell.classList.toggle('hidden', isVariableMode || !isExpense);
                     }
                     if (financeRefs.readonlyNote) {
                         financeRefs.readonlyNote.classList.toggle('hidden', !financeModalState.readOnly);
@@ -1309,6 +1411,12 @@
                     if (financeRefs.descriptionInput) {
                         financeRefs.descriptionInput.disabled = financeModalState.readOnly;
                     }
+                    if (financeRefs.fixedDayInput) {
+                        financeRefs.fixedDayInput.disabled = financeModalState.readOnly || isVariableMode;
+                    }
+                    if (financeRefs.fixedKindInput) {
+                        financeRefs.fixedKindInput.disabled = financeModalState.readOnly || isVariableMode || !isExpense;
+                    }
 
                     setModeButtonState(financeModalState.amountMode);
                     syncVariableEmptyState();
@@ -1320,18 +1428,38 @@
                             ? (isIncome ? 'Montar uma entrada em vários lançamentos' : 'Montar uma saída em vários lançamentos')
                             : (isIncome ? 'Criar uma entrada de valor único' : 'Criar uma saída de valor único');
                         financeRefs.subtitle.textContent = isVariableMode
-                            ? 'Você dá um nome principal e soma cada pedacinho na listinha abaixo.'
-                            : 'Salva o nome agora e o valor fica no toque rápido lá na lista.';
+                            ? 'Você dá um nome principal e soma cada pedacinho na listinha abaixo. As datas ajudam os alertas do mês a chegarem na hora certa.'
+                            : 'Salva o nome agora, deixa o dia opcional se quiser alerta e o valor continua no toque rápido lá na lista.';
                         financeRefs.descriptionLabel.textContent = isIncome ? 'Nome da entrada' : 'Nome da saída';
                         financeRefs.descriptionInput.placeholder = isIncome ? 'Ex: Shows, Salário, Freelas' : 'Ex: Combustível, Alimentação, Operação';
                         financeRefs.saveButton.textContent = 'Salvar item';
-                    } else {
+                        if (financeRefs.fixedCopy) {
+                            financeRefs.fixedCopy.textContent = isIncome
+                                ? 'Esse item vai nascer como valor único. Se quiser, já deixe o dia marcado para os alertas do mês. O valor continua sendo ajustado direto na lista.'
+                                : 'Esse item vai nascer como valor único. Se quiser, já deixe o dia marcado para lembrar quando vence ou quando você costuma pagar. O valor continua sendo ajustado direto na lista.';
+                        }
+                    } else if (isEditFixed) {
+                        const baseName = (financeRefs.descriptionInput.value || `item de valor único`).trim();
+                        financeRefs.eyebrow.textContent = financeModalState.readOnly ? 'Valor único em modo leitura' : 'Ajustar valor único';
+                        financeRefs.title.textContent = financeModalState.readOnly ? `Conferir ${baseName}` : `Ajustar ${baseName}`;
+                        financeRefs.subtitle.textContent = financeModalState.readOnly
+                            ? 'Pode dar aquela conferida. Para mexer, é só reabrir o mês.'
+                            : 'O valor continua sendo ajustado na lista. Aqui você acerta o nome e, se quiser, o dia que entra ou sai no radar.';
+                        financeRefs.descriptionLabel.textContent = 'Nome do item';
+                        financeRefs.descriptionInput.placeholder = isIncome ? 'Ex: Salário' : 'Ex: Aluguel';
+                        financeRefs.saveButton.textContent = 'Salvar valor único';
+                        if (financeRefs.fixedCopy) {
+                            financeRefs.fixedCopy.textContent = isIncome
+                                ? 'Entrada de valor único com dia opcional. Se o dia ficar em branco, nada muda no legado e o alerta simplesmente não entra em cena.'
+                                : 'Saída de valor único com dia opcional. Se o dia ficar em branco, nada muda no legado e o alerta fica quietinho.';
+                        }
+                    } else if (isEditVariable) {
                         const baseName = (financeRefs.descriptionInput.value || 'item com vários lançamentos').trim();
                         financeRefs.eyebrow.textContent = financeModalState.readOnly ? 'Listinha em modo leitura' : 'Editar lançamentos';
                         financeRefs.title.textContent = financeModalState.readOnly ? `Conferir ${baseName}` : `Ajustar ${baseName}`;
                         financeRefs.subtitle.textContent = financeModalState.readOnly
                             ? 'Pode dar aquela conferida. Para mexer, é só reabrir o mês.'
-                            : 'Tudo que você mexer aqui já recalcula o total que aparece na tela.';
+                            : 'Tudo que você mexer aqui já recalcula o total que aparece na tela. As datas seguem ajudando o radar do mês.';
                         financeRefs.descriptionLabel.textContent = 'Nome principal';
                         financeRefs.descriptionInput.placeholder = 'Ex: Shows';
                         financeRefs.saveButton.textContent = 'Salvar listinha';
@@ -1344,6 +1472,7 @@
                     financeModalState.amountMode = 'fixed';
                     financeModalState.financeId = null;
                     financeModalState.readOnly = false;
+                    resetFixedFinanceFields();
                 }
 
                 async function fetchJson(url, options = {}) {
@@ -1424,12 +1553,27 @@
                             items: financeModalState.amountMode === 'variable' ? readVariableItems({ validate: true }) : []
                         };
 
+                        if (financeModalState.amountMode === 'fixed') {
+                            const dayOfMonth = normalizeFixedDayInputValue(financeRefs.fixedDayInput?.value || '');
+                            payload.day_of_month = dayOfMonth;
+                            payload.schedule_kind = dayOfMonth
+                                ? (financeModalState.financeType === 'expense'
+                                    ? ((financeRefs.fixedKindInput?.value || 'due') === 'pay' ? 'pay' : 'due')
+                                    : 'receive')
+                                : null;
+                        }
+
                         if (financeModalState.action === 'create') {
                             payload.month = detailMonth;
                             payload.year = detailYear;
                             payload.type = financeModalState.financeType;
                             payload.amount_mode = financeModalState.amountMode;
                             await fetchJson('/finances/add-row', {
+                                method: 'POST',
+                                body: JSON.stringify(payload)
+                            });
+                        } else if (financeModalState.action === 'edit-fixed') {
+                            await fetchJson(`/finances/fixed/${financeModalState.financeId}`, {
                                 method: 'POST',
                                 body: JSON.stringify(payload)
                             });
@@ -1591,12 +1735,13 @@
                     try {
                         const data = await fetchJson(`/finances/details/${id}`);
                         const finance = data.finance || {};
-                        financeModalState.action = 'edit';
+                        financeModalState.action = 'edit-variable';
                         financeModalState.financeType = finance.type || 'income';
                         financeModalState.amountMode = 'variable';
                         financeModalState.financeId = finance.id;
                         financeModalState.readOnly = !!data.isClosed;
                         financeRefs.descriptionInput.value = finance.description || '';
+                        resetFixedFinanceFields();
                         renderVariableItems(Array.isArray(finance.items) ? finance.items : []);
                         applyFinanceModalState();
                         showFinanceModal();
@@ -1605,6 +1750,28 @@
                         }
                     } catch (error) {
                         alert(error.message || 'Não consegui abrir essa listinha agora.');
+                    }
+                }
+
+                async function openFixedEditor(id) {
+                    try {
+                        const data = await fetchJson(`/finances/details/${id}`);
+                        const finance = data.finance || {};
+                        financeModalState.action = 'edit-fixed';
+                        financeModalState.financeType = finance.type || 'income';
+                        financeModalState.amountMode = 'fixed';
+                        financeModalState.financeId = finance.id;
+                        financeModalState.readOnly = !!data.isClosed;
+                        financeRefs.descriptionInput.value = finance.description || '';
+                        renderVariableItems([]);
+                        populateFixedFinanceFields(finance);
+                        applyFinanceModalState();
+                        showFinanceModal();
+                        if (!financeModalState.readOnly) {
+                            requestAnimationFrame(() => { if (financeRefs.fixedDayInput) financeRefs.fixedDayInput.focus(); else financeRefs.descriptionInput?.focus(); });
+                        }
+                    } catch (error) {
+                        alert(error.message || 'Não consegui abrir esse valor único agora.');
                     }
                 }
 
@@ -1641,7 +1808,7 @@
 
                 financeRefs.saveButton?.addEventListener('click', saveFinanceModal);
                 financeRefs.descriptionInput?.addEventListener('input', () => {
-                    if (financeModalState.action === 'edit') {
+                    if (financeModalState.action !== 'create') {
                         applyFinanceModalState();
                     }
                 });

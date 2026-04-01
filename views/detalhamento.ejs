@@ -1197,9 +1197,11 @@
                     const row = document.createElement('div');
                     row.className = 'op-variable-item-row rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900';
                     row.dataset.variableItemRow = '1';
-                    row.innerHTML = `
-                        <input type="hidden" data-variable-item-id>
-                        <div class="grid gap-3 md:grid-cols-[118px_168px_minmax(0,1fr)_152px_auto] md:items-end">
+                    const isExpenseVariable = financeModalState.financeType === 'expense';
+                    const gridClasses = isExpenseVariable
+                        ? 'grid gap-3 md:grid-cols-[118px_168px_minmax(0,1fr)_152px_auto] md:items-end'
+                        : 'grid gap-3 md:grid-cols-[168px_minmax(0,1fr)_152px_auto] md:items-end';
+                    const paidColumnMarkup = isExpenseVariable ? `
                             <div>
                                 <label class="block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 mb-2">Já paguei</label>
                                 <label class="op-paid-toggle op-paid-toggle--compact" data-variable-item-paid-shell>
@@ -1211,7 +1213,11 @@
                                     </span>
                                     <span class="hidden" data-variable-item-paid-label>Marcar pago</span>
                                 </label>
-                            </div>
+                            </div>` : '';
+                    row.innerHTML = `
+                        <input type="hidden" data-variable-item-id>
+                        <div class="${gridClasses}">
+                            ${paidColumnMarkup}
                             <div>
                                 <label class="block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 mb-2">Data</label>
                                 <input type="date" data-variable-item-date class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:bg-slate-900">
@@ -1239,7 +1245,7 @@
                     const paidLabel = row.querySelector('[data-variable-item-paid-label]');
                     const removeButton = row.querySelector('[data-variable-item-remove]');
                     const moneyMask = getMoneyMaskApi();
-                    const initialPaid = !!Number(item.is_paid || item.isPaid || 0);
+                    const initialPaid = isExpenseVariable && !!Number(item.is_paid || item.isPaid || 0);
 
                     if (idInput) idInput.value = item.id || item.item_id || '';
                     if (dateInput) dateInput.value = item.item_date || item.date || getDefaultItemDate();
@@ -1346,12 +1352,19 @@
 
                     const items = readVariableItems();
                     const totalCents = items.reduce((sum, item) => sum + Number(item.amount_cents || 0), 0);
-                    const paidItems = items.filter((item) => Number(item.is_paid || 0) === 1);
+                    const isExpenseVariable = financeModalState.financeType === 'expense';
+                    const paidItems = isExpenseVariable
+                        ? items.filter((item) => Number(item.is_paid || 0) === 1)
+                        : [];
                     const paidCents = paidItems.reduce((sum, item) => sum + Number(item.amount_cents || 0), 0);
                     financeRefs.totalPreview.textContent = formatCurrency(totalCents);
 
                     if (!items.length) {
                         financeRefs.totalCaption.textContent = 'Sem lançamentos ainda. A linha principal pode ficar de prontidão.';
+                    } else if (!isExpenseVariable) {
+                        financeRefs.totalCaption.textContent = items.length === 1
+                            ? '1 lançamento entrando nesse total.'
+                            : `${items.length} lançamentos entrando nesse total.`;
                     } else if (items.length === 1) {
                         financeRefs.totalCaption.textContent = paidItems.length
                             ? `1 lançamento e ele já foi pago (${formatCurrency(paidCents)}).`

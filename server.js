@@ -6416,11 +6416,10 @@ function buildFixedFinanceScheduleChipLabel(finance = {}, { effectiveDate = '' }
   const paddedDay = String(dayOfMonth).padStart(2, '0');
   const type = normalizeFinanceType(finance?.type);
   const scheduleKind = resolveFinanceScheduleKind(finance);
-  const monthYearLabel = formatMonthYearLabel(effectiveDate);
 
-  if (type === 'income') return monthYearLabel ? `entra dia ${paddedDay} em ${monthYearLabel}` : `entra dia ${paddedDay}`;
-  if (scheduleKind === 'pay') return monthYearLabel ? `sai dia ${paddedDay} em ${monthYearLabel}` : `sai dia ${paddedDay}`;
-  return monthYearLabel ? `vence dia ${paddedDay} em ${monthYearLabel}` : `vence dia ${paddedDay}`;
+  if (type === 'income') return `Entra dia ${paddedDay}`;
+  if (scheduleKind === 'pay') return `Pago dia ${paddedDay}`;
+  return `Vence dia ${paddedDay}`;
 }
 
 function buildVariableFinanceScheduleSummary(finance = {}, { todayDateKey = '', contextYear = null, contextMonth = null } = {}) {

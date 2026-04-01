@@ -6402,17 +6402,25 @@ function formatMonthDayLabel(value) {
   return parsed.isValid() ? parsed.format('DD/MM') : '';
 }
 
-function buildFixedFinanceScheduleChipLabel(finance = {}) {
+function formatMonthYearLabel(value) {
+  const safeValue = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(safeValue)) return '';
+  const parsed = dayjs(safeValue);
+  return parsed.isValid() ? parsed.format('MM/YY') : '';
+}
+
+function buildFixedFinanceScheduleChipLabel(finance = {}, { effectiveDate = '' } = {}) {
   const dayOfMonth = normalizeFinanceDayOfMonth(finance?.day_of_month);
   if (!dayOfMonth) return '';
 
   const paddedDay = String(dayOfMonth).padStart(2, '0');
   const type = normalizeFinanceType(finance?.type);
   const scheduleKind = resolveFinanceScheduleKind(finance);
+  const monthYearLabel = formatMonthYearLabel(effectiveDate);
 
-  if (type === 'income') return `entra dia ${paddedDay}`;
-  if (scheduleKind === 'pay') return `sai dia ${paddedDay}`;
-  return `vence dia ${paddedDay}`;
+  if (type === 'income') return monthYearLabel ? `entra dia ${paddedDay} em ${monthYearLabel}` : `entra dia ${paddedDay}`;
+  if (scheduleKind === 'pay') return monthYearLabel ? `sai dia ${paddedDay} em ${monthYearLabel}` : `sai dia ${paddedDay}`;
+  return monthYearLabel ? `vence dia ${paddedDay} em ${monthYearLabel}` : `vence dia ${paddedDay}`;
 }
 
 function buildVariableFinanceScheduleSummary(finance = {}, { todayDateKey = '', contextYear = null, contextMonth = null } = {}) {
@@ -6485,12 +6493,12 @@ function decorateMonthlyFinancesForView(finances = [], { year = null, month = nu
       decorated.schedule_meta = {
         kind: 'fixed',
         hasSchedule: !!dayOfMonth,
-        chipLabel: buildFixedFinanceScheduleChipLabel(finance),
+        chipLabel: buildFixedFinanceScheduleChipLabel(finance, { effectiveDate }),
         effectiveDate,
         effectiveDateLabel: formatMonthDayLabel(effectiveDate),
         isToday: !!effectiveDate && effectiveDate === todayDateKey,
-        buttonLabel: dayOfMonth ? buildFixedFinanceScheduleChipLabel(finance) : 'Adicionar dia',
-        helperLabel: dayOfMonth ? `Cai em ${formatMonthDayLabel(effectiveDate)}` : 'Data opcional'
+        buttonLabel: dayOfMonth ? buildFixedFinanceScheduleChipLabel(finance, { effectiveDate }) : 'Adicionar dia',
+        helperLabel: ''
       };
       return decorated;
     }

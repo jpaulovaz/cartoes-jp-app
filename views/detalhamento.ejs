@@ -706,7 +706,6 @@
                                                                 <button type="button" onclick="openFixedEditor(<%= fin.id %>)" class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold transition-colors <%= financeScheduleButtonClasses(fin, scheduleMeta) %>">
                                                                     <%= scheduleMeta.buttonLabel || 'Adicionar dia' %>
                                                                 </button>
-                                                                <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400"><%= scheduleMeta.isToday ? 'É hoje que essa entrada entra no radar.' : (scheduleMeta.helperLabel || 'Data opcional para os alertas do mês.') %></span>
                                                             </div>
                                                         <% } %>
                                                     </div>
@@ -791,7 +790,6 @@
                                                                 <button type="button" onclick="openFixedEditor(<%= fin.id %>)" class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold transition-colors <%= financeScheduleButtonClasses(fin, scheduleMeta) %>">
                                                                     <%= scheduleMeta.buttonLabel || 'Adicionar dia' %>
                                                                 </button>
-                                                                <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400"><%= scheduleMeta.isToday ? 'É hoje que essa saída entra no radar.' : (scheduleMeta.helperLabel || 'Data opcional para os alertas do mês.') %></span>
                                                             </div>
                                                         <% } %>
                                                     </div>
@@ -876,7 +874,6 @@
                                         <div>
                                             <label for="finance-fixed-day-input" class="mb-2 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Dia</label>
                                             <input id="finance-fixed-day-input" type="number" min="1" max="31" inputmode="numeric" class="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white" placeholder="Ex: 5">
-                                            <p class="mt-2 text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400">Opcional. Se ficar em branco, o legado segue tranquilo e sem alerta.</p>
                                         </div>
                                         <div id="finance-fixed-kind-shell">
                                             <label for="finance-fixed-kind-input" class="mb-2 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Esse dia significa</label>
@@ -884,7 +881,6 @@
                                                 <option value="due">Vence nesse dia</option>
                                                 <option value="pay">Pago nesse dia</option>
                                             </select>
-                                            <p class="mt-2 text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400">Só vale para saídas. Em entradas, a leitura vira automaticamente “recebo nesse dia”.</p>
                                         </div>
                                     </div>
                                     <div class="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-[11px] font-medium leading-5 text-sky-800 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-100">

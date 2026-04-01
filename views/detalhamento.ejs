@@ -855,10 +855,48 @@
                                     <button type="button" data-finance-mode-btn data-finance-mode="variable" class="rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors">Vários lançamentos</button>
                                 </div>
 
-                                <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-start">
-                                    <div>
-                                        <label for="finance-description-input" id="finance-description-label" class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Nome da entrada</label>
-                                        <input id="finance-description-input" type="text" class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950" placeholder="Ex: Shows, Salário, Freelas">
+                                <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px] xl:items-start">
+                                    <div class="space-y-4">
+                                        <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_108px] md:items-end">
+                                            <div>
+                                                <label for="finance-description-input" id="finance-description-label" class="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Nome da entrada</label>
+                                                <input id="finance-description-input" type="text" class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950" placeholder="Ex: Shows, Salário, Freelas">
+                                            </div>
+                                            <div id="finance-fixed-day-shell">
+                                                <label for="finance-fixed-day-input" class="mb-2 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Dia</label>
+                                                <input id="finance-fixed-day-input" type="number" min="1" max="31" inputmode="numeric" class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-3 text-center text-sm font-black text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950" placeholder="Ex: 5">
+                                            </div>
+                                        </div>
+
+                                        <div id="finance-fixed-panel" class="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/60">
+                                            <p id="finance-fixed-copy" class="text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Esse item vai nascer como valor único. Se quiser, já deixe o dia marcado para os alertas do mês. O valor continua sendo ajustado direto na lista.</p>
+                                            <div id="finance-fixed-kind-shell" class="mt-4">
+                                                <div class="mb-2 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Esse dia significa</div>
+                                                <div class="grid gap-3 sm:grid-cols-2">
+                                                    <label class="op-paid-toggle w-full justify-start px-4 py-3" data-fixed-kind-choice="due">
+                                                        <input type="radio" name="finance-fixed-kind-radio" value="due" data-fixed-kind-radio aria-label="Vence nesse dia">
+                                                        <span class="op-paid-toggle__box" aria-hidden="true">
+                                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                                <path d="M5 12.5l4.2 4.2L19 7"></path>
+                                                            </svg>
+                                                        </span>
+                                                        <span class="op-paid-toggle__text text-sm">Vence nesse dia</span>
+                                                    </label>
+                                                    <label class="op-paid-toggle w-full justify-start px-4 py-3" data-fixed-kind-choice="pay">
+                                                        <input type="radio" name="finance-fixed-kind-radio" value="pay" data-fixed-kind-radio aria-label="Pago nesse dia">
+                                                        <span class="op-paid-toggle__box" aria-hidden="true">
+                                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                                <path d="M5 12.5l4.2 4.2L19 7"></path>
+                                                            </svg>
+                                                        </span>
+                                                        <span class="op-paid-toggle__text text-sm">Pago nesse dia</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-[11px] font-medium leading-5 text-sky-800 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-100">
+                                                Dica boa: se você marcar dia 31, nos meses curtinhos o app usa o último dia disponível sem bagunçar a rotina.
+                                            </div>
+                                        </div>
                                     </div>
                                     <div class="rounded-[24px] border border-slate-200 bg-slate-50/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/70">
                                         <div class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Total que vai pra tela</div>
@@ -867,32 +905,11 @@
                                     </div>
                                 </div>
 
-                                <div id="finance-fixed-panel" class="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/60">
-                                    <div class="text-sm font-bold text-slate-800 dark:text-white">Modo rápido na área</div>
-                                    <p id="finance-fixed-copy" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Esse item vai nascer como valor único. Se quiser, já deixe o dia marcado para os alertas do mês. O valor continua sendo ajustado direto na lista.</p>
-                                    <div class="mt-4 grid gap-4 md:grid-cols-[140px_minmax(0,1fr)] md:items-start">
-                                        <div>
-                                            <label for="finance-fixed-day-input" class="mb-2 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Dia</label>
-                                            <input id="finance-fixed-day-input" type="number" min="1" max="31" inputmode="numeric" class="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white" placeholder="Ex: 5">
-                                        </div>
-                                        <div id="finance-fixed-kind-shell">
-                                            <label for="finance-fixed-kind-input" class="mb-2 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Esse dia significa</label>
-                                            <select id="finance-fixed-kind-input" class="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white">
-                                                <option value="due">Vence nesse dia</option>
-                                                <option value="pay">Pago nesse dia</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-[11px] font-medium leading-5 text-sky-800 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-100">
-                                        Dica boa: se você marcar dia 31, nos meses curtinhos o app usa o último dia disponível sem bagunçar a rotina.
-                                    </div>
-                                </div>
-
                                 <div id="finance-variable-panel" class="hidden space-y-4">
                                     <div class="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/60 sm:flex-row sm:items-center sm:justify-between">
                                         <div>
                                             <div class="text-sm font-bold text-slate-800 dark:text-white">Listinha dos lançamentos</div>
-                                            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Cada linha soma no total do lado de fora. Você marca o pago, escolhe a data, conta o detalhe e põe o valor com mais conforto.</p>
+                                            <p id="finance-variable-copy" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Cada linha soma no total do lado de fora. Você marca o pago, escolhe a data, conta o detalhe e põe o valor com mais conforto.</p>
                                         </div>
                                         <button type="button" id="finance-add-item-btn" class="op-btn op-btn-primary px-4 py-2 text-sm">+ Adicionar linha</button>
                                     </div>
@@ -972,14 +989,17 @@
                     modeButtons: Array.from(document.querySelectorAll('[data-finance-mode-btn]')),
                     descriptionLabel: document.getElementById('finance-description-label'),
                     descriptionInput: document.getElementById('finance-description-input'),
+                    fixedDayShell: document.getElementById('finance-fixed-day-shell'),
                     totalPreview: document.getElementById('finance-total-preview'),
                     totalCaption: document.getElementById('finance-total-caption'),
                     fixedPanel: document.getElementById('finance-fixed-panel'),
                     fixedCopy: document.getElementById('finance-fixed-copy'),
                     fixedDayInput: document.getElementById('finance-fixed-day-input'),
                     fixedKindShell: document.getElementById('finance-fixed-kind-shell'),
-                    fixedKindInput: document.getElementById('finance-fixed-kind-input'),
+                    fixedKindChoices: Array.from(document.querySelectorAll('[data-fixed-kind-choice]')),
+                    fixedKindRadios: Array.from(document.querySelectorAll('[data-fixed-kind-radio]')),
                     variablePanel: document.getElementById('finance-variable-panel'),
+                    variableCopy: document.getElementById('finance-variable-copy'),
                     variableEmpty: document.getElementById('finance-variable-empty'),
                     itemsList: document.getElementById('finance-items-list'),
                     addItemButton: document.getElementById('finance-add-item-btn'),
@@ -1108,16 +1128,34 @@
 
                 function resetFixedFinanceFields() {
                     if (financeRefs.fixedDayInput) financeRefs.fixedDayInput.value = '';
-                    if (financeRefs.fixedKindInput) financeRefs.fixedKindInput.value = 'due';
+                    setFixedKindValue('due');
                 }
 
                 function populateFixedFinanceFields(finance = {}) {
                     if (financeRefs.fixedDayInput) {
                         financeRefs.fixedDayInput.value = finance.day_of_month ? String(finance.day_of_month) : '';
                     }
-                    if (financeRefs.fixedKindInput) {
-                        financeRefs.fixedKindInput.value = finance.schedule_kind === 'pay' ? 'pay' : 'due';
-                    }
+                    setFixedKindValue(finance.schedule_kind === 'pay' ? 'pay' : 'due');
+                }
+
+                function syncFixedKindChoiceVisual() {
+                    financeRefs.fixedKindChoices.forEach((choice) => {
+                        const radio = choice.querySelector('[data-fixed-kind-radio]');
+                        choice.classList.toggle('is-checked', !!radio?.checked);
+                    });
+                }
+
+                function setFixedKindValue(value) {
+                    const resolved = value === 'pay' ? 'pay' : 'due';
+                    financeRefs.fixedKindRadios.forEach((radio) => {
+                        radio.checked = radio.value === resolved;
+                    });
+                    syncFixedKindChoiceVisual();
+                }
+
+                function getFixedKindValue() {
+                    const checked = financeRefs.fixedKindRadios.find((radio) => radio.checked);
+                    return checked?.value === 'pay' ? 'pay' : 'due';
                 }
 
                 function createDeletePreviewCard({ title, meta, amountCents }) {
@@ -1402,6 +1440,9 @@
                     if (financeRefs.fixedPanel) {
                         financeRefs.fixedPanel.classList.toggle('hidden', isVariableMode);
                     }
+                    if (financeRefs.fixedDayShell) {
+                        financeRefs.fixedDayShell.classList.toggle('hidden', isVariableMode);
+                    }
                     if (financeRefs.variablePanel) {
                         financeRefs.variablePanel.classList.toggle('hidden', !isVariableMode);
                     }
@@ -1423,8 +1464,16 @@
                     if (financeRefs.fixedDayInput) {
                         financeRefs.fixedDayInput.disabled = financeModalState.readOnly || isVariableMode;
                     }
-                    if (financeRefs.fixedKindInput) {
-                        financeRefs.fixedKindInput.disabled = financeModalState.readOnly || isVariableMode || !isExpense;
+                    financeRefs.fixedKindRadios.forEach((radio) => {
+                        radio.disabled = financeModalState.readOnly || isVariableMode || !isExpense;
+                    });
+
+                    syncFixedKindChoiceVisual();
+
+                    if (financeRefs.variableCopy) {
+                        financeRefs.variableCopy.textContent = isExpense
+                            ? 'Cada linha soma no total do lado de fora. Você marca o pago, escolhe a data, conta o detalhe e põe o valor com mais conforto.'
+                            : 'Cada linha soma no total do lado de fora. Você escolhe a data, conta o detalhe e põe o valor com mais conforto.';
                     }
 
                     setModeButtonState(financeModalState.amountMode);
@@ -1444,8 +1493,8 @@
                         financeRefs.saveButton.textContent = 'Salvar item';
                         if (financeRefs.fixedCopy) {
                             financeRefs.fixedCopy.textContent = isIncome
-                                ? 'Esse item vai nascer como valor único. Se quiser, já deixe o dia marcado para os alertas do mês. O valor continua sendo ajustado direto na lista.'
-                                : 'Esse item vai nascer como valor único. Se quiser, já deixe o dia marcado para lembrar quando vence ou quando você costuma pagar. O valor continua sendo ajustado direto na lista.';
+                                ? 'Quer um empurrãozinho nos alertas? Deixe o dia marcado por aqui e o resto continua no toque rápido da lista.'
+                                : 'Deixe o dia ao lado do nome e marque se ele representa o vencimento ou o pagamento desse combinado.';
                         }
                     } else if (isEditFixed) {
                         const baseName = (financeRefs.descriptionInput.value || `item de valor único`).trim();
@@ -1459,8 +1508,8 @@
                         financeRefs.saveButton.textContent = 'Salvar valor único';
                         if (financeRefs.fixedCopy) {
                             financeRefs.fixedCopy.textContent = isIncome
-                                ? 'Entrada de valor único com dia opcional. Se o dia ficar em branco, nada muda no legado e o alerta simplesmente não entra em cena.'
-                                : 'Saída de valor único com dia opcional. Se o dia ficar em branco, nada muda no legado e o alerta fica quietinho.';
+                                ? 'Você pode ajustar o nome e, se quiser, deixar o dia certinho para o radar do mês tocar no momento certo.'
+                                : 'Você pode ajustar o nome e deixar claro se esse dia marca o vencimento ou o pagamento da saída.';
                         }
                     } else if (isEditVariable) {
                         const baseName = (financeRefs.descriptionInput.value || 'item com vários lançamentos').trim();
@@ -1567,7 +1616,7 @@
                             payload.day_of_month = dayOfMonth;
                             payload.schedule_kind = dayOfMonth
                                 ? (financeModalState.financeType === 'expense'
-                                    ? ((financeRefs.fixedKindInput?.value || 'due') === 'pay' ? 'pay' : 'due')
+                                    ? getFixedKindValue()
                                     : 'receive')
                                 : null;
                         }
@@ -1799,6 +1848,10 @@
                         financeModalState.amountMode = button.dataset.financeMode === 'variable' ? 'variable' : 'fixed';
                         applyFinanceModalState();
                     });
+                });
+
+                financeRefs.fixedKindRadios.forEach((radio) => {
+                    radio.addEventListener('change', syncFixedKindChoiceVisual);
                 });
 
                 financeRefs.closeButtons.forEach((button) => {

@@ -8,6 +8,7 @@
   const isHistoryTab = String(activeTab || 'open') === 'history';
   const visibleItems = isHistoryTab ? safeHistoryItems : safeOpenItems;
   const monthText = typeof monthLabel === 'function' ? monthLabel(month, year) : `${String(month).padStart(2, '0')}/${year}`;
+  const monthChipText = `${String(month).padStart(2, '0')} / ${year}`;
   const availableMonthEntries = Array.isArray(availableRanks) ? availableRanks
     .map((rank) => {
       const safeRank = Number(rank || 0);
@@ -63,17 +64,21 @@
       </div>
     </div>
 
-    <div class="op-page-hero__actions op-page-hero__actions--compact">
-      <div class="op-month-hero-actions__row op-month-hero-actions__row--dual">
-        <a href="<%= backHref || '/people' %>" class="op-btn op-btn-accent-soft op-btn--compact whitespace-nowrap">← Voltar para Amigos</a>
-        <a href="<%= sharedDebtsHref || '/shared-debts' %>" class="op-btn op-btn-info op-btn--compact whitespace-nowrap">Abrir Cobranças</a>
+    <div class="op-page-hero__actions w-full lg:max-w-[32rem]">
+      <a href="<%= backHref || '/people' %>" class="op-btn op-btn-accent-soft op-btn--block">← Voltar para Amigos</a>
+      <a href="<%= sharedDebtsHref || '/shared-debts' %>" class="op-btn op-btn-info op-btn--block">Abrir Cobranças</a>
+
+      <div class="w-full flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 p-1 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/70">
+        <a href="<%= previousMonthHref %>" class="op-btn op-btn-ghost flex-1">← Anterior</a>
+        <span class="op-btn op-btn-primary pointer-events-none shrink-0 whitespace-nowrap px-4" aria-current="page"><%= monthChipText %></span>
+        <a href="<%= nextMonthHref %>" class="op-btn op-btn-ghost flex-1">Próximo →</a>
       </div>
 
-      <div class="op-month-hero-actions__row op-month-hero-actions__row--triple">
-        <a href="<%= previousMonthHref %>" class="op-btn op-btn-accent-soft op-btn--compact whitespace-nowrap">← Mês anterior</a>
-        <a href="<%= currentMonthHref %>" class="op-btn <%= isCurrentMonth ? 'op-btn-success' : 'op-btn-primary' %> op-btn--compact whitespace-nowrap"><%= isCurrentMonth ? 'Mês atual' : 'Ir para o atual' %></a>
-        <a href="<%= nextMonthHref %>" class="op-btn op-btn-accent-soft op-btn--compact whitespace-nowrap">Mês seguinte →</a>
-      </div>
+      <% if (!isCurrentMonth) { %>
+        <div class="flex w-full justify-end">
+          <a href="<%= currentMonthHref %>" class="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-bold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300 dark:hover:bg-slate-800">Ir para o mês atual</a>
+        </div>
+      <% } %>
     </div>
   </section>
 

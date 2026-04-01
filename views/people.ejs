@@ -90,7 +90,7 @@
     const source = String((person && person.name) || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
     return source.length ? source.map((part) => part.charAt(0).toUpperCase()).join('') : 'OP';
   };
-  const personActionMatchComprasClass = 'inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl border px-4 py-3 text-center text-sm font-black leading-none shadow-sm transition-colors';
+  const personActionMatchComprasClass = 'inline-flex h-full min-h-[48px] w-full items-center justify-center rounded-2xl border px-4 py-3 text-center text-sm font-black leading-none shadow-sm transition-colors';
   const personActionMatchComprasLabelClass = 'block max-w-full whitespace-normal text-center leading-[1.05rem] sm:max-w-[7rem]';
 
   const renderPersonStatusChips = (person) => {

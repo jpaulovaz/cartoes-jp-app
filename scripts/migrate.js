@@ -371,6 +371,8 @@ CREATE TABLE IF NOT EXISTS monthly_finances (
   amount_cents INTEGER DEFAULT 0,
   amount_mode TEXT NOT NULL DEFAULT 'fixed',
   carry_key TEXT,
+  is_paid INTEGER NOT NULL DEFAULT 0,
+  paid_at TEXT,
   created_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (category_id) REFERENCES finance_categories(id)
@@ -383,6 +385,8 @@ CREATE TABLE IF NOT EXISTS monthly_finance_items (
   item_date TEXT,
   item_source TEXT,
   amount_cents INTEGER NOT NULL DEFAULT 0,
+  is_paid INTEGER NOT NULL DEFAULT 0,
+  paid_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (finance_id) REFERENCES monthly_finances(id),
@@ -1196,6 +1200,22 @@ if (!columnExists("monthly_finances", "amount_mode")) {
 
 if (!columnExists("monthly_finances", "carry_key")) {
   db.exec("ALTER TABLE monthly_finances ADD COLUMN carry_key TEXT;");
+}
+
+if (!columnExists("monthly_finances", "is_paid")) {
+  db.exec("ALTER TABLE monthly_finances ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("monthly_finances", "paid_at")) {
+  db.exec("ALTER TABLE monthly_finances ADD COLUMN paid_at TEXT;");
+}
+
+if (!columnExists("monthly_finance_items", "is_paid")) {
+  db.exec("ALTER TABLE monthly_finance_items ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("monthly_finance_items", "paid_at")) {
+  db.exec("ALTER TABLE monthly_finance_items ADD COLUMN paid_at TEXT;");
 }
 
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_monthly_finances_user_period_carry_key ON monthly_finances(user_id, month, year, carry_key) WHERE carry_key IS NOT NULL;");

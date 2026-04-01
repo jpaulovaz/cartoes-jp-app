@@ -601,6 +601,8 @@ try { db.prepare("ALTER TABLE closed_months ADD COLUMN user_id INTEGER").run(); 
 try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_closed_months_user_month_year ON closed_months(user_id, month, year)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN amount_mode TEXT NOT NULL DEFAULT 'fixed'").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN carry_key TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 0").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN paid_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_monthly_finances_user_period_carry_key ON monthly_finances(user_id, month, year, carry_key) WHERE carry_key IS NOT NULL").run(); } catch (e) { /* Índice já existe */ }
 db.prepare(`
   CREATE TABLE IF NOT EXISTS monthly_finance_carry_exceptions (
@@ -623,6 +625,8 @@ db.prepare(`
     item_date TEXT,
     item_source TEXT,
     amount_cents INTEGER NOT NULL DEFAULT 0,
+    is_paid INTEGER NOT NULL DEFAULT 0,
+    paid_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (finance_id) REFERENCES monthly_finances(id),
@@ -631,6 +635,8 @@ db.prepare(`
 `).run();
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_finance_user ON monthly_finance_items(finance_id, user_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_user_date ON monthly_finance_items(user_id, item_date)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("ALTER TABLE monthly_finance_items ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 0").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE monthly_finance_items ADD COLUMN paid_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 
 db.prepare(`
   CREATE TABLE IF NOT EXISTS recurring_rules (
@@ -6340,7 +6346,18 @@ function sanitizeFinanceDescription(value) {
 
 function normalizeFinanceItemDate(value) {
   const normalized = String(value || "").trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? "" + normalized : "";
+}
+
+function normalizeFinancePaidFlag(value) {
+  if (value === true || value === 1) return 1;
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return ['1', 'true', 'sim', 'yes', 'on'].includes(normalized) ? 1 : 0;
+}
+
+function normalizePositiveInteger(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function sanitizeVariableFinanceItems(items) {
@@ -6348,6 +6365,7 @@ function sanitizeVariableFinanceItems(items) {
 
   const normalizedItems = [];
   for (const rawItem of items.slice(0, 120)) {
+    const itemId = normalizePositiveInteger(rawItem?.id ?? rawItem?.item_id);
     const itemDate = normalizeFinanceItemDate(rawItem?.item_date ?? rawItem?.date);
     const itemSource = String(rawItem?.item_source ?? rawItem?.source ?? "")
       .replace(/\s+/g, " ")
@@ -6355,6 +6373,7 @@ function sanitizeVariableFinanceItems(items) {
       .slice(0, 120);
     const rawAmount = Number(rawItem?.amount_cents ?? rawItem?.amountCents ?? rawItem?.amount ?? 0);
     const amountCents = Number.isFinite(rawAmount) ? Math.max(0, Math.round(rawAmount)) : 0;
+    const isPaid = normalizeFinancePaidFlag(rawItem?.is_paid ?? rawItem?.isPaid);
 
     if (!itemDate && !itemSource && amountCents === 0) continue;
 
@@ -6363,9 +6382,11 @@ function sanitizeVariableFinanceItems(items) {
     }
 
     normalizedItems.push({
+      id: itemId || null,
       item_date: itemDate,
       item_source: itemSource,
-      amount_cents: amountCents
+      amount_cents: amountCents,
+      is_paid: isPaid
     });
   }
 
@@ -6538,7 +6559,7 @@ function ensureMonthlyFinanceScaffold(userId, month, year) {
 
 function getFinanceItemsByFinanceId(userId, financeId) {
   return db.prepare(`
-    SELECT id, finance_id, item_date, item_source, amount_cents
+    SELECT id, finance_id, item_date, item_source, amount_cents, is_paid, paid_at
     FROM monthly_finance_items
     WHERE finance_id = ? AND user_id = ?
     ORDER BY CASE WHEN item_date IS NULL OR item_date = '' THEN 1 ELSE 0 END, item_date ASC, id ASC
@@ -6552,7 +6573,7 @@ function getFinanceItemsMap(userId, financeIds) {
 
   const placeholders = financeIds.map(() => '?').join(', ');
   const rows = db.prepare(`
-    SELECT id, finance_id, item_date, item_source, amount_cents
+    SELECT id, finance_id, item_date, item_source, amount_cents, is_paid, paid_at
     FROM monthly_finance_items
     WHERE user_id = ? AND finance_id IN (${placeholders})
     ORDER BY CASE WHEN item_date IS NULL OR item_date = '' THEN 1 ELSE 0 END, item_date ASC, id ASC
@@ -6587,14 +6608,23 @@ function syncVariableFinanceAggregate(userId, financeId) {
 
 function hydrateMonthlyFinances(userId, finances) {
   const normalizedFinances = Array.isArray(finances)
-    ? finances.map((finance) => ({ ...finance, amount_mode: normalizeFinanceAmountMode(finance.amount_mode) }))
+    ? finances.map((finance) => ({
+      ...finance,
+      amount_mode: normalizeFinanceAmountMode(finance.amount_mode),
+      is_paid: normalizeFinancePaidFlag(finance?.is_paid),
+      paid_at: finance?.paid_at || null
+    }))
     : [];
 
   const itemsByFinance = getFinanceItemsMap(userId, normalizedFinances.map((finance) => finance.id));
   const dirtyVariableRows = [];
 
   for (const finance of normalizedFinances) {
-    const items = itemsByFinance.get(finance.id) || [];
+    const items = (itemsByFinance.get(finance.id) || []).map((item) => ({
+      ...item,
+      is_paid: normalizeFinancePaidFlag(item?.is_paid),
+      paid_at: item?.paid_at || null
+    }));
     finance.items = items;
     finance.item_count = items.length;
 
@@ -6634,6 +6664,8 @@ function getFinanceByIdForUser(userId, financeId) {
 
   if (!finance) return null;
   finance.amount_mode = normalizeFinanceAmountMode(finance.amount_mode);
+  finance.is_paid = normalizeFinancePaidFlag(finance?.is_paid);
+  finance.paid_at = finance?.paid_at || null;
   return finance;
 }
 
@@ -6642,7 +6674,11 @@ function serializeFinanceForApi(userId, financeId) {
   if (!finance) return null;
 
   if (finance.amount_mode === 'variable') {
-    finance.items = getFinanceItemsByFinanceId(userId, financeId);
+    finance.items = getFinanceItemsByFinanceId(userId, financeId).map((item) => ({
+      ...item,
+      is_paid: normalizeFinancePaidFlag(item?.is_paid),
+      paid_at: item?.paid_at || null
+    }));
     finance.item_count = finance.items.length;
     finance.amount_cents = syncVariableFinanceAggregate(userId, financeId);
     finance.formula = '';
@@ -6654,7 +6690,143 @@ function serializeFinanceForApi(userId, financeId) {
   return finance;
 }
 
+function buildFinancePaymentState(finance = {}) {
+  const isVariable = normalizeFinanceAmountMode(finance?.amount_mode) === 'variable';
+  const totalCents = Math.max(0, Number(finance?.amount_cents || 0));
+
+  if (!isVariable) {
+    const isPaid = normalizeFinancePaidFlag(finance?.is_paid) === 1;
+    const paidCents = isPaid ? totalCents : 0;
+    const totalItemCount = totalCents > 0 ? 1 : 0;
+    const paidItemCount = isPaid && totalItemCount ? 1 : 0;
+    return {
+      mode: 'fixed',
+      isPaid,
+      totalItemCount,
+      paidItemCount,
+      totalCents,
+      paidCents,
+      remainingCents: Math.max(0, totalCents - paidCents),
+      progressPct: totalCents > 0 ? Math.max(0, Math.min(100, Math.round((paidCents / totalCents) * 100))) : 0,
+      isComplete: totalCents > 0 && paidCents >= totalCents
+    };
+  }
+
+  const items = Array.isArray(finance?.items) ? finance.items : [];
+  const paidItems = items.filter((item) => normalizeFinancePaidFlag(item?.is_paid) === 1);
+  const paidCents = paidItems.reduce((sum, item) => sum + Math.max(0, Number(item?.amount_cents || 0)), 0);
+  const totalItemCount = items.length;
+  const paidItemCount = paidItems.length;
+  return {
+    mode: 'variable',
+    isPaid: totalItemCount > 0 && paidItemCount === totalItemCount,
+    totalItemCount,
+    paidItemCount,
+    totalCents,
+    paidCents,
+    remainingCents: Math.max(0, totalCents - paidCents),
+    progressPct: totalCents > 0 ? Math.max(0, Math.min(100, Math.round((paidCents / totalCents) * 100))) : 0,
+    isComplete: totalCents > 0 && paidCents >= totalCents
+  };
+}
+
+function buildExpensePaymentProgress(userId, month, year, hydratedFinances = null) {
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  const finances = Array.isArray(hydratedFinances)
+    ? hydratedFinances
+    : hydrateMonthlyFinances(userId, db.prepare(`
+      SELECT *
+      FROM monthly_finances
+      WHERE user_id = ? AND month = ? AND year = ? AND type = 'expense'
+      ORDER BY id ASC
+    `).all(userId, safeMonth, safeYear));
+
+  const expenseFinances = finances.filter((finance) => finance?.type === 'expense');
+  const summary = {
+    totalCents: 0,
+    paidCents: 0,
+    remainingCents: 0,
+    progressPct: 0,
+    totalItemCount: 0,
+    paidItemCount: 0,
+    fixedCount: 0,
+    variableParentCount: 0,
+    isComplete: false,
+    hasValue: false
+  };
+
+  expenseFinances.forEach((finance) => {
+    const state = buildFinancePaymentState(finance);
+    summary.totalCents += Math.max(0, Number(finance?.amount_cents || 0));
+    summary.paidCents += Math.max(0, Number(state.paidCents || 0));
+    summary.totalItemCount += Math.max(0, Number(state.totalItemCount || 0));
+    summary.paidItemCount += Math.max(0, Number(state.paidItemCount || 0));
+    if (state.mode === 'variable') summary.variableParentCount += 1;
+    else summary.fixedCount += 1;
+  });
+
+  summary.remainingCents = Math.max(0, summary.totalCents - summary.paidCents);
+  summary.progressPct = summary.totalCents > 0
+    ? Math.max(0, Math.min(100, Math.round((summary.paidCents / summary.totalCents) * 100)))
+    : 0;
+  summary.isComplete = summary.totalCents > 0 && summary.paidCents >= summary.totalCents;
+  summary.hasValue = summary.totalCents > 0;
+  summary.label = summary.totalCents > 0
+    ? `Pago ${formatBRLFromCents(summary.paidCents)} de ${formatBRLFromCents(summary.totalCents)} · ${summary.progressPct}%`
+    : 'Quando pintar saída, o progresso aparece aqui.';
+  return summary;
+}
+
+function buildSelfCardPaymentProgress(userId, month, year, { ownerPersonId = null, totalCents = null } = {}) {
+  const selfPerson = ownerPersonId
+    ? { id: Number(ownerPersonId) }
+    : (getSelfPerson(userId) || null);
+  const selfPersonId = Number(selfPerson?.id || 0);
+
+  let resolvedTotalCents = Number.isFinite(Number(totalCents)) ? Math.max(0, Number(totalCents)) : null;
+  if (resolvedTotalCents == null) {
+    resolvedTotalCents = selfPersonId
+      ? Math.max(0, Number(db.prepare(`
+          SELECT COALESCE(SUM(a.share_cents), 0) AS total
+          FROM allocations a
+          JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+          LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+          WHERE a.user_id = ?
+            AND a.person_id = ?
+            AND (
+              (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+              (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+            )
+        `).get(userId, selfPersonId, month, year, month, year)?.total || 0))
+      : 0;
+  }
+
+  const paymentBreakdown = selfPersonId
+    ? getPersonPaymentBreakdownForMonth(userId, month, year, selfPersonId)
+    : { manualCents: 0, autoCents: 0, totalPaidCents: 0 };
+  const paidCents = Math.max(0, Number(paymentBreakdown.totalPaidCents || 0));
+  const progressPct = resolvedTotalCents > 0
+    ? Math.max(0, Math.min(100, Math.round((paidCents / resolvedTotalCents) * 100)))
+    : 0;
+
+  return {
+    totalCents: resolvedTotalCents,
+    paidCents,
+    manualPaidCents: Math.max(0, Number(paymentBreakdown.manualCents || 0)),
+    autoPaidCents: Math.max(0, Number(paymentBreakdown.autoCents || 0)),
+    remainingCents: Math.max(0, resolvedTotalCents - paidCents),
+    progressPct,
+    isComplete: resolvedTotalCents > 0 && paidCents >= resolvedTotalCents,
+    hasValue: resolvedTotalCents > 0,
+    label: resolvedTotalCents > 0
+      ? `Já entrou ${formatBRLFromCents(paidCents)} de ${formatBRLFromCents(resolvedTotalCents)} · ${progressPct}%`
+      : 'Quando aparecer parcela sua nos cartões, o progresso mora aqui.'
+  };
+}
+
 function monthLabel(month, year) {
+
   return `${String(month).padStart(2, "0")}/${year}`;
 }
 
@@ -10150,6 +10322,8 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
 
   const cards = getActiveCards(userId).map(({ id, name, close_day, due_day, brand }) => ({ id, name, close_day, due_day, brand }));
   const purchaseCategories = getPurchaseCategories(userId);
+  const expensePaymentProgress = buildExpensePaymentProgress(userId, currentMonth, currentYear, finances);
+  const cardPaymentProgress = buildSelfCardPaymentProgress(userId, currentMonth, currentYear, { ownerPersonId: owner.id, totalCents: Number(cardTotal?.total || 0) });
 
   return safeRenderView(res, "home", {
     groupedRecent: groupedRecentDisplay,
@@ -16760,6 +16934,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     alerts,
     cards,
     purchaseCategories,
+    expensePaymentProgress,
+    cardPaymentProgress,
     sharedDebtDetailModuleSummary,
     cardHealthDetailModuleSummary
   });
@@ -20227,7 +20403,7 @@ app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) =>
       return res.status(423).json({ error: getMonthLockMessage(month, year) });
     }
 
-    const nowIso = new Date().toISOString();
+    const nowIsoValue = new Date().toISOString();
     const totalCents = amountMode === 'variable' ? sumFinanceItemCents(items) : 0;
     const carryKey = createMonthlyFinanceCarryKey();
 
@@ -20237,17 +20413,18 @@ app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) =>
     `);
 
     const insertItem = db.prepare(`
-      INSERT INTO monthly_finance_items (finance_id, user_id, item_date, item_source, amount_cents, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO monthly_finance_items (finance_id, user_id, item_date, item_source, amount_cents, is_paid, paid_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const financeId = db.transaction(() => {
-      const result = insertFinance.run(userId, month, year, type, description, totalCents, amountMode, carryKey, nowIso);
+      const result = insertFinance.run(userId, month, year, type, description, totalCents, amountMode, carryKey, nowIsoValue);
       const createdFinanceId = Number(result.lastInsertRowid);
 
       if (amountMode === 'variable') {
         for (const item of items) {
-          insertItem.run(createdFinanceId, userId, item.item_date, item.item_source, item.amount_cents, nowIso, nowIso);
+          const itemIsPaid = normalizeFinancePaidFlag(item?.is_paid);
+          insertItem.run(createdFinanceId, userId, item.item_date, item.item_source, item.amount_cents, itemIsPaid, itemIsPaid ? nowIsoValue : null, nowIsoValue, nowIsoValue);
         }
       }
 
@@ -20282,34 +20459,146 @@ app.post("/finances/variable/:id", ensureAuthenticated, express.json(), (req, re
     const description = sanitizeFinanceDescription(req.body.description);
     const items = sanitizeVariableFinanceItems(req.body.items);
     const totalCents = sumFinanceItemCents(items);
-    const nowIso = new Date().toISOString();
+    const nowIsoValue = new Date().toISOString();
+    const currentItems = getFinanceItemsByFinanceId(userId, id);
+    const currentItemsById = new Map(currentItems.map((item) => [Number(item.id || 0), item]));
 
     const updateFinance = db.prepare(`
       UPDATE monthly_finances
       SET description = ?, formula = '', amount_cents = ?, amount_mode = 'variable'
       WHERE id = ? AND user_id = ?
     `);
-    const deleteItems = db.prepare(`
-      DELETE FROM monthly_finance_items
-      WHERE finance_id = ? AND user_id = ?
+    const updateItem = db.prepare(`
+      UPDATE monthly_finance_items
+      SET item_date = ?, item_source = ?, amount_cents = ?, is_paid = ?, paid_at = ?, updated_at = ?
+      WHERE id = ? AND finance_id = ? AND user_id = ?
     `);
     const insertItem = db.prepare(`
-      INSERT INTO monthly_finance_items (finance_id, user_id, item_date, item_source, amount_cents, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO monthly_finance_items (finance_id, user_id, item_date, item_source, amount_cents, is_paid, paid_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const deleteItem = db.prepare(`
+      DELETE FROM monthly_finance_items
+      WHERE finance_id = ? AND user_id = ? AND id = ?
     `);
 
     db.transaction(() => {
       updateFinance.run(description, totalCents, id, userId);
-      deleteItems.run(id, userId);
+
+      const retainedIds = new Set();
       for (const item of items) {
-        insertItem.run(id, userId, item.item_date, item.item_source, item.amount_cents, nowIso, nowIso);
+        const itemId = normalizePositiveInteger(item?.id);
+        const nextPaid = normalizeFinancePaidFlag(item?.is_paid);
+        if (itemId && currentItemsById.has(itemId)) {
+          const currentItem = currentItemsById.get(itemId);
+          const currentPaid = normalizeFinancePaidFlag(currentItem?.is_paid);
+          const paidAt = nextPaid ? (currentPaid ? (currentItem?.paid_at || nowIsoValue) : nowIsoValue) : null;
+          updateItem.run(item.item_date, item.item_source, item.amount_cents, nextPaid, paidAt, nowIsoValue, itemId, id, userId);
+          retainedIds.add(itemId);
+        } else {
+          insertItem.run(id, userId, item.item_date, item.item_source, item.amount_cents, nextPaid, nextPaid ? nowIsoValue : null, nowIsoValue, nowIsoValue);
+        }
+      }
+
+      for (const currentItem of currentItems) {
+        const currentId = Number(currentItem.id || 0);
+        if (!currentId || retainedIds.has(currentId)) continue;
+        deleteItem.run(id, userId, currentId);
       }
     })();
 
-    return res.json({ success: true, finance: serializeFinanceForApi(userId, id) });
+    return res.json({
+      success: true,
+      finance: serializeFinanceForApi(userId, id),
+      expenseProgress: buildExpensePaymentProgress(userId, Number(finance.month), Number(finance.year))
+    });
   } catch (e) {
     const status = /certinhos|nome para esse item/i.test(String(e.message || '')) ? 400 : 500;
     return res.status(status).json({ error: getFriendlyErrorMessage(e, { defaultMessage: 'Não consegui salvar esses lançamentos agora.' }) });
+  }
+});
+
+app.post("/finances/payment-toggle/:id", ensureAuthenticated, express.json(), (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const id = Number(req.params.id);
+    const finance = getFinanceByIdForUser(userId, id);
+    if (!finance) {
+      return res.status(404).json({ error: "Item não encontrado." });
+    }
+
+    if (finance.type !== 'expense' || finance.amount_mode !== 'fixed') {
+      return res.status(400).json({ error: "Esse controle rápido vale só para saídas de valor único." });
+    }
+
+    if (isMonthClosed(userId, Number(finance.month), Number(finance.year))) {
+      return res.status(423).json({ error: getMonthLockMessage(Number(finance.month), Number(finance.year)) });
+    }
+
+    const nextPaid = normalizeFinancePaidFlag(req.body?.is_paid ?? req.body?.isPaid);
+    const paidAt = nextPaid ? (normalizeFinancePaidFlag(finance?.is_paid) ? (finance?.paid_at || nowIso()) : nowIso()) : null;
+
+    db.prepare(`
+      UPDATE monthly_finances
+      SET is_paid = ?, paid_at = ?
+      WHERE id = ? AND user_id = ?
+    `).run(nextPaid, paidAt, id, userId);
+
+    return res.json({
+      success: true,
+      finance: serializeFinanceForApi(userId, id),
+      expenseProgress: buildExpensePaymentProgress(userId, Number(finance.month), Number(finance.year))
+    });
+  } catch (e) {
+    const details = getFriendlyErrorDetails(e, { defaultMessage: 'Não consegui marcar essa conta agora.' });
+    return res.status(details.status).json({ error: details.message });
+  }
+});
+
+app.post("/finance-items/payment-toggle/:id", ensureAuthenticated, express.json(), (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const itemId = Number(req.params.id);
+    const item = db.prepare(`
+      SELECT fi.id, fi.finance_id, fi.user_id, fi.is_paid, fi.paid_at,
+             mf.month, mf.year, mf.type, mf.amount_mode
+      FROM monthly_finance_items fi
+      JOIN monthly_finances mf ON mf.id = fi.finance_id AND mf.user_id = fi.user_id
+      WHERE fi.id = ? AND fi.user_id = ?
+      LIMIT 1
+    `).get(itemId, userId);
+
+    if (!item) {
+      return res.status(404).json({ error: "Lançamento não encontrado." });
+    }
+
+    if (item.type !== 'expense' || normalizeFinanceAmountMode(item.amount_mode) !== 'variable') {
+      return res.status(400).json({ error: "Esse atalho vale só para lançamentos variáveis das saídas." });
+    }
+
+    if (isMonthClosed(userId, Number(item.month), Number(item.year))) {
+      return res.status(423).json({ error: getMonthLockMessage(Number(item.month), Number(item.year)) });
+    }
+
+    const nextPaid = normalizeFinancePaidFlag(req.body?.is_paid ?? req.body?.isPaid);
+    const paidAt = nextPaid ? (normalizeFinancePaidFlag(item?.is_paid) ? (item?.paid_at || nowIso()) : nowIso()) : null;
+
+    db.prepare(`
+      UPDATE monthly_finance_items
+      SET is_paid = ?, paid_at = ?, updated_at = ?
+      WHERE id = ? AND user_id = ?
+    `).run(nextPaid, paidAt, nowIso(), itemId, userId);
+
+    return res.json({
+      success: true,
+      finance: serializeFinanceForApi(userId, Number(item.finance_id)),
+      expenseProgress: buildExpensePaymentProgress(userId, Number(item.month), Number(item.year))
+    });
+  } catch (e) {
+    const details = getFriendlyErrorDetails(e, { defaultMessage: 'Não consegui marcar esse lançamento agora.' });
+    return res.status(details.status).json({ error: details.message });
   }
 });
 

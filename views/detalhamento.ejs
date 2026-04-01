@@ -38,9 +38,56 @@
         const heroOwnerName = String((owner && owner.name) || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).join(' ') || 'Seu painel';
         const incomeFinances = finances.filter((f) => f.type === 'income');
         const expenseFinances = finances.filter((f) => f.type === 'expense');
+        const expenseProgress = expensePaymentProgress || {};
+        const cardProgress = cardPaymentProgress || {};
+
+        function clampProgressPct(value) {
+            const pct = Number(value || 0);
+            if (!Number.isFinite(pct)) return 0;
+            return Math.max(0, Math.min(100, Math.round(pct)));
+        }
 
         function isVariable(fin) {
             return (fin.amount_mode || 'fixed') === 'variable';
+        }
+
+        function buildFinancePaymentState(fin) {
+            const totalCents = Math.max(0, Number(fin.amount_cents || 0));
+
+            if (!isVariable(fin)) {
+                const isPaid = Number(fin.is_paid || 0) === 1;
+                const paidCents = isPaid ? totalCents : 0;
+                return {
+                    mode: 'fixed',
+                    isPaid,
+                    totalItemCount: totalCents > 0 ? 1 : 0,
+                    paidItemCount: isPaid && totalCents > 0 ? 1 : 0,
+                    totalCents,
+                    paidCents,
+                    remainingCents: Math.max(0, totalCents - paidCents),
+                    progressPct: totalCents > 0 ? clampProgressPct((paidCents / totalCents) * 100) : 0,
+                    isComplete: totalCents > 0 && paidCents >= totalCents
+                };
+            }
+
+            const items = Array.isArray(fin.items) ? fin.items : [];
+            const paidItems = items.filter((item) => Number(item.is_paid || 0) === 1);
+            const paidCents = paidItems.reduce((sum, item) => sum + Math.max(0, Number(item.amount_cents || 0)), 0);
+            return {
+                mode: 'variable',
+                isPaid: items.length > 0 && paidItems.length === items.length,
+                totalItemCount: items.length,
+                paidItemCount: paidItems.length,
+                totalCents,
+                paidCents,
+                remainingCents: Math.max(0, totalCents - paidCents),
+                progressPct: totalCents > 0 ? clampProgressPct((paidCents / totalCents) * 100) : 0,
+                isComplete: totalCents > 0 && paidCents >= totalCents
+            };
+        }
+
+        function getProgressCardStyle(progress) {
+            return `--op-paid-progress:${clampProgressPct(progress && progress.progressPct)}%;`;
         }
 
         function getDisplayValue(fin) {
@@ -63,10 +110,22 @@
             return Array.isArray(fin.items) ? fin.items.length : 0;
         }
 
+        function getFixedPaymentMeta(fin) {
+            const state = buildFinancePaymentState(fin);
+            if (state.totalCents <= 0) return 'Sem valor definido ainda. Quando ele entrar, o check acompanha.';
+            if (state.isPaid) return `${formatBRLFromCents(state.totalCents)} já entrou na conta do pago.`;
+            return `${formatBRLFromCents(state.totalCents)} ainda esperando o seu ok de pago.`;
+        }
+
         function getVariableHint(fin) {
+            const paymentState = buildFinancePaymentState(fin);
             const totalItems = getItemCount(fin);
             if (!totalItems) return 'Ainda sem lançamentos por aqui';
-            return totalItems === 1 ? '1 lançamento somando esse total' : `${totalItems} lançamentos somando esse total`;
+
+            const baseLabel = totalItems === 1 ? '1 lançamento somando esse total' : `${totalItems} lançamentos somando esse total`;
+            if (!paymentState.paidItemCount) return `${baseLabel} · Nada marcado como pago ainda`;
+            if (paymentState.paidItemCount === totalItems) return `${baseLabel} · Tudo já foi pago`;
+            return `${baseLabel} · ${paymentState.paidItemCount} de ${totalItems} pagos`;
         }
 
 
@@ -325,17 +384,31 @@
                             <%= formatBRLFromCents(incCents) %>
                         </h3>
                     </div>
-                    <div class="bg-violet-500 p-5 rounded-3xl text-white shadow-sm border border-violet-600">
-                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Saiu no mês</p>
-                        <h3 class="text-xl xl:text-2xl font-black mt-1">
-                            <%= formatBRLFromCents(expCents) %>
-                        </h3>
+                    <div class="op-paid-progress-card op-paid-progress-card--expense" data-progress-card="expense" style="<%= getProgressCardStyle(expenseProgress) %>">
+                        <span class="op-paid-progress-card__fill" aria-hidden="true"></span>
+                        <span class="op-paid-progress-card__check <%= expenseProgress.isComplete ? '' : 'hidden' %>" data-progress-check aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M5 12.5l4.2 4.2L19 7"></path>
+                            </svg>
+                        </span>
+                        <div class="op-paid-progress-card__content">
+                            <p class="text-xs font-bold uppercase tracking-wider text-white/80">Saiu no mês</p>
+                            <h3 class="text-xl xl:text-2xl font-black mt-1" data-progress-total><%= formatBRLFromCents(expCents) %></h3>
+                            <p class="op-paid-progress-card__meta" data-progress-label><%= expenseProgress.label || 'Quando pintar saída, o progresso aparece aqui.' %></p>
+                        </div>
                     </div>
-                    <div class="bg-amber-500 p-5 rounded-3xl text-white shadow-sm border border-amber-600">
-                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Ficou nos cartões</p>
-                        <h3 class="text-xl xl:text-2xl font-black mt-1">
-                            <%= formatBRLFromCents(cardTotalCents) %>
-                        </h3>
+                    <div class="op-paid-progress-card op-paid-progress-card--cards" data-progress-card="cards" style="<%= getProgressCardStyle(cardProgress) %>">
+                        <span class="op-paid-progress-card__fill" aria-hidden="true"></span>
+                        <span class="op-paid-progress-card__check <%= cardProgress.isComplete ? '' : 'hidden' %>" data-progress-check aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M5 12.5l4.2 4.2L19 7"></path>
+                            </svg>
+                        </span>
+                        <div class="op-paid-progress-card__content">
+                            <p class="text-xs font-bold uppercase tracking-wider text-white/80">Ficou nos cartões</p>
+                            <h3 class="text-xl xl:text-2xl font-black mt-1" data-progress-total><%= formatBRLFromCents(cardTotalCents) %></h3>
+                            <p class="op-paid-progress-card__meta" data-progress-label><%= cardProgress.label || 'Quando aparecer parcela sua nos cartões, o progresso mora aqui.' %></p>
+                        </div>
                     </div>
                     <div class="bg-rose-500 p-5 rounded-3xl text-white shadow-sm border border-rose-600">
                         <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Tudo comprometido</p>
@@ -643,7 +716,7 @@
                                 <% } else { %>
                                     <div data-no-month-swipe>
                                         <div class="divide-y divide-slate-100 dark:divide-slate-700">
-                                            <% expenseFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); %>
+                                            <% expenseFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); const paymentState = buildFinancePaymentState(fin); %>
                                                 <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-2 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:gap-x-3">
                                                     <div class="min-w-0 space-y-2">
                                                         <input type="text" <%= isClosed ? 'disabled' : '' %> class="w-full min-w-0 bg-transparent border-b border-transparent text-sm font-semibold text-slate-800 focus:border-rose-500 outline-none dark:text-slate-200 disabled:opacity-60 sm:text-base sm:font-medium" value="<%= getDesc(fin) %>" onchange="updateRow(<%= fin.id %>, 'description', this.value)">
@@ -653,7 +726,30 @@
                                                                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10"></path></svg>
                                                                     Vários lançamentos
                                                                 </span>
+                                                                <% if (itemCount) { %>
+                                                                    <span class="op-paid-summary-chip <%= paymentState.isComplete ? 'is-complete' : '' %>">
+                                                                        <%= paymentState.paidItemCount %> de <%= paymentState.totalItemCount %> pagos
+                                                                    </span>
+                                                                <% } %>
                                                                 <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400"><%= getVariableHint(fin) %></span>
+                                                            </div>
+                                                        <% } else { %>
+                                                            <div class="flex flex-wrap items-center gap-2" data-fixed-finance-meta-group>
+                                                                <label class="op-paid-toggle <%= paymentState.isPaid ? 'is-checked' : '' %> <%= isClosed ? 'is-readonly' : '' %>" data-fixed-finance-toggle-shell>
+                                                                    <input type="checkbox"
+                                                                        data-fixed-finance-paid-toggle
+                                                                        data-finance-id="<%= fin.id %>"
+                                                                        data-finance-total-cents="<%= Number(fin.amount_cents || 0) %>"
+                                                                        <%= paymentState.isPaid ? 'checked' : '' %>
+                                                                        <%= isClosed ? 'disabled' : '' %>>
+                                                                    <span class="op-paid-toggle__box" aria-hidden="true">
+                                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                                            <path d="M5 12.5l4.2 4.2L19 7"></path>
+                                                                        </svg>
+                                                                    </span>
+                                                                    <span class="op-paid-toggle__text" data-fixed-finance-paid-label><%= paymentState.isPaid ? 'Pago' : 'Marcar pago' %></span>
+                                                                </label>
+                                                                <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400" data-fixed-finance-paid-meta><%= getFixedPaymentMeta(fin) %></span>
                                                             </div>
                                                         <% } %>
                                                     </div>
@@ -661,7 +757,7 @@
                                                         <% if (variable) { %>
                                                             <button type="button" onclick="openVariableEditor(<%= fin.id %>)" class="w-full rounded-2xl border border-rose-200 bg-rose-50 px-2.5 py-2 text-right transition hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900/40 dark:bg-rose-900/20 dark:hover:bg-rose-900/30 sm:px-3">
                                                                 <span class="block font-mono text-[13px] font-black text-rose-700 dark:text-rose-300 sm:text-sm"><%= formatBRLFromCents(fin.amount_cents) %></span>
-                                                                <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${itemCount} lançamento${itemCount === 1 ? '' : 's'}` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
+                                                                <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${paymentState.paidItemCount} de ${itemCount} pagos` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
                                                             </button>
                                                         <% } else { %>
                                                             <input type="text" data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 font-mono text-[13px] font-black text-right text-rose-700 outline-none transition hover:border-rose-300 focus:border-rose-400 focus:ring-2 focus:ring-rose-500 disabled:opacity-60 dark:border-rose-900/40 dark:bg-rose-900/30 dark:text-rose-400 sm:text-sm" value="<%= getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>, this.value)">
@@ -733,14 +829,14 @@
 
                                 <div id="finance-fixed-panel" class="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/60">
                                     <div class="text-sm font-bold text-slate-800 dark:text-white">Modo rápido na área</div>
-                                    <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Esse item vai nascer como valor único. Você salva o nome agora e ajusta o valor direto na lista, sem novela.</p>
+                                    <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Esse item vai nascer como valor único. Você salva o nome agora, ajusta o valor direto na lista e depois marca o check quando o pagamento bater.</p>
                                 </div>
 
                                 <div id="finance-variable-panel" class="hidden space-y-4">
                                     <div class="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/60 sm:flex-row sm:items-center sm:justify-between">
                                         <div>
                                             <div class="text-sm font-bold text-slate-800 dark:text-white">Listinha dos lançamentos</div>
-                                            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Cada linha soma no total do lado de fora. Data, origem e valor — sem mistério.</p>
+                                            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Cada linha soma no total do lado de fora. Data, origem, valor e o check de pago quando essa parte já tiver sido quitada.</p>
                                         </div>
                                         <button type="button" id="finance-add-item-btn" class="op-btn op-btn-primary px-4 py-2 text-sm">+ Adicionar linha</button>
                                     </div>
@@ -838,6 +934,65 @@
                     deleteCloseButtons: Array.from(document.querySelectorAll('[data-finance-delete-close]'))
                 };
                 const brlFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+                const progressCardRefs = {
+                    expense: document.querySelector('[data-progress-card="expense"]'),
+                    cards: document.querySelector('[data-progress-card="cards"]')
+                };
+
+                function clampProgressValue(value) {
+                    const pct = Number(value || 0);
+                    if (!Number.isFinite(pct)) return 0;
+                    return Math.max(0, Math.min(100, Math.round(pct)));
+                }
+
+                function getFixedPaymentMetaText(totalCents, isPaid) {
+                    const safeTotal = Math.max(0, Number(totalCents || 0));
+                    if (safeTotal <= 0) return 'Sem valor definido ainda. Quando ele entrar, o check acompanha.';
+                    return isPaid
+                        ? `${formatCurrency(safeTotal)} já entrou na conta do pago.`
+                        : `${formatCurrency(safeTotal)} ainda esperando o seu ok de pago.`;
+                }
+
+                function applyProgressCardState(scope, progress) {
+                    const root = progressCardRefs[scope];
+                    if (!root || !progress) return;
+
+                    const pct = clampProgressValue(progress.progressPct);
+                    root.style.setProperty('--op-paid-progress', `${pct}%`);
+
+                    const labelNode = root.querySelector('[data-progress-label]');
+                    if (labelNode) {
+                        labelNode.textContent = progress.label || (scope === 'cards'
+                            ? 'Quando aparecer parcela sua nos cartões, o progresso mora aqui.'
+                            : 'Quando pintar saída, o progresso aparece aqui.');
+                    }
+
+                    const checkNode = root.querySelector('[data-progress-check]');
+                    if (checkNode) {
+                        const shouldShowCheck = !!progress.isComplete && Number(progress.totalCents || 0) > 0;
+                        checkNode.classList.toggle('hidden', !shouldShowCheck);
+                    }
+                }
+
+                function applyFixedToggleVisual(toggle, isPaid) {
+                    const metaGroup = toggle?.closest('[data-fixed-finance-meta-group]');
+                    if (!metaGroup) return;
+
+                    const shell = metaGroup.querySelector('[data-fixed-finance-toggle-shell]');
+                    const label = metaGroup.querySelector('[data-fixed-finance-paid-label]');
+                    const meta = metaGroup.querySelector('[data-fixed-finance-paid-meta]');
+                    const totalCents = Number(toggle?.dataset.financeTotalCents || 0);
+
+                    if (shell) {
+                        shell.classList.toggle('is-checked', !!isPaid);
+                    }
+                    if (label) {
+                        label.textContent = isPaid ? 'Pago' : 'Marcar pago';
+                    }
+                    if (meta) {
+                        meta.textContent = getFixedPaymentMetaText(totalCents, isPaid);
+                    }
+                }
 
                 function evaluateFormula(str) {
                     try {
@@ -952,12 +1107,19 @@
                     updateBodyLockState();
                 }
 
+                function syncVariableItemRowState(row) {
+                    if (!row) return;
+                    const paidInput = row.querySelector('[data-variable-item-paid]');
+                    row.classList.toggle('is-paid', !!paidInput?.checked);
+                }
+
                 function createVariableItemRow(item = {}) {
                     const row = document.createElement('div');
-                    row.className = 'rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900';
+                    row.className = 'op-variable-item-row rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900';
                     row.dataset.variableItemRow = '1';
                     row.innerHTML = `
-                        <div class="grid gap-3 md:grid-cols-[170px_minmax(0,1fr)_170px_auto] md:items-end">
+                        <input type="hidden" data-variable-item-id>
+                        <div class="grid gap-3 md:grid-cols-[165px_minmax(0,1fr)_150px_150px_auto] md:items-end">
                             <div>
                                 <label class="block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 mb-2">Data</label>
                                 <input type="date" data-variable-item-date class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:bg-slate-900">
@@ -970,18 +1132,36 @@
                                 <label class="block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 mb-2">Valor</label>
                                 <input type="text" data-variable-item-amount class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-right text-sm font-black text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:bg-slate-900" inputmode="numeric" autocomplete="off" placeholder="0,00">
                             </div>
+                            <div>
+                                <label class="block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 mb-2">Já paguei</label>
+                                <label class="op-paid-toggle op-paid-toggle--compact" data-variable-item-paid-shell>
+                                    <input type="checkbox" data-variable-item-paid>
+                                    <span class="op-paid-toggle__box" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M5 12.5l4.2 4.2L19 7"></path>
+                                        </svg>
+                                    </span>
+                                    <span class="op-paid-toggle__text" data-variable-item-paid-label>Marcar pago</span>
+                                </label>
+                            </div>
                             <div class="md:pb-[1px]">
                                 <button type="button" data-variable-item-remove class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 px-3 py-2 text-sm font-bold text-rose-600 transition hover:bg-rose-50 dark:border-rose-900/40 dark:text-rose-300 dark:hover:bg-rose-900/20">Remover</button>
                             </div>
                         </div>
                     `;
 
+                    const idInput = row.querySelector('[data-variable-item-id]');
                     const dateInput = row.querySelector('[data-variable-item-date]');
                     const sourceInput = row.querySelector('[data-variable-item-source]');
                     const amountInput = row.querySelector('[data-variable-item-amount]');
+                    const paidInput = row.querySelector('[data-variable-item-paid]');
+                    const paidShell = row.querySelector('[data-variable-item-paid-shell]');
+                    const paidLabel = row.querySelector('[data-variable-item-paid-label]');
                     const removeButton = row.querySelector('[data-variable-item-remove]');
                     const moneyMask = getMoneyMaskApi();
+                    const initialPaid = !!Number(item.is_paid || item.isPaid || 0);
 
+                    if (idInput) idInput.value = item.id || item.item_id || '';
                     if (dateInput) dateInput.value = item.item_date || item.date || getDefaultItemDate();
                     if (sourceInput) sourceInput.value = item.item_source || item.source || '';
                     if (amountInput) {
@@ -1000,6 +1180,19 @@
                         sourceInput.addEventListener('input', refreshFinanceTotalPreview);
                         sourceInput.addEventListener('change', refreshFinanceTotalPreview);
                     }
+                    if (paidInput) {
+                        paidInput.checked = initialPaid;
+                        paidInput.disabled = financeModalState.readOnly;
+                        if (paidShell) paidShell.classList.toggle('is-checked', initialPaid);
+                        if (paidLabel) paidLabel.textContent = initialPaid ? 'Pago' : 'Marcar pago';
+                        paidInput.addEventListener('change', () => {
+                            const checked = !!paidInput.checked;
+                            if (paidShell) paidShell.classList.toggle('is-checked', checked);
+                            if (paidLabel) paidLabel.textContent = checked ? 'Pago' : 'Marcar pago';
+                            syncVariableItemRowState(row);
+                            refreshFinanceTotalPreview();
+                        });
+                    }
                     if (removeButton) {
                         removeButton.hidden = financeModalState.readOnly;
                         removeButton.addEventListener('click', () => {
@@ -1009,6 +1202,7 @@
                         });
                     }
 
+                    syncVariableItemRowState(row);
                     return row;
                 }
 
@@ -1035,9 +1229,11 @@
                     const items = [];
 
                     rows.forEach((row) => {
+                        const idValue = (row.querySelector('[data-variable-item-id]')?.value || '').trim();
                         const dateValue = (row.querySelector('[data-variable-item-date]')?.value || '').trim();
                         const sourceValue = (row.querySelector('[data-variable-item-source]')?.value || '').trim();
                         const amountValue = row.querySelector('[data-variable-item-amount]')?.value || '';
+                        const isPaid = row.querySelector('[data-variable-item-paid]')?.checked ? 1 : 0;
                         const amountCents = moneyMask.toCents(amountValue);
                         const hasAnyValue = !!dateValue || !!sourceValue || amountCents > 0;
 
@@ -1047,7 +1243,13 @@
                             throw new Error('Em vários lançamentos, preencha data, origem e valor certinhos.');
                         }
 
-                        items.push({ item_date: dateValue, item_source: sourceValue, amount_cents: amountCents });
+                        items.push({
+                            id: idValue ? Number(idValue) : null,
+                            item_date: dateValue,
+                            item_source: sourceValue,
+                            amount_cents: amountCents,
+                            is_paid: isPaid
+                        });
                     });
 
                     return items;
@@ -1064,14 +1266,22 @@
 
                     const items = readVariableItems();
                     const totalCents = items.reduce((sum, item) => sum + Number(item.amount_cents || 0), 0);
+                    const paidItems = items.filter((item) => Number(item.is_paid || 0) === 1);
+                    const paidCents = paidItems.reduce((sum, item) => sum + Number(item.amount_cents || 0), 0);
                     financeRefs.totalPreview.textContent = formatCurrency(totalCents);
 
                     if (!items.length) {
                         financeRefs.totalCaption.textContent = 'Sem lançamentos ainda. A linha principal pode ficar de prontidão.';
                     } else if (items.length === 1) {
-                        financeRefs.totalCaption.textContent = '1 lançamento entrando nesse total.';
-                    } else {
+                        financeRefs.totalCaption.textContent = paidItems.length
+                            ? `1 lançamento e ele já foi pago (${formatCurrency(paidCents)}).`
+                            : '1 lançamento entrando nesse total.';
+                    } else if (!paidItems.length) {
                         financeRefs.totalCaption.textContent = `${items.length} lançamentos entrando nesse total.`;
+                    } else if (paidItems.length === items.length) {
+                        financeRefs.totalCaption.textContent = `${items.length} lançamentos e todos já foram pagos.`;
+                    } else {
+                        financeRefs.totalCaption.textContent = `${items.length} lançamentos · ${paidItems.length} pagos (${formatCurrency(paidCents)}).`;
                     }
                 }
 
@@ -1168,6 +1378,47 @@
                     }
 
                     return data;
+                }
+
+                async function handleFixedPaymentToggle(event) {
+                    const toggle = event?.currentTarget;
+                    if (!toggle) return;
+
+                    const financeId = Number(toggle.dataset.financeId || 0);
+                    const nextPaid = !!toggle.checked;
+                    const previousPaid = !nextPaid;
+
+                    toggle.disabled = true;
+                    applyFixedToggleVisual(toggle, nextPaid);
+
+                    try {
+                        const data = await fetchJson(`/finances/payment-toggle/${financeId}`, {
+                            method: 'POST',
+                            body: JSON.stringify({ is_paid: nextPaid ? 1 : 0 })
+                        });
+
+                        const finance = data.finance || {};
+                        const resolvedPaid = !!Number(finance.is_paid || 0);
+                        toggle.checked = resolvedPaid;
+                        toggle.dataset.financeTotalCents = Number(finance.amount_cents || toggle.dataset.financeTotalCents || 0);
+                        applyFixedToggleVisual(toggle, resolvedPaid);
+                        applyProgressCardState('expense', data.expenseProgress || {});
+                    } catch (error) {
+                        toggle.checked = previousPaid;
+                        applyFixedToggleVisual(toggle, previousPaid);
+                        alert(error.message || 'Não consegui marcar essa conta agora.');
+                    } finally {
+                        toggle.disabled = detailMonthIsClosed;
+                    }
+                }
+
+                function bindFixedPaymentToggles() {
+                    document.querySelectorAll('[data-fixed-finance-paid-toggle]').forEach((toggle) => {
+                        if (toggle.dataset.paymentToggleBound === '1') return;
+                        toggle.dataset.paymentToggleBound = '1';
+                        applyFixedToggleVisual(toggle, !!toggle.checked);
+                        toggle.addEventListener('change', handleFixedPaymentToggle);
+                    });
                 }
 
                 async function saveFinanceModal() {
@@ -1443,6 +1694,9 @@
                 document.addEventListener('DOMContentLoaded', () => {
                     calculatePad();
                     applyFinanceModalState();
+                    applyProgressCardState('expense', <%- JSON.stringify(expenseProgress || {}) %>);
+                    applyProgressCardState('cards', <%- JSON.stringify(cardProgress || {}) %>);
+                    bindFixedPaymentToggles();
                 });
             </script>
 

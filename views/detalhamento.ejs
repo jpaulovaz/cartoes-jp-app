@@ -857,12 +857,12 @@
 
                                 <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px] xl:items-start">
                                     <div class="space-y-4">
-                                        <div class="grid gap-4 sm:grid-cols-[96px_minmax(0,1fr)] sm:items-end">
+                                        <div id="finance-fixed-header-grid" class="grid gap-4 sm:grid-cols-[96px_minmax(0,1fr)] sm:items-end">
                                             <div id="finance-fixed-day-shell">
                                                 <label for="finance-fixed-day-input" class="mb-2 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Dia</label>
                                                 <input id="finance-fixed-day-input" type="number" min="1" max="31" inputmode="numeric" class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-3 text-center text-sm font-black text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950" placeholder="Ex: 5">
                                             </div>
-                                            <div>
+                                            <div id="finance-description-shell">
                                                 <label for="finance-description-input" id="finance-description-label" class="mb-2 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Nome da entrada</label>
                                                 <input id="finance-description-input" type="text" class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950" placeholder="Ex: Shows, Salário, Freelas">
                                             </div>
@@ -989,7 +989,9 @@
                     modeButtons: Array.from(document.querySelectorAll('[data-finance-mode-btn]')),
                     descriptionLabel: document.getElementById('finance-description-label'),
                     descriptionInput: document.getElementById('finance-description-input'),
+                    descriptionShell: document.getElementById('finance-description-shell'),
                     fixedDayShell: document.getElementById('finance-fixed-day-shell'),
+                    fixedHeaderGrid: document.getElementById('finance-fixed-header-grid'),
                     totalPreview: document.getElementById('finance-total-preview'),
                     totalCaption: document.getElementById('finance-total-caption'),
                     fixedPanel: document.getElementById('finance-fixed-panel'),
@@ -1442,6 +1444,14 @@
                     }
                     if (financeRefs.fixedDayShell) {
                         financeRefs.fixedDayShell.classList.toggle('hidden', isVariableMode);
+                    }
+                    if (financeRefs.fixedHeaderGrid) {
+                        financeRefs.fixedHeaderGrid.classList.toggle('sm:grid-cols-[96px_minmax(0,1fr)]', !isVariableMode);
+                        financeRefs.fixedHeaderGrid.classList.toggle('sm:items-end', !isVariableMode);
+                        financeRefs.fixedHeaderGrid.classList.toggle('sm:grid-cols-1', isVariableMode);
+                    }
+                    if (financeRefs.descriptionShell) {
+                        financeRefs.descriptionShell.classList.toggle('sm:col-span-1', isVariableMode);
                     }
                     if (financeRefs.variablePanel) {
                         financeRefs.variablePanel.classList.toggle('hidden', !isVariableMode);

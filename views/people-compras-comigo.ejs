@@ -65,14 +65,14 @@
 
     <div class="op-page-hero__actions op-page-hero__actions--compact">
       <div class="op-month-hero-actions__row op-month-hero-actions__row--dual">
-        <a href="<%= backHref || '/people' %>" class="op-btn op-btn-muted op-btn--compact whitespace-nowrap">← Voltar para Amigos</a>
+        <a href="<%= backHref || '/people' %>" class="op-btn op-btn-accent-soft op-btn--compact whitespace-nowrap">← Voltar para Amigos</a>
         <a href="<%= sharedDebtsHref || '/shared-debts' %>" class="op-btn op-btn-info op-btn--compact whitespace-nowrap">Abrir Cobranças</a>
       </div>
 
       <div class="op-month-hero-actions__row op-month-hero-actions__row--triple">
-        <a href="<%= previousMonthHref %>" class="op-btn op-btn-muted op-btn--compact whitespace-nowrap">← Mês anterior</a>
+        <a href="<%= previousMonthHref %>" class="op-btn op-btn-accent-soft op-btn--compact whitespace-nowrap">← Mês anterior</a>
         <a href="<%= currentMonthHref %>" class="op-btn <%= isCurrentMonth ? 'op-btn-success' : 'op-btn-primary' %> op-btn--compact whitespace-nowrap"><%= isCurrentMonth ? 'Mês atual' : 'Ir para o atual' %></a>
-        <a href="<%= nextMonthHref %>" class="op-btn op-btn-muted op-btn--compact whitespace-nowrap">Mês seguinte →</a>
+        <a href="<%= nextMonthHref %>" class="op-btn op-btn-accent-soft op-btn--compact whitespace-nowrap">Mês seguinte →</a>
       </div>
     </div>
   </section>

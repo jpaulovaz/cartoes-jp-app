@@ -9933,9 +9933,9 @@ function buildSharedDebtDraftHistoryBlockerMessage(rows = []) {
   if (!items.length) return null;
   if (items.length === 1) {
     const label = String(items[0].description_snapshot || 'essa compra').trim() || 'essa compra';
-    return `${label} já chegou a nascer como cobrança compartilhada antes. Para não criar dívida fantasma nem reescrever envio antigo, o modo “guardar e mandar depois” fica só para compras novas.`;
+    return `${label} já chegou a nascer como cobrança compartilhada antes. A boa notícia é que a caixa de saída continua cuidando disso sem mandar nada automaticamente.`;
   }
-  return `Parte dessa seleção já virou cobrança em algum momento. Para não embaralhar histórico, aceite, Pix e envio antigo, a caixa de saída só guarda compras novas por aqui.`;
+  return `Parte dessa seleção já virou cobrança em algum momento. A caixa de saída continua segurando essas mudanças por aqui até você revisar e enviar.`;
 }
 
 function getSharedDebtCardTransactionSnapshot(userId, txnId) {
@@ -19527,14 +19527,10 @@ app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
       originKind: detectSharedDebtOriginKindFromRows(targetRows)
     });
 
-    const baseMessage = targetRows.length > 1
-      ? `${targetRows.length} lançamento(s) tiveram a distribuição atualizada.`
-      : 'Distribuição atualizada com sucesso.';
-
     const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
     const message = summary.itemCount > 0
-      ? `${baseMessage} ${formatCountLabel(summary.itemCount, 'item foi para a caixa de saída', 'itens foram para a caixa de saída')}.`
-      : `${baseMessage} Nada entrou na caixa de saída dessa vez.`;
+      ? `Divisão salva. ${formatCountLabel(summary.itemCount, 'item foi para a caixa de saída', 'itens foram para a caixa de saída')}.`
+      : 'Divisão salva. Nada entrou na caixa de saída dessa vez.';
 
     return res.json({
       ok: true,

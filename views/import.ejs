@@ -163,126 +163,177 @@
 </div>
 
 <% if (reviewReady) { %>
-  <div data-import-review-modal data-initial-open="1" class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/70 p-0 sm:items-center sm:p-6">
-    <div class="absolute inset-0" data-import-review-backdrop></div>
-    <section class="relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-slate-900 sm:h-auto sm:max-h-[92vh] sm:max-w-7xl sm:rounded-[32px] sm:border sm:border-slate-200 sm:ring-1 sm:ring-slate-200 dark:sm:border-slate-700 dark:sm:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="import-review-title">
+  <div data-import-review-modal data-initial-open="1" class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-0 sm:items-center sm:p-5">
+    <div class="absolute inset-0 backdrop-blur-[2px]" data-import-review-backdrop></div>
+    <section class="relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-slate-900 sm:h-auto sm:max-h-[94vh] sm:max-w-[96vw] 2xl:max-w-[1480px] sm:rounded-[30px] sm:border sm:border-slate-200 sm:ring-1 sm:ring-slate-200 dark:sm:border-slate-700 dark:sm:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="import-review-title">
       <form id="import-review-form" method="post" action="/import/confirm" class="flex min-h-0 flex-1 flex-col">
         <input type="hidden" name="preview_id" value="<%= preview.id %>">
-        <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800 sm:px-8 sm:py-6">
+
+        <div class="border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-6 lg:px-7">
           <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div>
-              <div class="text-xs font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Revisao antes de importar</div>
-              <h2 id="import-review-title" class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100"><%= preview.cardName %> · <%= preview.periodLabel %></h2>
-              <p class="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Arquivo <span class="font-bold text-slate-800 dark:text-slate-100"><%= preview.originalFilename %></span> com <span class="font-bold"><%= previewSummary.parsedCount || 0 %></span> compra(s), somando <span class="font-bold"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></span>.</p>
+            <div class="min-w-0">
+              <div class="text-[11px] font-black uppercase tracking-[0.22em] text-violet-600 dark:text-violet-300">Revisao antes de importar</div>
+              <h2 id="import-review-title" class="mt-2 text-[clamp(1.6rem,1.2rem+0.9vw,2.2rem)] font-black tracking-tight text-slate-900 dark:text-slate-100"><%= preview.cardName %> · <%= preview.periodLabel %></h2>
+              <p class="mt-2 max-w-4xl text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Arquivo <span class="font-bold text-slate-800 dark:text-slate-100"><%= preview.originalFilename %></span> com <span class="font-bold"><%= previewSummary.parsedCount || 0 %></span> compra(s), somando <span class="font-bold"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></span>.</p>
             </div>
-            <div class="flex flex-wrap gap-3">
-              <button type="button" data-import-review-close class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800">
+            <div class="flex shrink-0 flex-wrap gap-2.5">
+              <button type="button" data-import-review-close class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800">
                 Fechar modal
               </button>
-              <button type="submit" data-import-review-confirm class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+              <button type="submit" data-import-review-confirm class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
                 Confirmar importacao
               </button>
             </div>
           </div>
 
-          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div class="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/70">
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">No arquivo</div>
-              <div class="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></div>
-              <div class="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.parsedCount || 0 %> linha(s) lida(s)</div>
+          <div class="mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+            <div class="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3.5 dark:border-slate-700 dark:bg-slate-950/70">
+              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">No arquivo</div>
+              <div class="mt-2 text-[1.65rem] font-black leading-none text-slate-900 dark:text-slate-100"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></div>
+              <div class="mt-1.5 text-[13px] font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.parsedCount || 0 %> linha(s) lida(s)</div>
             </div>
-            <div class="rounded-[24px] border border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70">
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Ja estava no cartao</div>
-              <div class="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100"><%= previewSummary.existingTotalLabel || formatBRLFromCents(0) %></div>
-              <div class="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.existingCount || 0 %> compra(s) ja no mes</div>
+            <div class="rounded-[20px] border border-slate-200 bg-white px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/70">
+              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Ja estava no cartao</div>
+              <div class="mt-2 text-[1.65rem] font-black leading-none text-slate-900 dark:text-slate-100"><%= previewSummary.existingTotalLabel || formatBRLFromCents(0) %></div>
+              <div class="mt-1.5 text-[13px] font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.existingCount || 0 %> compra(s) no mes</div>
             </div>
-            <div class="rounded-[24px] border border-emerald-200 bg-emerald-50 px-4 py-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Vai entrar agora</div>
-              <div class="mt-2 text-2xl font-black text-emerald-900 dark:text-emerald-100" data-final-total><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
-              <div class="mt-1 text-sm font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultFinalCount || 0 %></span> compra(s) nesta confirmacao</div>
+            <div class="rounded-[20px] border border-emerald-200 bg-emerald-50 px-4 py-3.5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Vai entrar agora</div>
+              <div class="mt-2 text-[1.65rem] font-black leading-none text-emerald-900 dark:text-emerald-100" data-final-total><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
+              <div class="mt-1.5 text-[13px] font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultFinalCount || 0 %></span> compra(s) nesta confirmacao</div>
             </div>
-            <div class="rounded-[24px] border border-violet-200 bg-violet-50 px-4 py-4 dark:border-violet-900/60 dark:bg-violet-950/20">
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">O cartao fica em</div>
-              <div class="mt-2 text-2xl font-black text-violet-900 dark:text-violet-100" data-projected-total><%= previewSummary.projectedCardTotalLabel || formatBRLFromCents(0) %></div>
-              <div class="mt-1 text-sm font-semibold text-violet-700/80 dark:text-violet-200/80"><span data-projected-count><%= previewSummary.projectedCardCount || 0 %></span> compra(s) no mes depois da importacao</div>
+            <div class="rounded-[20px] border border-violet-200 bg-violet-50 px-4 py-3.5 dark:border-violet-900/60 dark:bg-violet-950/20">
+              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">O cartao fica em</div>
+              <div class="mt-2 text-[1.65rem] font-black leading-none text-violet-900 dark:text-violet-100" data-projected-total><%= previewSummary.projectedCardTotalLabel || formatBRLFromCents(0) %></div>
+              <div class="mt-1.5 text-[13px] font-semibold text-violet-700/80 dark:text-violet-200/80"><span data-projected-count><%= previewSummary.projectedCardCount || 0 %></span> compra(s) no mes depois da importacao</div>
             </div>
           </div>
         </div>
 
-        <div class="border-b border-slate-200 px-5 py-3 dark:border-slate-800 sm:px-8">
-          <div class="flex gap-3 overflow-x-auto pb-1">
-            <button type="button" data-review-tab-trigger="app" class="min-w-max rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800">
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">1. Suspeitas no app</div>
-              <div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100"><%= previewSummary.appDuplicateCount || 0 %> item(ns)</div>
-              <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.appDuplicateTotalLabel || formatBRLFromCents(0) %></div>
+        <div class="border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-6 lg:px-7">
+          <div class="flex gap-2 overflow-x-auto pb-1">
+            <button type="button" data-review-tab-trigger="app" class="min-w-[220px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800">
+              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">1. Suspeitas no app</div>
+              <div class="mt-1 flex items-end justify-between gap-3">
+                <div class="text-sm font-black text-slate-900 dark:text-slate-100"><%= previewSummary.appDuplicateCount || 0 %> item(ns)</div>
+                <div class="text-xs font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.appDuplicateTotalLabel || formatBRLFromCents(0) %></div>
+              </div>
             </button>
-            <button type="button" data-review-tab-trigger="csv" class="min-w-max rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800">
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">2. Repetidas no CSV</div>
-              <div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100"><%= previewSummary.csvDuplicateGroupCount || 0 %> grupo(s)</div>
-              <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.csvDuplicateTotalLabel || formatBRLFromCents(0) %></div>
+            <button type="button" data-review-tab-trigger="csv" class="min-w-[220px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800">
+              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">2. Repetidas no CSV</div>
+              <div class="mt-1 flex items-end justify-between gap-3">
+                <div class="text-sm font-black text-slate-900 dark:text-slate-100"><%= previewSummary.csvDuplicateGroupCount || 0 %> grupo(s)</div>
+                <div class="text-xs font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.csvDuplicateTotalLabel || formatBRLFromCents(0) %></div>
+              </div>
             </button>
-            <button type="button" data-review-tab-trigger="final" class="min-w-max rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800">
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">3. O que vai entrar</div>
-              <div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100"><span data-final-count><%= previewSummary.defaultFinalCount || 0 %></span> item(ns)</div>
-              <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400" data-final-total-secondary><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
+            <button type="button" data-review-tab-trigger="final" class="min-w-[220px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800">
+              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">3. O que vai entrar</div>
+              <div class="mt-1 flex items-end justify-between gap-3">
+                <div class="text-sm font-black text-slate-900 dark:text-slate-100"><span data-final-count><%= previewSummary.defaultFinalCount || 0 %></span> item(ns)</div>
+                <div class="text-xs font-semibold text-slate-500 dark:text-slate-400" data-final-total-secondary><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
+              </div>
             </button>
           </div>
         </div>
 
-        <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8 sm:py-6" data-review-tab-container data-default-tab="<%= defaultReviewTab %>" data-file-total-cents="<%= previewSummary.parsedTotalCents || 0 %>" data-existing-total-cents="<%= previewSummary.existingTotalCents || 0 %>" data-existing-count="<%= previewSummary.existingCount || 0 %>">
-          <section data-review-tab-panel="app" class="space-y-4">
+        <div class="min-h-0 flex-1 overflow-y-auto bg-slate-50/85 px-4 py-4 dark:bg-slate-950/45 sm:px-6 lg:px-7" data-review-tab-container data-default-tab="<%= defaultReviewTab %>" data-file-total-cents="<%= previewSummary.parsedTotalCents || 0 %>" data-existing-total-cents="<%= previewSummary.existingTotalCents || 0 %>" data-existing-count="<%= previewSummary.existingCount || 0 %>">
+          <section data-review-tab-panel="app" class="space-y-3.5">
             <% if (!previewAppCandidates.length) { %>
-              <div class="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
+              <div class="rounded-[24px] border border-dashed border-slate-300 bg-white px-5 py-8 text-center text-sm font-medium text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">
                 Nenhuma compra do arquivo bateu com mesmo dia e valor no mes escolhido. Aqui o app ficou tranquilinho.
               </div>
             <% } %>
 
-            <% previewAppCandidates.forEach((candidate) => {
+            <% previewAppCandidates.forEach((candidate, candidateIndex) => {
               const item = previewItemMap.get(candidate.itemId);
               if (!item) return;
             %>
-              <article class="rounded-[28px] border border-amber-200 bg-amber-50/70 p-4 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/15 sm:p-5">
-                <div class="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-                  <div class="rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Veio do arquivo</div>
-                    <div class="mt-3 text-base font-black text-slate-900 dark:text-slate-100"><%= item.description %></div>
-                    <div class="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70"><%= item.dateLabel %></span>
-                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70"><%= item.cardNumberLabel %></span>
-                    </div>
-                    <div class="mt-3 text-2xl font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
-                    <p class="mt-3 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
+              <article class="rounded-[24px] border border-amber-200 bg-amber-50/60 p-3.5 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/15 sm:p-4">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900/70 dark:text-amber-200">Suspeita <%= candidateIndex + 1 %></span>
+                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= candidate.existingMatchCount %> coincidencia(s)</span>
                       <% if (candidate.exactMatchCount > 0) { %>
-                        Ja existe <span class="font-bold"><%= candidate.exactMatchCount %></span> item(ns) praticamente igual(is) no app.
+                        <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200"><%= candidate.exactMatchCount %> praticamente igual(is)</span>
+                      <% } %>
+                    </div>
+                    <h3 class="mt-2 text-sm font-black leading-6 text-slate-900 dark:text-slate-100"><%= item.description %></h3>
+                    <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
+                      <% if (candidate.exactMatchCount > 0) { %>
+                        O app encontrou item(ns) muito parecido(s). Compare linha a linha antes de marcar para importar mesmo assim.
                       <% } else { %>
-                        O alerta apareceu porque ja existe compra no mesmo dia e com o mesmo valor.
+                        O alerta apareceu porque ja existe compra com mesmo dia e valor no mes escolhido.
                       <% } %>
                     </p>
                   </div>
-
-                  <div class="rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Ja esta no app</div>
-                      <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[11px] font-black text-amber-700 dark:border-amber-900/70 dark:bg-amber-900/30 dark:text-amber-200"><%= candidate.existingMatchCount %> coincidencia(s)</span>
-                    </div>
-                    <div class="mt-3 grid gap-3 lg:grid-cols-2">
-                      <% candidate.existingMatches.forEach((match) => { %>
-                        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-700 dark:bg-slate-900/70">
-                          <div class="flex items-start justify-between gap-3">
-                            <div>
-                              <div class="text-sm font-black text-slate-900 dark:text-slate-100"><%= match.description %></div>
-                              <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= match.dateLabel %> · <%= match.cardNumberLabel %></div>
-                            </div>
-                            <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= match.originLabel %></span>
-                          </div>
-                          <div class="mt-3 text-sm font-black text-slate-900 dark:text-slate-100"><%= match.amountLabel %></div>
-                        </div>
-                      <% }) %>
-                    </div>
+                  <div class="shrink-0 rounded-2xl border border-amber-200 bg-white px-3 py-2 text-right shadow-sm dark:border-amber-900/60 dark:bg-slate-900/70">
+                    <div class="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">Valor do item</div>
+                    <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
                   </div>
                 </div>
 
-                <label class="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm dark:border-amber-900/60 dark:bg-slate-900/80 dark:text-slate-200">
+                <div class="mt-3 grid gap-3 xl:grid-cols-[0.84fr_1.16fr]">
+                  <section class="rounded-[20px] border border-slate-200 bg-white/90 p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                    <div class="flex items-center justify-between gap-3">
+                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Veio do arquivo</div>
+                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">CSV</span>
+                    </div>
+                    <div class="mt-3 overflow-x-auto">
+                      <div class="min-w-[700px] space-y-2">
+                        <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                          <div>Lancamento</div>
+                          <div>Data</div>
+                          <div>Final</div>
+                          <div>Status</div>
+                          <div class="text-right">Valor</div>
+                        </div>
+                        <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-3 py-3 text-sm dark:border-amber-900/60 dark:bg-amber-950/20">
+                          <div class="min-w-0">
+                            <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                            <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Linha trazida pelo CSV</div>
+                          </div>
+                          <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
+                          <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
+                          <div><span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900 dark:text-amber-200">No arquivo</span></div>
+                          <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="rounded-[20px] border border-slate-200 bg-white/90 p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Ja esta no app</div>
+                      <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200"><%= candidate.existingMatchCount %> coincidencia(s)</span>
+                    </div>
+                    <div class="mt-3 overflow-x-auto">
+                      <div class="min-w-[700px] space-y-2">
+                        <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                          <div>Lancamento</div>
+                          <div>Data</div>
+                          <div>Final</div>
+                          <div>Origem</div>
+                          <div class="text-right">Valor</div>
+                        </div>
+                        <% candidate.existingMatches.forEach((match) => { %>
+                          <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-slate-950/70">
+                            <div class="min-w-0">
+                              <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= match.description %></div>
+                              <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Compra encontrada no app</div>
+                            </div>
+                            <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= match.dateLabel %></div>
+                            <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= match.cardNumberLabel %></div>
+                            <div><span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= match.originLabel %></span></div>
+                            <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= match.amountLabel %></div>
+                          </div>
+                        <% }) %>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+
+                <label class="mt-3 flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm dark:border-amber-900/60 dark:bg-slate-900/80 dark:text-slate-200">
                   <input type="checkbox" name="keep_app_<%= candidate.id %>" value="1" data-app-keep data-item-id="<%= item.id %>" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
                   <span>
                     <span class="block font-black text-slate-900 dark:text-slate-100">Importar mesmo assim</span>
@@ -293,76 +344,106 @@
             <% }) %>
           </section>
 
-          <section data-review-tab-panel="csv" class="hidden space-y-4">
+          <section data-review-tab-panel="csv" class="hidden space-y-3.5">
             <% if (!previewCsvGroups.length) { %>
-              <div class="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
+              <div class="rounded-[24px] border border-dashed border-slate-300 bg-white px-5 py-8 text-center text-sm font-medium text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">
                 O arquivo nao trouxe grupos identicos repetidos. Aqui esta tudo liso e sem eco.
               </div>
             <% } %>
 
-            <% previewCsvGroups.forEach((group) => {
+            <% previewCsvGroups.forEach((group, groupIndex) => {
               const representative = previewItemMap.get(group.representativeItemId);
               const groupItems = (group.itemIds || []).map((itemId) => previewItemMap.get(itemId)).filter(Boolean);
               if (!representative) return;
             %>
-              <article class="rounded-[28px] border border-sky-200 bg-sky-50/70 p-4 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/15 sm:p-5">
-                <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-                  <div>
+              <article class="rounded-[24px] border border-sky-200 bg-sky-50/60 p-3.5 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/15 sm:p-4">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
-                      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Grupo repetido no CSV</div>
-                      <span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[11px] font-black text-sky-700 dark:border-sky-900/70 dark:bg-slate-900/80 dark:text-sky-200"><%= group.occurrenceCount %> linha(s)</span>
+                      <span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-sky-700 dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-sky-200">Grupo <%= groupIndex + 1 %></span>
+                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= group.occurrenceCount %> linha(s)</span>
                       <% if (group.existingMatchCount > 0) { %>
-                        <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[11px] font-black text-amber-700 dark:border-amber-900/70 dark:bg-amber-900/30 dark:text-amber-200"><%= group.existingMatchCount %> com mesmo dia e valor no app</span>
+                        <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200"><%= group.existingMatchCount %> coincidencia(s) no app</span>
                       <% } %>
                     </div>
+                    <h3 class="mt-2 text-sm font-black leading-6 text-slate-900 dark:text-slate-100"><%= representative.description %></h3>
+                    <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">O arquivo repetiu esse lancamento <span class="font-bold"><%= group.occurrenceCount %></span> vez(es). Compare as linhas e ajuste quantas entram.</p>
+                  </div>
+                  <div class="shrink-0 rounded-2xl border border-sky-200 bg-white px-3 py-2 text-right shadow-sm dark:border-sky-900/60 dark:bg-slate-900/70">
+                    <div class="text-[10px] font-black uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">Total do grupo</div>
+                    <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100"><%= group.groupTotalLabel %></div>
+                  </div>
+                </div>
 
-                    <div class="mt-3 rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                      <div class="text-base font-black text-slate-900 dark:text-slate-100"><%= representative.description %></div>
-                      <div class="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70"><%= representative.dateLabel %></span>
-                        <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70"><%= representative.cardNumberLabel %></span>
-                        <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70">Cada linha vale <%= group.amountLabel %></span>
+                <div class="mt-3 grid gap-3 xl:grid-cols-[1fr_280px]">
+                  <div class="space-y-3">
+                    <section class="rounded-[20px] border border-slate-200 bg-white/90 p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                      <div class="flex items-center justify-between gap-3">
+                        <div class="text-[10px] font-black uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Linhas do CSV</div>
+                        <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-200">Cada linha vale <%= group.amountLabel %></span>
                       </div>
-                      <div class="mt-3 text-2xl font-black text-slate-900 dark:text-slate-100"><%= group.groupTotalLabel %></div>
-                      <p class="mt-3 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">O arquivo repetiu esse lancamento <span class="font-bold"><%= group.occurrenceCount %></span> vez(es). Se ja existe algo parecido no app, a sugestao automatica diminui a quantidade para ajudar a evitar dobra sem querer.</p>
-                    </div>
-
-                    <div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                      <% groupItems.forEach((item, index) => { %>
-                        <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-900/80">
-                          <div class="flex items-center justify-between gap-3">
-                            <div class="text-xs font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Linha <%= index + 1 %></div>
-                            <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= item.amountLabel %></span>
+                      <div class="mt-3 overflow-x-auto">
+                        <div class="min-w-[700px] space-y-2">
+                          <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                            <div>Lancamento</div>
+                            <div>Data</div>
+                            <div>Final</div>
+                            <div>Status</div>
+                            <div class="text-right">Valor</div>
                           </div>
-                          <div class="mt-2 text-sm font-black text-slate-900 dark:text-slate-100"><%= item.description %></div>
-                          <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= item.dateLabel %> · <%= item.cardNumberLabel %></div>
-                        </div>
-                      <% }) %>
-                    </div>
-
-                    <% if (group.existingMatches && group.existingMatches.length) { %>
-                      <div class="mt-4 rounded-[24px] border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-                        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Coincidencias no app para o mesmo dia e valor</div>
-                        <div class="mt-3 grid gap-3 lg:grid-cols-2">
-                          <% group.existingMatches.forEach((match) => { %>
-                            <div class="rounded-2xl border border-amber-200 bg-white px-3 py-3 dark:border-amber-900/60 dark:bg-slate-900/80">
-                              <div class="text-sm font-black text-slate-900 dark:text-slate-100"><%= match.description %></div>
-                              <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= match.dateLabel %> · <%= match.cardNumberLabel %></div>
-                              <div class="mt-2 flex items-center justify-between gap-3">
-                                <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= match.originLabel %></span>
-                                <span class="text-sm font-black text-slate-900 dark:text-slate-100"><%= match.amountLabel %></span>
+                          <% groupItems.forEach((item, index) => { %>
+                            <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-slate-950/70">
+                              <div class="min-w-0">
+                                <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                                <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Ocorrencia <%= index + 1 %> de <%= group.occurrenceCount %></div>
                               </div>
+                              <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
+                              <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
+                              <div><span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-sky-700 dark:border-sky-900/60 dark:bg-slate-900 dark:text-sky-200">Linha <%= index + 1 %></span></div>
+                              <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
                             </div>
                           <% }) %>
                         </div>
                       </div>
+                    </section>
+
+                    <% if (group.existingMatches && group.existingMatches.length) { %>
+                      <section class="rounded-[20px] border border-amber-200 bg-amber-50/70 p-3.5 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/20">
+                        <div class="flex items-center justify-between gap-3">
+                          <div class="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Coincidencias no app</div>
+                          <span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900/70 dark:text-amber-200"><%= group.existingMatches.length %> encontrada(s)</span>
+                        </div>
+                        <div class="mt-3 overflow-x-auto">
+                          <div class="min-w-[700px] space-y-2">
+                            <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                              <div>Lancamento</div>
+                              <div>Data</div>
+                              <div>Final</div>
+                              <div>Origem</div>
+                              <div class="text-right">Valor</div>
+                            </div>
+                            <% group.existingMatches.forEach((match) => { %>
+                              <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-amber-200 bg-white px-3 py-3 text-sm dark:border-amber-900/60 dark:bg-slate-900/80">
+                                <div class="min-w-0">
+                                  <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= match.description %></div>
+                                  <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Mesmo dia e valor no app</div>
+                                </div>
+                                <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= match.dateLabel %></div>
+                                <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= match.cardNumberLabel %></div>
+                                <div><span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= match.originLabel %></span></div>
+                                <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= match.amountLabel %></div>
+                              </div>
+                            <% }) %>
+                          </div>
+                        </div>
+                      </section>
                     <% } %>
                   </div>
 
-                  <div class="rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Quantas linhas entram?</div>
+                  <aside class="rounded-[20px] border border-slate-200 bg-white/95 p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 xl:sticky xl:top-0 xl:self-start">
+                    <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Quantas linhas entram?</div>
                     <label class="mt-3 block">
-                      <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Escolha a quantidade</span>
+                      <span class="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Escolha a quantidade</span>
                       <select name="keep_csv_<%= group.id %>" data-csv-keep data-group-id="<%= group.id %>" class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:bg-slate-900">
                         <% for (let keepCount = 0; keepCount <= group.occurrenceCount; keepCount += 1) { %>
                           <option value="<%= keepCount %>" <%= keepCount === Number(group.defaultKeepCount || 0) ? 'selected' : '' %>>
@@ -377,114 +458,118 @@
                         <% } %>
                       </select>
                     </label>
+
                     <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/70">
-                      <div class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Sugestao automatica</div>
-                      <div class="mt-2 text-lg font-black text-slate-900 dark:text-slate-100"><span data-csv-current-count="<%= group.id %>"><%= group.defaultKeepCount %></span> linha(s)</div>
-                      <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">O app sugeriu essa quantidade porque ja encontrou <span class="font-bold"><%= group.existingMatchCount %></span> coincidencia(s) com mesmo dia e valor no mes.</p>
+                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Sugestao automatica</div>
+                      <div class="mt-2 text-xl font-black text-slate-900 dark:text-slate-100"><span data-csv-current-count="<%= group.id %>"><%= group.defaultKeepCount %></span> linha(s)</div>
+                      <p class="mt-2 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300">A sugestao considera as coincidencias ja encontradas no app para esse mesmo dia e valor.</p>
                     </div>
-                  </div>
+                  </aside>
                 </div>
               </article>
             <% }) %>
           </section>
 
-          <section data-review-tab-panel="final" class="hidden space-y-4">
-            <div class="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(280px,0.95fr)]">
-              <div class="rounded-[28px] border border-emerald-200 bg-emerald-50/80 p-5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Vai ser importado</div>
-                <div class="mt-2 text-3xl font-black text-emerald-900 dark:text-emerald-100" data-final-total><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
-                <div class="mt-1 text-sm font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultFinalCount || 0 %></span> compra(s) vao entrar nessa confirmacao.</div>
+          <section data-review-tab-panel="final" class="hidden space-y-3.5">
+            <div class="grid gap-2.5 lg:grid-cols-3">
+              <div class="rounded-[20px] border border-emerald-200 bg-emerald-50/80 px-4 py-3.5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Vai ser importado</div>
+                <div class="mt-2 text-[1.7rem] font-black leading-none text-emerald-900 dark:text-emerald-100" data-final-total><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
+                <div class="mt-1.5 text-[13px] font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultFinalCount || 0 %></span> compra(s) vao entrar nessa confirmacao</div>
               </div>
-              <div class="rounded-[28px] border border-violet-200 bg-violet-50/80 p-5 dark:border-violet-900/60 dark:bg-violet-950/20">
-                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">O cartao fica em</div>
-                <div class="mt-2 text-3xl font-black text-violet-900 dark:text-violet-100" data-projected-total><%= previewSummary.projectedCardTotalLabel || formatBRLFromCents(0) %></div>
-                <div class="mt-1 text-sm font-semibold text-violet-700/80 dark:text-violet-200/80"><span data-projected-count><%= previewSummary.projectedCardCount || 0 %></span> compra(s) no mes depois de gravar.</div>
+              <div class="rounded-[20px] border border-violet-200 bg-violet-50/80 px-4 py-3.5 dark:border-violet-900/60 dark:bg-violet-950/20">
+                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">O cartao fica em</div>
+                <div class="mt-2 text-[1.7rem] font-black leading-none text-violet-900 dark:text-violet-100" data-projected-total><%= previewSummary.projectedCardTotalLabel || formatBRLFromCents(0) %></div>
+                <div class="mt-1.5 text-[13px] font-semibold text-violet-700/80 dark:text-violet-200/80"><span data-projected-count><%= previewSummary.projectedCardCount || 0 %></span> compra(s) no mes depois de gravar</div>
               </div>
-              <div class="rounded-[28px] border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-950/70">
-                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Comparacao com o arquivo</div>
-                <div class="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></div>
+              <div class="rounded-[20px] border border-slate-200 bg-white px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Comparacao com o arquivo</div>
+                <div class="mt-2 text-[1.45rem] font-black leading-none text-slate-900 dark:text-slate-100"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></div>
                 <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300" data-final-diff-text>Agora a comparacao usa o total que o cartao vai ter depois da importacao, nao so o que entrou nesta rodada.</p>
               </div>
             </div>
 
-            <div class="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/70 sm:p-5">
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div class="rounded-[24px] border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 sm:p-4">
+              <div class="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Lista final</div>
-                  <h3 class="mt-2 text-lg font-black text-slate-900 dark:text-slate-100">Esses sao os itens que vao pousar no app</h3>
+                  <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Lista final</div>
+                  <h3 class="mt-1.5 text-base font-black text-slate-900 dark:text-slate-100">Itens que vao entrar no app</h3>
                 </div>
-                <div class="text-sm font-semibold text-slate-500 dark:text-slate-400">As compras unicas entram sozinhas. O resto segue exatamente as escolhas das abas anteriores.</div>
+                <div class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">As compras unicas entram sozinhas. O restante segue exatamente as escolhas das abas anteriores.</div>
               </div>
 
-              <div class="mt-4 space-y-3" data-final-item-list>
-                <% previewAutoItems.forEach((item) => { %>
-                  <article data-final-item data-amount-cents="<%= item.amountCents %>" class="rounded-[24px] border border-emerald-200 bg-emerald-50/70 px-4 py-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <div class="flex flex-wrap items-center gap-2">
-                          <span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700 dark:border-emerald-900/60 dark:bg-slate-900/70 dark:text-emerald-200">Unica no arquivo</span>
-                        </div>
-                        <div class="mt-2 text-sm font-black text-slate-900 dark:text-slate-100"><%= item.description %></div>
-                        <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= item.dateLabel %> · <%= item.cardNumberLabel %></div>
-                      </div>
-                      <div class="text-lg font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
-                    </div>
-                  </article>
-                <% }) %>
+              <div class="mt-4 overflow-x-auto" data-final-item-list>
+                <div class="min-w-[700px] space-y-2">
+                  <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                    <div>Lancamento</div>
+                    <div>Data</div>
+                    <div>Final</div>
+                    <div>Status</div>
+                    <div class="text-right">Valor</div>
+                  </div>
 
-                <% previewAppCandidates.forEach((candidate) => {
-                  const item = previewItemMap.get(candidate.itemId);
-                  if (!item) return;
-                %>
-                  <article data-final-item data-final-app-item="<%= item.id %>" data-amount-cents="<%= item.amountCents %>" class="hidden rounded-[24px] border border-amber-200 bg-amber-50/70 px-4 py-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <div class="flex flex-wrap items-center gap-2">
-                          <span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900/70 dark:text-amber-200">Confirmada apesar da suspeita</span>
-                        </div>
-                        <div class="mt-2 text-sm font-black text-slate-900 dark:text-slate-100"><%= item.description %></div>
-                        <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= item.dateLabel %> · <%= item.cardNumberLabel %></div>
+                  <% previewAutoItems.forEach((item) => { %>
+                    <article data-final-item data-amount-cents="<%= item.amountCents %>" class="grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-3 py-3 text-sm dark:border-emerald-900/60 dark:bg-emerald-950/20">
+                      <div class="min-w-0">
+                        <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                        <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Compra unica do arquivo</div>
                       </div>
-                      <div class="text-lg font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
-                    </div>
-                  </article>
-                <% }) %>
+                      <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
+                      <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
+                      <div><span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-slate-900 dark:text-emerald-200">Unica no arquivo</span></div>
+                      <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                    </article>
+                  <% }) %>
 
-                <% previewCsvGroups.forEach((group) => {
-                  const groupItems = (group.itemIds || []).map((itemId) => previewItemMap.get(itemId)).filter(Boolean);
-                  groupItems.forEach((item, index) => {
-                %>
-                  <article data-final-item data-final-csv-group="<%= group.id %>" data-final-csv-position="<%= index + 1 %>" data-amount-cents="<%= item.amountCents %>" class="<%= index < Number(group.defaultKeepCount || 0) ? '' : 'hidden ' %>rounded-[24px] border border-sky-200 bg-sky-50/70 px-4 py-4 dark:border-sky-900/60 dark:bg-sky-950/20">
-                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <div class="flex flex-wrap items-center gap-2">
-                          <span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-sky-700 dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-sky-200">Linha repetida no CSV</span>
-                          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">Ocorrencia <%= index + 1 %> de <%= group.occurrenceCount %></span>
-                        </div>
-                        <div class="mt-2 text-sm font-black text-slate-900 dark:text-slate-100"><%= item.description %></div>
-                        <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= item.dateLabel %> · <%= item.cardNumberLabel %></div>
+                  <% previewAppCandidates.forEach((candidate) => {
+                    const item = previewItemMap.get(candidate.itemId);
+                    if (!item) return;
+                  %>
+                    <article data-final-item data-final-app-item="<%= item.id %>" data-amount-cents="<%= item.amountCents %>" class="hidden grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-3 py-3 text-sm dark:border-amber-900/60 dark:bg-amber-950/20">
+                      <div class="min-w-0">
+                        <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                        <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Incluida apesar da suspeita</div>
                       </div>
-                      <div class="text-lg font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
-                    </div>
-                  </article>
-                <% }) }) %>
+                      <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
+                      <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
+                      <div><span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900 dark:text-amber-200">Suspeita confirmada</span></div>
+                      <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                    </article>
+                  <% }) %>
+
+                  <% previewCsvGroups.forEach((group) => {
+                    const groupItems = (group.itemIds || []).map((itemId) => previewItemMap.get(itemId)).filter(Boolean);
+                    groupItems.forEach((item, index) => {
+                  %>
+                    <article data-final-item data-final-csv-group="<%= group.id %>" data-final-csv-position="<%= index + 1 %>" data-amount-cents="<%= item.amountCents %>" class="<%= index < Number(group.defaultKeepCount || 0) ? '' : 'hidden ' %>grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50/70 px-3 py-3 text-sm dark:border-sky-900/60 dark:bg-sky-950/20">
+                      <div class="min-w-0">
+                        <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                        <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Ocorrencia <%= index + 1 %> de <%= group.occurrenceCount %></div>
+                      </div>
+                      <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
+                      <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
+                      <div><span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-sky-700 dark:border-sky-900/60 dark:bg-slate-900 dark:text-sky-200">CSV repetido</span></div>
+                      <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                    </article>
+                  <% }) }) %>
+                </div>
               </div>
 
-              <div data-final-empty-state class="hidden rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
+              <div data-final-empty-state class="hidden mt-4 rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
                 Nada ficou selecionado para importar por enquanto. Ajuste as escolhas nas abas anteriores e volte aqui para conferir o resultado.
               </div>
             </div>
           </section>
         </div>
 
-        <div class="border-t border-slate-200 px-5 py-4 dark:border-slate-800 sm:px-8 sm:py-5">
+        <div class="border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-6 lg:px-7">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div class="text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Agora o espelho compara o valor do arquivo com o total que esse cartao vai ter depois da importacao. Assim fica mais facil decidir se a fatura fechada realmente vai bater.</div>
-            <div class="flex flex-col gap-3 sm:flex-row">
-              <button type="button" data-import-review-close class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800">
+            <div class="max-w-4xl text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Agora o espelho compara o valor do arquivo com o total que esse cartao vai ter depois da importacao. Assim fica mais facil decidir se a fatura fechada realmente vai bater.</div>
+            <div class="flex shrink-0 flex-col gap-2.5 sm:flex-row">
+              <button type="button" data-import-review-close class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800">
                 Voltar ao formulario
               </button>
-              <button type="submit" data-import-review-confirm class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
+              <button type="submit" data-import-review-confirm class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
                 Confirmar importacao
               </button>
             </div>

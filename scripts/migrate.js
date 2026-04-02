@@ -122,7 +122,6 @@ CREATE TABLE IF NOT EXISTS user_notification_preferences (
   shared_debt_payments INTEGER NOT NULL DEFAULT 1,
   monthly_pix_updates INTEGER NOT NULL DEFAULT 1,
   card_due_today INTEGER NOT NULL DEFAULT 1,
-  finance_date_alerts INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -150,10 +149,6 @@ if (!columnExists("user_notification_preferences", "monthly_pix_updates")) {
 
 if (!columnExists("user_notification_preferences", "card_due_today")) {
   db.exec("ALTER TABLE user_notification_preferences ADD COLUMN card_due_today INTEGER NOT NULL DEFAULT 1;");
-}
-
-if (!columnExists("user_notification_preferences", "finance_date_alerts")) {
-  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN finance_date_alerts INTEGER NOT NULL DEFAULT 1;");
 }
 
 if (!columnExists("user_notification_preferences", "updated_at")) {
@@ -415,21 +410,6 @@ CREATE TABLE IF NOT EXISTS monthly_finance_carry_exceptions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_monthly_finance_carry_exceptions_user_period ON monthly_finance_carry_exceptions(user_id, year, month);
-
-CREATE TABLE IF NOT EXISTS monthly_finance_alert_logs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
-  source_kind TEXT NOT NULL,
-  source_ref TEXT NOT NULL,
-  type TEXT NOT NULL,
-  date_key TEXT NOT NULL,
-  payload_json TEXT,
-  created_at TEXT NOT NULL,
-  UNIQUE(user_id, source_kind, source_ref, type, date_key),
-  FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_monthly_finance_alert_logs_date_user ON monthly_finance_alert_logs(date_key, user_id, type);
 
 CREATE TABLE IF NOT EXISTS scratchpad (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

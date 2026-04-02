@@ -4056,6 +4056,103 @@ function touchUserPasskeyUsage(userId, credentialId, { counter = 0, origin = '' 
   );
 }
 
+function summarizePasskeyIdentifier(value) {
+  const safeValue = String(value || '').trim();
+  if (!safeValue) return null;
+  return {
+    length: safeValue.length,
+    prefix: safeValue.slice(0, 12)
+  };
+}
+
+function summarizePasskeyContextForLog(context = {}) {
+  return {
+    available: !!context?.available,
+    runtimeAvailable: !!context?.runtimeAvailable,
+    origin: String(context?.origin || '').trim() || null,
+    rpID: String(context?.rpID || '').trim() || null,
+    rpName: String(context?.rpName || '').trim() || null,
+    secureContext: !!context?.secureContext,
+    disabledReason: String(context?.disabledReason || '').trim() || null
+  };
+}
+
+function summarizePasskeyFlowForLog(flow = null) {
+  if (!flow || typeof flow !== 'object') return null;
+  const createdAt = Number(flow.createdAt || 0) || 0;
+  return {
+    userId: Number(flow.userId || 0) || null,
+    origin: String(flow.origin || '').trim() || null,
+    rpID: String(flow.rpID || '').trim() || null,
+    label: String(flow.label || '').trim() || null,
+    challengeLength: String(flow.challenge || '').trim().length || 0,
+    ageMs: createdAt ? Math.max(0, Date.now() - createdAt) : null
+  };
+}
+
+function summarizePasskeyRegistrationPayload(payload = {}) {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+  const safeResponse = safePayload.response && typeof safePayload.response === 'object' ? safePayload.response : {};
+  const safeExtensions = safePayload.clientExtensionResults && typeof safePayload.clientExtensionResults === 'object'
+    ? Object.keys(safePayload.clientExtensionResults).slice(0, 12)
+    : [];
+
+  return {
+    credential: summarizePasskeyIdentifier(safePayload.id || safePayload.rawId || ''),
+    rawIdLength: String(safePayload.rawId || '').trim().length || 0,
+    type: String(safePayload.type || '').trim() || null,
+    authenticatorAttachment: String(safePayload.authenticatorAttachment || '').trim() || null,
+    clientExtensionKeys: safeExtensions,
+    response: {
+      clientDataJSONLength: String(safeResponse.clientDataJSON || '').trim().length || 0,
+      attestationObjectLength: String(safeResponse.attestationObject || '').trim().length || 0,
+      authenticatorDataLength: String(safeResponse.authenticatorData || '').trim().length || 0,
+      signatureLength: String(safeResponse.signature || '').trim().length || 0,
+      userHandlePresent: Object.prototype.hasOwnProperty.call(safeResponse, 'userHandle'),
+      transports: Array.isArray(safeResponse.transports)
+        ? safeResponse.transports.map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 8)
+        : []
+    }
+  };
+}
+
+function buildPasskeyRequestLogContext(req, context = null) {
+  const safeContext = context || buildPasskeyContext(req);
+  return {
+    requestId: req?.requestId || null,
+    method: req?.method || null,
+    path: req?.originalUrl || req?.path || null,
+    userId: Number(req?.user?.id || 0) || null,
+    ip: req?.ip || null,
+    appOrigin: buildAppOriginFromRequest(req) || null,
+    headers: {
+      host: String(req?.get?.('host') || '').trim() || null,
+      origin: String(req?.get?.('origin') || '').trim() || null,
+      referer: String(req?.get?.('referer') || '').trim() || null,
+      xForwardedHost: String(req?.get?.('x-forwarded-host') || '').split(',')[0].trim() || null,
+      xForwardedProto: String(req?.get?.('x-forwarded-proto') || '').split(',')[0].trim().toLowerCase() || null,
+      userAgent: String(req?.get?.('user-agent') || '').trim() || null
+    },
+    passkeyContext: summarizePasskeyContextForLog(safeContext)
+  };
+}
+
+function summarizePasskeyErrorForLog(error) {
+  return {
+    name: error?.name || null,
+    message: error?.message || null,
+    code: error?.code || null,
+    status: normalizeErrorStatus(error, 500),
+    stack: error?.stack ? String(error.stack).split('\n').slice(0, 8).join('\n') : null
+  };
+}
+
+function logPasskeyEvent(level, event, payload = {}) {
+  const safeLevel = level === 'error' ? 'error' : 'warn';
+  const emitter = safeLevel === 'error' ? console.error : console.warn;
+  emitter(`[passkey] ${event}`, payload);
+}
+
 function formatPasskeyDateTimeLabel(value) {
   if (!value) return '';
   const parsed = dayjs(value);
@@ -15179,18 +15276,32 @@ app.post('/people/security/passkeys/register/options', ensureAuthenticated, asyn
   setNoStoreHeaders(res);
   const userId = req.user.id;
   const settings = getUserSecuritySettings(userId);
+  const context = buildPasskeyContext(req);
+  const logContext = buildPasskeyRequestLogContext(req, context);
 
   if (!settings.pin_enabled) {
+    logPasskeyEvent('warn', 'register-options-blocked-pin-disabled', {
+      ...logContext,
+      pinEnabled: false
+    });
     return res.status(422).json({ ok: false, message: 'Primeiro liga o PIN. Aí eu consigo preparar o desbloqueio pelo aparelho.' });
   }
 
-  const context = buildPasskeyContext(req);
   if (!context.available) {
+    logPasskeyEvent('warn', 'register-options-context-unavailable', {
+      ...logContext,
+      disabledMessage: context.disabledMessage || null
+    });
     return res.status(422).json({ ok: false, message: context.disabledMessage || 'Esse desbloqueio ainda não ficou disponível neste ambiente.' });
   }
 
   const currentPasskeys = listUserPasskeys(userId);
   if (currentPasskeys.length >= PASSKEY_MAX_CREDENTIALS_PER_USER) {
+    logPasskeyEvent('warn', 'register-options-limit-reached', {
+      ...logContext,
+      existingCount: currentPasskeys.length,
+      maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER
+    });
     return res.status(409).json({ ok: false, message: `Você já preparou ${PASSKEY_MAX_CREDENTIALS_PER_USER} aparelhos por aqui. Se quiser abrir espaço, é só remover um deles.` });
   }
 
@@ -15221,7 +15332,15 @@ app.post('/people/security/passkeys/register/options', ensureAuthenticated, asyn
       maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER
     });
   } catch (error) {
-    return res.status(normalizeErrorStatus(error, 500)).json({
+    const status = normalizeErrorStatus(error, 500);
+    logPasskeyEvent(status >= 500 ? 'error' : 'warn', 'register-options-error', {
+      ...logContext,
+      label: normalizePasskeyLabel(req.body?.label || '', 'Este aparelho'),
+      existingCount: currentPasskeys.length,
+      maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER,
+      error: summarizePasskeyErrorForLog(error)
+    });
+    return res.status(status).json({
       ok: false,
       message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui preparar esse aparelho agora.' })
     });
@@ -15232,8 +15351,13 @@ app.post('/people/security/passkeys/register/verify', ensureAuthenticated, async
   setNoStoreHeaders(res);
   const userId = req.user.id;
   const flow = consumePasskeySessionFlow(req, 'register');
+  const logContext = buildPasskeyRequestLogContext(req);
 
   if (!flow || Number(flow.userId || 0) !== Number(userId || 0)) {
+    logPasskeyEvent('warn', 'register-verify-flow-missing', {
+      ...logContext,
+      flow: summarizePasskeyFlowForLog(flow)
+    });
     return res.status(410).json({ ok: false, message: 'Esse preparo perdeu a validade. Começa de novo que eu acompanho daqui.' });
   }
 
@@ -15246,11 +15370,23 @@ app.post('/people/security/passkeys/register/verify', ensureAuthenticated, async
     });
 
     if (!verification.verified || !verification.credential) {
+      logPasskeyEvent('warn', 'register-verify-unverified', {
+        ...logContext,
+        flow: summarizePasskeyFlowForLog(flow),
+        response: summarizePasskeyRegistrationPayload(req.body)
+      });
       return res.status(422).json({ ok: false, message: 'Não consegui confirmar esse aparelho agora. Vamos tentar de novo?' });
     }
 
     const currentPasskeys = listUserPasskeys(userId);
     if (currentPasskeys.length >= PASSKEY_MAX_CREDENTIALS_PER_USER) {
+      logPasskeyEvent('warn', 'register-verify-limit-reached', {
+        ...logContext,
+        flow: summarizePasskeyFlowForLog(flow),
+        response: summarizePasskeyRegistrationPayload(req.body),
+        existingCount: currentPasskeys.length,
+        maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER
+      });
       return res.status(409).json({ ok: false, message: `Você já preparou ${PASSKEY_MAX_CREDENTIALS_PER_USER} aparelhos por aqui. Se quiser abrir espaço, é só remover um deles.` });
     }
 
@@ -15265,7 +15401,14 @@ app.post('/people/security/passkeys/register/verify', ensureAuthenticated, async
       count: listUserPasskeys(userId).length
     });
   } catch (error) {
-    return res.status(normalizeErrorStatus(error, 500)).json({
+    const status = normalizeErrorStatus(error, 500);
+    logPasskeyEvent(status >= 500 ? 'error' : 'warn', 'register-verify-error', {
+      ...logContext,
+      flow: summarizePasskeyFlowForLog(flow),
+      response: summarizePasskeyRegistrationPayload(req.body),
+      error: summarizePasskeyErrorForLog(error)
+    });
+    return res.status(status).json({
       ok: false,
       message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui confirmar esse aparelho agora.' })
     });

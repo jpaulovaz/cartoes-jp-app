@@ -364,6 +364,27 @@ db.prepare(`
     FOREIGN KEY (user_id) REFERENCES users(id)
   )
 `).run();
+
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS import_overwrite_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    transaction_id INTEGER NOT NULL,
+    import_id INTEGER,
+    card_id INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    original_filename TEXT,
+    preview_item_id TEXT,
+    before_snapshot_json TEXT NOT NULL,
+    after_snapshot_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (transaction_id) REFERENCES transactions(id),
+    FOREIGN KEY (import_id) REFERENCES imports(id),
+    FOREIGN KEY (card_id) REFERENCES cards(id)
+  )
+`).run();
 db.prepare(`
   CREATE TABLE IF NOT EXISTS shared_debt_monthly_settlements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -583,6 +604,8 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debts_receiver_promised 
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debts_requester_promised ON shared_debt_requests(requester_user_id, promised_payment_date, status, request_kind)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_promised ON private_debt_reminders(owner_user_id, promised_payment_date, status, is_archived)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_manual_debt_due_alert_logs_date_scope ON manual_debt_due_alert_logs(date_key, scope, user_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_import_overwrite_events_user_period ON import_overwrite_events(user_id, year, month, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_import_overwrite_events_txn ON import_overwrite_events(transaction_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_pair ON shared_debt_monthly_settlements(requester_user_id, receiver_user_id, year, month, request_kind)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_receiver ON shared_debt_monthly_settlements(receiver_user_id, year, month, request_kind)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_settlement_status ON shared_debt_payment_intents(settlement_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
@@ -10642,6 +10665,65 @@ function getTransactionScopeRow(userId, txnId) {
   `).get(txnId, userId);
 }
 
+
+function getImportOverwriteTargetRow(userId, txnId) {
+  return db.prepare(`
+    SELECT t.id, t.user_id, t.import_id, t.card_id, t.txn_date, t.description, t.amount_cents, t.card_number, t.raw_json,
+           t.due_month, t.due_year, t.parent_txn_id, t.recurring_rule_id, t.purchase_category_id, t.created_at,
+           COALESCE(t.due_month, i.month) AS month,
+           COALESCE(t.due_year, i.year) AS year,
+           pc.name AS purchase_category_name
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
+    WHERE t.id = ? AND t.user_id = ?
+  `).get(txnId, userId);
+}
+
+function buildImportOverwriteAuditSnapshot(userId, txnRow, extra = {}) {
+  if (!txnRow || !txnRow.id) return null;
+  const allocations = getAllocationRowsByTransactionIds(userId, [txnRow.id]).get(Number(txnRow.id || 0)) || [];
+  const sharedDebtRequestCount = Number(db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM shared_debt_requests
+    WHERE requester_user_id = ? AND source_transaction_id = ?
+  `).get(userId, txnRow.id)?.total || 0);
+  const sharedDebtDraftCount = Number(db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM shared_debt_send_queue_items
+    WHERE requester_user_id = ? AND source_transaction_id = ?
+  `).get(userId, txnRow.id)?.total || 0);
+
+  return {
+    transaction: {
+      id: Number(txnRow.id || 0),
+      user_id: Number(txnRow.user_id || userId),
+      import_id: Number(txnRow.import_id || 0) || null,
+      card_id: Number(txnRow.card_id || 0) || null,
+      txn_date: String(txnRow.txn_date || '').trim() || null,
+      description: String(txnRow.description || '').trim() || null,
+      amount_cents: Number(txnRow.amount_cents || 0),
+      card_number: normalizeImportCardNumber(txnRow.card_number) || null,
+      raw_json: txnRow.raw_json || null,
+      due_month: Number(txnRow.due_month || 0) || null,
+      due_year: Number(txnRow.due_year || 0) || null,
+      month: Number(txnRow.month || 0) || null,
+      year: Number(txnRow.year || 0) || null,
+      purchase_category_id: Number(txnRow.purchase_category_id || 0) || null,
+      purchase_category_name: String(txnRow.purchase_category_name || '').trim() || null,
+      parent_txn_id: Number(txnRow.parent_txn_id || 0) || null,
+      recurring_rule_id: Number(txnRow.recurring_rule_id || 0) || null,
+      created_at: txnRow.created_at || null
+    },
+    allocations,
+    shared_debt: {
+      request_count: sharedDebtRequestCount,
+      draft_count: sharedDebtDraftCount
+    },
+    ...extra
+  };
+}
+
 function hasFutureInstallments(userId, txnRow) {
   if (!txnRow) return false;
   const currentMonth = Number(txnRow.month || 0);
@@ -10832,6 +10914,19 @@ function formatInstallmentDescription(baseDescription, position, total) {
   const normalizedPosition = Math.min(normalizedTotal, Math.max(1, Number(position || 1)));
   if (normalizedTotal <= 1) return cleanBase;
   return `${cleanBase} (${String(normalizedPosition).padStart(2, '0')}/${String(normalizedTotal).padStart(2, '0')})`;
+}
+
+
+function buildImportOverwriteDescription(userId, txnRow, nextBaseDescription) {
+  const cleanBaseDescription = String(nextBaseDescription || '').trim() || '(sem descricao)';
+  if (!txnRow || !txnRow.id) return cleanBaseDescription;
+
+  const installmentChain = getInstallmentChainRows(userId, txnRow);
+  if (!installmentChain.length) return cleanBaseDescription;
+
+  const currentIndex = installmentChain.findIndex((row) => Number(row.id || 0) === Number(txnRow.id || 0));
+  if (currentIndex < 0 || installmentChain.length <= 1) return cleanBaseDescription;
+  return formatInstallmentDescription(cleanBaseDescription, currentIndex + 1, installmentChain.length);
 }
 
 function getEditableTransactionScopeRows(userId, txnRow, scope = 'single') {
@@ -16450,11 +16545,96 @@ function buildImportPreviewItem(txn, sourceIndex) {
   };
 }
 
+function buildImportExistingMatchVersion(row) {
+  return JSON.stringify({
+    id: Number(row?.id || 0) || null,
+    importId: Number(row?.importId || row?.import_id || 0) || null,
+    cardId: Number(row?.cardId || row?.card_id || 0) || null,
+    month: Number(row?.month || 0) || null,
+    year: Number(row?.year || 0) || null,
+    txnDate: String(row?.txnDate || row?.txn_date || '').trim() || null,
+    description: String(row?.description || '').trim() || null,
+    amountCents: Number(row?.amountCents ?? row?.amount_cents ?? 0) || 0,
+    cardNumber: normalizeImportCardNumber(row?.cardNumber || row?.card_number) || null,
+    parentTxnId: Number(row?.parentTxnId || row?.parent_txn_id || 0) || null,
+    recurringRuleId: Number(row?.recurringRuleId || row?.recurring_rule_id || 0) || null
+  });
+}
+
+function buildImportSharedDebtSummary({ requestCount = 0, draftCount = 0 } = {}) {
+  const safeRequestCount = Math.max(0, Number(requestCount || 0));
+  const safeDraftCount = Math.max(0, Number(draftCount || 0));
+  if (!safeRequestCount && !safeDraftCount) return null;
+  const parts = [];
+  if (safeRequestCount > 0) {
+    parts.push(formatCountLabel(safeRequestCount, 'cobranca vinculada', 'cobrancas vinculadas'));
+  }
+  if (safeDraftCount > 0) {
+    parts.push(formatCountLabel(safeDraftCount, 'rascunho de envio', 'rascunhos de envio'));
+  }
+  return parts.join(' · ');
+}
+
+function compareImportExistingMatches(a, b) {
+  const rank = (row) => {
+    if (row?.overwriteEligible) return 0;
+    if (row?.isManual) return 1;
+    return 2;
+  };
+
+  const rankDiff = rank(a) - rank(b);
+  if (rankDiff !== 0) return rankDiff;
+
+  const exactTextA = normalizeImportDuplicateText(a?.description);
+  const exactTextB = normalizeImportDuplicateText(b?.description);
+  if (exactTextA !== exactTextB) return exactTextA.localeCompare(exactTextB, 'pt-BR');
+
+  const dateA = String(a?.txnDate || '');
+  const dateB = String(b?.txnDate || '');
+  if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+  const amountA = Number(a?.amountCents || 0);
+  const amountB = Number(b?.amountCents || 0);
+  if (amountA !== amountB) return amountB - amountA;
+
+  return Number(a?.id || 0) - Number(b?.id || 0);
+}
+
 function getExistingImportMonthRows(userId, cardId, month, year) {
   const rows = db.prepare(`
-    SELECT t.id, t.import_id, t.txn_date, t.description, t.amount_cents, t.card_number
+    SELECT t.id, t.import_id, t.card_id, t.txn_date, t.description, t.amount_cents, t.card_number,
+           t.purchase_category_id, t.parent_txn_id, t.recurring_rule_id,
+           COALESCE(t.due_month, i.month) AS month,
+           COALESCE(t.due_year, i.year) AS year,
+           pc.name AS purchase_category_name,
+           (
+             SELECT COUNT(*)
+             FROM allocations a
+             WHERE a.user_id = t.user_id
+               AND a.transaction_id = t.id
+           ) AS allocation_count,
+           EXISTS(
+             SELECT 1
+             FROM transactions tx_child
+             WHERE tx_child.user_id = t.user_id
+               AND tx_child.parent_txn_id = t.id
+             LIMIT 1
+           ) AS has_child_installments,
+           (
+             SELECT COUNT(*)
+             FROM shared_debt_requests r
+             WHERE r.requester_user_id = t.user_id
+               AND r.source_transaction_id = t.id
+           ) AS shared_debt_request_count,
+           (
+             SELECT COUNT(*)
+             FROM shared_debt_send_queue_items q
+             WHERE q.requester_user_id = t.user_id
+               AND q.source_transaction_id = t.id
+           ) AS shared_debt_queue_count
     FROM transactions t
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
     WHERE t.user_id = ?
       AND t.card_id = ?
       AND ${EFFECTIVE_DUE_MONTH_SQL} = ?
@@ -16462,17 +16642,59 @@ function getExistingImportMonthRows(userId, cardId, month, year) {
     ORDER BY t.txn_date IS NULL ASC, t.txn_date ASC, t.amount_cents DESC, t.id ASC
   `).all(userId, cardId, month, year);
 
-  return rows.map((row) => ({
-    id: Number(row.id),
-    txnDate: String(row.txn_date || '').trim() || null,
-    dateLabel: formatImportPreviewDateLabel(row.txn_date),
-    description: String(row.description || '').trim() || '(sem descricao)',
-    amountCents: Number(row.amount_cents) || 0,
-    amountLabel: formatBRLFromCents(Number(row.amount_cents) || 0),
-    cardNumber: normalizeImportCardNumber(row.card_number) || null,
-    cardNumberLabel: formatImportPreviewCardNumberLabel(row.card_number),
-    originLabel: Number(row.import_id || 0) > 0 ? 'Ja importada' : 'Lancada manualmente'
-  }));
+  return rows.map((row) => {
+    const importId = Number(row.import_id || 0) || null;
+    const monthNumber = Number(row.month || 0) || null;
+    const yearNumber = Number(row.year || 0) || null;
+    const isManual = !importId;
+    const isClosedMonth = Boolean(monthNumber && yearNumber && isMonthClosed(userId, monthNumber, yearNumber));
+    const allocationCount = Math.max(0, Number(row.allocation_count || 0));
+    const sharedDebtRequestCount = Math.max(0, Number(row.shared_debt_request_count || 0));
+    const sharedDebtQueueCount = Math.max(0, Number(row.shared_debt_queue_count || 0));
+    const hasInstallmentChain = Number(row.parent_txn_id || 0) > 0 || Number(row.has_child_installments || 0) > 0;
+
+    const mapped = {
+      id: Number(row.id),
+      importId,
+      cardId: Number(row.card_id || 0) || null,
+      month: monthNumber,
+      year: yearNumber,
+      txnDate: String(row.txn_date || '').trim() || null,
+      dateLabel: formatImportPreviewDateLabel(row.txn_date),
+      description: String(row.description || '').trim() || '(sem descricao)',
+      amountCents: Number(row.amount_cents) || 0,
+      amountLabel: formatBRLFromCents(Number(row.amount_cents) || 0),
+      cardNumber: normalizeImportCardNumber(row.card_number) || null,
+      cardNumberLabel: formatImportPreviewCardNumberLabel(row.card_number),
+      originLabel: importId ? 'Ja importada' : 'Lancada manualmente',
+      isManual,
+      isImported: !!importId,
+      overwriteEligible: Boolean(isManual && !isClosedMonth),
+      isClosedMonth,
+      overwriteUnavailableReason: importId
+        ? 'Essa coincidencia ja veio de importacao e fica so como referencia.'
+        : (isClosedMonth ? getMonthLockMessage(monthNumber, yearNumber) : null),
+      purchaseCategoryId: Number(row.purchase_category_id || 0) || null,
+      purchaseCategoryName: String(row.purchase_category_name || '').trim() || null,
+      allocationCount,
+      hasInstallmentChain,
+      hasRecurringRule: Number(row.recurring_rule_id || 0) > 0,
+      parentTxnId: Number(row.parent_txn_id || 0) || null,
+      recurringRuleId: Number(row.recurring_rule_id || 0) || null,
+      sharedDebtRequestCount,
+      sharedDebtQueueCount,
+      sharedDebtSummary: buildImportSharedDebtSummary({
+        requestCount: sharedDebtRequestCount,
+        draftCount: sharedDebtQueueCount
+      })
+    };
+
+    mapped.overwriteBadgeLabel = mapped.overwriteEligible
+      ? 'Manual · elegivel'
+      : (mapped.isManual ? 'Manual travado' : 'Ja importada');
+    mapped.version = buildImportExistingMatchVersion(mapped);
+    return mapped;
+  }).sort(compareImportExistingMatches);
 }
 
 function countExactExistingMatchesForImportItem(item, matches, cardId, month, year) {
@@ -16533,6 +16755,8 @@ function buildImportPreviewSummary({ parsedCount, parsedTotalCents, existingCoun
     csvDuplicateTotalCents,
     csvDuplicateTotalLabel: formatBRLFromCents(csvDuplicateTotalCents),
     defaultFinalCount,
+    defaultNewImportCount: defaultFinalCount,
+    defaultOverwriteCount: 0,
     defaultFinalTotalCents,
     defaultFinalTotalLabel: formatBRLFromCents(defaultFinalTotalCents),
     projectedCardCount,
@@ -16607,9 +16831,15 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
   for (const item of sortedItems) {
     if (csvGroupIdByItemId.has(item.id)) continue;
 
-    const existingMatches = existingByDayAmount.get(buildImportDayAmountKey({ txnDate: item.isoDate, amountCents: item.amountCents })) || [];
+    const existingMatches = (existingByDayAmount.get(buildImportDayAmountKey({ txnDate: item.isoDate, amountCents: item.amountCents })) || [])
+      .slice()
+      .sort(compareImportExistingMatches);
     if (existingMatches.length) {
       const exactMatchCount = countExactExistingMatchesForImportItem(item, existingMatches, cardId, month, year);
+      const overwriteCandidates = existingMatches.filter((match) => match.overwriteEligible);
+      const lockedManualMatches = existingMatches.filter((match) => match.isManual && !match.overwriteEligible);
+      const importedMatches = existingMatches.filter((match) => match.isImported);
+
       appDuplicateCandidates.push({
         id: `app_group_${appDuplicateCandidates.length + 1}`,
         itemId: item.id,
@@ -16617,7 +16847,19 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
         amountLabel: item.amountLabel,
         existingMatchCount: existingMatches.length,
         exactMatchCount,
-        existingMatches
+        existingMatches,
+        overwriteCandidateIds: overwriteCandidates.map((match) => Number(match.id || 0)).filter(Boolean),
+        overwriteEligibleCount: overwriteCandidates.length,
+        overwriteEligible: overwriteCandidates.length > 0,
+        hasMultipleOverwriteTargets: overwriteCandidates.length > 1,
+        defaultOverwriteTargetId: overwriteCandidates.length === 1 ? Number(overwriteCandidates[0].id || 0) : null,
+        lockedManualCount: lockedManualMatches.length,
+        importedMatchCount: importedMatches.length,
+        overwriteUnavailableReason: overwriteCandidates.length > 0
+          ? null
+          : (lockedManualMatches.length > 0
+              ? 'Os manuais encontrados ficam só como referência porque esse mês está fechado.'
+              : 'As coincidências daqui ficam só como referência, porque já vieram de importação.')
       });
       continue;
     }
@@ -16662,25 +16904,50 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
 
 function resolveImportPreviewSelection(preview, body) {
   const safeBody = body || {};
-  const selectedIds = [];
-  const seenIds = new Set();
+  const importedItemIds = [];
+  const seenImportedItemIds = new Set();
+  const overwriteActions = [];
   const itemMap = new Map((preview?.items || []).map((item) => [item.id, item]));
 
-  const pushItemId = (itemId) => {
-    if (!itemId || seenIds.has(itemId)) return;
+  const pushImportedItemId = (itemId) => {
+    if (!itemId || seenImportedItemIds.has(itemId)) return;
     if (!itemMap.has(itemId)) return;
-    seenIds.add(itemId);
-    selectedIds.push(itemId);
+    seenImportedItemIds.add(itemId);
+    importedItemIds.push(itemId);
+  };
+
+  const normalizeResolution = (candidateId) => {
+    const explicitResolution = String(safeBody[`app_resolution_${candidateId}`] || '').trim().toLowerCase();
+    if (['skip', 'import', 'overwrite'].includes(explicitResolution)) return explicitResolution;
+    return String(safeBody[`keep_app_${candidateId}`] || '') === '1' ? 'import' : 'skip';
   };
 
   for (const itemId of preview?.autoItemIds || []) {
-    pushItemId(itemId);
+    pushImportedItemId(itemId);
   }
 
   for (const candidate of preview?.appDuplicateCandidates || []) {
-    if (String(safeBody[`keep_app_${candidate.id}`] || '') === '1') {
-      pushItemId(candidate.itemId);
+    const resolution = normalizeResolution(candidate.id);
+    if (resolution === 'import') {
+      pushImportedItemId(candidate.itemId);
+      continue;
     }
+    if (resolution !== 'overwrite') continue;
+
+    const eligibleIds = Array.isArray(candidate.overwriteCandidateIds)
+      ? candidate.overwriteCandidateIds.map((value) => Number(value || 0)).filter(Boolean)
+      : [];
+    let targetTransactionId = Number(safeBody[`app_overwrite_target_${candidate.id}`] || 0);
+    if ((!targetTransactionId || !eligibleIds.includes(targetTransactionId)) && eligibleIds.length === 1) {
+      targetTransactionId = eligibleIds[0];
+    }
+
+    overwriteActions.push({
+      candidateId: candidate.id,
+      itemId: candidate.itemId,
+      targetTransactionId: targetTransactionId || null,
+      resolution: 'overwrite'
+    });
   }
 
   for (const group of preview?.csvDuplicateGroups || []) {
@@ -16691,19 +16958,24 @@ function resolveImportPreviewSelection(preview, body) {
     keepCount = Math.max(0, Math.min(Number(group.occurrenceCount || 0), keepCount));
 
     for (const itemId of (group.itemIds || []).slice(0, keepCount)) {
-      pushItemId(itemId);
+      pushImportedItemId(itemId);
     }
   }
 
-  return selectedIds
-    .map((itemId) => itemMap.get(itemId))
-    .filter(Boolean)
-    .sort((a, b) => Number(a.sourceIndex || 0) - Number(b.sourceIndex || 0));
+  return {
+    importedItems: importedItemIds
+      .map((itemId) => itemMap.get(itemId))
+      .filter(Boolean)
+      .sort((a, b) => Number(a.sourceIndex || 0) - Number(b.sourceIndex || 0)),
+    overwriteActions
+  };
 }
 
-function buildImportConfirmationMessage(preview, importedCount) {
+function buildImportConfirmationMessage(preview, importedCount, overwrittenCount = 0) {
   const periodLabel = preview?.periodLabel || monthLabel(preview?.month, preview?.year);
-  if (importedCount <= 0) {
+  const safeImportedCount = Math.max(0, Number(importedCount || 0));
+  const safeOverwrittenCount = Math.max(0, Number(overwrittenCount || 0));
+  if (safeImportedCount <= 0 && safeOverwrittenCount <= 0) {
     return {
       type: 'info',
       message: `Nada ficou marcado para entrar em ${periodLabel}. A previa continua aberta para voce ajustar.`
@@ -16719,9 +16991,19 @@ function buildImportConfirmationMessage(preview, importedCount) {
     reviewedParts.push(formatCountLabel(summary.csvDuplicateGroupCount, 'grupo repetido no CSV', 'grupos repetidos no CSV'));
   }
 
-  const baseMessage = importedCount === 1
-    ? `1 compra entrou em ${periodLabel}.`
-    : `${importedCount} compras entraram em ${periodLabel}.`;
+  const actionParts = [];
+  if (safeImportedCount > 0) {
+    actionParts.push(safeImportedCount === 1
+      ? '1 compra nova entrou'
+      : `${safeImportedCount} compras novas entraram`);
+  }
+  if (safeOverwrittenCount > 0) {
+    actionParts.push(safeOverwrittenCount === 1
+      ? '1 lancamento manual foi sobrescrito'
+      : `${safeOverwrittenCount} lancamentos manuais foram sobrescritos`);
+  }
+
+  const baseMessage = `${actionParts.join(' e ')} em ${periodLabel}.`;
 
   if (!reviewedParts.length) {
     return { type: 'success', message: `${baseMessage} Tudo certinho por aqui.` };
@@ -16816,40 +17098,218 @@ app.post('/import/confirm', ensureAuthenticated, ensureCanImport, (req, res) => 
     const card = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(preview.cardId, userId);
     if (!card) throw new Error('Esse cartao nao esta mais disponivel para receber a importacao.');
 
-    const selectedItems = resolveImportPreviewSelection(preview, req.body);
-    if (!selectedItems.length) {
-      setFlash(req, 'info', 'Nenhuma compra ficou marcada para entrar. Ajuste a revisao e confirme de novo.');
+    const selection = resolveImportPreviewSelection(preview, req.body);
+    const importedItems = Array.isArray(selection?.importedItems) ? selection.importedItems : [];
+    const overwriteActions = Array.isArray(selection?.overwriteActions) ? selection.overwriteActions : [];
+    if (!importedItems.length && !overwriteActions.length) {
+      setFlash(req, 'info', 'Nenhuma compra ficou marcada para entrar ou sobrescrever. Ajuste a revisao e confirme de novo.');
       return res.redirect('/import');
     }
 
-    const createImportWithTransactions = db.transaction((items) => {
-      const info = db.prepare(`
-        INSERT INTO imports(user_id, card_id, month, year, created_at, original_filename)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(userId, preview.cardId, preview.month, preview.year, nowIso(), preview.originalFilename || 'fatura.csv');
-
-      const insTxn = db.prepare(`
-        INSERT INTO transactions(user_id, import_id, card_id, txn_date, description, amount_cents, card_number, raw_json, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      for (const item of items) {
-        insTxn.run(
-          userId,
-          info.lastInsertRowid,
-          preview.cardId,
-          item.isoDate || null,
-          item.description,
-          item.amountCents,
-          item.cardNumber || null,
-          JSON.stringify(item.raw || {}),
-          nowIso()
-        );
+    const itemMap = new Map((preview.items || []).map((item) => [item.id, item]));
+    const candidateMap = new Map((preview.appDuplicateCandidates || []).map((candidate) => [candidate.id, candidate]));
+    const preparedOverwriteActions = overwriteActions.map((action) => {
+      const candidate = candidateMap.get(action.candidateId);
+      if (!candidate) {
+        throw new Error('Uma das suspeitas revisadas nao existe mais. Refaz a analise do CSV para seguir.');
       }
+      const item = itemMap.get(action.itemId);
+      if (!item) {
+        throw new Error('Nao consegui localizar uma das linhas do CSV que voce revisou. Refaz a analise para seguir.');
+      }
+
+      const eligibleMatches = (candidate.existingMatches || []).filter((match) => Number(match.overwriteEligible || 0) || match.overwriteEligible === true);
+      if (!eligibleMatches.length) {
+        throw new Error('Essa suspeita nao tem mais um lancamento manual elegivel para sobrescrita.');
+      }
+
+      let targetTransactionId = Number(action.targetTransactionId || 0);
+      if (!targetTransactionId && eligibleMatches.length === 1) {
+        targetTransactionId = Number(eligibleMatches[0].id || 0);
+      }
+      if (!targetTransactionId) {
+        throw new Error('Escolha qual lancamento manual voce quer sobrescrever antes de confirmar.');
+      }
+
+      const previewTargetMatch = eligibleMatches.find((match) => Number(match.id || 0) === targetTransactionId);
+      if (!previewTargetMatch) {
+        throw new Error('O alvo escolhido para sobrescrita nao bate mais com a revisao. Refaz a analise para seguir.');
+      }
+
+      return {
+        candidate,
+        item,
+        targetTransactionId,
+        previewTargetMatch
+      };
     });
 
-    createImportWithTransactions(selectedItems);
-    const feedback = buildImportConfirmationMessage(preview, selectedItems.length);
+    const targetIds = preparedOverwriteActions.map((action) => Number(action.targetTransactionId || 0)).filter(Boolean);
+    if (new Set(targetIds).size !== targetIds.length) {
+      throw new Error('O mesmo lancamento manual foi escolhido mais de uma vez. Cada sobrescrita precisa de um alvo proprio.');
+    }
+
+    const persistImportConfirmation = db.transaction((payload) => {
+      const now = nowIso();
+      let importId = null;
+
+      if (payload.importedItems.length) {
+        const info = db.prepare(`
+          INSERT INTO imports(user_id, card_id, month, year, created_at, original_filename)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(userId, preview.cardId, preview.month, preview.year, now, preview.originalFilename || 'fatura.csv');
+        importId = Number(info.lastInsertRowid || 0) || null;
+
+        const insertTransaction = db.prepare(`
+          INSERT INTO transactions(user_id, import_id, card_id, txn_date, description, amount_cents, card_number, raw_json, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        payload.importedItems.forEach((item) => {
+          insertTransaction.run(
+            userId,
+            importId,
+            preview.cardId,
+            item.isoDate || null,
+            item.description,
+            item.amountCents,
+            item.cardNumber || null,
+            JSON.stringify(item.raw || {}),
+            now
+          );
+        });
+      }
+
+      const updateTransaction = db.prepare(`
+        UPDATE transactions
+        SET txn_date = ?, description = ?, amount_cents = ?, card_number = ?, raw_json = ?
+        WHERE id = ? AND user_id = ?
+      `);
+      const insertOverwriteEvent = db.prepare(`
+        INSERT INTO import_overwrite_events (
+          user_id, transaction_id, import_id, card_id, month, year,
+          original_filename, preview_item_id, before_snapshot_json, after_snapshot_json, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const overwrittenIds = [];
+      payload.overwriteActions.forEach((action) => {
+        const currentTarget = getImportOverwriteTargetRow(userId, action.targetTransactionId);
+        if (!currentTarget) {
+          throw new Error('Um dos lancamentos escolhidos para sobrescrita nao existe mais. Refaz a revisao para seguir.');
+        }
+        if (Number(currentTarget.import_id || 0) > 0) {
+          throw new Error('Um dos lancamentos escolhidos deixou de ser manual. Refaz a revisao antes de confirmar.');
+        }
+
+        const currentMonth = Number(currentTarget.month || 0);
+        const currentYear = Number(currentTarget.year || 0);
+        if (Number(currentTarget.card_id || 0) !== Number(preview.cardId || 0)
+          || currentMonth !== Number(preview.month || 0)
+          || currentYear !== Number(preview.year || 0)) {
+          throw new Error('Uma das coincidencias mudou de contexto depois da revisao. Refaça a analise do CSV para continuar.');
+        }
+        if (isMonthClosed(userId, currentMonth, currentYear)) {
+          throw new Error(getMonthLockMessage(currentMonth, currentYear));
+        }
+
+        const currentVersion = buildImportExistingMatchVersion({
+          id: currentTarget.id,
+          import_id: currentTarget.import_id,
+          card_id: currentTarget.card_id,
+          month: currentTarget.month,
+          year: currentTarget.year,
+          txn_date: currentTarget.txn_date,
+          description: currentTarget.description,
+          amount_cents: currentTarget.amount_cents,
+          card_number: currentTarget.card_number,
+          parent_txn_id: currentTarget.parent_txn_id,
+          recurring_rule_id: currentTarget.recurring_rule_id
+        });
+        if (currentVersion !== action.previewTargetMatch.version) {
+          throw new Error('Uma das coincidencias mudou depois da revisao. Refaz a analise do CSV para evitar sobrescrever o item errado.');
+        }
+        if (Number(currentTarget.amount_cents || 0) !== Number(action.item.amountCents || 0)) {
+          throw new Error('O valor do alvo mudou depois da revisao. Refaz a analise do CSV antes de sobrescrever.');
+        }
+
+        const previewItemSnapshot = {
+          id: action.item.id,
+          txn_date: action.item.isoDate || null,
+          description: action.item.description,
+          amount_cents: Number(action.item.amountCents || 0),
+          card_number: action.item.cardNumber || null,
+          raw: action.item.raw || {}
+        };
+        const beforeSnapshot = buildImportOverwriteAuditSnapshot(userId, currentTarget, {
+          preview_item: previewItemSnapshot,
+          preview_id: preview.id,
+          original_filename: preview.originalFilename || 'fatura.csv'
+        });
+
+        const nextDescription = buildImportOverwriteDescription(userId, currentTarget, action.item.description);
+        updateTransaction.run(
+          action.item.isoDate || null,
+          nextDescription,
+          action.item.amountCents,
+          action.item.cardNumber || null,
+          JSON.stringify(action.item.raw || {}),
+          action.targetTransactionId,
+          userId
+        );
+
+        const refreshedTarget = getImportOverwriteTargetRow(userId, action.targetTransactionId);
+        const afterSnapshot = buildImportOverwriteAuditSnapshot(userId, refreshedTarget, {
+          preview_item: previewItemSnapshot,
+          preview_id: preview.id,
+          original_filename: preview.originalFilename || 'fatura.csv',
+          import_id: importId
+        });
+
+        insertOverwriteEvent.run(
+          userId,
+          action.targetTransactionId,
+          importId,
+          preview.cardId,
+          preview.month,
+          preview.year,
+          preview.originalFilename || 'fatura.csv',
+          action.item.id,
+          JSON.stringify(beforeSnapshot),
+          JSON.stringify(afterSnapshot),
+          now
+        );
+        overwrittenIds.push(action.targetTransactionId);
+      });
+
+      return {
+        importId,
+        overwrittenIds: Array.from(new Set(overwrittenIds))
+      };
+    });
+
+    const persistResult = persistImportConfirmation({ importedItems, overwriteActions: preparedOverwriteActions });
+    const overwrittenRows = persistResult.overwrittenIds.length
+      ? getTransactionScopeRowsByIds(userId, persistResult.overwrittenIds)
+      : [];
+
+    if (overwrittenRows.length) {
+      syncEqualAllocationsForEditedTransactions(userId, overwrittenRows);
+      const draftQueuedTxnIdSet = getSharedDebtDraftQueuedTxnIdSet(userId, persistResult.overwrittenIds);
+      const draftRows = overwrittenRows.filter((row) => draftQueuedTxnIdSet.has(Number(row.id || 0)));
+      const liveRows = overwrittenRows.filter((row) => !draftQueuedTxnIdSet.has(Number(row.id || 0)));
+      if (draftRows.length) {
+        queueSharedDebtDraftsForTransactions(userId, draftRows);
+      }
+      if (liveRows.length) {
+        syncSharedDebtRequestsForTransactions(userId, liveRows.map((row) => row.id), {
+          originKind: detectSharedDebtOriginKindFromRows(liveRows)
+        });
+      }
+    }
+
+    const feedback = buildImportConfirmationMessage(preview, importedItems.length, persistResult.overwrittenIds.length);
     clearImportPreview(req);
     setImportFormSeed(req, preview.formSeed || null);
     setFlash(req, feedback.type, feedback.message);

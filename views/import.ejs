@@ -200,7 +200,7 @@
             <div class="rounded-[20px] border border-emerald-200 bg-emerald-50 px-4 py-3.5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
               <div class="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Vai entrar agora</div>
               <div class="mt-2 text-[1.65rem] font-black leading-none text-emerald-900 dark:text-emerald-100" data-final-total><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
-              <div class="mt-1.5 text-[13px] font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultFinalCount || 0 %></span> compra(s) nesta confirmacao</div>
+              <div class="mt-1.5 text-[13px] font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultNewImportCount || previewSummary.defaultFinalCount || 0 %></span> nova(s) · <span data-overwrite-count><%= previewSummary.defaultOverwriteCount || 0 %></span> sobrescrita(s)</div>
             </div>
             <div class="rounded-[20px] border border-violet-200 bg-violet-50 px-4 py-3.5 dark:border-violet-900/60 dark:bg-violet-950/20">
               <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">O cartao fica em</div>
@@ -229,7 +229,10 @@
             <button type="button" data-review-tab-trigger="final" class="min-w-[220px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800">
               <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">3. O que vai entrar</div>
               <div class="mt-1 flex items-end justify-between gap-3">
-                <div class="text-sm font-black text-slate-900 dark:text-slate-100"><span data-final-count><%= previewSummary.defaultFinalCount || 0 %></span> item(ns)</div>
+                <div>
+                  <div class="text-sm font-black text-slate-900 dark:text-slate-100"><span data-final-count><%= previewSummary.defaultNewImportCount || previewSummary.defaultFinalCount || 0 %></span> nova(s)</div>
+                  <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400"><span data-overwrite-count><%= previewSummary.defaultOverwriteCount || 0 %></span> sobrescrita(s)</div>
+                </div>
                 <div class="text-xs font-semibold text-slate-500 dark:text-slate-400" data-final-total-secondary><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
               </div>
             </button>
@@ -246,6 +249,8 @@
 
             <% previewAppCandidates.forEach((candidate, candidateIndex) => {
               const item = previewItemMap.get(candidate.itemId);
+              const overwriteMatches = (candidate.existingMatches || []).filter((match) => match.overwriteEligible);
+              const defaultOverwriteMatch = overwriteMatches.find((match) => Number(match.id || 0) === Number(candidate.defaultOverwriteTargetId || 0)) || overwriteMatches[0] || null;
               if (!item) return;
             %>
               <article class="rounded-[24px] border border-amber-200 bg-amber-50/60 p-3.5 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/15 sm:p-4">
@@ -257,11 +262,14 @@
                       <% if (candidate.exactMatchCount > 0) { %>
                         <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200"><%= candidate.exactMatchCount %> praticamente igual(is)</span>
                       <% } %>
+                      <% if (candidate.overwriteEligibleCount > 0) { %>
+                        <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-900/30 dark:text-emerald-200"><%= candidate.overwriteEligibleCount %> manual(is) elegivel(is)</span>
+                      <% } %>
                     </div>
                     <h3 class="mt-2 text-sm font-black leading-6 text-slate-900 dark:text-slate-100"><%= item.description %></h3>
                     <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
                       <% if (candidate.exactMatchCount > 0) { %>
-                        O app encontrou item(ns) muito parecido(s). Compare linha a linha antes de marcar para importar mesmo assim.
+                        O app encontrou item(ns) muito parecido(s). Escolha uma unica acao para esta linha.
                       <% } else { %>
                         O alerta apareceu porque ja existe compra com mesmo dia e valor no mes escolhido.
                       <% } %>
@@ -320,7 +328,35 @@
                           <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-slate-950/70">
                             <div class="min-w-0">
                               <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= match.description %></div>
-                              <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Compra encontrada no app</div>
+                              <div class="mt-1 flex flex-wrap gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em]">
+                                <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= match.originLabel %></span>
+                                <% if (match.overwriteEligible) { %>
+                                  <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-900/30 dark:text-emerald-200"><%= match.overwriteBadgeLabel %></span>
+                                <% } else if (match.isManual) { %>
+                                  <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200"><%= match.overwriteBadgeLabel %></span>
+                                <% } else { %>
+                                  <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= match.overwriteBadgeLabel %></span>
+                                <% } %>
+                                <% if (match.purchaseCategoryName) { %>
+                                  <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= match.purchaseCategoryName %></span>
+                                <% } %>
+                                <% if (match.allocationCount > 0) { %>
+                                  <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= match.allocationCount %> pessoa(s)</span>
+                                <% } %>
+                                <% if (match.hasInstallmentChain) { %>
+                                  <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">Parcela</span>
+                                <% } %>
+                                <% if (match.hasRecurringRule) { %>
+                                  <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">Recorrente</span>
+                                <% } %>
+                              </div>
+                              <% if (match.sharedDebtSummary || match.overwriteUnavailableReason) { %>
+                                <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                                  <%= match.sharedDebtSummary || match.overwriteUnavailableReason %>
+                                </div>
+                              <% } else { %>
+                                <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Compra encontrada no app</div>
+                              <% } %>
                             </div>
                             <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= match.dateLabel %></div>
                             <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= match.cardNumberLabel %></div>
@@ -333,13 +369,67 @@
                   </section>
                 </div>
 
-                <label class="mt-3 flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm dark:border-amber-900/60 dark:bg-slate-900/80 dark:text-slate-200">
-                  <input type="checkbox" name="keep_app_<%= candidate.id %>" value="1" data-app-keep data-item-id="<%= item.id %>" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
-                  <span>
-                    <span class="block font-black text-slate-900 dark:text-slate-100">Importar mesmo assim</span>
-                    <span class="mt-1 block text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Deixe desmarcado se for a mesma compra. Marque so quando voce tiver certeza de que esse item do arquivo precisa entrar tambem.</span>
-                  </span>
-                </label>
+                <div class="mt-3 rounded-[20px] border border-amber-200 bg-white px-4 py-3.5 shadow-sm dark:border-amber-900/60 dark:bg-slate-900/80">
+                  <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Resolucao</div>
+                      <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Escolha uma unica acao para esta linha. Sobrescrever atualiza o manual e mantem categoria, divisao e vinculos.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                      <label class="group">
+                        <input type="radio" name="app_resolution_<%= candidate.id %>" value="skip" checked data-app-resolution data-candidate-id="<%= candidate.id %>" class="peer sr-only">
+                        <span class="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-600 transition peer-checked:border-slate-900 peer-checked:bg-slate-900 peer-checked:text-white dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:peer-checked:border-slate-200 dark:peer-checked:bg-slate-100 dark:peer-checked:text-slate-900">Pular</span>
+                      </label>
+                      <label class="group">
+                        <input type="radio" name="app_resolution_<%= candidate.id %>" value="import" data-app-resolution data-candidate-id="<%= candidate.id %>" class="peer sr-only">
+                        <span class="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-emerald-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-emerald-700 transition peer-checked:border-emerald-600 peer-checked:bg-emerald-600 peer-checked:text-white dark:border-emerald-900/60 dark:bg-slate-950 dark:text-emerald-300 dark:peer-checked:border-emerald-500 dark:peer-checked:bg-emerald-500 dark:peer-checked:text-slate-950">Importar</span>
+                      </label>
+                      <% if (candidate.overwriteEligibleCount > 0) { %>
+                        <label class="group">
+                          <input type="radio" name="app_resolution_<%= candidate.id %>" value="overwrite" data-app-resolution data-candidate-id="<%= candidate.id %>" class="peer sr-only">
+                          <span class="inline-flex min-w-[132px] items-center justify-center rounded-2xl border border-violet-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-violet-700 transition peer-checked:border-violet-600 peer-checked:bg-violet-600 peer-checked:text-white dark:border-violet-900/60 dark:bg-slate-950 dark:text-violet-300 dark:peer-checked:border-violet-500 dark:peer-checked:bg-violet-500 dark:peer-checked:text-slate-950">Sobrescrever</span>
+                        </label>
+                      <% } else { %>
+                        <span class="inline-flex min-w-[132px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-500">Sobrescrever</span>
+                      <% } %>
+                    </div>
+                  </div>
+
+                  <div class="mt-3 grid gap-2 text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400 sm:grid-cols-3">
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-950/60">Pular mantém o que ja esta no app.</div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-950/60">Importar entra como compra nova.</div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-950/60">Sobrescrever atualiza o manual e preserva categoria/divisao.</div>
+                  </div>
+
+                  <% if (candidate.overwriteEligibleCount > 0) { %>
+                    <% if (overwriteMatches.length === 1) { %>
+                      <input type="hidden" name="app_overwrite_target_<%= candidate.id %>" value="<%= candidate.defaultOverwriteTargetId %>" data-overwrite-target-static data-candidate-id="<%= candidate.id %>" data-target-description="<%= defaultOverwriteMatch ? defaultOverwriteMatch.description : '' %>">
+                    <% } %>
+                    <div data-overwrite-target-box="<%= candidate.id %>" class="mt-3 hidden rounded-[18px] border border-violet-200 bg-violet-50/70 px-3 py-3 dark:border-violet-900/50 dark:bg-violet-950/20">
+                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Alvo da sobrescrita</div>
+                      <% if (overwriteMatches.length === 1) { %>
+                        <div class="mt-2 rounded-2xl border border-violet-200 bg-white px-3 py-3 text-sm dark:border-violet-900/60 dark:bg-slate-900/80">
+                          <div class="font-black text-slate-900 dark:text-slate-100"><%= defaultOverwriteMatch ? defaultOverwriteMatch.description : 'Lancamento manual' %></div>
+                          <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Esse manual sera atualizado, mantendo categoria, divisao e vinculos.</div>
+                        </div>
+                      <% } else { %>
+                        <div class="mt-2 space-y-2">
+                          <% overwriteMatches.forEach((match) => { %>
+                            <label class="flex cursor-pointer items-start gap-3 rounded-2xl border border-violet-200 bg-white px-3 py-3 text-sm dark:border-violet-900/60 dark:bg-slate-900/80">
+                              <input type="radio" name="app_overwrite_target_<%= candidate.id %>" value="<%= match.id %>" data-overwrite-target data-candidate-id="<%= candidate.id %>" data-target-description="<%= match.description %>" class="mt-0.5 h-4 w-4 border-slate-300 text-violet-600 focus:ring-violet-500">
+                              <span class="min-w-0 flex-1">
+                                <span class="block font-black text-slate-900 dark:text-slate-100"><%= match.description %></span>
+                                <span class="mt-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400"><%= match.dateLabel %> · <%= match.amountLabel %> · <%= match.cardNumberLabel %></span>
+                              </span>
+                            </label>
+                          <% }) %>
+                        </div>
+                      <% } %>
+                    </div>
+                  <% } else if (candidate.overwriteUnavailableReason) { %>
+                    <div class="mt-3 rounded-[18px] border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-[11px] font-medium leading-5 text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400"><%= candidate.overwriteUnavailableReason %></div>
+                  <% } %>
+                </div>
               </article>
             <% }) %>
           </section>
@@ -473,9 +563,9 @@
           <section data-review-tab-panel="final" class="hidden space-y-3.5">
             <div class="grid gap-2.5 lg:grid-cols-3">
               <div class="rounded-[20px] border border-emerald-200 bg-emerald-50/80 px-4 py-3.5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Vai ser importado</div>
+                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Entra como compra nova</div>
                 <div class="mt-2 text-[1.7rem] font-black leading-none text-emerald-900 dark:text-emerald-100" data-final-total><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
-                <div class="mt-1.5 text-[13px] font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultFinalCount || 0 %></span> compra(s) vao entrar nessa confirmacao</div>
+                <div class="mt-1.5 text-[13px] font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultNewImportCount || previewSummary.defaultFinalCount || 0 %></span> nova(s) · <span data-overwrite-count><%= previewSummary.defaultOverwriteCount || 0 %></span> sobrescrita(s)</div>
               </div>
               <div class="rounded-[20px] border border-violet-200 bg-violet-50/80 px-4 py-3.5 dark:border-violet-900/60 dark:bg-violet-950/20">
                 <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">O cartao fica em</div>
@@ -489,78 +579,124 @@
               </div>
             </div>
 
-            <div class="rounded-[24px] border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 sm:p-4">
-              <div class="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Lista final</div>
-                  <h3 class="mt-1.5 text-base font-black text-slate-900 dark:text-slate-100">Itens que vao entrar no app</h3>
-                </div>
-                <div class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">As compras unicas entram sozinhas. O restante segue exatamente as escolhas das abas anteriores.</div>
-              </div>
-
-              <div class="mt-4 overflow-x-auto" data-final-item-list>
-                <div class="min-w-[700px] space-y-2">
-                  <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                    <div>Lancamento</div>
-                    <div>Data</div>
-                    <div>Final</div>
-                    <div>Status</div>
-                    <div class="text-right">Valor</div>
+            <div class="grid gap-3 xl:grid-cols-[1.1fr_0.9fr]">
+              <section class="rounded-[24px] border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 sm:p-4">
+                <div class="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Lista final</div>
+                    <h3 class="mt-1.5 text-base font-black text-slate-900 dark:text-slate-100">Novas compras que vao entrar</h3>
                   </div>
+                  <div class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Compras unicas entram sozinhas. O restante segue exatamente as escolhas das abas anteriores.</div>
+                </div>
 
-                  <% previewAutoItems.forEach((item) => { %>
-                    <article data-final-item data-amount-cents="<%= item.amountCents %>" class="grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-3 py-3 text-sm dark:border-emerald-900/60 dark:bg-emerald-950/20">
-                      <div class="min-w-0">
-                        <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
-                        <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Compra unica do arquivo</div>
-                      </div>
-                      <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
-                      <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
-                      <div><span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-slate-900 dark:text-emerald-200">Unica no arquivo</span></div>
-                      <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
-                    </article>
-                  <% }) %>
+                <div class="mt-4 overflow-x-auto" data-final-item-list>
+                  <div class="min-w-[700px] space-y-2">
+                    <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                      <div>Lancamento</div>
+                      <div>Data</div>
+                      <div>Final</div>
+                      <div>Status</div>
+                      <div class="text-right">Valor</div>
+                    </div>
 
+                    <% previewAutoItems.forEach((item) => { %>
+                      <article data-final-item data-final-import-item data-amount-cents="<%= item.amountCents %>" class="grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-3 py-3 text-sm dark:border-emerald-900/60 dark:bg-emerald-950/20">
+                        <div class="min-w-0">
+                          <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                          <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Compra unica do arquivo</div>
+                        </div>
+                        <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
+                        <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
+                        <div><span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-slate-900 dark:text-emerald-200">Unica no arquivo</span></div>
+                        <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                      </article>
+                    <% }) %>
+
+                    <% previewAppCandidates.forEach((candidate) => {
+                      const item = previewItemMap.get(candidate.itemId);
+                      if (!item) return;
+                    %>
+                      <article data-final-item data-final-import-item data-final-app-item="<%= candidate.id %>" data-amount-cents="<%= item.amountCents %>" class="hidden grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-3 py-3 text-sm dark:border-amber-900/60 dark:bg-amber-950/20">
+                        <div class="min-w-0">
+                          <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                          <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Incluida apesar da suspeita</div>
+                        </div>
+                        <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
+                        <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
+                        <div><span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900 dark:text-amber-200">Suspeita confirmada</span></div>
+                        <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                      </article>
+                    <% }) %>
+
+                    <% previewCsvGroups.forEach((group) => {
+                      const groupItems = (group.itemIds || []).map((itemId) => previewItemMap.get(itemId)).filter(Boolean);
+                      groupItems.forEach((item, index) => {
+                    %>
+                      <article data-final-item data-final-import-item data-final-csv-group="<%= group.id %>" data-final-csv-position="<%= index + 1 %>" data-amount-cents="<%= item.amountCents %>" class="<%= index < Number(group.defaultKeepCount || 0) ? '' : 'hidden ' %>grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50/70 px-3 py-3 text-sm dark:border-sky-900/60 dark:bg-sky-950/20">
+                        <div class="min-w-0">
+                          <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                          <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Ocorrencia <%= index + 1 %> de <%= group.occurrenceCount %></div>
+                        </div>
+                        <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
+                        <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
+                        <div><span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-sky-700 dark:border-sky-900/60 dark:bg-slate-900 dark:text-sky-200">CSV repetido</span></div>
+                        <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                      </article>
+                    <% }) }) %>
+                  </div>
+                </div>
+
+                <div data-final-import-empty class="hidden mt-4 rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
+                  Nenhuma compra nova ficou marcada para entrar por enquanto.
+                </div>
+              </section>
+
+              <section class="rounded-[24px] border border-violet-200 bg-violet-50/70 p-3.5 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/15 sm:p-4">
+                <div class="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Lista final</div>
+                    <h3 class="mt-1.5 text-base font-black text-slate-900 dark:text-slate-100">Lançamentos manuais que vao ser sobrescritos</h3>
+                  </div>
+                  <div class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">A compra manual continua a mesma. O app atualiza os dados vindos do CSV e preserva categoria/divisao.</div>
+                </div>
+
+                <div class="mt-4 space-y-2" data-final-overwrite-list>
                   <% previewAppCandidates.forEach((candidate) => {
                     const item = previewItemMap.get(candidate.itemId);
                     if (!item) return;
+                    const defaultOverwriteMatch = (candidate.existingMatches || []).find((match) => Number(match.id || 0) === Number(candidate.defaultOverwriteTargetId || 0)) || null;
                   %>
-                    <article data-final-item data-final-app-item="<%= item.id %>" data-amount-cents="<%= item.amountCents %>" class="hidden grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-3 py-3 text-sm dark:border-amber-900/60 dark:bg-amber-950/20">
-                      <div class="min-w-0">
-                        <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
-                        <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Incluida apesar da suspeita</div>
+                    <article data-final-item data-final-overwrite-item="<%= candidate.id %>" data-amount-cents="<%= item.amountCents %>" class="hidden rounded-2xl border border-violet-200 bg-white px-3 py-3 text-sm dark:border-violet-900/60 dark:bg-slate-900/80">
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                          <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                            Atualiza: <span data-final-overwrite-target-label="<%= candidate.id %>"><%= defaultOverwriteMatch ? defaultOverwriteMatch.description : 'Escolha o manual alvo na aba de suspeitas' %></span>
+                          </div>
+                        </div>
+                        <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-violet-700 dark:border-violet-900/60 dark:bg-violet-900/30 dark:text-violet-200">Sobrescreve</span>
                       </div>
-                      <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
-                      <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
-                      <div><span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900 dark:text-amber-200">Suspeita confirmada</span></div>
-                      <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                      <div class="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                        <span><%= item.dateLabel %></span>
+                        <span>·</span>
+                        <span><%= item.cardNumberLabel %></span>
+                        <span>·</span>
+                        <span><%= item.amountLabel %></span>
+                      </div>
                     </article>
                   <% }) %>
-
-                  <% previewCsvGroups.forEach((group) => {
-                    const groupItems = (group.itemIds || []).map((itemId) => previewItemMap.get(itemId)).filter(Boolean);
-                    groupItems.forEach((item, index) => {
-                  %>
-                    <article data-final-item data-final-csv-group="<%= group.id %>" data-final-csv-position="<%= index + 1 %>" data-amount-cents="<%= item.amountCents %>" class="<%= index < Number(group.defaultKeepCount || 0) ? '' : 'hidden ' %>grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50/70 px-3 py-3 text-sm dark:border-sky-900/60 dark:bg-sky-950/20">
-                      <div class="min-w-0">
-                        <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
-                        <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Ocorrencia <%= index + 1 %> de <%= group.occurrenceCount %></div>
-                      </div>
-                      <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
-                      <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
-                      <div><span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-sky-700 dark:border-sky-900/60 dark:bg-slate-900 dark:text-sky-200">CSV repetido</span></div>
-                      <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
-                    </article>
-                  <% }) }) %>
                 </div>
-              </div>
 
-              <div data-final-empty-state class="hidden mt-4 rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
-                Nada ficou selecionado para importar por enquanto. Ajuste as escolhas nas abas anteriores e volte aqui para conferir o resultado.
-              </div>
+                <div data-final-overwrite-empty class="hidden mt-4 rounded-[20px] border border-dashed border-violet-200 bg-white/70 px-5 py-6 text-center text-sm font-medium text-slate-500 dark:border-violet-900/60 dark:bg-slate-900/50 dark:text-slate-400">
+                  Nenhum lancamento manual sera sobrescrito nesta confirmacao.
+                </div>
+              </section>
+            </div>
+
+            <div data-final-empty-state class="hidden rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
+              Nada ficou selecionado para importar ou sobrescrever por enquanto. Ajuste as escolhas nas abas anteriores e volte aqui para conferir o resultado.
             </div>
           </section>
-        </div>
 
         <div class="border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-6 lg:px-7">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -602,20 +738,29 @@
     const tabButtons = modal.querySelectorAll('[data-review-tab-trigger]');
     const tabPanels = modal.querySelectorAll('[data-review-tab-panel]');
     const finalItems = Array.from(modal.querySelectorAll('[data-final-item]'));
-    const appCheckboxes = Array.from(modal.querySelectorAll('[data-app-keep]'));
+    const finalImportItems = Array.from(modal.querySelectorAll('[data-final-import-item]'));
+    const finalOverwriteItems = Array.from(modal.querySelectorAll('[data-final-overwrite-item]'));
+    const appResolutionInputs = Array.from(modal.querySelectorAll('[data-app-resolution]'));
+    const overwriteTargetInputs = Array.from(modal.querySelectorAll('[data-overwrite-target]'));
+    const overwriteTargetStaticInputs = Array.from(modal.querySelectorAll('[data-overwrite-target-static]'));
+    const overwriteTargetBoxes = Array.from(modal.querySelectorAll('[data-overwrite-target-box]'));
     const csvSelects = Array.from(modal.querySelectorAll('[data-csv-keep]'));
     const finalCountTargets = Array.from(modal.querySelectorAll('[data-final-count]'));
+    const overwriteCountTargets = Array.from(modal.querySelectorAll('[data-overwrite-count]'));
     const finalTotalTargets = Array.from(modal.querySelectorAll('[data-final-total]'));
     const finalTotalSecondaryTargets = Array.from(modal.querySelectorAll('[data-final-total-secondary]'));
     const projectedCountTargets = Array.from(modal.querySelectorAll('[data-projected-count]'));
     const projectedTotalTargets = Array.from(modal.querySelectorAll('[data-projected-total]'));
     const diffText = modal.querySelector('[data-final-diff-text]');
     const emptyState = modal.querySelector('[data-final-empty-state]');
+    const finalImportEmptyState = modal.querySelector('[data-final-import-empty]');
+    const finalOverwriteEmptyState = modal.querySelector('[data-final-overwrite-empty]');
     const confirmButtons = Array.from(modal.querySelectorAll('[data-import-review-confirm]'));
     const fileTotalCents = Number(tabContainer?.dataset.fileTotalCents || 0);
     const existingTotalCents = Number(tabContainer?.dataset.existingTotalCents || 0);
     const existingCount = Number(tabContainer?.dataset.existingCount || 0);
     const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+    const candidateIds = Array.from(new Set(appResolutionInputs.map((input) => String(input.dataset.candidateId || '')).filter(Boolean)));
 
     function formatMoney(cents) {
       return moneyFormatter.format((Number(cents || 0)) / 100);
@@ -660,12 +805,64 @@
       });
     }
 
+    function getCandidateResolution(candidateId) {
+      const checked = modal.querySelector('[data-app-resolution][data-candidate-id="' + candidateId + '"]:checked');
+      return checked ? String(checked.value || 'skip') : 'skip';
+    }
+
+    function getSelectedOverwriteTarget(candidateId) {
+      const checked = modal.querySelector('[data-overwrite-target][data-candidate-id="' + candidateId + '"]:checked');
+      if (checked) {
+        return {
+          value: String(checked.value || ''),
+          description: String(checked.dataset.targetDescription || '').trim()
+        };
+      }
+      const staticInput = modal.querySelector('[data-overwrite-target-static][data-candidate-id="' + candidateId + '"]');
+      if (staticInput) {
+        return {
+          value: String(staticInput.value || ''),
+          description: String(staticInput.dataset.targetDescription || '').trim()
+        };
+      }
+      return { value: '', description: '' };
+    }
+
+    function updateOverwriteVisibility() {
+      overwriteTargetBoxes.forEach((box) => {
+        const candidateId = String(box.getAttribute('data-overwrite-target-box') || '');
+        box.classList.toggle('hidden', getCandidateResolution(candidateId) !== 'overwrite');
+      });
+    }
+
     function updateFinalPreview() {
-      appCheckboxes.forEach((checkbox) => {
-        const itemId = checkbox.dataset.itemId;
-        const target = modal.querySelector('[data-final-app-item="' + itemId + '"]');
-        if (!target) return;
-        target.classList.toggle('hidden', !checkbox.checked);
+      updateOverwriteVisibility();
+
+      let invalidOverwriteCount = 0;
+      candidateIds.forEach((candidateId) => {
+        const resolution = getCandidateResolution(candidateId);
+        const importTarget = modal.querySelector('[data-final-app-item="' + candidateId + '"]');
+        const overwriteTarget = modal.querySelector('[data-final-overwrite-item="' + candidateId + '"]');
+
+        if (importTarget) {
+          importTarget.classList.toggle('hidden', resolution !== 'import');
+        }
+        if (overwriteTarget) {
+          overwriteTarget.classList.toggle('hidden', resolution !== 'overwrite');
+        }
+
+        const selectedOverwrite = getSelectedOverwriteTarget(candidateId);
+        const targetLabels = modal.querySelectorAll('[data-final-overwrite-target-label="' + candidateId + '"]');
+        targetLabels.forEach((label) => {
+          label.textContent = selectedOverwrite.description || 'Escolha o manual alvo na aba de suspeitas';
+        });
+
+        const needsExplicitTarget = modal.querySelectorAll('[data-overwrite-target][data-candidate-id="' + candidateId + '"]').length > 0;
+        const invalidCurrentOverwrite = resolution === 'overwrite' && needsExplicitTarget && !selectedOverwrite.value;
+        if (overwriteTarget) {
+          overwriteTarget.dataset.invalidTarget = invalidCurrentOverwrite ? '1' : '0';
+        }
+        if (invalidCurrentOverwrite) invalidOverwriteCount += 1;
       });
 
       csvSelects.forEach((select) => {
@@ -678,26 +875,35 @@
         });
       });
 
-      let selectedCount = 0;
-      let selectedTotalCents = 0;
-      finalItems.forEach((item) => {
+      let importedCount = 0;
+      let importedTotalCents = 0;
+      finalImportItems.forEach((item) => {
         if (item.classList.contains('hidden')) return;
-        selectedCount += 1;
-        selectedTotalCents += Number(item.getAttribute('data-amount-cents') || 0);
+        importedCount += 1;
+        importedTotalCents += Number(item.getAttribute('data-amount-cents') || 0);
+      });
+
+      let overwriteCount = 0;
+      finalOverwriteItems.forEach((item) => {
+        if (item.classList.contains('hidden')) return;
+        overwriteCount += 1;
       });
 
       finalCountTargets.forEach((target) => {
-        target.textContent = String(selectedCount);
+        target.textContent = String(importedCount);
+      });
+      overwriteCountTargets.forEach((target) => {
+        target.textContent = String(overwriteCount);
       });
       finalTotalTargets.forEach((target) => {
-        target.textContent = formatMoney(selectedTotalCents);
+        target.textContent = formatMoney(importedTotalCents);
       });
       finalTotalSecondaryTargets.forEach((target) => {
-        target.textContent = formatMoney(selectedTotalCents);
+        target.textContent = formatMoney(importedTotalCents);
       });
 
-      const projectedCount = existingCount + selectedCount;
-      const projectedTotalCents = existingTotalCents + selectedTotalCents;
+      const projectedCount = existingCount + importedCount;
+      const projectedTotalCents = existingTotalCents + importedTotalCents;
 
       projectedCountTargets.forEach((target) => {
         target.textContent = String(projectedCount);
@@ -720,14 +926,22 @@
         }
       }
 
+      const totalActions = importedCount + overwriteCount;
       if (emptyState) {
-        emptyState.classList.toggle('hidden', selectedCount > 0);
+        emptyState.classList.toggle('hidden', totalActions > 0);
+      }
+      if (finalImportEmptyState) {
+        finalImportEmptyState.classList.toggle('hidden', importedCount > 0);
+      }
+      if (finalOverwriteEmptyState) {
+        finalOverwriteEmptyState.classList.toggle('hidden', overwriteCount > 0);
       }
 
+      const shouldDisableConfirm = totalActions <= 0 || invalidOverwriteCount > 0;
       confirmButtons.forEach((button) => {
-        button.disabled = selectedCount <= 0;
-        button.classList.toggle('opacity-60', selectedCount <= 0);
-        button.classList.toggle('cursor-not-allowed', selectedCount <= 0);
+        button.disabled = shouldDisableConfirm;
+        button.classList.toggle('opacity-60', shouldDisableConfirm);
+        button.classList.toggle('cursor-not-allowed', shouldDisableConfirm);
       });
 
       updateCsvKeepCounters();
@@ -747,7 +961,8 @@
         setActiveTab(button.getAttribute('data-review-tab-trigger'));
       });
     });
-    appCheckboxes.forEach((checkbox) => checkbox.addEventListener('change', updateFinalPreview));
+    appResolutionInputs.forEach((input) => input.addEventListener('change', updateFinalPreview));
+    overwriteTargetInputs.forEach((input) => input.addEventListener('change', updateFinalPreview));
     csvSelects.forEach((select) => select.addEventListener('change', updateFinalPreview));
     if (reviewForm) {
       reviewForm.addEventListener('submit', function() {

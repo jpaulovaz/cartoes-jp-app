@@ -276,6 +276,25 @@ CREATE TABLE IF NOT EXISTS imports (
   FOREIGN KEY (card_id) REFERENCES cards(id)
 );
 
+CREATE TABLE IF NOT EXISTS import_overwrite_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  transaction_id INTEGER NOT NULL,
+  import_id INTEGER,
+  card_id INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  original_filename TEXT,
+  preview_item_id TEXT,
+  before_snapshot_json TEXT NOT NULL,
+  after_snapshot_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id),
+  FOREIGN KEY (import_id) REFERENCES imports(id),
+  FOREIGN KEY (card_id) REFERENCES cards(id)
+);
+
 CREATE TABLE IF NOT EXISTS transactions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -1163,6 +1182,8 @@ CREATE INDEX IF NOT EXISTS idx_people_user_profile_kind ON people(user_id, profi
 CREATE INDEX IF NOT EXISTS idx_people_user_status_active ON people(user_id, status, active);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 CREATE INDEX IF NOT EXISTS idx_imports_user ON imports(user_id);
+CREATE INDEX IF NOT EXISTS idx_import_overwrite_events_user_period ON import_overwrite_events(user_id, year, month, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_import_overwrite_events_txn ON import_overwrite_events(transaction_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_purchase_categories_user_active ON purchase_categories(user_id, active, sort_order, name);
 CREATE INDEX IF NOT EXISTS idx_purchase_categories_user_kind ON purchase_categories(user_id, kind, active);
 CREATE INDEX IF NOT EXISTS idx_txn_user ON transactions(user_id);

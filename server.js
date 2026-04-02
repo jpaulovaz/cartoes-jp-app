@@ -278,6 +278,10 @@ try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN pix_version INTEGE
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN status_summary TEXT NOT NULL DEFAULT 'pending'").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN first_responded_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN resolved_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_send_queue_items ADD COLUMN action_kind TEXT NOT NULL DEFAULT 'create'").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_send_queue_items ADD COLUMN target_request_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_send_queue_items ADD COLUMN baseline_status_snapshot TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("UPDATE shared_debt_send_queue_items SET action_kind = COALESCE(NULLIF(trim(action_kind), ''), 'create') WHERE action_kind IS NULL OR trim(action_kind) = ''").run(); } catch (e) { /* Tabela ainda pode não existir neste ponto */ }
 try { db.prepare("ALTER TABLE shared_debt_payment_intents ADD COLUMN creditor_note TEXT").run(); } catch (e) { /* Coluna já existe */ }
 
 // Cria a tabela de meses fechados se não existir
@@ -495,6 +499,9 @@ db.prepare(`
     amount_cents INTEGER NOT NULL,
     receiver_email_snapshot TEXT,
     receiver_name_snapshot TEXT,
+    action_kind TEXT NOT NULL DEFAULT 'create',
+    target_request_id INTEGER,
+    baseline_status_snapshot TEXT,
     sent_request_id INTEGER,
     cancelled_at TEXT,
     created_at TEXT NOT NULL,
@@ -507,6 +514,7 @@ db.prepare(`
     FOREIGN KEY (source_allocation_id) REFERENCES allocations(id),
     FOREIGN KEY (source_person_id) REFERENCES people(id),
     FOREIGN KEY (card_id) REFERENCES cards(id),
+    FOREIGN KEY (target_request_id) REFERENCES shared_debt_requests(id),
     FOREIGN KEY (sent_request_id) REFERENCES shared_debt_requests(id)
   )
 `).run();
@@ -616,6 +624,7 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_request
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_receiver_period ON shared_debt_send_queues(receiver_user_id, source_due_year DESC, source_due_month DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_queue ON shared_debt_send_queue_items(queue_id, source_txn_date_snapshot, id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_txn_person ON shared_debt_send_queue_items(requester_user_id, source_transaction_id, source_person_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_target_request ON shared_debt_send_queue_items(target_request_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_status ON friend_requests(requester_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_target_status ON friend_requests(target_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_pair_status ON friend_requests(requester_user_id, target_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
@@ -5471,6 +5480,18 @@ function normalizeSharedDebtSendQueueStatus(value) {
   return 'draft';
 }
 
+function normalizeSharedDebtQueueActionKind(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (['create', 'update', 'cancel'].includes(normalized)) return normalized;
+  return 'create';
+}
+
+function canRecreateSharedDebtDraftFromHistory(row) {
+  const status = String(row?.status || '').trim().toLowerCase();
+  if (!status) return true;
+  return ['cancelled', 'rejection_accepted_by_sender'].includes(status);
+}
+
 function detectSharedDebtOriginKindFromRows(rows) {
   const cleanRows = Array.from(new Map(
     (rows || [])
@@ -6304,7 +6325,8 @@ function recordSharedDebtBatchChange(context, payload) {
       descriptions: [],
       totalCents: 0,
       createdCount: 0,
-      updatedCount: 0
+      updatedCount: 0,
+      cancelledCount: 0
     });
   }
 
@@ -6316,7 +6338,9 @@ function recordSharedDebtBatchChange(context, payload) {
   if (payload?.description && entry.descriptions.length < 3 && !entry.descriptions.includes(payload.description)) {
     entry.descriptions.push(payload.description);
   }
+
   if (payload?.kind === 'updated') entry.updatedCount += 1;
+  else if (payload?.kind === 'cancelled') entry.cancelledCount += 1;
   else entry.createdCount += 1;
 }
 
@@ -6325,7 +6349,8 @@ function buildSharedDebtBatchNotificationBody({ requesterDisplayName, actionLabe
   const formattedTotal = formatBRLFromCents(Number(totalCents || 0));
   const preview = (descriptions || []).filter(Boolean).slice(0, 2).join(' · ');
   const countLabel = formatCountLabel(safeCount, 'cobrança', 'cobranças');
-  const previewSuffix = preview ? ` Nessa leva entraram: ${preview}.` : '';
+  const previewPrefix = actionLabel === 'ajustou' ? ' Teve mexida em: ' : ' Nessa leva entraram: ';
+  const previewSuffix = preview ? `${previewPrefix}${preview}.` : '';
   return `${requesterDisplayName} ${actionLabel} ${countLabel} para você, somando ${formattedTotal}.${previewSuffix}`;
 }
 
@@ -6339,19 +6364,22 @@ function flushSharedDebtBatchNotifications(context) {
     const batchSummary = refreshSharedDebtBatch(entry.batchId);
     if (!batchSummary) return;
 
-    const onlyCreated = entry.createdCount > 0 && entry.updatedCount === 0;
-    const onlyUpdated = entry.updatedCount > 0 && entry.createdCount === 0;
+    const onlyCreated = entry.createdCount > 0 && entry.updatedCount === 0 && entry.cancelledCount === 0;
+    const onlyUpdated = entry.updatedCount > 0 && entry.createdCount === 0 && entry.cancelledCount === 0;
+    const onlyCancelled = entry.cancelledCount > 0 && entry.createdCount === 0 && entry.updatedCount === 0;
     const title = onlyCreated
       ? 'Chegou um novo envio compartilhado'
       : onlyUpdated
         ? 'Um envio compartilhado foi atualizado'
-        : 'Tem novidade em um envio compartilhado';
+        : onlyCancelled
+          ? 'Uma cobrança compartilhada mudou por aqui'
+          : 'Tem novidade em um envio compartilhado';
 
     const actionLabel = onlyCreated
       ? 'enviou'
       : onlyUpdated
         ? 'atualizou'
-        : 'enviou e atualizou';
+        : 'ajustou';
 
     createNotification({
       userId: entry.receiverUserId,
@@ -6367,7 +6395,7 @@ function flushSharedDebtBatchNotifications(context) {
       href: `/shared-debts?batch=${entry.batchId}`,
       relatedType: 'shared_debt_batch',
       relatedId: entry.batchId,
-      groupKey: 'shared_debt_new'
+      groupKey: onlyCreated ? 'shared_debt_new' : 'shared_debt_updates'
     });
   });
 }
@@ -9910,74 +9938,237 @@ function buildSharedDebtDraftHistoryBlockerMessage(rows = []) {
   return `Parte dessa seleção já virou cobrança em algum momento. Para não embaralhar histórico, aceite, Pix e envio antigo, a caixa de saída só guarda compras novas por aqui.`;
 }
 
+function getSharedDebtCardTransactionSnapshot(userId, txnId) {
+  return db.prepare(`
+    SELECT
+      t.id,
+      t.parent_txn_id,
+      t.txn_date,
+      t.description,
+      t.amount_cents,
+      t.card_id,
+      c.name AS card_name,
+      COALESCE(t.due_month, i.month) AS due_month,
+      COALESCE(t.due_year, i.year) AS due_year
+    FROM transactions t
+    LEFT JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.id = ? AND t.user_id = ?
+  `).get(txnId, userId);
+}
+
+function buildSharedDebtDraftQueueActionsForTransaction(userId, txnId) {
+  const cleanTxnId = Number(txnId || 0);
+  if (!cleanTxnId) return [];
+
+  const txn = getSharedDebtCardTransactionSnapshot(userId, cleanTxnId);
+  if (!txn) return [];
+
+  const eligibleRows = getSharedDebtEligibleAllocationRows(userId, cleanTxnId);
+  const existingRequests = db.prepare(`
+    SELECT *
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND request_kind = 'card'
+      AND source_transaction_id = ?
+    ORDER BY id DESC
+  `).all(userId, cleanTxnId);
+
+  const pendingByPerson = new Map();
+  const latestByPerson = new Map();
+  existingRequests.forEach((row) => {
+    const personId = Number(row.source_person_id || 0);
+    if (!personId) return;
+    if (!latestByPerson.has(personId)) latestByPerson.set(personId, row);
+    if (String(row.status || '').trim().toLowerCase() === 'pending' && !pendingByPerson.has(personId)) {
+      pendingByPerson.set(personId, row);
+    }
+  });
+
+  const handledPendingRequestIds = new Set();
+  const actions = [];
+
+  const pushAction = (payload) => {
+    const receiverUserId = Number(payload?.receiverUserId || 0);
+    const sourceTransactionId = Number(payload?.sourceTransactionId || 0);
+    const sourcePersonId = Number(payload?.sourcePersonId || 0);
+    const sourceDueMonth = Number(payload?.sourceDueMonth || 0);
+    const sourceDueYear = Number(payload?.sourceDueYear || 0);
+    if (!receiverUserId || !sourceTransactionId || !sourcePersonId || !sourceDueMonth || !sourceDueYear) return;
+
+    actions.push({
+      requesterUserId: userId,
+      receiverUserId,
+      sourceTransactionId,
+      sourceAllocationId: Number(payload?.sourceAllocationId || 0) || null,
+      sourcePersonId,
+      sourceDueMonth,
+      sourceDueYear,
+      sourceTxnDateSnapshot: payload?.sourceTxnDateSnapshot || null,
+      cardId: Number(payload?.cardId || 0) || null,
+      cardNameSnapshot: payload?.cardNameSnapshot || null,
+      descriptionSnapshot: payload?.descriptionSnapshot || txn.description,
+      amountCents: Number(payload?.amountCents || 0),
+      receiverEmailSnapshot: normalizeEmail(payload?.receiverEmailSnapshot),
+      receiverNameSnapshot: payload?.receiverNameSnapshot || null,
+      actionKind: normalizeSharedDebtQueueActionKind(payload?.actionKind),
+      targetRequestId: Number(payload?.targetRequestId || 0) || null,
+      baselineStatusSnapshot: payload?.baselineStatusSnapshot || null
+    });
+  };
+
+  const enqueueCancelAction = (requestRow) => {
+    const requestId = Number(requestRow?.id || 0);
+    if (!requestId || handledPendingRequestIds.has(requestId)) return;
+    handledPendingRequestIds.add(requestId);
+
+    pushAction({
+      receiverUserId: Number(requestRow.receiver_user_id || 0),
+      sourceTransactionId: cleanTxnId,
+      sourceAllocationId: Number(requestRow.source_allocation_id || 0) || null,
+      sourcePersonId: Number(requestRow.source_person_id || 0),
+      sourceDueMonth: Number(requestRow.source_due_month || txn.due_month || 0),
+      sourceDueYear: Number(requestRow.source_due_year || txn.due_year || 0),
+      sourceTxnDateSnapshot: requestRow.source_txn_date_snapshot || txn.txn_date || null,
+      cardId: Number(requestRow.card_id || 0) || null,
+      cardNameSnapshot: requestRow.card_name_snapshot || txn.card_name || null,
+      descriptionSnapshot: requestRow.description_snapshot || txn.description,
+      amountCents: Number(requestRow.amount_cents || 0),
+      receiverEmailSnapshot: requestRow.receiver_email_snapshot || null,
+      receiverNameSnapshot: requestRow.receiver_name_snapshot || null,
+      actionKind: 'cancel',
+      targetRequestId: requestId,
+      baselineStatusSnapshot: requestRow.status || 'pending'
+    });
+  };
+
+  eligibleRows.forEach((row) => {
+    const personId = Number(row.person_id || 0);
+    const receiverUserId = Number(row.receiver_user_id || 0);
+    if (!personId || !receiverUserId) return;
+
+    const receiverEmailSnapshot = normalizeEmail(row.person_email || row.receiver_user_email);
+    const receiverNameSnapshot = row.person_name || row.receiver_user_name || null;
+    const existingPending = pendingByPerson.get(personId);
+    const latestRequest = latestByPerson.get(personId);
+
+    if (existingPending && Number(existingPending.receiver_user_id || 0) === receiverUserId) {
+      handledPendingRequestIds.add(Number(existingPending.id || 0));
+
+      const changed = [
+        Number(existingPending.source_allocation_id || 0) !== Number(row.allocation_id || 0),
+        Number(existingPending.amount_cents || 0) !== Number(row.share_cents || 0),
+        Number(existingPending.card_id || 0) !== Number(txn.card_id || 0),
+        String(existingPending.card_name_snapshot || '') !== String(txn.card_name || ''),
+        String(existingPending.description_snapshot || '') !== String(txn.description || ''),
+        Number(existingPending.source_due_month || 0) !== Number(txn.due_month || 0),
+        Number(existingPending.source_due_year || 0) !== Number(txn.due_year || 0),
+        String(existingPending.source_txn_date_snapshot || '') !== String(txn.txn_date || ''),
+        String(existingPending.receiver_email_snapshot || '') !== String(receiverEmailSnapshot || ''),
+        String(existingPending.receiver_name_snapshot || '') !== String(receiverNameSnapshot || '')
+      ].some(Boolean);
+
+      if (!changed) return;
+
+      pushAction({
+        receiverUserId,
+        sourceTransactionId: cleanTxnId,
+        sourceAllocationId: Number(row.allocation_id || 0) || null,
+        sourcePersonId: personId,
+        sourceDueMonth: Number(txn.due_month || 0),
+        sourceDueYear: Number(txn.due_year || 0),
+        sourceTxnDateSnapshot: txn.txn_date || null,
+        cardId: Number(txn.card_id || 0) || null,
+        cardNameSnapshot: txn.card_name || null,
+        descriptionSnapshot: txn.description,
+        amountCents: Number(row.share_cents || 0),
+        receiverEmailSnapshot,
+        receiverNameSnapshot,
+        actionKind: 'update',
+        targetRequestId: Number(existingPending.id || 0),
+        baselineStatusSnapshot: existingPending.status || 'pending'
+      });
+      return;
+    }
+
+    if (existingPending) {
+      enqueueCancelAction(existingPending);
+    }
+
+    const canCreate = !latestRequest || canRecreateSharedDebtDraftFromHistory(latestRequest) || Number(latestRequest?.id || 0) === Number(existingPending?.id || 0);
+    if (!canCreate) return;
+
+    pushAction({
+      receiverUserId,
+      sourceTransactionId: cleanTxnId,
+      sourceAllocationId: Number(row.allocation_id || 0) || null,
+      sourcePersonId: personId,
+      sourceDueMonth: Number(txn.due_month || 0),
+      sourceDueYear: Number(txn.due_year || 0),
+      sourceTxnDateSnapshot: txn.txn_date || null,
+      cardId: Number(txn.card_id || 0) || null,
+      cardNameSnapshot: txn.card_name || null,
+      descriptionSnapshot: txn.description,
+      amountCents: Number(row.share_cents || 0),
+      receiverEmailSnapshot,
+      receiverNameSnapshot,
+      actionKind: 'create'
+    });
+  });
+
+  pendingByPerson.forEach((requestRow) => {
+    enqueueCancelAction(requestRow);
+  });
+
+  return actions;
+}
+
 function queueSharedDebtDraftsForTransactions(userId, targetRows = []) {
   const rows = dedupeTxnRows(targetRows);
   const txnIds = rows.map((row) => Number(row.id || 0)).filter(Boolean);
   if (!txnIds.length) {
-    return { queueCount: 0, itemCount: 0, totalCents: 0, shareableCount: 0 };
-  }
-
-  const blockers = getSharedDebtDraftHistoryBlockersForTransactions(userId, txnIds);
-  if (blockers.length) {
-    throw new Error(buildSharedDebtDraftHistoryBlockerMessage(blockers));
+    return { queueCount: 0, itemCount: 0, totalCents: 0, shareableCount: 0, createCount: 0, updateCount: 0, cancelCount: 0 };
   }
 
   clearDraftSharedDebtSendQueueItemsForTransactions(userId, txnIds);
 
-  const queueGroups = new Map();
-  rows.forEach((targetTxn) => {
-    const dueMonth = Number(targetTxn.due_month || targetTxn.month || 0);
-    const dueYear = Number(targetTxn.due_year || targetTxn.year || 0);
-    if (!dueMonth || !dueYear) return;
-
-    getSharedDebtEligibleAllocationRows(userId, targetTxn.id).forEach((row) => {
-      const receiverUserId = Number(row.receiver_user_id || 0);
-      const sourcePersonId = Number(row.person_id || 0);
-      if (!receiverUserId || !sourcePersonId) return;
-
-      const key = `${receiverUserId}:${dueYear}:${dueMonth}`;
-      if (!queueGroups.has(key)) {
-        queueGroups.set(key, {
-          receiverUserId,
-          month: dueMonth,
-          year: dueYear,
-          receiverEmailSnapshot: normalizeEmail(row.person_email || row.receiver_user_email),
-          receiverNameSnapshot: row.person_name || row.receiver_user_name || null,
-          items: []
-        });
-      }
-
-      queueGroups.get(key).items.push({
-        requesterUserId: userId,
-        receiverUserId,
-        sourceTransactionId: Number(targetTxn.id || 0),
-        sourceAllocationId: Number(row.allocation_id || 0) || null,
-        sourcePersonId,
-        sourceDueMonth: dueMonth,
-        sourceDueYear: dueYear,
-        sourceTxnDateSnapshot: targetTxn.txn_date || null,
-        cardId: Number(targetTxn.card_id || 0) || null,
-        cardNameSnapshot: targetTxn.card_name || null,
-        descriptionSnapshot: targetTxn.description,
-        amountCents: Number(row.share_cents || 0),
-        receiverEmailSnapshot: normalizeEmail(row.person_email || row.receiver_user_email),
-        receiverNameSnapshot: row.person_name || row.receiver_user_name || null
-      });
-    });
+  const actions = [];
+  rows.forEach((row) => {
+    buildSharedDebtDraftQueueActionsForTransaction(userId, row.id).forEach((action) => actions.push(action));
   });
 
-  if (!queueGroups.size) {
-    return { queueCount: 0, itemCount: 0, totalCents: 0, shareableCount: 0 };
+  if (!actions.length) {
+    return { queueCount: 0, itemCount: 0, totalCents: 0, shareableCount: 0, createCount: 0, updateCount: 0, cancelCount: 0 };
   }
+
+  const queueGroups = new Map();
+  actions.forEach((action) => {
+    const key = `${action.receiverUserId}:${action.sourceDueYear}:${action.sourceDueMonth}`;
+    if (!queueGroups.has(key)) {
+      queueGroups.set(key, {
+        receiverUserId: action.receiverUserId,
+        month: action.sourceDueMonth,
+        year: action.sourceDueYear,
+        receiverEmailSnapshot: action.receiverEmailSnapshot,
+        receiverNameSnapshot: action.receiverNameSnapshot,
+        items: []
+      });
+    }
+
+    const group = queueGroups.get(key);
+    if (!group.receiverEmailSnapshot && action.receiverEmailSnapshot) group.receiverEmailSnapshot = action.receiverEmailSnapshot;
+    if (!group.receiverNameSnapshot && action.receiverNameSnapshot) group.receiverNameSnapshot = action.receiverNameSnapshot;
+    group.items.push(action);
+  });
 
   const upsertItem = db.prepare(`
     INSERT INTO shared_debt_send_queue_items (
       queue_id, requester_user_id, receiver_user_id, source_transaction_id,
       source_allocation_id, source_person_id, source_due_month, source_due_year,
       source_txn_date_snapshot, card_id, card_name_snapshot, description_snapshot,
-      amount_cents, receiver_email_snapshot, receiver_name_snapshot,
-      sent_request_id, cancelled_at, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+      amount_cents, receiver_email_snapshot, receiver_name_snapshot, action_kind,
+      target_request_id, baseline_status_snapshot, sent_request_id, cancelled_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
     ON CONFLICT(queue_id, source_transaction_id, source_person_id) DO UPDATE SET
       requester_user_id = excluded.requester_user_id,
       receiver_user_id = excluded.receiver_user_id,
@@ -9991,12 +10182,15 @@ function queueSharedDebtDraftsForTransactions(userId, targetRows = []) {
       amount_cents = excluded.amount_cents,
       receiver_email_snapshot = excluded.receiver_email_snapshot,
       receiver_name_snapshot = excluded.receiver_name_snapshot,
+      action_kind = excluded.action_kind,
+      target_request_id = excluded.target_request_id,
+      baseline_status_snapshot = excluded.baseline_status_snapshot,
       sent_request_id = NULL,
       cancelled_at = NULL,
       updated_at = excluded.updated_at
   `);
 
-  const touchedQueueIds = [];
+  const touchedQueueIds = new Set();
   db.transaction(() => {
     queueGroups.forEach((group) => {
       const existingQueue = getSharedDebtDraftQueueRow({
@@ -10017,7 +10211,7 @@ function queueSharedDebtDraftsForTransactions(userId, targetRows = []) {
         receiverNameSnapshot: group.receiverNameSnapshot
       });
 
-      touchedQueueIds.push(queueId);
+      touchedQueueIds.add(queueId);
       group.items.forEach((item) => {
         const now = nowIso();
         upsertItem.run(
@@ -10036,6 +10230,9 @@ function queueSharedDebtDraftsForTransactions(userId, targetRows = []) {
           item.amountCents,
           item.receiverEmailSnapshot,
           item.receiverNameSnapshot,
+          item.actionKind,
+          item.targetRequestId,
+          item.baselineStatusSnapshot,
           now,
           now
         );
@@ -10044,13 +10241,24 @@ function queueSharedDebtDraftsForTransactions(userId, targetRows = []) {
     });
   })();
 
-  const draftQueues = getSharedDebtSendQueueDraftsForUser(userId).filter((queue) => touchedQueueIds.includes(Number(queue.id || 0)));
-  return draftQueues.reduce((acc, queue) => {
-    acc.queueCount += 1;
-    acc.itemCount += Number(queue.itemCount || 0);
-    acc.totalCents += Number(queue.totalCents || 0);
+  const summary = actions.reduce((acc, action) => {
+    acc.itemCount += 1;
+    acc.totalCents += Math.max(0, Number(action.amountCents || 0));
+    if (action.actionKind === 'update') acc.updateCount += 1;
+    else if (action.actionKind === 'cancel') acc.cancelCount += 1;
+    else acc.createCount += 1;
     return acc;
-  }, { queueCount: 0, itemCount: 0, totalCents: 0, shareableCount: touchedQueueIds.length });
+  }, {
+    queueCount: touchedQueueIds.size,
+    itemCount: 0,
+    totalCents: 0,
+    shareableCount: touchedQueueIds.size,
+    createCount: 0,
+    updateCount: 0,
+    cancelCount: 0
+  });
+
+  return summary;
 }
 
 function getSharedDebtSendQueueDraftSummary(userId, options = {}) {
@@ -10107,6 +10315,7 @@ function getSharedDebtSendQueueDraftsForUser(userId) {
     if (!itemsByQueueId.has(queueId)) itemsByQueueId.set(queueId, []);
     itemsByQueueId.get(queueId).push({
       ...row,
+      actionKind: normalizeSharedDebtQueueActionKind(row.action_kind),
       amountFormatted: formatBRLFromCents(Number(row.amount_cents || 0)),
       txnDateLabel: row.source_txn_date_snapshot ? formatDateBR(row.source_txn_date_snapshot) : null
     });
@@ -10158,7 +10367,10 @@ function sendSharedDebtDraftQueue(userId, queueId) {
     WHERE queue_id = ?
       AND cancelled_at IS NULL
     ORDER BY COALESCE(source_txn_date_snapshot, '') ASC, id ASC
-  `).all(cleanQueueId);
+  `).all(cleanQueueId).map((item) => ({
+    ...item,
+    action_kind: normalizeSharedDebtQueueActionKind(item.action_kind)
+  }));
 
   if (!queueItems.length) {
     refreshSharedDebtSendQueue(cleanQueueId);
@@ -10167,34 +10379,30 @@ function sendSharedDebtDraftQueue(userId, queueId) {
     throw error;
   }
 
-  const conflictingItem = queueItems.find((item) => db.prepare(`
-    SELECT 1
-    FROM shared_debt_requests
-    WHERE requester_user_id = ?
-      AND request_kind = 'card'
-      AND status <> 'cancelled'
-      AND source_transaction_id = ?
-      AND source_person_id = ?
-    LIMIT 1
-  `).get(userId, item.source_transaction_id, item.source_person_id));
-
-  if (conflictingItem) {
-    const error = new Error('Uma dessas compras já ganhou cobrança real antes de você apertar enviar. Revise esse rascunho e tenta de novo.');
-    error.code = 'QUEUE_CONFLICT';
-    throw error;
-  }
-
   const requesterPerson = getOwnerPerson(userId);
   const actor = getUserRecord(userId);
   const requesterDisplayName = requesterPerson?.name || actor?.name || actor?.email || 'Um usuário';
   const now = nowIso();
-  const batchId = createSharedDebtBatch({
-    requesterUserId: userId,
-    receiverUserId: queueRow.receiver_user_id,
-    originKind: queueItems.length > 1 ? 'multiple' : 'single',
-    createdAt: now
+  const notificationContext = createSharedDebtSyncContext(userId, {
+    originKind: queueItems.length > 1 ? 'multiple' : 'single'
   });
+  notificationContext.requesterDisplayName = requesterDisplayName;
 
+  const loadTargetRequest = db.prepare(`
+    SELECT *
+    FROM shared_debt_requests
+    WHERE id = ? AND requester_user_id = ?
+    LIMIT 1
+  `);
+  const loadCurrentAllocation = db.prepare(`
+    SELECT a.id
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    WHERE a.user_id = ?
+      AND a.transaction_id = ?
+      AND a.person_id = ?
+    LIMIT 1
+  `);
   const insertRequest = db.prepare(`
     INSERT INTO shared_debt_requests (
       requester_user_id, requester_person_id, receiver_user_id, source_person_id,
@@ -10203,6 +10411,30 @@ function sendSharedDebtDraftQueue(userId, queueId) {
       receiver_email_snapshot, receiver_name_snapshot, request_note, response_note,
       status, batch_id, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'pending', ?, ?, ?)
+  `);
+  const updateRequest = db.prepare(`
+    UPDATE shared_debt_requests
+    SET requester_person_id = ?,
+        receiver_user_id = ?,
+        source_person_id = ?,
+        source_allocation_id = ?,
+        source_due_month = ?,
+        source_due_year = ?,
+        source_txn_date_snapshot = ?,
+        card_id = ?,
+        card_name_snapshot = ?,
+        description_snapshot = ?,
+        amount_cents = ?,
+        receiver_email_snapshot = ?,
+        receiver_name_snapshot = ?,
+        batch_id = ?,
+        updated_at = ?
+    WHERE id = ? AND requester_user_id = ?
+  `);
+  const cancelRequest = db.prepare(`
+    UPDATE shared_debt_requests
+    SET status = 'cancelled', updated_at = ?, resolved_at = COALESCE(resolved_at, ?)
+    WHERE id = ? AND requester_user_id = ? AND status = 'pending'
   `);
   const updateQueue = db.prepare(`
     UPDATE shared_debt_send_queues
@@ -10218,73 +10450,183 @@ function sendSharedDebtDraftQueue(userId, queueId) {
     WHERE id = ?
   `);
 
-  const createdRequestIds = [];
+  const requestIds = [];
+  const affectedBatchIds = new Set();
+  const actionCounts = { create: 0, update: 0, cancel: 0 };
+
   db.transaction(() => {
     queueItems.forEach((item) => {
-      const currentAllocation = db.prepare(`
-        SELECT a.id
-        FROM allocations a
-        JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
-        WHERE a.user_id = ?
-          AND a.transaction_id = ?
-          AND a.person_id = ?
-        LIMIT 1
-      `).get(userId, item.source_transaction_id, item.source_person_id);
+      const actionKind = normalizeSharedDebtQueueActionKind(item.action_kind);
 
-      const info = insertRequest.run(
-        userId,
-        requesterPerson?.id || null,
-        queueRow.receiver_user_id,
-        item.source_person_id,
-        item.source_transaction_id,
-        Number(currentAllocation?.id || item.source_allocation_id || 0) || null,
-        item.source_due_month,
-        item.source_due_year,
-        item.source_txn_date_snapshot || null,
-        Number(item.card_id || 0) || null,
-        item.card_name_snapshot || null,
-        item.description_snapshot,
-        Number(item.amount_cents || 0),
-        item.receiver_email_snapshot || queueRow.receiver_email_snapshot || null,
-        item.receiver_name_snapshot || queueRow.receiver_name_snapshot || null,
+      if (actionKind === 'create') {
+        const batchId = Number(getOrCreateSharedDebtBatchId(notificationContext, queueRow.receiver_user_id) || createSharedDebtBatch({
+          requesterUserId: userId,
+          receiverUserId: queueRow.receiver_user_id,
+          originKind: queueItems.length > 1 ? 'multiple' : 'single',
+          createdAt: now
+        }));
+
+        const currentAllocation = loadCurrentAllocation.get(userId, item.source_transaction_id, item.source_person_id);
+        const info = insertRequest.run(
+          userId,
+          requesterPerson?.id || null,
+          queueRow.receiver_user_id,
+          item.source_person_id,
+          item.source_transaction_id,
+          Number(currentAllocation?.id || item.source_allocation_id || 0) || null,
+          item.source_due_month,
+          item.source_due_year,
+          item.source_txn_date_snapshot || null,
+          Number(item.card_id || 0) || null,
+          item.card_name_snapshot || null,
+          item.description_snapshot,
+          Number(item.amount_cents || 0),
+          item.receiver_email_snapshot || queueRow.receiver_email_snapshot || null,
+          item.receiver_name_snapshot || queueRow.receiver_name_snapshot || null,
+          batchId,
+          now,
+          now
+        );
+
+        const requestId = Number(info.lastInsertRowid);
+        requestIds.push(requestId);
+        actionCounts.create += 1;
+        affectedBatchIds.add(batchId);
+        updateQueueItem.run(requestId, now, item.id);
+        addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'created' });
+        recordSharedDebtBatchChange(notificationContext, {
+          batchId,
+          receiverUserId: queueRow.receiver_user_id,
+          receiverName: item.receiver_name_snapshot || queueRow.receiver_name_snapshot || null,
+          requestId,
+          kind: 'created',
+          amountCents: Number(item.amount_cents || 0),
+          description: item.description_snapshot
+        });
+        return;
+      }
+
+      const targetRequestId = Number(item.target_request_id || item.sent_request_id || 0);
+      const targetRequest = loadTargetRequest.get(targetRequestId, userId);
+      if (!targetRequest) {
+        const error = new Error('Uma dessas pendências mudou antes do envio manual. Revise a caixa de saída e tenta de novo.');
+        error.code = 'QUEUE_TARGET_MISSING';
+        throw error;
+      }
+
+      const currentStatus = String(targetRequest.status || '').trim().toLowerCase();
+      const baselineStatus = String(item.baseline_status_snapshot || 'pending').trim().toLowerCase() || 'pending';
+      if (currentStatus !== baselineStatus || currentStatus !== 'pending') {
+        const error = new Error('Uma dessas pendências saiu do ponto em que o rascunho foi montado. Revise a caixa de saída antes de enviar.');
+        error.code = 'QUEUE_TARGET_STALE';
+        throw error;
+      }
+
+      if (actionKind === 'update') {
+        const currentAllocation = loadCurrentAllocation.get(userId, item.source_transaction_id, item.source_person_id);
+        const existingBatchId = Number(targetRequest.batch_id || 0);
+        let nextBatchId = existingBatchId;
+        if (!nextBatchId || batchHasStartedResponse(existingBatchId)) {
+          nextBatchId = Number(getOrCreateSharedDebtBatchId(notificationContext, Number(targetRequest.receiver_user_id || item.receiver_user_id || queueRow.receiver_user_id)) || createSharedDebtBatch({
+            requesterUserId: userId,
+            receiverUserId: Number(targetRequest.receiver_user_id || item.receiver_user_id || queueRow.receiver_user_id),
+            originKind: queueItems.length > 1 ? 'multiple' : 'single',
+            createdAt: now
+          }));
+        }
+
+        updateRequest.run(
+          requesterPerson?.id || null,
+          Number(targetRequest.receiver_user_id || item.receiver_user_id || queueRow.receiver_user_id),
+          item.source_person_id,
+          Number(currentAllocation?.id || item.source_allocation_id || 0) || null,
+          item.source_due_month,
+          item.source_due_year,
+          item.source_txn_date_snapshot || null,
+          Number(item.card_id || 0) || null,
+          item.card_name_snapshot || null,
+          item.description_snapshot,
+          Number(item.amount_cents || 0),
+          item.receiver_email_snapshot || targetRequest.receiver_email_snapshot || null,
+          item.receiver_name_snapshot || targetRequest.receiver_name_snapshot || null,
+          nextBatchId || null,
+          now,
+          targetRequestId,
+          userId
+        );
+
+        requestIds.push(targetRequestId);
+        actionCounts.update += 1;
+        updateQueueItem.run(targetRequestId, now, item.id);
+        addSharedDebtEvent({
+          requestId: targetRequestId,
+          actorUserId: userId,
+          eventType: 'updated',
+          note: nextBatchId !== existingBatchId
+            ? 'Solicitação atualizada pela caixa de saída em um novo envio.'
+            : 'Solicitação atualizada pela caixa de saída.'
+        });
+
+        if (existingBatchId) affectedBatchIds.add(existingBatchId);
+        if (nextBatchId) affectedBatchIds.add(nextBatchId);
+        recordSharedDebtBatchChange(notificationContext, {
+          batchId: nextBatchId || existingBatchId,
+          receiverUserId: Number(targetRequest.receiver_user_id || item.receiver_user_id || queueRow.receiver_user_id),
+          receiverName: item.receiver_name_snapshot || targetRequest.receiver_name_snapshot || queueRow.receiver_name_snapshot || null,
+          requestId: targetRequestId,
+          kind: 'updated',
+          amountCents: Number(item.amount_cents || 0),
+          description: item.description_snapshot
+        });
+        return;
+      }
+
+      const cancelInfo = cancelRequest.run(now, now, targetRequestId, userId);
+      if (!Number(cancelInfo.changes || 0)) {
+        const error = new Error('Uma dessas pendências saiu do ponto em que o rascunho foi montado. Revise a caixa de saída antes de enviar.');
+        error.code = 'QUEUE_TARGET_CANCEL_STALE';
+        throw error;
+      }
+
+      requestIds.push(targetRequestId);
+      actionCounts.cancel += 1;
+      updateQueueItem.run(targetRequestId, now, item.id);
+      addSharedDebtEvent({
+        requestId: targetRequestId,
+        actorUserId: userId,
+        eventType: 'cancelled',
+        note: 'Solicitação cancelada a partir da caixa de saída.'
+      });
+
+      const batchId = Number(targetRequest.batch_id || 0);
+      if (batchId) affectedBatchIds.add(batchId);
+      recordSharedDebtBatchChange(notificationContext, {
         batchId,
-        now,
-        now
-      );
-
-      const requestId = Number(info.lastInsertRowid);
-      createdRequestIds.push(requestId);
-      updateQueueItem.run(requestId, now, item.id);
-      addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'created' });
+        receiverUserId: Number(targetRequest.receiver_user_id || queueRow.receiver_user_id),
+        receiverName: targetRequest.receiver_name_snapshot || queueRow.receiver_name_snapshot || null,
+        requestId: targetRequestId,
+        kind: 'cancelled',
+        amountCents: Number(targetRequest.amount_cents || item.amount_cents || 0),
+        description: targetRequest.description_snapshot || item.description_snapshot
+      });
     });
 
-    updateQueue.run(now, batchId, now, cleanQueueId);
+    const primaryBatchId = Array.from(affectedBatchIds).find(Boolean) || null;
+    updateQueue.run(now, primaryBatchId, now, cleanQueueId);
   })();
 
-  refreshSharedDebtBatch(batchId, now);
-  createNotification({
-    userId: queueRow.receiver_user_id,
-    type: 'shared_debt_batch',
-    title: 'Chegou um novo envio compartilhado',
-    body: buildSharedDebtBatchNotificationBody({
-      requesterDisplayName,
-      actionLabel: 'enviou',
-      itemCount: queueItems.length,
-      totalCents: Number(queueRow.total_cents || 0),
-      descriptions: queueItems.map((item) => item.description_snapshot)
-    }),
-    href: `/shared-debts?batch=${batchId}`,
-    relatedType: 'shared_debt_batch',
-    relatedId: batchId,
-    groupKey: 'shared_debt_new'
+  affectedBatchIds.forEach((batchId) => {
+    if (batchId) refreshSharedDebtBatch(batchId, now);
   });
+  flushSharedDebtBatchNotifications(notificationContext);
 
   return {
     queueRow,
-    batchId,
-    requestIds: createdRequestIds,
+    batchIds: Array.from(affectedBatchIds).filter(Boolean),
+    requestIds,
     itemCount: queueItems.length,
-    totalCents: Number(queueRow.total_cents || 0)
+    totalCents: Number(queueRow.total_cents || 0),
+    actionCounts
   };
 }
 
@@ -10321,19 +10663,10 @@ function discardSharedDebtDraftQueue(userId, queueId) {
 
 function applySharedDebtDispatchModeForTransactions(userId, targetRows, options = {}) {
   const rows = dedupeTxnRows(targetRows);
-  const deliveryMode = normalizeSharedDebtDispatchMode(options?.deliveryMode);
-  if (deliveryMode === 'draft') {
-    return {
-      deliveryMode,
-      summary: queueSharedDebtDraftsForTransactions(userId, rows)
-    };
-  }
-
-  clearDraftSharedDebtSendQueueItemsForTransactions(userId, rows.map((row) => Number(row.id || 0)));
-  syncSharedDebtRequestsForTransactions(userId, rows.map((row) => row.id), {
-    originKind: options?.originKind || detectSharedDebtOriginKindFromRows(rows)
-  });
-  return { deliveryMode, summary: null };
+  return {
+    deliveryMode: 'draft',
+    summary: queueSharedDebtDraftsForTransactions(userId, rows)
+  };
 }
 
 function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) {
@@ -13065,7 +13398,7 @@ app.post('/shared-debts/draft-queues/:id/send', ensureAuthenticated, (req, res) 
 
   try {
     const result = sendSharedDebtDraftQueue(userId, queueId);
-    setFlash(req, 'success', `Pronto! ${formatCountLabel(result.itemCount, 'cobrança saiu', 'cobranças saíram')} da caixa de saída e foram para ${formatBRLFromCents(result.totalCents)} num envio só.`);
+    setFlash(req, 'success', `Pronto! ${formatCountLabel(result.itemCount, 'item saiu', 'itens saíram')} da caixa de saída e seguiram o combinado.`);
   } catch (error) {
     setFlash(req, 'error', error.message || 'Não consegui disparar esse rascunho agora.');
   }
@@ -13082,7 +13415,7 @@ app.post('/shared-debts/draft-queues/:id/discard', ensureAuthenticated, (req, re
   if (!discarded) {
     setFlash(req, 'info', 'Esse rascunho já tinha saído de cena ou não existe mais.');
   } else {
-    setFlash(req, 'success', 'Rascunho descartado. A caixa de saída ficou mais leve por aqui.');
+    setFlash(req, 'success', 'Rascunho descartado. A divisão local continuou salva por aqui.');
   }
 
   return res.redirect(fallbackRedirect);
@@ -17296,17 +17629,7 @@ app.post('/import/confirm', ensureAuthenticated, ensureCanImport, (req, res) => 
 
     if (overwrittenRows.length) {
       syncEqualAllocationsForEditedTransactions(userId, overwrittenRows);
-      const draftQueuedTxnIdSet = getSharedDebtDraftQueuedTxnIdSet(userId, persistResult.overwrittenIds);
-      const draftRows = overwrittenRows.filter((row) => draftQueuedTxnIdSet.has(Number(row.id || 0)));
-      const liveRows = overwrittenRows.filter((row) => !draftQueuedTxnIdSet.has(Number(row.id || 0)));
-      if (draftRows.length) {
-        queueSharedDebtDraftsForTransactions(userId, draftRows);
-      }
-      if (liveRows.length) {
-        syncSharedDebtRequestsForTransactions(userId, liveRows.map((row) => row.id), {
-          originKind: detectSharedDebtOriginKindFromRows(liveRows)
-        });
-      }
+      queueSharedDebtDraftsForTransactions(userId, overwrittenRows);
     }
 
     const feedback = buildImportConfirmationMessage(preview, importedItems.length, persistResult.overwrittenIds.length);
@@ -18571,9 +18894,9 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
       }
     })();
 
-    syncSharedDebtRequestsForTransactions(userId, createdTxnIds, {
-      originKind: createdTxnIds.length > 1 ? 'installment' : 'single'
-    });
+    if (createdTxnIds.length) {
+      queueSharedDebtDraftsForTransactions(userId, getTransactionScopeRowsByIds(userId, createdTxnIds));
+    }
 
     if (isRecurring) {
       setFlash(req, "success", "Lançamento recorrente mensal criado com sucesso.");
@@ -18673,12 +18996,10 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
       originKind: detectSharedDebtOriginKindFromRows(targetRows)
     });
 
-    if (dispatchResult.deliveryMode === 'draft') {
-      const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
-      setFlash(req, 'success', summary.itemCount > 0
-        ? `Divisão salva e ${formatCountLabel(summary.itemCount, 'cobrança ficou guardada', 'cobranças ficaram guardadas')} na caixa de saída.`
-        : 'Divisão salva. Como ainda não encontrei amizade pronta nessa seleção, nada ficou pendente de envio.');
-    }
+    const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
+    setFlash(req, 'success', summary.itemCount > 0
+      ? `Divisão salva. ${formatCountLabel(summary.itemCount, 'item foi para a caixa de saída', 'itens foram para a caixa de saída')}.`
+      : 'Divisão salva. Nada entrou na caixa de saída dessa vez.');
 
     res.redirect(`/month/${txn.year}/${txn.month}`);
   } catch (error) {
@@ -18937,7 +19258,6 @@ app.post("/txn/:id/edit", ensureAuthenticated, (req, res) => {
     return respondError(409, error.message || 'A divisão dessa compra precisa de uma revisão antes de trocar o valor.');
   }
 
-  const draftQueuedTxnIdSet = getSharedDebtDraftQueuedTxnIdSet(userId, targetRows.map((row) => row.id));
   const updateTxn = db.prepare(`
     UPDATE transactions
     SET txn_date = ?, description = ?, amount_cents = ?, card_id = ?, due_month = ?, due_year = ?, purchase_category_id = ?
@@ -19000,17 +19320,8 @@ app.post("/txn/:id/edit", ensureAuthenticated, (req, res) => {
   const refreshedRows = getTransactionScopeRowsByIds(userId, targetRows.map((row) => row.id));
   syncEqualAllocationsForEditedTransactions(userId, refreshedRows);
 
-  const draftRows = refreshedRows.filter((row) => draftQueuedTxnIdSet.has(Number(row.id || 0)));
-  const liveRows = refreshedRows.filter((row) => !draftQueuedTxnIdSet.has(Number(row.id || 0)));
-
-  if (draftRows.length) {
-    queueSharedDebtDraftsForTransactions(userId, draftRows);
-  }
-
-  if (liveRows.length) {
-    syncSharedDebtRequestsForTransactions(userId, liveRows.map((row) => row.id), {
-      originKind: detectSharedDebtOriginKindFromRows(liveRows)
-    });
+  if (refreshedRows.length) {
+    queueSharedDebtDraftsForTransactions(userId, refreshedRows);
   }
 
   const movedMonth = futureScope && dueShiftDelta !== 0;
@@ -19114,12 +19425,10 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
       originKind: detectSharedDebtOriginKindFromRows(targetRows)
     });
 
-    if (dispatchResult.deliveryMode === 'draft') {
-      const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
-      setFlash(req, 'success', summary.itemCount > 0
-        ? `Divisão salva e ${formatCountLabel(summary.itemCount, 'cobrança ficou guardada', 'cobranças ficaram guardadas')} na caixa de saída.`
-        : 'Divisão salva. Como ainda não encontrei amizade pronta nessa seleção, nada ficou pendente de envio.');
-    }
+    const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
+    setFlash(req, 'success', summary.itemCount > 0
+      ? `Divisão salva. ${formatCountLabel(summary.itemCount, 'item foi para a caixa de saída', 'itens foram para a caixa de saída')}.`
+      : 'Divisão salva. Nada entrou na caixa de saída dessa vez.');
 
     res.redirect(`/month/${txn.year}/${txn.month}`);
   } catch (error) {
@@ -19222,13 +19531,10 @@ app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
       ? `${targetRows.length} lançamento(s) tiveram a distribuição atualizada.`
       : 'Distribuição atualizada com sucesso.';
 
-    let message = baseMessage;
-    if (dispatchResult.deliveryMode === 'draft') {
-      const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
-      message = summary.itemCount > 0
-        ? `${baseMessage} ${formatCountLabel(summary.itemCount, 'cobrança ficou guardada', 'cobranças ficaram guardadas')} na caixa de saída.`
-        : `${baseMessage} Não achei amizade pronta nessa seleção, então nada ficou pendente de envio.`;
-    }
+    const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
+    const message = summary.itemCount > 0
+      ? `${baseMessage} ${formatCountLabel(summary.itemCount, 'item foi para a caixa de saída', 'itens foram para a caixa de saída')}.`
+      : `${baseMessage} Nada entrou na caixa de saída dessa vez.`;
 
     return res.json({
       ok: true,
@@ -19393,8 +19699,6 @@ app.post("/month/:year/:month/bulk/move", ensureAuthenticated, (req, res) => {
     SET due_month = ?, due_year = ?
     WHERE id = ? AND user_id = ?
   `);
-  const draftQueuedTxnIdSet = getSharedDebtDraftQueuedTxnIdSet(userId, moveTargets.map((targetTxn) => targetTxn.id));
-
   db.transaction(() => {
     moveTargets.forEach(targetTxn => {
       updateTxn.run(targetTxn.target_month, targetTxn.target_year, targetTxn.id, userId);
@@ -19402,17 +19706,8 @@ app.post("/month/:year/:month/bulk/move", ensureAuthenticated, (req, res) => {
   })();
 
   const refreshedRows = getTransactionScopeRowsByIds(userId, moveTargets.map((targetTxn) => targetTxn.id));
-  const draftRows = refreshedRows.filter((row) => draftQueuedTxnIdSet.has(Number(row.id || 0)));
-  const liveRows = refreshedRows.filter((row) => !draftQueuedTxnIdSet.has(Number(row.id || 0)));
-
-  if (draftRows.length) {
-    queueSharedDebtDraftsForTransactions(userId, draftRows);
-  }
-
-  if (liveRows.length) {
-    syncSharedDebtRequestsForTransactions(userId, liveRows.map((targetTxn) => targetTxn.id), {
-      originKind: detectSharedDebtOriginKindFromRows(liveRows)
-    });
+  if (refreshedRows.length) {
+    queueSharedDebtDraftsForTransactions(userId, refreshedRows);
   }
 
   return res.json({

@@ -729,6 +729,9 @@ CREATE TABLE IF NOT EXISTS shared_debt_send_queue_items (
   amount_cents INTEGER NOT NULL,
   receiver_email_snapshot TEXT,
   receiver_name_snapshot TEXT,
+  action_kind TEXT NOT NULL DEFAULT 'create',
+  target_request_id INTEGER,
+  baseline_status_snapshot TEXT,
   sent_request_id INTEGER,
   cancelled_at TEXT,
   created_at TEXT NOT NULL,
@@ -741,6 +744,7 @@ CREATE TABLE IF NOT EXISTS shared_debt_send_queue_items (
   FOREIGN KEY (source_allocation_id) REFERENCES allocations(id),
   FOREIGN KEY (source_person_id) REFERENCES people(id),
   FOREIGN KEY (card_id) REFERENCES cards(id),
+  FOREIGN KEY (target_request_id) REFERENCES shared_debt_requests(id),
   FOREIGN KEY (sent_request_id) REFERENCES shared_debt_requests(id)
 );
 
@@ -1034,6 +1038,24 @@ if (!columnExists("shared_debt_batches", "resolved_at")) {
   db.exec("ALTER TABLE shared_debt_batches ADD COLUMN resolved_at TEXT;");
 }
 
+if (!columnExists("shared_debt_send_queue_items", "action_kind")) {
+  db.exec("ALTER TABLE shared_debt_send_queue_items ADD COLUMN action_kind TEXT NOT NULL DEFAULT 'create';");
+}
+
+if (!columnExists("shared_debt_send_queue_items", "target_request_id")) {
+  db.exec("ALTER TABLE shared_debt_send_queue_items ADD COLUMN target_request_id INTEGER;");
+}
+
+if (!columnExists("shared_debt_send_queue_items", "baseline_status_snapshot")) {
+  db.exec("ALTER TABLE shared_debt_send_queue_items ADD COLUMN baseline_status_snapshot TEXT;");
+}
+
+db.exec(`
+UPDATE shared_debt_send_queue_items
+SET action_kind = COALESCE(NULLIF(trim(action_kind), ''), 'create')
+WHERE action_kind IS NULL OR trim(action_kind) = '';
+`);
+
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase() || null;
@@ -1225,6 +1247,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_requester_status ON share
 CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_receiver_period ON shared_debt_send_queues(receiver_user_id, source_due_year DESC, source_due_month DESC);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_queue ON shared_debt_send_queue_items(queue_id, source_txn_date_snapshot, id);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_txn_person ON shared_debt_send_queue_items(requester_user_id, source_transaction_id, source_person_id);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_target_request ON shared_debt_send_queue_items(target_request_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at);
 CREATE INDEX IF NOT EXISTS idx_user_notification_preferences_updated ON user_notification_preferences(updated_at);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_status ON friend_requests(requester_user_id, status, created_at);

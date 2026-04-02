@@ -1,14 +1,14 @@
-<div class="op-surface-card rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/95 space-y-5">
+<div class="op-surface-card rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/95 space-y-5">
   <div>
-    <div class="text-xs font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Mapa do admin</div>
-    <h2 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Encontre e pule direto</h2>
-    <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">
-      A busca esconde o ruído e deixa só as áreas que combinam com o que você quer ajustar agora.
+    <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Navegação</div>
+    <h2 class="mt-2 text-lg font-semibold tracking-tight text-slate-900 dark:text-white">Mapa da administração</h2>
+    <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+      Use a busca para localizar seções, campos e ações sem percorrer toda a página.
     </p>
   </div>
 
   <label class="block">
-    <span class="block text-[11px] font-black uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Busca rápida</span>
+    <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Buscar seção</span>
     <div class="relative mt-2">
       <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 dark:text-slate-500">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.6-5.15a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -16,15 +16,15 @@
       <input type="search"
              data-admin-search-input
              placeholder="Buscar seção, campo ou ação"
-             class="w-full rounded-2xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-950 py-3 pl-10 pr-4 text-sm font-medium text-slate-800 dark:text-slate-100 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:focus:border-blue-500 dark:focus:bg-slate-900">
+             class="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 py-3 pl-10 pr-4 text-sm text-slate-800 dark:text-slate-100 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-300 dark:focus:border-slate-500 dark:focus:ring-slate-700">
     </div>
   </label>
 
   <div class="space-y-4">
     <% navGroups.forEach((group) => { %>
       <section data-admin-nav-group class="space-y-2">
-        <div class="px-1 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><%= group.title %></div>
-        <nav class="space-y-2">
+        <div class="px-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400"><%= group.title %></div>
+        <nav class="space-y-1.5">
           <% group.items.forEach((item) => {
                const selected = activeSectionKey === item.key || (activeSectionKey === 'access' && item.key === 'access');
                const badgeText = item.badge || '';
@@ -35,16 +35,16 @@
                data-admin-nav-target="admin-section-<%= item.key %>"
                data-admin-search="<%= item.searchText || '' %>"
                aria-current="<%= selected ? 'location' : 'false' %>"
-               class="flex items-start gap-3 rounded-2xl border px-4 py-3 transition-all <%= selected ? 'border-blue-200 bg-blue-50 text-blue-700 shadow-sm dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-200' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/30 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900/50' %>">
-              <span data-admin-nav-dot class="mt-1 h-2.5 w-2.5 rounded-full <%= selected ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600' %>"></span>
+               class="flex items-start gap-3 rounded-xl border px-3.5 py-3 transition-all <%= selected ? 'border-slate-900 bg-slate-900 text-white shadow-sm dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/30 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900/50' %>">
+              <span data-admin-nav-dot class="mt-1 h-2.5 w-2.5 rounded-full <%= selected ? 'bg-white/80 dark:bg-slate-900' : 'bg-slate-300 dark:bg-slate-600' %>"></span>
               <span class="min-w-0 flex-1">
                 <span class="flex items-center justify-between gap-3">
-                  <span class="block text-sm font-black tracking-tight"><%= item.title %></span>
+                  <span class="block text-sm font-semibold tracking-tight"><%= item.title %></span>
                   <% if (badgeText) { %>
-                    <span class="inline-flex items-center rounded-full border border-current/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] opacity-80"><%= badgeText %></span>
+                    <span class="inline-flex items-center rounded-full border border-current/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] opacity-85"><%= badgeText %></span>
                   <% } %>
                 </span>
-                <span class="mt-1 block text-xs font-medium text-current/80"><%= item.description %></span>
+                <span class="mt-1 block text-xs leading-relaxed text-current/80"><%= item.description %></span>
               </span>
             </a>
           <% }) %>
@@ -53,17 +53,17 @@
     <% }) %>
   </div>
 
-  <details class="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-900/40">
-    <summary class="cursor-pointer list-none font-black text-slate-800 dark:text-slate-100 flex items-center justify-between gap-3">
-      Guia rápido do painel
+  <details class="rounded-xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-900/40">
+    <summary class="cursor-pointer list-none font-semibold text-slate-800 dark:text-slate-100 flex items-center justify-between gap-3">
+      Como usar o painel
       <span class="text-xs font-bold text-slate-400 dark:text-slate-500">abrir</span>
     </summary>
-    <div class="mt-3 space-y-2 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
-      <p>• Quase tudo entra na hora. Quando pedir restart, o badge aparece no campo e na seção.</p>
-      <p>• Ações operacionais ficam separadas dos formulários para você não precisar garimpar botão no meio do texto.</p>
-      <p>• O PDF completo continua aqui por segurança, mas agora o painel tenta se explicar sem palestra.</p>
-      <a href="<%= adminGuideUrl %>" class="inline-flex items-center rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-700 transition hover:bg-white dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
-        Baixar guia completo
+    <div class="mt-3 space-y-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+      <p>• Use a navegação lateral para alternar entre operação diária e configurações técnicas.</p>
+      <p>• Ações operacionais ficam separadas dos formulários para reduzir ruído visual.</p>
+      <p>• O guia completo continua disponível como apoio, mas a página foi organizada para leitura direta.</p>
+      <a href="<%= adminGuideUrl %>" class="inline-flex items-center rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-white dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+        Abrir guia completo
       </a>
     </div>
   </details>

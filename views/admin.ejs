@@ -49,23 +49,58 @@
   const groupMeta = {
     identity: {
       title: 'Autenticação e segurança',
-      description: 'Google e regras de sessão lado a lado, porque as duas coisas mexem com a entrada no app.'
+      description: 'Configurações de login, sessão e proteção de acesso ao aplicativo.'
     },
     messaging: {
       title: 'Mensageria e alertas',
-      description: 'Todos os canais de comunicação no mesmo guarda-chuva, com ação e histórico em áreas separadas.'
+      description: 'Canais usados para comunicação com usuários e notificações operacionais.'
     },
     rules: {
       title: 'Regras do produto',
-      description: 'Aqui ficam decisões que mudam o comportamento do app, mas sem disputar espaço com a operação diária.'
+      description: 'Parâmetros que alteram o comportamento funcional do aplicativo.'
     },
     operations: {
       title: 'Backup e recuperação',
-      description: 'Operação de backup, conexão com Google Drive e restauração em um fluxo mais claro.'
+      description: 'Rotinas de cópia, armazenamento e restauração do ambiente.'
     },
     system: {
       title: 'Sistema',
-      description: 'Ajustes mais sensíveis e estruturais, mantidos por último para a navegação começar pelo que mais acontece.'
+      description: 'Ajustes estruturais do servidor e parâmetros de execução.'
+    }
+  };
+
+  const sectionCopyOverrides = {
+    google: {
+      nav: 'Credenciais e retorno do OAuth.',
+      description: 'Define Client ID, Client Secret e URL de retorno do login com Google.'
+    },
+    whatsapp: {
+      nav: 'Integração com a Evolution API.',
+      description: 'Configura a integração responsável pelos envios automáticos via WhatsApp.'
+    },
+    email: {
+      nav: 'SMTP, remetente e testes de envio.',
+      description: 'Centraliza SMTP, remetente padrão, testes e reenvio de comunicações.'
+    },
+    push: {
+      nav: 'Chaves VAPID e lembretes.',
+      description: 'Controla chaves de push web e regras de lembrete do aplicativo.'
+    },
+    security: {
+      nav: 'Sessão, PIN e passkeys.',
+      description: 'Define tempo de sessão, proteção local e políticas de autenticação.'
+    },
+    sharedDebt: {
+      nav: 'Regra de vínculo para cobranças.',
+      description: 'Configura como o aplicativo valida o vínculo necessário para cobranças entre usuários.'
+    },
+    backup: {
+      nav: 'Agendamento, destinos e restauração.',
+      description: 'Gerencia backup automático, armazenamento local, Google Drive e restauração.'
+    },
+    system: {
+      nav: 'Parâmetros técnicos do servidor.',
+      description: 'Reúne ajustes estruturais do servidor e itens que podem exigir reinicialização.'
     }
   };
 
@@ -77,7 +112,8 @@
   })).filter((group) => group.sections.length > 0);
 
   function buildSectionSearchText(section) {
-    const parts = [section.title, section.eyebrow, section.description, section.shortDescription];
+    const override = sectionCopyOverrides[section.key] || {};
+    const parts = [section.title, section.eyebrow, override.description || section.description, override.nav || section.shortDescription];
     (section.fields || []).forEach((field) => {
       parts.push(field.label, field.helper, field.key, field.placeholder, field.appliesLabel);
     });
@@ -90,7 +126,7 @@
     return {
       key: section.key,
       title: section.title,
-      description: section.shortDescription || section.eyebrow || 'Configuração',
+      description: (sectionCopyOverrides[section.key] && sectionCopyOverrides[section.key].nav) || section.shortDescription || section.eyebrow || 'Configuração',
       badge: statusCard ? statusCard.status : (restartCount > 0 ? `${restartCount} restart` : `${section.fields.length} ajuste(s)`),
       searchText: buildSectionSearchText(section)
     };
@@ -104,14 +140,14 @@
         {
           key: 'overview',
           title: 'Visão geral',
-          description: 'Saúde dos serviços e atalhos mais usados.',
+          description: 'Resumo operacional e atalhos principais.',
           badge: `${servicesReadyCount}/${serviceCards.length || 0}`,
           searchText: 'visao geral resumo rapido servicos acessos email backup push'
         },
         {
           key: 'access',
           title: 'Acessos',
-          description: 'Convidar, editar papel e acompanhar boas-vindas.',
+          description: 'Gestão de usuários, permissões e convites.',
           badge: `${usersList.length} acesso(s)`,
           searchText: 'acessos usuarios convite boas-vindas email admin login'
         }
@@ -129,44 +165,43 @@
 %>
 
 <div class="max-w-[1500px] mx-auto space-y-6">
-  <section class="op-page-hero op-page-hero--admin op-fade-up">
-    <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+  <section class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div class="px-6 py-6 sm:px-8 flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
       <div class="min-w-0 max-w-4xl">
-        <span class="op-page-hero__eyebrow">Central operacional</span>
-        <h1 class="op-page-hero__title mt-3">/admin agora fala menos, orienta mais e deixa os botões aparecerem</h1>
-        <p class="op-page-hero__subtitle mt-3">
-          Mesmas capacidades, só que com ordem mais coerente: visão rápida no topo, acessos em destaque,
-          seções agrupadas por domínio e históricos recolhidos para não virar uma avenida de card sem fim.
+        <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Administração</span>
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">Painel administrativo</h1>
+        <p class="mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+          Área central para operar acessos, integrações, backups e parâmetros do aplicativo com uma leitura mais objetiva e adequada a uso administrativo.
         </p>
-        <div class="op-page-hero__meta mt-4 flex flex-wrap gap-2">
-          <span class="badge"><%= usersList.length %> acesso(s)</span>
-          <span class="badge"><%= servicesReadyCount %> serviço(s) prontos</span>
-          <span class="badge"><%= servicesAttentionCount %> ponto(s) pedindo atenção</span>
-          <span class="badge"><%= totalConfigItems %> ajustes na central</span>
-          <span class="badge"><%= fieldsWithRestartCount %> campo(s) com restart</span>
+        <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= usersList.length %> acesso(s)</span>
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= servicesReadyCount %> serviço(s) disponíveis</span>
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= servicesAttentionCount %> em atenção</span>
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= totalConfigItems %> configurações</span>
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= fieldsWithRestartCount %> exigem restart</span>
         </div>
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:max-w-[700px]">
+      <div class="grid gap-3 sm:grid-cols-2 xl:min-w-[440px]">
         <button type="button" onclick="openAddUserModal()"
-          class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400">
-          Liberar acesso
+          class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
+          Novo acesso
         </button>
 
         <form action="/admin/email/test-connection" method="POST">
-          <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900/40">
+          <button type="submit" class="w-full inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-900/40">
             Testar e-mail
           </button>
         </form>
 
         <form action="/admin/backup/run" method="POST">
-          <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200 dark:hover:bg-emerald-950/40">
-            Fazer backup agora
+          <button type="submit" class="w-full inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-900/40">
+            Executar backup
           </button>
         </form>
 
-        <a href="<%= adminGuideUrl %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900/40">
-          Guia completo
+        <a href="<%= adminGuideUrl %>" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-900/40">
+          Abrir guia
         </a>
       </div>
     </div>
@@ -178,7 +213,7 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
       </div>
       <div>
-        <div class="op-inline-alert__title">Tem um ajuste pedindo atenção</div>
+        <div class="op-inline-alert__title">Ação necessária</div>
         <div class="op-inline-alert__text"><%= error %></div>
       </div>
     </div>
@@ -190,7 +225,7 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
       </div>
       <div>
-        <div class="op-inline-alert__title">Tudo salvo bonitinho</div>
+        <div class="op-inline-alert__title">Alterações salvas</div>
         <div class="op-inline-alert__text"><%= success %></div>
       </div>
     </div>
@@ -205,13 +240,13 @@
       <section id="admin-section-overview"
                data-admin-search-target
                data-admin-search="visao geral servicos email backup push google seguranca acessos resumo rapido"
-               class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
+               class="op-surface-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
         <div class="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-700 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div class="max-w-3xl">
             <span class="text-xs font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Visão geral</span>
-            <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Resumo rápido para saber onde agir antes de mergulhar nos detalhes</h2>
+            <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Resumo operacional</h2>
             <p class="mt-3 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">
-              O topo agora serve para triagem: saúde dos serviços, atalhos mais usados e um retrato curto do que vale atenção nesta rodada.
+              Resumo dos serviços, atalhos mais utilizados e sinais que exigem acompanhamento imediato.
             </p>
           </div>
           <div class="flex flex-wrap gap-2">
@@ -222,22 +257,22 @@
 
         <div class="p-6 sm:p-8 space-y-6">
           <div class="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
-            <article class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
+            <article class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
               <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Acessos ativos</div>
               <div class="mt-3 text-3xl font-black tracking-tight text-slate-900 dark:text-white"><%= usersList.length %></div>
               <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400"><%= adminUsersCount %> admin(s) e <%= neverAccessedCount %> ainda sem login.</p>
             </article>
-            <article class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
+            <article class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
               <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Serviços prontos</div>
               <div class="mt-3 text-3xl font-black tracking-tight text-slate-900 dark:text-white"><%= servicesReadyCount %>/<%= serviceCards.length || 0 %></div>
-              <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400"><%= servicesAttentionCount > 0 ? `${servicesAttentionCount} ponto(s) pedindo carinho.` : 'Tudo sem alerta gritando.' %></p>
+              <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400"><%= servicesAttentionCount > 0 ? `${servicesAttentionCount} item(ns) em atenção.` : 'Sem alertas relevantes no momento.' %></p>
             </article>
-            <article class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
+            <article class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
               <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Pede restart</div>
               <div class="mt-3 text-3xl font-black tracking-tight text-slate-900 dark:text-white"><%= fieldsWithRestartCount %></div>
               <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400"><%= sectionsWithRestartCount %> seção(ões) têm pelo menos um campo desse tipo.</p>
             </article>
-            <article class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
+            <article class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
               <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Convites pendentes</div>
               <div class="mt-3 text-3xl font-black tracking-tight text-slate-900 dark:text-white"><%= welcomePendingCount %></div>
               <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">Quem ainda não recebeu ou não teve boas-vindas confirmado.</p>
@@ -250,7 +285,7 @@
                    const toneClass = tonePanelClasses[card.tone || 'muted'] || tonePanelClasses.muted;
                    const badgeClass = toneBadgeClasses[card.tone || 'muted'] || toneBadgeClasses.muted;
               %>
-                <article class="rounded-3xl border p-5 <%= toneClass %>">
+                <article class="rounded-2xl border p-5 <%= toneClass %>">
                   <div class="flex items-start justify-between gap-3">
                     <div class="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-current/10 bg-white/60 text-current dark:bg-slate-900/30">
                       <%- renderStatusIcon(card.key) %>
@@ -264,22 +299,22 @@
             </div>
 
             <div class="space-y-4">
-              <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
-                <div class="text-xs font-black uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Leitura da rodada</div>
-                <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">O que vale fazer primeiro</h3>
+              <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
+                <div class="text-xs font-black uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Prioridades operacionais</div>
+                <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Prioridades</h3>
                 <ul class="mt-4 space-y-3 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
-                  <li>• Convide ou ajuste acessos sem sair do topo da página.</li>
-                  <li>• Histórico de e-mail, backup e restauração foi recolhido para o foco ficar na operação principal.</li>
-                  <li>• Busca lateral encontra seção e campo sem exigir aquela caça ao card perdido.</li>
+                  <li>• Use os atalhos para liberar acesso, testar e-mail ou executar backup sem navegar pela página.</li>
+                  <li>• Históricos e blocos de apoio foram mantidos em áreas secundárias para preservar a leitura principal.</li>
+                  <li>• A busca lateral localiza seções e campos sem exigir rolagem manual extensa.</li>
                 </ul>
               </div>
-              <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
-                <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Ajuda mais discreta</div>
+              <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
+                <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Documentação</div>
                 <p class="mt-2">
-                  O guia em PDF continua disponível, mas agora ele entra como apoio e não como protagonista da página.
+                  O guia completo continua disponível como referência operacional.
                 </p>
                 <a href="<%= adminGuideUrl %>" class="mt-4 inline-flex items-center rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-700 transition hover:bg-white dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
-                  Baixar guia completo
+                  Abrir guia completo
                 </a>
               </div>
             </div>
@@ -301,11 +336,13 @@
                const restartCount = section.fields.filter((field) => field.restartRequired).length;
                const secretCount = section.fields.filter((field) => field.secret).length;
                const fullText = buildSectionSearchText(section);
+               const sectionCopy = sectionCopyOverrides[section.key] || {};
+               const sectionDescription = sectionCopy.description || section.shortDescription || section.description;
           %>
             <section id="admin-section-<%= section.key %>"
                      data-admin-search-target
                      data-admin-search="<%= fullText %>"
-                     class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
+                     class="op-surface-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
               <div class="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-700 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="min-w-0 max-w-3xl">
                   <div class="flex flex-wrap items-center gap-2">
@@ -315,7 +352,7 @@
                     <% } %>
                   </div>
                   <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= section.title %></h2>
-                  <p class="mt-3 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400"><%= section.shortDescription || section.description %></p>
+                  <p class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300"><%= sectionDescription %></p>
                 </div>
                 <div class="flex flex-wrap gap-2 lg:justify-end">
                   <span class="badge"><%= section.fields.length %> ajuste(s)</span>
@@ -353,28 +390,28 @@
                 </form>
 
                 <aside class="space-y-4">
-                  <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
-                    <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Leitura rápida</div>
-                    <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Como essa seção se comporta</h3>
+                  <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
+                    <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Resumo da seção</div>
+                    <h3 class="mt-2 text-lg font-semibold tracking-tight text-slate-900 dark:text-white">Visão rápida</h3>
                     <div class="mt-4 space-y-3 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
                       <% if (sectionStatus) { %>
                         <p><span class="font-black text-slate-900 dark:text-white"><%= sectionStatus.status %>.</span> <%= sectionStatus.text %></p>
                       <% } else { %>
-                        <p>Os ajustes desta área não têm painel de saúde dedicado, então o card funciona como base de configuração.</p>
+                        <p>Esta seção não possui painel operacional dedicado; use este bloco como referência principal de configuração.</p>
                       <% } %>
-                      <p><%= restartCount > 0 ? `${restartCount} campo(s) desta seção pedem restart.` : 'Tudo aqui entra na hora depois de salvar.' %></p>
+                      <p><%= restartCount > 0 ? `${restartCount} campo(s) desta seção pedem restart.` : 'As alterações desta seção entram em vigor imediatamente após salvar.' %></p>
                       <% if (secretCount > 0) { %>
-                        <p><%= secretCount %> campo(s) sensíveis continuam mascarados por padrão para não vazar segredos no meio da operação.</p>
+                        <p><%= secretCount %> campo(s) permanecem mascarados por padrão para proteger dados sensíveis.</p>
                       <% } %>
                     </div>
                   </div>
 
                   <% if (section.key === 'email' && emailState) { %>
-                    <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 space-y-4">
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 space-y-4">
                       <div>
                         <div class="text-xs font-black uppercase tracking-[0.18em] text-emerald-500 dark:text-emerald-300">Ações</div>
-                        <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Correio em modo operação</h3>
-                        <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">Teste conexão, mande um e-mail real e confira o básico sem sair da seção.</p>
+                        <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Teste de e-mail</h3>
+                        <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">Valide a conexão SMTP e envie um teste sem sair da seção.</p>
                       </div>
 
                       <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-4 py-4 text-sm font-medium text-slate-600 dark:text-slate-300 space-y-3">
@@ -411,16 +448,16 @@
 
               <% if (section.key === 'email' && emailState) { %>
                 <div class="border-t border-slate-100 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/20 p-6 sm:p-8">
-                  <details class="group rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5" <%= emailState.recentEvents && emailState.recentEvents.length > 0 ? '' : '' %>>
+                  <details class="group rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5" <%= emailState.recentEvents && emailState.recentEvents.length > 0 ? '' : '' %>>
                     <summary class="flex cursor-pointer list-none items-start justify-between gap-4">
                       <div>
                         <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Histórico</div>
-                        <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Últimos disparos do correio</h3>
+                        <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Últimos envios de e-mail</h3>
                         <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">Mantido recolhido para não poluir a leitura principal da configuração.</p>
                       </div>
                       <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 group-open:bg-blue-50 group-open:text-blue-700 dark:group-open:bg-blue-950/30 dark:group-open:text-blue-200"><%= emailState.recentEvents && emailState.recentEvents.length ? `${emailState.recentEvents.length} registro(s)` : 'Sem registros' %></span>
                     </summary>
-                    <div class="mt-5 overflow-x-auto rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                    <div class="mt-5 overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
                       <table class="w-full min-w-[900px] text-sm text-left">
                         <thead class="bg-slate-50 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-[11px] tracking-wider">
                           <tr>
@@ -457,7 +494,7 @@
                             <% }) %>
                           <% } else { %>
                             <tr>
-                              <td colspan="5" class="px-4 py-8 text-center text-sm font-medium text-slate-500 dark:text-slate-400">Ainda não rolou nenhum disparo de e-mail por aqui.</td>
+                              <td colspan="5" class="px-4 py-8 text-center text-sm font-medium text-slate-500 dark:text-slate-400">Nenhum envio de e-mail registrado até o momento.</td>
                             </tr>
                           <% } %>
                         </tbody>
@@ -470,15 +507,15 @@
               <% if (section.key === 'backup' && backupState) { %>
                 <div class="border-t border-slate-100 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/20 p-6 sm:p-8 space-y-6">
                   <div class="grid gap-4 xl:grid-cols-3">
-                    <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
                       <div class="text-xs font-black uppercase tracking-[0.18em] text-emerald-500 dark:text-emerald-300">Rotina</div>
-                      <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Agenda do cofre</h3>
+                      <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Agendamento</h3>
                       <p class="mt-3 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
                         <span class="font-black text-slate-900 dark:text-white"><%= backupState.frequencyLabel %></span>
                         <% if (backupState.config.enabled && backupState.config.frequency !== 'manual') { %>
-                          • próxima rodada em <span class="font-black text-slate-900 dark:text-white"><%= backupState.nextRunAtLabel %></span>
+                          • próxima execução em <span class="font-black text-slate-900 dark:text-white"><%= backupState.nextRunAtLabel %></span>
                         <% } else { %>
-                          • automação em pausa elegante, só no manual.
+                          • automação desativada; somente execução manual.
                         <% } %>
                       </p>
                       <div class="mt-4 flex flex-wrap gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
@@ -487,8 +524,8 @@
                       </div>
                     </div>
 
-                    <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
-                      <div class="text-xs font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Cofre local</div>
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
+                      <div class="text-xs font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Armazenamento local</div>
                       <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Duas cópias no servidor</h3>
                       <div class="mt-4 space-y-3 text-sm font-medium text-slate-600 dark:text-slate-300">
                         <div>
@@ -502,7 +539,7 @@
                       </div>
                     </div>
 
-                    <div class="rounded-3xl border <%= backupState.googleConnected ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/20' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800' %> p-5">
+                    <div class="rounded-2xl border <%= backupState.googleConnected ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/20' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800' %> p-5">
                       <div class="text-xs font-black uppercase tracking-[0.18em] <%= backupState.googleConnected ? 'text-emerald-600 dark:text-emerald-300' : 'text-violet-500 dark:text-violet-300' %>">Google Drive</div>
                       <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white"><%= backupState.googleConnected ? 'Conta conectada' : 'Conexão pendente' %></h3>
                       <p class="mt-3 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
@@ -512,9 +549,9 @@
                             • pasta <span class="font-black text-slate-900 dark:text-white"><%= backupState.googleFolderName %></span>
                           <% } %>
                         <% } else if (backupState.googleReadyForAuth) { %>
-                          O login do Google já está configurado. Falta só conectar a conta que vai receber os backups na nuvem.
+                          O login do Google já está configurado. Falta conectar a conta que receberá os backups em nuvem.
                         <% } else { %>
-                          Primeiro salve o Client ID, o Client secret e a URL de retorno do Google. Depois o botão de conectar acorda.
+                          Salve primeiro o Client ID, o Client Secret e a URL de retorno do Google para habilitar a conexão.
                         <% } %>
                       </p>
                       <% if (backupState.googleRedirectUri) { %>
@@ -527,22 +564,22 @@
                   </div>
 
                   <div class="grid gap-6 xl:grid-cols-[minmax(0,1.1fr),minmax(0,0.9fr)]">
-                    <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 space-y-4">
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 space-y-4">
                       <div>
                         <div class="text-xs font-black uppercase tracking-[0.18em] text-blue-500 dark:text-blue-300">Ações rápidas</div>
-                        <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Botões de operação</h3>
-                        <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">Backup manual, conexão com Google e o guia da central sem se misturar com a área de configuração.</p>
+                        <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Ações operacionais</h3>
+                        <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">Reúne as ações principais de backup e a documentação associada.</p>
                       </div>
 
                       <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                         <form action="/admin/backup/run" method="POST">
                           <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-blue-500 dark:hover:bg-blue-400">
-                            Fazer backup agora
+                            Executar backup agora
                           </button>
                         </form>
 
                         <a href="<%= backupState.guideUrl %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-black text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition">
-                          Baixar guia completo
+                          Abrir guia completo
                         </a>
 
                         <% if (backupState.googleConnected) { %>
@@ -563,15 +600,15 @@
                       </div>
 
                       <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-4 py-4 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
-                        O zip continua nascendo com manifesto próprio do AcerttaPay, duas cópias locais e, se a nuvem estiver conectada, uma terceira viagem para o Google Drive.
+                        O arquivo é gerado com manifesto próprio do AcerttaPay, duas cópias locais e, quando a nuvem está conectada, uma cópia adicional no Google Drive.
                       </div>
                     </div>
 
-                    <div class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 space-y-4">
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 space-y-4">
                       <div>
                         <div class="text-xs font-black uppercase tracking-[0.18em] text-rose-500 dark:text-rose-300">Restauração</div>
-                        <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Trazer um backup de volta</h3>
-                        <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">Envie um <code>.zip</code> criado pelo próprio AcerttaPay. Antes de restaurar, o app tira mais uma foto de segurança.</p>
+                        <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Restaurar backup</h3>
+                        <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">Envie um <code>.zip</code> gerado pelo próprio AcerttaPay. Antes da restauração, o sistema cria uma cópia de segurança adicional.</p>
                       </div>
 
                       <form action="/admin/backup/restore" method="POST" enctype="multipart/form-data" class="space-y-4">
@@ -587,16 +624,16 @@
                     </div>
                   </div>
 
-                  <details class="group rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
+                  <details class="group rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
                     <summary class="flex cursor-pointer list-none items-start justify-between gap-4">
                       <div>
                         <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Histórico</div>
-                        <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Backups mais recentes</h3>
-                        <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">Os downloads locais aparecem quando o arquivo ainda está no cofre do servidor.</p>
+                        <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Histórico de backups</h3>
+                        <p class="mt-2 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">Os links locais aparecem quando o arquivo ainda está disponível no servidor.</p>
                       </div>
                       <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300"><%= backupState.recentRuns && backupState.recentRuns.length ? `${backupState.recentRuns.length} backup(s)` : 'Sem histórico' %></span>
                     </summary>
-                    <div class="mt-5 overflow-x-auto rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                    <div class="mt-5 overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
                       <table class="w-full min-w-[980px] text-sm text-left">
                         <thead class="bg-slate-50 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-[11px] tracking-wider">
                           <tr>
@@ -641,7 +678,7 @@
                             <% }) %>
                           <% } else { %>
                             <tr>
-                              <td colspan="6" class="px-4 py-8 text-center text-sm font-medium text-slate-500 dark:text-slate-400">Nenhum backup gravado ainda. O cofre está esperando o primeiro zip chegar.</td>
+                              <td colspan="6" class="px-4 py-8 text-center text-sm font-medium text-slate-500 dark:text-slate-400">Nenhum backup registrado até o momento.</td>
                             </tr>
                           <% } %>
                         </tbody>
@@ -649,18 +686,18 @@
                     </div>
                   </details>
 
-                  <details class="group rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
+                  <details class="group rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
                     <summary class="flex cursor-pointer list-none items-start justify-between gap-4">
                       <div>
                         <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Últimas restaurações</div>
-                        <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Histórico de volta ao passado</h3>
+                        <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Histórico de restaurações</h3>
                       </div>
                       <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300"><%= backupState.recentRestores && backupState.recentRestores.length ? `${backupState.recentRestores.length} registro(s)` : 'Sem histórico' %></span>
                     </summary>
                     <div class="mt-5 grid gap-4 lg:grid-cols-2">
                       <% if (backupState.recentRestores && backupState.recentRestores.length > 0) { %>
                         <% backupState.recentRestores.forEach((restore) => { %>
-                          <div class="rounded-3xl border <%= restore.statusTone === 'success' ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/60 dark:bg-emerald-950/20' : restore.statusTone === 'warning' ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800' %> p-5">
+                          <div class="rounded-2xl border <%= restore.statusTone === 'success' ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/60 dark:bg-emerald-950/20' : restore.statusTone === 'warning' ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800' %> p-5">
                             <div class="flex items-start justify-between gap-3">
                               <div>
                                 <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500"><%= restore.startedAtLabel %></div>
@@ -672,8 +709,8 @@
                           </div>
                         <% }) %>
                       <% } else { %>
-                        <div class="rounded-3xl border border-dashed border-slate-300 dark:border-slate-600 bg-white/70 dark:bg-slate-900/30 p-5 text-sm font-medium text-slate-500 dark:text-slate-400 lg:col-span-2">
-                          Nenhuma restauração registrada ainda. Melhor continuar assim, mas bom saber que a porta de volta existe.
+                        <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 bg-white/70 dark:bg-slate-900/30 p-5 text-sm font-medium text-slate-500 dark:text-slate-400 lg:col-span-2">
+                          Nenhuma restauração registrada até o momento.
                         </div>
                       <% } %>
                     </div>
@@ -689,27 +726,27 @@
 </div>
 
 <div id="addUserModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-  <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl border border-slate-200 dark:border-slate-700" onclick="event.stopPropagation()">
+  <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-lg shadow-2xl border border-slate-200 dark:border-slate-700" onclick="event.stopPropagation()">
     <div class="flex justify-between items-center mb-6">
       <div>
-        <h2 id="userModalTitle" class="text-xl font-black text-slate-800 dark:text-white">Liberar novo acesso</h2>
-        <p id="userModalDescription" class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Esse e-mail poderá entrar no app usando a conta Google correspondente.</p>
+        <h2 id="userModalTitle" class="text-xl font-black text-slate-800 dark:text-white">Novo acesso</h2>
+        <p id="userModalDescription" class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Esse e-mail poderá acessar o aplicativo com a conta Google correspondente.</p>
       </div>
       <button type="button" onclick="closeAddUserModal()" class="op-icon-btn" aria-label="Fechar janela">✕</button>
     </div>
 
     <form id="userForm" action="/admin/add-user" method="POST" class="space-y-4">
       <div>
-        <label for="email" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Email do Google</label>
+        <label for="email" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">E-mail do Google</label>
         <input type="email" id="email" name="email" required placeholder="exemplo@gmail.com"
           class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
       </div>
 
       <div>
-        <label for="name" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Nome (Opcional)</label>
+        <label for="name" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Nome (opcional)</label>
         <input type="text" id="name" name="name" placeholder="Nome da pessoa"
           class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
-        <p class="text-xs font-medium text-slate-400 mt-2">Se ficar em branco, usamos a parte anterior ao <code>@</code>.</p>
+        <p class="text-xs font-medium text-slate-400 mt-2">Se ficar em branco, o nome será preenchido a partir do e-mail.</p>
       </div>
 
       <div>
@@ -725,8 +762,8 @@
         <input type="checkbox" id="can_import" name="can_import" value="1" checked
           class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-800">
         <span>
-          <span class="block text-sm font-bold text-slate-800 dark:text-white">Pode importar fatura?</span>
-          <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Se ficar desmarcado, essa pessoa não verá os botões nem poderá usar a importação.</span>
+          <span class="block text-sm font-bold text-slate-800 dark:text-white">Permitir importação de fatura</span>
+          <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Desative para ocultar os recursos de importação para esse usuário.</span>
         </span>
       </label>
 
@@ -735,19 +772,19 @@
           <input type="checkbox" id="send_welcome_email" name="send_welcome_email" value="1" <%= emailState && emailState.active ? 'checked' : '' %> <%= emailState && emailState.active ? '' : 'disabled' %>
             class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-800">
           <span>
-            <span class="block text-sm font-bold text-slate-800 dark:text-white">Enviar e-mail de boas-vindas agora</span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Enviar e-mail de boas-vindas</span>
             <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
-              Esse aviso não cria senha. A pessoa entra com o Google usando este e-mail.
+              Esse envio não cria senha. O acesso continua sendo feito com a conta Google vinculada a este e-mail.
               <% if (!(emailState && emailState.active)) { %>
-                Para ligar isso de verdade, vale acertar o SMTP na seção de E-mail transacional.
+                Para habilitar esse envio, conclua a configuração SMTP na seção de e-mail.
               <% } %>
             </span>
           </span>
         </label>
 
         <label class="block rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3">
-          <span class="block text-xs font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Recado do admin (opcional)</span>
-          <textarea id="welcome_admin_message" name="welcome_admin_message" rows="3" maxlength="280" placeholder="Se quiser, deixa um recado curto e amigável para acompanhar o convite."
+          <span class="block text-xs font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Mensagem adicional do administrador (opcional)</span>
+          <textarea id="welcome_admin_message" name="welcome_admin_message" rows="3" maxlength="280" placeholder="Inclua uma observação curta para acompanhar o convite, se necessário."
             class="mt-3 w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium text-slate-800 dark:text-slate-100"></textarea>
         </label>
       </div>
@@ -759,7 +796,7 @@
         </button>
         <button type="submit"
           class="flex-1 px-5 py-3 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5">
-          <span id="userModalSubmitLabel">Liberar acesso</span>
+          <span id="userModalSubmitLabel">Salvar acesso</span>
         </button>
       </div>
     </form>
@@ -794,9 +831,9 @@
   function configureUserModalForAdd() {
     if (!userForm) return;
     userForm.action = '/admin/add-user';
-    userModalTitle.textContent = 'Liberar novo acesso';
-    userModalDescription.textContent = 'Esse e-mail poderá entrar no app usando a conta Google correspondente.';
-    userModalSubmitLabel.textContent = 'Liberar acesso';
+    userModalTitle.textContent = 'Novo acesso';
+    userModalDescription.textContent = 'Esse e-mail poderá acessar o aplicativo com a conta Google correspondente.';
+    userModalSubmitLabel.textContent = 'Salvar acesso';
     emailField.value = '';
     nameField.value = '';
     roleField.value = 'user';
@@ -820,9 +857,9 @@
   function openEditUserModal(button) {
     if (!button || !userForm) return;
     userForm.action = `/admin/update-user/${button.dataset.userId}`;
-    userModalTitle.textContent = 'Editar permissões';
-    userModalDescription.textContent = 'Atualize os dados de acesso mantendo as permissões desejadas para essa pessoa.';
-    userModalSubmitLabel.textContent = 'Salvar mudanças';
+    userModalTitle.textContent = 'Editar acesso';
+    userModalDescription.textContent = 'Atualize os dados e as permissões desse usuário.';
+    userModalSubmitLabel.textContent = 'Salvar alterações';
     emailField.value = button.dataset.userEmail || '';
     nameField.value = button.dataset.userName || '';
     roleField.value = button.dataset.userRole || 'user';
@@ -884,7 +921,7 @@
           button.textContent = previous;
         }, 1800);
       } catch (_error) {
-        window.prompt('Copia e leva com carinho este link:', loginUrl);
+        window.prompt('Copie este link:', loginUrl);
       }
     });
   });
@@ -895,9 +932,9 @@
   const adminGroupContainers = Array.from(document.querySelectorAll('[data-admin-group-container]'));
   const adminSearchInput = document.querySelector('[data-admin-search-input]');
   const adminSearchTargets = Array.from(document.querySelectorAll('[data-admin-search-target]'));
-  const adminNavActiveClasses = ['border-blue-200', 'bg-blue-50', 'text-blue-700', 'shadow-sm', 'dark:border-blue-800', 'dark:bg-blue-900/30', 'dark:text-blue-200'];
+  const adminNavActiveClasses = ['border-slate-900', 'bg-slate-900', 'text-white', 'shadow-sm', 'dark:border-slate-100', 'dark:bg-slate-100', 'dark:text-slate-900'];
   const adminNavInactiveClasses = ['border-slate-200', 'bg-white', 'text-slate-700', 'dark:border-slate-700', 'dark:bg-slate-900/30', 'dark:text-slate-200'];
-  const adminNavDotActiveClasses = ['bg-blue-500'];
+  const adminNavDotActiveClasses = ['bg-white/80', 'dark:bg-slate-900'];
   const adminNavDotInactiveClasses = ['bg-slate-300', 'dark:bg-slate-600'];
 
   function setAdminNavActive(activeKey) {
@@ -990,33 +1027,119 @@
 
   const accessSearchInput = document.querySelector('[data-access-search-input]');
   const accessRoleFilter = document.querySelector('[data-access-role-filter]');
-  const accessCards = Array.from(document.querySelectorAll('[data-access-card]'));
+  const accessSortSelect = document.querySelector('[data-access-sort]');
+  const accessPageSizeSelect = document.querySelector('[data-access-page-size]');
+  const accessPrevButton = document.querySelector('[data-access-prev]');
+  const accessNextButton = document.querySelector('[data-access-next]');
+  const accessPageIndicator = document.querySelector('[data-access-page-indicator]');
+  const accessPageSummary = document.querySelector('[data-access-page-summary]');
   const accessResults = document.querySelector('[data-access-results]');
+  const accessRows = Array.from(document.querySelectorAll('[data-access-row]'));
+  const accessTableBody = document.querySelector('[data-access-table-body]');
+  const accessEmptyRow = document.querySelector('[data-access-empty]');
+  let accessPage = 1;
 
-  function applyAccessFilters() {
-    const query = normalizeAdminText(accessSearchInput?.value || '');
-    const role = accessRoleFilter?.value || 'all';
-    let visibleCount = 0;
+  function getAccessPageSize() {
+    const value = Number(accessPageSizeSelect?.value || 25);
+    return Number.isFinite(value) && value > 0 ? value : 25;
+  }
 
-    accessCards.forEach((card) => {
-      const haystack = normalizeAdminText(card.dataset.accessSearch || '');
-      const roleMatch = role === 'all'
-        || (role === 'pending' && card.dataset.accessWelcome === 'pending')
-        || (role === 'never' && card.dataset.accessNever === '1')
-        || card.dataset.accessRole === role;
-      const textMatch = !query || haystack.includes(query);
-      const isVisible = roleMatch && textMatch;
-      card.hidden = !isVisible;
-      if (isVisible) visibleCount += 1;
-    });
-
-    if (accessResults) {
-      accessResults.textContent = `${visibleCount} resultado(s)`;
+  function compareAccessRows(a, b, sortValue) {
+    switch (sortValue) {
+      case 'created-asc':
+        return Number(a.dataset.accessCreatedAt || 0) - Number(b.dataset.accessCreatedAt || 0);
+      case 'created-desc':
+        return Number(b.dataset.accessCreatedAt || 0) - Number(a.dataset.accessCreatedAt || 0);
+      case 'last-login-desc': {
+        const diff = Number(b.dataset.accessLastLogin || 0) - Number(a.dataset.accessLastLogin || 0);
+        if (diff !== 0) return diff;
+        return normalizeAdminText(a.dataset.accessName || '').localeCompare(normalizeAdminText(b.dataset.accessName || ''), 'pt-BR');
+      }
+      case 'role-desc': {
+        const roleDiff = Number(b.dataset.accessRoleRank || 0) - Number(a.dataset.accessRoleRank || 0);
+        if (roleDiff !== 0) return roleDiff;
+        return normalizeAdminText(a.dataset.accessName || '').localeCompare(normalizeAdminText(b.dataset.accessName || ''), 'pt-BR');
+      }
+      case 'name-asc':
+      default:
+        return normalizeAdminText(a.dataset.accessName || '').localeCompare(normalizeAdminText(b.dataset.accessName || ''), 'pt-BR');
     }
   }
 
-  accessSearchInput?.addEventListener('input', applyAccessFilters);
-  accessRoleFilter?.addEventListener('change', applyAccessFilters);
+  function applyAccessFilters() {
+    if (!accessRows.length) return;
+
+    const query = normalizeAdminText(accessSearchInput?.value || '');
+    const role = accessRoleFilter?.value || 'all';
+    const sortValue = accessSortSelect?.value || 'name-asc';
+    const pageSize = getAccessPageSize();
+
+    const filteredRows = accessRows.filter((row) => {
+      const haystack = normalizeAdminText(row.dataset.accessSearch || '');
+      const roleMatch = role === 'all'
+        || (role === 'pending' && row.dataset.accessWelcome === 'pending')
+        || (role === 'never' && row.dataset.accessNever === '1')
+        || row.dataset.accessRole === role;
+      const textMatch = !query || haystack.includes(query);
+      return roleMatch && textMatch;
+    }).sort((a, b) => compareAccessRows(a, b, sortValue));
+
+    if (accessTableBody) {
+      filteredRows.forEach((row) => accessTableBody.appendChild(row));
+      if (accessEmptyRow) accessTableBody.appendChild(accessEmptyRow);
+    }
+
+    const total = filteredRows.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    if (accessPage > totalPages) accessPage = totalPages;
+    if (accessPage < 1) accessPage = 1;
+
+    const start = (accessPage - 1) * pageSize;
+    const pageRows = filteredRows.slice(start, start + pageSize);
+
+    accessRows.forEach((row) => {
+      row.hidden = !pageRows.includes(row);
+    });
+
+    if (accessEmptyRow) {
+      accessEmptyRow.hidden = total !== 0;
+    }
+
+    if (accessResults) {
+      accessResults.textContent = `${total} resultado(s)`;
+    }
+
+    if (accessPageIndicator) {
+      accessPageIndicator.textContent = `Página ${total ? accessPage : 1} de ${totalPages}`;
+    }
+
+    if (accessPageSummary) {
+      accessPageSummary.textContent = total
+        ? `Exibindo ${start + 1}-${Math.min(start + pageRows.length, total)} de ${total} resultado(s).`
+        : 'Nenhum usuário corresponde aos filtros atuais.';
+    }
+
+    if (accessPrevButton) accessPrevButton.disabled = accessPage <= 1 || total === 0;
+    if (accessNextButton) accessNextButton.disabled = accessPage >= totalPages || total === 0;
+  }
+
+  function resetAccessFilters() {
+    accessPage = 1;
+    applyAccessFilters();
+  }
+
+  accessSearchInput?.addEventListener('input', resetAccessFilters);
+  accessRoleFilter?.addEventListener('change', resetAccessFilters);
+  accessSortSelect?.addEventListener('change', resetAccessFilters);
+  accessPageSizeSelect?.addEventListener('change', resetAccessFilters);
+  accessPrevButton?.addEventListener('click', () => {
+    accessPage -= 1;
+    applyAccessFilters();
+  });
+  accessNextButton?.addEventListener('click', () => {
+    accessPage += 1;
+    applyAccessFilters();
+  });
 
   window.addEventListener('load', () => {
     configureUserModalForAdd();

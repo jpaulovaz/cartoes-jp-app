@@ -1,57 +1,58 @@
 <%
   const spanClass = field.fullWidth ? 'md:col-span-2' : '';
   const helperText = field.helper || '';
-  const badgeBase = 'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em]';
-  const appliesBadge = `${badgeBase} ${field.restartRequired ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200' : 'border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900/30 dark:text-slate-300'}`;
+  const badgeBase = 'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em]';
+  const appliesBadge = `${badgeBase} ${field.restartRequired ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200' : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300'}`;
   const secretBadge = `${badgeBase} border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-200`;
+  const wrapperClass = 'block rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/30 px-4 py-4';
 %>
 <div class="<%= spanClass %>">
   <% if (field.input === 'switch') { %>
-    <label class="flex h-full items-start gap-4 rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-5 py-4 cursor-pointer transition hover:border-slate-300 dark:hover:border-slate-600">
+    <label class="flex h-full items-start gap-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/30 px-4 py-4 cursor-pointer transition hover:border-slate-300 dark:hover:border-slate-600">
       <input type="checkbox" name="<%= field.key %>" value="1" <%= field.boolValue ? 'checked' : '' %>
-        class="mt-1 h-5 w-5 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-800">
+        class="mt-1 h-4.5 w-4.5 rounded border-slate-300 dark:border-slate-600 text-slate-900 focus:ring-slate-500 bg-white dark:bg-slate-800">
       <span class="min-w-0">
         <span class="flex flex-wrap items-center gap-2">
-          <span class="text-sm font-black text-slate-900 dark:text-white"><%= field.label %></span>
+          <span class="text-sm font-semibold text-slate-900 dark:text-white"><%= field.label %></span>
           <span class="<%= appliesBadge %>"><%= field.appliesLabel %></span>
           <% if (field.secret) { %>
             <span class="<%= secretBadge %>">Sensível</span>
           <% } %>
         </span>
         <% if (helperText) { %>
-          <span class="mt-2 block text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400"><%= helperText %></span>
+          <span class="mt-2 block text-sm leading-relaxed text-slate-500 dark:text-slate-400"><%= helperText %></span>
         <% } %>
       </span>
     </label>
   <% } else if (field.input === 'textarea') { %>
-    <label class="block rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-5 py-4">
+    <label class="<%= wrapperClass %>">
       <span class="flex flex-wrap items-center gap-2">
-        <span class="text-sm font-black text-slate-900 dark:text-white"><%= field.label %></span>
+        <span class="text-sm font-semibold text-slate-900 dark:text-white"><%= field.label %></span>
         <span class="<%= appliesBadge %>"><%= field.appliesLabel %></span>
         <% if (field.secret) { %>
           <span class="<%= secretBadge %>">Sensível</span>
         <% } %>
       </span>
       <% if (helperText) { %>
-        <span class="mt-2 block text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400"><%= helperText %></span>
+        <span class="mt-2 block text-sm leading-relaxed text-slate-500 dark:text-slate-400"><%= helperText %></span>
       <% } %>
       <textarea name="<%= field.key %>" rows="<%= field.rows || 4 %>" placeholder="<%= field.placeholder || '' %>"
-        class="mt-4 w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium text-slate-800 dark:text-slate-100 <%= field.monospace ? 'font-mono tracking-tight' : '' %>"><%= field.value %></textarea>
+        class="mt-4 w-full rounded-xl border border-slate-300 dark:border-slate-600 px-4 py-3 bg-slate-50 dark:bg-slate-950 focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-700 outline-none transition-all text-sm text-slate-800 dark:text-slate-100 <%= field.monospace ? 'font-mono tracking-tight' : '' %>"><%= field.value %></textarea>
     </label>
   <% } else if (field.input === 'select') { %>
-    <label class="block rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-5 py-4">
+    <label class="<%= wrapperClass %>">
       <span class="flex flex-wrap items-center gap-2">
-        <span class="text-sm font-black text-slate-900 dark:text-white"><%= field.label %></span>
+        <span class="text-sm font-semibold text-slate-900 dark:text-white"><%= field.label %></span>
         <span class="<%= appliesBadge %>"><%= field.appliesLabel %></span>
         <% if (field.secret) { %>
           <span class="<%= secretBadge %>">Sensível</span>
         <% } %>
       </span>
       <% if (helperText) { %>
-        <span class="mt-2 block text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400"><%= helperText %></span>
+        <span class="mt-2 block text-sm leading-relaxed text-slate-500 dark:text-slate-400"><%= helperText %></span>
       <% } %>
       <select name="<%= field.key %>"
-        class="mt-4 w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium text-slate-800 dark:text-slate-100 <%= field.monospace ? 'font-mono tracking-tight' : '' %>">
+        class="mt-4 w-full rounded-xl border border-slate-300 dark:border-slate-600 px-4 py-3 bg-slate-50 dark:bg-slate-950 focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-700 outline-none transition-all text-sm text-slate-800 dark:text-slate-100 <%= field.monospace ? 'font-mono tracking-tight' : '' %>">
         <% (field.options || []).forEach((option) => {
              const optionValue = String(option && typeof option === 'object' ? option.value : option);
              const optionLabel = option && typeof option === 'object' ? option.label : optionValue;
@@ -61,16 +62,16 @@
       </select>
     </label>
   <% } else { %>
-    <label class="block rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-5 py-4">
+    <label class="<%= wrapperClass %>">
       <span class="flex flex-wrap items-center gap-2">
-        <span class="text-sm font-black text-slate-900 dark:text-white"><%= field.label %></span>
+        <span class="text-sm font-semibold text-slate-900 dark:text-white"><%= field.label %></span>
         <span class="<%= appliesBadge %>"><%= field.appliesLabel %></span>
         <% if (field.secret) { %>
           <span class="<%= secretBadge %>">Sensível</span>
         <% } %>
       </span>
       <% if (helperText) { %>
-        <span class="mt-2 block text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400"><%= helperText %></span>
+        <span class="mt-2 block text-sm leading-relaxed text-slate-500 dark:text-slate-400"><%= helperText %></span>
       <% } %>
       <div class="mt-4 flex items-center gap-3">
         <input type="<%= field.secret ? 'password' : (field.input || 'text') %>" name="<%= field.key %>" value="<%= field.value %>"
@@ -78,9 +79,9 @@
           <% if (typeof field.min !== 'undefined') { %>min="<%= field.min %>"<% } %>
           <% if (typeof field.max !== 'undefined') { %>max="<%= field.max %>"<% } %>
           <% if (typeof field.step !== 'undefined') { %>step="<%= field.step %>"<% } %>
-          class="flex-1 rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium text-slate-800 dark:text-slate-100 <%= field.monospace ? 'font-mono tracking-tight' : '' %>">
+          class="flex-1 rounded-xl border border-slate-300 dark:border-slate-600 px-4 py-3 bg-slate-50 dark:bg-slate-950 focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-700 outline-none transition-all text-sm text-slate-800 dark:text-slate-100 <%= field.monospace ? 'font-mono tracking-tight' : '' %>">
         <% if (field.secret) { %>
-          <button type="button" data-secret-toggle class="shrink-0 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">Mostrar</button>
+          <button type="button" data-secret-toggle class="shrink-0 rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">Mostrar</button>
         <% } %>
       </div>
     </label>

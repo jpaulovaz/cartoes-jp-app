@@ -246,6 +246,7 @@ db.prepare(`
     shared_debt_payments INTEGER NOT NULL DEFAULT 1,
     monthly_pix_updates INTEGER NOT NULL DEFAULT 1,
     card_due_today INTEGER NOT NULL DEFAULT 1,
+    finance_date_alerts INTEGER NOT NULL DEFAULT 1,
     updated_at TEXT,
     FOREIGN KEY (user_id) REFERENCES users(id)
   )
@@ -257,6 +258,7 @@ try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN shared_de
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_payments INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN monthly_pix_updates INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN card_due_today INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN finance_date_alerts INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
@@ -619,6 +621,21 @@ db.prepare(`
   )
 `).run();
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_monthly_finance_carry_exceptions_user_period ON monthly_finance_carry_exceptions(user_id, year, month)").run(); } catch (e) { /* Índice já existe */ }
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS monthly_finance_alert_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    source_kind TEXT NOT NULL,
+    source_ref TEXT NOT NULL,
+    type TEXT NOT NULL,
+    date_key TEXT NOT NULL,
+    payload_json TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(user_id, source_kind, source_ref, type, date_key),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_monthly_finance_alert_logs_date_user ON monthly_finance_alert_logs(date_key, user_id, type)").run(); } catch (e) { /* Índice já existe */ }
 db.prepare(`
   CREATE TABLE IF NOT EXISTS monthly_finance_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1061,6 +1078,7 @@ let scheduledDuePushSweepRunning = false;
 let duePushSchedulerInitialHandle = null;
 let duePushSchedulerIntervalHandle = null;
 let scheduledManualDebtDueSweepRunning = false;
+let scheduledMonthlyFinanceAlertSweepRunning = false;
 let manualDebtDueSchedulerInitialHandle = null;
 let manualDebtDueSchedulerIntervalHandle = null;
 let backupSchedulerHandle = null;
@@ -2481,11 +2499,11 @@ function restartManualDebtDueScheduler() {
   const intervalMs = Math.max(1, config.checkIntervalMinutes) * 60 * 1000;
 
   manualDebtDueSchedulerInitialHandle = setTimeout(() => {
-    runManualDebtDueAlertSweep().catch(err => console.error('Falha no agendamento inicial da data combinada:', err?.message || err));
+    runDateDrivenAlertSweep().catch(err => console.error('Falha no agendamento inicial dos alertas do dia:', err?.message || err));
   }, 15000);
 
   manualDebtDueSchedulerIntervalHandle = setInterval(() => {
-    runManualDebtDueAlertSweep().catch(err => console.error('Falha no agendamento recorrente da data combinada:', err?.message || err));
+    runDateDrivenAlertSweep().catch(err => console.error('Falha no agendamento recorrente dos alertas do dia:', err?.message || err));
   }, intervalMs);
 }
 
@@ -3173,6 +3191,11 @@ const USER_NOTIFICATION_PREFERENCE_GROUPS = Object.freeze([
     key: 'card_due_today',
     title: 'Vencimento da fatura',
     description: 'Lembretes do dia em que uma fatura vence neste aparelho.'
+  },
+  {
+    key: 'finance_date_alerts',
+    title: 'Datas do mês',
+    description: 'Avisos quando chega o dia marcado nas suas entradas e saídas.'
   }
 ]);
 
@@ -3202,7 +3225,7 @@ function getUserNotificationPreferences(userId) {
 
   const row = db.prepare(`
     SELECT user_id, friendship_activity, shared_debt_new, shared_debt_updates,
-           shared_debt_payments, monthly_pix_updates, card_due_today, updated_at
+           shared_debt_payments, monthly_pix_updates, card_due_today, finance_date_alerts, updated_at
     FROM user_notification_preferences
     WHERE user_id = ?
     LIMIT 1
@@ -3241,8 +3264,8 @@ function upsertUserNotificationPreferences(userId, overrides = {}) {
   db.prepare(`
     INSERT INTO user_notification_preferences (
       user_id, friendship_activity, shared_debt_new, shared_debt_updates,
-      shared_debt_payments, monthly_pix_updates, card_due_today, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      shared_debt_payments, monthly_pix_updates, card_due_today, finance_date_alerts, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       friendship_activity = excluded.friendship_activity,
       shared_debt_new = excluded.shared_debt_new,
@@ -3250,6 +3273,7 @@ function upsertUserNotificationPreferences(userId, overrides = {}) {
       shared_debt_payments = excluded.shared_debt_payments,
       monthly_pix_updates = excluded.monthly_pix_updates,
       card_due_today = excluded.card_due_today,
+      finance_date_alerts = excluded.finance_date_alerts,
       updated_at = excluded.updated_at
   `).run(
     next.user_id,
@@ -3259,6 +3283,7 @@ function upsertUserNotificationPreferences(userId, overrides = {}) {
     next.shared_debt_payments,
     next.monthly_pix_updates,
     next.card_due_today,
+    next.finance_date_alerts,
     next.updated_at
   );
 
@@ -3289,6 +3314,7 @@ function resolveNotificationPreferenceGroupKey({ groupKey = null, type = null, t
   const safeTitle = String(title || '').trim().toLowerCase();
 
   if (safeType === 'friend_request' || safeType === 'friendship_update') return 'friendship_activity';
+  if (safeType === 'monthly_finance_date' || safeRelatedType === 'monthly_finance') return 'finance_date_alerts';
   if (safeRelatedType === 'shared_debt_payment_intent' || safeTitle.includes('pix do mes') || safeTitle.includes('pix do mês')) return 'monthly_pix_updates';
   if (safeTitle.includes('pagamento')) return 'shared_debt_payments';
   if (safeTitle.includes('atualiz') || safeTitle.includes('aceit') || safeTitle.includes('recus') || safeTitle.includes('contest') || safeTitle.includes('revis')) return 'shared_debt_updates';
@@ -6327,6 +6353,227 @@ const FINANCE_TYPES = ["income", "expense"];
 const FINANCE_TYPE_SET = new Set(FINANCE_TYPES);
 const FINANCE_AMOUNT_MODES = ["fixed", "variable"];
 const FINANCE_AMOUNT_MODE_SET = new Set(FINANCE_AMOUNT_MODES);
+const FINANCE_SCHEDULE_KINDS = ["receive", "due", "pay"];
+const FINANCE_SCHEDULE_KIND_SET = new Set(FINANCE_SCHEDULE_KINDS);
+
+function normalizeFinanceDayOfMonth(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 31 ? parsed : null;
+}
+
+function normalizeFinanceScheduleKind(value, financeType = null) {
+  const safeType = normalizeFinanceType(financeType);
+  const normalized = String(value || "").trim().toLowerCase();
+
+  if (safeType === 'income') {
+    return 'receive';
+  }
+
+  if (safeType === 'expense') {
+    if (normalized === 'pay' || normalized === 'due') return normalized;
+    return 'due';
+  }
+
+  return FINANCE_SCHEDULE_KIND_SET.has(normalized) ? normalized : null;
+}
+
+function resolveFinanceScheduleKind(finance = {}) {
+  const dayOfMonth = normalizeFinanceDayOfMonth(finance?.day_of_month);
+  if (!dayOfMonth) return null;
+  return normalizeFinanceScheduleKind(finance?.schedule_kind, finance?.type);
+}
+
+function computeMonthlyFinanceEffectiveDate(year, month, dayOfMonth) {
+  const safeYear = Number(year || 0);
+  const safeMonth = Number(month || 0);
+  const safeDay = normalizeFinanceDayOfMonth(dayOfMonth);
+  if (!safeYear || safeMonth < 1 || safeMonth > 12 || !safeDay) return '';
+
+  const base = dayjs(`${safeYear}-${String(safeMonth).padStart(2, '0')}-01`);
+  if (!base.isValid()) return '';
+  const resolvedDay = Math.min(safeDay, base.daysInMonth());
+  return `${safeYear}-${String(safeMonth).padStart(2, '0')}-${String(resolvedDay).padStart(2, '0')}`;
+}
+
+function formatMonthDayLabel(value) {
+  const safeValue = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(safeValue)) return '';
+  const parsed = dayjs(safeValue);
+  return parsed.isValid() ? parsed.format('DD/MM') : '';
+}
+
+function formatMonthYearLabel(value) {
+  const safeValue = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(safeValue)) return '';
+  const parsed = dayjs(safeValue);
+  return parsed.isValid() ? parsed.format('MM/YY') : '';
+}
+
+function buildFixedFinanceScheduleChipLabel(finance = {}, { effectiveDate = '' } = {}) {
+  const dayOfMonth = normalizeFinanceDayOfMonth(finance?.day_of_month);
+  if (!dayOfMonth) return '';
+
+  const paddedDay = String(dayOfMonth).padStart(2, '0');
+  const type = normalizeFinanceType(finance?.type);
+  const scheduleKind = resolveFinanceScheduleKind(finance);
+
+  if (type === 'income') return `Entra dia ${paddedDay}`;
+  if (scheduleKind === 'pay') return `Pago dia ${paddedDay}`;
+  return `Vence dia ${paddedDay}`;
+}
+
+function buildVariableFinanceScheduleSummary(finance = {}, { todayDateKey = '', contextYear = null, contextMonth = null } = {}) {
+  const type = normalizeFinanceType(finance?.type);
+  const items = Array.isArray(finance?.items) ? finance.items : [];
+  if (!items.length) return { label: '', tone: 'default' };
+
+  const datedItems = items
+    .map((item) => ({
+      ...item,
+      date_key: normalizeFinanceItemDate(item?.item_date),
+      amount_cents: Math.max(0, Number(item?.amount_cents || 0) || 0),
+      is_paid: normalizeFinancePaidFlag(item?.is_paid)
+    }))
+    .filter((item) => item.date_key && item.amount_cents > 0)
+    .sort((a, b) => String(a.date_key).localeCompare(String(b.date_key)));
+
+  if (!datedItems.length) return { label: '', tone: 'default' };
+
+  const relevantItems = type === 'expense'
+    ? datedItems.filter((item) => item.is_paid !== 1)
+    : datedItems;
+
+  if (!relevantItems.length) {
+    return type === 'expense'
+      ? { label: 'Tudo pago na listinha', tone: 'success' }
+      : { label: `Último em ${formatMonthDayLabel(datedItems[datedItems.length - 1].date_key)}`, tone: 'default' };
+  }
+
+  const todayItems = todayDateKey ? relevantItems.filter((item) => item.date_key === todayDateKey) : [];
+  if (todayItems.length) {
+    return {
+      label: todayItems.length === 1 ? 'Tem 1 hoje' : `Tem ${todayItems.length} hoje`,
+      tone: type === 'expense' ? 'warning' : 'info'
+    };
+  }
+
+  const referenceDate = (() => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(todayDateKey || ''))) return todayDateKey;
+    if (contextYear && contextMonth) return `${contextYear}-${String(contextMonth).padStart(2, '0')}-01`;
+    return '';
+  })();
+
+  let nextItem = null;
+  if (referenceDate) {
+    nextItem = relevantItems.find((item) => item.date_key >= referenceDate) || null;
+  }
+  if (!nextItem) nextItem = relevantItems[0] || null;
+
+  if (nextItem) {
+    return {
+      label: `Próximo em ${formatMonthDayLabel(nextItem.date_key)}`,
+      tone: 'default'
+    };
+  }
+
+  return { label: '', tone: 'default' };
+}
+
+function decorateMonthlyFinancesForView(finances = [], { year = null, month = null, todayDateKey = '' } = {}) {
+  const safeYear = Number(year || 0);
+  const safeMonth = Number(month || 0);
+  return (Array.isArray(finances) ? finances : []).map((finance) => {
+    const amountMode = normalizeFinanceAmountMode(finance?.amount_mode);
+    const decorated = { ...finance };
+
+    if (amountMode === 'fixed') {
+      const dayOfMonth = normalizeFinanceDayOfMonth(finance?.day_of_month);
+      const effectiveDate = dayOfMonth ? computeMonthlyFinanceEffectiveDate(safeYear, safeMonth, dayOfMonth) : '';
+      decorated.schedule_meta = {
+        kind: 'fixed',
+        hasSchedule: !!dayOfMonth,
+        chipLabel: buildFixedFinanceScheduleChipLabel(finance, { effectiveDate }),
+        effectiveDate,
+        effectiveDateLabel: formatMonthDayLabel(effectiveDate),
+        isToday: !!effectiveDate && effectiveDate === todayDateKey,
+        buttonLabel: dayOfMonth ? buildFixedFinanceScheduleChipLabel(finance, { effectiveDate }) : 'Adicionar dia',
+        helperLabel: ''
+      };
+      return decorated;
+    }
+
+    decorated.schedule_meta = {
+      kind: 'variable',
+      ...(buildVariableFinanceScheduleSummary(finance, { todayDateKey, contextYear: safeYear, contextMonth: safeMonth }))
+    };
+    return decorated;
+  });
+}
+
+function resolveMonthlyFinanceAlertHref(type, year, month) {
+  const safeType = normalizeFinanceType(type) || 'expense';
+  return `/detalhamento/${Number(year || 0)}/${Number(month || 0)}${safeType === 'income' ? '#grana-entra' : '#grana-sai'}`;
+}
+
+function buildMonthlyFinanceOccurrencePreview(items = []) {
+  const names = Array.from(new Set((Array.isArray(items) ? items : [])
+    .map((item) => String(item?.description || '').trim())
+    .filter(Boolean)));
+  if (!names.length) return '';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} e ${names[1]}`;
+  return `${names[0]}, ${names[1]} e mais ${names.length - 2}`;
+}
+
+function buildMonthlyFinanceDateNotificationPayload(type, items = [], { year = null, month = null, dateKey = null } = {}) {
+  const safeType = normalizeFinanceType(type) || 'expense';
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  const totalCents = list.reduce((sum, item) => sum + Math.max(0, Number(item?.amount_cents || 0) || 0), 0);
+  const href = resolveMonthlyFinanceAlertHref(safeType, year, month);
+
+  if (list.length === 1) {
+    const item = list[0];
+    const label = String(item?.description || '').trim() || (safeType === 'income' ? 'essa entrada' : 'essa saída');
+    if (safeType === 'income') {
+      return {
+        title: `Hoje entra ${label}`,
+        body: `${label} está no radar de hoje com ${formatBRLFromCents(item.amount_cents)}.`,
+        href,
+        payloadMeta: { type: safeType, dateKey, totalCents, count: 1 }
+      };
+    }
+
+    const safeKind = String(item?.schedule_kind || 'due').trim();
+    return {
+      title: safeKind === 'pay' ? `Hoje sai ${label}` : `Hoje vence ${label}`,
+      body: safeKind === 'pay'
+        ? `${label} está marcado para hoje com ${formatBRLFromCents(item.amount_cents)}.`
+        : `${label} bate hoje com ${formatBRLFromCents(item.amount_cents)} no radar.`,
+      href,
+      payloadMeta: { type: safeType, dateKey, totalCents, count: 1, scheduleKind: safeKind }
+    };
+  }
+
+  const preview = buildMonthlyFinanceOccurrencePreview(list);
+  return {
+    title: safeType === 'income' ? 'Hoje tem entradas do mês' : 'Hoje tem saídas do mês',
+    body: `${formatCountLabel(list.length, safeType === 'income' ? 'entrada' : 'saída', safeType === 'income' ? 'entradas' : 'saídas')} somam ${formatBRLFromCents(totalCents)}${preview ? ` por conta de ${preview}` : ''}.`,
+    href,
+    payloadMeta: { type: safeType, dateKey, totalCents, count: list.length }
+  };
+}
+
+function buildMonthlyFinanceDashboardAlert(type, items = [], { year = null, month = null, dateKey = null } = {}) {
+  const payload = buildMonthlyFinanceDateNotificationPayload(type, items, { year, month, dateKey });
+  return {
+    type: normalizeFinanceType(type) === 'expense' ? 'warning' : 'info',
+    icon: normalizeFinanceType(type) === 'expense' ? '🧾' : '✨',
+    title: payload.title,
+    description: payload.body,
+    href: payload.href
+  };
+}
+
 
 function normalizeFinanceType(value) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -6349,39 +6596,6 @@ function sanitizeFinanceDescription(value) {
 function normalizeFinanceItemDate(value) {
   const normalized = String(value || "").trim();
   return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? "" + normalized : "";
-}
-
-function normalizeFinanceDayOfMonth(value) {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 31 ? parsed : null;
-}
-
-function normalizeFinanceScheduleKind(type, value, { allowEmpty = false } = {}) {
-  const normalizedType = normalizeFinanceType(type) || 'income';
-  const normalized = String(value || '').trim().toLowerCase();
-
-  if (!normalized) {
-    if (allowEmpty) return null;
-    return normalizedType === 'expense' ? 'due' : 'income';
-  }
-
-  if (normalizedType === 'expense') {
-    return normalized === 'pay' ? 'pay' : 'due';
-  }
-
-  return 'income';
-}
-
-function normalizeFixedFinanceSchedule(type, dayOfMonth, scheduleKind) {
-  const normalizedDay = normalizeFinanceDayOfMonth(dayOfMonth);
-  if (!normalizedDay) {
-    return { day_of_month: null, schedule_kind: null };
-  }
-
-  return {
-    day_of_month: normalizedDay,
-    schedule_kind: normalizeFinanceScheduleKind(type, scheduleKind)
-  };
 }
 
 function normalizeFinancePaidFlag(value) {
@@ -6463,41 +6677,33 @@ function syncMonthlyFinanceCarryForward(userId, month, year) {
     WHERE user_id = ? AND month = ? AND year = ?
       AND carry_key IS NOT NULL AND TRIM(carry_key) <> ''
     ORDER BY id ASC
-  `).all(userId, prevMonth, prevYear).map((row) => {
-    const fixedSchedule = normalizeFixedFinanceSchedule(row.type, row.day_of_month, row.schedule_kind);
-    return {
-      ...row,
-      amount_mode: normalizeFinanceAmountMode(row.amount_mode),
-      carry_key: normalizeMonthlyFinanceCarryKey(row.carry_key),
-      day_of_month: fixedSchedule.day_of_month,
-      schedule_kind: fixedSchedule.schedule_kind
-    };
-  }).filter((row) => row.carry_key);
+  `).all(userId, prevMonth, prevYear).map((row) => ({
+    ...row,
+    amount_mode: normalizeFinanceAmountMode(row.amount_mode),
+    carry_key: normalizeMonthlyFinanceCarryKey(row.carry_key),
+    day_of_month: normalizeFinanceDayOfMonth(row.day_of_month),
+    schedule_kind: normalizeFinanceDayOfMonth(row.day_of_month) ? normalizeFinanceScheduleKind(row.schedule_kind, row.type) : null
+  })).filter((row) => row.carry_key);
 
   if (!previousRows.length) {
     return 0;
   }
 
-  const currentRowsByCarryKey = new Map(
-    db.prepare(`
-      SELECT id, type, carry_key, day_of_month, schedule_kind
-      FROM monthly_finances
-      WHERE user_id = ? AND month = ? AND year = ?
-        AND carry_key IS NOT NULL AND TRIM(carry_key) <> ''
-    `).all(userId, month, year)
-      .map((row) => {
-        const carryKey = normalizeMonthlyFinanceCarryKey(row.carry_key);
-        if (!carryKey) return null;
-        const fixedSchedule = normalizeFixedFinanceSchedule(row.type, row.day_of_month, row.schedule_kind);
-        return [carryKey, {
-          ...row,
-          carry_key: carryKey,
-          day_of_month: fixedSchedule.day_of_month,
-          schedule_kind: fixedSchedule.schedule_kind
-        }];
-      })
-      .filter(Boolean)
-  );
+  const currentRows = db.prepare(`
+    SELECT id, type, amount_mode, carry_key, day_of_month, schedule_kind
+    FROM monthly_finances
+    WHERE user_id = ? AND month = ? AND year = ?
+      AND carry_key IS NOT NULL AND TRIM(carry_key) <> ''
+  `).all(userId, month, year).map((row) => ({
+    ...row,
+    amount_mode: normalizeFinanceAmountMode(row.amount_mode),
+    carry_key: normalizeMonthlyFinanceCarryKey(row.carry_key),
+    day_of_month: normalizeFinanceDayOfMonth(row.day_of_month),
+    schedule_kind: normalizeFinanceDayOfMonth(row.day_of_month) ? normalizeFinanceScheduleKind(row.schedule_kind, row.type) : null
+  })).filter((row) => row.carry_key);
+
+  const currentRowsByCarryKey = new Map(currentRows.map((row) => [row.carry_key, row]));
+  const currentCarryKeys = new Set(currentRowsByCarryKey.keys());
 
   const blockedCarryKeys = new Set(
     db.prepare(`
@@ -6513,14 +6719,15 @@ function syncMonthlyFinanceCarryForward(userId, month, year) {
     INSERT OR IGNORE INTO monthly_finances (user_id, month, year, type, category_id, description, formula, amount_cents, amount_mode, carry_key, day_of_month, schedule_kind, created_at)
     VALUES (?, ?, ?, ?, ?, ?, '', 0, ?, ?, ?, ?, ?)
   `);
-  const updateExisting = db.prepare(`
+  const updateExistingSchedule = db.prepare(`
     UPDATE monthly_finances
     SET day_of_month = ?, schedule_kind = ?
     WHERE id = ? AND user_id = ?
   `);
 
   const currentNowIso = nowIso();
-  let changedCount = 0;
+  let insertedCount = 0;
+  let updatedCount = 0;
 
   db.transaction(() => {
     for (const row of previousRows) {
@@ -6528,24 +6735,27 @@ function syncMonthlyFinanceCarryForward(userId, month, year) {
         continue;
       }
 
-      const currentRow = currentRowsByCarryKey.get(row.carry_key);
+      const currentRow = currentRowsByCarryKey.get(row.carry_key) || null;
       if (currentRow) {
-        const shouldBackfillDay = !currentRow.day_of_month && row.day_of_month;
-        const shouldBackfillKind = currentRow.day_of_month && !currentRow.schedule_kind && row.schedule_kind;
+        const previousDay = normalizeFinanceDayOfMonth(row.day_of_month);
+        const currentDay = normalizeFinanceDayOfMonth(currentRow.day_of_month);
+        const previousKind = previousDay ? normalizeFinanceScheduleKind(row.schedule_kind, row.type) : null;
+        const currentKind = currentDay ? normalizeFinanceScheduleKind(currentRow.schedule_kind, currentRow.type) : null;
 
-        if (shouldBackfillDay || shouldBackfillKind) {
-          updateExisting.run(
-            shouldBackfillDay ? row.day_of_month : currentRow.day_of_month,
-            shouldBackfillDay ? row.schedule_kind : row.schedule_kind,
-            currentRow.id,
-            userId
-          );
-          currentRowsByCarryKey.set(row.carry_key, {
-            ...currentRow,
-            day_of_month: shouldBackfillDay ? row.day_of_month : currentRow.day_of_month,
-            schedule_kind: row.schedule_kind || currentRow.schedule_kind
-          });
-          changedCount += 1;
+        const shouldBackfillSchedule = currentRow.amount_mode === 'fixed'
+          && previousDay
+          && ((!currentDay) || (currentDay === previousDay && previousKind && currentKind !== previousKind));
+
+        if (shouldBackfillSchedule) {
+          const result = updateExistingSchedule.run(previousDay, previousKind, currentRow.id, userId);
+          if (Number(result.changes || 0) > 0) {
+            currentRowsByCarryKey.set(row.carry_key, {
+              ...currentRow,
+              day_of_month: previousDay,
+              schedule_kind: previousKind
+            });
+            updatedCount += 1;
+          }
         }
         continue;
       }
@@ -6565,64 +6775,21 @@ function syncMonthlyFinanceCarryForward(userId, month, year) {
       );
 
       if (Number(result.changes || 0) > 0) {
+        currentCarryKeys.add(row.carry_key);
         currentRowsByCarryKey.set(row.carry_key, {
           id: Number(result.lastInsertRowid || 0),
           type: row.type,
+          amount_mode: row.amount_mode,
           carry_key: row.carry_key,
           day_of_month: row.day_of_month,
           schedule_kind: row.schedule_kind
         });
-        changedCount += 1;
+        insertedCount += 1;
       }
     }
   })();
 
-  return changedCount;
-}
-
-function syncFutureLegacyFixedFinanceScheduleFromRow(userId, financeRow) {
-  if (!financeRow) return 0;
-
-  const carryKey = normalizeMonthlyFinanceCarryKey(financeRow.carry_key);
-  if (!carryKey) return 0;
-  if (normalizeFinanceAmountMode(financeRow.amount_mode) !== 'fixed') return 0;
-
-  const fixedSchedule = normalizeFixedFinanceSchedule(financeRow.type, financeRow.day_of_month, financeRow.schedule_kind);
-  if (!fixedSchedule.day_of_month) return 0;
-
-  const sourceMonth = Number(financeRow.month || 0);
-  const sourceYear = Number(financeRow.year || 0);
-  const futureRows = db.prepare(`
-    SELECT id, type, month, year, day_of_month, schedule_kind
-    FROM monthly_finances
-    WHERE user_id = ? AND carry_key = ?
-      AND (year > ? OR (year = ? AND month > ?))
-    ORDER BY year ASC, month ASC, id ASC
-  `).all(userId, carryKey, sourceYear, sourceYear, sourceMonth);
-
-  if (!futureRows.length) {
-    return 0;
-  }
-
-  const updateFuture = db.prepare(`
-    UPDATE monthly_finances
-    SET day_of_month = ?, schedule_kind = ?
-    WHERE id = ? AND user_id = ?
-  `);
-
-  let updatedCount = 0;
-  db.transaction(() => {
-    for (const row of futureRows) {
-      const currentSchedule = normalizeFixedFinanceSchedule(row.type || financeRow.type, row.day_of_month, row.schedule_kind);
-      if (currentSchedule.day_of_month) {
-        break;
-      }
-      updateFuture.run(fixedSchedule.day_of_month, fixedSchedule.schedule_kind, row.id, userId);
-      updatedCount += 1;
-    }
-  })();
-
-  return updatedCount;
+  return insertedCount + updatedCount;
 }
 
 function ensureMonthlyFinanceScaffold(userId, month, year) {
@@ -6671,7 +6838,6 @@ function ensureMonthlyFinanceScaffold(userId, month, year) {
 
       const previousRows = selectPrevious.all(userId, prevMonth, prevYear, type);
       for (const row of previousRows) {
-        const fixedSchedule = normalizeFixedFinanceSchedule(type, row.day_of_month, row.schedule_kind);
         insertClone.run(
           userId,
           month,
@@ -6681,8 +6847,8 @@ function ensureMonthlyFinanceScaffold(userId, month, year) {
           row.description ?? "",
           normalizeFinanceAmountMode(row.amount_mode),
           normalizeMonthlyFinanceCarryKey(row.carry_key) || null,
-          fixedSchedule.day_of_month,
-          fixedSchedule.schedule_kind,
+          normalizeFinanceDayOfMonth(row.day_of_month),
+          row.day_of_month ? normalizeFinanceScheduleKind(row.schedule_kind, type) : null,
           nowIso
         );
       }
@@ -6741,17 +6907,14 @@ function syncVariableFinanceAggregate(userId, financeId) {
 
 function hydrateMonthlyFinances(userId, finances) {
   const normalizedFinances = Array.isArray(finances)
-    ? finances.map((finance) => {
-      const fixedSchedule = normalizeFixedFinanceSchedule(finance?.type, finance?.day_of_month, finance?.schedule_kind);
-      return {
-        ...finance,
-        amount_mode: normalizeFinanceAmountMode(finance.amount_mode),
-        day_of_month: fixedSchedule.day_of_month,
-        schedule_kind: fixedSchedule.schedule_kind,
-        is_paid: normalizeFinancePaidFlag(finance?.is_paid),
-        paid_at: finance?.paid_at || null
-      };
-    })
+    ? finances.map((finance) => ({
+      ...finance,
+      amount_mode: normalizeFinanceAmountMode(finance.amount_mode),
+      day_of_month: normalizeFinanceDayOfMonth(finance?.day_of_month),
+      schedule_kind: normalizeFinanceDayOfMonth(finance?.day_of_month) ? normalizeFinanceScheduleKind(finance?.schedule_kind, finance?.type) : null,
+      is_paid: normalizeFinancePaidFlag(finance?.is_paid),
+      paid_at: finance?.paid_at || null
+    }))
     : [];
 
   const itemsByFinance = getFinanceItemsMap(userId, normalizedFinances.map((finance) => finance.id));
@@ -6802,9 +6965,8 @@ function getFinanceByIdForUser(userId, financeId) {
 
   if (!finance) return null;
   finance.amount_mode = normalizeFinanceAmountMode(finance.amount_mode);
-  const fixedSchedule = normalizeFixedFinanceSchedule(finance?.type, finance?.day_of_month, finance?.schedule_kind);
-  finance.day_of_month = fixedSchedule.day_of_month;
-  finance.schedule_kind = fixedSchedule.schedule_kind;
+  finance.day_of_month = normalizeFinanceDayOfMonth(finance?.day_of_month);
+  finance.schedule_kind = finance.day_of_month ? normalizeFinanceScheduleKind(finance?.schedule_kind, finance?.type) : null;
   finance.is_paid = normalizeFinancePaidFlag(finance?.is_paid);
   finance.paid_at = finance?.paid_at || null;
   return finance;
@@ -8847,6 +9009,244 @@ async function runManualDebtDueAlertSweep() {
   } finally {
     scheduledManualDebtDueSweepRunning = false;
   }
+}
+
+
+function getUsersWithMonthlyFinanceAlertCandidates(month, year) {
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  if (!safeMonth || !safeYear) return [];
+
+  const previous = getPreviousMonthYear(safeMonth, safeYear);
+  const targetPrefix = `${safeYear}-${String(safeMonth).padStart(2, '0')}`;
+  const rows = db.prepare(`
+    SELECT DISTINCT user_id
+    FROM monthly_finances
+    WHERE (month = ? AND year = ?) OR (month = ? AND year = ?)
+    UNION
+    SELECT DISTINCT mf.user_id
+    FROM monthly_finance_items fi
+    JOIN monthly_finances mf ON mf.id = fi.finance_id AND mf.user_id = fi.user_id
+    WHERE substr(COALESCE(fi.item_date, ''), 1, 7) = ?
+    ORDER BY user_id ASC
+  `).all(safeMonth, safeYear, previous.month, previous.year, targetPrefix);
+
+  return rows.map((row) => Number(row.user_id || 0)).filter(Boolean);
+}
+
+function materializeMonthlyFinanceStructureForUsers(userIds, month, year) {
+  const normalizedUserIds = normalizeManualDebtDueUserIds(userIds) || [];
+  normalizedUserIds.forEach((userId) => {
+    ensureMonthlyFinanceScaffold(userId, Number(month), Number(year));
+    syncMonthlyFinanceCarryForward(userId, Number(month), Number(year));
+  });
+}
+
+function getMonthlyFinanceBucketsForDate(dateKey, { userIds = null, month = null, year = null } = {}) {
+  const safeDateKey = String(dateKey || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(safeDateKey)) return new Map();
+
+  const safeYear = Number(year || safeDateKey.slice(0, 4));
+  const safeMonth = Number(month || safeDateKey.slice(5, 7));
+  if (!safeYear || !safeMonth) return new Map();
+
+  const filteredUserIds = normalizeManualDebtDueUserIds(userIds);
+  const userFilterSql = filteredUserIds ? ` AND mf.user_id IN (${filteredUserIds.map(() => '?').join(', ')})` : '';
+
+  const fixedRows = db.prepare(`
+    SELECT mf.id AS finance_id, mf.user_id, mf.type, mf.description, mf.amount_cents,
+           mf.day_of_month, mf.schedule_kind, mf.is_paid
+    FROM monthly_finances mf
+    WHERE mf.month = ?
+      AND mf.year = ?
+      AND mf.amount_mode = 'fixed'
+      AND COALESCE(mf.amount_cents, 0) > 0
+      AND COALESCE(mf.day_of_month, 0) > 0
+      ${userFilterSql}
+    ORDER BY mf.id ASC
+  `).all(safeMonth, safeYear, ...(filteredUserIds || []));
+
+  const itemRows = db.prepare(`
+    SELECT fi.id AS item_id, fi.finance_id, fi.user_id, fi.item_date, fi.item_source,
+           fi.amount_cents, fi.is_paid, mf.type, mf.description
+    FROM monthly_finance_items fi
+    JOIN monthly_finances mf ON mf.id = fi.finance_id AND mf.user_id = fi.user_id
+    WHERE mf.month = ?
+      AND mf.year = ?
+      AND mf.amount_mode = 'variable'
+      AND fi.item_date = ?
+      AND COALESCE(fi.amount_cents, 0) > 0
+      ${userFilterSql}
+    ORDER BY fi.id ASC
+  `).all(safeMonth, safeYear, safeDateKey, ...(filteredUserIds || []));
+
+  const buckets = new Map();
+  const append = (userId, type, payload) => {
+    const safeUserId = Number(userId || 0);
+    const safeType = normalizeFinanceType(type);
+    if (!safeUserId || !safeType) return;
+    if (!buckets.has(safeUserId)) {
+      buckets.set(safeUserId, { userId: safeUserId, income: [], expense: [] });
+    }
+    buckets.get(safeUserId)[safeType].push(payload);
+  };
+
+  fixedRows.forEach((row) => {
+    const effectiveDate = computeMonthlyFinanceEffectiveDate(safeYear, safeMonth, row.day_of_month);
+    if (effectiveDate !== safeDateKey) return;
+    if (normalizeFinanceType(row.type) === 'expense' && normalizeFinancePaidFlag(row.is_paid) === 1) return;
+
+    append(row.user_id, row.type, {
+      source_kind: 'fixed_finance',
+      source_ref: String(row.finance_id),
+      finance_id: Number(row.finance_id || 0) || null,
+      finance_item_id: null,
+      description: String(row.description || '').trim() || (normalizeFinanceType(row.type) === 'income' ? 'entrada do mês' : 'saída do mês'),
+      amount_cents: Math.max(0, Number(row.amount_cents || 0) || 0),
+      schedule_kind: resolveFinanceScheduleKind(row)
+    });
+  });
+
+  itemRows.forEach((row) => {
+    if (normalizeFinanceType(row.type) === 'expense' && normalizeFinancePaidFlag(row.is_paid) === 1) return;
+    append(row.user_id, row.type, {
+      source_kind: 'variable_item',
+      source_ref: String(row.item_id),
+      finance_id: Number(row.finance_id || 0) || null,
+      finance_item_id: Number(row.item_id || 0) || null,
+      description: String(row.item_source || row.description || '').trim() || (normalizeFinanceType(row.type) === 'income' ? 'entrada do mês' : 'saída do mês'),
+      amount_cents: Math.max(0, Number(row.amount_cents || 0) || 0),
+      schedule_kind: normalizeFinanceType(row.type) === 'income' ? 'receive' : 'pay'
+    });
+  });
+
+  return buckets;
+}
+
+function hasMonthlyFinanceAlertLog({ userId, sourceKind, sourceRef, type, dateKey }) {
+  const safeUserId = Number(userId || 0);
+  const safeType = normalizeFinanceType(type);
+  const safeDateKey = String(dateKey || '').trim();
+  const safeSourceKind = String(sourceKind || '').trim();
+  const safeSourceRef = String(sourceRef || '').trim();
+  if (!safeUserId || !safeType || !safeSourceKind || !safeSourceRef || !/^\d{4}-\d{2}-\d{2}$/.test(safeDateKey)) return false;
+
+  const row = db.prepare(`
+    SELECT id
+    FROM monthly_finance_alert_logs
+    WHERE user_id = ? AND source_kind = ? AND source_ref = ? AND type = ? AND date_key = ?
+    LIMIT 1
+  `).get(safeUserId, safeSourceKind, safeSourceRef, safeType, safeDateKey);
+
+  return !!row;
+}
+
+function recordMonthlyFinanceAlertLog({ userId, sourceKind, sourceRef, type, dateKey, payload = null }) {
+  const safeUserId = Number(userId || 0);
+  const safeType = normalizeFinanceType(type);
+  const safeDateKey = String(dateKey || '').trim();
+  const safeSourceKind = String(sourceKind || '').trim();
+  const safeSourceRef = String(sourceRef || '').trim();
+  if (!safeUserId || !safeType || !safeSourceKind || !safeSourceRef || !/^\d{4}-\d{2}-\d{2}$/.test(safeDateKey)) return false;
+
+  const info = db.prepare(`
+    INSERT OR IGNORE INTO monthly_finance_alert_logs (user_id, source_kind, source_ref, type, date_key, payload_json, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(safeUserId, safeSourceKind, safeSourceRef, safeType, safeDateKey, payload ? JSON.stringify(payload) : null, nowIso());
+
+  return Number(info.changes || 0) > 0;
+}
+
+async function deliverMonthlyFinanceDateAlertsForDate(dateKey, { userIds = null } = {}) {
+  const safeDateKey = String(dateKey || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(safeDateKey)) return 0;
+
+  const safeYear = Number(safeDateKey.slice(0, 4));
+  const safeMonth = Number(safeDateKey.slice(5, 7));
+  let candidateUserIds = normalizeManualDebtDueUserIds(userIds);
+  if (!candidateUserIds) {
+    candidateUserIds = getUsersWithMonthlyFinanceAlertCandidates(safeMonth, safeYear);
+  }
+  if (!candidateUserIds || !candidateUserIds.length) return 0;
+
+  materializeMonthlyFinanceStructureForUsers(candidateUserIds, safeMonth, safeYear);
+  const buckets = getMonthlyFinanceBucketsForDate(safeDateKey, { userIds: candidateUserIds, month: safeMonth, year: safeYear });
+  let deliveredCount = 0;
+
+  candidateUserIds.forEach((userId) => {
+    const bucket = buckets.get(userId) || { income: [], expense: [] };
+
+    ['income', 'expense'].forEach((type) => {
+      const freshItems = (Array.isArray(bucket[type]) ? bucket[type] : []).filter((item) => !hasMonthlyFinanceAlertLog({
+        userId,
+        sourceKind: item.source_kind,
+        sourceRef: item.source_ref,
+        type,
+        dateKey: safeDateKey
+      }));
+
+      if (!freshItems.length) return;
+
+      const payload = buildMonthlyFinanceDateNotificationPayload(type, freshItems, {
+        year: safeYear,
+        month: safeMonth,
+        dateKey: safeDateKey
+      });
+
+      const result = createNotification({
+        userId,
+        type: 'monthly_finance_date',
+        title: payload.title,
+        body: payload.body,
+        href: payload.href,
+        relatedType: 'monthly_finance',
+        relatedId: freshItems.length === 1
+          ? Number(freshItems[0].finance_item_id || freshItems[0].finance_id || 0) || null
+          : null,
+        groupKey: 'finance_date_alerts'
+      });
+
+      if (result) {
+        freshItems.forEach((item) => {
+          recordMonthlyFinanceAlertLog({
+            userId,
+            sourceKind: item.source_kind,
+            sourceRef: item.source_ref,
+            type,
+            dateKey: safeDateKey,
+            payload: {
+              amountCents: item.amount_cents,
+              description: item.description,
+              scheduleKind: item.schedule_kind
+            }
+          });
+        });
+        deliveredCount += 1;
+      }
+    });
+  });
+
+  return deliveredCount;
+}
+
+async function runMonthlyFinanceDateAlertSweep() {
+  if (scheduledMonthlyFinanceAlertSweepRunning) return;
+  scheduledMonthlyFinanceAlertSweepRunning = true;
+
+  try {
+    const { now, scheduledAt, dateKey } = getManualDebtDueScheduleContext();
+    if (now.isBefore(scheduledAt)) return;
+    await deliverMonthlyFinanceDateAlertsForDate(dateKey);
+  } catch (error) {
+    console.error('Falha no sweep das datas do mês:', error?.message || error);
+  } finally {
+    scheduledMonthlyFinanceAlertSweepRunning = false;
+  }
+}
+
+async function runDateDrivenAlertSweep() {
+  await runManualDebtDueAlertSweep();
+  await runMonthlyFinanceDateAlertSweep();
 }
 
 function getUnreadNotificationCount(userId) {
@@ -16716,6 +17116,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const owner = getSelfPerson(userId) || ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
   if (!owner) return res.status(400).send("Ajuste seu perfil em Amigos antes de seguir por aqui.");
 
+  const dashboardAlertContext = getManualDebtDueScheduleContext();
+
   const cardTotal = db.prepare(`
     SELECT COALESCE(SUM(a.share_cents), 0) as total
     FROM allocations a
@@ -16729,12 +17131,20 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       )
   `).get(userId, owner.id, currentMonth, currentYear, currentMonth, currentYear);
 
-  const finances = hydrateMonthlyFinances(userId, db.prepare(`
+  const rawFinances = hydrateMonthlyFinances(userId, db.prepare(`
     SELECT *
     FROM monthly_finances
     WHERE user_id = ? AND month = ? AND year = ?
     ORDER BY CASE type WHEN 'income' THEN 0 ELSE 1 END, id ASC
   `).all(userId, currentMonth, currentYear));
+  const decorateFinanceTodayKey = currentYear === dashboardAlertContext.now.year() && currentMonth === (dashboardAlertContext.now.month() + 1)
+    ? dashboardAlertContext.dateKey
+    : '';
+  const finances = decorateMonthlyFinancesForView(rawFinances, {
+    year: currentYear,
+    month: currentMonth,
+    todayDateKey: decorateFinanceTodayKey
+  });
 
   const categories = db.prepare("SELECT * FROM finance_categories WHERE user_id = ? AND is_active = 1").all(userId);
 
@@ -16892,9 +17302,14 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     });
   }
 
-  const manualDebtDueContext = getManualDebtDueScheduleContext();
+  const manualDebtDueContext = dashboardAlertContext;
   const today = manualDebtDueContext.now;
   const todayManualDebtBucket = getManualDebtDueBucketsForDate(manualDebtDueContext.dateKey, { userIds: [userId] }).get(userId) || { pay: [], receive: [] };
+  const todayFinanceBucket = getMonthlyFinanceBucketsForDate(manualDebtDueContext.dateKey, {
+    userIds: [userId],
+    month: currentMonth,
+    year: currentYear
+  }).get(userId) || { income: [], expense: [] };
 
   const sharedDebtDetailModuleSummary = getSharedDebtDetailModuleSummary(userId, currentMonth, currentYear);
   const cardHealthDetailModuleSummary = buildCardHealthDetailModuleSummary(userId, currentMonth, currentYear, {
@@ -16916,6 +17331,21 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const isCurrentReferenceMonth = currentYear === today.year() && currentMonth === (today.month() + 1);
 
   if (isCurrentReferenceMonth) {
+    if ((todayFinanceBucket.income || []).length) {
+      alerts.push(buildMonthlyFinanceDashboardAlert('income', todayFinanceBucket.income, {
+        year: currentYear,
+        month: currentMonth,
+        dateKey: manualDebtDueContext.dateKey
+      }));
+    }
+
+    if ((todayFinanceBucket.expense || []).length) {
+      alerts.push(buildMonthlyFinanceDashboardAlert('expense', todayFinanceBucket.expense, {
+        year: currentYear,
+        month: currentMonth,
+        dateKey: manualDebtDueContext.dateKey
+      }));
+    }
     const closingTodayCards = getActiveCards(userId).filter(card => {
       const closeDay = normalizeDayNumber(card.close_day);
       return closeDay && Math.min(closeDay, today.daysInMonth()) === today.date();
@@ -20534,9 +20964,8 @@ app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) =>
     const amountMode = normalizeFinanceAmountMode(req.body.amount_mode);
     const description = sanitizeFinanceDescription(req.body.description);
     const items = amountMode === 'variable' ? sanitizeVariableFinanceItems(req.body.items) : [];
-    const fixedSchedule = amountMode === 'fixed'
-      ? normalizeFixedFinanceSchedule(type, req.body.day_of_month ?? req.body.dayOfMonth, req.body.schedule_kind ?? req.body.scheduleKind)
-      : { day_of_month: null, schedule_kind: null };
+    const dayOfMonth = amountMode === 'fixed' ? normalizeFinanceDayOfMonth(req.body.day_of_month) : null;
+    const scheduleKind = dayOfMonth ? normalizeFinanceScheduleKind(req.body.schedule_kind, type) : null;
 
     if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 2000) {
       return res.status(400).json({ error: "Mês ou ano inválido." });
@@ -20565,19 +20994,7 @@ app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) =>
     `);
 
     const financeId = db.transaction(() => {
-      const result = insertFinance.run(
-        userId,
-        month,
-        year,
-        type,
-        description,
-        totalCents,
-        amountMode,
-        carryKey,
-        fixedSchedule.day_of_month,
-        fixedSchedule.schedule_kind,
-        nowIsoValue
-      );
+      const result = insertFinance.run(userId, month, year, type, description, totalCents, amountMode, carryKey, dayOfMonth, scheduleKind, nowIsoValue);
       const createdFinanceId = Number(result.lastInsertRowid);
 
       if (amountMode === 'variable') {
@@ -20674,6 +21091,46 @@ app.post("/finances/variable/:id", ensureAuthenticated, express.json(), (req, re
   } catch (e) {
     const status = /certinhos|nome para esse item/i.test(String(e.message || '')) ? 400 : 500;
     return res.status(status).json({ error: getFriendlyErrorMessage(e, { defaultMessage: 'Não consegui salvar esses lançamentos agora.' }) });
+  }
+});
+
+
+app.post("/finances/fixed/:id", ensureAuthenticated, express.json(), (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const id = Number(req.params.id);
+    const finance = getFinanceByIdForUser(userId, id);
+    if (!finance) {
+      return res.status(404).json({ error: "Item não encontrado." });
+    }
+
+    if (finance.amount_mode !== 'fixed') {
+      return res.status(400).json({ error: "Esse item usa vários lançamentos." });
+    }
+
+    if (isMonthClosed(userId, Number(finance.month), Number(finance.year))) {
+      return res.status(423).json({ error: getMonthLockMessage(Number(finance.month), Number(finance.year)) });
+    }
+
+    const description = sanitizeFinanceDescription(req.body.description);
+    const dayOfMonth = normalizeFinanceDayOfMonth(req.body.day_of_month);
+    const scheduleKind = dayOfMonth ? normalizeFinanceScheduleKind(req.body.schedule_kind, finance.type) : null;
+
+    db.prepare(`
+      UPDATE monthly_finances
+      SET description = ?, day_of_month = ?, schedule_kind = ?
+      WHERE id = ? AND user_id = ?
+    `).run(description, dayOfMonth, scheduleKind, id, userId);
+
+    return res.json({
+      success: true,
+      finance: serializeFinanceForApi(userId, id),
+      expenseProgress: finance.type === 'expense' ? buildExpensePaymentProgress(userId, Number(finance.month), Number(finance.year)) : null
+    });
+  } catch (e) {
+    const status = /nome para esse item/i.test(String(e.message || '')) ? 400 : 500;
+    return res.status(status).json({ error: getFriendlyErrorMessage(e, { defaultMessage: 'Não consegui salvar a data desse item agora.' }) });
   }
 });
 
@@ -20778,31 +21235,9 @@ app.post("/finances/update/:id", ensureAuthenticated, express.json(), (req, res)
       return res.status(423).json({ error: getMonthLockMessage(Number(row.month), Number(row.year)) });
     }
 
-    let financeForFutureSync = null;
-
     if (field === 'description') {
       db.prepare("UPDATE monthly_finances SET description = ? WHERE id = ? AND user_id = ?")
         .run(sanitizeFinanceDescription(value), id, userId);
-    } else if (field === 'fixed_meta') {
-      if (row.amount_mode !== 'fixed') {
-        return res.status(400).json({ error: "Esse item usa vários lançamentos. Abra a lista dele para editar os lançamentos." });
-      }
-
-      const nextDescription = sanitizeFinanceDescription(req.body.description ?? row.description ?? value);
-      const fixedSchedule = normalizeFixedFinanceSchedule(row.type, req.body.day_of_month ?? req.body.dayOfMonth, req.body.schedule_kind ?? req.body.scheduleKind);
-
-      db.prepare(`
-        UPDATE monthly_finances
-        SET description = ?, day_of_month = ?, schedule_kind = ?
-        WHERE id = ? AND user_id = ?
-      `).run(nextDescription, fixedSchedule.day_of_month, fixedSchedule.schedule_kind, id, userId);
-
-      financeForFutureSync = {
-        ...row,
-        description: nextDescription,
-        day_of_month: fixedSchedule.day_of_month,
-        schedule_kind: fixedSchedule.schedule_kind
-      };
     } else if (field === 'formula_and_value') {
       if (row.amount_mode !== 'fixed') {
         return res.status(400).json({ error: "Esse item usa vários lançamentos. Abra a lista dele para editar os lançamentos." });
@@ -20813,10 +21248,6 @@ app.post("/finances/update/:id", ensureAuthenticated, express.json(), (req, res)
         .run(String(formula || '').trim(), parsedAmountCents, id, userId);
     } else {
       return res.status(400).json({ error: "Campo de atualização inválido." });
-    }
-
-    if (financeForFutureSync) {
-      syncFutureLegacyFixedFinanceScheduleFromRow(userId, financeForFutureSync);
     }
 
     return res.json({ success: true, finance: serializeFinanceForApi(userId, id) });

@@ -6668,6 +6668,174 @@ function getPreviousMonthYear(month, year) {
   return { month: prevMonth, year: prevYear };
 }
 
+function getNextMonthYear(month, year) {
+  let nextMonth = Number(month) + 1;
+  let nextYear = Number(year);
+  if (nextMonth > 12) {
+    nextMonth = 1;
+    nextYear += 1;
+  }
+  return { month: nextMonth, year: nextYear };
+}
+
+function normalizeMonthlyFinanceScheduleRow(row) {
+  const normalizedDay = normalizeFinanceDayOfMonth(row?.day_of_month);
+  return {
+    ...row,
+    amount_mode: normalizeFinanceAmountMode(row?.amount_mode),
+    carry_key: normalizeMonthlyFinanceCarryKey(row?.carry_key),
+    day_of_month: normalizedDay,
+    schedule_kind: normalizedDay ? normalizeFinanceScheduleKind(row?.schedule_kind, row?.type) : null
+  };
+}
+
+function getFutureFixedFinanceRowsByCarryKey(userId, carryKey, month, year) {
+  const resolvedCarryKey = normalizeMonthlyFinanceCarryKey(carryKey);
+  if (!resolvedCarryKey) return [];
+
+  return db.prepare(`
+    SELECT id, month, year, type, amount_mode, carry_key, day_of_month, schedule_kind
+    FROM monthly_finances
+    WHERE user_id = ? AND carry_key = ?
+      AND (year > ? OR (year = ? AND month > ?))
+    ORDER BY year ASC, month ASC, id ASC
+  `).all(userId, resolvedCarryKey, Number(year), Number(year), Number(month))
+    .map((row) => normalizeMonthlyFinanceScheduleRow(row))
+    .filter((row) => row.amount_mode === 'fixed');
+}
+
+function getContiguousFutureLegacyFixedFinanceRows(userId, sourceFinance) {
+  const sourceType = normalizeFinanceType(sourceFinance?.type);
+  const sourceAmountMode = normalizeFinanceAmountMode(sourceFinance?.amount_mode);
+  const sourceDescription = String(sourceFinance?.description ?? '').trim();
+  const sourceMonth = Number(sourceFinance?.month || 0);
+  const sourceYear = Number(sourceFinance?.year || 0);
+  const sourceCategoryId = sourceFinance?.category_id == null ? null : Number(sourceFinance.category_id);
+
+  if (sourceAmountMode !== 'fixed' || !sourceType || !sourceMonth || !sourceYear || !sourceDescription) {
+    return [];
+  }
+
+  const selectLegacyRows = db.prepare(`
+    SELECT id, month, year, type, amount_mode, carry_key, day_of_month, schedule_kind
+    FROM monthly_finances
+    WHERE user_id = ? AND month = ? AND year = ? AND type = ? AND amount_mode = 'fixed'
+      AND ((? IS NULL AND category_id IS NULL) OR category_id = ?)
+      AND TRIM(COALESCE(description, '')) = ?
+      AND (carry_key IS NULL OR TRIM(carry_key) = '')
+    ORDER BY id ASC
+  `);
+
+  const rows = [];
+  let cursor = getNextMonthYear(sourceMonth, sourceYear);
+
+  for (let depth = 0; depth < 120; depth += 1) {
+    const candidates = selectLegacyRows.all(
+      userId,
+      cursor.month,
+      cursor.year,
+      sourceType,
+      sourceCategoryId,
+      sourceCategoryId,
+      sourceDescription
+    );
+
+    if (candidates.length !== 1) {
+      break;
+    }
+
+    rows.push(normalizeMonthlyFinanceScheduleRow(candidates[0]));
+    cursor = getNextMonthYear(cursor.month, cursor.year);
+  }
+
+  return rows;
+}
+
+function syncFutureLegacyFixedFinanceScheduleFromRow(userId, sourceFinance, {
+  nextDayOfMonth = null,
+  nextScheduleKind = null,
+  nextCarryKey = ''
+} = {}) {
+  if (normalizeFinanceAmountMode(sourceFinance?.amount_mode) !== 'fixed') {
+    return 0;
+  }
+
+  const resolvedNextDay = normalizeFinanceDayOfMonth(nextDayOfMonth);
+  if (!resolvedNextDay) {
+    return 0;
+  }
+
+  const resolvedNextKind = normalizeFinanceScheduleKind(nextScheduleKind, sourceFinance?.type);
+  const previousDay = normalizeFinanceDayOfMonth(sourceFinance?.day_of_month);
+  const previousKind = previousDay ? normalizeFinanceScheduleKind(sourceFinance?.schedule_kind, sourceFinance?.type) : null;
+  const sourceCarryKey = normalizeMonthlyFinanceCarryKey(sourceFinance?.carry_key);
+  const resolvedNextCarryKey = normalizeMonthlyFinanceCarryKey(nextCarryKey || sourceCarryKey);
+
+  const rowsById = new Map();
+  for (const row of getFutureFixedFinanceRowsByCarryKey(userId, sourceCarryKey, sourceFinance?.month, sourceFinance?.year)) {
+    rowsById.set(Number(row.id || 0), row);
+  }
+  for (const row of getContiguousFutureLegacyFixedFinanceRows(userId, sourceFinance)) {
+    rowsById.set(Number(row.id || 0), row);
+  }
+
+  const targetRows = Array.from(rowsById.values()).sort((a, b) => {
+    const yearDiff = Number(a.year || 0) - Number(b.year || 0);
+    if (yearDiff !== 0) return yearDiff;
+    const monthDiff = Number(a.month || 0) - Number(b.month || 0);
+    if (monthDiff !== 0) return monthDiff;
+    return Number(a.id || 0) - Number(b.id || 0);
+  });
+
+  if (!targetRows.length) {
+    return 0;
+  }
+
+  const updateRow = db.prepare(`
+    UPDATE monthly_finances
+    SET day_of_month = ?, schedule_kind = ?, carry_key = COALESCE(NULLIF(TRIM(carry_key), ''), ?)
+    WHERE id = ? AND user_id = ?
+  `);
+
+  let updatedCount = 0;
+
+  db.transaction(() => {
+    for (const row of targetRows) {
+      if (row.amount_mode !== 'fixed') {
+        continue;
+      }
+
+      const rowDay = normalizeFinanceDayOfMonth(row.day_of_month);
+      const rowKind = rowDay ? normalizeFinanceScheduleKind(row.schedule_kind, row.type) : null;
+      const matchesPreviousSchedule = previousDay
+        && rowDay === previousDay
+        && (rowKind || null) === (previousKind || null);
+      const matchesNextScheduleWithoutCarryKey = !normalizeMonthlyFinanceCarryKey(row.carry_key)
+        && rowDay === resolvedNextDay
+        && (rowKind || null) === (resolvedNextKind || null);
+      const shouldUpdate = !rowDay || matchesPreviousSchedule || matchesNextScheduleWithoutCarryKey;
+
+      if (!shouldUpdate) {
+        continue;
+      }
+
+      const result = updateRow.run(
+        resolvedNextDay,
+        resolvedNextKind,
+        resolvedNextCarryKey || null,
+        row.id,
+        userId
+      );
+
+      if (Number(result.changes || 0) > 0) {
+        updatedCount += 1;
+      }
+    }
+  })();
+
+  return updatedCount;
+}
+
 function syncMonthlyFinanceCarryForward(userId, month, year) {
   const { month: prevMonth, year: prevYear } = getPreviousMonthYear(month, year);
 
@@ -21116,12 +21284,25 @@ app.post("/finances/fixed/:id", ensureAuthenticated, express.json(), (req, res) 
     const description = sanitizeFinanceDescription(req.body.description);
     const dayOfMonth = normalizeFinanceDayOfMonth(req.body.day_of_month);
     const scheduleKind = dayOfMonth ? normalizeFinanceScheduleKind(req.body.schedule_kind, finance.type) : null;
+    const currentCarryKey = normalizeMonthlyFinanceCarryKey(finance.carry_key);
+    const nextCarryKey = dayOfMonth && !currentCarryKey ? createMonthlyFinanceCarryKey() : currentCarryKey;
 
     db.prepare(`
       UPDATE monthly_finances
-      SET description = ?, day_of_month = ?, schedule_kind = ?
+      SET description = ?, day_of_month = ?, schedule_kind = ?, carry_key = CASE
+        WHEN ? IS NOT NULL AND TRIM(?) <> '' AND (carry_key IS NULL OR TRIM(carry_key) = '') THEN ?
+        ELSE carry_key
+      END
       WHERE id = ? AND user_id = ?
-    `).run(description, dayOfMonth, scheduleKind, id, userId);
+    `).run(description, dayOfMonth, scheduleKind, nextCarryKey || null, nextCarryKey || '', nextCarryKey || null, id, userId);
+
+    if (dayOfMonth) {
+      syncFutureLegacyFixedFinanceScheduleFromRow(userId, finance, {
+        nextDayOfMonth: dayOfMonth,
+        nextScheduleKind: scheduleKind,
+        nextCarryKey
+      });
+    }
 
     return res.json({
       success: true,

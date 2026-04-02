@@ -3990,11 +3990,14 @@ function saveUserPasskey(userId, payload) {
     throw new Error('Não encontrei quem vai receber esse desbloqueio pelo aparelho.');
   }
 
-  const safeId = String(payload?.id || '').trim();
-  const safePublicKey = String(payload?.public_key || '').trim();
+  const safeId = String(payload?.id || payload?.credential_id || payload?.credentialId || '').trim();
+  const safePublicKey = String(payload?.public_key || payload?.publicKey || '').trim();
   if (!safeId || !safePublicKey) {
     throw new Error('Não consegui guardar esse aparelho agora.');
   }
+
+  const safeDeviceType = String(payload?.device_type || payload?.deviceType || '').trim() || null;
+  const safeBackedUp = Number(payload?.backed_up ?? payload?.backedUp ?? 0) !== 0 ? 1 : 0;
 
   const now = nowIso();
   db.prepare(`
@@ -4018,8 +4021,8 @@ function saveUserPasskey(userId, payload) {
     normalizePasskeyLabel(payload.label || '', 'Este aparelho'),
     safePublicKey,
     Number(payload.counter || 0) || 0,
-    String(payload.device_type || '').trim() || null,
-    Number(payload.backed_up || 0) !== 0 ? 1 : 0,
+    safeDeviceType,
+    safeBackedUp,
     JSON.stringify(Array.isArray(payload.transports) ? payload.transports.filter(Boolean) : []),
     String(payload.aaguid || '').trim() || null,
     now,

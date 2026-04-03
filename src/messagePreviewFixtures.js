@@ -1,4 +1,4 @@
-const MESSAGE_PREVIEW_FIXTURES = {
+const BASE_MESSAGE_PREVIEW_FIXTURES = {
   'notification.shared_debt.batch.new': {
     remetente: 'Mari',
     n_cobrancas: '3 cobranças',
@@ -186,6 +186,228 @@ const MESSAGE_PREVIEW_FIXTURES = {
     admin_ou_time: 'Caio',
     link_login: 'https://app.organizapay.com.br/login'
   }
+};
+
+
+const ADDITIONAL_MESSAGE_PREVIEW_FIXTURES = {
+  "notification.shared_debt.single.updated": {
+    remetente: "Mari",
+    valor: "R$ 72,00",
+    descricao: "pizza do sábado",
+  },
+  "notification.shared_debt.single.created": {
+    remetente: "Mari",
+    valor: "R$ 72,00",
+    descricao: "pizza do sábado",
+  },
+  "notification.shared_debt.single.manual_created": {
+    remetente: "Mari",
+    valor: "R$ 72,00",
+    descricao: "pizza do sábado",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.batch.response.accept.regular": {
+    destinatario: "Leo",
+    n_cobrancas: "3 cobranças",
+    valor_total: "R$ 184,90",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.batch.response.reject.regular": {
+    destinatario: "Leo",
+    n_cobrancas: "3 cobranças",
+    valor_total: "R$ 184,90",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.batch.response.accept.manual": {
+    destinatario: "Leo",
+    n_lembretes: "2 lembretes avulsos",
+    valor_total: "R$ 184,90",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.batch.response.reject.manual": {
+    destinatario: "Leo",
+    n_lembretes: "2 lembretes avulsos",
+    valor_total: "R$ 184,90",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.single.response.accept.regular": {
+    destinatario: "Leo",
+    valor: "R$ 72,00",
+    descricao: "pizza do sábado",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.single.response.reject.regular": {
+    destinatario: "Leo",
+    valor: "R$ 72,00",
+    descricao: "pizza do sábado",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.single.response.accept.manual": {
+    destinatario: "Leo",
+    valor: "R$ 72,00",
+    descricao: "pizza do sábado",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.single.response.reject.manual": {
+    destinatario: "Leo",
+    valor: "R$ 72,00",
+    descricao: "pizza do sábado",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.single.sender_action.accept_rejection.regular": {
+    remetente: "Mari",
+    valor: "R$ 72,00",
+    descricao: "pizza do sábado",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.single.sender_action.contest_rejection.regular": {
+    remetente: "Mari",
+    valor: "R$ 72,00",
+    descricao: "pizza do sábado",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.single.sender_action.accept_rejection.manual": {
+    remetente: "Mari",
+    valor: "R$ 72,00",
+    descricao: "pizza do sábado",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.single.sender_action.contest_rejection.manual": {
+    remetente: "Mari",
+    valor: "R$ 72,00",
+    descricao: "pizza do sábado",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.monthly_pix.reported": {
+    pagador: "Leo",
+    valor: "R$ 72,00",
+    mes_referencia: "04/2026",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.monthly_pix.confirmed": {
+    credor: "Mari",
+    valor: "R$ 72,00",
+    mes_referencia: "04/2026",
+    resumo_distribuicao_pix: "2 cobranças ficaram quitadas.",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.monthly_pix.revision": {
+    credor: "Mari",
+    valor: "R$ 72,00",
+    mes_referencia: "04/2026",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.payment_marked.regular": {
+    pagador: "Leo",
+    valor: "R$ 72,00",
+    descricao: "pizza do sábado",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.payment_marked.manual": {
+    pagador: "Leo",
+    valor: "R$ 72,00",
+    descricao: "pizza do sábado",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.payment_confirmed.regular": {
+    credor: "Mari",
+    valor: "R$ 72,00",
+    descricao: "pizza do sábado",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.payment_confirmed.manual": {
+    credor: "Mari",
+    valor: "R$ 72,00",
+    descricao: "pizza do sábado",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.payment_marked.bulk": {
+    pagador: "Leo",
+    n_cobrancas: "3 cobranças",
+    periodo: "04/2026",
+    valor_total: "R$ 184,90",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.shared_debt.payment_confirmed.bulk": {
+    credor: "Mari",
+    n_cobrancas: "3 cobranças",
+    periodo: "04/2026",
+    valor_total: "R$ 184,90",
+    nota: "Pode me mandar o comprovante por aqui.",
+  },
+  "notification.friendship.request_received": {
+    pessoa: "Mari",
+  },
+  "notification.friendship.request_accepted": {
+    pessoa: "Mari",
+  },
+  "notification.friendship.request_rejected": {
+    pessoa: "Mari",
+  },
+  "notification.friendship.ended": {
+    pessoa: "Mari",
+  },
+  "dashboard.friendship.pending.single": {
+    pessoa: "Mari",
+  },
+  "dashboard.friendship.pending.multi": {
+    n_pedidos: "3 pedidos",
+  },
+  "dashboard.friendship.unread": {
+    titulo_reaproveitado: "Hoje entra freela da semana",
+    body_reaproveitado: "freela da semana está no radar de hoje com R$ 280,00.",
+  },
+  "dashboard.shared_debt.unread.single": {
+    titulo_reaproveitado: "Hoje entra freela da semana",
+    body_reaproveitado: "freela da semana está no radar de hoje com R$ 280,00.",
+  },
+  "dashboard.shared_debt.unread.multi": {
+    n_novidades: "4 novidades",
+  },
+  "dashboard.shared_debt.pending": {
+    n_cobrancas: "3 cobranças",
+  },
+  "dashboard.shared_debt.draft_queue": {
+    n_cobrancas: "3 cobranças",
+    valor_total: "R$ 184,90",
+  },
+  "dashboard.private_reminders.radar": {
+    titulo_radar: "Fatura vencida com pendência",
+    descricao_radar: "Nubank (10/04) ainda tem R$ 240,00 pendente.",
+  },
+  "dashboard.monthly_finance.today": {
+    titulo_reaproveitado: "Hoje entra freela da semana",
+    body_reaproveitado: "freela da semana está no radar de hoje com R$ 280,00.",
+  },
+  "dashboard.cards.closing_today": {
+    titulo_radar: "Fatura vencida com pendência",
+    descricao_radar: "Nubank (10/04) ainda tem R$ 240,00 pendente.",
+  },
+  "dashboard.cards.due_soon": {
+    descricao_radar: "Nubank (10/04) ainda tem R$ 240,00 pendente.",
+  },
+  "dashboard.shared_debt.rejections_pending": {
+    n_recusas: "2 recusas",
+  },
+  "dashboard.shared_debt.payments_pending": {
+    n_pagamentos: "3 pagamentos",
+    dica_pix_mes: "1 deles é Pix do mês.",
+  },
+  "dashboard.monthly_pix.pending_confirmation": {
+    n_pix_mes: "2 avisos",
+  },
+  "dashboard.month.unassigned": {
+    n_itens: "5 itens",
+  },
+  "dashboard.cards.overdue": {
+    titulo_radar: "Fatura vencida com pendência",
+    descricao_radar: "Nubank (10/04) ainda tem R$ 240,00 pendente.",
+  }
+};
+
+const MESSAGE_PREVIEW_FIXTURES = {
+  ...BASE_MESSAGE_PREVIEW_FIXTURES,
+  ...ADDITIONAL_MESSAGE_PREVIEW_FIXTURES
 };
 
 function getMessagePreviewFixture(messageKey) {

@@ -6879,11 +6879,18 @@ function buildMonthlyFinanceDateNotificationPayload(type, items = [], { year = n
 
 function buildMonthlyFinanceDashboardAlert(type, items = [], { year = null, month = null, dateKey = null } = {}) {
   const payload = buildMonthlyFinanceDateNotificationPayload(type, items, { year, month, dateKey });
+  const resolved = resolveCatalogText('dashboard.monthly_finance.today', {
+    titulo_reaproveitado: payload.title,
+    body_reaproveitado: payload.body
+  }, {
+    fallbackTitle: payload.title,
+    fallbackBody: payload.body
+  });
   return {
     type: normalizeFinanceType(type) === 'expense' ? 'warning' : 'info',
     icon: normalizeFinanceType(type) === 'expense' ? '🧾' : '✨',
-    title: payload.title,
-    description: payload.body,
+    title: resolved.title,
+    description: resolved.body,
     href: payload.href
   };
 }
@@ -11049,11 +11056,19 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
               description: txn.description
             });
           } else {
+            const resolvedMessage = resolveCatalogText('notification.shared_debt.single.updated', {
+              remetente: requesterDisplayName,
+              valor: formatBRLFromCents(row.share_cents),
+              descricao: txn.description
+            }, {
+              fallbackTitle: 'Uma cobrança compartilhada foi atualizada',
+              fallbackBody: `${requesterDisplayName} ajustou a cobrança de ${formatBRLFromCents(row.share_cents)} (${txn.description}).`
+            });
             createNotification({
               userId: row.receiver_user_id,
               type: 'shared_debt_request',
-              title: 'Uma cobrança compartilhada foi atualizada',
-              body: `${requesterDisplayName} ajustou a cobrança de ${formatBRLFromCents(row.share_cents)} (${txn.description}).`,
+              title: resolvedMessage.title,
+              body: resolvedMessage.body,
               href: `/shared-debts?request=${existing.id}`,
               relatedType: 'shared_debt_request',
               relatedId: existing.id,
@@ -11124,11 +11139,19 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
               description: txn.description
             });
           } else {
+            const resolvedMessage = resolveCatalogText('notification.shared_debt.single.created', {
+              remetente: requesterDisplayName,
+              valor: formatBRLFromCents(row.share_cents),
+              descricao: txn.description
+            }, {
+              fallbackTitle: 'Chegou uma cobrança compartilhada',
+              fallbackBody: `${requesterDisplayName} te enviou uma cobrança de ${formatBRLFromCents(row.share_cents)} (${txn.description}).`
+            });
             createNotification({
               userId: row.receiver_user_id,
               type: 'shared_debt_request',
-              title: 'Chegou uma cobrança compartilhada',
-              body: `${requesterDisplayName} te enviou uma cobrança de ${formatBRLFromCents(row.share_cents)} (${txn.description}).`,
+              title: resolvedMessage.title,
+              body: resolvedMessage.body,
               href: `/shared-debts?request=${requestId}`,
               relatedType: 'shared_debt_request',
               relatedId: requestId,
@@ -13763,11 +13786,21 @@ app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
   addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'created', note: note || 'Lembrete avulso enviado.' });
   refreshSharedDebtBatch(batchId, now);
 
+  const resolvedManualReminderMessage = resolveCatalogText('notification.shared_debt.single.manual_created', {
+    remetente: actorName,
+    valor: formatBRLFromCents(amountCents),
+    descricao: description,
+    nota: note || ''
+  }, {
+    fallbackTitle: 'Chegou um lembrete avulso',
+    fallbackBody: `${actorName} te enviou um lembrete de ${formatBRLFromCents(amountCents)} (${description}).${buildNoteSuffix(note, 'Recado')}`
+  });
+
   createNotification({
     userId: linkedUserId,
     type: 'shared_debt_request',
-    title: 'Chegou um lembrete avulso',
-    body: `${actorName} te enviou um lembrete de ${formatBRLFromCents(amountCents)} (${description}).${buildNoteSuffix(note, 'Recado')}`,
+    title: resolvedManualReminderMessage.title,
+    body: resolvedManualReminderMessage.body,
     href: `/shared-debts?request=${requestId}`,
     relatedType: 'shared_debt_request',
     relatedId: requestId,
@@ -13890,13 +13923,26 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
   const itemCountLabel = isManualBatch
     ? formatCountLabel(pendingItems.length, 'lembrete avulso', 'lembretes avulsos')
     : chargeCountLabel;
-  const title = accepted
+  const batchResponseMessageKey = accepted
+    ? (isManualBatch ? 'notification.shared_debt.batch.response.accept.manual' : 'notification.shared_debt.batch.response.accept.regular')
+    : (isManualBatch ? 'notification.shared_debt.batch.response.reject.manual' : 'notification.shared_debt.batch.response.reject.regular');
+  const fallbackTitle = accepted
     ? (isManualBatch ? 'Seu lembrete avulso foi aceito' : 'Seu envio foi aceito')
     : (isManualBatch ? 'Seu lembrete avulso foi recusado' : 'Seu envio foi recusado');
   const baseBody = accepted
     ? `${actorName} aceitou ${itemCountLabel} do seu envio, somando ${formatBRLFromCents(totalCents)}.`
     : `${actorName} recusou ${itemCountLabel} do seu envio, somando ${formatBRLFromCents(totalCents)}.`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
+  const resolvedBatchResponseMessage = resolveCatalogText(batchResponseMessageKey, {
+    destinatario: actorName,
+    n_cobrancas: chargeCountLabel,
+    n_lembretes: itemCountLabel,
+    valor_total: formatBRLFromCents(totalCents),
+    nota: note || ''
+  }, {
+    fallbackTitle,
+    fallbackBody: body
+  });
 
   const updateStmt = db.prepare(`
     UPDATE shared_debt_requests
@@ -13915,8 +13961,8 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
     createNotification({
       userId: batchRow.requester_user_id,
       type: 'shared_debt_batch',
-      title,
-      body,
+      title: resolvedBatchResponseMessage.title,
+      body: resolvedBatchResponseMessage.body,
       href: firstRequestId ? `/shared-debts?request=${firstRequestId}` : '/shared-debts',
       relatedType: 'shared_debt_batch',
       relatedId: batchId,
@@ -13974,13 +14020,25 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
   const eventType = nextStatus;
   const requestKind = normalizeSharedDebtRequestKind(requestRow.request_kind);
   const isManualRequest = requestKind === 'manual';
-  const title = accepted
+  const singleResponseMessageKey = accepted
+    ? (isManualRequest ? 'notification.shared_debt.single.response.accept.manual' : 'notification.shared_debt.single.response.accept.regular')
+    : (isManualRequest ? 'notification.shared_debt.single.response.reject.manual' : 'notification.shared_debt.single.response.reject.regular');
+  const fallbackTitle = accepted
     ? (isManualRequest ? 'Aceitaram seu lembrete avulso' : 'Aceitaram sua cobrança compartilhada')
     : (isManualRequest ? 'Recusaram seu lembrete avulso' : 'Recusaram sua cobrança compartilhada');
   const baseBody = accepted
     ? `${actorName} aceitou ${isManualRequest ? 'o lembrete avulso' : 'a cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`
     : `${actorName} recusou ${isManualRequest ? 'o lembrete avulso' : 'a cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
+  const resolvedSingleResponseMessage = resolveCatalogText(singleResponseMessageKey, {
+    destinatario: actorName,
+    valor: formatBRLFromCents(requestRow.amount_cents),
+    descricao: requestRow.description_snapshot,
+    nota: note || ''
+  }, {
+    fallbackTitle,
+    fallbackBody: body
+  });
 
   db.transaction(() => {
     db.prepare(`
@@ -13995,8 +14053,8 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
     createNotification({
       userId: requestRow.requester_user_id,
       type: 'shared_debt_request',
-      title,
-      body,
+      title: resolvedSingleResponseMessage.title,
+      body: resolvedSingleResponseMessage.body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
       relatedId: requestId,
@@ -14052,13 +14110,25 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
   const eventType = nextStatus;
   const requestKind = normalizeSharedDebtRequestKind(requestRow.request_kind);
   const isManualRequest = requestKind === 'manual';
-  const title = acceptingRejection
+  const senderActionMessageKey = acceptingRejection
+    ? (isManualRequest ? 'notification.shared_debt.single.sender_action.accept_rejection.manual' : 'notification.shared_debt.single.sender_action.accept_rejection.regular')
+    : (isManualRequest ? 'notification.shared_debt.single.sender_action.contest_rejection.manual' : 'notification.shared_debt.single.sender_action.contest_rejection.regular');
+  const fallbackTitle = acceptingRejection
     ? (isManualRequest ? 'A recusa do lembrete foi aceita' : 'Sua recusa foi aceita')
     : (isManualRequest ? 'A recusa do lembrete foi contestada' : 'Sua recusa foi contestada');
   const baseBody = acceptingRejection
     ? `${actorName} aceitou a sua recusa ${isManualRequest ? 'do lembrete avulso' : 'da cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`
     : `${actorName} contestou a sua recusa ${isManualRequest ? 'do lembrete avulso' : 'da cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
+  const resolvedSenderActionMessage = resolveCatalogText(senderActionMessageKey, {
+    remetente: actorName,
+    valor: formatBRLFromCents(requestRow.amount_cents),
+    descricao: requestRow.description_snapshot,
+    nota: note || ''
+  }, {
+    fallbackTitle,
+    fallbackBody: body
+  });
 
   db.transaction(() => {
     if (acceptingRejection) {
@@ -14081,8 +14151,8 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
     createNotification({
       userId: requestRow.receiver_user_id,
       type: 'shared_debt_request',
-      title,
-      body,
+      title: resolvedSenderActionMessage.title,
+      body: resolvedSenderActionMessage.body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
       relatedId: requestId,
@@ -14370,11 +14440,20 @@ app.post('/shared-debts/monthly-settlements/:id/report-payment', ensureAuthentic
 
     cancelSharedDebtGeneratedMonthlyIntents(settlementId, userId);
 
+    const resolvedMonthlyPixReportedMessage = resolveCatalogText('notification.monthly_pix.reported', {
+      pagador: actorName,
+      valor: formatBRLFromCents(intentAmountCents),
+      mes_referencia: monthLabel(settlementRow.month, settlementRow.year),
+      nota: note || ''
+    }, {
+      fallbackTitle: 'Pix do mês informado',
+      fallbackBody: `${actorName} avisou um Pix de ${formatBRLFromCents(intentAmountCents)} para ${monthLabel(settlementRow.month, settlementRow.year)}.${buildNoteSuffix(note)}`
+    });
     createNotification({
       userId: settlementRow.requester_user_id,
       type: 'shared_debt_request',
-      title: 'Pix do mês informado',
-      body: `${actorName} avisou um Pix de ${formatBRLFromCents(intentAmountCents)} para ${monthLabel(settlementRow.month, settlementRow.year)}.${buildNoteSuffix(note)}`,
+      title: resolvedMonthlyPixReportedMessage.title,
+      body: resolvedMonthlyPixReportedMessage.body,
       href: `/shared-debts?settlement=${settlementId}`,
       relatedType: 'shared_debt_payment_intent',
       relatedId: intentId,
@@ -14547,11 +14626,21 @@ app.post('/shared-debts/monthly-settlements/:id/confirm-payment', ensureAuthenti
       touchSharedDebtBatch(batchId, now);
     });
 
+    const resolvedMonthlyPixConfirmedMessage = resolveCatalogText('notification.monthly_pix.confirmed', {
+      credor: actorName,
+      valor: formatBRLFromCents(intentRow.amount_cents),
+      mes_referencia: monthText,
+      resumo_distribuicao_pix: buildSharedDebtCardMonthlyIntentResultSummary(preview),
+      nota: note || ''
+    }, {
+      fallbackTitle: 'Pix do mês confirmado',
+      fallbackBody: `${actorName} confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. ${buildSharedDebtCardMonthlyIntentResultSummary(preview)}${buildNoteSuffix(note)}`
+    });
     createNotification({
       userId: settlementRow.receiver_user_id,
       type: 'shared_debt_request',
-      title: 'Pix do mês confirmado',
-      body: `${actorName} confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. ${buildSharedDebtCardMonthlyIntentResultSummary(preview)}${buildNoteSuffix(note)}`,
+      title: resolvedMonthlyPixConfirmedMessage.title,
+      body: resolvedMonthlyPixConfirmedMessage.body,
       href: `/shared-debts?settlement=${settlementId}`,
       relatedType: 'shared_debt_payment_intent',
       relatedId: intentId,
@@ -14642,11 +14731,20 @@ app.post('/shared-debts/monthly-settlements/:id/reject-payment', ensureAuthentic
       throw new Error('Esse Pix do mês já mudou de estado enquanto você estava por aqui.');
     }
 
+    const resolvedMonthlyPixRevisionMessage = resolveCatalogText('notification.monthly_pix.revision', {
+      credor: actorName,
+      valor: formatBRLFromCents(intentRow.amount_cents),
+      mes_referencia: monthText,
+      nota: note || ''
+    }, {
+      fallbackTitle: 'Pix do mês voltou para revisão',
+      fallbackBody: `${actorName} não confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. O valor voltou para o saldo aberto dessa carteira.${buildNoteSuffix(note)}`
+    });
     createNotification({
       userId: settlementRow.receiver_user_id,
       type: 'shared_debt_request',
-      title: 'Pix do mês voltou para revisão',
-      body: `${actorName} não confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. O valor voltou para o saldo aberto dessa carteira.${buildNoteSuffix(note)}`,
+      title: resolvedMonthlyPixRevisionMessage.title,
+      body: resolvedMonthlyPixRevisionMessage.body,
       href: `/shared-debts?settlement=${settlementId}`,
       relatedType: 'shared_debt_payment_intent',
       relatedId: intentId,
@@ -14836,6 +14934,19 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
   const isManualRequest = requestKind === 'manual';
   const baseBody = `${actorName} avisou que já pagou ${isManualRequest ? 'o lembrete avulso' : 'a cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
+  const resolvedPaymentMarkedMessage = resolveCatalogText(
+    isManualRequest ? 'notification.shared_debt.payment_marked.manual' : 'notification.shared_debt.payment_marked.regular',
+    {
+      pagador: actorName,
+      valor: formatBRLFromCents(requestRow.amount_cents),
+      descricao: requestRow.description_snapshot,
+      nota: note || ''
+    },
+    {
+      fallbackTitle: isManualRequest ? 'Pagamento do lembrete marcado como feito' : 'Pagamento marcado como feito',
+      fallbackBody: body
+    }
+  );
 
   db.transaction(() => {
     db.prepare(`
@@ -14850,8 +14961,8 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
     createNotification({
       userId: requestRow.requester_user_id,
       type: 'shared_debt_request',
-      title: isManualRequest ? 'Pagamento do lembrete marcado como feito' : 'Pagamento marcado como feito',
-      body,
+      title: resolvedPaymentMarkedMessage.title,
+      body: resolvedPaymentMarkedMessage.body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
       relatedId: requestId,
@@ -14910,6 +15021,19 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
   const isManualRequest = requestKind === 'manual';
   const baseBody = `${actorName} confirmou o recebimento ${isManualRequest ? 'do lembrete avulso' : 'da cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
+  const resolvedPaymentConfirmedMessage = resolveCatalogText(
+    isManualRequest ? 'notification.shared_debt.payment_confirmed.manual' : 'notification.shared_debt.payment_confirmed.regular',
+    {
+      credor: actorName,
+      valor: formatBRLFromCents(requestRow.amount_cents),
+      descricao: requestRow.description_snapshot,
+      nota: note || ''
+    },
+    {
+      fallbackTitle: isManualRequest ? 'Pagamento do lembrete confirmado' : 'Pagamento confirmado',
+      fallbackBody: body
+    }
+  );
 
   db.transaction(() => {
     db.prepare(`
@@ -14927,8 +15051,8 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
     createNotification({
       userId: requestRow.receiver_user_id,
       type: 'shared_debt_request',
-      title: isManualRequest ? 'Pagamento do lembrete confirmado' : 'Pagamento confirmado',
-      body,
+      title: resolvedPaymentConfirmedMessage.title,
+      body: resolvedPaymentConfirmedMessage.body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
       relatedId: requestId,
@@ -14994,11 +15118,22 @@ app.post('/shared-debts/bulk/mark-paid', ensureAuthenticated, (req, res) => {
       const body = `${bodyBase}${buildNoteSuffix(note)}`;
       const firstRow = group.rows[0];
 
+      const resolvedBulkMarkedMessage = resolveCatalogText('notification.shared_debt.payment_marked.bulk', {
+        pagador: actorName,
+        n_cobrancas: chargeCountLabel,
+        periodo: periodLabel || '',
+        valor_total: formatBRLFromCents(group.totalCents),
+        nota: note || ''
+      }, {
+        fallbackTitle: group.rows.length > 1 ? 'Pagamentos marcados como feitos' : 'Pagamento marcado como feito',
+        fallbackBody: body
+      });
+
       createNotification({
         userId: firstRow.requester_user_id,
         type: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
-        title: group.rows.length > 1 ? 'Pagamentos marcados como feitos' : 'Pagamento marcado como feito',
-        body,
+        title: resolvedBulkMarkedMessage.title,
+        body: resolvedBulkMarkedMessage.body,
         href: group.batchId ? `/shared-debts?batch=${group.batchId}` : `/shared-debts?request=${firstRow.id}`,
         relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
         relatedId: group.batchId || firstRow.id,
@@ -15064,11 +15199,22 @@ app.post('/shared-debts/bulk/confirm-receipt', ensureAuthenticated, (req, res) =
       const body = `${bodyBase}${buildNoteSuffix(note)}`;
       const firstRow = group.rows[0];
 
+      const resolvedBulkConfirmedMessage = resolveCatalogText('notification.shared_debt.payment_confirmed.bulk', {
+        credor: actorName,
+        n_cobrancas: chargeCountLabel,
+        periodo: periodLabel || '',
+        valor_total: formatBRLFromCents(group.totalCents),
+        nota: note || ''
+      }, {
+        fallbackTitle: group.rows.length > 1 ? 'Pagamentos confirmados' : 'Pagamento confirmado',
+        fallbackBody: body
+      });
+
       createNotification({
         userId: firstRow.receiver_user_id,
         type: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
-        title: group.rows.length > 1 ? 'Pagamentos confirmados' : 'Pagamento confirmado',
-        body,
+        title: resolvedBulkConfirmedMessage.title,
+        body: resolvedBulkConfirmedMessage.body,
         href: group.batchId ? `/shared-debts?batch=${group.batchId}` : `/shared-debts?request=${firstRow.id}`,
         relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
         relatedId: group.batchId || firstRow.id,
@@ -16496,11 +16642,17 @@ app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
   );
 
   const requestId = Number(info.lastInsertRowid || 0);
+  const resolvedFriendRequestMessage = resolveCatalogText('notification.friendship.request_received', {
+    pessoa: requester?.name || person.name || 'Alguém'
+  }, {
+    fallbackTitle: 'Chegou um pedido de amizade',
+    fallbackBody: `${requester?.name || person.name || 'Alguém'} quer virar seu contato de confiança no AcerttaPay.`
+  });
   createNotification({
     userId: resolved.linked_user_id,
     type: 'friend_request',
-    title: 'Chegou um pedido de amizade',
-    body: `${requester?.name || person.name || 'Alguém'} quer virar seu contato de confiança no AcerttaPay.`,
+    title: resolvedFriendRequestMessage.title,
+    body: resolvedFriendRequestMessage.body,
     href: `/people?friendRequest=${requestId}`,
     relatedType: 'friend_request',
     relatedId: requestId,
@@ -16585,11 +16737,17 @@ app.post('/friend-requests/:id/respond', ensureAuthenticated, (req, res) => {
         preferredEmail: requestRow.requester_email_snapshot || requesterUser?.email
       });
 
+      const resolvedFriendAcceptedMessage = resolveCatalogText('notification.friendship.request_accepted', {
+        pessoa: targetUser?.name || 'Essa pessoa'
+      }, {
+        fallbackTitle: 'Amizade ativada',
+        fallbackBody: `${targetUser?.name || 'Essa pessoa'} aceitou seu pedido. Agora vocês já podem trocar cobranças automáticas com mais privacidade.`
+      });
       createNotification({
         userId: requestRow.requester_user_id,
         type: 'friendship_update',
-        title: 'Amizade ativada',
-        body: `${targetUser?.name || 'Essa pessoa'} aceitou seu pedido. Agora vocês já podem trocar cobranças automáticas com mais privacidade.`,
+        title: resolvedFriendAcceptedMessage.title,
+        body: resolvedFriendAcceptedMessage.body,
         href: '/people',
         relatedType: 'friend_request',
         relatedId: requestId,
@@ -16607,11 +16765,17 @@ app.post('/friend-requests/:id/respond', ensureAuthenticated, (req, res) => {
     WHERE id = ? AND target_user_id = ? AND status = 'pending'
   `).run(now, now, now, requestId, userId);
 
+  const resolvedFriendRejectedMessage = resolveCatalogText('notification.friendship.request_rejected', {
+    pessoa: targetUser?.name || 'Essa pessoa'
+  }, {
+    fallbackTitle: 'Pedido não aceito',
+    fallbackBody: `${targetUser?.name || 'Essa pessoa'} preferiu não ativar a amizade agora.`
+  });
   createNotification({
     userId: requestRow.requester_user_id,
     type: 'friendship_update',
-    title: 'Pedido não aceito',
-    body: `${targetUser?.name || 'Essa pessoa'} preferiu não ativar a amizade agora.`,
+    title: resolvedFriendRejectedMessage.title,
+    body: resolvedFriendRejectedMessage.body,
     href: '/people',
     relatedType: 'friend_request',
     relatedId: requestId,
@@ -16667,11 +16831,17 @@ app.post('/people/:id/unfriend', ensureAuthenticated, (req, res) => {
   closeOtherPendingFriendRequestsBetweenUsers(userId, resolved.linked_user_id, null, 'merged');
 
   const actor = getUserRecord(userId);
+  const resolvedFriendEndedMessage = resolveCatalogText('notification.friendship.ended', {
+    pessoa: actor?.name || 'Um contato'
+  }, {
+    fallbackTitle: 'Amizade desfeita',
+    fallbackBody: `${actor?.name || 'Um contato'} desfez a amizade no AcerttaPay. O histórico continua, mas novos envios automáticos param por aqui.`
+  });
   createNotification({
     userId: resolved.linked_user_id,
     type: 'friendship_update',
-    title: 'Amizade desfeita',
-    body: `${actor?.name || 'Um contato'} desfez a amizade no AcerttaPay. O histórico continua, mas novos envios automáticos param por aqui.`,
+    title: resolvedFriendEndedMessage.title,
+    body: resolvedFriendEndedMessage.body,
     href: '/people',
     relatedType: 'friendship',
     relatedId: friendship.id,
@@ -18537,24 +18707,43 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 
   if (pendingFriendRequests.length) {
     const newestFriendRequest = pendingFriendRequests[0];
+    const friendPendingMessageKey = pendingFriendRequests.length === 1
+      ? 'dashboard.friendship.pending.single'
+      : 'dashboard.friendship.pending.multi';
+    const friendPendingTitle = pendingFriendRequests.length === 1
+      ? `${newestFriendRequest.requester_name || 'Alguém'} quer entrar na sua rede`
+      : 'Pedidos de amizade esperando resposta';
+    const friendPendingDescription = pendingFriendRequests.length === 1
+      ? 'Aceitando, vocês liberam cobranças automáticas dos dois lados com um ok de verdade.'
+      : `${formatCountLabel(pendingFriendRequests.length, 'pedido de amizade está', 'pedidos de amizade estão')} te esperando lá em Amigos.`;
+    const resolvedFriendPendingAlert = resolveCatalogText(friendPendingMessageKey, {
+      pessoa: newestFriendRequest.requester_name || 'Alguém',
+      n_pedidos: formatCountLabel(pendingFriendRequests.length, 'pedido', 'pedidos')
+    }, {
+      fallbackTitle: friendPendingTitle,
+      fallbackBody: friendPendingDescription
+    });
     alerts.push({
       type: 'info',
       icon: '💚',
-      title: pendingFriendRequests.length === 1
-        ? `${newestFriendRequest.requester_name || 'Alguém'} quer entrar na sua rede`
-        : 'Pedidos de amizade esperando resposta',
-      description: pendingFriendRequests.length === 1
-        ? 'Aceitando, vocês liberam cobranças automáticas dos dois lados com um ok de verdade.'
-        : `${formatCountLabel(pendingFriendRequests.length, 'pedido de amizade está', 'pedidos de amizade estão')} te esperando lá em Amigos.`,
+      title: resolvedFriendPendingAlert.title,
+      description: resolvedFriendPendingAlert.body,
       href: `/people?friendRequest=${newestFriendRequest.id}`
     });
   } else if (unreadFriendNotifications.length) {
     const newestFriendNotification = unreadFriendNotifications[0];
+    const resolvedUnreadFriendAlert = resolveCatalogText('dashboard.friendship.unread', {
+      titulo_reaproveitado: newestFriendNotification.title || 'Tem novidade na sua rede',
+      body_reaproveitado: newestFriendNotification.body || 'Seu espaço de amizades ganhou novidade no AcerttaPay.'
+    }, {
+      fallbackTitle: newestFriendNotification.title || 'Tem novidade na sua rede',
+      fallbackBody: newestFriendNotification.body || 'Seu espaço de amizades ganhou novidade no AcerttaPay.'
+    });
     alerts.push({
       type: 'info',
       icon: '💌',
-      title: newestFriendNotification.title || 'Tem novidade na sua rede',
-      description: newestFriendNotification.body || 'Seu espaço de amizades ganhou novidade no AcerttaPay.',
+      title: resolvedUnreadFriendAlert.title,
+      description: resolvedUnreadFriendAlert.body,
       href: newestFriendNotification.href || '/people'
     });
   }
@@ -18572,13 +18761,26 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 
   if (unreadSharedDebtNotifications.length) {
     const newest = unreadSharedDebtNotifications[0];
+    const sharedDebtAlertMessageKey = unreadSharedDebtNotifications.length === 1
+      ? 'dashboard.shared_debt.unread.single'
+      : 'dashboard.shared_debt.unread.multi';
+    const sharedDebtAlertTitle = unreadSharedDebtNotifications.length === 1 ? (newest.title || 'Tem cobrança esperando você') : 'Cobranças pendentes';
+    const sharedDebtAlertBody = unreadSharedDebtNotifications.length === 1
+      ? (newest.body || 'Você recebeu uma nova cobrança para analisar.')
+      : `Você tem ${formatCountLabel(unreadSharedDebtNotifications.length, 'novidade', 'novidades')} em Cobranças esperando sua olhada.`;
+    const resolvedSharedDebtAlert = resolveCatalogText(sharedDebtAlertMessageKey, {
+      titulo_reaproveitado: sharedDebtAlertTitle,
+      body_reaproveitado: newest.body || 'Você recebeu uma nova cobrança para analisar.',
+      n_novidades: formatCountLabel(unreadSharedDebtNotifications.length, 'novidade', 'novidades')
+    }, {
+      fallbackTitle: sharedDebtAlertTitle,
+      fallbackBody: sharedDebtAlertBody
+    });
     alerts.push({
       type: 'info',
       icon: '🤝',
-      title: unreadSharedDebtNotifications.length === 1 ? newest.title : 'Cobranças pendentes',
-      description: unreadSharedDebtNotifications.length === 1
-        ? (newest.body || 'Você recebeu uma nova cobrança para analisar.')
-        : `Você tem ${formatCountLabel(unreadSharedDebtNotifications.length, 'novidade', 'novidades')} em Cobranças esperando sua olhada.`,
+      title: resolvedSharedDebtAlert.title,
+      description: resolvedSharedDebtAlert.body,
       href: newest.href || '/shared-debts'
     });
   } else {
@@ -18589,11 +18791,18 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     `).get(userId)?.total || 0;
 
     if (pendingSharedDebtCount > 0) {
+      const pendingSharedDebtDescription = `${formatCountLabel(pendingSharedDebtCount, 'cobrança', 'cobranças')} ${pendingSharedDebtCount === 1 ? 'está' : 'estão'} te esperando.`;
+      const resolvedPendingSharedDebtAlert = resolveCatalogText('dashboard.shared_debt.pending', {
+        n_novidades: formatCountLabel(pendingSharedDebtCount, 'cobrança', 'cobranças')
+      }, {
+        fallbackTitle: 'Envios aguardando sua análise',
+        fallbackBody: pendingSharedDebtDescription
+      });
       alerts.push({
         type: 'warning',
         icon: '📨',
-        title: 'Envios aguardando sua análise',
-        description: `${formatCountLabel(pendingSharedDebtCount, 'cobrança', 'cobranças')} ${pendingSharedDebtCount === 1 ? 'está' : 'estão'} te esperando.`,
+        title: resolvedPendingSharedDebtAlert.title,
+        description: resolvedPendingSharedDebtAlert.body,
         href: '/shared-debts#received'
       });
     }
@@ -18601,11 +18810,20 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 
   const draftSendQueueSummary = getSharedDebtSendQueueDraftSummary(userId);
   if (draftSendQueueSummary.queueCount > 0) {
+    const draftQueueTitle = draftSendQueueSummary.queueCount === 1 ? 'Tem 1 envio guardado na caixa de saída' : 'Tem envios guardados na caixa de saída';
+    const draftQueueDescription = `${formatCountLabel(draftSendQueueSummary.itemCount, 'cobrança está', 'cobranças estão')} prontas para disparar, somando ${formatBRLFromCents(draftSendQueueSummary.totalCents)}.`;
+    const resolvedDraftQueueAlert = resolveCatalogText('dashboard.shared_debt.draft_queue', {
+      n_cobrancas: formatCountLabel(draftSendQueueSummary.itemCount, 'cobrança', 'cobranças'),
+      valor_total: formatBRLFromCents(draftSendQueueSummary.totalCents)
+    }, {
+      fallbackTitle: draftQueueTitle,
+      fallbackBody: draftQueueDescription
+    });
     alerts.push({
       type: 'info',
       icon: '📤',
-      title: draftSendQueueSummary.queueCount === 1 ? 'Tem 1 envio guardado na caixa de saída' : 'Tem envios guardados na caixa de saída',
-      description: `${formatCountLabel(draftSendQueueSummary.itemCount, 'cobrança está', 'cobranças estão')} prontas para disparar, somando ${formatBRLFromCents(draftSendQueueSummary.totalCents)}.`,
+      title: resolvedDraftQueueAlert.title,
+      description: resolvedDraftQueueAlert.body,
       href: '/shared-debts#draft-queues'
     });
   }
@@ -18620,13 +18838,23 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       descriptionParts.push(`${formatCountLabel(privateDebtReminderSummary.readyToArchiveCount, 'lembrete já pode', 'lembretes já podem')} ir para o arquivo.`);
     }
 
+    const privateReminderTitle = privateDebtReminderSummary.hasActive
+      ? (privateDebtReminderSummary.activeCount === 1 ? 'Tem 1 lembrete privado em aberto' : 'Tem lembretes privados em aberto')
+      : (privateDebtReminderSummary.readyToArchiveCount === 1 ? 'Tem 1 lembrete privado pronto para arquivo' : 'Tem lembretes privados prontos para arquivo');
+    const privateReminderDescription = `${descriptionParts.join(' ')} Esse radar existe só no seu app.`;
+    const resolvedPrivateReminderAlert = resolveCatalogText('dashboard.private_reminders.radar', {
+      titulo_radar: privateReminderTitle,
+      descricao_radar: privateReminderDescription
+    }, {
+      fallbackTitle: privateReminderTitle,
+      fallbackBody: privateReminderDescription
+    });
+
     alerts.push({
       type: privateDebtReminderSummary.hasActive ? 'info' : 'success',
       icon: privateDebtReminderSummary.hasActive ? '🧾' : '🗂️',
-      title: privateDebtReminderSummary.hasActive
-        ? (privateDebtReminderSummary.activeCount === 1 ? 'Tem 1 lembrete privado em aberto' : 'Tem lembretes privados em aberto')
-        : (privateDebtReminderSummary.readyToArchiveCount === 1 ? 'Tem 1 lembrete privado pronto para arquivo' : 'Tem lembretes privados prontos para arquivo'),
-      description: `${descriptionParts.join(' ')} Esse radar existe só no seu app.`,
+      title: resolvedPrivateReminderAlert.title,
+      description: resolvedPrivateReminderAlert.body,
       href: '/shared-debts#private-reminders'
     });
   }
@@ -18681,11 +18909,20 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     });
 
     if (closingTodayCards.length) {
+      const closingTodayTitle = closingTodayCards.length === 1 ? 'Cartão fecha hoje' : 'Cartões fecham hoje';
+      const closingTodayDescription = `${closingTodayCards.map(card => card.name).join(', ')} ${closingTodayCards.length === 1 ? 'fecha' : 'fecham'} hoje.`;
+      const resolvedClosingTodayAlert = resolveCatalogText('dashboard.cards.closing_today', {
+        titulo_radar: closingTodayTitle,
+        descricao_radar: closingTodayDescription
+      }, {
+        fallbackTitle: closingTodayTitle,
+        fallbackBody: closingTodayDescription
+      });
       alerts.push({
         type: 'info',
         icon: '⏰',
-        title: 'Cartão fecha hoje',
-        description: `${closingTodayCards.map(card => card.name).join(', ')} ${closingTodayCards.length === 1 ? 'fecha' : 'fecham'} hoje.`
+        title: resolvedClosingTodayAlert.title,
+        description: resolvedClosingTodayAlert.body
       });
     }
 
@@ -18701,11 +18938,19 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       .filter(item => item.total_cents > 0 && item.due_date && item.diff_days >= 0 && item.diff_days <= 2);
 
     if (dueSoonCards.length) {
+      const dueSoonDescription = dueSoonCards.map(item => `${item.card_name} (${dayjs(item.due_date).format('DD/MM')})`).join(', ');
+      const resolvedDueSoonAlert = resolveCatalogText('dashboard.cards.due_soon', {
+        descricao_radar: dueSoonDescription,
+        lista_cartoes_com_datas: dueSoonDescription
+      }, {
+        fallbackTitle: 'Vencimento em até 2 dias',
+        fallbackBody: dueSoonDescription
+      });
       alerts.push({
         type: 'warning',
         icon: '📅',
-        title: 'Vencimento em até 2 dias',
-        description: dueSoonCards.map(item => `${item.card_name} (${dayjs(item.due_date).format('DD/MM')})`).join(', ')
+        title: resolvedDueSoonAlert.title,
+        description: resolvedDueSoonAlert.body
       });
     }
   }
@@ -18717,11 +18962,18 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   `).get(userId)?.total || 0;
 
   if (senderDecisionCount > 0) {
+    const senderDecisionDescription = `${formatCountLabel(senderDecisionCount, 'recusa', 'recusas')} ${senderDecisionCount === 1 ? 'ainda aguarda' : 'ainda aguardam'} sua decisão para encerrar ou contestar.`;
+    const resolvedSenderDecisionAlert = resolveCatalogText('dashboard.shared_debt.rejections_pending', {
+      n_recusas: formatCountLabel(senderDecisionCount, 'recusa', 'recusas')
+    }, {
+      fallbackTitle: 'Rejeições aguardando sua decisão',
+      fallbackBody: senderDecisionDescription
+    });
     alerts.push({
       type: 'warning',
       icon: '⚖️',
-      title: 'Rejeições aguardando sua decisão',
-      description: `${formatCountLabel(senderDecisionCount, 'recusa', 'recusas')} ${senderDecisionCount === 1 ? 'ainda aguarda' : 'ainda aguardam'} sua decisão para encerrar ou contestar.`,
+      title: resolvedSenderDecisionAlert.title,
+      description: resolvedSenderDecisionAlert.body,
       href: '/shared-debts#sent'
     });
   }
@@ -18747,22 +18999,35 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   if (pendingReceiptConfirmationCount > 0) {
     let title = 'Pagamentos aguardando sua confirmação';
     let description = `${formatCountLabel(pendingReceiptConfirmationCount, 'pagamento', 'pagamentos')} já ${pendingReceiptConfirmationCount === 1 ? 'foi marcado como feito e está' : 'foram marcados como feitos e estão'} esperando seu ok final.`;
+    let messageKey = 'dashboard.shared_debt.payments_pending';
+    const variables = {
+      n_pagamentos: formatCountLabel(pendingReceiptConfirmationCount, 'pagamento', 'pagamentos'),
+      n_pix_mes: formatCountLabel(monthlyPendingReceiptConfirmationCount, 'Pix do mês', 'Pix do mês'),
+      dica_pix_mes: ''
+    };
 
     if (monthlyPendingReceiptConfirmationCount > 0 && legacyPendingReceiptConfirmationCount === 0) {
-      title = monthlyPendingReceiptConfirmationCount === 1 ? 'Pix do mês aguardando seu ok' : 'Pix do mês aguardando seu ok';
+      title = 'Pix do mês aguardando seu ok';
       description = `${formatCountLabel(monthlyPendingReceiptConfirmationCount, 'Pix do mês', 'Pix do mês')} já ${monthlyPendingReceiptConfirmationCount === 1 ? 'foi avisado e está' : 'foram avisados e estão'} esperando sua confirmação na carteira mensal.`;
+      messageKey = 'dashboard.monthly_pix.pending_confirmation';
     } else if (monthlyPendingReceiptConfirmationCount > 0) {
       const monthlyHint = monthlyPendingReceiptConfirmationCount === 1
         ? '1 deles é Pix do mês.'
         : `${monthlyPendingReceiptConfirmationCount} deles são Pix do mês.`;
       description = `${description} ${monthlyHint}`;
+      variables.dica_pix_mes = monthlyHint;
     }
+
+    const resolvedPendingPaymentAlert = resolveCatalogText(messageKey, variables, {
+      fallbackTitle: title,
+      fallbackBody: description
+    });
 
     alerts.push({
       type: 'warning',
       icon: '✅',
-      title,
-      description,
+      title: resolvedPendingPaymentAlert.title,
+      description: resolvedPendingPaymentAlert.body,
       href: '/shared-debts#sent'
     });
   }
@@ -18783,11 +19048,18 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     `).get(userId, currentMonth, currentYear, currentMonth, currentYear)?.total || 0;
 
     if (unassignedCount > 0) {
+      const unassignedDescription = `${formatCountLabel(unassignedCount, 'item', 'itens')} deste mês ainda ${unassignedCount === 1 ? 'não foi dividido' : 'não foram divididos'} entre as pessoas.`;
+      const resolvedUnassignedAlert = resolveCatalogText('dashboard.month.unassigned', {
+        n_itens: formatCountLabel(unassignedCount, 'item', 'itens')
+      }, {
+        fallbackTitle: 'Itens sem distribuição',
+        fallbackBody: unassignedDescription
+      });
       alerts.push({
         type: 'warning',
         icon: '👥',
-        title: 'Itens sem distribuição',
-        description: `${formatCountLabel(unassignedCount, 'item', 'itens')} deste mês ainda ${unassignedCount === 1 ? 'não foi dividido' : 'não foram divididos'} entre as pessoas.`,
+        title: resolvedUnassignedAlert.title,
+        description: resolvedUnassignedAlert.body,
         href: `/month/${currentYear}/${currentMonth}?f_allocated=nao`
       });
     }
@@ -18813,11 +19085,20 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       .filter(item => item.total_cents > 0 && item.due_passed && item.remaining_cents > 0);
 
     if (overduePendingCards.length) {
+      const overdueTitle = overduePendingCards.length === 1 ? 'Fatura vencida com pendência' : 'Faturas vencidas com pendência';
+      const overdueDescription = buildOverduePaymentAlertDescription(overduePendingCards);
+      const resolvedOverdueAlert = resolveCatalogText('dashboard.cards.overdue', {
+        titulo_radar: overdueTitle,
+        descricao_radar: overdueDescription
+      }, {
+        fallbackTitle: overdueTitle,
+        fallbackBody: overdueDescription
+      });
       alerts.push({
         type: 'warning',
         icon: '🚨',
-        title: overduePendingCards.length === 1 ? 'Fatura vencida com pendência' : 'Faturas vencidas com pendência',
-        description: buildOverduePaymentAlertDescription(overduePendingCards),
+        title: resolvedOverdueAlert.title,
+        description: resolvedOverdueAlert.body,
         href: `/summary/${currentYear}/${currentMonth}`
       });
     }

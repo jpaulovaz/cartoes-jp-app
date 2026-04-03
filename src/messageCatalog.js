@@ -1,4 +1,4 @@
-const MESSAGE_CATALOG = [
+const BASE_MESSAGE_CATALOG = [
   {
     catalogId: 'NTF-001',
     messageKey: 'notification.shared_debt.batch.new',
@@ -591,6 +591,708 @@ const MESSAGE_CATALOG = [
     ]
   }
 ];
+
+const ADDITIONAL_MESSAGE_CATALOG = [
+  {
+    catalogId: "NTF-014",
+    messageKey: "notification.shared_debt.single.updated",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Sincronização automática da divisão",
+    purpose: "Cobrança individual atualizada",
+    defaultTitle: "Uma cobrança compartilhada foi atualizada",
+    defaultBody: "{remetente} ajustou a cobrança de {valor} ({descricao}).",
+    variables: [
+      { name: "remetente", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "descricao", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-015",
+    messageKey: "notification.shared_debt.single.created",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Sincronização automática da divisão",
+    purpose: "Cobrança individual criada",
+    defaultTitle: "Chegou uma cobrança compartilhada",
+    defaultBody: "{remetente} te enviou uma cobrança de {valor} ({descricao}).",
+    variables: [
+      { name: "remetente", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "descricao", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-016",
+    messageKey: "notification.shared_debt.single.manual_created",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Lembrete avulso manual",
+    purpose: "Lembrete avulso enviado",
+    defaultTitle: "Chegou um lembrete avulso",
+    defaultBody: "{remetente} te enviou um lembrete de {valor} ({descricao}). [Recado: {nota}]",
+    variables: [
+      { name: "remetente", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "descricao", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-017",
+    messageKey: "notification.shared_debt.batch.response.accept.regular",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Resposta a envio em lote",
+    purpose: "Lote regular aceito pelo destinatário",
+    defaultTitle: "Seu envio foi aceito",
+    defaultBody: "{destinatario} aceitou {n_cobrancas} do seu envio, somando {valor_total}. [Recado: {nota}]",
+    variables: [
+      { name: "destinatario", required: true, fields: ["body"] },
+      { name: "n_cobrancas", required: true, fields: ["body"] },
+      { name: "valor_total", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-018",
+    messageKey: "notification.shared_debt.batch.response.reject.regular",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Resposta a envio em lote",
+    purpose: "Lote regular recusado pelo destinatário",
+    defaultTitle: "Seu envio foi recusado",
+    defaultBody: "{destinatario} recusou {n_cobrancas} do seu envio, somando {valor_total}. [Recado: {nota}]",
+    variables: [
+      { name: "destinatario", required: true, fields: ["body"] },
+      { name: "n_cobrancas", required: true, fields: ["body"] },
+      { name: "valor_total", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-019",
+    messageKey: "notification.shared_debt.batch.response.accept.manual",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Resposta a envio em lote",
+    purpose: "Lote de lembrete avulso aceito",
+    defaultTitle: "Seu lembrete avulso foi aceito",
+    defaultBody: "{destinatario} aceitou {n_lembretes} do seu envio, somando {valor_total}. [Recado: {nota}]",
+    variables: [
+      { name: "destinatario", required: true, fields: ["body"] },
+      { name: "n_lembretes", required: true, fields: ["body"] },
+      { name: "valor_total", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-020",
+    messageKey: "notification.shared_debt.batch.response.reject.manual",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Resposta a envio em lote",
+    purpose: "Lote de lembrete avulso recusado",
+    defaultTitle: "Seu lembrete avulso foi recusado",
+    defaultBody: "{destinatario} recusou {n_lembretes} do seu envio, somando {valor_total}. [Recado: {nota}]",
+    variables: [
+      { name: "destinatario", required: true, fields: ["body"] },
+      { name: "n_lembretes", required: true, fields: ["body"] },
+      { name: "valor_total", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-021",
+    messageKey: "notification.shared_debt.single.response.accept.regular",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Resposta a cobrança individual",
+    purpose: "Cobrança regular aceita",
+    defaultTitle: "Aceitaram sua cobrança compartilhada",
+    defaultBody: "{destinatario} aceitou a cobrança de {valor} ({descricao}). [Recado: {nota}]",
+    variables: [
+      { name: "destinatario", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "descricao", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-022",
+    messageKey: "notification.shared_debt.single.response.reject.regular",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Resposta a cobrança individual",
+    purpose: "Cobrança regular recusada",
+    defaultTitle: "Recusaram sua cobrança compartilhada",
+    defaultBody: "{destinatario} recusou a cobrança de {valor} ({descricao}). [Recado: {nota}]",
+    variables: [
+      { name: "destinatario", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "descricao", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-023",
+    messageKey: "notification.shared_debt.single.response.accept.manual",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Resposta a cobrança individual",
+    purpose: "Lembrete avulso aceito",
+    defaultTitle: "Aceitaram seu lembrete avulso",
+    defaultBody: "{destinatario} aceitou o lembrete avulso de {valor} ({descricao}). [Recado: {nota}]",
+    variables: [
+      { name: "destinatario", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "descricao", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-024",
+    messageKey: "notification.shared_debt.single.response.reject.manual",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Resposta a cobrança individual",
+    purpose: "Lembrete avulso recusado",
+    defaultTitle: "Recusaram seu lembrete avulso",
+    defaultBody: "{destinatario} recusou o lembrete avulso de {valor} ({descricao}). [Recado: {nota}]",
+    variables: [
+      { name: "destinatario", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "descricao", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-025",
+    messageKey: "notification.shared_debt.single.sender_action.accept_rejection.regular",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Decisão do remetente após recusa",
+    purpose: "Recusa aceita (cobrança regular)",
+    defaultTitle: "Sua recusa foi aceita",
+    defaultBody: "{remetente} aceitou a sua recusa da cobrança de {valor} ({descricao}). [Recado: {nota}]",
+    variables: [
+      { name: "remetente", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "descricao", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-026",
+    messageKey: "notification.shared_debt.single.sender_action.contest_rejection.regular",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Decisão do remetente após recusa",
+    purpose: "Recusa contestada (cobrança regular)",
+    defaultTitle: "Sua recusa foi contestada",
+    defaultBody: "{remetente} contestou a sua recusa da cobrança de {valor} ({descricao}). [Recado: {nota}]",
+    variables: [
+      { name: "remetente", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "descricao", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-027",
+    messageKey: "notification.shared_debt.single.sender_action.accept_rejection.manual",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Decisão do remetente após recusa",
+    purpose: "Recusa aceita (lembrete avulso)",
+    defaultTitle: "A recusa do lembrete foi aceita",
+    defaultBody: "{remetente} aceitou a sua recusa do lembrete avulso de {valor} ({descricao}). [Recado: {nota}]",
+    variables: [
+      { name: "remetente", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "descricao", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-028",
+    messageKey: "notification.shared_debt.single.sender_action.contest_rejection.manual",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Decisão do remetente após recusa",
+    purpose: "Recusa contestada (lembrete avulso)",
+    defaultTitle: "A recusa do lembrete foi contestada",
+    defaultBody: "{remetente} contestou a sua recusa do lembrete avulso de {valor} ({descricao}). [Recado: {nota}]",
+    variables: [
+      { name: "remetente", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "descricao", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-029",
+    messageKey: "notification.monthly_pix.reported",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Pix do mês",
+    flow: "Carteira mensal / Pix",
+    purpose: "Pagador informou o Pix do mês",
+    defaultTitle: "Pix do mês informado",
+    defaultBody: "{pagador} avisou um Pix de {valor} para {mes_referencia}. [Recado: {nota}]",
+    variables: [
+      { name: "pagador", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "mes_referencia", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-030",
+    messageKey: "notification.monthly_pix.confirmed",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Pix do mês",
+    flow: "Carteira mensal / Pix",
+    purpose: "Credor confirmou o Pix do mês",
+    defaultTitle: "Pix do mês confirmado",
+    defaultBody: "{credor} confirmou o Pix de {valor} em {mes_referencia}. {resumo_distribuicao_pix}. [Recado: {nota}]",
+    variables: [
+      { name: "credor", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "mes_referencia", required: true, fields: ["body"] },
+      { name: "resumo_distribuicao_pix", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-031",
+    messageKey: "notification.monthly_pix.revision",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Pix do mês",
+    flow: "Carteira mensal / Pix",
+    purpose: "Credor devolveu o Pix para revisão",
+    defaultTitle: "Pix do mês voltou para revisão",
+    defaultBody: "{credor} não confirmou o Pix de {valor} em {mes_referencia}. O valor voltou para o saldo aberto dessa carteira. [Recado: {nota}]",
+    variables: [
+      { name: "credor", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "mes_referencia", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-032",
+    messageKey: "notification.shared_debt.payment_marked.regular",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Pagamento de cobrança",
+    purpose: "Pagador marcou a cobrança como paga",
+    defaultTitle: "Pagamento marcado como feito",
+    defaultBody: "{pagador} avisou que já pagou a cobrança de {valor} ({descricao}). [Recado: {nota}]",
+    variables: [
+      { name: "pagador", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "descricao", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-033",
+    messageKey: "notification.shared_debt.payment_marked.manual",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Pagamento de lembrete avulso",
+    purpose: "Pagador marcou o lembrete avulso como pago",
+    defaultTitle: "Pagamento do lembrete marcado como feito",
+    defaultBody: "{pagador} avisou que já pagou o lembrete avulso de {valor} ({descricao}). [Recado: {nota}]",
+    variables: [
+      { name: "pagador", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "descricao", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-034",
+    messageKey: "notification.shared_debt.payment_confirmed.regular",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Confirmação de recebimento",
+    purpose: "Credor confirmou o recebimento da cobrança",
+    defaultTitle: "Pagamento confirmado",
+    defaultBody: "{credor} confirmou o recebimento da cobrança de {valor} ({descricao}). [Recado: {nota}]",
+    variables: [
+      { name: "credor", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "descricao", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-035",
+    messageKey: "notification.shared_debt.payment_confirmed.manual",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Confirmação de recebimento",
+    purpose: "Credor confirmou o recebimento do lembrete avulso",
+    defaultTitle: "Pagamento do lembrete confirmado",
+    defaultBody: "{credor} confirmou o recebimento do lembrete avulso de {valor} ({descricao}). [Recado: {nota}]",
+    variables: [
+      { name: "credor", required: true, fields: ["body"] },
+      { name: "valor", required: true, fields: ["body"] },
+      { name: "descricao", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-036",
+    messageKey: "notification.shared_debt.payment_marked.bulk",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Pagamento em lote",
+    purpose: "Pagador marcou várias cobranças como pagas",
+    defaultTitle: "Pagamentos marcados como feitos",
+    defaultBody: "{pagador} avisou o pagamento de {n_cobrancas}[ no período {periodo}], somando {valor_total}. [Recado: {nota}]",
+    variables: [
+      { name: "pagador", required: true, fields: ["body"] },
+      { name: "n_cobrancas", required: true, fields: ["body"] },
+      { name: "periodo", required: false, fields: ["body"] },
+      { name: "valor_total", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-037",
+    messageKey: "notification.shared_debt.payment_confirmed.bulk",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Cobranças compartilhadas",
+    flow: "Confirmação em lote",
+    purpose: "Credor confirmou várias cobranças",
+    defaultTitle: "Pagamentos confirmados",
+    defaultBody: "{credor} confirmou o recebimento de {n_cobrancas}[ no período {periodo}], somando {valor_total}. [Recado: {nota}]",
+    variables: [
+      { name: "credor", required: true, fields: ["body"] },
+      { name: "n_cobrancas", required: true, fields: ["body"] },
+      { name: "periodo", required: false, fields: ["body"] },
+      { name: "valor_total", required: true, fields: ["body"] },
+      { name: "nota", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-038",
+    messageKey: "notification.friendship.request_received",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Amizades",
+    flow: "Rede de contatos",
+    purpose: "Pedido de amizade recebido",
+    defaultTitle: "Chegou um pedido de amizade",
+    defaultBody: "{pessoa} quer virar seu contato de confiança no AcerttaPay.",
+    variables: [
+      { name: "pessoa", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-039",
+    messageKey: "notification.friendship.request_accepted",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Amizades",
+    flow: "Rede de contatos",
+    purpose: "Pedido aceito",
+    defaultTitle: "Amizade ativada",
+    defaultBody: "{pessoa} aceitou seu pedido. Agora vocês já podem trocar cobranças automáticas com mais privacidade.",
+    variables: [
+      { name: "pessoa", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-040",
+    messageKey: "notification.friendship.request_rejected",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Amizades",
+    flow: "Rede de contatos",
+    purpose: "Pedido recusado",
+    defaultTitle: "Pedido não aceito",
+    defaultBody: "{pessoa} preferiu não ativar a amizade agora.",
+    variables: [
+      { name: "pessoa", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "NTF-041",
+    messageKey: "notification.friendship.ended",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Amizades",
+    flow: "Rede de contatos",
+    purpose: "Amizade encerrada",
+    defaultTitle: "Amizade desfeita",
+    defaultBody: "{pessoa} desfez a amizade no AcerttaPay. O histórico continua, mas novos envios automáticos param por aqui.",
+    variables: [
+      { name: "pessoa", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "GER-001",
+    messageKey: "dashboard.friendship.pending.single",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Rede de contatos",
+    purpose: "Pedido de amizade pendente (1 pedido)",
+    defaultTitle: "{pessoa} quer entrar na sua rede",
+    defaultBody: "Aceitando, vocês liberam cobranças automáticas dos dois lados com um ok de verdade.",
+    variables: [
+      { name: "pessoa", required: true, fields: ["title"] },
+    ]
+  },
+  {
+    catalogId: "GER-002",
+    messageKey: "dashboard.friendship.pending.multi",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Rede de contatos",
+    purpose: "Pedidos de amizade pendentes (vários)",
+    defaultTitle: "Pedidos de amizade esperando resposta",
+    defaultBody: "{n_pedidos} te esperando lá em Amigos.",
+    variables: [
+      { name: "n_pedidos", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "GER-003",
+    messageKey: "dashboard.friendship.unread",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Rede de contatos",
+    purpose: "Novidade de amizade não lida",
+    defaultTitle: "{titulo_reaproveitado}",
+    defaultBody: "{body_reaproveitado}",
+    variables: [
+      { name: "titulo_reaproveitado", required: true, fields: ["title"] },
+      { name: "body_reaproveitado", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "GER-004",
+    messageKey: "dashboard.shared_debt.unread.single",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Cobranças compartilhadas",
+    purpose: "Novidade única de cobrança não lida",
+    defaultTitle: "{titulo_reaproveitado}",
+    defaultBody: "{body_reaproveitado}",
+    variables: [
+      { name: "titulo_reaproveitado", required: true, fields: ["title"] },
+      { name: "body_reaproveitado", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "GER-005",
+    messageKey: "dashboard.shared_debt.unread.multi",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Cobranças compartilhadas",
+    purpose: "Múltiplas novidades de cobrança não lidas",
+    defaultTitle: "Cobranças pendentes",
+    defaultBody: "Você tem {n_novidades} em Cobranças esperando sua olhada.",
+    variables: [
+      { name: "n_novidades", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "GER-006",
+    messageKey: "dashboard.shared_debt.pending",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Cobranças compartilhadas",
+    purpose: "Cobranças pendentes sem notificação não lida",
+    defaultTitle: "Envios aguardando sua análise",
+    defaultBody: "{n_cobrancas} te esperando.",
+    variables: [
+      { name: "n_cobrancas", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "GER-007",
+    messageKey: "dashboard.shared_debt.draft_queue",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Caixa de saída",
+    purpose: "Envio guardado na caixa de saída",
+    defaultTitle: "Tem 1 envio guardado na caixa de saída / Tem envios guardados na caixa de saída",
+    defaultBody: "{n_cobrancas} prontas para disparar, somando {valor_total}.",
+    variables: [
+      { name: "n_cobrancas", required: true, fields: ["body"] },
+      { name: "valor_total", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "GER-008",
+    messageKey: "dashboard.private_reminders.radar",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Lembretes privados",
+    purpose: "Radar de lembretes privados",
+    defaultTitle: "{titulo_radar}",
+    defaultBody: "{descricao_radar}",
+    variables: [
+      { name: "titulo_radar", required: true, fields: ["title"] },
+      { name: "descricao_radar", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "GER-011",
+    messageKey: "dashboard.monthly_finance.today",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Agenda financeira do mês",
+    purpose: "Entradas/saídas do dia",
+    defaultTitle: "{titulo_reaproveitado}",
+    defaultBody: "{body_reaproveitado}",
+    variables: [
+      { name: "titulo_reaproveitado", required: true, fields: ["title"] },
+      { name: "body_reaproveitado", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "GER-012",
+    messageKey: "dashboard.cards.closing_today",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Cartões",
+    purpose: "Cartão fecha hoje",
+    defaultTitle: "{titulo_radar}",
+    defaultBody: "{descricao_radar}",
+    variables: [
+      { name: "titulo_radar", required: true, fields: ["title"] },
+      { name: "descricao_radar", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "GER-013",
+    messageKey: "dashboard.cards.due_soon",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Cartões",
+    purpose: "Vencimento em até 2 dias",
+    defaultTitle: "Vencimento em até 2 dias",
+    defaultBody: "{descricao_radar}",
+    variables: [
+      { name: "descricao_radar", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "GER-014",
+    messageKey: "dashboard.shared_debt.rejections_pending",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Cobranças compartilhadas",
+    purpose: "Recusas aguardando decisão do remetente",
+    defaultTitle: "Rejeições aguardando sua decisão",
+    defaultBody: "{n_recusas} ainda aguarda(m) sua decisão para encerrar ou contestar.",
+    variables: [
+      { name: "n_recusas", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "GER-015",
+    messageKey: "dashboard.shared_debt.payments_pending",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Confirmação de pagamento",
+    purpose: "Pagamentos aguardando confirmação final",
+    defaultTitle: "Pagamentos aguardando sua confirmação",
+    defaultBody: "{n_pagamentos} já foi/foram marcado(s) como feito(s) e está/estão esperando seu ok final. [{dica_pix_mes}]",
+    variables: [
+      { name: "n_pagamentos", required: true, fields: ["body"] },
+      { name: "dica_pix_mes", required: false, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "GER-016",
+    messageKey: "dashboard.monthly_pix.pending_confirmation",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Confirmação de pagamento",
+    purpose: "Somente Pix do mês aguardando ok",
+    defaultTitle: "Pix do mês aguardando seu ok",
+    defaultBody: "{n_pix_mes} já foi/foram avisado(s) e está/estão esperando sua confirmação na carteira mensal.",
+    variables: [
+      { name: "n_pix_mes", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "GER-017",
+    messageKey: "dashboard.month.unassigned",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Distribuição das compras",
+    purpose: "Itens sem distribuição",
+    defaultTitle: "Itens sem distribuição",
+    defaultBody: "{n_itens} deste mês ainda não foi/foram dividido(s) entre as pessoas.",
+    variables: [
+      { name: "n_itens", required: true, fields: ["body"] },
+    ]
+  },
+  {
+    catalogId: "GER-018",
+    messageKey: "dashboard.cards.overdue",
+    channel: "Card de alerta na visão geral",
+    previewRenderer: "dashboard_alert",
+    category: "Aba Geral / alertas",
+    flow: "Cartões",
+    purpose: "Fatura vencida com pendência",
+    defaultTitle: "{titulo_radar}",
+    defaultBody: "{descricao_radar}",
+    variables: [
+      { name: "titulo_radar", required: true, fields: ["title"] },
+      { name: "descricao_radar", required: true, fields: ["body"] },
+    ]
+  }
+];
+
+const MESSAGE_CATALOG = [...BASE_MESSAGE_CATALOG, ...ADDITIONAL_MESSAGE_CATALOG];
 
 const MESSAGE_CATALOG_BY_KEY = new Map(MESSAGE_CATALOG.map((entry) => [entry.messageKey, entry]));
 const MESSAGE_CATALOG_BY_ID = new Map(MESSAGE_CATALOG.map((entry) => [entry.catalogId, entry]));

@@ -127,6 +127,11 @@ const {
   normalizePrivateDebtPromisedPaymentDate,
   canArchivePrivateDebtStatus
 } = require('./src/privateDebtReminders');
+const {
+  ensureMessageTemplateTables,
+  syncMessageCatalogWithDatabase
+} = require('./src/messageCatalog');
+const { resolveMessage } = require('./src/messageResolver');
 
 // --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
 require('./scripts/migrate.js');
@@ -633,6 +638,8 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_person O
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_linked ON person_app_links(owner_user_id, linked_user_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("ALTER TABLE closed_months ADD COLUMN user_id INTEGER").run(); } catch (e) { /* Coluna já existe ou tabela ainda não precisava de ajuste */ }
 try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_closed_months_user_month_year ON closed_months(user_id, month, year)").run(); } catch (e) { /* Índice já existe */ }
+ensureMessageTemplateTables(db);
+syncMessageCatalogWithDatabase(db);
 try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN amount_mode TEXT NOT NULL DEFAULT 'fixed'").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN carry_key TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN day_of_month INTEGER").run(); } catch (e) { /* Coluna já existe */ }
@@ -5053,6 +5060,11 @@ function buildNoteSuffix(note, label = 'Recado') {
   return safeNote ? ` ${label}: ${safeNote}` : '';
 }
 
+
+function resolveCatalogText(messageKey, variables = {}, { fallbackTitle = '', fallbackBody = '' } = {}) {
+  return resolveMessage(messageKey, variables, { fallbackTitle, fallbackBody });
+}
+
 function normalizePixToggle(value) {
   return value === true || value === 1 || value === '1' || value === 'true' || value === 'on';
 }
@@ -6344,14 +6356,25 @@ function recordSharedDebtBatchChange(context, payload) {
   else entry.createdCount += 1;
 }
 
-function buildSharedDebtBatchNotificationBody({ requesterDisplayName, actionLabel, itemCount, totalCents, descriptions }) {
+function buildSharedDebtBatchNotificationPayload({ requesterDisplayName, itemCount, totalCents, descriptions, messageKey }) {
   const safeCount = Math.max(0, Number(itemCount || 0));
-  const formattedTotal = formatBRLFromCents(Number(totalCents || 0));
   const preview = (descriptions || []).filter(Boolean).slice(0, 2).join(' · ');
+  const formattedTotal = formatBRLFromCents(Number(totalCents || 0));
   const countLabel = formatCountLabel(safeCount, 'cobrança', 'cobranças');
-  const previewPrefix = actionLabel === 'ajustou' ? ' Teve mexida em: ' : ' Nessa leva entraram: ';
-  const previewSuffix = preview ? `${previewPrefix}${preview}.` : '';
-  return `${requesterDisplayName} ${actionLabel} ${countLabel} para você, somando ${formattedTotal}.${previewSuffix}`;
+  const resolved = resolveCatalogText(messageKey, {
+    remetente: requesterDisplayName,
+    n_cobrancas: countLabel,
+    valor_total: formattedTotal,
+    previsao_descricoes: preview
+  }, {
+    fallbackTitle: 'Tem novidade em um envio compartilhado',
+    fallbackBody: `${requesterDisplayName} ajustou ${countLabel} para você, somando ${formattedTotal}${preview ? `. Teve mexida em: ${preview}.` : '.'}`
+  });
+
+  return {
+    title: resolved.title,
+    body: resolved.body
+  };
 }
 
 function flushSharedDebtBatchNotifications(context) {
@@ -6367,31 +6390,27 @@ function flushSharedDebtBatchNotifications(context) {
     const onlyCreated = entry.createdCount > 0 && entry.updatedCount === 0 && entry.cancelledCount === 0;
     const onlyUpdated = entry.updatedCount > 0 && entry.createdCount === 0 && entry.cancelledCount === 0;
     const onlyCancelled = entry.cancelledCount > 0 && entry.createdCount === 0 && entry.updatedCount === 0;
-    const title = onlyCreated
-      ? 'Chegou um novo envio compartilhado'
+    const messageKey = onlyCreated
+      ? 'notification.shared_debt.batch.new'
       : onlyUpdated
-        ? 'Um envio compartilhado foi atualizado'
+        ? 'notification.shared_debt.batch.updated'
         : onlyCancelled
-          ? 'Uma cobrança compartilhada mudou por aqui'
-          : 'Tem novidade em um envio compartilhado';
+          ? 'notification.shared_debt.batch.adjusted'
+          : 'notification.shared_debt.batch.mixed';
 
-    const actionLabel = onlyCreated
-      ? 'enviou'
-      : onlyUpdated
-        ? 'atualizou'
-        : 'ajustou';
+    const resolvedMessage = buildSharedDebtBatchNotificationPayload({
+      requesterDisplayName: context.requesterDisplayName,
+      itemCount,
+      totalCents: entry.totalCents,
+      descriptions: entry.descriptions,
+      messageKey
+    });
 
     createNotification({
       userId: entry.receiverUserId,
       type: 'shared_debt_batch',
-      title,
-      body: buildSharedDebtBatchNotificationBody({
-        requesterDisplayName: context.requesterDisplayName,
-        actionLabel,
-        itemCount,
-        totalCents: entry.totalCents,
-        descriptions: entry.descriptions
-      }),
+      title: resolvedMessage.title,
+      body: resolvedMessage.body,
       href: `/shared-debts?batch=${entry.batchId}`,
       relatedType: 'shared_debt_batch',
       relatedId: entry.batchId,
@@ -6685,30 +6704,57 @@ function buildMonthlyFinanceDateNotificationPayload(type, items = [], { year = n
   if (list.length === 1) {
     const item = list[0];
     const label = String(item?.description || '').trim() || (safeType === 'income' ? 'essa entrada' : 'essa saída');
-    if (safeType === 'income') {
-      return {
-        title: `Hoje entra ${label}`,
-        body: `${label} está no radar de hoje com ${formatBRLFromCents(item.amount_cents)}.`,
-        href,
-        payloadMeta: { type: safeType, dateKey, totalCents, count: 1 }
-      };
-    }
-
     const safeKind = String(item?.schedule_kind || 'due').trim();
-    return {
-      title: safeKind === 'pay' ? `Hoje sai ${label}` : `Hoje vence ${label}`,
-      body: safeKind === 'pay'
+    const messageKey = safeType === 'income'
+      ? 'notification.monthly_finance.income.single'
+      : safeKind === 'pay'
+        ? 'notification.monthly_finance.expense.single.pay'
+        : 'notification.monthly_finance.expense.single.due';
+    const fallbackTitle = safeType === 'income'
+      ? `Hoje entra ${label}`
+      : safeKind === 'pay'
+        ? `Hoje sai ${label}`
+        : `Hoje vence ${label}`;
+    const fallbackBody = safeType === 'income'
+      ? `${label} está no radar de hoje com ${formatBRLFromCents(item.amount_cents)}.`
+      : safeKind === 'pay'
         ? `${label} está marcado para hoje com ${formatBRLFromCents(item.amount_cents)}.`
-        : `${label} bate hoje com ${formatBRLFromCents(item.amount_cents)} no radar.`,
+        : `${label} bate hoje com ${formatBRLFromCents(item.amount_cents)} no radar.`;
+    const resolved = resolveCatalogText(messageKey, {
+      descricao: label,
+      valor: formatBRLFromCents(item.amount_cents)
+    }, {
+      fallbackTitle,
+      fallbackBody
+    });
+
+    return {
+      title: resolved.title,
+      body: resolved.body,
       href,
       payloadMeta: { type: safeType, dateKey, totalCents, count: 1, scheduleKind: safeKind }
     };
   }
 
   const preview = buildMonthlyFinanceOccurrencePreview(list);
+  const messageKey = safeType === 'income'
+    ? 'notification.monthly_finance.income.multi'
+    : 'notification.monthly_finance.expense.multi';
+  const fallbackTitle = safeType === 'income' ? 'Hoje tem entradas do mês' : 'Hoje tem saídas do mês';
+  const fallbackBody = `${formatCountLabel(list.length, safeType === 'income' ? 'entrada' : 'saída', safeType === 'income' ? 'entradas' : 'saídas')} somam ${formatBRLFromCents(totalCents)}${preview ? ` por conta de ${preview}` : ''}.`;
+  const resolved = resolveCatalogText(messageKey, {
+    n_entradas: safeType === 'income' ? formatCountLabel(list.length, 'entrada', 'entradas') : '',
+    n_saidas: safeType === 'expense' ? formatCountLabel(list.length, 'saida', 'saidas') : '',
+    valor_total: formatBRLFromCents(totalCents),
+    previsao_descricoes: preview
+  }, {
+    fallbackTitle,
+    fallbackBody
+  });
+
   return {
-    title: safeType === 'income' ? 'Hoje tem entradas do mês' : 'Hoje tem saídas do mês',
-    body: `${formatCountLabel(list.length, safeType === 'income' ? 'entrada' : 'saída', safeType === 'income' ? 'entradas' : 'saídas')} somam ${formatBRLFromCents(totalCents)}${preview ? ` por conta de ${preview}` : ''}.`,
+    title: resolved.title,
+    body: resolved.body,
     href,
     payloadMeta: { type: safeType, dateKey, totalCents, count: list.length }
   };
@@ -8894,14 +8940,26 @@ function buildDueTodayPushPayload(cards, zonedToday, sequenceNo = 1) {
 
   if (cards.length === 1) {
     const card = cards[0];
-    const title = sequenceNo > 1 ? 'Lembrete: sua fatura vence hoje' : 'Hoje vence sua fatura';
-    const body = card.paid_cents > 0
+    const hasPartialPayment = Number(card.paid_cents || 0) > 0;
+    const messageKey = hasPartialPayment
+      ? (sequenceNo > 1 ? 'push.card_due_today.single.repeat.partial' : 'push.card_due_today.single.first.partial')
+      : (sequenceNo > 1 ? 'push.card_due_today.single.repeat.expected' : 'push.card_due_today.single.first.expected');
+    const fallbackTitle = sequenceNo > 1 ? 'Lembrete: sua fatura vence hoje' : 'Hoje vence sua fatura';
+    const fallbackBody = hasPartialPayment
       ? `${card.card_name} vence hoje. Ainda faltam ${formatBRLFromCents(card.remaining_cents)} para fechar essa conta.`
       : `${card.card_name} vence hoje. O valor previsto é ${formatBRLFromCents(card.total_cents)}.`;
+    const resolved = resolveCatalogText(messageKey, {
+      cartao: card.card_name,
+      valor_restante: formatBRLFromCents(card.remaining_cents),
+      valor_total: formatBRLFromCents(card.total_cents)
+    }, {
+      fallbackTitle,
+      fallbackBody
+    });
 
     return {
-      title,
-      body,
+      title: resolved.title,
+      body: resolved.body,
       href,
       tag: `card-due-today:${zonedToday.dateKey}`
     };
@@ -8909,10 +8967,21 @@ function buildDueTodayPushPayload(cards, zonedToday, sequenceNo = 1) {
 
   const previewNames = cards.slice(0, 2).map(item => item.card_name).join(', ');
   const extraCount = cards.length > 2 ? ` e mais ${cards.length - 2}` : '';
+  const messageKey = sequenceNo > 1 ? 'push.card_due_today.multi.repeat' : 'push.card_due_today.multi.first';
+  const fallbackTitle = sequenceNo > 1 ? 'Lembrete: tem fatura vencendo hoje' : 'Hoje tem fatura vencendo';
+  const fallbackBody = `${formatCountLabel(cards.length, 'fatura', 'faturas')} vencem hoje. Entre elas: ${previewNames}${extraCount}. Ainda faltam ${formatBRLFromCents(totalRemaining)} para quitar tudo no resumo.`;
+  const resolved = resolveCatalogText(messageKey, {
+    n_faturas: formatCountLabel(cards.length, 'fatura', 'faturas'),
+    previsao_cartoes: `${previewNames}${extraCount}`,
+    valor_total_pendente: formatBRLFromCents(totalRemaining)
+  }, {
+    fallbackTitle,
+    fallbackBody
+  });
 
   return {
-    title: sequenceNo > 1 ? 'Lembrete: tem fatura vencendo hoje' : 'Hoje tem fatura vencendo',
-    body: `${formatCountLabel(cards.length, 'fatura', 'faturas')} vencem hoje. Entre elas: ${previewNames}${extraCount}. Ainda faltam ${formatBRLFromCents(totalRemaining)} para quitar tudo no resumo.`,
+    title: resolved.title,
+    body: resolved.body,
     href,
     tag: `card-due-today:${zonedToday.dateKey}`
   };
@@ -9024,11 +9093,17 @@ function queuePushNotification(userId, payload) {
     .catch(err => console.error('Falha ao disparar push notification:', err?.message || err));
 }
 
-function createNotification({ userId, type, title, body = null, href = null, relatedType = null, relatedId = null, groupKey = null }) {
+function createNotification({ userId, type, title, body = null, href = null, relatedType = null, relatedId = null, groupKey = null, messageKey = null, messageVariables = null }) {
   const targetUser = getUserRecord(userId, { includeDeleted: false });
   if (!targetUser) return null;
 
-  const resolvedGroupKey = resolveNotificationPreferenceGroupKey({ groupKey, type, title, relatedType });
+  const resolvedMessage = messageKey
+    ? resolveCatalogText(messageKey, messageVariables || {}, { fallbackTitle: title, fallbackBody: body })
+    : null;
+  const finalTitle = resolvedMessage?.title || title;
+  const finalBody = resolvedMessage?.body || body;
+
+  const resolvedGroupKey = resolveNotificationPreferenceGroupKey({ groupKey, type, title: finalTitle, relatedType });
   if (resolvedGroupKey && !isUserNotificationGroupEnabled(targetUser.id, resolvedGroupKey)) {
     return null;
   }
@@ -9036,10 +9111,10 @@ function createNotification({ userId, type, title, body = null, href = null, rel
   const result = db.prepare(`
     INSERT INTO notifications (user_id, type, title, body, href, is_read, related_type, related_id, created_at)
     VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
-  `).run(targetUser.id, type, title, body, href, relatedType, relatedId, nowIso());
+  `).run(targetUser.id, type, finalTitle, finalBody, href, relatedType, relatedId, nowIso());
 
   const pushTag = relatedType && relatedId ? `${relatedType}:${relatedId}` : `${type}:${result.lastInsertRowid || nowIso()}`;
-  queuePushNotification(targetUser.id, { title, body, href, tag: pushTag });
+  queuePushNotification(targetUser.id, { title: finalTitle, body: finalBody, href, tag: pushTag });
 
   return result;
 }
@@ -9248,11 +9323,25 @@ function buildManualDebtDueNotificationPayload(scope, items = [], dateKey = null
     const item = list[0];
     const counterpart = item.counterpart_name || item.counterpart_email || 'alguém';
     const description = item.description_snapshot || 'esse combinado';
+    const messageKey = safeScope === 'pay'
+      ? 'notification.manual_debt_due.pay.single'
+      : 'notification.manual_debt_due.receive.single';
+    const fallbackTitle = safeScope === 'pay' ? 'Hoje é o dia combinado para pagar' : 'Hoje é o dia combinado para receber';
+    const fallbackBody = safeScope === 'pay'
+      ? `Tem ${formatBRLFromCents(item.amount_cents)} combinado com ${counterpart} em ${description}.`
+      : `Tem ${formatBRLFromCents(item.amount_cents)} combinado com ${counterpart} em ${description} batendo hoje.`;
+    const resolved = resolveCatalogText(messageKey, {
+      valor: formatBRLFromCents(item.amount_cents),
+      contraparte: counterpart,
+      descricao: description
+    }, {
+      fallbackTitle,
+      fallbackBody
+    });
+
     return {
-      title: safeScope === 'pay' ? 'Hoje é o dia combinado para pagar' : 'Hoje é o dia combinado para receber',
-      body: safeScope === 'pay'
-        ? `Tem ${formatBRLFromCents(item.amount_cents)} combinado com ${counterpart} em ${description}.`
-        : `Tem ${formatBRLFromCents(item.amount_cents)} combinado com ${counterpart} em ${description} batendo hoje.`,
+      title: resolved.title,
+      body: resolved.body,
       href,
       relatedType: item.item_kind === 'private_reminder' ? 'private_debt_reminder' : 'shared_debt_request',
       relatedId: item.id || null,
@@ -9260,9 +9349,23 @@ function buildManualDebtDueNotificationPayload(scope, items = [], dateKey = null
     };
   }
 
+  const messageKey = safeScope === 'pay'
+    ? 'notification.manual_debt_due.pay.multi'
+    : 'notification.manual_debt_due.receive.multi';
+  const fallbackTitle = safeScope === 'pay' ? 'Hoje tem combinados para pagar' : 'Hoje tem combinados para receber';
+  const fallbackBody = `São ${formatCountLabel(list.length, 'combinado', 'combinados')} batendo hoje, somando ${formatBRLFromCents(totalCents)}${counterpartPreview ? ` com ${counterpartPreview}` : ''}.`;
+  const resolved = resolveCatalogText(messageKey, {
+    n_combinados: formatCountLabel(list.length, 'combinado', 'combinados'),
+    valor_total: formatBRLFromCents(totalCents),
+    previsao_contrapartes: counterpartPreview
+  }, {
+    fallbackTitle,
+    fallbackBody
+  });
+
   return {
-    title: safeScope === 'pay' ? 'Hoje tem combinados para pagar' : 'Hoje tem combinados para receber',
-    body: `São ${formatCountLabel(list.length, 'combinado', 'combinados')} batendo hoje, somando ${formatBRLFromCents(totalCents)}${counterpartPreview ? ` com ${counterpartPreview}` : ''}.`,
+    title: resolved.title,
+    body: resolved.body,
     href,
     relatedType: list.every((item) => item.item_kind === 'private_reminder') ? 'private_debt_reminder' : 'shared_debt_request',
     relatedId: list.length === 1 ? list[0].id || null : null,
@@ -9272,13 +9375,23 @@ function buildManualDebtDueNotificationPayload(scope, items = [], dateKey = null
 
 function buildManualDebtDueDashboardAlert(scope, items = [], dateKey = null) {
   const payload = buildManualDebtDueNotificationPayload(scope, items, dateKey);
+  const safeScope = normalizeManualDebtDueScope(scope);
+  const messageKey = safeScope === 'pay' ? 'dashboard.manual_debt_due.pay' : 'dashboard.manual_debt_due.receive';
+  const fallbackTitle = safeScope === 'pay'
+    ? 'Tem combinado batendo hoje para pagar'
+    : 'Tem combinado batendo hoje para receber';
+  const resolved = resolveCatalogText(messageKey, {
+    body_reaproveitado: payload.body
+  }, {
+    fallbackTitle,
+    fallbackBody: payload.body
+  });
+
   return {
-    type: normalizeManualDebtDueScope(scope) === 'pay' ? 'warning' : 'info',
-    icon: normalizeManualDebtDueScope(scope) === 'pay' ? '💸' : '📥',
-    title: normalizeManualDebtDueScope(scope) === 'pay'
-      ? 'Tem combinado batendo hoje para pagar'
-      : 'Tem combinado batendo hoje para receber',
-    description: payload.body,
+    type: safeScope === 'pay' ? 'warning' : 'info',
+    icon: safeScope === 'pay' ? '💸' : '📥',
+    title: resolved.title,
+    description: resolved.body || payload.body,
     href: payload.href
   };
 }
@@ -17311,7 +17424,7 @@ function buildImportConfirmationMessage(preview, importedCount, overwrittenCount
   if (safeImportedCount <= 0 && safeOverwrittenCount <= 0) {
     return {
       type: 'info',
-      message: `Nada ficou marcado para entrar em ${periodLabel}. A previa continua aberta para voce ajustar.`
+      message: `Nada ficou marcado para entrar em ${periodLabel}. A previa continua aberta para você ajustar.`
     };
   }
 
@@ -17654,7 +17767,7 @@ app.post('/import/preview/cancel', ensureAuthenticated, ensureCanImport, (req, r
 
   setImportFormSeed(req, preview.formSeed || null);
   clearImportPreview(req);
-  setFlash(req, 'info', 'Fechei essa previa. O formulario continua preenchido para voce ajustar o que quiser.');
+  setFlash(req, 'info', 'Fechei essa previa. O formulario continua preenchido para você ajustar o que quiser.');
   return res.redirect('/import');
 });
 

@@ -1,4 +1,5 @@
 const db = require("../src/db");
+const { ensureMessageTemplateTables, syncMessageCatalogWithDatabase } = require("../src/messageCatalog");
 
 function columnExists(table, col) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(r => r.name);
@@ -1377,4 +1378,8 @@ db.transaction(() => {
 console.log("✅ Migração Multi-Usuário concluída!");
 console.log("✅ Tabela de usuários criada");
 console.log("✅ user_id adicionado a todas as tabelas");
+
+ensureMessageTemplateTables(db);
+syncMessageCatalogWithDatabase(db);
+
 console.log("✅ Categorias de compra opcionais preparadas");

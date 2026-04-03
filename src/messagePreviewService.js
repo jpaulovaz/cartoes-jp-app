@@ -44,6 +44,58 @@ function buildMessagePreview(messageKey, options = {}) {
     };
   }
 
+  if (renderer === 'share_text') {
+    return {
+      ...resolved,
+      renderer,
+      preview: {
+        kind: 'share_text',
+        title: resolved.title,
+        body: resolved.body,
+        note: 'Prévia do texto que acompanha o compartilhamento nativo'
+      }
+    };
+  }
+
+  if (renderer === 'whatsapp') {
+    return {
+      ...resolved,
+      renderer,
+      preview: {
+        kind: 'whatsapp',
+        title: resolved.title,
+        body: resolved.body,
+        note: 'Prévia da mensagem pronta para ir ao WhatsApp'
+      }
+    };
+  }
+
+  if (renderer === 'pix_copy') {
+    return {
+      ...resolved,
+      renderer,
+      preview: {
+        kind: 'pix_copy',
+        title: resolved.title,
+        body: resolved.body,
+        note: 'Prévia do texto de copiar e colar com Pix'
+      }
+    };
+  }
+
+  if (renderer === 'email') {
+    return {
+      ...resolved,
+      renderer,
+      preview: {
+        kind: 'email',
+        title: resolved.title,
+        body: resolved.body,
+        note: 'Prévia do assunto e do corpo do e-mail em texto'
+      }
+    };
+  }
+
   return {
     ...resolved,
     renderer,

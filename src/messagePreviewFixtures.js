@@ -96,6 +96,95 @@ const MESSAGE_PREVIEW_FIXTURES = {
     n_faturas: '3 faturas',
     previsao_cartoes: 'Nubank, Inter e mais 1',
     valor_total_pendente: 'R$ 1.420,15'
+  },
+  'share.summary.settled.native': {
+    periodo: '04/2026',
+    pessoa: 'Mari',
+    valor_total: 'R$ 240,00',
+    valor_pago: 'R$ 240,00'
+  },
+  'share.summary.partial.native.no_pix': {
+    periodo: '04/2026',
+    pessoa: 'Mari',
+    valor_pago: 'R$ 120,00',
+    valor_restante: 'R$ 120,00'
+  },
+  'share.summary.partial.native.with_pix': {
+    periodo: '04/2026',
+    pessoa: 'Mari',
+    valor_pago: 'R$ 120,00',
+    valor_restante: 'R$ 120,00',
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405120.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304ABCD'
+  },
+  'share.summary.open.native.no_pix': {
+    periodo: '04/2026',
+    pessoa: 'Mari',
+    valor_restante: 'R$ 240,00'
+  },
+  'share.summary.open.native.with_pix': {
+    periodo: '04/2026',
+    pessoa: 'Mari',
+    valor_restante: 'R$ 240,00',
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405240.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304EFGH'
+  },
+  'whatsapp.summary.settled.caption': {
+    periodo: '04/2026',
+    pessoa: 'Mari'
+  },
+  'whatsapp.summary.partial.caption': {
+    periodo: '04/2026',
+    pessoa: 'Mari',
+    valor_pago: 'R$ 120,00',
+    valor_restante: 'R$ 120,00'
+  },
+  'whatsapp.summary.partial.followup': {
+    valor_restante: 'R$ 120,00',
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405120.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304ABCD'
+  },
+  'whatsapp.summary.open.caption': {
+    periodo: '04/2026',
+    pessoa: 'Mari',
+    valor_restante: 'R$ 240,00'
+  },
+  'whatsapp.summary.open.followup': {
+    valor_restante: 'R$ 240,00',
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405240.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304EFGH'
+  },
+  'whatsapp.summary.auto.second.pix_only': {
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405240.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304EFGH'
+  },
+  'whatsapp.summary.auto.second.fallback': {
+    valor_restante: 'R$ 240,00',
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405240.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304EFGH'
+  },
+  'whatsapp.summary.pix_payload_only': {
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405240.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304EFGH'
+  },
+  'pix.manual_request.share': {
+    credor: 'Mari',
+    valor: 'R$ 72,00',
+    descricao: 'pizza do sábado',
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com520400005303986540572.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304IJKL'
+  },
+  'pix.monthly_settlement.share': {
+    credor: 'Mari',
+    valor: 'R$ 240,00',
+    periodo: '04/2026',
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405240.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304MNOP'
+  },
+  'email.admin_access.welcome': {
+    app: 'AcerttaPay',
+    nome: 'Mari',
+    admin_ou_sistema: 'Caio',
+    perfil: 'Usuário do app',
+    link_login: 'https://app.organizapay.com.br/login',
+    recado_admin: 'Qualquer dúvida, me chama por aqui que eu te ajudo.'
+  },
+  'email.admin_access.test': {
+    app: 'AcerttaPay',
+    nome: 'Mari',
+    admin_ou_time: 'Caio',
+    link_login: 'https://app.organizapay.com.br/login'
   }
 };
 

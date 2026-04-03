@@ -236,7 +236,7 @@ function validateAdminMessageDraft(messageKey, { customTitle, customBody } = {})
   };
 }
 
-function saveMessageTemplateCustomization({ messageKey, customTitle, customBody, changedByUserId = null, source = 'admin' } = {}) {
+function saveMessageTemplateCustomization({ messageKey, customTitle, customBody, changedByUserId = null, source = 'admin', importBatchId = null } = {}) {
   const { entry, normalizedTitle, normalizedBody } = validateAdminMessageDraft(messageKey, { customTitle, customBody });
   const existing = getMessageTemplateRow(entry.messageKey);
   if (!existing) {
@@ -283,8 +283,9 @@ function saveMessageTemplateCustomization({ messageKey, customTitle, customBody,
         next_custom_body,
         changed_at,
         changed_by_user_id,
-        source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        source,
+        import_batch_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       entry.messageKey,
       entry.catalogId,
@@ -294,7 +295,8 @@ function saveMessageTemplateCustomization({ messageKey, customTitle, customBody,
       nextCustomBody,
       stamp,
       Number(changedByUserId || 0) || null,
-      safeTrimmedString(source) || 'admin'
+      safeTrimmedString(source) || 'admin',
+      Number(importBatchId || 0) || null
     );
   })();
 
@@ -306,7 +308,7 @@ function saveMessageTemplateCustomization({ messageKey, customTitle, customBody,
   };
 }
 
-function resetMessageTemplateCustomization({ messageKey, changedByUserId = null, source = 'admin_reset' } = {}) {
+function resetMessageTemplateCustomization({ messageKey, changedByUserId = null, source = 'admin_reset', importBatchId = null } = {}) {
   ensureCatalogReady();
   const entry = getMessageCatalogByKey(messageKey);
   if (!entry) {
@@ -351,8 +353,9 @@ function resetMessageTemplateCustomization({ messageKey, changedByUserId = null,
         next_custom_body,
         changed_at,
         changed_by_user_id,
-        source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        source,
+        import_batch_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       entry.messageKey,
       entry.catalogId,
@@ -362,7 +365,8 @@ function resetMessageTemplateCustomization({ messageKey, changedByUserId = null,
       null,
       stamp,
       Number(changedByUserId || 0) || null,
-      safeTrimmedString(source) || 'admin_reset'
+      safeTrimmedString(source) || 'admin_reset',
+      Number(importBatchId || 0) || null
     );
   })();
 

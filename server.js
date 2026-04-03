@@ -140,6 +140,11 @@ const {
   resetMessageTemplateCustomization
 } = require('./src/messageAdminService');
 const { buildMessagePreview, buildPushTestPayload } = require('./src/messagePreviewService');
+const {
+  buildMessageCsvExport,
+  buildImportPreviewFromBuffer,
+  applyImportPreview
+} = require('./src/messageCsvService');
 
 // --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
 require('./scripts/migrate.js');
@@ -3185,7 +3190,7 @@ function formatAdminMessageUpdatedAt(value) {
   return parsed.format('DD/MM/YYYY [às] HH:mm');
 }
 
-function renderAdminMessages(res, { error = null, success = null, filters = {}, openMessageKey = '', draftByMessageKey = {} } = {}) {
+function renderAdminMessages(res, { error = null, success = null, filters = {}, openMessageKey = '', draftByMessageKey = {}, importPreview = null } = {}) {
   const pageData = listMessageTemplatesForAdmin(filters, { draftByMessageKey });
 
   return safeRenderView(res, 'admin-messages', {
@@ -3198,11 +3203,26 @@ function renderAdminMessages(res, { error = null, success = null, filters = {}, 
     messageStats: pageData.stats,
     migratedMessageCount: getMessageCatalog().length,
     openMessageKey: String(openMessageKey || '').trim(),
+    importPreview,
     buildAdminMessagesPath,
     formatAdminMessageUpdatedAt,
     pushConfigured: isPushConfigured(),
     pushTestRateLimitSeconds: Math.round(ADMIN_MESSAGE_PUSH_TEST_RATE_LIMIT_MS / 1000)
   });
+}
+
+function getAdminMessageImportPreview(req) {
+  return req?.session?.adminMessageImportPreview || null;
+}
+
+function setAdminMessageImportPreview(req, preview) {
+  if (!req?.session) return;
+  req.session.adminMessageImportPreview = preview || null;
+}
+
+function clearAdminMessageImportPreview(req) {
+  if (!req?.session || !Object.prototype.hasOwnProperty.call(req.session, 'adminMessageImportPreview')) return;
+  delete req.session.adminMessageImportPreview;
 }
 
 function buildSetupFormSeed(overrides = {}) {
@@ -5202,24 +5222,56 @@ function getUserPixProfile(userId) {
 function buildManualSharedDebtPixShareText({ creditorName, amountCents, description, payload } = {}) {
   const safeCreditorName = String(creditorName || 'quem vai receber').trim() || 'quem vai receber';
   const safeDescription = String(description || 'o combinado').trim() || 'o combinado';
-  return [
+  const safePayload = String(payload || '').trim();
+  const fallbackTitle = safeCreditorName ? `Cobrança com Pix de ${safeCreditorName}` : 'Cobrança com Pix';
+  const fallbackBody = [
     `Oi! Ficou pendente ${formatBRLFromCents(amountCents)} referente a ${safeDescription}.`,
     `Para facilitar, já deixei o Pix copia e cola de ${safeCreditorName} aqui embaixo:`,
-    String(payload || '').trim(),
+    safePayload,
     'Depois me avisa por aqui quando pagar 💸'
   ].filter(Boolean).join('\n\n');
+  const resolved = resolveCatalogText('pix.manual_request.share', {
+    credor: safeCreditorName,
+    valor: formatBRLFromCents(amountCents),
+    descricao: safeDescription,
+    pix_payload: safePayload
+  }, {
+    fallbackTitle,
+    fallbackBody
+  });
+
+  return {
+    title: resolved.title || fallbackTitle,
+    text: resolved.body || fallbackBody
+  };
 }
 
 
 function buildSharedDebtCardMonthlyPixShareText({ creditorName, amountCents, month, year, payload } = {}) {
   const safeCreditorName = String(creditorName || 'quem vai receber').trim() || 'quem vai receber';
   const periodLabel = month && year ? monthLabel(month, year) : 'este mês';
-  return [
+  const safePayload = String(payload || '').trim();
+  const fallbackTitle = safeCreditorName ? `Pix do mês para ${safeCreditorName}` : 'Pix do mês';
+  const fallbackBody = [
     `Oi! Separei ${formatBRLFromCents(amountCents)} para acertar ${periodLabel} por aqui.`,
     `Para facilitar, já deixei o Pix copia e cola de ${safeCreditorName} logo abaixo:`,
-    String(payload || '').trim(),
+    safePayload,
     'Depois me avisa no app quando fizer o Pix 💸'
   ].filter(Boolean).join('\n\n');
+  const resolved = resolveCatalogText('pix.monthly_settlement.share', {
+    credor: safeCreditorName,
+    valor: formatBRLFromCents(amountCents),
+    periodo: periodLabel,
+    pix_payload: safePayload
+  }, {
+    fallbackTitle,
+    fallbackBody
+  });
+
+  return {
+    title: resolved.title || fallbackTitle,
+    text: resolved.body || fallbackBody
+  };
 }
 
 function coerceMoneyValueToCents(rawValue, fallback = 0) {
@@ -14204,7 +14256,7 @@ app.post('/shared-debts/monthly-settlements/:id/pix', ensureAuthenticated, async
     const qrDataUrl = QRCode
       ? await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', margin: 1, width: 320 })
       : null;
-    const shareText = buildSharedDebtCardMonthlyPixShareText({
+    const shareContent = buildSharedDebtCardMonthlyPixShareText({
       creditorName: creditorProfile.ownerName || creditorRecord?.name || creditorRecord?.email || 'quem vai receber',
       amountCents: requestedAmountCents,
       month: settlementRow.month,
@@ -14227,7 +14279,8 @@ app.post('/shared-debts/monthly-settlements/:id/pix', ensureAuthenticated, async
       keyType: creditorProfile.pixKeyType,
       keyTypeLabel: creditorProfile.pixKeyTypeLabel,
       city: creditorProfile.pixCity,
-      shareText,
+      shareText: shareContent.text,
+      shareTitle: shareContent.title,
       keyValue: creditorProfile.pixKeyValue,
       monthLabel: monthLabel(settlementRow.month, settlementRow.year),
       preview,
@@ -14683,7 +14736,7 @@ app.get('/shared-debts/:id/pix', ensureAuthenticated, async (req, res) => {
     const qrDataUrl = QRCode
       ? await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', margin: 1, width: 320 })
       : null;
-    const shareText = buildManualSharedDebtPixShareText({
+    const shareContent = buildManualSharedDebtPixShareText({
       creditorName: creditorProfile.ownerName || requestRow.requester_name || requestRow.requester_email || 'quem vai receber',
       amountCents: pendingCents,
       description: requestRow.description_snapshot,
@@ -14713,7 +14766,8 @@ app.get('/shared-debts/:id/pix', ensureAuthenticated, async (req, res) => {
       keyType: creditorProfile.pixKeyType,
       keyTypeLabel: creditorProfile.pixKeyTypeLabel,
       city: creditorProfile.pixCity,
-      shareText,
+      shareText: shareContent.text,
+      shareTitle: shareContent.title,
       keyValue: creditorProfile.pixKeyValue,
       description: requestRow.description_snapshot,
       isCreditor: Number(requestRow.requester_user_id || 0) === Number(userId || 0)
@@ -21680,22 +21734,23 @@ function buildStatementShareMessageContext({ state, personName, periodLabel, tot
   const totalLabel = formatBRLFromCents(totalCents);
   const paidLabel = formatBRLFromCents(paidCents);
   const remainingLabel = formatBRLFromCents(remainingCents);
-  const hasPix = !!String(pixPayload || '').trim();
+  const safePixPayload = String(pixPayload || '').trim();
+  const hasPix = !!safePixPayload;
 
+  let nativeShareTitle = `Resumo ${periodLabel} — ${safePersonName}`;
   let nativeShareText = '';
   let whatsappCaption = '';
   let whatsappFollowUpMessage = '';
 
   if (safeState === 'settled') {
-    nativeShareText = [
+    const nativeFallback = [
       `Separei o resumo de ${periodLabel} só para registro.`,
       'Já ficou tudo certinho por aqui. Obrigado por fechar essa com a gente.',
       '',
       `Total do período: ${totalLabel}.`,
       `Valor pago: ${paidLabel}.`
     ].join('\n');
-
-    whatsappCaption = [
+    const whatsappFallback = [
       `*Oi, ${safePersonName}!* ✨`,
       '',
       `Separei o resumo de *${periodLabel}* só para registro.`,
@@ -21703,67 +21758,142 @@ function buildStatementShareMessageContext({ state, personName, periodLabel, tot
       '',
       'A imagem com os detalhes foi logo abaixo 👇'
     ].join('\n');
+
+    const resolvedNative = resolveCatalogText('share.summary.settled.native', {
+      periodo: periodLabel,
+      pessoa: safePersonName,
+      valor_total: totalLabel,
+      valor_pago: paidLabel
+    }, {
+      fallbackTitle: nativeShareTitle,
+      fallbackBody: nativeFallback
+    });
+
+    nativeShareTitle = resolvedNative.title || nativeShareTitle;
+    nativeShareText = resolvedNative.body;
+    whatsappCaption = resolveCatalogText('whatsapp.summary.settled.caption', {
+      periodo: periodLabel,
+      pessoa: safePersonName
+    }, {
+      fallbackTitle: `Resumo ${periodLabel}`,
+      fallbackBody: whatsappFallback
+    }).body;
   } else if (safeState === 'partial_due') {
-    nativeShareText = [
+    const nativeFallback = [
       `Separei o resumo de ${periodLabel}. Já entrou ${paidLabel} e ainda falta ${remainingLabel} para fechar tudo.`,
       'A imagem vai junto com os detalhes.'
     ].join('\n\n');
-
-    whatsappCaption = [
+    const nativeFallbackWithPix = [
+      nativeFallback,
+      'Pix copia e cola do saldo restante:',
+      safePixPayload
+    ].join('\n\n');
+    const whatsappFallback = [
       `*Oi, ${safePersonName}!* 💳`,
       '',
       `Separei o resumo de *${periodLabel}*. Já entrou *${paidLabel}* e ainda falta *${remainingLabel}* para fechar tudo.`,
       '',
       'A imagem com os detalhes foi logo abaixo 👇'
     ].join('\n');
+    const whatsappFollowFallback = [
+      `Pix copia e cola do saldo restante (${remainingLabel}):`,
+      '',
+      safePixPayload,
+      '',
+      'Quando pagar, me manda o comprovante por aqui 💸'
+    ].join('\n');
+
+    const resolvedNative = resolveCatalogText(hasPix ? 'share.summary.partial.native.with_pix' : 'share.summary.partial.native.no_pix', {
+      periodo: periodLabel,
+      pessoa: safePersonName,
+      valor_pago: paidLabel,
+      valor_restante: remainingLabel,
+      pix_payload: safePixPayload
+    }, {
+      fallbackTitle: nativeShareTitle,
+      fallbackBody: hasPix ? nativeFallbackWithPix : nativeFallback
+    });
+
+    nativeShareTitle = resolvedNative.title || nativeShareTitle;
+    nativeShareText = resolvedNative.body;
+    whatsappCaption = resolveCatalogText('whatsapp.summary.partial.caption', {
+      periodo: periodLabel,
+      pessoa: safePersonName,
+      valor_pago: paidLabel,
+      valor_restante: remainingLabel
+    }, {
+      fallbackTitle: `Resumo ${periodLabel}`,
+      fallbackBody: whatsappFallback
+    }).body;
 
     if (hasPix) {
-      nativeShareText = [
-        nativeShareText,
-        'Pix copia e cola do saldo restante:',
-        String(pixPayload || '').trim()
-      ].join('\n\n');
-
-      whatsappFollowUpMessage = [
-        `Pix copia e cola do saldo restante (${remainingLabel}):`,
-        '',
-        String(pixPayload || '').trim(),
-        '',
-        'Quando pagar, me manda o comprovante por aqui 💸'
-      ].join('\n');
+      whatsappFollowUpMessage = resolveCatalogText('whatsapp.summary.partial.followup', {
+        valor_restante: remainingLabel,
+        pix_payload: safePixPayload
+      }, {
+        fallbackTitle: 'Pix copia e cola do saldo restante',
+        fallbackBody: whatsappFollowFallback
+      }).body;
     }
   } else {
-    nativeShareText = [
+    const nativeFallback = [
       `Separei o resumo de ${periodLabel}. O total em aberto ficou em ${remainingLabel}.`,
       'A imagem vai junto com os detalhes.'
     ].join('\n\n');
-
-    whatsappCaption = [
+    const nativeFallbackWithPix = [
+      nativeFallback,
+      'Pix copia e cola para facilitar o acerto:',
+      safePixPayload
+    ].join('\n\n');
+    const whatsappFallback = [
       `*Oi, ${safePersonName}!* 💳`,
       '',
       `Separei o resumo de *${periodLabel}*. O total em aberto ficou em *${remainingLabel}*.`,
       '',
       'A imagem com os detalhes foi logo abaixo 👇'
     ].join('\n');
+    const whatsappFollowFallback = [
+      `Pix copia e cola para fechar esse resumo (${remainingLabel}):`,
+      '',
+      safePixPayload,
+      '',
+      'Quando pagar, me manda o comprovante por aqui 💸'
+    ].join('\n');
+
+    const resolvedNative = resolveCatalogText(hasPix ? 'share.summary.open.native.with_pix' : 'share.summary.open.native.no_pix', {
+      periodo: periodLabel,
+      pessoa: safePersonName,
+      valor_restante: remainingLabel,
+      pix_payload: safePixPayload
+    }, {
+      fallbackTitle: nativeShareTitle,
+      fallbackBody: hasPix ? nativeFallbackWithPix : nativeFallback
+    });
+
+    nativeShareTitle = resolvedNative.title || nativeShareTitle;
+    nativeShareText = resolvedNative.body;
+    whatsappCaption = resolveCatalogText('whatsapp.summary.open.caption', {
+      periodo: periodLabel,
+      pessoa: safePersonName,
+      valor_restante: remainingLabel
+    }, {
+      fallbackTitle: `Resumo ${periodLabel}`,
+      fallbackBody: whatsappFallback
+    }).body;
 
     if (hasPix) {
-      nativeShareText = [
-        nativeShareText,
-        'Pix copia e cola para facilitar o acerto:',
-        String(pixPayload || '').trim()
-      ].join('\n\n');
-
-      whatsappFollowUpMessage = [
-        `Pix copia e cola para fechar esse resumo (${remainingLabel}):`,
-        '',
-        String(pixPayload || '').trim(),
-        '',
-        'Quando pagar, me manda o comprovante por aqui 💸'
-      ].join('\n');
+      whatsappFollowUpMessage = resolveCatalogText('whatsapp.summary.open.followup', {
+        valor_restante: remainingLabel,
+        pix_payload: safePixPayload
+      }, {
+        fallbackTitle: 'Pix copia e cola do resumo',
+        fallbackBody: whatsappFollowFallback
+      }).body;
     }
   }
 
   return {
+    nativeShareTitle,
     nativeShareText,
     whatsappCaption,
     whatsappFollowUpMessage
@@ -21851,14 +21981,23 @@ async function buildSharePixContext({ userId, month, year, person, totalCents, p
     remainingCents: safeRemainingCents,
     pixPayload: pix.available ? pix.payload : ''
   });
+  const whatsappAutoSecondMessage = pix.available
+    ? resolveCatalogText('whatsapp.summary.auto.second.pix_only', {
+      pix_payload: pix.payload
+    }, {
+      fallbackTitle: 'Automação do WhatsApp — Pix bruto',
+      fallbackBody: pix.payload
+    }).body
+    : '';
 
   return {
     state,
     periodLabel,
-    shareTitle: `Resumo ${periodLabel} — ${person?.name || 'AcerttaPay'}`,
+    shareTitle: messages.nativeShareTitle || `Resumo ${periodLabel} — ${person?.name || 'AcerttaPay'}`,
     nativeShareText: messages.nativeShareText,
     whatsappCaption: messages.whatsappCaption,
     whatsappFollowUpMessage: messages.whatsappFollowUpMessage,
+    whatsappAutoSecondMessage,
     pix
   };
 }
@@ -22124,7 +22263,7 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
   }
 
   try {
-    const { personPhone, personPhoneCountry, message, followUpMessage, pixPayload, imageBase64 } = req.body;
+    const { personPhone, personPhoneCountry, message, followUpMessage, pixPayload, autoSecondMessage, imageBase64 } = req.body;
 
     const apiUrl = getSettingText('EVOLUTION_API_URL');
     const apiKey = getSettingText('EVOLUTION_API_KEY');
@@ -22149,9 +22288,12 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
 
     await sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNumber, message, base64Data);
 
+    const automationSecondMessage = String(autoSecondMessage || '').trim();
     const pixCopyPaste = String(pixPayload || '').trim();
     const fallbackText = String(followUpMessage || '').trim();
-    if (pixCopyPaste) {
+    if (automationSecondMessage) {
+      await sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, automationSecondMessage);
+    } else if (pixCopyPaste) {
       await sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, pixCopyPaste);
     } else if (fallbackText) {
       await sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, fallbackText);
@@ -22609,8 +22751,115 @@ app.get('/admin/messages', ensureAuthenticated, (req, res) => {
 
   return renderAdminMessages(res, {
     filters: normalizeAdminMessageActionFilters(req.query),
-    openMessageKey: req.query.open
+    openMessageKey: req.query.open,
+    importPreview: getAdminMessageImportPreview(req)
   });
+});
+
+app.get('/admin/messages/export.csv', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  try {
+    const exportFile = buildMessageCsvExport();
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${exportFile.filename}"`);
+    return res.send(exportFile.content);
+  } catch (error) {
+    return renderAdminMessages(res, {
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui montar o CSV do catálogo agora.' }),
+      filters: normalizeAdminMessageActionFilters(req.query),
+      importPreview: getAdminMessageImportPreview(req)
+    });
+  }
+});
+
+app.post('/admin/messages/import', ensureAuthenticated, upload.single('catalog_csv'), (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  const filters = normalizeAdminMessageActionFilters(req.body);
+  const uploadedFile = req.file;
+  if (!uploadedFile || !uploadedFile.buffer) {
+    clearAdminMessageImportPreview(req);
+    return renderAdminMessages(res, {
+      error: 'Escolha um CSV do catálogo antes de pedir a prévia do lote.',
+      filters,
+      importPreview: null
+    });
+  }
+
+  try {
+    const importPreview = buildImportPreviewFromBuffer({
+      fileBuffer: uploadedFile.buffer,
+      fileName: uploadedFile.originalname
+    });
+
+    setAdminMessageImportPreview(req, importPreview);
+    const infoMessage = importPreview.errorRows > 0
+      ? 'A prévia encontrou algumas linhas pedindo ajuste antes de importar.'
+      : (importPreview.changedRows > 0
+        ? 'Prévia do lote pronta. Confere os impactos antes de aplicar.'
+        : 'Prévia pronta. Esse arquivo não trouxe mudança nova para aplicar.');
+
+    return renderAdminMessages(res, {
+      success: infoMessage,
+      filters,
+      importPreview
+    });
+  } catch (error) {
+    clearAdminMessageImportPreview(req);
+    return renderAdminMessages(res, {
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui ler esse CSV agora.' }),
+      filters,
+      importPreview: null
+    });
+  }
+});
+
+app.post('/admin/messages/import/confirm', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  const filters = normalizeAdminMessageActionFilters(req.body);
+  const preview = getAdminMessageImportPreview(req);
+  if (!preview) {
+    setFlash(req, 'error', 'A prévia do lote expirou por aqui. Reimporte o CSV para seguir.');
+    return res.redirect(buildAdminMessagesPath(filters));
+  }
+
+  try {
+    const result = applyImportPreview({ preview, changedByUserId: userId });
+    clearAdminMessageImportPreview(req);
+    const success = result.appliedCount > 0
+      ? `Lote aplicado. ${result.appliedCount} mensagem(ns) já saíram atualizadas sem precisar de deploy.`
+      : 'Esse lote não tinha mudança nova para aplicar.';
+    setFlash(req, 'success', success);
+    return res.redirect(buildAdminMessagesPath(filters));
+  } catch (error) {
+    return renderAdminMessages(res, {
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui aplicar esse lote agora.' }),
+      filters,
+      importPreview: preview
+    });
+  }
+});
+
+app.post('/admin/messages/import/cancel', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  clearAdminMessageImportPreview(req);
+  setFlash(req, 'info', 'Prévia do lote descartada. Nada foi aplicado no catálogo.');
+  return res.redirect(buildAdminMessagesPath(normalizeAdminMessageActionFilters(req.body)));
 });
 
 app.post('/admin/messages/:messageKey', ensureAuthenticated, (req, res) => {
@@ -22635,6 +22884,7 @@ app.post('/admin/messages/:messageKey', ensureAuthenticated, (req, res) => {
       ? 'Mensagem salva com sucesso. Agora o catálogo já fala esse texto sem depender de deploy.'
       : 'Mensagem conferida. Não achei mudança nova para guardar aqui.';
 
+    clearAdminMessageImportPreview(req);
     setFlash(req, 'success', success);
     return res.redirect(buildAdminMessagesPath(filters, { open: messageKey }));
   } catch (error) {
@@ -22646,6 +22896,7 @@ app.post('/admin/messages/:messageKey', ensureAuthenticated, (req, res) => {
       error: validationMessage,
       filters,
       openMessageKey: messageKey,
+      importPreview: getAdminMessageImportPreview(req),
       draftByMessageKey: {
         [messageKey]: {
           custom_title: req.body.custom_title,
@@ -22676,13 +22927,15 @@ app.post('/admin/messages/:messageKey/reset', ensureAuthenticated, (req, res) =>
       ? 'Mensagem restaurada para o padrão do app. Voltou para a versão nativa sem drama.'
       : 'Essa mensagem já estava usando o padrão do app. Nada precisou ser desfeito.';
 
+    clearAdminMessageImportPreview(req);
     setFlash(req, 'success', success);
     return res.redirect(buildAdminMessagesPath(filters, { open: messageKey }));
   } catch (error) {
     return renderAdminMessages(res, {
       error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui restaurar essa mensagem agora.' }),
       filters,
-      openMessageKey: messageKey
+      openMessageKey: messageKey,
+      importPreview: getAdminMessageImportPreview(req)
     });
   }
 });

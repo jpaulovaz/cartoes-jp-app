@@ -6,14 +6,20 @@ function safeTrimmedString(value) {
   return String(value).trim();
 }
 
-function extractTemplatePlaceholders(template) {
-  const matches = String(template || '').match(/\{\s*([a-zA-Z0-9_]+)\s*\}/g) || [];
+function stripOptionalSegments(template) {
+  return String(template || '').replace(/\[[^\[\]]+\]/g, '');
+}
+
+function extractTemplatePlaceholders(template, options = {}) {
+  const includeOptional = !options || options.includeOptional !== false;
+  const source = includeOptional ? String(template || '') : stripOptionalSegments(template);
+  const matches = source.match(/\{\s*([a-zA-Z0-9_]+)\s*\}/g) || [];
   return Array.from(new Set(matches.map((match) => match.replace(/[{}\s]/g, ''))));
 }
 
 function getCatalogPlaceholderMap(entry) {
-  const fallbackTitlePlaceholders = extractTemplatePlaceholders(entry?.defaultTitle || '');
-  const fallbackBodyPlaceholders = extractTemplatePlaceholders(entry?.defaultBody || '');
+  const fallbackTitlePlaceholders = extractTemplatePlaceholders(entry?.defaultTitle || '', { includeOptional: false });
+  const fallbackBodyPlaceholders = extractTemplatePlaceholders(entry?.defaultBody || '', { includeOptional: false });
   const spec = normalizeVariableSpec(entry?.variables || []);
   const map = new Map();
 

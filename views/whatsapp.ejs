@@ -34,6 +34,7 @@
   const whatsappCopyText = [whatsappCaptionText, whatsappFollowUpText].filter(Boolean).join('\n\n');
   const sharePixContext = shareContext && shareContext.pix ? shareContext.pix : null;
   const pixAvailable = !!(sharePixContext && sharePixContext.available);
+  const whatsappAutoSecondText = (shareContext && shareContext.whatsappAutoSecondMessage) || ((sharePixContext && sharePixContext.available && sharePixContext.payload) || '');
   const copyTextButtonLabel = pixAvailable ? 'Copiar texto do WhatsApp + Pix' : 'Copiar texto do WhatsApp';
 %>
 
@@ -184,6 +185,7 @@
   const CAPTURE_MAX_SCALE = 2;
   const whatsappCaptionMessage = <%- JSON.stringify(whatsappCaptionText) %>;
   const whatsappFollowUpMessage = <%- JSON.stringify(whatsappFollowUpText) %>;
+  const whatsappAutoSecondMessage = <%- JSON.stringify(whatsappAutoSecondText) %>;
   const whatsappShareText = <%- JSON.stringify(whatsappCopyText) %>;
   const whatsappPixPayload = <%- JSON.stringify((sharePixContext && sharePixContext.available && sharePixContext.payload) || '') %>;
 
@@ -613,6 +615,7 @@
           personPhoneCountry: '<%= person.phone_ui_country || "BR" %>',
           message: whatsappCaptionMessage,
           followUpMessage: whatsappFollowUpMessage,
+          autoSecondMessage: whatsappAutoSecondMessage,
           pixPayload: whatsappPixPayload,
           imageBase64
         })

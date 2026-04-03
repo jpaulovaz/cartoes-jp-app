@@ -3337,7 +3337,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
 
     if (navigator.share) {
       await navigator.share({
-        title: data?.creditorName ? `Cobrança com Pix de ${data.creditorName}` : 'Cobrança com Pix',
+        title: data?.shareTitle || (data?.creditorName ? `Cobrança com Pix de ${data.creditorName}` : 'Cobrança com Pix'),
         text: shareText
       });
       showPixToast('Cobrança compartilhada. Agora é só aguardar o combinado andar.','success');
@@ -3746,7 +3746,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
 
     if (navigator.share) {
       await navigator.share({
-        title: data?.creditorName ? `Pix do mês para ${data.creditorName}` : 'Pix do mês',
+        title: data?.shareTitle || (data?.creditorName ? `Pix do mês para ${data.creditorName}` : 'Pix do mês'),
         text: shareText
       });
       showPixToast('Pix do mês compartilhado. Agora é só seguir o combinado.','success');

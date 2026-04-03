@@ -20,8 +20,8 @@
         <span class="mt-4 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Catálogo de mensagens</span>
         <h1 class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">Mensagens do app</h1>
         <p class="mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-          Aqui você ajusta título e texto das mensagens já migradas para o catálogo, com prévia contextual antes de salvar.
-          Nesta fase, a base cobre push, central do app e alertas da aba Geral. O lote em CSV entra na próxima etapa.
+          Aqui você ajusta título e texto das mensagens já migradas para o catálogo, com prévia contextual antes de salvar,
+          exporta o catálogo em CSV e também importa revisões em lote com uma prévia antes de aplicar.
         </p>
         <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= messageStats.total %> no catálogo</span>
@@ -34,12 +34,15 @@
         </div>
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-2 xl:min-w-[420px]">
-        <a href="/admin" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-900/40">
-          Voltar para administração
+      <div class="grid gap-3 sm:grid-cols-2 xl:min-w-[520px]">
+        <a href="/admin/messages/export.csv" class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
+          Exportar CSV
         </a>
         <a href="/admin/messages" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-900/40">
           Limpar filtros
+        </a>
+        <a href="/admin" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-900/40 sm:col-span-2">
+          Voltar para administração
         </a>
       </div>
     </div>
@@ -128,8 +131,137 @@
           </button>
         </div>
       </form>
+
+      <div class="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+        <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div class="max-w-2xl">
+            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Lote em CSV</div>
+            <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+              Exporte o catálogo, revise no computador e depois importe o CSV de volta. Antes de aplicar, a tela monta uma prévia do lote com mudanças, itens sem alteração e possíveis erros de placeholder.
+            </p>
+          </div>
+
+          <form action="/admin/messages/import" method="POST" enctype="multipart/form-data" class="grid gap-3 md:grid-cols-[minmax(0,1fr),auto] xl:min-w-[520px]">
+            <input type="hidden" name="q" value="<%= filters.q %>">
+            <input type="hidden" name="channel" value="<%= filters.channel %>">
+            <input type="hidden" name="category" value="<%= filters.category %>">
+            <input type="hidden" name="status" value="<%= filters.status %>">
+            <label class="block">
+              <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Arquivo CSV</span>
+              <input type="file" name="catalog_csv" accept=".csv,text/csv" class="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white dark:border-slate-600 dark:bg-slate-950 dark:text-slate-200 dark:file:bg-slate-100 dark:file:text-slate-900">
+            </label>
+            <button type="submit" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-900/60 md:self-end">
+              Ver prévia do lote
+            </button>
+          </form>
+        </div>
+      </div>
     </div>
   </section>
+
+  <% if (importPreview) { %>
+    <section class="rounded-2xl border border-indigo-200 bg-white shadow-sm dark:border-indigo-900/60 dark:bg-slate-800">
+      <div class="border-b border-indigo-100 px-6 py-6 dark:border-indigo-900/40 sm:px-8">
+        <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div class="max-w-3xl">
+            <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-300">Prévia do lote</span>
+            <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= importPreview.fileName %></h2>
+            <p class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+              Nada entra em campo antes da sua confirmação. Aqui você vê o tamanho do impacto, confere se tem linha pedindo ajuste e só depois aplica o lote no catálogo.
+            </p>
+          </div>
+          <div class="grid gap-2 sm:grid-cols-2 xl:min-w-[360px] text-xs font-semibold text-slate-600 dark:text-slate-300">
+            <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= importPreview.rowCount %> linha(s) lida(s)</span>
+            <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"><%= importPreview.changedRows %> com mudança</span>
+            <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= importPreview.unchangedRows %> sem novidade</span>
+            <% if (importPreview.ignoredRows > 0) { %>
+              <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300"><%= importPreview.ignoredRows %> fora desta fase</span>
+            <% } %>
+            <span class="inline-flex items-center rounded-full border <%= importPreview.errorRows ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300' : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300' %> px-3 py-1"><%= importPreview.errorRows %> erro(s)</span>
+          </div>
+        </div>
+
+        <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <form action="/admin/messages/import/confirm" method="POST">
+            <input type="hidden" name="q" value="<%= filters.q %>">
+            <input type="hidden" name="channel" value="<%= filters.channel %>">
+            <input type="hidden" name="category" value="<%= filters.category %>">
+            <input type="hidden" name="status" value="<%= filters.status %>">
+            <button type="submit" <%= importPreview.readyToImport ? '' : 'disabled' %> class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60">
+              Aplicar lote
+            </button>
+          </form>
+          <form action="/admin/messages/import/cancel" method="POST">
+            <input type="hidden" name="q" value="<%= filters.q %>">
+            <input type="hidden" name="channel" value="<%= filters.channel %>">
+            <input type="hidden" name="category" value="<%= filters.category %>">
+            <input type="hidden" name="status" value="<%= filters.status %>">
+            <button type="submit" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-900/40">
+              Descartar prévia
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <% if (importPreview.errors && importPreview.errors.length) { %>
+        <div class="px-6 py-5 sm:px-8 border-b border-slate-100 dark:border-slate-700">
+          <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 dark:border-amber-900/60 dark:bg-amber-950/30">
+            <div class="text-sm font-semibold text-amber-800 dark:text-amber-200">Tem linha pedindo ajuste antes da importação</div>
+            <ul class="mt-3 space-y-2 text-sm leading-relaxed text-amber-700 dark:text-amber-300">
+              <% importPreview.errors.slice(0, 12).forEach((item) => { %>
+                <li>Linha <strong><%= item.lineNumber %></strong>: <%= item.message %></li>
+              <% }) %>
+              <% if (importPreview.errors.length > 12) { %>
+                <li>…e mais <%= importPreview.errors.length - 12 %> aviso(s).</li>
+              <% } %>
+            </ul>
+          </div>
+        </div>
+      <% } %>
+
+      <div class="px-6 py-5 sm:px-8 space-y-4">
+        <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">Impactos previstos</div>
+        <% const changedPreviewRows = (importPreview.rows || []).filter((row) => row.status === 'changed'); %>
+        <% if (!changedPreviewRows.length) { %>
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+            Esse arquivo não trouxe nenhuma mudança nova nas colunas de título e texto.
+          </div>
+        <% } else { %>
+          <div class="grid gap-4 xl:grid-cols-2">
+            <% changedPreviewRows.slice(0, 12).forEach((row) => { %>
+              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+                <div class="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                  <span><%= row.catalogId %></span>
+                  <span>•</span>
+                  <span><%= row.channel %></span>
+                </div>
+                <div class="mt-2 text-sm font-semibold text-slate-900 dark:text-white"><%= row.purpose %></div>
+                <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div>
+                    <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Atual</div>
+                    <div class="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm dark:border-slate-700 dark:bg-slate-950/80">
+                      <div class="font-semibold text-slate-900 dark:text-white"><%= row.currentTitleTemplate %></div>
+                      <div class="mt-2 whitespace-pre-line text-slate-600 dark:text-slate-300"><%= row.currentBodyTemplate %></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-600 dark:text-emerald-300">Como fica</div>
+                    <div class="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm dark:border-emerald-900/60 dark:bg-emerald-950/30">
+                      <div class="font-semibold text-slate-900 dark:text-white"><%= row.nextTitleTemplate %></div>
+                      <div class="mt-2 whitespace-pre-line text-slate-700 dark:text-slate-200"><%= row.nextBodyTemplate %></div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            <% }) %>
+          </div>
+          <% if (changedPreviewRows.length > 12) { %>
+            <div class="text-sm text-slate-500 dark:text-slate-400">Mostrando as 12 primeiras mudanças do lote. O restante entra na mesma aplicação quando você confirmar.</div>
+          <% } %>
+        <% } %>
+      </div>
+    </section>
+  <% } %>
 
   <% if (!messageItems.length) { %>
     <section class="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -160,7 +292,7 @@
             <div class="grid gap-4 lg:grid-cols-[110px,220px,220px,minmax(0,1fr),180px] lg:items-start">
               <div>
                 <div class="text-sm font-black tracking-tight text-slate-900 dark:text-white"><%= item.catalogId %></div>
-                <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= item.previewRenderer === 'push' ? 'Push' : (item.previewRenderer === 'dashboard_alert' ? 'Alerta da Geral' : 'Central do app') %></div>
+                <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= item.previewRenderer === 'push' ? 'Push' : (item.previewRenderer === 'dashboard_alert' ? 'Alerta da Geral' : (item.previewRenderer === 'share_text' ? 'Compartilhamento nativo' : (item.previewRenderer === 'whatsapp' ? 'WhatsApp' : (item.previewRenderer === 'pix_copy' ? 'Pix / copiar e colar' : (item.previewRenderer === 'email' ? 'E-mail' : 'Central do app'))))) %></div>
               </div>
               <div>
                 <div class="text-sm font-semibold text-slate-800 dark:text-slate-100"><%= item.channel %></div>
@@ -438,6 +570,56 @@
         `;
       }
 
+      if (kind === 'share_text') {
+        return `
+          <div class="rounded-3xl border border-sky-200 bg-sky-50 p-5 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Exemplo de compartilhamento nativo</div>
+            <div class="mt-3 rounded-2xl border border-sky-200/80 bg-white px-4 py-4 dark:border-sky-900/60 dark:bg-slate-900/70">
+              <div class="text-sm font-semibold text-slate-900 dark:text-white">${escapeHtml(title)}</div>
+              <div class="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-slate-300">${escapeHtml(body)}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      if (kind === 'whatsapp') {
+        return `
+          <div class="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm dark:border-emerald-900/60 dark:bg-emerald-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Exemplo de WhatsApp</div>
+            <div class="mt-3 max-w-md rounded-[28px] border border-emerald-200/80 bg-white px-4 py-4 dark:border-emerald-900/60 dark:bg-slate-900/70">
+              <div class="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700/80 dark:text-emerald-300/80">Mensagem pronta para colar</div>
+              <div class="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-700 dark:text-slate-200">${escapeHtml(body)}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      if (kind === 'pix_copy') {
+        return `
+          <div class="rounded-3xl border border-fuchsia-200 bg-fuchsia-50 p-5 shadow-sm dark:border-fuchsia-900/60 dark:bg-fuchsia-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-fuchsia-700 dark:text-fuchsia-300">Exemplo de Pix / copiar e colar</div>
+            <div class="mt-3 rounded-2xl border border-fuchsia-200/80 bg-white px-4 py-4 dark:border-fuchsia-900/60 dark:bg-slate-900/70">
+              <div class="text-sm font-semibold text-slate-900 dark:text-white">${escapeHtml(title)}</div>
+              <div class="mt-3 whitespace-pre-line break-all text-sm leading-relaxed text-slate-700 dark:text-slate-200">${escapeHtml(body)}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      if (kind === 'email') {
+        return `
+          <div class="rounded-3xl border border-violet-200 bg-violet-50 p-5 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Exemplo de e-mail</div>
+            <div class="mt-3 rounded-2xl border border-violet-200/80 bg-white px-4 py-4 dark:border-violet-900/60 dark:bg-slate-900/70">
+              <div class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Assunto</div>
+              <div class="mt-1 text-sm font-black text-slate-900 dark:text-white">${escapeHtml(title)}</div>
+              <div class="mt-4 text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Corpo</div>
+              <div class="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-700 dark:text-slate-200">${escapeHtml(body)}</div>
+            </div>
+          </div>
+        `;
+      }
+
       return `
         <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Exemplo da central do app</div>
@@ -493,7 +675,7 @@
       modalError.classList.add('hidden');
       modalError.textContent = '';
       modalStage.innerHTML = '<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">Montando a prévia com dados de exemplo...</div>';
-      modalEyebrow.textContent = `${form.dataset.catalogId || 'Prévia'} · ${form.dataset.previewRenderer === 'push' ? 'Push' : (form.dataset.previewRenderer === 'dashboard_alert' ? 'Aba Geral' : 'Central do app')}`;
+      modalEyebrow.textContent = `${form.dataset.catalogId || 'Prévia'} · ${form.dataset.previewRenderer === 'push' ? 'Push' : (form.dataset.previewRenderer === 'dashboard_alert' ? 'Aba Geral' : (form.dataset.previewRenderer === 'share_text' ? 'Compartilhamento nativo' : (form.dataset.previewRenderer === 'whatsapp' ? 'WhatsApp' : (form.dataset.previewRenderer === 'pix_copy' ? 'Pix / copiar e colar' : (form.dataset.previewRenderer === 'email' ? 'E-mail' : 'Central do app')))))}`;
       modalTitle.textContent = 'Prévia da mensagem';
       modalNote.textContent = 'Carregando exemplo...';
       openModal();

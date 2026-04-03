@@ -1,0 +1,611 @@
+<%- include('partials/header', { title }) %>
+<%
+  const flashType = (flash && flash.type) ? String(flash.type) : '';
+  const flashMessage = (flash && flash.message) ? String(flash.message) : '';
+  const pageError = error || (flashType === 'error' ? flashMessage : '');
+  const pageSuccess = success || ((flashType === 'success' || flashType === 'info') ? flashMessage : '');
+%>
+
+<div class="mx-auto max-w-[1500px] space-y-6">
+  <section class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div class="px-6 py-6 sm:px-8 flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+      <div class="min-w-0 max-w-4xl">
+        <div class="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500 dark:text-slate-400">
+          <a href="/admin" class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/50 dark:hover:bg-slate-900">
+            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            Voltar para o admin
+          </a>
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/50"><%= migratedMessageCount %> mensagem(ns) nesta fase</span>
+        </div>
+        <span class="mt-4 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Catálogo de mensagens</span>
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">Mensagens do app</h1>
+        <p class="mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+          Aqui você ajusta título e texto das mensagens já migradas para o catálogo, com prévia contextual antes de salvar.
+          Nesta fase, a base cobre push, central do app e alertas da aba Geral. O lote em CSV entra na próxima etapa.
+        </p>
+        <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= messageStats.total %> no catálogo</span>
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= messageStats.custom %> customizada(s)</span>
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= messageStats.defaults %> no padrão</span>
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= messageStats.push %> com push de teste</span>
+          <% if (messageStats.attention > 0) { %>
+            <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"><%= messageStats.attention %> pedindo revisão</span>
+          <% } %>
+        </div>
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-2 xl:min-w-[420px]">
+        <a href="/admin" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-900/40">
+          Voltar para administração
+        </a>
+        <a href="/admin/messages" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-900/40">
+          Limpar filtros
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <% if (pageError) { %>
+    <div class="op-inline-alert op-inline-alert--warning">
+      <div class="op-inline-alert__icon">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      </div>
+      <div>
+        <div class="op-inline-alert__title">Ajuste pendente</div>
+        <div class="op-inline-alert__text"><%= pageError %></div>
+      </div>
+    </div>
+  <% } %>
+
+  <% if (pageSuccess) { %>
+    <div class="op-inline-alert op-inline-alert--success">
+      <div class="op-inline-alert__icon">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+      </div>
+      <div>
+        <div class="op-inline-alert__title">Tudo certo</div>
+        <div class="op-inline-alert__text"><%= pageSuccess %></div>
+      </div>
+    </div>
+  <% } %>
+
+  <section class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div class="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-700">
+      <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div class="max-w-3xl">
+          <span class="text-xs font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Localizar rapidinho</span>
+          <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Busca, filtros e recorte da fase</h2>
+          <p class="mt-3 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">
+            Você pode filtrar por canal, categoria e status. A lista abaixo já mostra só as mensagens migradas nesta etapa do catálogo.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= messageStats.filtered %> resultado(s) na tela</span>
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40">Prévia contextual inclusa</span>
+        </div>
+      </div>
+
+      <form action="/admin/messages" method="GET" class="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr),repeat(3,minmax(0,0.7fr)),auto]">
+        <label class="block">
+          <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Buscar</span>
+          <input type="search" name="q" value="<%= filters.q %>" placeholder="ID, canal, função ou trecho do texto"
+                 class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-300 dark:focus:border-slate-500 dark:focus:ring-slate-700">
+        </label>
+
+        <label class="block">
+          <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Canal</span>
+          <select name="channel" class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-300 dark:focus:border-slate-500 dark:focus:ring-slate-700">
+            <option value="all">Todos os canais</option>
+            <% messageFilterOptions.channels.forEach((channelOption) => { %>
+              <option value="<%= channelOption %>" <%= filters.channel === channelOption ? 'selected' : '' %>><%= channelOption %></option>
+            <% }) %>
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Categoria</span>
+          <select name="category" class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-300 dark:focus:border-slate-500 dark:focus:ring-slate-700">
+            <option value="all">Todas as categorias</option>
+            <% messageFilterOptions.categories.forEach((categoryOption) => { %>
+              <option value="<%= categoryOption %>" <%= filters.category === categoryOption ? 'selected' : '' %>><%= categoryOption %></option>
+            <% }) %>
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Status</span>
+          <select name="status" class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-300 dark:focus:border-slate-500 dark:focus:ring-slate-700">
+            <option value="all" <%= filters.status === 'all' ? 'selected' : '' %>>Todos</option>
+            <option value="custom" <%= filters.status === 'custom' ? 'selected' : '' %>>Customizadas</option>
+            <option value="default" <%= filters.status === 'default' ? 'selected' : '' %>>No padrão</option>
+            <option value="attention" <%= filters.status === 'attention' ? 'selected' : '' %>>Pedindo revisão</option>
+          </select>
+        </label>
+
+        <div class="flex gap-3 md:items-end">
+          <button type="submit" class="w-full inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
+            Filtrar
+          </button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <% if (!messageItems.length) { %>
+    <section class="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <div class="mx-auto max-w-xl space-y-3">
+        <div class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Nada por aqui</div>
+        <h2 class="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Nenhuma mensagem bateu com esse filtro</h2>
+        <p class="text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+          Tenta aliviar a busca ou trocar o status. O catálogo continua inteiro guardado aqui, só ficou escondido por esse recorte.
+        </p>
+        <a href="/admin/messages" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-900/40">
+          Limpar filtros
+        </a>
+      </div>
+    </section>
+  <% } else { %>
+    <section class="space-y-4">
+      <div class="hidden lg:grid grid-cols-[110px,220px,220px,minmax(0,1fr),180px] gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">
+        <div>ID</div>
+        <div>Canal</div>
+        <div>Categoria</div>
+        <div>Função atual</div>
+        <div>Status</div>
+      </div>
+
+      <% messageItems.forEach((item) => { %>
+        <details class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 overflow-hidden" data-message-item <%= openMessageKey === item.messageKey ? 'open' : '' %> id="message-<%= item.catalogId %>">
+          <summary class="cursor-pointer list-none px-5 py-4 hover:bg-slate-50/70 dark:hover:bg-slate-900/40 transition">
+            <div class="grid gap-4 lg:grid-cols-[110px,220px,220px,minmax(0,1fr),180px] lg:items-start">
+              <div>
+                <div class="text-sm font-black tracking-tight text-slate-900 dark:text-white"><%= item.catalogId %></div>
+                <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= item.previewRenderer === 'push' ? 'Push' : (item.previewRenderer === 'dashboard_alert' ? 'Alerta da Geral' : 'Central do app') %></div>
+              </div>
+              <div>
+                <div class="text-sm font-semibold text-slate-800 dark:text-slate-100"><%= item.channel %></div>
+                <div class="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400"><%= item.flow %></div>
+              </div>
+              <div>
+                <div class="text-sm font-semibold text-slate-800 dark:text-slate-100"><%= item.category %></div>
+                <div class="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400"><%= item.purpose %></div>
+              </div>
+              <div class="min-w-0">
+                <div class="text-sm font-semibold text-slate-900 dark:text-white truncate"><%= item.currentTitleTemplate %></div>
+                <div class="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400 line-clamp-2"><%= item.currentBodyTemplate %></div>
+              </div>
+              <div class="flex flex-wrap gap-2 lg:justify-end">
+                <% if (item.hasInvalidCustom) { %>
+                  <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">Revisar</span>
+                <% } else if (item.isCustomized) { %>
+                  <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">Customizada</span>
+                <% } else { %>
+                  <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">Padrão</span>
+                <% } %>
+              </div>
+            </div>
+          </summary>
+
+          <div class="border-t border-slate-200 px-5 py-5 dark:border-slate-700">
+            <form action="/admin/messages/<%= encodeURIComponent(item.messageKey) %>" method="POST" class="space-y-5" data-message-editor data-preview-route="/admin/messages/<%= encodeURIComponent(item.messageKey) %>/preview" data-push-test-route="/admin/messages/<%= encodeURIComponent(item.messageKey) %>/push-test" data-message-key="<%= item.messageKey %>" data-catalog-id="<%= item.catalogId %>" data-preview-renderer="<%= item.previewRenderer %>">
+              <input type="hidden" name="q" value="<%= filters.q %>">
+              <input type="hidden" name="channel" value="<%= filters.channel %>">
+              <input type="hidden" name="category" value="<%= filters.category %>">
+              <input type="hidden" name="status" value="<%= filters.status %>">
+
+              <div class="grid gap-4 xl:grid-cols-[minmax(0,1.1fr),360px]">
+                <div class="space-y-4">
+                  <label class="block">
+                    <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Título atual</span>
+                    <input type="text" name="custom_title" value="<%= item.formTitle %>" required
+                           class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-300 dark:focus:border-slate-500 dark:focus:ring-slate-700">
+                  </label>
+
+                  <label class="block">
+                    <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Texto atual</span>
+                    <textarea name="custom_body" rows="5" required
+                              class="mt-2 w-full rounded-2xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-4 py-3 text-sm leading-relaxed text-slate-800 dark:text-slate-100 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-300 dark:focus:border-slate-500 dark:focus:ring-slate-700"><%= item.formBody %></textarea>
+                  </label>
+
+                  <div class="flex flex-wrap gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    <% item.placeholderSpec.forEach((placeholder) => { %>
+                      <span class="inline-flex items-center rounded-full border px-3 py-1 <%= placeholder.required ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300' : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300' %>">
+                        {<%= placeholder.name %>}<%= placeholder.required ? ' obrigatório' : ' opcional' %>
+                      </span>
+                    <% }) %>
+                  </div>
+                </div>
+
+                <div class="space-y-4">
+                  <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+                    <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Leitura rápida</div>
+                    <dl class="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300">
+                      <div>
+                        <dt class="font-semibold text-slate-800 dark:text-slate-100">Chave técnica</dt>
+                        <dd class="mt-1 break-all"><%= item.messageKey %></dd>
+                      </div>
+                      <div>
+                        <dt class="font-semibold text-slate-800 dark:text-slate-100">Fluxo</dt>
+                        <dd class="mt-1"><%= item.flow %></dd>
+                      </div>
+                      <div>
+                        <dt class="font-semibold text-slate-800 dark:text-slate-100">Atualizado por último</dt>
+                        <dd class="mt-1"><%= formatAdminMessageUpdatedAt(item.updatedAt) %> · <%= item.updatedByLabel %></dd>
+                      </div>
+                      <div>
+                        <dt class="font-semibold text-slate-800 dark:text-slate-100">Origem ativa</dt>
+                        <dd class="mt-1"><%= item.isCustomized ? 'Texto customizado no catálogo' : 'Padrão nativo do app' %></dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  <% if (item.previewRenderer === 'push') { %>
+                    <div class="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-800 dark:border-indigo-900/60 dark:bg-indigo-950/30 dark:text-indigo-200">
+                      <div class="font-semibold">Push com teste real neste aparelho</div>
+                      <p class="mt-2 leading-relaxed">
+                        Ao abrir a prévia, você pode disparar um push de teste para este navegador ou aparelho. O teste não entra na central do usuário e respeita uma pausa curta entre envios.
+                      </p>
+                    </div>
+                  <% } else { %>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+                      <div class="font-semibold text-slate-800 dark:text-slate-100">Prévia contextual</div>
+                      <p class="mt-2 leading-relaxed">
+                        O botão de pré-visualização abre um exemplo com dados fictícios, para você conferir tom, quebra de linha e leitura antes de salvar.
+                      </p>
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+
+              <div data-message-form-feedback class="hidden rounded-2xl border px-4 py-3 text-sm"></div>
+
+              <div class="sticky bottom-0 z-10 -mx-5 flex flex-col gap-3 border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur dark:border-slate-700 dark:bg-slate-800/95 sm:static sm:z-auto sm:-mx-0 sm:flex-row sm:flex-wrap sm:items-center sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-0">
+                <button type="button" data-message-preview-open class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-900/40">
+                  Ver prévia
+                </button>
+                <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
+                  Salvar mensagem
+                </button>
+                <button type="submit" formaction="/admin/messages/<%= encodeURIComponent(item.messageKey) %>/reset" class="inline-flex items-center justify-center rounded-xl border border-rose-300 px-4 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 dark:border-rose-900/60 dark:text-rose-300 dark:hover:bg-rose-950/30">
+                  Restaurar padrão
+                </button>
+              </div>
+            </form>
+          </div>
+        </details>
+      <% }) %>
+    </section>
+  <% } %>
+</div>
+
+<div class="hidden fixed inset-0 z-[10040] bg-slate-900/70 backdrop-blur-sm px-3 py-3 sm:px-4 sm:py-6" data-message-preview-modal aria-hidden="true">
+  <div class="flex min-h-full items-end justify-center sm:items-center">
+    <div class="flex w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]">
+      <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6 dark:border-slate-700">
+        <div>
+          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400" data-message-preview-eyebrow>Prévia contextual</div>
+          <h2 class="mt-2 text-xl font-black tracking-tight text-slate-900 dark:text-white" data-message-preview-title>Prévia da mensagem</h2>
+          <p class="mt-2 text-sm text-slate-500 dark:text-slate-400" data-message-preview-note>Carregando exemplo...</p>
+        </div>
+        <button type="button" class="op-icon-btn" aria-label="Fechar prévia" data-message-preview-close>✕</button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 space-y-4">
+        <div data-message-preview-error class="hidden rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"></div>
+        <div data-message-preview-stage class="space-y-4"></div>
+        <div data-message-preview-push-tools class="hidden rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-4 dark:border-indigo-900/60 dark:bg-indigo-950/30">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div class="text-sm font-semibold text-indigo-900 dark:text-indigo-100">Push de teste neste aparelho</div>
+              <p class="mt-1 text-sm leading-relaxed text-indigo-800/90 dark:text-indigo-200/90" data-message-preview-push-helper>
+                A gente vai checar se este navegador já está inscrito para receber alertas.
+              </p>
+            </div>
+            <button type="button" data-message-preview-push-send class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60" disabled>
+              Enviar push de teste
+            </button>
+          </div>
+          <div data-message-preview-push-feedback class="hidden mt-3 rounded-2xl border px-4 py-3 text-sm"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (() => {
+    const modal = document.querySelector('[data-message-preview-modal]');
+    if (!(modal instanceof HTMLElement)) return;
+
+    const modalTitle = modal.querySelector('[data-message-preview-title]');
+    const modalEyebrow = modal.querySelector('[data-message-preview-eyebrow]');
+    const modalNote = modal.querySelector('[data-message-preview-note]');
+    const modalStage = modal.querySelector('[data-message-preview-stage]');
+    const modalError = modal.querySelector('[data-message-preview-error]');
+    const pushTools = modal.querySelector('[data-message-preview-push-tools]');
+    const pushHelper = modal.querySelector('[data-message-preview-push-helper]');
+    const pushSendButton = modal.querySelector('[data-message-preview-push-send]');
+    const pushFeedback = modal.querySelector('[data-message-preview-push-feedback]');
+    const closeButtons = modal.querySelectorAll('[data-message-preview-close]');
+    let activeForm = null;
+    let activePreview = null;
+    let currentPushSubscription = null;
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function formatMultiline(value) {
+      return escapeHtml(value).replace(/\n/g, '<br>');
+    }
+
+    function setFormFeedback(form, message, tone = 'info') {
+      const host = form ? form.querySelector('[data-message-form-feedback]') : null;
+      if (!(host instanceof HTMLElement)) return;
+      host.classList.remove('hidden', 'border-emerald-200', 'bg-emerald-50', 'text-emerald-700', 'dark:border-emerald-900/60', 'dark:bg-emerald-950/30', 'dark:text-emerald-300', 'border-amber-200', 'bg-amber-50', 'text-amber-700', 'dark:border-amber-900/60', 'dark:bg-amber-950/30', 'dark:text-amber-300', 'border-slate-200', 'bg-slate-50', 'text-slate-700', 'dark:border-slate-700', 'dark:bg-slate-900/40', 'dark:text-slate-300');
+      host.textContent = message || '';
+      if (!message) {
+        host.classList.add('hidden');
+        return;
+      }
+      if (tone === 'success') {
+        host.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-700', 'dark:border-emerald-900/60', 'dark:bg-emerald-950/30', 'dark:text-emerald-300');
+      } else if (tone === 'error') {
+        host.classList.add('border-amber-200', 'bg-amber-50', 'text-amber-700', 'dark:border-amber-900/60', 'dark:bg-amber-950/30', 'dark:text-amber-300');
+      } else {
+        host.classList.add('border-slate-200', 'bg-slate-50', 'text-slate-700', 'dark:border-slate-700', 'dark:bg-slate-900/40', 'dark:text-slate-300');
+      }
+    }
+
+    function setPushFeedback(message, tone = 'info') {
+      if (!(pushFeedback instanceof HTMLElement)) return;
+      pushFeedback.classList.remove('hidden', 'border-emerald-200', 'bg-emerald-50', 'text-emerald-700', 'dark:border-emerald-900/60', 'dark:bg-emerald-950/30', 'dark:text-emerald-300', 'border-amber-200', 'bg-amber-50', 'text-amber-700', 'dark:border-amber-900/60', 'dark:bg-amber-950/30', 'dark:text-amber-300', 'border-slate-200', 'bg-slate-50', 'text-slate-700', 'dark:border-slate-700', 'dark:bg-slate-900/40', 'dark:text-slate-300');
+      pushFeedback.textContent = message || '';
+      if (!message) {
+        pushFeedback.classList.add('hidden');
+        return;
+      }
+      if (tone === 'success') {
+        pushFeedback.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-700', 'dark:border-emerald-900/60', 'dark:bg-emerald-950/30', 'dark:text-emerald-300');
+      } else if (tone === 'error') {
+        pushFeedback.classList.add('border-amber-200', 'bg-amber-50', 'text-amber-700', 'dark:border-amber-900/60', 'dark:bg-amber-950/30', 'dark:text-amber-300');
+      } else {
+        pushFeedback.classList.add('border-slate-200', 'bg-slate-50', 'text-slate-700', 'dark:border-slate-700', 'dark:bg-slate-900/40', 'dark:text-slate-300');
+      }
+    }
+
+    function openModal() {
+      modal.classList.remove('hidden');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('overflow-hidden');
+    }
+
+    function closeModal() {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('overflow-hidden');
+      setPushFeedback('');
+      currentPushSubscription = null;
+      activePreview = null;
+    }
+
+    function collectPayload(form) {
+      const titleInput = form.querySelector('[name="custom_title"]');
+      const bodyInput = form.querySelector('[name="custom_body"]');
+      return {
+        custom_title: titleInput ? titleInput.value : '',
+        custom_body: bodyInput ? bodyInput.value : ''
+      };
+    }
+
+    function renderPreviewCard(preview) {
+      const kind = preview?.preview?.kind || 'notification';
+      const title = preview?.preview?.title || preview?.title || '';
+      const body = preview?.preview?.body || preview?.preview?.description || preview?.body || '';
+
+      if (kind === 'dashboard_alert') {
+        return `
+          <div class="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Exemplo de alerta na Geral</div>
+            <div class="mt-3 rounded-2xl border border-amber-200/80 bg-white px-4 py-4 dark:border-amber-900/60 dark:bg-slate-900/70">
+              <h3 class="text-base font-black tracking-tight text-slate-900 dark:text-white">${escapeHtml(title)}</h3>
+              <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">${formatMultiline(body)}</p>
+            </div>
+          </div>
+        `;
+      }
+
+      if (kind === 'push') {
+        return `
+          <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Exemplo de push</div>
+            <div class="mt-3 max-w-md rounded-[28px] border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/90">
+              <div class="flex items-start gap-3">
+                <div class="h-11 w-11 shrink-0 rounded-2xl bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 flex items-center justify-center font-black">OP</div>
+                <div class="min-w-0">
+                  <div class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">AcerttaPay · teste</div>
+                  <div class="mt-1 text-sm font-black text-slate-900 dark:text-white">${escapeHtml(title)}</div>
+                  <div class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">${formatMultiline(body)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Exemplo da central do app</div>
+          <div class="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-950/90">
+            <div class="text-base font-black tracking-tight text-slate-900 dark:text-white">${escapeHtml(title)}</div>
+            <div class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">${formatMultiline(body)}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function syncPushAvailability() {
+      if (!(pushTools instanceof HTMLElement) || !(pushHelper instanceof HTMLElement) || !(pushSendButton instanceof HTMLButtonElement)) return;
+      currentPushSubscription = null;
+      pushSendButton.disabled = true;
+      setPushFeedback('');
+
+      if (!activePreview || activePreview?.preview?.kind !== 'push') {
+        pushTools.classList.add('hidden');
+        return;
+      }
+
+      pushTools.classList.remove('hidden');
+
+      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+        pushHelper.textContent = 'Este navegador não oferece suporte completo para push. Aqui vale usar um navegador com alertas ativos.';
+        return;
+      }
+
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          pushHelper.textContent = Notification.permission === 'denied'
+            ? 'Os alertas estão bloqueados neste navegador. Libere a permissão para conseguir testar aqui.'
+            : 'Ative os alertas neste aparelho primeiro. Depois o botão de teste acorda sozinho.';
+          return;
+        }
+
+        currentPushSubscription = typeof subscription.toJSON === 'function' ? subscription.toJSON() : JSON.parse(JSON.stringify(subscription));
+        pushSendButton.disabled = false;
+        pushHelper.textContent = 'Tudo certo! Este aparelho já está pronto para receber um push de teste.';
+      } catch (error) {
+        pushHelper.textContent = 'Não consegui confirmar o estado do push neste aparelho agora.';
+      }
+    }
+
+    async function openPreview(form, trigger) {
+      if (!(form instanceof HTMLFormElement)) return;
+      activeForm = form;
+      setFormFeedback(form, '');
+      if (trigger instanceof HTMLButtonElement) trigger.disabled = true;
+      modalError.classList.add('hidden');
+      modalError.textContent = '';
+      modalStage.innerHTML = '<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">Montando a prévia com dados de exemplo...</div>';
+      modalEyebrow.textContent = `${form.dataset.catalogId || 'Prévia'} · ${form.dataset.previewRenderer === 'push' ? 'Push' : (form.dataset.previewRenderer === 'dashboard_alert' ? 'Aba Geral' : 'Central do app')}`;
+      modalTitle.textContent = 'Prévia da mensagem';
+      modalNote.textContent = 'Carregando exemplo...';
+      openModal();
+
+      try {
+        const response = await fetch(form.dataset.previewRoute, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(collectPayload(form))
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) {
+          const message = data.message || 'Não consegui montar a prévia agora.';
+          modalError.textContent = message;
+          modalError.classList.remove('hidden');
+          modalStage.innerHTML = '';
+          setFormFeedback(form, message, 'error');
+          pushTools.classList.add('hidden');
+          return;
+        }
+
+        activePreview = data.preview;
+        modalTitle.textContent = activePreview.title || activePreview.preview?.title || 'Prévia da mensagem';
+        modalNote.textContent = activePreview.preview?.note || 'Prévia com dados de exemplo';
+        modalStage.innerHTML = renderPreviewCard(activePreview);
+        await syncPushAvailability();
+      } catch (error) {
+        const message = error?.message || 'Não consegui montar a prévia agora.';
+        modalError.textContent = message;
+        modalError.classList.remove('hidden');
+        modalStage.innerHTML = '';
+        pushTools.classList.add('hidden');
+        setFormFeedback(form, message, 'error');
+      } finally {
+        if (trigger instanceof HTMLButtonElement) trigger.disabled = false;
+      }
+    }
+
+    async function sendPushTest() {
+      if (!(activeForm instanceof HTMLFormElement) || !(pushSendButton instanceof HTMLButtonElement)) return;
+      if (!currentPushSubscription) {
+        setPushFeedback('Ative os alertas neste aparelho antes de tentar o teste.', 'error');
+        return;
+      }
+
+      pushSendButton.disabled = true;
+      setPushFeedback('Mandando o push de teste para este aparelho...', 'info');
+
+      try {
+        const response = await fetch(activeForm.dataset.pushTestRoute, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            ...collectPayload(activeForm),
+            subscription: currentPushSubscription
+          })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) {
+          const message = data.message || 'Não consegui mandar o push de teste agora.';
+          setPushFeedback(message, 'error');
+          setFormFeedback(activeForm, message, 'error');
+          return;
+        }
+
+        setPushFeedback(data.message || 'Push de teste enviado com sucesso.', 'success');
+        setFormFeedback(activeForm, data.message || 'Push de teste enviado com sucesso.', 'success');
+      } catch (error) {
+        const message = error?.message || 'Não consegui mandar o push de teste agora.';
+        setPushFeedback(message, 'error');
+        setFormFeedback(activeForm, message, 'error');
+      } finally {
+        pushSendButton.disabled = false;
+      }
+    }
+
+    document.querySelectorAll('[data-message-preview-open]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const form = button.closest('[data-message-editor]');
+        openPreview(form, button);
+      });
+    });
+
+    if (pushSendButton instanceof HTMLButtonElement) {
+      pushSendButton.addEventListener('click', sendPushTest);
+    }
+
+    closeButtons.forEach((button) => {
+      button.addEventListener('click', closeModal);
+    });
+
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closeModal();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && modal.getAttribute('aria-hidden') === 'false') {
+        closeModal();
+      }
+    });
+
+    const opened = document.querySelector('[data-message-item][open]');
+    if (opened instanceof HTMLElement) {
+      opened.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  })();
+</script>
+
+<%- include('partials/footer') %>

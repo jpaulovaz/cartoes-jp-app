@@ -91,7 +91,7 @@ function validateTemplateField(entry, fieldName, candidateTemplate) {
   };
 }
 
-function resolveTemplateSource(entry, row = null, fallbackTitle = '', fallbackBody = '') {
+function resolveTemplateSource(entry, row = null, fallbackTitle = '', fallbackBody = '', templateOverrides = null) {
   const customTitle = safeTrimmedString(row?.custom_title);
   const customBody = safeTrimmedString(row?.custom_body);
   const defaultTitle = normalizeTemplateCandidate(row?.default_title || entry?.defaultTitle || fallbackTitle || '');
@@ -99,13 +99,43 @@ function resolveTemplateSource(entry, row = null, fallbackTitle = '', fallbackBo
 
   const titleValidation = customTitle ? validateTemplateField(entry, 'title', customTitle) : { valid: false, errors: [] };
   const bodyValidation = customBody ? validateTemplateField(entry, 'body', customBody) : { valid: false, errors: [] };
+  const validationErrors = [...titleValidation.errors, ...bodyValidation.errors];
+
+  let titleTemplate = titleValidation.valid ? customTitle : defaultTitle;
+  let bodyTemplate = bodyValidation.valid ? customBody : defaultBody;
+  let usesCustomTitle = titleValidation.valid;
+  let usesCustomBody = bodyValidation.valid;
+
+  if (templateOverrides && typeof templateOverrides === 'object') {
+    if (Object.prototype.hasOwnProperty.call(templateOverrides, 'titleTemplate')) {
+      const candidateTitle = normalizeTemplateCandidate(templateOverrides.titleTemplate);
+      const candidateValidation = validateTemplateField(entry, 'title', candidateTitle);
+      if (candidateValidation.valid) {
+        titleTemplate = candidateTitle;
+        usesCustomTitle = candidateTitle !== defaultTitle;
+      } else {
+        validationErrors.push(...candidateValidation.errors);
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(templateOverrides, 'bodyTemplate')) {
+      const candidateBody = normalizeTemplateCandidate(templateOverrides.bodyTemplate);
+      const candidateValidation = validateTemplateField(entry, 'body', candidateBody);
+      if (candidateValidation.valid) {
+        bodyTemplate = candidateBody;
+        usesCustomBody = candidateBody !== defaultBody;
+      } else {
+        validationErrors.push(...candidateValidation.errors);
+      }
+    }
+  }
 
   return {
-    titleTemplate: titleValidation.valid ? customTitle : defaultTitle,
-    bodyTemplate: bodyValidation.valid ? customBody : defaultBody,
-    usesCustomTitle: titleValidation.valid,
-    usesCustomBody: bodyValidation.valid,
-    validationErrors: [...titleValidation.errors, ...bodyValidation.errors]
+    titleTemplate,
+    bodyTemplate,
+    usesCustomTitle,
+    usesCustomBody,
+    validationErrors
   };
 }
 
@@ -148,7 +178,13 @@ function resolveMessage(messageKey, variables = {}, options = {}) {
   }
 
   const row = getMessageTemplateRow(entry.messageKey);
-  const source = resolveTemplateSource(entry, row, options.fallbackTitle, options.fallbackBody);
+  const source = resolveTemplateSource(
+    entry,
+    row,
+    options.fallbackTitle,
+    options.fallbackBody,
+    options.templateOverrides || null
+  );
 
   return {
     messageKey: entry.messageKey,

@@ -148,7 +148,9 @@
       data-app-pin-idle-seconds="<%= Number(appPinContext.idleSeconds || 0) %>"
       data-app-pin-lock-url="/lock/engage"
       data-app-pin-touch-url="/lock/touch"
-      data-app-pin-screen="<%= appPinScreen %>">
+      data-app-pin-screen="<%= appPinScreen %>"
+      data-presence-enabled="<%= user ? '1' : '0' %>"
+      data-presence-touch-url="/presence/touch">
   <div class="mobile-top-chrome-fix" aria-hidden="true"></div>
 
   <% const dNav = new Date();

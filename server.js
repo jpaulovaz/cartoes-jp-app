@@ -254,6 +254,7 @@ try { db.prepare("ALTER TABLE users ADD COLUMN profile_photo_mode TEXT NOT NULL 
 try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_text TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_vibe TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN last_seen_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 
 db.prepare(`
   CREATE TABLE IF NOT EXISTS user_notification_preferences (
@@ -1692,15 +1693,17 @@ function configureGoogleStrategy() {
           return done(null, false, { message: 'Essa conta do Google não combina com o acesso autorizado por aqui.' });
         }
 
+        const loginAt = nowIso();
         db.prepare(`
           UPDATE users
           SET google_id = ?,
               last_login = ?,
+              last_seen_at = ?,
               name = COALESCE(NULLIF(name, ''), ?),
               email = ?,
               google_photo_url = CASE WHEN ? IS NOT NULL AND trim(?) <> '' THEN ? ELSE google_photo_url END
           WHERE id = ?
-        `).run(googleId, nowIso(), profileName || emailMatchedUser.name || email.split('@')[0], email, googlePhotoUrl, googlePhotoUrl, googlePhotoUrl, emailMatchedUser.id);
+        `).run(googleId, loginAt, loginAt, profileName || emailMatchedUser.name || email.split('@')[0], email, googlePhotoUrl, googlePhotoUrl, googlePhotoUrl, emailMatchedUser.id);
 
         authorizedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(emailMatchedUser.id);
       } else {
@@ -1708,14 +1711,16 @@ function configureGoogleStrategy() {
           return done(null, false, { message: 'Esse e-mail do Google está ligado a outro acesso por aqui. Bora ajustar isso antes de continuar.' });
         }
 
+        const loginAt = nowIso();
         db.prepare(`
           UPDATE users
           SET last_login = ?,
+              last_seen_at = ?,
               name = COALESCE(NULLIF(name, ''), ?),
               email = CASE WHEN ? IS NOT NULL AND trim(?) <> '' THEN ? ELSE email END,
               google_photo_url = CASE WHEN ? IS NOT NULL AND trim(?) <> '' THEN ? ELSE google_photo_url END
           WHERE id = ?
-        `).run(nowIso(), profileName || authorizedUser.name || email.split('@')[0], email, email, email, googlePhotoUrl, googlePhotoUrl, googlePhotoUrl, authorizedUser.id);
+        `).run(loginAt, loginAt, profileName || authorizedUser.name || email.split('@')[0], email, email, email, googlePhotoUrl, googlePhotoUrl, googlePhotoUrl, authorizedUser.id);
 
         authorizedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(authorizedUser.id);
       }
@@ -2785,7 +2790,7 @@ function getUserRecord(userId, { includeDeleted = true } = {}) {
   const safeUserId = Number(userId || 0);
   if (!safeUserId) return null;
   return db.prepare(`
-    SELECT id, email, name, role, can_import, created_at, last_login,
+    SELECT id, email, name, role, can_import, created_at, last_login, last_seen_at,
            google_id, google_photo_url, profile_photo_url, profile_photo_mode,
            profile_signature_text, profile_signature_vibe, profile_signature_updated_at,
            COALESCE(status, 'active') AS status, deleted_at, deleted_label
@@ -2797,7 +2802,7 @@ function getUserRecord(userId, { includeDeleted = true } = {}) {
 
 function getAllUsers({ includeDeleted = false } = {}) {
   return db.prepare(`
-    SELECT id, email, name, role, can_import, created_at, last_login, COALESCE(status, 'active') AS status, deleted_at, deleted_label
+    SELECT id, email, name, role, can_import, created_at, last_login, last_seen_at, COALESCE(status, 'active') AS status, deleted_at, deleted_label
     FROM users
     ${includeDeleted ? '' : "WHERE COALESCE(status, 'active') <> 'deleted'"}
     ORDER BY created_at DESC, id DESC
@@ -4944,6 +4949,15 @@ app.set("views", path.join(__dirname, "views"));
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/vendor/html2canvas", express.static(path.join(__dirname, "node_modules", "html2canvas", "dist")));
 
+app.use((req, res, next) => {
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    return next();
+  }
+
+  syncRequestUserPresence(req);
+  return next();
+});
+
 // ===== MIDDLEWARE GLOBAL =====
 app.use((req, res, next) => {
   res.locals.user = null;
@@ -5019,6 +5033,33 @@ app.use((req, res, next) => {
 });
 
 function nowIso() { return dayjs().toISOString(); }
+
+const USER_PRESENCE_TOUCH_INTERVAL_MS = 60 * 1000;
+
+function touchUserPresence(userId, timestamp = null) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return null;
+  const seenAt = timestamp || nowIso();
+  db.prepare(`UPDATE users SET last_seen_at = ? WHERE id = ?`).run(seenAt, safeUserId);
+  return seenAt;
+}
+
+function syncRequestUserPresence(req, { force = false } = {}) {
+  const safeUserId = Number(req.user?.id || req.session?.passport?.user?.id || 0);
+  if (!safeUserId) return null;
+
+  const nowMs = Date.now();
+  const lastSyncedAtMs = Number(req.session?.lastSeenSyncedAt || 0);
+  if (!force && lastSyncedAtMs && (nowMs - lastSyncedAtMs) < USER_PRESENCE_TOUCH_INTERVAL_MS) {
+    return null;
+  }
+
+  const seenAt = touchUserPresence(safeUserId, new Date(nowMs).toISOString());
+  if (req.session) {
+    req.session.lastSeenSyncedAt = nowMs;
+  }
+  return seenAt;
+}
 
 function normalizeProfilePhotoUrl(value) {
   const raw = String(value || '').trim();
@@ -16476,6 +16517,7 @@ app.post('/lock/touch', ensureAuthenticatedIgnoringPin, (req, res) => {
 
   if (!settings.pin_enabled) {
     clearAppLockSession(req);
+    syncRequestUserPresence(req, { force: true });
     return res.status(204).end();
   }
 
@@ -16502,6 +16544,13 @@ app.post('/lock/touch', ensureAuthenticatedIgnoringPin, (req, res) => {
   }
 
   touchAppSession(req);
+  syncRequestUserPresence(req, { force: true });
+  return res.status(204).end();
+});
+
+app.post('/presence/touch', ensureAuthenticatedIgnoringPin, (req, res) => {
+  setNoStoreHeaders(res);
+  syncRequestUserPresence(req, { force: true });
   return res.status(204).end();
 });
 

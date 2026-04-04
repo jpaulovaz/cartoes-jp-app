@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS users (
   google_photo_url TEXT,
   profile_photo_url TEXT,
   created_at TEXT NOT NULL,
-  last_login TEXT
+  last_login TEXT,
+  last_seen_at TEXT
 );
 `);
 
@@ -58,6 +59,10 @@ if (!columnExists("users", "google_photo_url")) {
 
 if (!columnExists("users", "profile_photo_mode")) {
   db.exec("ALTER TABLE users ADD COLUMN profile_photo_mode TEXT NOT NULL DEFAULT 'default';");
+}
+
+if (!columnExists("users", "last_seen_at")) {
+  db.exec("ALTER TABLE users ADD COLUMN last_seen_at TEXT;");
 }
 
 // ===== SEGURANCA DO APP =====

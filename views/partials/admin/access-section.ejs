@@ -2,7 +2,7 @@
   const usersList = Array.isArray(users) ? users : [];
   const adminUsersCount = usersList.filter((item) => String(item.role || '') === 'admin').length;
   const importReleasedCount = usersList.filter((item) => Number(item.can_import ?? 1) !== 0).length;
-  const neverAccessedCount = usersList.filter((item) => !item.last_login).length;
+  const neverAccessedCount = usersList.filter((item) => !(item.last_seen_at || item.last_login)).length;
   const welcomePendingCount = usersList.filter((item) => (item.welcomeEmailStatus?.tone || 'muted') !== 'success').length;
 %>
 <section id="admin-section-access"
@@ -51,7 +51,7 @@
       <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-4 py-4">
         <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Sem acesso registrado</div>
         <div class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white"><%= neverAccessedCount %></div>
-        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Útil para acompanhar quem recebeu acesso, mas ainda não entrou.</p>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Útil para acompanhar quem recebeu acesso, mas ainda não gerou atividade no app.</p>
       </div>
     </div>
 
@@ -133,19 +133,21 @@
                  const welcomeLabel = u.welcomeEmailStatus?.label || 'Nunca enviado';
                  const welcomeDetail = u.welcomeEmailStatus?.detail || 'Sem envio registrado.';
                  const createdAtDate = u.created_at ? new Date(u.created_at) : null;
-                 const lastLoginDate = u.last_login ? new Date(u.last_login) : null;
+                 const lastSeenDate = (u.last_seen_at || u.last_login) ? new Date(u.last_seen_at || u.last_login) : null;
                  const createdAtLabel = createdAtDate ? createdAtDate.toLocaleDateString('pt-BR') : '-';
-                 const lastLoginLabel = lastLoginDate ? lastLoginDate.toLocaleDateString('pt-BR') : 'Sem acesso';
+                 const lastSeenLabel = lastSeenDate
+                   ? `${lastSeenDate.toLocaleDateString('pt-BR')} às ${lastSeenDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                   : 'Sem acesso';
                  const searchCorpus = [u.name, u.email, roleLabel, importLabel, welcomeLabel, welcomeDetail].filter(Boolean).join(' ');
             %>
               <tr data-access-row
                   data-access-search="<%= searchCorpus %>"
                   data-access-role="<%= u.role === 'admin' ? 'admin' : 'user' %>"
                   data-access-welcome="<%= (u.welcomeEmailStatus?.tone || 'muted') === 'success' ? 'sent' : 'pending' %>"
-                  data-access-never="<%= u.last_login ? '0' : '1' %>"
+                  data-access-never="<%= (u.last_seen_at || u.last_login) ? '0' : '1' %>"
                   data-access-name="<%= String(u.name || '').toLowerCase() %>"
                   data-access-created-at="<%= createdAtDate ? createdAtDate.getTime() : 0 %>"
-                  data-access-last-login="<%= lastLoginDate ? lastLoginDate.getTime() : 0 %>"
+                  data-access-last-login="<%= lastSeenDate ? lastSeenDate.getTime() : 0 %>"
                   data-access-role-rank="<%= u.role === 'admin' ? 1 : 0 %>"
                   class="align-top hover:bg-slate-50/80 dark:hover:bg-slate-900/30 transition-colors">
                 <td class="px-4 py-4">
@@ -172,7 +174,7 @@
                     <div class="text-xs leading-relaxed text-slate-500 dark:text-slate-400 max-w-[220px]"><%= welcomeDetail %></div>
                   </div>
                 </td>
-                <td class="px-4 py-4 text-slate-700 dark:text-slate-200 whitespace-nowrap"><%= lastLoginLabel %></td>
+                <td class="px-4 py-4 text-slate-700 dark:text-slate-200 whitespace-nowrap"><%= lastSeenLabel %></td>
                 <td class="px-4 py-4 text-slate-700 dark:text-slate-200 whitespace-nowrap"><%= createdAtLabel %></td>
                 <td class="px-4 py-4">
                   <div class="flex flex-wrap gap-2">

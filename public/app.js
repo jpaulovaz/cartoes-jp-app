@@ -3129,3 +3129,78 @@
   broadcastPinState('unlocked');
   touchServer(true);
 })();
+
+(function () {
+  const body = document.body;
+  if (!(body instanceof HTMLElement)) return;
+  if (body.dataset.presenceEnabled !== '1') return;
+  if (String(body.dataset.appPinScreen || 'app').toLowerCase() === 'lock') return;
+  if (body.dataset.appPinEnabled === '1') return;
+
+  const touchUrl = body.dataset.presenceTouchUrl || '/presence/touch';
+  const heartbeatMs = 60 * 1000;
+  let timer = null;
+  let lastTouchAt = 0;
+
+  function clearTimer() {
+    if (timer) {
+      window.clearTimeout(timer);
+      timer = null;
+    }
+  }
+
+  async function touchServer(force = false) {
+    if (document.visibilityState === 'hidden' && !force) return;
+    const now = Date.now();
+    if (!force && now - lastTouchAt < heartbeatMs) return;
+    lastTouchAt = now;
+
+    try {
+      await fetch(touchUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-AcerttaPay-Async': '1'
+        },
+        keepalive: force
+      });
+    } catch (_error) {}
+  }
+
+  function schedule() {
+    clearTimer();
+    timer = window.setTimeout(() => {
+      touchServer(true).finally(schedule);
+    }, heartbeatMs);
+  }
+
+  function markPresence() {
+    schedule();
+    touchServer(false);
+  }
+
+  ['pointerdown', 'touchstart', 'mousedown'].forEach((eventName) => {
+    document.addEventListener(eventName, markPresence, { passive: true });
+  });
+  document.addEventListener('keydown', markPresence);
+  window.addEventListener('focus', () => {
+    touchServer(true);
+    schedule();
+  }, { passive: true });
+  window.addEventListener('pageshow', () => {
+    touchServer(true);
+    schedule();
+  }, { passive: true });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      clearTimer();
+      return;
+    }
+    touchServer(true);
+    schedule();
+  });
+
+  schedule();
+  touchServer(true);
+})();

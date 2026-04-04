@@ -218,19 +218,47 @@
             if (tone === 'success') return 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-900/20';
             return 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/60';
         }
+
+        function buildMaskedMoneyLabel(value, includeCurrency = true) {
+            const raw = String(value == null ? '' : value).trim();
+            const digitCount = (raw.match(/\d/g) || []).length;
+            const bulletCount = Math.max(4, Math.min(includeCurrency ? 10 : 8, digitCount || 4));
+            const bullets = '•'.repeat(bulletCount);
+            return includeCurrency ? `R$ ${bullets}` : bullets;
+        }
     %>
 
             <div class="op-screen op-screen--detalhamento max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+                data-sensitive-scope="detalhamento"
                 data-month-swipe-area
                 data-month-swipe-prev="/detalhamento/<%= prevY %>/<%= prevM %>"
                 data-month-swipe-next="/detalhamento/<%= nextY %>/<%= nextM %>"
                 style="touch-action: pan-y pinch-zoom;">
 
                 <section class="op-page-hero op-fade-up mb-8">
-                    <div>
-                        <span class="op-page-hero__eyebrow">Painel principal</span>
-                        <h1 class="op-page-hero__title mt-4">👑 Meu Controle</h1>
-                        <p class="op-page-hero__subtitle mt-3"><span class="font-bold text-blue-600 dark:text-blue-300"><%= heroOwnerName %></span>, aqui você vê o que entrou, o que saiu, os cartões e o respiro do mês sem ficar abrindo mil telas.</p>
+                    <div class="op-detalhamento-hero__content">
+                        <div class="op-detalhamento-hero__copy min-w-0">
+                            <span class="op-page-hero__eyebrow">Painel principal</span>
+                            <h1 class="op-page-hero__title mt-4">👑 Meu Controle</h1>
+                            <p class="op-page-hero__subtitle mt-3"><span class="font-bold text-blue-600 dark:text-blue-300"><%= heroOwnerName %></span>, aqui você vê o que entrou, o que saiu, os cartões e o respiro do mês sem ficar abrindo mil telas.</p>
+                        </div>
+                        <button type="button"
+                            class="op-icon-btn op-sensitive-toggle"
+                            data-sensitive-toggle
+                            aria-pressed="false"
+                            aria-label="Ocultar valores sensíveis"
+                            title="Ocultar valores sensíveis">
+                            <svg data-sensitive-icon="visible" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            <svg data-sensitive-icon="hidden" class="hidden h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="m3 3 18 18"></path>
+                                <path d="M10.58 10.58a2 2 0 0 0 2.83 2.83"></path>
+                                <path d="M9.36 5.37A9.77 9.77 0 0 1 12 5c7 0 11 7 11 7a18.56 18.56 0 0 1-2.31 3.19"></path>
+                                <path d="M6.23 6.23A18.7 18.7 0 0 0 1 12s4 7 11 7a10.8 10.8 0 0 0 5-.95"></path>
+                            </svg>
+                        </button>
                     </div>
 
                     <div class="op-page-hero__actions w-full lg:max-w-[32rem]">
@@ -405,9 +433,10 @@
 
                 <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     <div class="bg-emerald-500 p-5 rounded-3xl text-white shadow-sm border border-emerald-600">
+                        <% const incomeTopLabel = formatBRLFromCents(incCents); %>
                         <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Grana que entrou</p>
-                        <h3 class="text-xl xl:text-2xl font-black mt-1">
-                            <%= formatBRLFromCents(incCents) %>
+                        <h3 class="text-xl xl:text-2xl font-black mt-1" data-sensitive-text data-sensitive-visible-value="<%= incomeTopLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(incomeTopLabel, true) %>">
+                            <%= incomeTopLabel %>
                         </h3>
                     </div>
                     <div class="op-paid-progress-card op-paid-progress-card--expense" data-progress-card="expense" style="<%= getProgressCardStyle(expenseProgress) %>">
@@ -443,9 +472,10 @@
                         </h3>
                     </div>
                     <div class="bg-blue-600 p-5 rounded-3xl text-white shadow-sm border border-blue-700 col-span-2 lg:col-span-1">
+                        <% const balanceTopLabel = formatBRLFromCents(saldoCents); %>
                         <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Quanto sobra</p>
-                        <h3 class="text-xl xl:text-2xl font-black mt-1">
-                            <%= formatBRLFromCents(saldoCents) %>
+                        <h3 class="text-xl xl:text-2xl font-black mt-1" data-sensitive-text data-sensitive-visible-value="<%= balanceTopLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(balanceTopLabel, true) %>">
+                            <%= balanceTopLabel %>
                         </h3>
                     </div>
                 </div>
@@ -710,13 +740,13 @@
                                                         <% } %>
                                                     </div>
                                                     <div class="w-40 min-w-[10rem] max-w-[10rem] self-start sm:w-48 sm:min-w-[12rem] sm:max-w-[12rem]">
-                                                        <% if (variable) { %>
+                                                        <% if (variable) { const incomeVariableLabel = formatBRLFromCents(fin.amount_cents); %>
                                                             <button type="button" onclick="openVariableEditor(<%= fin.id %>)" class="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-right transition hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 sm:px-3">
-                                                                <span class="block font-mono text-[13px] font-black text-emerald-700 dark:text-emerald-300 sm:text-sm"><%= formatBRLFromCents(fin.amount_cents) %></span>
+                                                                <span class="block font-mono text-[13px] font-black text-emerald-700 dark:text-emerald-300 sm:text-sm" data-sensitive-text data-sensitive-visible-value="<%= incomeVariableLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(incomeVariableLabel, true) %>"><%= incomeVariableLabel %></span>
                                                                 <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${itemCount} lançamento${itemCount === 1 ? '' : 's'}` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
                                                             </button>
-                                                        <% } else { %>
-                                                            <input type="text" data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-mono text-[13px] font-black text-right text-emerald-700 outline-none transition hover:border-emerald-300 focus:border-emerald-400 focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:border-emerald-900/40 dark:bg-emerald-900/30 dark:text-emerald-400 sm:text-sm" value="<%= getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>, this.value)">
+                                                        <% } else { const incomeFixedValue = getDisplayValue(fin); %>
+                                                            <input type="text" data-money-mask inputmode="numeric" data-sensitive-input data-sensitive-masked-value="<%= buildMaskedMoneyLabel(incomeFixedValue, false) %>" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-mono text-[13px] font-black text-right text-emerald-700 outline-none transition hover:border-emerald-300 focus:border-emerald-400 focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:border-emerald-900/40 dark:bg-emerald-900/30 dark:text-emerald-400 sm:text-sm" value="<%= incomeFixedValue %>" onblur="saveMath(<%= fin.id %>, this.value)">
                                                         <% } %>
                                                     </div>
                                                     <div class="self-start pt-0.5 text-right sm:pt-1">
@@ -1918,12 +1948,113 @@
                     }
                 });
 
+                function initSensitiveValuesToggle() {
+                    const scope = document.querySelector('[data-sensitive-scope="detalhamento"]');
+                    const toggle = scope?.querySelector('[data-sensitive-toggle]');
+                    if (!scope || !toggle) return;
+
+                    const storageKey = 'op:detailed-sensitive-hidden';
+                    const textNodes = Array.from(scope.querySelectorAll('[data-sensitive-text]'));
+                    const inputNodes = Array.from(scope.querySelectorAll('[data-sensitive-input]'));
+                    const visibleLabel = 'Ocultar valores sensíveis';
+                    const hiddenLabel = 'Mostrar valores sensíveis';
+
+                    textNodes.forEach((node) => {
+                        if (!node.dataset.sensitiveVisibleValue) {
+                            node.dataset.sensitiveVisibleValue = node.textContent.trim();
+                        }
+                    });
+
+                    inputNodes.forEach((input) => {
+                        if (!input.dataset.sensitiveVisibleValue) {
+                            input.dataset.sensitiveVisibleValue = input.value || '';
+                        }
+                        if (!input.dataset.sensitiveReadonly) {
+                            input.dataset.sensitiveReadonly = input.readOnly ? '1' : '0';
+                        }
+                        if (!input.dataset.sensitiveTabindexSnapshot) {
+                            const tabindexAttr = input.getAttribute('tabindex');
+                            input.dataset.sensitiveTabindexSnapshot = tabindexAttr == null ? '' : tabindexAttr;
+                        }
+                    });
+
+                    function syncButton(hidden) {
+                        const nextLabel = hidden ? hiddenLabel : visibleLabel;
+                        toggle.classList.toggle('is-hidden', hidden);
+                        toggle.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+                        toggle.setAttribute('aria-label', nextLabel);
+                        toggle.setAttribute('title', nextLabel);
+                        toggle.querySelectorAll('[data-sensitive-icon]').forEach((icon) => {
+                            const shouldShow = icon.dataset.sensitiveIcon === (hidden ? 'hidden' : 'visible');
+                            icon.classList.toggle('hidden', !shouldShow);
+                        });
+                    }
+
+                    function syncTextNodes(hidden) {
+                        textNodes.forEach((node) => {
+                            const visibleValue = node.dataset.sensitiveVisibleValue || node.textContent.trim();
+                            const maskedValue = node.dataset.sensitiveMaskedValue || 'R$ ••••';
+                            node.textContent = hidden ? maskedValue : visibleValue;
+                            node.classList.toggle('op-sensitive-value--masked', hidden);
+                        });
+                    }
+
+                    function syncInputNodes(hidden) {
+                        inputNodes.forEach((input) => {
+                            if (hidden) {
+                                input.dataset.sensitiveVisibleValue = input.value || input.dataset.sensitiveVisibleValue || '';
+                                input.value = input.dataset.sensitiveMaskedValue || '••••';
+                                input.readOnly = true;
+                                input.tabIndex = -1;
+                                input.classList.add('op-sensitive-input--masked');
+                                return;
+                            }
+
+                            input.value = input.dataset.sensitiveVisibleValue || '';
+                            input.readOnly = input.dataset.sensitiveReadonly === '1';
+                            const originalTabindex = input.dataset.sensitiveTabindexSnapshot || '';
+                            if (originalTabindex) input.setAttribute('tabindex', originalTabindex);
+                            else input.removeAttribute('tabindex');
+                            input.classList.remove('op-sensitive-input--masked');
+                        });
+                    }
+
+                    function applyState(hidden, { persist = true } = {}) {
+                        if (hidden && document.activeElement instanceof HTMLElement && inputNodes.includes(document.activeElement)) {
+                            document.activeElement.blur();
+                        }
+                        scope.classList.toggle('is-sensitive-hidden', hidden);
+                        scope.dataset.sensitiveState = hidden ? 'hidden' : 'visible';
+                        syncButton(hidden);
+                        syncTextNodes(hidden);
+                        syncInputNodes(hidden);
+                        if (!persist) return;
+                        try {
+                            window.localStorage.setItem(storageKey, hidden ? '1' : '0');
+                        } catch (_error) {}
+                    }
+
+                    let startHidden = false;
+                    try {
+                        startHidden = window.localStorage.getItem(storageKey) === '1';
+                    } catch (_error) {
+                        startHidden = false;
+                    }
+
+                    applyState(startHidden, { persist: false });
+                    toggle.addEventListener('click', () => {
+                        const nextHidden = scope.dataset.sensitiveState !== 'hidden';
+                        applyState(nextHidden);
+                    });
+                }
+
                 document.addEventListener('DOMContentLoaded', () => {
                     calculatePad();
                     applyFinanceModalState();
                     applyProgressCardState('expense', <%- JSON.stringify(expenseProgress || {}) %>);
                     applyProgressCardState('cards', <%- JSON.stringify(cardProgress || {}) %>);
                     bindFixedPaymentToggles();
+                    initSensitiveValuesToggle();
                 });
             </script>
 

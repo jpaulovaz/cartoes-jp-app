@@ -908,6 +908,56 @@ html.dark .op-admin-status-item--muted .op-admin-status-item__icon {
   gap: 0.75rem;
 }
 
+.op-detalhamento-hero__content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+}
+
+.op-detalhamento-hero__copy {
+  min-width: 0;
+}
+
+.op-sensitive-toggle {
+  position: relative;
+  z-index: 1;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 18px;
+}
+
+.op-sensitive-toggle.is-hidden {
+  background: rgba(15, 23, 42, 0.92);
+  border-color: rgba(15, 23, 42, 0.16);
+  color: #f8fafc;
+}
+
+html.dark .op-sensitive-toggle.is-hidden {
+  background: rgba(37, 99, 235, 0.22);
+  border-color: rgba(96, 165, 250, 0.28);
+  color: #dbeafe;
+}
+
+.op-sensitive-value--masked {
+  letter-spacing: 0.08em;
+}
+
+.op-sensitive-input--masked {
+  color: rgba(5, 150, 105, 0.78) !important;
+  letter-spacing: 0.14em;
+  cursor: default;
+  pointer-events: none;
+  user-select: none;
+}
+
+html.dark .op-sensitive-input--masked {
+  color: rgba(110, 231, 183, 0.82) !important;
+}
+
 @media (min-width: 1024px) {
   .op-page-hero {
     flex-direction: row;

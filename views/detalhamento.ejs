@@ -243,7 +243,7 @@
                             <p class="op-page-hero__subtitle mt-3"><span class="font-bold text-blue-600 dark:text-blue-300"><%= heroOwnerName %></span>, aqui você vê o que entrou, o que saiu, os cartões e o respiro do mês sem ficar abrindo mil telas.</p>
                         </div>
                         <button type="button"
-                            class="op-icon-btn op-sensitive-toggle"
+                            class="op-icon-btn op-sensitive-toggle op-sensitive-toggle--mobile"
                             data-sensitive-toggle
                             aria-pressed="false"
                             aria-label="Ocultar valores sensíveis"
@@ -261,37 +261,61 @@
                         </button>
                     </div>
 
-                    <div class="op-page-hero__actions w-full lg:max-w-[32rem]">
-                        <% if (isClosed) { %>
-                            <button onclick="toggleLock('open')"
-                                class="op-btn op-btn-danger-soft op-btn--block">
-                                🔒 Mês Fechado
+                    <div class="op-detalhamento-hero__actions-shell w-full lg:max-w-[32rem]">
+                        <div class="op-detalhamento-hero__actions-head">
+                            <button type="button"
+                                class="op-icon-btn op-sensitive-toggle op-sensitive-toggle--desktop"
+                                data-sensitive-toggle
+                                aria-pressed="false"
+                                aria-label="Ocultar valores sensíveis"
+                                title="Ocultar valores sensíveis">
+                                <svg data-sensitive-icon="visible" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                <svg data-sensitive-icon="hidden" class="hidden h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="m3 3 18 18"></path>
+                                    <path d="M10.58 10.58a2 2 0 0 0 2.83 2.83"></path>
+                                    <path d="M9.36 5.37A9.77 9.77 0 0 1 12 5c7 0 11 7 11 7a18.56 18.56 0 0 1-2.31 3.19"></path>
+                                    <path d="M6.23 6.23A18.7 18.7 0 0 0 1 12s4 7 11 7a10.8 10.8 0 0 0 5-.95"></path>
+                                </svg>
                             </button>
-                        <% } else { %>
-                            <button onclick="toggleLock('close')"
-                                class="op-btn op-btn-success op-btn--block">
-                                🔓 Fechar Mês
-                            </button>
-                        <% } %>
+                        </div>
 
-                        <button type="button" data-manual-modal-open
-                            <%= (isClosed || !cards || !cards.length) ? 'disabled' : '' %>
-                            class="op-btn op-btn-success op-btn--block <%= (isClosed || !cards || !cards.length) ? 'opacity-60 cursor-not-allowed' : '' %>">
-                            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                            </svg>
-                            Nova compra
-                        </button>
+                        <div class="op-page-hero__actions op-detalhamento-hero__actions">
+                            <div class="op-detalhamento-hero__action-row op-detalhamento-hero__action-row--primary">
+                                <% if (isClosed) { %>
+                                    <button onclick="toggleLock('open')"
+                                        class="op-btn op-btn-danger-soft op-btn--block">
+                                        🔒 Mês Fechado
+                                    </button>
+                                <% } else { %>
+                                    <button onclick="toggleLock('close')"
+                                        class="op-btn op-btn-success op-btn--block">
+                                        🔓 Fechar Mês
+                                    </button>
+                                <% } %>
 
-                        <div class="col-span-2 w-full flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 p-1 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/70">
-                            <a href="/detalhamento/<%= prevY %>/<%= prevM %>"
-                                class="op-btn op-btn-ghost flex-1">&larr; Anterior</a>
-                            <a href="/month/<%= year %>/<%= month %>"
-                                class="op-btn op-btn-primary whitespace-nowrap px-4">
-                                <%= String(month).padStart(2, '0' ) %> / <%= year %>
-                            </a>
-                            <a href="/detalhamento/<%= nextY %>/<%= nextM %>"
-                                class="op-btn op-btn-ghost flex-1">Próximo &rarr;</a>
+                                <button type="button" data-manual-modal-open
+                                    <%= (isClosed || !cards || !cards.length) ? 'disabled' : '' %>
+                                    class="op-btn op-btn-success op-btn--block <%= (isClosed || !cards || !cards.length) ? 'opacity-60 cursor-not-allowed' : '' %>">
+                                    <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                    </svg>
+                                    Nova compra
+                                </button>
+                            </div>
+
+                            <div class="op-detalhamento-hero__action-row op-detalhamento-hero__action-row--month col-span-2 w-full flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 p-1 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/70">
+                                <a href="/detalhamento/<%= prevY %>/<%= prevM %>"
+                                    class="op-btn op-btn-ghost flex-1">&larr; Anterior</a>
+                                <a href="/month/<%= year %>/<%= month %>"
+                                    class="op-btn op-btn-primary whitespace-nowrap px-4">
+                                    <%= String(month).padStart(2, '0' ) %> / <%= year %>
+                                </a>
+                                <a href="/detalhamento/<%= nextY %>/<%= nextM %>"
+                                    class="op-btn op-btn-ghost flex-1">Próximo &rarr;</a>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -1950,8 +1974,8 @@
 
                 function initSensitiveValuesToggle() {
                     const scope = document.querySelector('[data-sensitive-scope="detalhamento"]');
-                    const toggle = scope?.querySelector('[data-sensitive-toggle]');
-                    if (!scope || !toggle) return;
+                    const toggles = scope ? Array.from(scope.querySelectorAll('[data-sensitive-toggle]')) : [];
+                    if (!scope || !toggles.length) return;
 
                     const storageKey = 'op:detailed-sensitive-hidden';
                     const textNodes = Array.from(scope.querySelectorAll('[data-sensitive-text]'));
@@ -1980,13 +2004,15 @@
 
                     function syncButton(hidden) {
                         const nextLabel = hidden ? hiddenLabel : visibleLabel;
-                        toggle.classList.toggle('is-hidden', hidden);
-                        toggle.setAttribute('aria-pressed', hidden ? 'true' : 'false');
-                        toggle.setAttribute('aria-label', nextLabel);
-                        toggle.setAttribute('title', nextLabel);
-                        toggle.querySelectorAll('[data-sensitive-icon]').forEach((icon) => {
-                            const shouldShow = icon.dataset.sensitiveIcon === (hidden ? 'hidden' : 'visible');
-                            icon.classList.toggle('hidden', !shouldShow);
+                        toggles.forEach((toggle) => {
+                            toggle.classList.toggle('is-hidden', hidden);
+                            toggle.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+                            toggle.setAttribute('aria-label', nextLabel);
+                            toggle.setAttribute('title', nextLabel);
+                            toggle.querySelectorAll('[data-sensitive-icon]').forEach((icon) => {
+                                const shouldShow = icon.dataset.sensitiveIcon === (hidden ? 'hidden' : 'visible');
+                                icon.classList.toggle('hidden', !shouldShow);
+                            });
                         });
                     }
 
@@ -2042,9 +2068,11 @@
                     }
 
                     applyState(startHidden, { persist: false });
-                    toggle.addEventListener('click', () => {
-                        const nextHidden = scope.dataset.sensitiveState !== 'hidden';
-                        applyState(nextHidden);
+                    toggles.forEach((toggle) => {
+                        toggle.addEventListener('click', () => {
+                            const nextHidden = scope.dataset.sensitiveState !== 'hidden';
+                            applyState(nextHidden);
+                        });
                     });
                 }
 

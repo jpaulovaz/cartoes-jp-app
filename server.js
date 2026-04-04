@@ -23913,4 +23913,5 @@ app.listen(PORT, () => {
   console.log(`✅ Rodando em http://localhost:${PORT}`);
   startCardDueTodayPushScheduler();
   startManualDebtDueScheduler();
+  restartBackupScheduler();
 });

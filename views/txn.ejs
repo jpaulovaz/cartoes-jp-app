@@ -26,7 +26,7 @@
       </div>
     </div>
     <div class="op-page-hero__actions">
-      <a href="/month/<%= txn.year %>/<%= txn.month %>" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
+      <a href="/month/<%= txn.year %>/<%= txn.month %>" class="op-btn op-hero-link op-hero-link--month">
         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
         </svg>
@@ -34,7 +34,7 @@
       </a>
       <% if (!isClosed) { %>
         <div class="flex flex-wrap gap-2 sm:justify-end">
-          <button type="submit" form="txn-alloc-form" data-txn-save-button data-delivery-mode-button data-delivery-mode="draft" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="submit" form="txn-alloc-form" data-txn-save-button data-delivery-mode-button data-delivery-mode="draft" class="op-btn op-btn-success disabled:cursor-not-allowed disabled:opacity-50">
             <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>

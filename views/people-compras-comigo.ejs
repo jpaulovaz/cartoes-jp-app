@@ -65,12 +65,12 @@
     </div>
 
     <div class="op-page-hero__actions w-full lg:max-w-[32rem]">
-      <a href="<%= backHref || '/people' %>" class="op-btn op-btn-accent-soft op-btn--block">← Voltar para Minha Rede</a>
-      <a href="<%= sharedDebtsHref || '/shared-debts' %>" class="op-btn op-btn-info op-btn--block">Abrir Acertos</a>
+      <a href="<%= backHref || '/people' %>" class="op-btn op-hero-link op-hero-link--network op-btn--block">← Voltar para Minha Rede</a>
+      <a href="<%= sharedDebtsHref || '/shared-debts' %>" class="op-btn op-hero-link op-hero-link--debts op-btn--block">Abrir Acertos</a>
 
       <div class="w-full flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 p-1 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/70">
         <a href="<%= previousMonthHref %>" class="op-btn op-btn-ghost flex-1">← Anterior</a>
-        <span class="op-btn op-btn-primary pointer-events-none shrink-0 whitespace-nowrap px-4" aria-current="page"><%= monthChipText %></span>
+        <span class="op-btn op-hero-link op-hero-link--month pointer-events-none shrink-0 whitespace-nowrap px-4" aria-current="page"><%= monthChipText %></span>
         <a href="<%= nextMonthHref %>" class="op-btn op-btn-ghost flex-1">Próximo →</a>
       </div>
 

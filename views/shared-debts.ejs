@@ -876,15 +876,15 @@
       </div>
       <div class="mt-5 flex flex-wrap gap-3 op-shared-action-row">
         <% if (isArchiveMode) { %>
-          <a href="<%= otherPath %>" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Voltar para ativas</a>
+          <a href="<%= otherPath %>" class="op-btn op-hero-link op-hero-link--debts">Voltar para ativas</a>
         <% } else { %>
           <% if (draftQueueSummaryMeta.queueCount) { %>
-            <a href="#draft-queues" class="inline-flex items-center justify-center rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-bold text-sky-700 shadow-sm transition-colors hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200 dark:hover:bg-sky-900/30">
+            <a href="#draft-queues" class="op-btn op-hero-link op-hero-link--debts">
               Caixa de saída
               <span class="ml-2 inline-flex min-w-[1.8rem] items-center justify-center rounded-full bg-sky-700 px-2 py-0.5 text-[11px] font-black text-white dark:bg-sky-200 dark:text-sky-900"><%= draftQueueSummaryMeta.queueCount %></span>
             </a>
           <% } %>
-          <a href="<%= otherPath %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
+          <a href="<%= otherPath %>" class="op-btn op-hero-link op-hero-link--debts-soft">
             Arquivo
             <% if (archiveTotalCount) { %>
               <span class="ml-2 inline-flex min-w-[1.8rem] items-center justify-center rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-black text-white dark:bg-slate-100 dark:text-slate-900"><%= archiveTotalCount %></span>

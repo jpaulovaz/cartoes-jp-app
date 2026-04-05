@@ -45,17 +45,11 @@
       </div>
     </div>
     <div class="op-page-hero__actions op-page-hero__actions--compact">
-      <a href="/month/<%= year %>/<%= month %>" class="op-btn op-btn-success op-btn--compact whitespace-nowrap">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
-        </svg>
-        Ver compras
+      <a href="/month/<%= year %>/<%= month %>" class="inline-flex items-center justify-center whitespace-nowrap text-center px-4 py-2.5 text-sm font-bold text-white bg-slate-900 border border-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-200 dark:hover:bg-white">
+        Ver mês
       </a>
-      <a href="/summary/<%= year %>/<%= month %>" class="op-btn op-btn-info op-btn--compact whitespace-nowrap">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v8m4-4H8"></path>
-        </svg>
-        Fechamento
+      <a href="/summary/<%= year %>/<%= month %>" class="inline-flex items-center justify-center whitespace-nowrap text-center px-4 py-2.5 text-sm font-bold text-white bg-slate-900 border border-slate-900 rounded-xl hover:bg-slate-800 shadow-sm transition-all hover:-translate-y-0.5 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-200 dark:hover:bg-white">
+        Resumo da ópera
       </a>
       <a href="/detalhamento/<%= year %>/<%= month %>" class="op-btn op-btn-export op-btn--compact whitespace-nowrap">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

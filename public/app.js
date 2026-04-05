@@ -55,12 +55,14 @@
     const body = document.body;
     const isIOS = detectIOS();
     const isStandalone = detectStandalone();
+    const hasCoarsePointer = window.matchMedia('(pointer: coarse)').matches || Number(navigator.maxTouchPoints || 0) > 0;
     const visualViewport = window.visualViewport;
     const viewportHeight = Math.round((visualViewport && visualViewport.height) || window.innerHeight || document.documentElement.clientHeight || 0);
     const viewportWidth = Math.round((visualViewport && visualViewport.width) || window.innerWidth || document.documentElement.clientWidth || 0);
     const offsetTop = Math.round((visualViewport && visualViewport.offsetTop) || 0);
     const keyboardInset = Math.max(0, Math.round((window.innerHeight || viewportHeight) - viewportHeight - offsetTop));
     const keyboardOpen = keyboardInset > 120;
+    const landscapePhoneChrome = hasCoarsePointer && viewportWidth >= 768 && viewportHeight <= 560;
     const cozyViewport = viewportWidth <= 430;
     const compactViewport = viewportWidth <= 390;
     const tightViewport = viewportWidth <= 360;
@@ -74,6 +76,7 @@
     root.classList.toggle('op-vp-compact', compactViewport);
     root.classList.toggle('op-vp-tight', tightViewport);
     root.classList.toggle('op-vp-short', shortViewport);
+    root.classList.toggle('op-force-mobile-chrome', landscapePhoneChrome);
     root.dataset.opPlatform = isIOS ? 'ios' : 'default';
     root.dataset.opDisplayMode = isStandalone ? 'standalone' : 'browser';
     root.dataset.opViewportTier = viewportTier;
@@ -92,6 +95,7 @@
       body.classList.toggle('op-vp-compact', compactViewport);
       body.classList.toggle('op-vp-tight', tightViewport);
       body.classList.toggle('op-vp-short', shortViewport);
+      body.classList.toggle('op-force-mobile-chrome', landscapePhoneChrome);
       body.classList.toggle('op-virtual-keyboard-open', isIOS && keyboardOpen);
       body.dataset.opViewportTier = viewportTier;
     }
@@ -1909,7 +1913,7 @@
     const mainShell = document.querySelector('.op-app-main');
     let hideTimer = null;
 
-    const isMobileViewport = () => !window.matchMedia('(min-width: 768px)').matches;
+    const isMobileViewport = () => !window.matchMedia('(min-width: 768px)').matches || root.classList.contains('op-force-mobile-chrome');
     const showNav = () => nav.classList.remove('is-idle-hidden');
     const hideNav = () => nav.classList.add('is-idle-hidden');
     const scheduleHide = (delay = 1900) => {
@@ -2110,7 +2114,8 @@
     if (getLinks().length < 2) return;
 
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const isMobileViewport = () => window.matchMedia('(max-width: 767px)').matches;
+    const root = document.documentElement;
+    const isMobileViewport = () => window.matchMedia('(max-width: 767px)').matches || root.classList.contains('op-force-mobile-chrome');
 
     let snapTimer = null;
     let isPointerDown = false;

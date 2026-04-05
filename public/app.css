@@ -1564,6 +1564,14 @@ html.dark .op-variable-item-row.is-paid {
   transition: color 0.2s ease;
 }
 
+.op-bottom-nav__label {
+  display: block;
+  max-width: 4.7rem;
+  white-space: normal;
+  text-align: center;
+  text-wrap: balance;
+}
+
 .op-bottom-nav__link:hover,
 .op-bottom-nav__link.is-active {
   color: #fff;
@@ -6872,6 +6880,80 @@ html.op-vp-tight .op-mobile-brand-card > img,
 html.op-vp-tight .op-mobile-brand-card .h-12.w-12 {
   width: 2.6rem !important;
   height: 2.6rem !important;
+}
+
+@media (min-width: 768px) {
+  html.op-force-mobile-chrome header.sticky {
+    padding-left: max(0.55rem, calc(var(--op-left-safe) + 0.2rem)) !important;
+    padding-right: max(0.55rem, calc(var(--op-right-safe) + 0.2rem)) !important;
+  }
+
+  html.op-force-mobile-chrome .op-topbar-shell {
+    margin-top: 0.45rem;
+    padding: 0.7rem;
+    border-radius: 24px;
+  }
+
+  html.op-force-mobile-chrome .op-topbar-desktop {
+    display: none !important;
+  }
+
+  html.op-force-mobile-chrome .op-topbar-mobile {
+    display: block !important;
+  }
+
+  html.op-force-mobile-chrome .op-mobile-topbar-row {
+    gap: 0.45rem;
+  }
+
+  html.op-force-mobile-chrome .op-mobile-brand-card {
+    padding-inline: 0.8rem;
+  }
+
+  html.op-force-mobile-chrome .op-mobile-brand-card > img,
+  html.op-force-mobile-chrome .op-mobile-brand-card .h-12.w-12 {
+    width: 2.7rem !important;
+    height: 2.7rem !important;
+  }
+
+  html.op-force-mobile-chrome .op-utility-btn {
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 16px;
+  }
+
+  html.op-force-mobile-chrome .op-bottom-nav {
+    display: block !important;
+    padding-inline: 0.7rem;
+  }
+
+  html.op-force-mobile-chrome .op-bottom-nav__inner {
+    gap: 0.35rem;
+    padding: 0.45rem;
+    border-radius: 22px;
+  }
+
+  html.op-force-mobile-chrome .op-bottom-nav__link {
+    min-width: 4.45rem;
+    min-height: 54px;
+    padding-inline: 0.58rem;
+    font-size: 0.63rem;
+  }
+
+  html.op-force-mobile-chrome .op-bottom-nav__label {
+    max-width: 4.85rem;
+  }
+
+  html.op-force-mobile-chrome .op-bottom-nav__icon {
+    width: 1.82rem;
+    height: 1.82rem;
+    border-radius: 0.78rem;
+  }
+
+  html.op-force-mobile-chrome .op-app-main {
+    padding-bottom: var(--op-mobile-bottom-clearance) !important;
+    scroll-padding-bottom: var(--op-mobile-bottom-clearance);
+  }
 }
 
 html.op-vp-tight .op-page-hero,

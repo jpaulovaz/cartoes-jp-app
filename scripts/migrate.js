@@ -129,6 +129,7 @@ CREATE TABLE IF NOT EXISTS user_notification_preferences (
   monthly_pix_updates INTEGER NOT NULL DEFAULT 1,
   card_due_today INTEGER NOT NULL DEFAULT 1,
   finance_date_alerts INTEGER NOT NULL DEFAULT 1,
+  due_date_alerts INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -160,6 +161,15 @@ if (!columnExists("user_notification_preferences", "card_due_today")) {
 
 if (!columnExists("user_notification_preferences", "finance_date_alerts")) {
   db.exec("ALTER TABLE user_notification_preferences ADD COLUMN finance_date_alerts INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("user_notification_preferences", "due_date_alerts")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN due_date_alerts INTEGER NOT NULL DEFAULT 1;");
+  try {
+    db.exec("UPDATE user_notification_preferences SET due_date_alerts = COALESCE(shared_debt_payments, 1);");
+  } catch (error) {
+    // tabela ainda pode estar vazia ou em transição; sem drama
+  }
 }
 
 if (!columnExists("user_notification_preferences", "updated_at")) {

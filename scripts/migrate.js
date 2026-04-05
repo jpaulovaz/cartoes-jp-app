@@ -1,4 +1,5 @@
 const db = require("../src/db");
+const { ensureMessageTemplateTables, syncMessageCatalogWithDatabase } = require("../src/messageCatalog");
 
 function columnExists(table, col) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(r => r.name);
@@ -27,7 +28,8 @@ CREATE TABLE IF NOT EXISTS users (
   google_photo_url TEXT,
   profile_photo_url TEXT,
   created_at TEXT NOT NULL,
-  last_login TEXT
+  last_login TEXT,
+  last_seen_at TEXT
 );
 `);
 
@@ -57,6 +59,10 @@ if (!columnExists("users", "google_photo_url")) {
 
 if (!columnExists("users", "profile_photo_mode")) {
   db.exec("ALTER TABLE users ADD COLUMN profile_photo_mode TEXT NOT NULL DEFAULT 'default';");
+}
+
+if (!columnExists("users", "last_seen_at")) {
+  db.exec("ALTER TABLE users ADD COLUMN last_seen_at TEXT;");
 }
 
 // ===== SEGURANCA DO APP =====
@@ -122,6 +128,8 @@ CREATE TABLE IF NOT EXISTS user_notification_preferences (
   shared_debt_payments INTEGER NOT NULL DEFAULT 1,
   monthly_pix_updates INTEGER NOT NULL DEFAULT 1,
   card_due_today INTEGER NOT NULL DEFAULT 1,
+  finance_date_alerts INTEGER NOT NULL DEFAULT 1,
+  due_date_alerts INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -149,6 +157,19 @@ if (!columnExists("user_notification_preferences", "monthly_pix_updates")) {
 
 if (!columnExists("user_notification_preferences", "card_due_today")) {
   db.exec("ALTER TABLE user_notification_preferences ADD COLUMN card_due_today INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("user_notification_preferences", "finance_date_alerts")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN finance_date_alerts INTEGER NOT NULL DEFAULT 1;");
+}
+
+if (!columnExists("user_notification_preferences", "due_date_alerts")) {
+  db.exec("ALTER TABLE user_notification_preferences ADD COLUMN due_date_alerts INTEGER NOT NULL DEFAULT 1;");
+  try {
+    db.exec("UPDATE user_notification_preferences SET due_date_alerts = COALESCE(shared_debt_payments, 1);");
+  } catch (error) {
+    // tabela ainda pode estar vazia ou em transição; sem drama
+  }
 }
 
 if (!columnExists("user_notification_preferences", "updated_at")) {
@@ -271,6 +292,25 @@ CREATE TABLE IF NOT EXISTS imports (
   FOREIGN KEY (card_id) REFERENCES cards(id)
 );
 
+CREATE TABLE IF NOT EXISTS import_overwrite_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  transaction_id INTEGER NOT NULL,
+  import_id INTEGER,
+  card_id INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  original_filename TEXT,
+  preview_item_id TEXT,
+  before_snapshot_json TEXT NOT NULL,
+  after_snapshot_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id),
+  FOREIGN KEY (import_id) REFERENCES imports(id),
+  FOREIGN KEY (card_id) REFERENCES cards(id)
+);
+
 CREATE TABLE IF NOT EXISTS transactions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -371,6 +411,10 @@ CREATE TABLE IF NOT EXISTS monthly_finances (
   amount_cents INTEGER DEFAULT 0,
   amount_mode TEXT NOT NULL DEFAULT 'fixed',
   carry_key TEXT,
+  day_of_month INTEGER,
+  schedule_kind TEXT,
+  is_paid INTEGER NOT NULL DEFAULT 0,
+  paid_at TEXT,
   created_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (category_id) REFERENCES finance_categories(id)
@@ -383,6 +427,8 @@ CREATE TABLE IF NOT EXISTS monthly_finance_items (
   item_date TEXT,
   item_source TEXT,
   amount_cents INTEGER NOT NULL DEFAULT 0,
+  is_paid INTEGER NOT NULL DEFAULT 0,
+  paid_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (finance_id) REFERENCES monthly_finances(id),
@@ -404,6 +450,21 @@ CREATE TABLE IF NOT EXISTS monthly_finance_carry_exceptions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_monthly_finance_carry_exceptions_user_period ON monthly_finance_carry_exceptions(user_id, year, month);
+
+CREATE TABLE IF NOT EXISTS monthly_finance_alert_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  source_kind TEXT NOT NULL,
+  source_ref TEXT NOT NULL,
+  type TEXT NOT NULL,
+  date_key TEXT NOT NULL,
+  payload_json TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, source_kind, source_ref, type, date_key),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_monthly_finance_alert_logs_date_user ON monthly_finance_alert_logs(date_key, user_id, type);
 
 CREATE TABLE IF NOT EXISTS scratchpad (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -684,6 +745,9 @@ CREATE TABLE IF NOT EXISTS shared_debt_send_queue_items (
   amount_cents INTEGER NOT NULL,
   receiver_email_snapshot TEXT,
   receiver_name_snapshot TEXT,
+  action_kind TEXT NOT NULL DEFAULT 'create',
+  target_request_id INTEGER,
+  baseline_status_snapshot TEXT,
   sent_request_id INTEGER,
   cancelled_at TEXT,
   created_at TEXT NOT NULL,
@@ -696,6 +760,7 @@ CREATE TABLE IF NOT EXISTS shared_debt_send_queue_items (
   FOREIGN KEY (source_allocation_id) REFERENCES allocations(id),
   FOREIGN KEY (source_person_id) REFERENCES people(id),
   FOREIGN KEY (card_id) REFERENCES cards(id),
+  FOREIGN KEY (target_request_id) REFERENCES shared_debt_requests(id),
   FOREIGN KEY (sent_request_id) REFERENCES shared_debt_requests(id)
 );
 
@@ -989,6 +1054,24 @@ if (!columnExists("shared_debt_batches", "resolved_at")) {
   db.exec("ALTER TABLE shared_debt_batches ADD COLUMN resolved_at TEXT;");
 }
 
+if (!columnExists("shared_debt_send_queue_items", "action_kind")) {
+  db.exec("ALTER TABLE shared_debt_send_queue_items ADD COLUMN action_kind TEXT NOT NULL DEFAULT 'create';");
+}
+
+if (!columnExists("shared_debt_send_queue_items", "target_request_id")) {
+  db.exec("ALTER TABLE shared_debt_send_queue_items ADD COLUMN target_request_id INTEGER;");
+}
+
+if (!columnExists("shared_debt_send_queue_items", "baseline_status_snapshot")) {
+  db.exec("ALTER TABLE shared_debt_send_queue_items ADD COLUMN baseline_status_snapshot TEXT;");
+}
+
+db.exec(`
+UPDATE shared_debt_send_queue_items
+SET action_kind = COALESCE(NULLIF(trim(action_kind), ''), 'create')
+WHERE action_kind IS NULL OR trim(action_kind) = '';
+`);
+
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase() || null;
@@ -1137,6 +1220,8 @@ CREATE INDEX IF NOT EXISTS idx_people_user_profile_kind ON people(user_id, profi
 CREATE INDEX IF NOT EXISTS idx_people_user_status_active ON people(user_id, status, active);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 CREATE INDEX IF NOT EXISTS idx_imports_user ON imports(user_id);
+CREATE INDEX IF NOT EXISTS idx_import_overwrite_events_user_period ON import_overwrite_events(user_id, year, month, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_import_overwrite_events_txn ON import_overwrite_events(transaction_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_purchase_categories_user_active ON purchase_categories(user_id, active, sort_order, name);
 CREATE INDEX IF NOT EXISTS idx_purchase_categories_user_kind ON purchase_categories(user_id, kind, active);
 CREATE INDEX IF NOT EXISTS idx_txn_user ON transactions(user_id);
@@ -1178,6 +1263,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_requester_status ON share
 CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_receiver_period ON shared_debt_send_queues(receiver_user_id, source_due_year DESC, source_due_month DESC);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_queue ON shared_debt_send_queue_items(queue_id, source_txn_date_snapshot, id);
 CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_txn_person ON shared_debt_send_queue_items(requester_user_id, source_transaction_id, source_person_id);
+CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_target_request ON shared_debt_send_queue_items(target_request_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at);
 CREATE INDEX IF NOT EXISTS idx_user_notification_preferences_updated ON user_notification_preferences(updated_at);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_status ON friend_requests(requester_user_id, status, created_at);
@@ -1196,6 +1282,30 @@ if (!columnExists("monthly_finances", "amount_mode")) {
 
 if (!columnExists("monthly_finances", "carry_key")) {
   db.exec("ALTER TABLE monthly_finances ADD COLUMN carry_key TEXT;");
+}
+
+if (!columnExists("monthly_finances", "day_of_month")) {
+  db.exec("ALTER TABLE monthly_finances ADD COLUMN day_of_month INTEGER;");
+}
+
+if (!columnExists("monthly_finances", "schedule_kind")) {
+  db.exec("ALTER TABLE monthly_finances ADD COLUMN schedule_kind TEXT;");
+}
+
+if (!columnExists("monthly_finances", "is_paid")) {
+  db.exec("ALTER TABLE monthly_finances ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("monthly_finances", "paid_at")) {
+  db.exec("ALTER TABLE monthly_finances ADD COLUMN paid_at TEXT;");
+}
+
+if (!columnExists("monthly_finance_items", "is_paid")) {
+  db.exec("ALTER TABLE monthly_finance_items ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!columnExists("monthly_finance_items", "paid_at")) {
+  db.exec("ALTER TABLE monthly_finance_items ADD COLUMN paid_at TEXT;");
 }
 
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_monthly_finances_user_period_carry_key ON monthly_finances(user_id, month, year, carry_key) WHERE carry_key IS NOT NULL;");
@@ -1283,4 +1393,8 @@ db.transaction(() => {
 console.log("✅ Migração Multi-Usuário concluída!");
 console.log("✅ Tabela de usuários criada");
 console.log("✅ user_id adicionado a todas as tabelas");
+
+ensureMessageTemplateTables(db);
+syncMessageCatalogWithDatabase(db);
+
 console.log("✅ Categorias de compra opcionais preparadas");

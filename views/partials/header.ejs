@@ -148,7 +148,9 @@
       data-app-pin-idle-seconds="<%= Number(appPinContext.idleSeconds || 0) %>"
       data-app-pin-lock-url="/lock/engage"
       data-app-pin-touch-url="/lock/touch"
-      data-app-pin-screen="<%= appPinScreen %>">
+      data-app-pin-screen="<%= appPinScreen %>"
+      data-presence-enabled="<%= user ? '1' : '0' %>"
+      data-presence-touch-url="/presence/touch">
   <div class="mobile-top-chrome-fix" aria-hidden="true"></div>
 
   <% const dNav = new Date();
@@ -170,7 +172,7 @@
 
   <header class="sticky top-0 z-50 px-3 pt-[max(env(safe-area-inset-top,0px),0.25rem)] md:px-4 lg:px-6">
     <div class="op-topbar-shell mx-auto mt-2 max-w-[1640px] rounded-[30px] border border-white/10 px-3 py-3 md:px-5 md:py-4">
-      <div class="hidden md:flex items-center gap-4">
+      <div class="op-topbar-desktop hidden md:flex items-center gap-4">
         <a href="<%= defaultDashboardHref %>" class="flex min-w-0 items-center gap-4 rounded-[22px] border border-white/8 bg-white/5 px-4 py-3 transition hover:bg-white/10">
           <% if (hasUserPhoto) { %><img src="<%= userPhotoUrl %>" alt="<%= ownerShortName %>" loading="lazy" referrerpolicy="no-referrer" class="h-14 w-14 rounded-full object-cover shadow-[0_14px_32px_rgba(37,99,235,0.32)] ring-2 ring-white/25"><% } else { %><img src="/icon-192.png" alt="AcerttaPay" class="h-14 w-14 rounded-[1.35rem] object-cover shadow-[0_14px_32px_rgba(37,99,235,0.32)]"><% } %>
           <span class="min-w-0">
@@ -239,7 +241,7 @@
         </div>
       </div>
 
-      <div class="md:hidden space-y-3">
+      <div class="op-topbar-mobile md:hidden space-y-3">
         <div class="op-mobile-topbar-row flex items-center gap-3">
           <a href="<%= defaultDashboardHref %>" class="op-mobile-brand-card flex min-w-0 flex-1 items-center gap-3 rounded-[24px] border border-white/10 bg-white/6 px-3 py-3">
             <% if (hasUserPhoto) { %><img src="<%= userPhotoUrl %>" alt="<%= ownerShortName %>" loading="lazy" referrerpolicy="no-referrer" class="h-12 w-12 rounded-full object-cover shadow-[0_10px_24px_rgba(37,99,235,0.3)] ring-2 ring-white/25"><% } else { %><img src="/icon-192.png" alt="AcerttaPay" class="h-12 w-12 rounded-[1.1rem] object-cover shadow-[0_10px_24px_rgba(37,99,235,0.3)]"><% } %>

@@ -240,6 +240,17 @@ VAPID_PRIVATE_KEY=...
 VAPID_SUBJECT=mailto:voce@dominio.com
 
 INACTIVITY_TIMEOUT_MINUTES=0
+
+CARD_DUE_PUSH_TIMEZONE=America/Sao_Paulo
+CARD_DUE_PUSH_HOUR=10
+CARD_DUE_PUSH_MINUTE=0
+CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES=10
+
+CARD_DUE_PUSH_ENABLED=1
+CARD_DUE_PUSH_MAX_SENDS_PER_DAY=1
+CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES=0
+MONTHLY_FINANCE_DATE_ALERT_ENABLED=1
+DATE_DRIVEN_ALERTS_ENABLED=1
 ```
 
 <details>
@@ -248,9 +259,12 @@ INACTIVITY_TIMEOUT_MINUTES=0
 - `SESSION_SECRET` → protege a sessão do usuário;
 - `GOOGLE_*` → autenticação com Google;
 - `EVOLUTION_*` → integração de WhatsApp para automações administrativas;
-- `VAPID_*` → notificações push web;
+- `VAPID_*` → infraestrutura do push web;
 - `INACTIVITY_TIMEOUT_MINUTES` → expiração da sessão por inatividade;
-- `CARD_DUE_PUSH_*` → rotina de lembretes de vencimento da fatura;
+- `CARD_DUE_PUSH_TIMEZONE`, `CARD_DUE_PUSH_HOUR`, `CARD_DUE_PUSH_MINUTE` e `CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES` → agenda compartilhada das rotinas automáticas;
+- `CARD_DUE_PUSH_ENABLED`, `CARD_DUE_PUSH_MAX_SENDS_PER_DAY` e `CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES` → rotina de vencimento da fatura;
+- `MONTHLY_FINANCE_DATE_ALERT_ENABLED` → liga ou pausa os alertas automáticos das datas do mês;
+- `DATE_DRIVEN_ALERTS_ENABLED` → liga ou pausa os alertas automáticos das datas combinadas;
 - `FRIENDSHIP_GATE_SHARED_DEBT_ENABLED` → controla regra de vínculo para cobranças entre amigos.
 
 </details>
@@ -285,7 +299,7 @@ A área `/admin` virou a “casinha oficial das configurações” do app. É l�
 ### O que dá para configurar por lá
 - acesso com Google;
 - WhatsApp automático;
-- alertas push;
+- push web, agenda automática e rotinas de alerta;
 - sessão e segurança;
 - comportamento das cobranças compartilhadas;
 - rotina de backup e restauração;
@@ -335,6 +349,11 @@ O OrganizaPay pode ser instalado como app em dispositivos compatíveis e já con
 ## 🔔 Push notifications
 
 Se as chaves VAPID estiverem configuradas, o projeto já suporta notificações push web.
+
+Além disso, a central `/admin` separa o tema em três camadas para evitar confusão:
+- **infraestrutura push web** (`VAPID_*`);
+- **agenda compartilhada** dos alertas automáticos (`CARD_DUE_PUSH_TIMEZONE`, `CARD_DUE_PUSH_HOUR`, `CARD_DUE_PUSH_MINUTE`, `CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES`);
+- **rotinas automáticas com toggle próprio** para fatura, datas do mês e datas combinadas.
 
 ### Gerar chaves
 

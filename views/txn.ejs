@@ -34,14 +34,11 @@
       </a>
       <% if (!isClosed) { %>
         <div class="flex flex-wrap gap-2 sm:justify-end">
-          <button type="submit" form="txn-alloc-form" data-txn-save-button data-delivery-mode-button data-delivery-mode="send_now" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="submit" form="txn-alloc-form" data-txn-save-button data-delivery-mode-button data-delivery-mode="draft" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
             <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            Salvar Divisão
-          </button>
-          <button type="submit" form="txn-alloc-form" data-txn-save-button data-delivery-mode-button data-delivery-mode="draft" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
-            Salvar e Mandar Depois
+            Salvar
           </button>
         </div>
       <% } %>
@@ -71,7 +68,7 @@
           data-txn-amount-cents="<%= Number(txn.amount_cents || 0) %>"
           data-is-closed="<%= isClosed ? '1' : '0' %>"
         >
-          <input type="hidden" name="delivery_mode" value="send_now" data-delivery-mode-input />
+          <input type="hidden" name="delivery_mode" value="draft" data-delivery-mode-input />
           <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-txn-people-grid>
             <% people.forEach(p => { %>
               <label class="group <%= isClosed ? 'cursor-default' : 'cursor-pointer' %>">
@@ -147,11 +144,10 @@
 
           <% if (!isClosed) { %>
             <div class="rounded-[22px] border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm font-medium text-sky-900 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200">
-              Quer evitar flood quando estiver atribuindo muita compra? Salve agora e mande depois. A cobrança fica na sua caixa de saída até você disparar por pessoa e por mês.
+              Ao salvar, a divisão fica guardada por aqui e o que virar cobrança vai para a sua caixa de saída. Você revisa com calma e dispara quando quiser, por pessoa e por mês.
             </div>
             <div class="flex flex-col gap-3 pt-1 sm:flex-row sm:flex-wrap">
-              <button type="submit" data-txn-save-button data-delivery-mode-button data-delivery-mode="send_now" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Salvar e Cobrar Agora</button>
-              <button type="submit" data-txn-save-button data-delivery-mode-button data-delivery-mode="draft" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Salvar e Mandar Depois</button>
+              <button type="submit" data-txn-save-button data-delivery-mode-button data-delivery-mode="draft" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Salvar</button>
               <% if (!txn.import_id) { %><button type="button" data-edit-txn-open class="inline-flex items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-bold text-emerald-700 transition-all hover:-translate-y-0.5 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:bg-emerald-900/35">Editar Compra</button><% } %>
               <button type="submit" form="delete-txn-form" class="inline-flex items-center justify-center rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-bold text-red-700 transition-all hover:-translate-y-0.5 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200 dark:hover:bg-red-900/35">Excluir Compra</button>
             </div>
@@ -332,8 +328,8 @@
             <div class="op-step-item">
               <div class="op-step-item__index">3</div>
               <div>
-                <div class="op-step-item__title">Escolha se envia agora ou depois</div>
-                <div class="op-step-item__text">Pode cobrar na hora ou guardar na caixa de saída para disparar em lote por pessoa e por mês. O restante do app continua seguindo o mesmo combinado.</div>
+                <div class="op-step-item__title">Salve e revise a caixa de saída</div>
+                <div class="op-step-item__text">Ao salvar, o app guarda o que virar cobrança na caixa de saída. Depois você revisa tudo e envia por pessoa e por mês, sem correria e sem dívida fantasma.</div>
               </div>
             </div>
           </div>
@@ -553,7 +549,7 @@
     });
     deliveryModeButtons.forEach((button) => {
       button.addEventListener('click', () => {
-        if (deliveryModeInput) deliveryModeInput.value = button.getAttribute('data-delivery-mode') || 'send_now';
+        if (deliveryModeInput) deliveryModeInput.value = button.getAttribute('data-delivery-mode') || 'draft';
       });
     });
 

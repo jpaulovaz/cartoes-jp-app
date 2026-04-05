@@ -8,8 +8,24 @@
             if (f.type === 'expense') expCents += f.amount_cents;
         });
 
-        const sharedDebtOwedCents = Number((sharedDebtSummary && sharedDebtSummary.owedCents) || 0);
-        const sharedDebtReceivableCents = Number((sharedDebtSummary && sharedDebtSummary.receivableCents) || 0);
+        const sharedDebtTrailModule = sharedDebtDetailModuleSummary || {};
+        const sharedDebtTrailPay = sharedDebtTrailModule.pay || {};
+        const sharedDebtTrailReceive = sharedDebtTrailModule.receive || {};
+        const sharedDebtTrailManual = sharedDebtTrailModule.manual || {};
+        const sharedDebtTrailCard = sharedDebtTrailModule.card || {};
+        const sharedDebtTrailChips = Array.isArray(sharedDebtTrailModule.chips) ? sharedDebtTrailModule.chips : [];
+        const sharedDebtTrailHeaderHref = sharedDebtTrailModule.headerHref || '/shared-debts';
+
+        const cardHealthModule = cardHealthDetailModuleSummary || {};
+        const cardHealthCurrent = cardHealthModule.current || {};
+        const cardHealthFuture = cardHealthModule.future || {};
+        const cardHealthThird = cardHealthModule.thirdParties || {};
+        const cardHealthRadar = cardHealthModule.radar || {};
+        const cardHealthChips = Array.isArray(cardHealthModule.chips) ? cardHealthModule.chips : [];
+        const cardHealthCompact = cardHealthModule.compact || {};
+        const cardHealthUseCompact = !!cardHealthModule.useCompactState;
+        const cardHealthPrimaryCta = cardHealthModule.primaryCta || { href: `/summary/${year}/${month}`, label: 'Fechamento do mês' };
+        const cardHealthSecondaryCta = cardHealthModule.secondaryCta || { href: '/geral', label: 'Ver cartões' };
         const saldoCents = incCents - expCents - cardTotalCents;
 
         let prevM = parseInt(month, 10) - 1;
@@ -22,9 +38,56 @@
         const heroOwnerName = String((owner && owner.name) || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).join(' ') || 'Seu painel';
         const incomeFinances = finances.filter((f) => f.type === 'income');
         const expenseFinances = finances.filter((f) => f.type === 'expense');
+        const expenseProgress = expensePaymentProgress || {};
+        const cardProgress = cardPaymentProgress || {};
+
+        function clampProgressPct(value) {
+            const pct = Number(value || 0);
+            if (!Number.isFinite(pct)) return 0;
+            return Math.max(0, Math.min(100, Math.round(pct)));
+        }
 
         function isVariable(fin) {
             return (fin.amount_mode || 'fixed') === 'variable';
+        }
+
+        function buildFinancePaymentState(fin) {
+            const totalCents = Math.max(0, Number(fin.amount_cents || 0));
+
+            if (!isVariable(fin)) {
+                const isPaid = Number(fin.is_paid || 0) === 1;
+                const paidCents = isPaid ? totalCents : 0;
+                return {
+                    mode: 'fixed',
+                    isPaid,
+                    totalItemCount: totalCents > 0 ? 1 : 0,
+                    paidItemCount: isPaid && totalCents > 0 ? 1 : 0,
+                    totalCents,
+                    paidCents,
+                    remainingCents: Math.max(0, totalCents - paidCents),
+                    progressPct: totalCents > 0 ? clampProgressPct((paidCents / totalCents) * 100) : 0,
+                    isComplete: totalCents > 0 && paidCents >= totalCents
+                };
+            }
+
+            const items = Array.isArray(fin.items) ? fin.items : [];
+            const paidItems = items.filter((item) => Number(item.is_paid || 0) === 1);
+            const paidCents = paidItems.reduce((sum, item) => sum + Math.max(0, Number(item.amount_cents || 0)), 0);
+            return {
+                mode: 'variable',
+                isPaid: items.length > 0 && paidItems.length === items.length,
+                totalItemCount: items.length,
+                paidItemCount: paidItems.length,
+                totalCents,
+                paidCents,
+                remainingCents: Math.max(0, totalCents - paidCents),
+                progressPct: totalCents > 0 ? clampProgressPct((paidCents / totalCents) * 100) : 0,
+                isComplete: totalCents > 0 && paidCents >= totalCents
+            };
+        }
+
+        function getProgressCardStyle(progress) {
+            return `--op-paid-progress:${clampProgressPct(progress && progress.progressPct)}%;`;
         }
 
         function getDisplayValue(fin) {
@@ -48,59 +111,240 @@
         }
 
         function getVariableHint(fin) {
+            const paymentState = buildFinancePaymentState(fin);
             const totalItems = getItemCount(fin);
             if (!totalItems) return 'Ainda sem lançamentos por aqui';
-            return totalItems === 1 ? '1 lançamento somando esse total' : `${totalItems} lançamentos somando esse total`;
+
+            const baseLabel = totalItems === 1 ? '1 lançamento somando esse total' : `${totalItems} lançamentos somando esse total`;
+            if (!paymentState.paidItemCount) return `${baseLabel} · Nada marcado como pago ainda`;
+            if (paymentState.paidItemCount === totalItems) return `${baseLabel} · Tudo já foi pago`;
+            return `${baseLabel} · ${paymentState.paidItemCount} de ${totalItems} pagos`;
+        }
+
+        function getFinanceScheduleMeta(fin) {
+            return (fin && fin.schedule_meta) ? fin.schedule_meta : {};
+        }
+
+        function financeScheduleChipClasses(fin, scheduleMeta) {
+            const tone = String((scheduleMeta && scheduleMeta.tone) || '').trim();
+            const isToday = !!(scheduleMeta && scheduleMeta.isToday);
+            if (isToday) {
+                return fin.type === 'expense'
+                    ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100'
+                    : 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-100';
+            }
+            if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100';
+            if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100';
+            if (tone === 'info') return 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-100';
+            return 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200';
+        }
+
+        function financeScheduleButtonClasses(fin, scheduleMeta) {
+            const isToday = !!(scheduleMeta && scheduleMeta.isToday);
+            const hasSchedule = !!(scheduleMeta && scheduleMeta.hasSchedule);
+            if (isToday) {
+                return fin.type === 'expense'
+                    ? 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100 dark:hover:bg-amber-900/40'
+                    : 'border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-100 dark:hover:bg-sky-900/40';
+            }
+            if (hasSchedule) {
+                return fin.type === 'expense'
+                    ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-200 dark:hover:bg-rose-900/30'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:bg-emerald-900/30';
+            }
+            return 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800';
+        }
+
+        function sharedDebtTrailChipClasses(tone) {
+            if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100';
+            if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100';
+            if (tone === 'info') return 'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-100';
+            return 'border-slate-200 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-900/70 dark:text-slate-200';
+        }
+
+        function buildSharedDebtTrailCountLabel(count) {
+            const total = Number(count || 0);
+            if (total <= 0) return 'Nenhuma cobrança em aberto por aqui';
+            return total === 1 ? '1 cobrança em aberto por aqui' : `${total} cobranças em aberto por aqui`;
+        }
+
+        function buildSharedDebtTrailBreakdown(scope) {
+            const parts = [];
+
+            if (scope === 'pay') {
+                const cardCount = Number(sharedDebtTrailCard.owedItemCount || 0);
+                const manualCount = Number(sharedDebtTrailManual.owedCount || 0);
+
+                if (cardCount > 0) parts.push(cardCount === 1 ? '1 item do cartão' : `${cardCount} itens do cartão`);
+                if (manualCount > 0) parts.push(manualCount === 1 ? '1 cobrança avulsa' : `${manualCount} cobranças avulsas`);
+            } else {
+                const cardCount = Number(sharedDebtTrailCard.receivableItemCount || 0);
+                const manualCount = Number(sharedDebtTrailManual.receivableCount || 0);
+                const privateCount = Number(sharedDebtTrailManual.privateActiveCount || 0);
+
+                if (cardCount > 0) parts.push(cardCount === 1 ? '1 item do cartão' : `${cardCount} itens do cartão`);
+                if (manualCount > 0) parts.push(manualCount === 1 ? '1 cobrança avulsa' : `${manualCount} cobranças avulsas`);
+                if (privateCount > 0) parts.push(privateCount === 1 ? '1 lembrete privado' : `${privateCount} lembretes privados`);
+            }
+
+            if (!parts.length) return 'Fica só no lembrete. Não entra no saldo do topo.';
+            return `${parts.join(' • ')}. Fica só no lembrete. Não entra no saldo do topo.`;
+        }
+
+        function buildSharedDebtTrailCtaLabel(scope) {
+            if (scope === 'pay') return 'Abrir cobranças recebidas';
+            const receiveHref = String(sharedDebtTrailReceive.href || '');
+            const hasOnlyPrivate = Number(sharedDebtTrailManual.receivableCount || 0) === 0
+                && Number(sharedDebtTrailCard.receivableItemCount || 0) === 0
+                && Number(sharedDebtTrailManual.privateActiveCount || 0) > 0;
+            if (hasOnlyPrivate || receiveHref.includes('#private-reminders')) return 'Abrir lembretes privados';
+            return 'Abrir cobranças enviadas';
+        }
+
+        function healthChipClasses(tone) {
+            if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100';
+            if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100';
+            return 'border-slate-200 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-900/70 dark:text-slate-200';
+        }
+
+        function healthCompactBadgeClasses(tone) {
+            if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100';
+            if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100';
+            return 'border-slate-200 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-900/70 dark:text-slate-200';
+        }
+
+        function healthRadarItemClasses(tone) {
+            if (tone === 'warning') return 'border-amber-200 bg-amber-50/80 dark:border-amber-800 dark:bg-amber-900/20';
+            if (tone === 'success') return 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-900/20';
+            return 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/60';
+        }
+
+        function buildMaskedMoneyLabel(value, includeCurrency = true) {
+            const raw = String(value == null ? '' : value).trim();
+            const digitCount = (raw.match(/\d/g) || []).length;
+            const bulletCount = Math.max(4, Math.min(includeCurrency ? 10 : 8, digitCount || 4));
+            const bullets = '•'.repeat(bulletCount);
+            return includeCurrency ? `R$ ${bullets}` : bullets;
         }
     %>
 
             <div class="op-screen op-screen--detalhamento max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+                data-sensitive-scope="detalhamento"
                 data-month-swipe-area
                 data-month-swipe-prev="/detalhamento/<%= prevY %>/<%= prevM %>"
                 data-month-swipe-next="/detalhamento/<%= nextY %>/<%= nextM %>"
                 style="touch-action: pan-y pinch-zoom;">
 
                 <section class="op-page-hero op-fade-up mb-8">
-                    <div>
-                        <span class="op-page-hero__eyebrow">Painel principal</span>
-                        <h1 class="op-page-hero__title mt-4">👑 Meu Controle</h1>
-                        <p class="op-page-hero__subtitle mt-3"><span class="font-bold text-blue-600 dark:text-blue-300"><%= heroOwnerName %></span>, aqui você vê o que entrou, o que saiu, os cartões e o respiro do mês sem ficar abrindo mil telas.</p>
+                    <div class="op-detalhamento-hero__content">
+                        <div class="op-detalhamento-hero__copy min-w-0">
+                            <span class="op-page-hero__eyebrow">Painel principal</span>
+                            <h1 class="op-page-hero__title mt-4">👑 Meu Controle</h1>
+                            <p class="op-page-hero__subtitle mt-3"><span class="font-bold text-blue-600 dark:text-blue-300"><%= heroOwnerName %></span>, aqui você vê o que entrou, o que saiu, os cartões e o respiro do mês sem ficar abrindo mil telas.</p>
+                        </div>
+                        <button type="button"
+                            class="op-icon-btn op-sensitive-toggle op-sensitive-toggle--mobile"
+                            data-sensitive-toggle
+                            aria-pressed="false"
+                            aria-label="Ocultar valores sensíveis"
+                            title="Ocultar valores sensíveis">
+                            <svg data-sensitive-icon="visible" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            <svg data-sensitive-icon="hidden" class="hidden h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="m3 3 18 18"></path>
+                                <path d="M10.58 10.58a2 2 0 0 0 2.83 2.83"></path>
+                                <path d="M9.36 5.37A9.77 9.77 0 0 1 12 5c7 0 11 7 11 7a18.56 18.56 0 0 1-2.31 3.19"></path>
+                                <path d="M6.23 6.23A18.7 18.7 0 0 0 1 12s4 7 11 7a10.8 10.8 0 0 0 5-.95"></path>
+                            </svg>
+                        </button>
                     </div>
 
-                    <div class="op-page-hero__actions w-full lg:max-w-[32rem]">
-                        <% if (isClosed) { %>
-                            <button onclick="toggleLock('open')"
-                                class="op-btn op-btn-danger-soft op-btn--block">
-                                🔒 Mês Fechado
+                    <div class="op-detalhamento-hero__actions-shell w-full lg:max-w-[32rem]">
+                        <div class="op-detalhamento-hero__actions-head">
+                            <button type="button"
+                                class="op-icon-btn op-sensitive-toggle op-sensitive-toggle--desktop"
+                                data-sensitive-toggle
+                                aria-pressed="false"
+                                aria-label="Ocultar valores sensíveis"
+                                title="Ocultar valores sensíveis">
+                                <svg data-sensitive-icon="visible" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                <svg data-sensitive-icon="hidden" class="hidden h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="m3 3 18 18"></path>
+                                    <path d="M10.58 10.58a2 2 0 0 0 2.83 2.83"></path>
+                                    <path d="M9.36 5.37A9.77 9.77 0 0 1 12 5c7 0 11 7 11 7a18.56 18.56 0 0 1-2.31 3.19"></path>
+                                    <path d="M6.23 6.23A18.7 18.7 0 0 0 1 12s4 7 11 7a10.8 10.8 0 0 0 5-.95"></path>
+                                </svg>
                             </button>
-                        <% } else { %>
-                            <button onclick="toggleLock('close')"
-                                class="op-btn op-btn-success op-btn--block">
-                                🔓 Fechar Mês
-                            </button>
-                        <% } %>
+                        </div>
 
-                        <button type="button" data-manual-modal-open
-                            <%= (isClosed || !cards || !cards.length) ? 'disabled' : '' %>
-                            class="op-btn op-btn-success op-btn--block <%= (isClosed || !cards || !cards.length) ? 'opacity-60 cursor-not-allowed' : '' %>">
-                            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                            </svg>
-                            Nova compra
-                        </button>
+                        <div class="op-page-hero__actions op-detalhamento-hero__actions">
+                            <div class="op-detalhamento-hero__action-row op-detalhamento-hero__action-row--primary">
+                                <% if (isClosed) { %>
+                                    <button onclick="toggleLock('open')"
+                                        class="op-btn op-btn-danger-soft op-btn--block">
+                                        🔒 Mês Fechado
+                                    </button>
+                                <% } else { %>
+                                    <button onclick="toggleLock('close')"
+                                        class="op-btn op-btn-success op-btn--block">
+                                        🔓 Fechar Mês
+                                    </button>
+                                <% } %>
 
-                        <div class="col-span-2 w-full flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 p-1 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/70">
-                            <a href="/detalhamento/<%= prevY %>/<%= prevM %>"
-                                class="op-btn op-btn-ghost flex-1">&larr; Anterior</a>
-                            <a href="/month/<%= year %>/<%= month %>"
-                                class="op-btn op-btn-primary whitespace-nowrap px-4">
-                                <%= String(month).padStart(2, '0' ) %> / <%= year %>
-                            </a>
-                            <a href="/detalhamento/<%= nextY %>/<%= nextM %>"
-                                class="op-btn op-btn-ghost flex-1">Próximo &rarr;</a>
+                                <button type="button" data-manual-modal-open
+                                    <%= (isClosed || !cards || !cards.length) ? 'disabled' : '' %>
+                                    class="op-btn op-btn-success op-btn--block <%= (isClosed || !cards || !cards.length) ? 'opacity-60 cursor-not-allowed' : '' %>">
+                                    <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                    </svg>
+                                    Nova compra
+                                </button>
+                            </div>
+
+                            <div class="op-detalhamento-hero__action-row op-detalhamento-hero__action-row--month col-span-2 w-full flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 p-1 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/70">
+                                <a href="/detalhamento/<%= prevY %>/<%= prevM %>"
+                                    class="op-btn op-btn-ghost flex-1">&larr; Anterior</a>
+                                <a href="/month/<%= year %>/<%= month %>"
+                                    class="op-btn op-btn-primary whitespace-nowrap px-4">
+                                    <%= String(month).padStart(2, '0' ) %> / <%= year %>
+                                </a>
+                                <a href="/detalhamento/<%= nextY %>/<%= nextM %>"
+                                    class="op-btn op-btn-ghost flex-1">Próximo &rarr;</a>
+                            </div>
                         </div>
                     </div>
                 </section>
+
+
+                <% if (alerts && alerts.length) { %>
+                    <div class="mb-8 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Olho vivo no mês</h2>
+                            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Os pontos que merecem sua atenção antes que virem dor de cabeça.</p>
+                        </div>
+                        <div class="p-4 md:p-5 grid gap-3">
+                            <% alerts.forEach(alert => { %>
+                                <div class="rounded-2xl border px-4 py-3 <%= alert.type === 'warning' ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20' : 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20' %>">
+                                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                        <div>
+                                            <div class="font-bold text-slate-800 dark:text-white"><%= alert.icon %> <%= alert.title %></div>
+                                            <div class="text-sm text-slate-600 dark:text-slate-300 mt-1"><%= alert.description %></div>
+                                        </div>
+                                        <% if (alert.href) { %>
+                                            <a href="<%= alert.href %>" class="op-btn op-btn-ghost px-4 py-2 text-sm">Abrir</a>
+                                        <% } %>
+                                    </div>
+                                </div>
+                            <% }) %>
+                        </div>
+                    </div>
+                <% } %>
+
 
                 <div id="modalManualDetalhamento" data-manual-modal aria-hidden="true"
                     class="hidden fixed inset-0 z-[10020] bg-slate-900/60 backdrop-blur-sm px-3 py-3 sm:px-4 sm:py-6">
@@ -213,22 +457,37 @@
 
                 <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     <div class="bg-emerald-500 p-5 rounded-3xl text-white shadow-sm border border-emerald-600">
+                        <% const incomeTopLabel = formatBRLFromCents(incCents); %>
                         <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Grana que entrou</p>
-                        <h3 class="text-xl xl:text-2xl font-black mt-1">
-                            <%= formatBRLFromCents(incCents) %>
+                        <h3 class="text-xl xl:text-2xl font-black mt-1" data-sensitive-text data-sensitive-visible-value="<%= incomeTopLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(incomeTopLabel, true) %>">
+                            <%= incomeTopLabel %>
                         </h3>
                     </div>
-                    <div class="bg-violet-500 p-5 rounded-3xl text-white shadow-sm border border-violet-600">
-                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Saiu no mês</p>
-                        <h3 class="text-xl xl:text-2xl font-black mt-1">
-                            <%= formatBRLFromCents(expCents) %>
-                        </h3>
+                    <div class="op-paid-progress-card op-paid-progress-card--expense" data-progress-card="expense" style="<%= getProgressCardStyle(expenseProgress) %>">
+                        <span class="op-paid-progress-card__fill" aria-hidden="true"></span>
+                        <span class="op-paid-progress-card__check <%= expenseProgress.isComplete ? '' : 'hidden' %>" data-progress-check aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M5 12.5l4.2 4.2L19 7"></path>
+                            </svg>
+                        </span>
+                        <div class="op-paid-progress-card__content">
+                            <p class="text-xs font-bold uppercase tracking-wider text-white/80">Saiu no mês</p>
+                            <h3 class="text-xl xl:text-2xl font-black mt-1" data-progress-total><%= formatBRLFromCents(expCents) %></h3>
+                            <p class="op-paid-progress-card__meta" data-progress-label><%= expenseProgress.label || 'Quando pintar saída, o progresso aparece aqui.' %></p>
+                        </div>
                     </div>
-                    <div class="bg-amber-500 p-5 rounded-3xl text-white shadow-sm border border-amber-600">
-                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Ficou nos cartões</p>
-                        <h3 class="text-xl xl:text-2xl font-black mt-1">
-                            <%= formatBRLFromCents(cardTotalCents) %>
-                        </h3>
+                    <div class="op-paid-progress-card op-paid-progress-card--cards" data-progress-card="cards" style="<%= getProgressCardStyle(cardProgress) %>">
+                        <span class="op-paid-progress-card__fill" aria-hidden="true"></span>
+                        <span class="op-paid-progress-card__check <%= cardProgress.isComplete ? '' : 'hidden' %>" data-progress-check aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M5 12.5l4.2 4.2L19 7"></path>
+                            </svg>
+                        </span>
+                        <div class="op-paid-progress-card__content">
+                            <p class="text-xs font-bold uppercase tracking-wider text-white/80">Ficou nos cartões</p>
+                            <h3 class="text-xl xl:text-2xl font-black mt-1" data-progress-total><%= formatBRLFromCents(cardTotalCents) %></h3>
+                            <p class="op-paid-progress-card__meta" data-progress-label><%= cardProgress.label || 'Quando aparecer parcela sua nos cartões, o progresso mora aqui.' %></p>
+                        </div>
                     </div>
                     <div class="bg-rose-500 p-5 rounded-3xl text-white shadow-sm border border-rose-600">
                         <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Tudo comprometido</p>
@@ -237,81 +496,230 @@
                         </h3>
                     </div>
                     <div class="bg-blue-600 p-5 rounded-3xl text-white shadow-sm border border-blue-700 col-span-2 lg:col-span-1">
+                        <% const balanceTopLabel = formatBRLFromCents(saldoCents); %>
                         <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Quanto sobra</p>
-                        <h3 class="text-xl xl:text-2xl font-black mt-1">
-                            <%= formatBRLFromCents(saldoCents) %>
+                        <h3 class="text-xl xl:text-2xl font-black mt-1" data-sensitive-text data-sensitive-visible-value="<%= balanceTopLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(balanceTopLabel, true) %>">
+                            <%= balanceTopLabel %>
                         </h3>
                     </div>
                 </div>
 
-                <div class="mt-4 mb-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-300">
-                    <span class="font-bold text-slate-800 dark:text-white">Cobranças ficam num trilho à parte:</span>
-                    o que você tem para pagar ou receber aparece logo abaixo como lembrete, sem mexer no respiro real do mês ali em cima.
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 mt-4">
-                    <a href="/shared-debts#received" class="block bg-sky-500 p-5 rounded-3xl text-white shadow-sm border border-sky-600 hover:-translate-y-0.5 transition-transform">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Cobranças pra pagar</p>
-                                <h3 class="text-xl xl:text-2xl font-black mt-1">
-                                    <%= formatBRLFromCents(sharedDebtOwedCents) %>
-                                </h3>
-                                <p class="mt-2 text-xs font-semibold opacity-85">
-                                    <%= Number(sharedDebtSummary?.owedCount || 0) %> cobrança(s) em aberto por aqui
-                                </p>
-                                <p class="mt-2 text-[11px] font-medium opacity-80">Fica só no lembrete. Não entra no saldo do topo.</p>
-                                <p class="mt-3 text-xs font-bold uppercase tracking-[0.18em] opacity-90">Abrir cobranças recebidas</p>
-                            </div>
-                            <div class="h-12 w-12 shrink-0 rounded-2xl bg-white/15 flex items-center justify-center text-2xl">🧾</div>
-                        </div>
-                    </a>
-                    <a href="/shared-debts#sent" class="block bg-cyan-600 p-5 rounded-3xl text-white shadow-sm border border-cyan-700 hover:-translate-y-0.5 transition-transform">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Cobranças pra receber</p>
-                                <h3 class="text-xl xl:text-2xl font-black mt-1">
-                                    <%= formatBRLFromCents(sharedDebtReceivableCents) %>
-                                </h3>
-                                <p class="mt-2 text-xs font-semibold opacity-85">
-                                    <%= Number(sharedDebtSummary?.receivableCount || 0) %> cobrança(s) em aberto por aqui
-                                </p>
-                                <p class="mt-2 text-[11px] font-medium opacity-80">Fica só no lembrete. Não entra no saldo do topo.</p>
-                                <p class="mt-3 text-xs font-bold uppercase tracking-[0.18em] opacity-90">Abrir cobranças enviadas</p>
-                            </div>
-                            <div class="h-12 w-12 shrink-0 rounded-2xl bg-white/15 flex items-center justify-center text-2xl">💸</div>
-                        </div>
-                    </a>
-                </div>
-
-                <% if (alerts && alerts.length) { %>
-                    <div class="mb-8 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
-                            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Olho vivo no mês</h2>
-                            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Os pontos que merecem sua atenção antes que virem dor de cabeça.</p>
-                        </div>
-                        <div class="p-4 md:p-5 grid gap-3">
-                            <% alerts.forEach(alert => { %>
-                                <div class="rounded-2xl border px-4 py-3 <%= alert.type === 'warning' ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20' : 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20' %>">
-                                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                        <div>
-                                            <div class="font-bold text-slate-800 dark:text-white"><%= alert.icon %> <%= alert.title %></div>
-                                            <div class="text-sm text-slate-600 dark:text-slate-300 mt-1"><%= alert.description %></div>
-                                        </div>
-                                        <% if (alert.href) { %>
-                                            <a href="<%= alert.href %>" class="op-btn op-btn-ghost px-4 py-2 text-sm">Abrir</a>
-                                        <% } %>
-                                    </div>
-                                </div>
+                <section class="mt-8 mb-8 space-y-4">
+                    <% if (sharedDebtTrailChips.length) { %>
+                        <div class="flex flex-wrap gap-2">
+                            <% sharedDebtTrailChips.forEach((chip) => { %>
+                                <a href="<%= chip.href || sharedDebtTrailHeaderHref %>" class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold tracking-[0.02em] <%= sharedDebtTrailChipClasses(chip.tone) %>">
+                                    <%= chip.label %>
+                                </a>
                             <% }) %>
                         </div>
-                    </div>
-                <% } %>
+                    <% } %>
 
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <a href="<%= sharedDebtTrailPay.href || '/shared-debts#received' %>" class="group block rounded-3xl border border-sky-600 bg-gradient-to-br from-sky-500 via-sky-600 to-blue-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
+                            <div class="flex items-start justify-between gap-4">
+                                <div class="min-w-0">
+                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Cobranças pra pagar</p>
+                                    <h2 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(sharedDebtTrailPay.amountCents || 0)) %></h2>
+                                    <p class="mt-2 text-sm font-semibold opacity-95"><%= buildSharedDebtTrailCountLabel(sharedDebtTrailPay.count) %></p>
+                                    <p class="mt-2 text-[13px] font-semibold leading-5 opacity-95"><%= (sharedDebtTrailPay.status && sharedDebtTrailPay.status.label) || 'Nada puxando seu mês desse lado.' %></p>
+                                    <p class="mt-2 text-[11px] font-medium leading-5 opacity-80"><%= buildSharedDebtTrailBreakdown('pay') %></p>
+                                    <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= buildSharedDebtTrailCtaLabel('pay') %></p>
+                                </div>
+                                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">🧾</div>
+                            </div>
+                        </a>
+
+                        <a href="<%= sharedDebtTrailReceive.href || '/shared-debts#sent' %>" class="group block rounded-3xl border border-cyan-700 bg-gradient-to-br from-cyan-600 via-cyan-600 to-blue-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
+                            <div class="flex items-start justify-between gap-4">
+                                <div class="min-w-0">
+                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Cobranças pra receber</p>
+                                    <h2 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(sharedDebtTrailReceive.amountCents || 0)) %></h2>
+                                    <p class="mt-2 text-sm font-semibold opacity-95"><%= buildSharedDebtTrailCountLabel(sharedDebtTrailReceive.count) %></p>
+                                    <p class="mt-2 text-[13px] font-semibold leading-5 opacity-95"><%= (sharedDebtTrailReceive.status && sharedDebtTrailReceive.status.label) || 'Nada pendurado do lado de cá.' %></p>
+                                    <p class="mt-2 text-[11px] font-medium leading-5 opacity-80"><%= buildSharedDebtTrailBreakdown('receive') %></p>
+                                    <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= buildSharedDebtTrailCtaLabel('receive') %></p>
+                                </div>
+                                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">💸</div>
+                            </div>
+                        </a>
+                    </div>
+                </section>
+
+                <section class="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div class="border-b border-slate-200 bg-slate-50/90 px-5 py-5 dark:border-slate-700 dark:bg-slate-900/70 sm:px-6">
+                        <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                            <div class="min-w-0">
+                                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300"><%= cardHealthModule.eyebrow || 'Saúde dos cartões' %></div>
+                                <h2 class="mt-1 text-xl font-extrabold text-slate-900 dark:text-white"><%= cardHealthModule.title || 'Saúde dos cartões' %></h2>
+                                <p class="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= cardHealthModule.subtitle || 'Aqui entra a visão operacional do crédito: fatura do mês, próximos meses, o pedaço que depende de terceiros e o que pede sua mão agora.' %></p>
+                            </div>
+                            <div class="flex flex-col gap-2 sm:flex-row">
+                                <a href="<%= cardHealthPrimaryCta.href || `/summary/${year}/${month}` %>" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"><%= cardHealthPrimaryCta.label || 'Fechamento do mês' %></a>
+                                <a href="<%= cardHealthSecondaryCta.href || '/geral' %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= cardHealthSecondaryCta.label || 'Ver cartões' %></a>
+                            </div>
+                        </div>
+
+                        <% if (cardHealthChips.length) { %>
+                            <div class="mt-4 flex flex-wrap gap-2">
+                                <% cardHealthChips.forEach((chip) => { %>
+                                    <a href="<%= chip.href || cardHealthPrimaryCta.href || `/summary/${year}/${month}` %>" class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold tracking-[0.02em] <%= healthChipClasses(chip.tone) %>">
+                                        <%= chip.label %>
+                                    </a>
+                                <% }) %>
+                            </div>
+                        <% } %>
+                    </div>
+
+                    <% if (cardHealthUseCompact) { %>
+                        <div class="p-4 sm:p-6">
+                            <div class="rounded-3xl border px-5 py-6 sm:px-6 <%= cardHealthCompact.tone === 'success' ? 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-900/20' : 'border-slate-200 bg-slate-50/80 dark:border-slate-600 dark:bg-slate-900/50' %>">
+                                <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                                    <div class="min-w-0">
+                                        <h3 class="text-lg font-extrabold <%= cardHealthCompact.tone === 'success' ? 'text-emerald-900 dark:text-emerald-100' : 'text-slate-900 dark:text-white' %>"><%= cardHealthCompact.title || 'Seu painel de cartão está quietinho.' %></h3>
+                                        <p class="mt-2 max-w-3xl text-sm font-medium leading-6 <%= cardHealthCompact.tone === 'success' ? 'text-emerald-900/80 dark:text-emerald-100/80' : 'text-slate-500 dark:text-slate-400' %>"><%= cardHealthCompact.description || 'Quando entrar fatura, mês futuro ou rateio com terceiros, esse bloco acorda sem bagunçar o topo.' %></p>
+                                        <% if (Array.isArray(cardHealthCompact.badges) && cardHealthCompact.badges.length) { %>
+                                            <div class="mt-4 flex flex-wrap gap-2">
+                                                <% cardHealthCompact.badges.forEach((badge) => { %>
+                                                    <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold tracking-[0.02em] <%= healthCompactBadgeClasses(badge.tone) %>"><%= badge.label %></span>
+                                                <% }) %>
+                                            </div>
+                                        <% } %>
+                                    </div>
+                                    <div class="flex flex-col gap-2 sm:flex-row">
+                                        <a href="<%= cardHealthPrimaryCta.href || `/summary/${year}/${month}` %>" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"><%= cardHealthPrimaryCta.label || 'Fechamento do mês' %></a>
+                                        <a href="<%= cardHealthSecondaryCta.href || '/geral' %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= cardHealthSecondaryCta.label || 'Ver cartões' %></a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <% } else { %>
+                        <div class="space-y-4 p-4 sm:p-6">
+                            <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                                <a href="<%= cardHealthCurrent.ctaHref || cardHealthPrimaryCta.href || `/summary/${year}/${month}` %>" class="group block overflow-hidden rounded-3xl border border-blue-700 bg-gradient-to-br from-sky-600 via-blue-600 to-indigo-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5 xl:col-span-2">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Fatura do mês</p>
+                                            <h3 class="mt-2 text-2xl font-black sm:text-[2rem]"><%= formatBRLFromCents(Number(cardHealthCurrent.totalCents || 0)) %></h3>
+                                            <p class="mt-2 text-sm font-semibold opacity-90"><%= cardHealthCurrent.countLabel || 'Sem cartão puxando esta referência.' %></p>
+                                        </div>
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">💳</div>
+                                    </div>
+                                    <div class="mt-4 h-2 w-full rounded-full bg-white/15">
+                                        <div class="h-2 rounded-full bg-white" style="width: <%= Math.max(0, Math.min(100, Number(cardHealthCurrent.progressPct || 0))) %>%"></div>
+                                    </div>
+                                    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                        <div class="rounded-2xl bg-white/10 px-3 py-3 backdrop-blur-sm">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] opacity-70">Já pago</p>
+                                            <p class="mt-2 text-lg font-black"><%= formatBRLFromCents(Number(cardHealthCurrent.paidCents || 0)) %></p>
+                                        </div>
+                                        <div class="rounded-2xl bg-white/10 px-3 py-3 backdrop-blur-sm">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] opacity-70">Falta</p>
+                                            <p class="mt-2 text-lg font-black"><%= formatBRLFromCents(Number(cardHealthCurrent.remainingCents || 0)) %></p>
+                                        </div>
+                                        <div class="rounded-2xl bg-white/10 px-3 py-3 backdrop-blur-sm">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] opacity-70">Próx. vencimento</p>
+                                            <p class="mt-2 text-lg font-black"><%= cardHealthCurrent.nextDueLabel || '--/--' %></p>
+                                            <% if (cardHealthCurrent.nextDueCardName) { %>
+                                                <p class="mt-1 text-[11px] font-semibold opacity-75"><%= cardHealthCurrent.nextDueCardName %></p>
+                                            <% } %>
+                                        </div>
+                                    </div>
+                                    <p class="mt-4 text-sm font-medium leading-6 opacity-90"><%= cardHealthCurrent.pressureLabel || 'Sem cartão pressionando o mês por aqui.' %></p>
+                                    <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= cardHealthCurrent.ctaLabel || 'Abrir fechamento' %></p>
+                                </a>
+
+                                <a href="<%= cardHealthFuture.ctaHref || '/geral' %>" class="group block rounded-3xl border border-cyan-700 bg-gradient-to-br from-cyan-600 via-sky-600 to-blue-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Próximas faturas</p>
+                                            <h3 class="mt-2 text-2xl font-black sm:text-[1.85rem]"><%= formatBRLFromCents(Number(cardHealthFuture.totalCents || 0)) %></h3>
+                                            <p class="mt-2 text-sm font-semibold opacity-90"><%= cardHealthFuture.countLabel || 'Nenhuma competência futura aberta por enquanto.' %></p>
+                                        </div>
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">🗓️</div>
+                                    </div>
+                                    <div class="mt-4 grid grid-cols-2 gap-3">
+                                        <div class="rounded-2xl bg-white/10 px-3 py-3 backdrop-blur-sm">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] opacity-70">Competências</p>
+                                            <p class="mt-2 text-lg font-black"><%= Number(cardHealthFuture.monthCount || 0) %></p>
+                                        </div>
+                                        <div class="rounded-2xl bg-white/10 px-3 py-3 backdrop-blur-sm">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] opacity-70">Primeira parada</p>
+                                            <p class="mt-2 text-lg font-black"><%= cardHealthFuture.firstLabel || '--/--' %></p>
+                                        </div>
+                                    </div>
+                                    <p class="mt-4 text-sm font-medium leading-6 opacity-90"><%= cardHealthFuture.leadLabel || 'Quando os próximos meses aparecerem em /geral, eles pousam aqui.' %></p>
+                                    <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= cardHealthFuture.ctaLabel || 'Ver próximos meses' %></p>
+                                </a>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                                <a href="<%= cardHealthThird.ctaHref || `/summary/${year}/${month}` %>" class="group block rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm transition-transform hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/40">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Com terceiros</p>
+                                            <h3 class="mt-2 text-2xl font-black text-slate-900 dark:text-white sm:text-[1.85rem]"><%= formatBRLFromCents(Number(cardHealthThird.totalCents || 0)) %></h3>
+                                            <p class="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200"><%= cardHealthThird.countLabel || 'Sem rateio com terceiros neste mês.' %></p>
+                                        </div>
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-2xl text-white dark:bg-slate-100 dark:text-slate-900">🤝</div>
+                                    </div>
+                                    <div class="mt-4 h-2 w-full rounded-full bg-slate-200 dark:bg-slate-700">
+                                        <div class="h-2 rounded-full bg-indigo-500" style="width: <%= Math.max(0, Math.min(100, Number(cardHealthThird.progressPct || 0))) %>%"></div>
+                                    </div>
+                                    <div class="mt-4 grid grid-cols-2 gap-3">
+                                        <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Já entrou</p>
+                                            <p class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(Number(cardHealthThird.paidCents || 0)) %></p>
+                                        </div>
+                                        <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                                            <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Ainda falta</p>
+                                            <p class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(Number(cardHealthThird.remainingCents || 0)) %></p>
+                                        </div>
+                                    </div>
+                                    <p class="mt-4 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400"><%= cardHealthThird.highlightLabel || 'Quando alguém participar da conta, o retrato aparece aqui.' %></p>
+                                    <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300"><%= cardHealthThird.ctaLabel || 'Ver pessoas do mês' %></p>
+                                </a>
+
+                                <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Radar do cartão</p>
+                                            <h3 class="mt-2 text-2xl font-black text-slate-900 dark:text-white sm:text-[1.85rem]"><%= Number(cardHealthRadar.signalCount || 0) > 0 ? `${Number(cardHealthRadar.signalCount || 0)} sinal${Number(cardHealthRadar.signalCount || 0) === 1 ? '' : 's'}` : 'Tudo no trilho' %></h3>
+                                            <p class="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200"><%= cardHealthRadar.signalLabel || 'Sem susto operacional por agora.' %></p>
+                                        </div>
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-2xl text-white dark:bg-slate-100 dark:text-slate-900">🚦</div>
+                                    </div>
+
+                                    <% if (cardHealthRadar.items && cardHealthRadar.items.length) { %>
+                                        <div class="mt-4 grid gap-3">
+                                            <% cardHealthRadar.items.forEach((item) => { %>
+                                                <a href="<%= item.href || cardHealthRadar.ctaHref || `/month/${year}/${month}` %>" class="block rounded-2xl border px-4 py-3 <%= healthRadarItemClasses(item.tone) %>">
+                                                    <div class="flex items-start gap-3">
+                                                        <div class="text-lg leading-none"><%= item.icon || '•' %></div>
+                                                        <div class="min-w-0">
+                                                            <p class="text-sm font-extrabold text-slate-900 dark:text-white"><%= item.title %></p>
+                                                            <p class="mt-1 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300"><%= item.description %></p>
+                                                        </div>
+                                                    </div>
+                                                </a>
+                                            <% }) %>
+                                        </div>
+                                    <% } else { %>
+                                        <div class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm font-medium leading-6 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-100">
+                                            Sem vencimento estourando, sem compra sem dono e sem cartão fechando hoje. Pode seguir o baile.
+                                        </div>
+                                    <% } %>
+
+                                    <a href="<%= cardHealthRadar.ctaHref || `/month/${year}/${month}` %>" class="mt-4 inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= cardHealthRadar.ctaLabel || 'Abrir mês' %></a>
+                                </div>
+                            </div>
+                        </div>
+                    <% } %>
+                </section>
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
                     <div class="space-y-8">
-                        <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <div id="grana-entra" class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                             <div class="bg-slate-900 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <h5 class="text-white font-bold">✨ Grana que entra</h5>
@@ -332,7 +740,7 @@
                                 <% } else { %>
                                     <div data-no-month-swipe>
                                         <div class="divide-y divide-slate-100 dark:divide-slate-700">
-                                            <% incomeFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); %>
+                                            <% incomeFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); const scheduleMeta = getFinanceScheduleMeta(fin); %>
                                                 <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-2 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:gap-x-3">
                                                     <div class="min-w-0 space-y-2">
                                                         <input type="text" <%= isClosed ? 'disabled' : '' %> class="w-full min-w-0 bg-transparent border-b border-transparent text-sm font-semibold text-slate-800 focus:border-blue-500 outline-none dark:text-slate-200 disabled:opacity-60 sm:text-base sm:font-medium" value="<%= getDesc(fin) %>" onchange="updateRow(<%= fin.id %>, 'description', this.value)">
@@ -342,18 +750,27 @@
                                                                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10"></path></svg>
                                                                     Vários lançamentos
                                                                 </span>
+                                                                <% if (scheduleMeta.label) { %>
+                                                                    <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold <%= financeScheduleChipClasses(fin, scheduleMeta) %>"><%= scheduleMeta.label %></span>
+                                                                <% } %>
                                                                 <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400"><%= getVariableHint(fin) %></span>
+                                                            </div>
+                                                        <% } else { %>
+                                                            <div class="flex flex-wrap items-center gap-2" data-fixed-finance-meta-group>
+                                                                <button type="button" onclick="openFixedEditor(<%= fin.id %>)" class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold transition-colors <%= financeScheduleButtonClasses(fin, scheduleMeta) %>">
+                                                                    <%= scheduleMeta.buttonLabel || 'Adicionar dia' %>
+                                                                </button>
                                                             </div>
                                                         <% } %>
                                                     </div>
                                                     <div class="w-40 min-w-[10rem] max-w-[10rem] self-start sm:w-48 sm:min-w-[12rem] sm:max-w-[12rem]">
-                                                        <% if (variable) { %>
+                                                        <% if (variable) { const incomeVariableLabel = formatBRLFromCents(fin.amount_cents); %>
                                                             <button type="button" onclick="openVariableEditor(<%= fin.id %>)" class="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-right transition hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 sm:px-3">
-                                                                <span class="block font-mono text-[13px] font-black text-emerald-700 dark:text-emerald-300 sm:text-sm"><%= formatBRLFromCents(fin.amount_cents) %></span>
+                                                                <span class="block font-mono text-[13px] font-black text-emerald-700 dark:text-emerald-300 sm:text-sm" data-sensitive-text data-sensitive-visible-value="<%= incomeVariableLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(incomeVariableLabel, true) %>"><%= incomeVariableLabel %></span>
                                                                 <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${itemCount} lançamento${itemCount === 1 ? '' : 's'}` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
                                                             </button>
-                                                        <% } else { %>
-                                                            <input type="text" data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-mono text-[13px] font-black text-right text-emerald-700 outline-none transition hover:border-emerald-300 focus:border-emerald-400 focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:border-emerald-900/40 dark:bg-emerald-900/30 dark:text-emerald-400 sm:text-sm" value="<%= getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>, this.value)">
+                                                        <% } else { const incomeFixedValue = getDisplayValue(fin); %>
+                                                            <input type="text" data-money-mask inputmode="numeric" data-sensitive-input data-sensitive-masked-value="<%= buildMaskedMoneyLabel(incomeFixedValue, false) %>" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-mono text-[13px] font-black text-right text-emerald-700 outline-none transition hover:border-emerald-300 focus:border-emerald-400 focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:border-emerald-900/40 dark:bg-emerald-900/30 dark:text-emerald-400 sm:text-sm" value="<%= incomeFixedValue %>" onblur="saveMath(<%= fin.id %>, this.value)">
                                                         <% } %>
                                                     </div>
                                                     <div class="self-start pt-0.5 text-right sm:pt-1">
@@ -367,7 +784,7 @@
                             </div>
                         </div>
 
-                        <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <div id="grana-sai" class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                             <div class="bg-slate-800 dark:bg-slate-900 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <h5 class="text-white font-bold">🧾 Grana que sai</h5>
@@ -388,7 +805,7 @@
                                 <% } else { %>
                                     <div data-no-month-swipe>
                                         <div class="divide-y divide-slate-100 dark:divide-slate-700">
-                                            <% expenseFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); %>
+                                            <% expenseFinances.forEach((fin) => { const variable = isVariable(fin); const itemCount = getItemCount(fin); const paymentState = buildFinancePaymentState(fin); const scheduleMeta = getFinanceScheduleMeta(fin); %>
                                                 <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-2 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:gap-x-3">
                                                     <div class="min-w-0 space-y-2">
                                                         <input type="text" <%= isClosed ? 'disabled' : '' %> class="w-full min-w-0 bg-transparent border-b border-transparent text-sm font-semibold text-slate-800 focus:border-rose-500 outline-none dark:text-slate-200 disabled:opacity-60 sm:text-base sm:font-medium" value="<%= getDesc(fin) %>" onchange="updateRow(<%= fin.id %>, 'description', this.value)">
@@ -398,7 +815,35 @@
                                                                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10"></path></svg>
                                                                     Vários lançamentos
                                                                 </span>
+                                                                <% if (itemCount) { %>
+                                                                    <span class="op-paid-summary-chip <%= paymentState.isComplete ? 'is-complete' : '' %>">
+                                                                        <%= paymentState.paidItemCount %> de <%= paymentState.totalItemCount %> pagos
+                                                                    </span>
+                                                                <% } %>
+                                                                <% if (scheduleMeta.label) { %>
+                                                                    <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold <%= financeScheduleChipClasses(fin, scheduleMeta) %>"><%= scheduleMeta.label %></span>
+                                                                <% } %>
                                                                 <span class="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-slate-400"><%= getVariableHint(fin) %></span>
+                                                            </div>
+                                                        <% } else { %>
+                                                            <div class="flex flex-wrap items-center gap-2" data-fixed-finance-meta-group>
+                                                                <label class="op-paid-toggle <%= paymentState.isPaid ? 'is-checked' : '' %> <%= isClosed ? 'is-readonly' : '' %>" data-fixed-finance-toggle-shell>
+                                                                    <input type="checkbox"
+                                                                        data-fixed-finance-paid-toggle
+                                                                        data-finance-id="<%= fin.id %>"
+                                                                        data-finance-total-cents="<%= Number(fin.amount_cents || 0) %>"
+                                                                        <%= paymentState.isPaid ? 'checked' : '' %>
+                                                                        <%= isClosed ? 'disabled' : '' %>>
+                                                                    <span class="op-paid-toggle__box" aria-hidden="true">
+                                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                                            <path d="M5 12.5l4.2 4.2L19 7"></path>
+                                                                        </svg>
+                                                                    </span>
+                                                                    <span class="op-paid-toggle__text" data-fixed-finance-paid-label><%= paymentState.isPaid ? 'Pago' : 'Marcar pago' %></span>
+                                                                </label>
+                                                                <button type="button" onclick="openFixedEditor(<%= fin.id %>)" class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold transition-colors <%= financeScheduleButtonClasses(fin, scheduleMeta) %>">
+                                                                    <%= scheduleMeta.buttonLabel || 'Adicionar dia' %>
+                                                                </button>
                                                             </div>
                                                         <% } %>
                                                     </div>
@@ -406,7 +851,7 @@
                                                         <% if (variable) { %>
                                                             <button type="button" onclick="openVariableEditor(<%= fin.id %>)" class="w-full rounded-2xl border border-rose-200 bg-rose-50 px-2.5 py-2 text-right transition hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900/40 dark:bg-rose-900/20 dark:hover:bg-rose-900/30 sm:px-3">
                                                                 <span class="block font-mono text-[13px] font-black text-rose-700 dark:text-rose-300 sm:text-sm"><%= formatBRLFromCents(fin.amount_cents) %></span>
-                                                                <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${itemCount} lançamento${itemCount === 1 ? '' : 's'}` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
+                                                                <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${paymentState.paidItemCount} de ${itemCount} pagos` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
                                                             </button>
                                                         <% } else { %>
                                                             <input type="text" data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 font-mono text-[13px] font-black text-right text-rose-700 outline-none transition hover:border-rose-300 focus:border-rose-400 focus:ring-2 focus:ring-rose-500 disabled:opacity-60 dark:border-rose-900/40 dark:bg-rose-900/30 dark:text-rose-400 sm:text-sm" value="<%= getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>, this.value)">
@@ -446,9 +891,9 @@
                     </div>
                 </div>
 
-                <div id="financeModal" aria-hidden="true" class="hidden fixed inset-0 z-[10030] bg-slate-950/60 backdrop-blur-sm px-3 py-3 sm:px-4 sm:py-8">
-                    <div class="pointer-events-none flex min-h-full items-end justify-center sm:items-center">
-                        <section class="pointer-events-auto w-full max-w-3xl overflow-hidden rounded-[30px] border border-slate-200 bg-white/95 shadow-2xl ring-1 ring-slate-200 backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95 dark:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="finance-modal-title">
+                <div id="financeModal" aria-hidden="true" class="hidden fixed inset-0 z-[10030] overflow-y-auto bg-slate-950/60 backdrop-blur-sm px-3 py-4 sm:px-4 sm:py-8">
+                    <div class="pointer-events-none flex min-h-full items-start justify-center sm:items-center">
+                        <section data-finance-modal-surface class="pointer-events-auto w-full max-w-5xl overflow-hidden rounded-[30px] border border-slate-200 bg-white/95 shadow-2xl ring-1 ring-slate-200 backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95 dark:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="finance-modal-title">
                             <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 dark:border-slate-800 sm:px-6">
                                 <div>
                                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300" id="finance-modal-eyebrow">Nova entrada</div>
@@ -458,16 +903,54 @@
                                 <button type="button" class="op-icon-btn shrink-0" data-finance-close aria-label="Fechar janela">✕</button>
                             </div>
 
-                            <div class="max-h-[72vh] space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+                            <div data-finance-modal-scroll class="max-h-[82vh] space-y-5 overflow-y-auto px-5 py-5 sm:px-6 lg:max-h-[44rem]">
                                 <div id="finance-mode-group" class="grid grid-cols-2 gap-2">
                                     <button type="button" data-finance-mode-btn data-finance-mode="fixed" class="rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors">Valor único</button>
                                     <button type="button" data-finance-mode-btn data-finance-mode="variable" class="rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors">Vários lançamentos</button>
                                 </div>
 
-                                <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-start">
-                                    <div>
-                                        <label for="finance-description-input" id="finance-description-label" class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Nome da entrada</label>
-                                        <input id="finance-description-input" type="text" class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950" placeholder="Ex: Shows, Salário, Freelas">
+                                <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px] xl:items-start">
+                                    <div class="space-y-4">
+                                        <div id="finance-fixed-header-grid" class="grid gap-4 sm:grid-cols-[96px_minmax(0,1fr)] sm:items-end">
+                                            <div id="finance-fixed-day-shell">
+                                                <label for="finance-fixed-day-input" class="mb-2 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Dia</label>
+                                                <input id="finance-fixed-day-input" type="number" min="1" max="31" inputmode="numeric" class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-3 text-center text-sm font-black text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950" placeholder="Ex: 5">
+                                            </div>
+                                            <div id="finance-description-shell">
+                                                <label for="finance-description-input" id="finance-description-label" class="mb-2 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Nome da entrada</label>
+                                                <input id="finance-description-input" type="text" class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950" placeholder="Ex: Shows, Salário, Freelas">
+                                            </div>
+                                        </div>
+
+                                        <div id="finance-fixed-panel" class="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/60">
+                                            <p id="finance-fixed-copy" class="text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Esse item vai nascer como valor único. Se quiser, já deixe o dia marcado para os alertas do mês. O valor continua sendo ajustado direto na lista.</p>
+                                            <div id="finance-fixed-kind-shell" class="mt-4">
+                                                <div class="mb-2 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Esse dia significa</div>
+                                                <div class="grid gap-3 sm:grid-cols-2">
+                                                    <label class="op-paid-toggle w-full justify-start px-4 py-3" data-fixed-kind-choice="due">
+                                                        <input type="radio" name="finance-fixed-kind-radio" value="due" data-fixed-kind-radio aria-label="Vence nesse dia">
+                                                        <span class="op-paid-toggle__box" aria-hidden="true">
+                                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                                <path d="M5 12.5l4.2 4.2L19 7"></path>
+                                                            </svg>
+                                                        </span>
+                                                        <span class="op-paid-toggle__text text-sm">Vence nesse dia</span>
+                                                    </label>
+                                                    <label class="op-paid-toggle w-full justify-start px-4 py-3" data-fixed-kind-choice="pay">
+                                                        <input type="radio" name="finance-fixed-kind-radio" value="pay" data-fixed-kind-radio aria-label="Pago nesse dia">
+                                                        <span class="op-paid-toggle__box" aria-hidden="true">
+                                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                                <path d="M5 12.5l4.2 4.2L19 7"></path>
+                                                            </svg>
+                                                        </span>
+                                                        <span class="op-paid-toggle__text text-sm">Pago nesse dia</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-[11px] font-medium leading-5 text-sky-800 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-100">
+                                                Dica boa: se você marcar dia 31, nos meses curtinhos o app usa o último dia disponível sem bagunçar a rotina.
+                                            </div>
+                                        </div>
                                     </div>
                                     <div class="rounded-[24px] border border-slate-200 bg-slate-50/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/70">
                                         <div class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Total que vai pra tela</div>
@@ -476,16 +959,11 @@
                                     </div>
                                 </div>
 
-                                <div id="finance-fixed-panel" class="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/60">
-                                    <div class="text-sm font-bold text-slate-800 dark:text-white">Modo rápido na área</div>
-                                    <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Esse item vai nascer como valor único. Você salva o nome agora e ajusta o valor direto na lista, sem novela.</p>
-                                </div>
-
                                 <div id="finance-variable-panel" class="hidden space-y-4">
                                     <div class="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/60 sm:flex-row sm:items-center sm:justify-between">
                                         <div>
                                             <div class="text-sm font-bold text-slate-800 dark:text-white">Listinha dos lançamentos</div>
-                                            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Cada linha soma no total do lado de fora. Data, origem e valor — sem mistério.</p>
+                                            <p id="finance-variable-copy" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Cada linha soma no total do lado de fora. Você marca o pago, escolhe a data, conta o detalhe e põe o valor com mais conforto.</p>
                                         </div>
                                         <button type="button" id="finance-add-item-btn" class="op-btn op-btn-primary px-4 py-2 text-sm">+ Adicionar linha</button>
                                     </div>
@@ -556,6 +1034,8 @@
                 };
                 const financeRefs = {
                     modal: document.getElementById('financeModal'),
+                    modalSurface: document.querySelector('[data-finance-modal-surface]'),
+                    modalScroll: document.querySelector('[data-finance-modal-scroll]'),
                     eyebrow: document.getElementById('finance-modal-eyebrow'),
                     title: document.getElementById('finance-modal-title'),
                     subtitle: document.getElementById('finance-modal-subtitle'),
@@ -563,10 +1043,19 @@
                     modeButtons: Array.from(document.querySelectorAll('[data-finance-mode-btn]')),
                     descriptionLabel: document.getElementById('finance-description-label'),
                     descriptionInput: document.getElementById('finance-description-input'),
+                    descriptionShell: document.getElementById('finance-description-shell'),
+                    fixedDayShell: document.getElementById('finance-fixed-day-shell'),
+                    fixedHeaderGrid: document.getElementById('finance-fixed-header-grid'),
                     totalPreview: document.getElementById('finance-total-preview'),
                     totalCaption: document.getElementById('finance-total-caption'),
                     fixedPanel: document.getElementById('finance-fixed-panel'),
+                    fixedCopy: document.getElementById('finance-fixed-copy'),
+                    fixedDayInput: document.getElementById('finance-fixed-day-input'),
+                    fixedKindShell: document.getElementById('finance-fixed-kind-shell'),
+                    fixedKindChoices: Array.from(document.querySelectorAll('[data-fixed-kind-choice]')),
+                    fixedKindRadios: Array.from(document.querySelectorAll('[data-fixed-kind-radio]')),
                     variablePanel: document.getElementById('finance-variable-panel'),
+                    variableCopy: document.getElementById('finance-variable-copy'),
                     variableEmpty: document.getElementById('finance-variable-empty'),
                     itemsList: document.getElementById('finance-items-list'),
                     addItemButton: document.getElementById('finance-add-item-btn'),
@@ -583,6 +1072,52 @@
                     deleteCloseButtons: Array.from(document.querySelectorAll('[data-finance-delete-close]'))
                 };
                 const brlFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+                const progressCardRefs = {
+                    expense: document.querySelector('[data-progress-card="expense"]'),
+                    cards: document.querySelector('[data-progress-card="cards"]')
+                };
+
+                function clampProgressValue(value) {
+                    const pct = Number(value || 0);
+                    if (!Number.isFinite(pct)) return 0;
+                    return Math.max(0, Math.min(100, Math.round(pct)));
+                }
+
+                function applyProgressCardState(scope, progress) {
+                    const root = progressCardRefs[scope];
+                    if (!root || !progress) return;
+
+                    const pct = clampProgressValue(progress.progressPct);
+                    root.style.setProperty('--op-paid-progress', `${pct}%`);
+
+                    const labelNode = root.querySelector('[data-progress-label]');
+                    if (labelNode) {
+                        labelNode.textContent = progress.label || (scope === 'cards'
+                            ? 'Quando aparecer parcela sua nos cartões, o progresso mora aqui.'
+                            : 'Quando pintar saída, o progresso aparece aqui.');
+                    }
+
+                    const checkNode = root.querySelector('[data-progress-check]');
+                    if (checkNode) {
+                        const shouldShowCheck = !!progress.isComplete && Number(progress.totalCents || 0) > 0;
+                        checkNode.classList.toggle('hidden', !shouldShowCheck);
+                    }
+                }
+
+                function applyFixedToggleVisual(toggle, isPaid) {
+                    const metaGroup = toggle?.closest('[data-fixed-finance-meta-group]');
+                    if (!metaGroup) return;
+
+                    const shell = metaGroup.querySelector('[data-fixed-finance-toggle-shell]');
+                    const label = metaGroup.querySelector('[data-fixed-finance-paid-label]');
+
+                    if (shell) {
+                        shell.classList.toggle('is-checked', !!isPaid);
+                    }
+                    if (label) {
+                        label.textContent = isPaid ? 'Pago' : 'Marcar pago';
+                    }
+                }
 
                 function evaluateFormula(str) {
                     try {
@@ -637,6 +1172,48 @@
                     return Number.isNaN(parsed.getTime()) ? 'Sem data' : parsed.toLocaleDateString('pt-BR');
                 }
 
+                function normalizeFixedDayInputValue(value) {
+                    const raw = String(value ?? '').trim();
+                    if (!raw) return null;
+                    const parsed = Number(raw);
+                    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 31) {
+                        throw new Error('Escolha um dia entre 1 e 31 ou deixe em branco para seguir sem data.');
+                    }
+                    return parsed;
+                }
+
+                function resetFixedFinanceFields() {
+                    if (financeRefs.fixedDayInput) financeRefs.fixedDayInput.value = '';
+                    setFixedKindValue('due');
+                }
+
+                function populateFixedFinanceFields(finance = {}) {
+                    if (financeRefs.fixedDayInput) {
+                        financeRefs.fixedDayInput.value = finance.day_of_month ? String(finance.day_of_month) : '';
+                    }
+                    setFixedKindValue(finance.schedule_kind === 'pay' ? 'pay' : 'due');
+                }
+
+                function syncFixedKindChoiceVisual() {
+                    financeRefs.fixedKindChoices.forEach((choice) => {
+                        const radio = choice.querySelector('[data-fixed-kind-radio]');
+                        choice.classList.toggle('is-checked', !!radio?.checked);
+                    });
+                }
+
+                function setFixedKindValue(value) {
+                    const resolved = value === 'pay' ? 'pay' : 'due';
+                    financeRefs.fixedKindRadios.forEach((radio) => {
+                        radio.checked = radio.value === resolved;
+                    });
+                    syncFixedKindChoiceVisual();
+                }
+
+                function getFixedKindValue() {
+                    const checked = financeRefs.fixedKindRadios.find((radio) => radio.checked);
+                    return checked?.value === 'pay' ? 'pay' : 'due';
+                }
+
                 function createDeletePreviewCard({ title, meta, amountCents }) {
                     const row = document.createElement('div');
                     row.className = 'rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-950/60';
@@ -673,6 +1250,13 @@
                     if (!financeRefs.modal) return;
                     financeRefs.modal.classList.remove('hidden');
                     financeRefs.modal.setAttribute('aria-hidden', 'false');
+                    financeRefs.modal.scrollTop = 0;
+                    if (financeRefs.modalScroll) financeRefs.modalScroll.scrollTop = 0;
+                    requestAnimationFrame(() => {
+                        financeRefs.modal.scrollTop = 0;
+                        if (financeRefs.modalScroll) financeRefs.modalScroll.scrollTop = 0;
+                        financeRefs.modalSurface?.scrollIntoView({ block: window.innerWidth >= 640 ? 'center' : 'start' });
+                    });
                     updateBodyLockState();
                 }
 
@@ -697,12 +1281,37 @@
                     updateBodyLockState();
                 }
 
+                function syncVariableItemRowState(row) {
+                    if (!row) return;
+                    const paidInput = row.querySelector('[data-variable-item-paid]');
+                    row.classList.toggle('is-paid', !!paidInput?.checked);
+                }
+
                 function createVariableItemRow(item = {}) {
                     const row = document.createElement('div');
-                    row.className = 'rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900';
+                    row.className = 'op-variable-item-row rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900';
                     row.dataset.variableItemRow = '1';
+                    const isExpenseVariable = financeModalState.financeType === 'expense';
+                    const gridClasses = isExpenseVariable
+                        ? 'grid gap-3 md:grid-cols-[118px_168px_minmax(0,1fr)_152px_auto] md:items-end'
+                        : 'grid gap-3 md:grid-cols-[168px_minmax(0,1fr)_152px_auto] md:items-end';
+                    const paidColumnMarkup = isExpenseVariable ? `
+                            <div>
+                                <label class="block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 mb-2">Já paguei</label>
+                                <label class="op-paid-toggle op-paid-toggle--compact" data-variable-item-paid-shell>
+                                    <input type="checkbox" data-variable-item-paid aria-label="Marcar esse lançamento como pago">
+                                    <span class="op-paid-toggle__box" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M5 12.5l4.2 4.2L19 7"></path>
+                                        </svg>
+                                    </span>
+                                    <span class="hidden" data-variable-item-paid-label>Marcar pago</span>
+                                </label>
+                            </div>` : '';
                     row.innerHTML = `
-                        <div class="grid gap-3 md:grid-cols-[170px_minmax(0,1fr)_170px_auto] md:items-end">
+                        <input type="hidden" data-variable-item-id>
+                        <div class="${gridClasses}">
+                            ${paidColumnMarkup}
                             <div>
                                 <label class="block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 mb-2">Data</label>
                                 <input type="date" data-variable-item-date class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:bg-slate-900">
@@ -716,17 +1325,23 @@
                                 <input type="text" data-variable-item-amount class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-right text-sm font-black text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:bg-slate-900" inputmode="numeric" autocomplete="off" placeholder="0,00">
                             </div>
                             <div class="md:pb-[1px]">
-                                <button type="button" data-variable-item-remove class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 px-3 py-2 text-sm font-bold text-rose-600 transition hover:bg-rose-50 dark:border-rose-900/40 dark:text-rose-300 dark:hover:bg-rose-900/20">Remover</button>
+                                <button type="button" data-variable-item-remove class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 px-3 py-2 text-sm font-bold text-rose-600 transition hover:bg-rose-50 dark:border-rose-900/40 dark:text-rose-300 dark:hover:bg-rose-900/20 md:w-auto">Remover</button>
                             </div>
                         </div>
                     `;
 
+                    const idInput = row.querySelector('[data-variable-item-id]');
                     const dateInput = row.querySelector('[data-variable-item-date]');
                     const sourceInput = row.querySelector('[data-variable-item-source]');
                     const amountInput = row.querySelector('[data-variable-item-amount]');
+                    const paidInput = row.querySelector('[data-variable-item-paid]');
+                    const paidShell = row.querySelector('[data-variable-item-paid-shell]');
+                    const paidLabel = row.querySelector('[data-variable-item-paid-label]');
                     const removeButton = row.querySelector('[data-variable-item-remove]');
                     const moneyMask = getMoneyMaskApi();
+                    const initialPaid = isExpenseVariable && !!Number(item.is_paid || item.isPaid || 0);
 
+                    if (idInput) idInput.value = item.id || item.item_id || '';
                     if (dateInput) dateInput.value = item.item_date || item.date || getDefaultItemDate();
                     if (sourceInput) sourceInput.value = item.item_source || item.source || '';
                     if (amountInput) {
@@ -745,6 +1360,19 @@
                         sourceInput.addEventListener('input', refreshFinanceTotalPreview);
                         sourceInput.addEventListener('change', refreshFinanceTotalPreview);
                     }
+                    if (paidInput) {
+                        paidInput.checked = initialPaid;
+                        paidInput.disabled = financeModalState.readOnly;
+                        if (paidShell) paidShell.classList.toggle('is-checked', initialPaid);
+                        if (paidLabel) paidLabel.textContent = initialPaid ? 'Pago' : 'Marcar pago';
+                        paidInput.addEventListener('change', () => {
+                            const checked = !!paidInput.checked;
+                            if (paidShell) paidShell.classList.toggle('is-checked', checked);
+                            if (paidLabel) paidLabel.textContent = checked ? 'Pago' : 'Marcar pago';
+                            syncVariableItemRowState(row);
+                            refreshFinanceTotalPreview();
+                        });
+                    }
                     if (removeButton) {
                         removeButton.hidden = financeModalState.readOnly;
                         removeButton.addEventListener('click', () => {
@@ -754,6 +1382,7 @@
                         });
                     }
 
+                    syncVariableItemRowState(row);
                     return row;
                 }
 
@@ -780,9 +1409,11 @@
                     const items = [];
 
                     rows.forEach((row) => {
+                        const idValue = (row.querySelector('[data-variable-item-id]')?.value || '').trim();
                         const dateValue = (row.querySelector('[data-variable-item-date]')?.value || '').trim();
                         const sourceValue = (row.querySelector('[data-variable-item-source]')?.value || '').trim();
                         const amountValue = row.querySelector('[data-variable-item-amount]')?.value || '';
+                        const isPaid = row.querySelector('[data-variable-item-paid]')?.checked ? 1 : 0;
                         const amountCents = moneyMask.toCents(amountValue);
                         const hasAnyValue = !!dateValue || !!sourceValue || amountCents > 0;
 
@@ -792,7 +1423,13 @@
                             throw new Error('Em vários lançamentos, preencha data, origem e valor certinhos.');
                         }
 
-                        items.push({ item_date: dateValue, item_source: sourceValue, amount_cents: amountCents });
+                        items.push({
+                            id: idValue ? Number(idValue) : null,
+                            item_date: dateValue,
+                            item_source: sourceValue,
+                            amount_cents: amountCents,
+                            is_paid: isPaid
+                        });
                     });
 
                     return items;
@@ -809,14 +1446,29 @@
 
                     const items = readVariableItems();
                     const totalCents = items.reduce((sum, item) => sum + Number(item.amount_cents || 0), 0);
+                    const isExpenseVariable = financeModalState.financeType === 'expense';
+                    const paidItems = isExpenseVariable
+                        ? items.filter((item) => Number(item.is_paid || 0) === 1)
+                        : [];
+                    const paidCents = paidItems.reduce((sum, item) => sum + Number(item.amount_cents || 0), 0);
                     financeRefs.totalPreview.textContent = formatCurrency(totalCents);
 
                     if (!items.length) {
                         financeRefs.totalCaption.textContent = 'Sem lançamentos ainda. A linha principal pode ficar de prontidão.';
+                    } else if (!isExpenseVariable) {
+                        financeRefs.totalCaption.textContent = items.length === 1
+                            ? '1 lançamento entrando nesse total.'
+                            : `${items.length} lançamentos entrando nesse total.`;
                     } else if (items.length === 1) {
-                        financeRefs.totalCaption.textContent = '1 lançamento entrando nesse total.';
-                    } else {
+                        financeRefs.totalCaption.textContent = paidItems.length
+                            ? `1 lançamento e ele já foi pago (${formatCurrency(paidCents)}).`
+                            : '1 lançamento entrando nesse total.';
+                    } else if (!paidItems.length) {
                         financeRefs.totalCaption.textContent = `${items.length} lançamentos entrando nesse total.`;
+                    } else if (paidItems.length === items.length) {
+                        financeRefs.totalCaption.textContent = `${items.length} lançamentos e todos já foram pagos.`;
+                    } else {
+                        financeRefs.totalCaption.textContent = `${items.length} lançamentos · ${paidItems.length} pagos (${formatCurrency(paidCents)}).`;
                     }
                 }
 
@@ -834,6 +1486,9 @@
                     const isCreate = financeModalState.action === 'create';
                     const isVariableMode = financeModalState.amountMode === 'variable';
                     const isIncome = financeModalState.financeType === 'income';
+                    const isExpense = financeModalState.financeType === 'expense';
+                    const isEditVariable = financeModalState.action === 'edit-variable';
+                    const isEditFixed = financeModalState.action === 'edit-fixed';
 
                     if (financeRefs.modeGroup) {
                         financeRefs.modeGroup.classList.toggle('hidden', !isCreate);
@@ -841,8 +1496,22 @@
                     if (financeRefs.fixedPanel) {
                         financeRefs.fixedPanel.classList.toggle('hidden', isVariableMode);
                     }
+                    if (financeRefs.fixedDayShell) {
+                        financeRefs.fixedDayShell.classList.toggle('hidden', isVariableMode);
+                    }
+                    if (financeRefs.fixedHeaderGrid) {
+                        financeRefs.fixedHeaderGrid.classList.toggle('sm:grid-cols-[96px_minmax(0,1fr)]', !isVariableMode);
+                        financeRefs.fixedHeaderGrid.classList.toggle('sm:items-end', !isVariableMode);
+                        financeRefs.fixedHeaderGrid.classList.toggle('sm:grid-cols-1', isVariableMode);
+                    }
+                    if (financeRefs.descriptionShell) {
+                        financeRefs.descriptionShell.classList.toggle('sm:col-span-1', isVariableMode);
+                    }
                     if (financeRefs.variablePanel) {
                         financeRefs.variablePanel.classList.toggle('hidden', !isVariableMode);
+                    }
+                    if (financeRefs.fixedKindShell) {
+                        financeRefs.fixedKindShell.classList.toggle('hidden', isVariableMode || !isExpense);
                     }
                     if (financeRefs.readonlyNote) {
                         financeRefs.readonlyNote.classList.toggle('hidden', !financeModalState.readOnly);
@@ -856,6 +1525,20 @@
                     if (financeRefs.descriptionInput) {
                         financeRefs.descriptionInput.disabled = financeModalState.readOnly;
                     }
+                    if (financeRefs.fixedDayInput) {
+                        financeRefs.fixedDayInput.disabled = financeModalState.readOnly || isVariableMode;
+                    }
+                    financeRefs.fixedKindRadios.forEach((radio) => {
+                        radio.disabled = financeModalState.readOnly || isVariableMode || !isExpense;
+                    });
+
+                    syncFixedKindChoiceVisual();
+
+                    if (financeRefs.variableCopy) {
+                        financeRefs.variableCopy.textContent = isExpense
+                            ? 'Cada linha soma no total do lado de fora. Você marca o pago, escolhe a data, conta o detalhe e põe o valor com mais conforto.'
+                            : 'Cada linha soma no total do lado de fora. Você escolhe a data, conta o detalhe e põe o valor com mais conforto.';
+                    }
 
                     setModeButtonState(financeModalState.amountMode);
                     syncVariableEmptyState();
@@ -867,18 +1550,38 @@
                             ? (isIncome ? 'Montar uma entrada em vários lançamentos' : 'Montar uma saída em vários lançamentos')
                             : (isIncome ? 'Criar uma entrada de valor único' : 'Criar uma saída de valor único');
                         financeRefs.subtitle.textContent = isVariableMode
-                            ? 'Você dá um nome principal e soma cada pedacinho na listinha abaixo.'
-                            : 'Salva o nome agora e o valor fica no toque rápido lá na lista.';
+                            ? 'Você dá um nome principal e soma cada pedacinho na listinha abaixo. As datas ajudam os alertas do mês a chegarem na hora certa.'
+                            : 'Salva o nome agora, deixa o dia opcional se quiser alerta e o valor continua no toque rápido lá na lista.';
                         financeRefs.descriptionLabel.textContent = isIncome ? 'Nome da entrada' : 'Nome da saída';
                         financeRefs.descriptionInput.placeholder = isIncome ? 'Ex: Shows, Salário, Freelas' : 'Ex: Combustível, Alimentação, Operação';
                         financeRefs.saveButton.textContent = 'Salvar item';
-                    } else {
+                        if (financeRefs.fixedCopy) {
+                            financeRefs.fixedCopy.textContent = isIncome
+                                ? 'Quer um empurrãozinho nos alertas? Deixe o dia marcado por aqui e o resto continua no toque rápido da lista.'
+                                : 'Deixe o dia ao lado do nome e marque se ele representa o vencimento ou o pagamento desse combinado.';
+                        }
+                    } else if (isEditFixed) {
+                        const baseName = (financeRefs.descriptionInput.value || `item de valor único`).trim();
+                        financeRefs.eyebrow.textContent = financeModalState.readOnly ? 'Valor único em modo leitura' : 'Ajustar valor único';
+                        financeRefs.title.textContent = financeModalState.readOnly ? `Conferir ${baseName}` : `Ajustar ${baseName}`;
+                        financeRefs.subtitle.textContent = financeModalState.readOnly
+                            ? 'Pode dar aquela conferida. Para mexer, é só reabrir o mês.'
+                            : 'O valor continua sendo ajustado na lista. Aqui você acerta o nome e, se quiser, o dia que entra ou sai no radar.';
+                        financeRefs.descriptionLabel.textContent = 'Nome do item';
+                        financeRefs.descriptionInput.placeholder = isIncome ? 'Ex: Salário' : 'Ex: Aluguel';
+                        financeRefs.saveButton.textContent = 'Salvar valor único';
+                        if (financeRefs.fixedCopy) {
+                            financeRefs.fixedCopy.textContent = isIncome
+                                ? 'Você pode ajustar o nome e, se quiser, deixar o dia certinho para o radar do mês tocar no momento certo.'
+                                : 'Você pode ajustar o nome e deixar claro se esse dia marca o vencimento ou o pagamento da saída.';
+                        }
+                    } else if (isEditVariable) {
                         const baseName = (financeRefs.descriptionInput.value || 'item com vários lançamentos').trim();
                         financeRefs.eyebrow.textContent = financeModalState.readOnly ? 'Listinha em modo leitura' : 'Editar lançamentos';
                         financeRefs.title.textContent = financeModalState.readOnly ? `Conferir ${baseName}` : `Ajustar ${baseName}`;
                         financeRefs.subtitle.textContent = financeModalState.readOnly
                             ? 'Pode dar aquela conferida. Para mexer, é só reabrir o mês.'
-                            : 'Tudo que você mexer aqui já recalcula o total que aparece na tela.';
+                            : 'Tudo que você mexer aqui já recalcula o total que aparece na tela. As datas seguem ajudando o radar do mês.';
                         financeRefs.descriptionLabel.textContent = 'Nome principal';
                         financeRefs.descriptionInput.placeholder = 'Ex: Shows';
                         financeRefs.saveButton.textContent = 'Salvar listinha';
@@ -891,6 +1594,7 @@
                     financeModalState.amountMode = 'fixed';
                     financeModalState.financeId = null;
                     financeModalState.readOnly = false;
+                    resetFixedFinanceFields();
                 }
 
                 async function fetchJson(url, options = {}) {
@@ -915,6 +1619,47 @@
                     return data;
                 }
 
+                async function handleFixedPaymentToggle(event) {
+                    const toggle = event?.currentTarget;
+                    if (!toggle) return;
+
+                    const financeId = Number(toggle.dataset.financeId || 0);
+                    const nextPaid = !!toggle.checked;
+                    const previousPaid = !nextPaid;
+
+                    toggle.disabled = true;
+                    applyFixedToggleVisual(toggle, nextPaid);
+
+                    try {
+                        const data = await fetchJson(`/finances/payment-toggle/${financeId}`, {
+                            method: 'POST',
+                            body: JSON.stringify({ is_paid: nextPaid ? 1 : 0 })
+                        });
+
+                        const finance = data.finance || {};
+                        const resolvedPaid = !!Number(finance.is_paid || 0);
+                        toggle.checked = resolvedPaid;
+                        toggle.dataset.financeTotalCents = Number(finance.amount_cents || toggle.dataset.financeTotalCents || 0);
+                        applyFixedToggleVisual(toggle, resolvedPaid);
+                        applyProgressCardState('expense', data.expenseProgress || {});
+                    } catch (error) {
+                        toggle.checked = previousPaid;
+                        applyFixedToggleVisual(toggle, previousPaid);
+                        alert(error.message || 'Não consegui marcar essa conta agora.');
+                    } finally {
+                        toggle.disabled = detailMonthIsClosed;
+                    }
+                }
+
+                function bindFixedPaymentToggles() {
+                    document.querySelectorAll('[data-fixed-finance-paid-toggle]').forEach((toggle) => {
+                        if (toggle.dataset.paymentToggleBound === '1') return;
+                        toggle.dataset.paymentToggleBound = '1';
+                        applyFixedToggleVisual(toggle, !!toggle.checked);
+                        toggle.addEventListener('change', handleFixedPaymentToggle);
+                    });
+                }
+
                 async function saveFinanceModal() {
                     if (financeModalState.readOnly) return;
                     const description = (financeRefs.descriptionInput?.value || '').trim();
@@ -930,12 +1675,27 @@
                             items: financeModalState.amountMode === 'variable' ? readVariableItems({ validate: true }) : []
                         };
 
+                        if (financeModalState.amountMode === 'fixed') {
+                            const dayOfMonth = normalizeFixedDayInputValue(financeRefs.fixedDayInput?.value || '');
+                            payload.day_of_month = dayOfMonth;
+                            payload.schedule_kind = dayOfMonth
+                                ? (financeModalState.financeType === 'expense'
+                                    ? getFixedKindValue()
+                                    : 'receive')
+                                : null;
+                        }
+
                         if (financeModalState.action === 'create') {
                             payload.month = detailMonth;
                             payload.year = detailYear;
                             payload.type = financeModalState.financeType;
                             payload.amount_mode = financeModalState.amountMode;
                             await fetchJson('/finances/add-row', {
+                                method: 'POST',
+                                body: JSON.stringify(payload)
+                            });
+                        } else if (financeModalState.action === 'edit-fixed') {
+                            await fetchJson(`/finances/fixed/${financeModalState.financeId}`, {
                                 method: 'POST',
                                 body: JSON.stringify(payload)
                             });
@@ -1097,12 +1857,13 @@
                     try {
                         const data = await fetchJson(`/finances/details/${id}`);
                         const finance = data.finance || {};
-                        financeModalState.action = 'edit';
+                        financeModalState.action = 'edit-variable';
                         financeModalState.financeType = finance.type || 'income';
                         financeModalState.amountMode = 'variable';
                         financeModalState.financeId = finance.id;
                         financeModalState.readOnly = !!data.isClosed;
                         financeRefs.descriptionInput.value = finance.description || '';
+                        resetFixedFinanceFields();
                         renderVariableItems(Array.isArray(finance.items) ? finance.items : []);
                         applyFinanceModalState();
                         showFinanceModal();
@@ -1111,6 +1872,28 @@
                         }
                     } catch (error) {
                         alert(error.message || 'Não consegui abrir essa listinha agora.');
+                    }
+                }
+
+                async function openFixedEditor(id) {
+                    try {
+                        const data = await fetchJson(`/finances/details/${id}`);
+                        const finance = data.finance || {};
+                        financeModalState.action = 'edit-fixed';
+                        financeModalState.financeType = finance.type || 'income';
+                        financeModalState.amountMode = 'fixed';
+                        financeModalState.financeId = finance.id;
+                        financeModalState.readOnly = !!data.isClosed;
+                        financeRefs.descriptionInput.value = finance.description || '';
+                        renderVariableItems([]);
+                        populateFixedFinanceFields(finance);
+                        applyFinanceModalState();
+                        showFinanceModal();
+                        if (!financeModalState.readOnly) {
+                            requestAnimationFrame(() => { if (financeRefs.fixedDayInput) financeRefs.fixedDayInput.focus(); else financeRefs.descriptionInput?.focus(); });
+                        }
+                    } catch (error) {
+                        alert(error.message || 'Não consegui abrir esse valor único agora.');
                     }
                 }
 
@@ -1131,6 +1914,10 @@
                     });
                 });
 
+                financeRefs.fixedKindRadios.forEach((radio) => {
+                    radio.addEventListener('change', syncFixedKindChoiceVisual);
+                });
+
                 financeRefs.closeButtons.forEach((button) => {
                     button.addEventListener('click', closeFinanceModal);
                 });
@@ -1147,7 +1934,7 @@
 
                 financeRefs.saveButton?.addEventListener('click', saveFinanceModal);
                 financeRefs.descriptionInput?.addEventListener('input', () => {
-                    if (financeModalState.action === 'edit') {
+                    if (financeModalState.action !== 'create') {
                         applyFinanceModalState();
                     }
                 });
@@ -1185,9 +1972,117 @@
                     }
                 });
 
+                function initSensitiveValuesToggle() {
+                    const scope = document.querySelector('[data-sensitive-scope="detalhamento"]');
+                    const toggles = scope ? Array.from(scope.querySelectorAll('[data-sensitive-toggle]')) : [];
+                    if (!scope || !toggles.length) return;
+
+                    const storageKey = 'op:detailed-sensitive-hidden';
+                    const textNodes = Array.from(scope.querySelectorAll('[data-sensitive-text]'));
+                    const inputNodes = Array.from(scope.querySelectorAll('[data-sensitive-input]'));
+                    const visibleLabel = 'Ocultar valores sensíveis';
+                    const hiddenLabel = 'Mostrar valores sensíveis';
+
+                    textNodes.forEach((node) => {
+                        if (!node.dataset.sensitiveVisibleValue) {
+                            node.dataset.sensitiveVisibleValue = node.textContent.trim();
+                        }
+                    });
+
+                    inputNodes.forEach((input) => {
+                        if (!input.dataset.sensitiveVisibleValue) {
+                            input.dataset.sensitiveVisibleValue = input.value || '';
+                        }
+                        if (!input.dataset.sensitiveReadonly) {
+                            input.dataset.sensitiveReadonly = input.readOnly ? '1' : '0';
+                        }
+                        if (!input.dataset.sensitiveTabindexSnapshot) {
+                            const tabindexAttr = input.getAttribute('tabindex');
+                            input.dataset.sensitiveTabindexSnapshot = tabindexAttr == null ? '' : tabindexAttr;
+                        }
+                    });
+
+                    function syncButton(hidden) {
+                        const nextLabel = hidden ? hiddenLabel : visibleLabel;
+                        toggles.forEach((toggle) => {
+                            toggle.classList.toggle('is-hidden', hidden);
+                            toggle.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+                            toggle.setAttribute('aria-label', nextLabel);
+                            toggle.setAttribute('title', nextLabel);
+                            toggle.querySelectorAll('[data-sensitive-icon]').forEach((icon) => {
+                                const shouldShow = icon.dataset.sensitiveIcon === (hidden ? 'hidden' : 'visible');
+                                icon.classList.toggle('hidden', !shouldShow);
+                            });
+                        });
+                    }
+
+                    function syncTextNodes(hidden) {
+                        textNodes.forEach((node) => {
+                            const visibleValue = node.dataset.sensitiveVisibleValue || node.textContent.trim();
+                            const maskedValue = node.dataset.sensitiveMaskedValue || 'R$ ••••';
+                            node.textContent = hidden ? maskedValue : visibleValue;
+                            node.classList.toggle('op-sensitive-value--masked', hidden);
+                        });
+                    }
+
+                    function syncInputNodes(hidden) {
+                        inputNodes.forEach((input) => {
+                            if (hidden) {
+                                input.dataset.sensitiveVisibleValue = input.value || input.dataset.sensitiveVisibleValue || '';
+                                input.value = input.dataset.sensitiveMaskedValue || '••••';
+                                input.readOnly = true;
+                                input.tabIndex = -1;
+                                input.classList.add('op-sensitive-input--masked');
+                                return;
+                            }
+
+                            input.value = input.dataset.sensitiveVisibleValue || '';
+                            input.readOnly = input.dataset.sensitiveReadonly === '1';
+                            const originalTabindex = input.dataset.sensitiveTabindexSnapshot || '';
+                            if (originalTabindex) input.setAttribute('tabindex', originalTabindex);
+                            else input.removeAttribute('tabindex');
+                            input.classList.remove('op-sensitive-input--masked');
+                        });
+                    }
+
+                    function applyState(hidden, { persist = true } = {}) {
+                        if (hidden && document.activeElement instanceof HTMLElement && inputNodes.includes(document.activeElement)) {
+                            document.activeElement.blur();
+                        }
+                        scope.classList.toggle('is-sensitive-hidden', hidden);
+                        scope.dataset.sensitiveState = hidden ? 'hidden' : 'visible';
+                        syncButton(hidden);
+                        syncTextNodes(hidden);
+                        syncInputNodes(hidden);
+                        if (!persist) return;
+                        try {
+                            window.localStorage.setItem(storageKey, hidden ? '1' : '0');
+                        } catch (_error) {}
+                    }
+
+                    let startHidden = false;
+                    try {
+                        startHidden = window.localStorage.getItem(storageKey) === '1';
+                    } catch (_error) {
+                        startHidden = false;
+                    }
+
+                    applyState(startHidden, { persist: false });
+                    toggles.forEach((toggle) => {
+                        toggle.addEventListener('click', () => {
+                            const nextHidden = scope.dataset.sensitiveState !== 'hidden';
+                            applyState(nextHidden);
+                        });
+                    });
+                }
+
                 document.addEventListener('DOMContentLoaded', () => {
                     calculatePad();
                     applyFinanceModalState();
+                    applyProgressCardState('expense', <%- JSON.stringify(expenseProgress || {}) %>);
+                    applyProgressCardState('cards', <%- JSON.stringify(cardProgress || {}) %>);
+                    bindFixedPaymentToggles();
+                    initSensitiveValuesToggle();
                 });
             </script>
 

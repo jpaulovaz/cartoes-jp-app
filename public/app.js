@@ -443,8 +443,15 @@
     }
   }
 
+  function moveManualPurchaseModalToBody(modal) {
+    if (!(modal instanceof HTMLElement)) return modal;
+    if (modal.parentElement === document.body) return modal;
+    document.body.appendChild(modal);
+    return modal;
+  }
+
   function setupManualPurchaseModal() {
-    const modal = document.querySelector('[data-manual-modal]');
+    const modal = moveManualPurchaseModalToBody(document.querySelector('[data-manual-modal]'));
     if (!(modal instanceof HTMLElement)) return;
 
     const form = modal.querySelector('[data-auto-first-due-form]');
@@ -1370,32 +1377,38 @@
     return 'Ligue os alertas deste aparelho para receber novidades.';
   }
 
-  function getToggleStateConfig(state) {
+  function getPushToggleVariant(button) {
+    const variant = String(button?.dataset?.pushToggleVariant || '').trim().toLowerCase();
+    return variant === 'compact' || variant === 'inline' ? 'compact' : 'block';
+  }
+
+  function getToggleStateConfig(state, variant = 'block') {
+    const sizeClass = variant === 'compact' ? 'op-btn--compact' : 'op-btn--block';
     const states = {
       idle: {
         html: `${iconBell}Ativar alertas`,
         disabled: false,
-        className: 'op-btn op-btn-warning-soft op-btn--block'
+        className: `op-btn op-btn-warning-soft ${sizeClass}`
       },
       blocked: {
         html: `${iconBlocked}Alertas bloqueados`,
         disabled: true,
-        className: 'op-btn op-btn-danger-soft op-btn--block'
+        className: `op-btn op-btn-danger-soft ${sizeClass}`
       },
       enabled: {
         html: `${iconBellOff}Desligar alertas`,
         disabled: false,
-        className: 'op-btn op-btn-success op-btn--block'
+        className: `op-btn op-btn-success ${sizeClass}`
       },
       loading: {
         html: `${iconSpinner}Preparando...`,
         disabled: true,
-        className: 'op-btn op-btn-muted op-btn--block'
+        className: `op-btn op-btn-muted ${sizeClass}`
       },
       unsupported: {
         html: `${iconBlocked}Alertas indisponíveis`,
         disabled: true,
-        className: 'op-btn op-btn-muted op-btn--block'
+        className: `op-btn op-btn-muted ${sizeClass}`
       }
     };
 
@@ -1507,7 +1520,7 @@
   function setPushToggleState(button, statusEl, state) {
     if (!(button instanceof HTMLButtonElement)) return;
 
-    const chosen = getToggleStateConfig(state);
+    const chosen = getToggleStateConfig(state, getPushToggleVariant(button));
     button.innerHTML = chosen.html;
     button.disabled = chosen.disabled;
     button.className = chosen.className;
@@ -3121,5 +3134,80 @@
   scheduleIdleLock();
   scheduleTouchTimer();
   broadcastPinState('unlocked');
+  touchServer(true);
+})();
+
+(function () {
+  const body = document.body;
+  if (!(body instanceof HTMLElement)) return;
+  if (body.dataset.presenceEnabled !== '1') return;
+  if (String(body.dataset.appPinScreen || 'app').toLowerCase() === 'lock') return;
+  if (body.dataset.appPinEnabled === '1') return;
+
+  const touchUrl = body.dataset.presenceTouchUrl || '/presence/touch';
+  const heartbeatMs = 60 * 1000;
+  let timer = null;
+  let lastTouchAt = 0;
+
+  function clearTimer() {
+    if (timer) {
+      window.clearTimeout(timer);
+      timer = null;
+    }
+  }
+
+  async function touchServer(force = false) {
+    if (document.visibilityState === 'hidden' && !force) return;
+    const now = Date.now();
+    if (!force && now - lastTouchAt < heartbeatMs) return;
+    lastTouchAt = now;
+
+    try {
+      await fetch(touchUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-AcerttaPay-Async': '1'
+        },
+        keepalive: force
+      });
+    } catch (_error) {}
+  }
+
+  function schedule() {
+    clearTimer();
+    timer = window.setTimeout(() => {
+      touchServer(true).finally(schedule);
+    }, heartbeatMs);
+  }
+
+  function markPresence() {
+    schedule();
+    touchServer(false);
+  }
+
+  ['pointerdown', 'touchstart', 'mousedown'].forEach((eventName) => {
+    document.addEventListener(eventName, markPresence, { passive: true });
+  });
+  document.addEventListener('keydown', markPresence);
+  window.addEventListener('focus', () => {
+    touchServer(true);
+    schedule();
+  }, { passive: true });
+  window.addEventListener('pageshow', () => {
+    touchServer(true);
+    schedule();
+  }, { passive: true });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      clearTimer();
+      return;
+    }
+    touchServer(true);
+    schedule();
+  });
+
+  schedule();
   touchServer(true);
 })();

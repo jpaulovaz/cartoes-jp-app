@@ -1840,6 +1840,11 @@
           selectionSection.appendChild(grid);
         }
 
+        const outboxNote = document.createElement('div');
+        outboxNote.className = 'rounded-[22px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-900 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200';
+        outboxNote.textContent = 'Ao salvar, a divisão fica salva por aqui e o que virar cobrança vai para a caixa de saída. Você manda depois, no seu tempo.';
+        wrapper.appendChild(outboxNote);
+
         const splitModeSection = document.createElement('section');
         splitModeSection.className = 'space-y-3 hidden';
         splitModeSection.hidden = true;
@@ -2062,13 +2067,13 @@
             syncSplitUi();
           });
         });
-        async function submitAllocationChange(deliveryMode = 'send_now') {
+        async function submitAllocationChange() {
           const checkedIds = getSelectedIds();
           const payload = {
             txn_ids: txnIds,
             person_ids: checkedIds,
             apply_scope: 'single',
-            delivery_mode: deliveryMode
+            delivery_mode: 'draft'
           };
 
           if (checkedIds.length > 1) {
@@ -2095,8 +2100,7 @@
             }, {});
           }
 
-          const actionLabel = deliveryMode === 'draft' ? 'guardar a distribuição' : 'alterar a distribuição';
-          const scope = await resolveSelectionScope(items, { actionLabel });
+          const scope = await resolveSelectionScope(items, { actionLabel: 'salvar a divisão' });
           if (!scope) return false;
           payload.apply_scope = scope;
           const ok = await postBulkAction(`/month/${currentYear}/${currentMonth}/bulk/alloc`, payload);
@@ -2105,35 +2109,26 @@
         }
 
         const saveNowAction = {
-          label: 'Salvar Divisão',
+          label: 'Salvar',
           tone: 'primary',
           closeOnClick: false,
           disabled: !people.length,
-          onClick: async () => submitAllocationChange('send_now')
-        };
-
-        const saveLaterAction = {
-          label: 'Salvar e Mandar Depois',
-          tone: 'primary',
-          closeOnClick: false,
-          disabled: !people.length,
-          onClick: async () => submitAllocationChange('draft')
+          onClick: async () => submitAllocationChange()
         };
 
         const sheetState = openMonthSheet({
           title: items.length > 1 ? 'Aplicar participantes' : 'Selecionar participantes',
           subtitle: items.length > 1
-            ? 'A distribuição será substituída em todos os itens selecionados.'
-            : 'Escolha quem participa e, se quiser, dite o valor de cada um.',
+            ? 'A divisão local será salva em todos os itens selecionados. O que virar cobrança vai para a caixa de saída.'
+            : 'Escolha quem participa e, se quiser, dite o valor de cada um. O que virar cobrança vai para a caixa de saída.',
           body: wrapper,
           size: 'people',
           actions: [
             saveNowAction,
-            saveLaterAction,
             { label: 'Cancelar', tone: 'cancel' }
           ]
         });
-        saveActionButtons = Array.from(sheetState.actions.querySelectorAll('button')).slice(0, 2);
+        saveActionButtons = Array.from(sheetState.actions.querySelectorAll('button')).slice(0, 1);
         syncSelectionCounter();
         syncSplitUi();
       }

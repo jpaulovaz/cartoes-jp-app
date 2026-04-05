@@ -127,6 +127,24 @@ const {
   normalizePrivateDebtPromisedPaymentDate,
   canArchivePrivateDebtStatus
 } = require('./src/privateDebtReminders');
+const {
+  ensureMessageTemplateTables,
+  syncMessageCatalogWithDatabase,
+  getMessageCatalog
+} = require('./src/messageCatalog');
+const { resolveMessage } = require('./src/messageResolver');
+const {
+  listMessageTemplatesForAdmin,
+  normalizeAdminMessageFilters,
+  saveMessageTemplateCustomization,
+  resetMessageTemplateCustomization
+} = require('./src/messageAdminService');
+const { buildMessagePreview, buildPushTestPayload } = require('./src/messagePreviewService');
+const {
+  buildMessageCsvExport,
+  buildImportPreviewFromBuffer,
+  applyImportPreview
+} = require('./src/messageCsvService');
 
 // --- EXECUTA MIGRAÇÃO AUTOMÁTICA AO INICIAR ---
 require('./scripts/migrate.js');
@@ -194,6 +212,20 @@ function normalizeCardBrand(value) {
   return CARD_BRAND_ALIASES.get(cleaned) || '';
 }
 
+function tableHasColumn(tableName, columnName) {
+  const safeTableName = String(tableName || '').trim();
+  const safeColumnName = String(columnName || '').trim();
+  if (!/^[a-zA-Z0-9_]+$/.test(safeTableName) || !/^[a-zA-Z0-9_]+$/.test(safeColumnName)) {
+    return false;
+  }
+
+  try {
+    return db.prepare(`PRAGMA table_info(${safeTableName})`).all().some((row) => String(row?.name || '').trim() === safeColumnName);
+  } catch (error) {
+    return false;
+  }
+}
+
 function getCardBrandMeta(value) {
   const normalized = normalizeCardBrand(value);
   if (!normalized) return null;
@@ -236,6 +268,7 @@ try { db.prepare("ALTER TABLE users ADD COLUMN profile_photo_mode TEXT NOT NULL 
 try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_text TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_vibe TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE users ADD COLUMN profile_signature_updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE users ADD COLUMN last_seen_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 
 db.prepare(`
   CREATE TABLE IF NOT EXISTS user_notification_preferences (
@@ -246,10 +279,14 @@ db.prepare(`
     shared_debt_payments INTEGER NOT NULL DEFAULT 1,
     monthly_pix_updates INTEGER NOT NULL DEFAULT 1,
     card_due_today INTEGER NOT NULL DEFAULT 1,
+    finance_date_alerts INTEGER NOT NULL DEFAULT 1,
+    due_date_alerts INTEGER NOT NULL DEFAULT 1,
     updated_at TEXT,
     FOREIGN KEY (user_id) REFERENCES users(id)
   )
 `).run();
+
+const hasDueDateAlertsPreferenceColumn = tableHasColumn('user_notification_preferences', 'due_date_alerts');
 
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN friendship_activity INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_new INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
@@ -257,6 +294,11 @@ try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN shared_de
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_payments INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN monthly_pix_updates INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN card_due_today INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN finance_date_alerts INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+if (!hasDueDateAlertsPreferenceColumn) {
+  try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN due_date_alerts INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+  try { db.prepare("UPDATE user_notification_preferences SET due_date_alerts = COALESCE(shared_debt_payments, 1)").run(); } catch (e) { /* Tabela ainda pode não existir neste ponto */ }
+}
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
@@ -276,6 +318,10 @@ try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN pix_version INTEGE
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN status_summary TEXT NOT NULL DEFAULT 'pending'").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN first_responded_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE shared_debt_batches ADD COLUMN resolved_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_send_queue_items ADD COLUMN action_kind TEXT NOT NULL DEFAULT 'create'").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_send_queue_items ADD COLUMN target_request_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE shared_debt_send_queue_items ADD COLUMN baseline_status_snapshot TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("UPDATE shared_debt_send_queue_items SET action_kind = COALESCE(NULLIF(trim(action_kind), ''), 'create') WHERE action_kind IS NULL OR trim(action_kind) = ''").run(); } catch (e) { /* Tabela ainda pode não existir neste ponto */ }
 try { db.prepare("ALTER TABLE shared_debt_payment_intents ADD COLUMN creditor_note TEXT").run(); } catch (e) { /* Coluna já existe */ }
 
 // Cria a tabela de meses fechados se não existir
@@ -360,6 +406,27 @@ db.prepare(`
     created_at TEXT NOT NULL,
     UNIQUE(user_id, scope, date_key),
     FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
+
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS import_overwrite_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    transaction_id INTEGER NOT NULL,
+    import_id INTEGER,
+    card_id INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    original_filename TEXT,
+    preview_item_id TEXT,
+    before_snapshot_json TEXT NOT NULL,
+    after_snapshot_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (transaction_id) REFERENCES transactions(id),
+    FOREIGN KEY (import_id) REFERENCES imports(id),
+    FOREIGN KEY (card_id) REFERENCES cards(id)
   )
 `).run();
 db.prepare(`
@@ -472,6 +539,9 @@ db.prepare(`
     amount_cents INTEGER NOT NULL,
     receiver_email_snapshot TEXT,
     receiver_name_snapshot TEXT,
+    action_kind TEXT NOT NULL DEFAULT 'create',
+    target_request_id INTEGER,
+    baseline_status_snapshot TEXT,
     sent_request_id INTEGER,
     cancelled_at TEXT,
     created_at TEXT NOT NULL,
@@ -484,6 +554,7 @@ db.prepare(`
     FOREIGN KEY (source_allocation_id) REFERENCES allocations(id),
     FOREIGN KEY (source_person_id) REFERENCES people(id),
     FOREIGN KEY (card_id) REFERENCES cards(id),
+    FOREIGN KEY (target_request_id) REFERENCES shared_debt_requests(id),
     FOREIGN KEY (sent_request_id) REFERENCES shared_debt_requests(id)
   )
 `).run();
@@ -581,6 +652,8 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debts_receiver_promised 
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debts_requester_promised ON shared_debt_requests(requester_user_id, promised_payment_date, status, request_kind)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_private_debt_reminders_owner_promised ON private_debt_reminders(owner_user_id, promised_payment_date, status, is_archived)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_manual_debt_due_alert_logs_date_scope ON manual_debt_due_alert_logs(date_key, scope, user_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_import_overwrite_events_user_period ON import_overwrite_events(user_id, year, month, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_import_overwrite_events_txn ON import_overwrite_events(transaction_id, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_pair ON shared_debt_monthly_settlements(requester_user_id, receiver_user_id, year, month, request_kind)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_receiver ON shared_debt_monthly_settlements(receiver_user_id, year, month, request_kind)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_settlement_status ON shared_debt_payment_intents(settlement_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
@@ -591,6 +664,7 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_request
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_receiver_period ON shared_debt_send_queues(receiver_user_id, source_due_year DESC, source_due_month DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_queue ON shared_debt_send_queue_items(queue_id, source_txn_date_snapshot, id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_txn_person ON shared_debt_send_queue_items(requester_user_id, source_transaction_id, source_person_id)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queue_items_target_request ON shared_debt_send_queue_items(target_request_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_status ON friend_requests(requester_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_target_status ON friend_requests(target_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_friend_requests_pair_status ON friend_requests(requester_user_id, target_user_id, status, created_at DESC)").run(); } catch (e) { /* Índice já existe */ }
@@ -599,8 +673,14 @@ try { db.prepare("CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_person O
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_linked ON person_app_links(owner_user_id, linked_user_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("ALTER TABLE closed_months ADD COLUMN user_id INTEGER").run(); } catch (e) { /* Coluna já existe ou tabela ainda não precisava de ajuste */ }
 try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_closed_months_user_month_year ON closed_months(user_id, month, year)").run(); } catch (e) { /* Índice já existe */ }
+ensureMessageTemplateTables(db);
+syncMessageCatalogWithDatabase(db);
 try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN amount_mode TEXT NOT NULL DEFAULT 'fixed'").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN carry_key TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN day_of_month INTEGER").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN schedule_kind TEXT").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 0").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE monthly_finances ADD COLUMN paid_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_monthly_finances_user_period_carry_key ON monthly_finances(user_id, month, year, carry_key) WHERE carry_key IS NOT NULL").run(); } catch (e) { /* Índice já existe */ }
 db.prepare(`
   CREATE TABLE IF NOT EXISTS monthly_finance_carry_exceptions (
@@ -616,6 +696,21 @@ db.prepare(`
 `).run();
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_monthly_finance_carry_exceptions_user_period ON monthly_finance_carry_exceptions(user_id, year, month)").run(); } catch (e) { /* Índice já existe */ }
 db.prepare(`
+  CREATE TABLE IF NOT EXISTS monthly_finance_alert_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    source_kind TEXT NOT NULL,
+    source_ref TEXT NOT NULL,
+    type TEXT NOT NULL,
+    date_key TEXT NOT NULL,
+    payload_json TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(user_id, source_kind, source_ref, type, date_key),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`).run();
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_monthly_finance_alert_logs_date_user ON monthly_finance_alert_logs(date_key, user_id, type)").run(); } catch (e) { /* Índice já existe */ }
+db.prepare(`
   CREATE TABLE IF NOT EXISTS monthly_finance_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     finance_id INTEGER NOT NULL,
@@ -623,6 +718,8 @@ db.prepare(`
     item_date TEXT,
     item_source TEXT,
     amount_cents INTEGER NOT NULL DEFAULT 0,
+    is_paid INTEGER NOT NULL DEFAULT 0,
+    paid_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (finance_id) REFERENCES monthly_finances(id),
@@ -631,6 +728,8 @@ db.prepare(`
 `).run();
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_finance_user ON monthly_finance_items(finance_id, user_id)").run(); } catch (e) { /* Índice já existe */ }
 try { db.prepare("CREATE INDEX IF NOT EXISTS idx_monthly_finance_items_user_date ON monthly_finance_items(user_id, item_date)").run(); } catch (e) { /* Índice já existe */ }
+try { db.prepare("ALTER TABLE monthly_finance_items ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 0").run(); } catch (e) { /* Coluna já existe */ }
+try { db.prepare("ALTER TABLE monthly_finance_items ADD COLUMN paid_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 
 db.prepare(`
   CREATE TABLE IF NOT EXISTS recurring_rules (
@@ -1053,6 +1152,7 @@ let scheduledDuePushSweepRunning = false;
 let duePushSchedulerInitialHandle = null;
 let duePushSchedulerIntervalHandle = null;
 let scheduledManualDebtDueSweepRunning = false;
+let scheduledMonthlyFinanceAlertSweepRunning = false;
 let manualDebtDueSchedulerInitialHandle = null;
 let manualDebtDueSchedulerIntervalHandle = null;
 let backupSchedulerHandle = null;
@@ -1169,19 +1269,49 @@ function clearInternalSettings(keys, updatedByUserId = null) {
   })();
 }
 
-function getPushRuntimeConfig() {
+function getPushInfrastructureRuntimeConfig() {
   return {
     publicKey: getSettingText('VAPID_PUBLIC_KEY'),
     privateKey: getSettingText('VAPID_PRIVATE_KEY'),
-    subject: getSettingText('VAPID_SUBJECT', 'mailto:no-reply@acerttapay.local'),
-    duePushEnabled: getSettingBoolean('CARD_DUE_PUSH_ENABLED', true),
-    timezone: getSettingText('CARD_DUE_PUSH_TIMEZONE', 'America/Sao_Paulo') || 'America/Sao_Paulo',
-    hour: getSettingInt('CARD_DUE_PUSH_HOUR', 10),
-    minute: getSettingInt('CARD_DUE_PUSH_MINUTE', 0),
-    maxSendsPerDay: getSettingInt('CARD_DUE_PUSH_MAX_SENDS_PER_DAY', 1),
-    repeatIntervalMinutes: getSettingInt('CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES', 0),
-    checkIntervalMinutes: getSettingInt('CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES', 10)
+    subject: getSettingText('VAPID_SUBJECT', 'mailto:no-reply@acerttapay.local')
   };
+}
+
+function getAutomaticAlertScheduleRuntimeConfig() {
+  return {
+    timezone: getSettingText('CARD_DUE_PUSH_TIMEZONE', 'America/Sao_Paulo') || 'America/Sao_Paulo',
+    hour: Math.max(0, Math.min(23, Number(getSettingInt('CARD_DUE_PUSH_HOUR', 10) || 10))),
+    minute: Math.max(0, Math.min(59, Number(getSettingInt('CARD_DUE_PUSH_MINUTE', 0) || 0))),
+    checkIntervalMinutes: Math.max(1, Number(getSettingInt('CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES', 10) || 10))
+  };
+}
+
+function getCardDueTodayPushRuntimeConfig() {
+  return {
+    ...getPushInfrastructureRuntimeConfig(),
+    ...getAutomaticAlertScheduleRuntimeConfig(),
+    duePushEnabled: getSettingBoolean('CARD_DUE_PUSH_ENABLED', true),
+    maxSendsPerDay: Math.max(0, Number(getSettingInt('CARD_DUE_PUSH_MAX_SENDS_PER_DAY', 1) || 0)),
+    repeatIntervalMinutes: Math.max(0, Number(getSettingInt('CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES', 0) || 0))
+  };
+}
+
+function getMonthlyFinanceDateAlertRuntimeConfig() {
+  return {
+    enabled: getSettingBoolean('MONTHLY_FINANCE_DATE_ALERT_ENABLED', true),
+    ...getAutomaticAlertScheduleRuntimeConfig()
+  };
+}
+
+function getDateDrivenAlertRuntimeConfig() {
+  return {
+    enabled: getSettingBoolean('DATE_DRIVEN_ALERTS_ENABLED', true),
+    ...getAutomaticAlertScheduleRuntimeConfig()
+  };
+}
+
+function getPushRuntimeConfig() {
+  return getCardDueTodayPushRuntimeConfig();
 }
 
 function getEmailRuntimeConfig() {
@@ -1545,7 +1675,7 @@ function getPushPublicKey() {
 }
 
 function applyPushRuntimeConfig() {
-  const config = getPushRuntimeConfig();
+  const config = getPushInfrastructureRuntimeConfig();
   pushRuntimeEnabled = false;
 
   if (!webPush) {
@@ -1614,15 +1744,17 @@ function configureGoogleStrategy() {
           return done(null, false, { message: 'Essa conta do Google não combina com o acesso autorizado por aqui.' });
         }
 
+        const loginAt = nowIso();
         db.prepare(`
           UPDATE users
           SET google_id = ?,
               last_login = ?,
+              last_seen_at = ?,
               name = COALESCE(NULLIF(name, ''), ?),
               email = ?,
               google_photo_url = CASE WHEN ? IS NOT NULL AND trim(?) <> '' THEN ? ELSE google_photo_url END
           WHERE id = ?
-        `).run(googleId, nowIso(), profileName || emailMatchedUser.name || email.split('@')[0], email, googlePhotoUrl, googlePhotoUrl, googlePhotoUrl, emailMatchedUser.id);
+        `).run(googleId, loginAt, loginAt, profileName || emailMatchedUser.name || email.split('@')[0], email, googlePhotoUrl, googlePhotoUrl, googlePhotoUrl, emailMatchedUser.id);
 
         authorizedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(emailMatchedUser.id);
       } else {
@@ -1630,14 +1762,16 @@ function configureGoogleStrategy() {
           return done(null, false, { message: 'Esse e-mail do Google está ligado a outro acesso por aqui. Bora ajustar isso antes de continuar.' });
         }
 
+        const loginAt = nowIso();
         db.prepare(`
           UPDATE users
           SET last_login = ?,
+              last_seen_at = ?,
               name = COALESCE(NULLIF(name, ''), ?),
               email = CASE WHEN ? IS NOT NULL AND trim(?) <> '' THEN ? ELSE email END,
               google_photo_url = CASE WHEN ? IS NOT NULL AND trim(?) <> '' THEN ? ELSE google_photo_url END
           WHERE id = ?
-        `).run(nowIso(), profileName || authorizedUser.name || email.split('@')[0], email, email, email, googlePhotoUrl, googlePhotoUrl, googlePhotoUrl, authorizedUser.id);
+        `).run(loginAt, loginAt, profileName || authorizedUser.name || email.split('@')[0], email, email, email, googlePhotoUrl, googlePhotoUrl, googlePhotoUrl, authorizedUser.id);
 
         authorizedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(authorizedUser.id);
       }
@@ -2469,22 +2603,28 @@ function clearManualDebtDueScheduler() {
 function restartManualDebtDueScheduler() {
   clearManualDebtDueScheduler();
 
-  const config = getManualDebtDueRuntimeConfig();
-  const intervalMs = Math.max(1, config.checkIntervalMinutes) * 60 * 1000;
+  const scheduleConfig = getAutomaticAlertScheduleRuntimeConfig();
+  const dateDrivenConfig = getDateDrivenAlertRuntimeConfig();
+  const monthlyFinanceConfig = getMonthlyFinanceDateAlertRuntimeConfig();
+  if (!dateDrivenConfig.enabled && !monthlyFinanceConfig.enabled) {
+    return;
+  }
+
+  const intervalMs = Math.max(1, scheduleConfig.checkIntervalMinutes) * 60 * 1000;
 
   manualDebtDueSchedulerInitialHandle = setTimeout(() => {
-    runManualDebtDueAlertSweep().catch(err => console.error('Falha no agendamento inicial da data combinada:', err?.message || err));
+    runDateDrivenAlertSweep().catch(err => console.error('Falha no agendamento inicial dos alertas do dia:', err?.message || err));
   }, 15000);
 
   manualDebtDueSchedulerIntervalHandle = setInterval(() => {
-    runManualDebtDueAlertSweep().catch(err => console.error('Falha no agendamento recorrente da data combinada:', err?.message || err));
+    runDateDrivenAlertSweep().catch(err => console.error('Falha no agendamento recorrente dos alertas do dia:', err?.message || err));
   }, intervalMs);
 }
 
 function restartCardDueTodayPushScheduler() {
   clearCardDueTodayPushScheduler();
 
-  const config = getPushRuntimeConfig();
+  const config = getCardDueTodayPushRuntimeConfig();
   if (!isPushConfigured() || !config.duePushEnabled || config.maxSendsPerDay <= 0) {
     return;
   }
@@ -2530,14 +2670,136 @@ function updateAppSettings(entries, updatedByUserId = null) {
   return refreshRuntimeSettings();
 }
 
-function buildAdminStatusCards() {
+function formatAdminHourMinuteLabel(hour, minute) {
+  return `${String(Math.max(0, Number(hour || 0))).padStart(2, '0')}:${String(Math.max(0, Number(minute || 0))).padStart(2, '0')}`;
+}
+
+function buildPushAdminState() {
+  const infrastructureConfig = getPushInfrastructureRuntimeConfig();
+  const scheduleConfig = getAutomaticAlertScheduleRuntimeConfig();
+  const cardDueConfig = getCardDueTodayPushRuntimeConfig();
+  const monthlyFinanceConfig = getMonthlyFinanceDateAlertRuntimeConfig();
+  const dateDrivenConfig = getDateDrivenAlertRuntimeConfig();
+  const pushReady = isPushConfigured();
+
+  const buildRoutineMeta = ({ key, title, description, scopeLabel, enabled, usesInternalNotification, channelLabel, helperText, fieldKeys }) => {
+    let status = 'Pausada';
+    let tone = 'muted';
+
+    if (enabled) {
+      if (pushReady) {
+        status = 'Ligada';
+        tone = 'success';
+      } else if (usesInternalNotification) {
+        status = 'Ligada no app';
+        tone = 'success';
+      } else {
+        status = 'Sem canal';
+        tone = 'warning';
+      }
+    }
+
+    return {
+      key,
+      title,
+      description,
+      scopeLabel,
+      enabled,
+      usesInternalNotification,
+      channelLabel: pushReady ? channelLabel : (usesInternalNotification ? 'Aviso interno' : 'Push web'),
+      helperText,
+      fieldKeys,
+      status,
+      tone
+    };
+  };
+
+  const cardDueEnabled = !!cardDueConfig.duePushEnabled && Number(cardDueConfig.maxSendsPerDay || 0) > 0;
+  const cardDueHelper = !cardDueConfig.duePushEnabled
+    ? 'A rotina da fatura está pausada pelo interruptor principal.'
+    : Number(cardDueConfig.maxSendsPerDay || 0) <= 0
+      ? 'O máximo diário ficou zerado, então a rotina não dispara nenhum lembrete.'
+      : Number(cardDueConfig.maxSendsPerDay || 0) > 1
+        ? `Até ${cardDueConfig.maxSendsPerDay} envios por dia, com repetição a cada ${cardDueConfig.repeatIntervalMinutes} minuto(s).`
+        : 'Até 1 envio por dia no horário base configurado.';
+
+  const routines = [
+    buildRoutineMeta({
+      key: 'card_due_today',
+      title: 'Vencimento da fatura',
+      description: 'Avisa quando existe fatura vencendo hoje.',
+      scopeLabel: 'Faturas vencendo hoje',
+      enabled: cardDueEnabled,
+      usesInternalNotification: false,
+      channelLabel: 'Push web',
+      helperText: cardDueHelper,
+      fieldKeys: ['CARD_DUE_PUSH_ENABLED', 'CARD_DUE_PUSH_MAX_SENDS_PER_DAY', 'CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES']
+    }),
+    buildRoutineMeta({
+      key: 'monthly_finance_date',
+      title: 'Datas do mês',
+      description: 'Lembra o dia marcado da grana que entra e da grana que sai.',
+      scopeLabel: 'Entradas e saídas do mês',
+      enabled: !!monthlyFinanceConfig.enabled,
+      usesInternalNotification: true,
+      channelLabel: 'Aviso interno + push web',
+      helperText: pushReady
+        ? 'Usa a agenda automática e também tenta tocar o sininho quando o navegador estiver pronto.'
+        : 'Sem VAPID, continua deixando aviso dentro do app para não sumir no mapa.',
+      fieldKeys: ['MONTHLY_FINANCE_DATE_ALERT_ENABLED']
+    }),
+    buildRoutineMeta({
+      key: 'date_driven_alerts',
+      title: 'Datas combinadas',
+      description: 'Cobre cobranças avulsas com data e lembretes privados com data combinada.',
+      scopeLabel: 'Cobranças avulsas e lembretes privados',
+      enabled: !!dateDrivenConfig.enabled,
+      usesInternalNotification: true,
+      channelLabel: 'Aviso interno + push web',
+      helperText: pushReady
+        ? 'Usa a mesma agenda automática e deixa o histórico salvo na central do app.'
+        : 'Mesmo sem push web, segue avisando na central do app quando o dia combinado chega.',
+      fieldKeys: ['DATE_DRIVEN_ALERTS_ENABLED']
+    })
+  ];
+
+  const activeCount = routines.filter((routine) => routine.enabled).length;
+  const inAppFallbackCount = routines.filter((routine) => routine.enabled && routine.usesInternalNotification && !pushReady).length;
+
+  return {
+    infrastructure: {
+      configured: pushReady,
+      status: pushReady ? 'Configurado' : 'Pendente',
+      tone: pushReady ? 'success' : 'warning',
+      subject: infrastructureConfig.subject || 'mailto:no-reply@acerttapay.local',
+      helperText: pushReady
+        ? 'Com as chaves VAPID válidas, o navegador pode receber push web sem mistério.'
+        : 'Sem o trio VAPID completo, nenhum push web toca neste navegador.'
+    },
+    schedule: {
+      timezone: scheduleConfig.timezone,
+      hour: scheduleConfig.hour,
+      minute: scheduleConfig.minute,
+      checkIntervalMinutes: scheduleConfig.checkIntervalMinutes,
+      label: `${formatAdminHourMinuteLabel(scheduleConfig.hour, scheduleConfig.minute)} em ${scheduleConfig.timezone}`,
+      helperText: 'Esse relógio move as rotinas automáticas de fatura, datas do mês e datas combinadas.'
+    },
+    routines,
+    activeCount,
+    totalCount: routines.length,
+    inAppFallbackCount,
+    hasInAppFallback: inAppFallbackCount > 0,
+    pushTestHref: '/admin/messages'
+  };
+}
+
+function buildAdminStatusCards(pushPanelState = null) {
   const googleReady = isGoogleAuthConfigured();
   const whatsappReady = !!(getSettingText('EVOLUTION_API_URL') && getSettingText('EVOLUTION_API_KEY') && getSettingText('EVOLUTION_INSTANCE_NAME'));
   const emailConfig = getEmailRuntimeConfig();
   const emailConfigured = isEmailConfigured(emailConfig);
-  const pushReady = isPushConfigured();
+  const pushPanel = pushPanelState || buildPushAdminState();
   const timeoutMinutes = getSettingInt('INACTIVITY_TIMEOUT_MINUTES', 0);
-  const duePushEnabled = getSettingBoolean('CARD_DUE_PUSH_ENABLED', true);
   const backupConfig = getBackupRuntimeConfig();
   const lastBackup = backupRunsSelectRecent.all(1).map((row) => mapBackupRunForAdmin(row, backupConfig.timeZone))[0] || null;
   const backupConnectedToGoogle = !!backupConfig.googleRefreshToken;
@@ -2558,6 +2820,20 @@ function buildAdminStatusCards() {
     : lastBackup
       ? `${lastBackup.triggerLabel} em ${lastBackup.startedAtLabel}. ${lastBackup.message}`
       : 'A rotina automática está armada e esperando a próxima janela para salvar a memória do app.';
+
+  const pushTone = pushPanel.infrastructure.configured
+    ? (pushPanel.activeCount > 0 ? 'success' : 'muted')
+    : 'warning';
+  const pushStatus = pushPanel.infrastructure.configured
+    ? `${pushPanel.activeCount}/${pushPanel.totalCount} ativas`
+    : (pushPanel.hasInAppFallback ? 'Push parcial' : 'Push pendente');
+  const pushText = pushPanel.infrastructure.configured
+    ? (pushPanel.activeCount > 0
+      ? `Push web pronto. Agenda automática em ${pushPanel.schedule.label} e ${pushPanel.activeCount} de ${pushPanel.totalCount} rotinas ligadas.`
+      : `Push web pronto, mas nenhuma das ${pushPanel.totalCount} rotinas automáticas está ligada agora.`)
+    : (pushPanel.hasInAppFallback
+      ? `O push web ainda está sem VAPID completo, mas a agenda ${pushPanel.schedule.label} continua valendo para ${pushPanel.inAppFallbackCount} rotina(s) que também viram aviso interno.`
+      : 'Faltam as chaves VAPID completas para o push acordar.');
 
   return [
     {
@@ -2591,12 +2867,10 @@ function buildAdminStatusCards() {
     },
     {
       key: 'push',
-      title: 'Alertas push',
-      tone: pushReady ? 'success' : 'warning',
-      status: pushReady ? (duePushEnabled ? 'Tinindo' : 'Push ok, lembrete pausado') : 'Ainda em silêncio',
-      text: pushReady
-        ? 'As chaves VAPID estão válidas e o sininho pode tocar neste navegador.'
-        : 'Faltam as chaves VAPID completas para o push acordar.'
+      title: 'Alertas automáticos',
+      tone: pushTone,
+      status: pushStatus,
+      text: pushText
     },
     {
       key: 'backup',
@@ -2707,7 +2981,7 @@ function getUserRecord(userId, { includeDeleted = true } = {}) {
   const safeUserId = Number(userId || 0);
   if (!safeUserId) return null;
   return db.prepare(`
-    SELECT id, email, name, role, can_import, created_at, last_login,
+    SELECT id, email, name, role, can_import, created_at, last_login, last_seen_at,
            google_id, google_photo_url, profile_photo_url, profile_photo_mode,
            profile_signature_text, profile_signature_vibe, profile_signature_updated_at,
            COALESCE(status, 'active') AS status, deleted_at, deleted_label
@@ -2719,7 +2993,7 @@ function getUserRecord(userId, { includeDeleted = true } = {}) {
 
 function getAllUsers({ includeDeleted = false } = {}) {
   return db.prepare(`
-    SELECT id, email, name, role, can_import, created_at, last_login, COALESCE(status, 'active') AS status, deleted_at, deleted_label
+    SELECT id, email, name, role, can_import, created_at, last_login, last_seen_at, COALESCE(status, 'active') AS status, deleted_at, deleted_label
     FROM users
     ${includeDeleted ? '' : "WHERE COALESCE(status, 'active') <> 'deleted'"}
     ORDER BY created_at DESC, id DESC
@@ -3056,6 +3330,8 @@ function ensureDefaultOwnerPerson(userId, preferredName, preferredEmail = null) 
 }
 
 function renderAdmin(res, { error = null, success = null, activeSection = 'access' } = {}) {
+  const pushPanel = buildPushAdminState();
+
   return safeRenderView(res, 'admin', {
     title: 'AcerttaPay | Administração',
     users: buildAdminUsers(),
@@ -3063,9 +3339,10 @@ function renderAdmin(res, { error = null, success = null, activeSection = 'acces
     success,
     activeSection,
     settingsSections: buildAdminSettingsSections(),
-    statusCards: buildAdminStatusCards(),
+    statusCards: buildAdminStatusCards(pushPanel),
     backupPanel: buildBackupAdminState(),
     emailPanel: buildEmailAdminState(res?.req, { timeZone: getBackupRuntimeConfig().timeZone }),
+    pushPanel,
     totalConfigItems: SETTING_DEFINITIONS.length,
     autoReloadCount: SETTING_DEFINITIONS.filter((item) => !item.restartRequired).length,
     restartRequiredCount: SETTING_DEFINITIONS.filter((item) => item.restartRequired).length,
@@ -3073,6 +3350,78 @@ function renderAdmin(res, { error = null, success = null, activeSection = 'acces
     pushConfigured: isPushConfigured(),
     emailConfigured: isEmailConfigured(getEmailRuntimeConfig())
   });
+}
+
+
+const ADMIN_MESSAGE_PUSH_TEST_RATE_LIMIT_MS = 12000;
+const adminMessagePushTestRateLimit = new Map();
+
+function normalizeAdminMessageActionFilters(source = {}) {
+  return normalizeAdminMessageFilters({
+    q: source.q,
+    channel: source.channel,
+    category: source.category,
+    status: source.status
+  });
+}
+
+function buildAdminMessagesQueryString(filters = {}, extra = {}) {
+  const params = new URLSearchParams();
+  const merged = { ...normalizeAdminMessageActionFilters(filters), ...extra };
+
+  if (merged.q) params.set('q', merged.q);
+  if (merged.channel && merged.channel !== 'all') params.set('channel', merged.channel);
+  if (merged.category && merged.category !== 'all') params.set('category', merged.category);
+  if (merged.status && merged.status !== 'all') params.set('status', merged.status);
+  if (merged.open) params.set('open', merged.open);
+
+  return params.toString();
+}
+
+function buildAdminMessagesPath(filters = {}, extra = {}) {
+  const query = buildAdminMessagesQueryString(filters, extra);
+  return query ? `/admin/messages?${query}` : '/admin/messages';
+}
+
+function formatAdminMessageUpdatedAt(value) {
+  const parsed = dayjs(value);
+  if (!value || !parsed.isValid()) return 'Ainda sem edição manual';
+  return parsed.format('DD/MM/YYYY [às] HH:mm');
+}
+
+function renderAdminMessages(res, { error = null, success = null, filters = {}, openMessageKey = '', draftByMessageKey = {}, importPreview = null } = {}) {
+  const pageData = listMessageTemplatesForAdmin(filters, { draftByMessageKey });
+
+  return safeRenderView(res, 'admin-messages', {
+    title: 'AcerttaPay | Mensagens do app',
+    error,
+    success,
+    filters: pageData.filters,
+    messageItems: pageData.items,
+    messageFilterOptions: pageData.filterOptions,
+    messageStats: pageData.stats,
+    migratedMessageCount: getMessageCatalog().length,
+    openMessageKey: String(openMessageKey || '').trim(),
+    importPreview,
+    buildAdminMessagesPath,
+    formatAdminMessageUpdatedAt,
+    pushConfigured: isPushConfigured(),
+    pushTestRateLimitSeconds: Math.round(ADMIN_MESSAGE_PUSH_TEST_RATE_LIMIT_MS / 1000)
+  });
+}
+
+function getAdminMessageImportPreview(req) {
+  return req?.session?.adminMessageImportPreview || null;
+}
+
+function setAdminMessageImportPreview(req, preview) {
+  if (!req?.session) return;
+  req.session.adminMessageImportPreview = preview || null;
+}
+
+function clearAdminMessageImportPreview(req) {
+  if (!req?.session || !Object.prototype.hasOwnProperty.call(req.session, 'adminMessageImportPreview')) return;
+  delete req.session.adminMessageImportPreview;
 }
 
 function buildSetupFormSeed(overrides = {}) {
@@ -3165,6 +3514,16 @@ const USER_NOTIFICATION_PREFERENCE_GROUPS = Object.freeze([
     key: 'card_due_today',
     title: 'Vencimento da fatura',
     description: 'Lembretes do dia em que uma fatura vence neste aparelho.'
+  },
+  {
+    key: 'finance_date_alerts',
+    title: 'Datas do mês',
+    description: 'Avisos quando chega o dia marcado nas suas entradas e saídas.'
+  },
+  {
+    key: 'due_date_alerts',
+    title: 'Datas combinadas',
+    description: 'Lembretes automáticos de cobranças avulsas e lembretes privados quando o dia combinado chega.'
   }
 ]);
 
@@ -3194,7 +3553,7 @@ function getUserNotificationPreferences(userId) {
 
   const row = db.prepare(`
     SELECT user_id, friendship_activity, shared_debt_new, shared_debt_updates,
-           shared_debt_payments, monthly_pix_updates, card_due_today, updated_at
+           shared_debt_payments, monthly_pix_updates, card_due_today, finance_date_alerts, due_date_alerts, updated_at
     FROM user_notification_preferences
     WHERE user_id = ?
     LIMIT 1
@@ -3233,8 +3592,8 @@ function upsertUserNotificationPreferences(userId, overrides = {}) {
   db.prepare(`
     INSERT INTO user_notification_preferences (
       user_id, friendship_activity, shared_debt_new, shared_debt_updates,
-      shared_debt_payments, monthly_pix_updates, card_due_today, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      shared_debt_payments, monthly_pix_updates, card_due_today, finance_date_alerts, due_date_alerts, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       friendship_activity = excluded.friendship_activity,
       shared_debt_new = excluded.shared_debt_new,
@@ -3242,6 +3601,8 @@ function upsertUserNotificationPreferences(userId, overrides = {}) {
       shared_debt_payments = excluded.shared_debt_payments,
       monthly_pix_updates = excluded.monthly_pix_updates,
       card_due_today = excluded.card_due_today,
+      finance_date_alerts = excluded.finance_date_alerts,
+      due_date_alerts = excluded.due_date_alerts,
       updated_at = excluded.updated_at
   `).run(
     next.user_id,
@@ -3251,6 +3612,8 @@ function upsertUserNotificationPreferences(userId, overrides = {}) {
     next.shared_debt_payments,
     next.monthly_pix_updates,
     next.card_due_today,
+    next.finance_date_alerts,
+    next.due_date_alerts,
     next.updated_at
   );
 
@@ -3281,6 +3644,7 @@ function resolveNotificationPreferenceGroupKey({ groupKey = null, type = null, t
   const safeTitle = String(title || '').trim().toLowerCase();
 
   if (safeType === 'friend_request' || safeType === 'friendship_update') return 'friendship_activity';
+  if (safeType === 'monthly_finance_date' || safeRelatedType === 'monthly_finance') return 'finance_date_alerts';
   if (safeRelatedType === 'shared_debt_payment_intent' || safeTitle.includes('pix do mes') || safeTitle.includes('pix do mês')) return 'monthly_pix_updates';
   if (safeTitle.includes('pagamento')) return 'shared_debt_payments';
   if (safeTitle.includes('atualiz') || safeTitle.includes('aceit') || safeTitle.includes('recus') || safeTitle.includes('contest') || safeTitle.includes('revis')) return 'shared_debt_updates';
@@ -3827,6 +4191,38 @@ function saveUserAppPinFromRequest(userId, req, { allowReauthOverride = false } 
   return saved;
 }
 
+
+function updateUserAppPinIdleSecondsFromRequest(userId, req, { allowReauthOverride = false } = {}) {
+  const settings = getUserSecuritySettings(userId);
+  if (!settings.pin_enabled) {
+    throw new Error('Primeiro liga o PIN. Aí eu consigo salvar o tempo de bloqueio.');
+  }
+
+  const idleSeconds = normalizePinIdleSeconds(req.body.pin_idle_seconds);
+  const canBypassCurrentPin = allowReauthOverride && hasFreshPinReauthSession(req, userId);
+
+  if (!canBypassCurrentPin) {
+    const currentPinCheck = validatePinInput(req.body.current_pin);
+    if (!currentPinCheck.ok || !verifyUserAppPin(userId, currentPinCheck.value)) {
+      throw new Error('Para mudar o tempo de bloqueio, me confirma o PIN atual primeiro.');
+    }
+  }
+
+  const updated = upsertUserSecuritySettings(userId, {
+    pin_idle_seconds: idleSeconds,
+    failed_attempts: 0,
+    locked_until: null,
+    updated_at: nowIso()
+  });
+
+  resetUserAppPinFailures(userId);
+  touchAppSession(req);
+  if (allowReauthOverride) {
+    clearPinReauthSession(req);
+  }
+  return updated;
+}
+
 function disableUserAppPinFromRequest(userId, req, { allowReauthOverride = false } = {}) {
   const settings = getUserSecuritySettings(userId);
   if (!settings.pin_enabled) {
@@ -3924,11 +4320,14 @@ function saveUserPasskey(userId, payload) {
     throw new Error('Não encontrei quem vai receber esse desbloqueio pelo aparelho.');
   }
 
-  const safeId = String(payload?.id || '').trim();
-  const safePublicKey = String(payload?.public_key || '').trim();
+  const safeId = String(payload?.id || payload?.credential_id || payload?.credentialId || '').trim();
+  const safePublicKey = String(payload?.public_key || payload?.publicKey || '').trim();
   if (!safeId || !safePublicKey) {
     throw new Error('Não consegui guardar esse aparelho agora.');
   }
+
+  const safeDeviceType = String(payload?.device_type || payload?.deviceType || '').trim() || null;
+  const safeBackedUp = Number(payload?.backed_up ?? payload?.backedUp ?? 0) !== 0 ? 1 : 0;
 
   const now = nowIso();
   db.prepare(`
@@ -3952,8 +4351,8 @@ function saveUserPasskey(userId, payload) {
     normalizePasskeyLabel(payload.label || '', 'Este aparelho'),
     safePublicKey,
     Number(payload.counter || 0) || 0,
-    String(payload.device_type || '').trim() || null,
-    Number(payload.backed_up || 0) !== 0 ? 1 : 0,
+    safeDeviceType,
+    safeBackedUp,
     JSON.stringify(Array.isArray(payload.transports) ? payload.transports.filter(Boolean) : []),
     String(payload.aaguid || '').trim() || null,
     now,
@@ -3988,6 +4387,103 @@ function touchUserPasskeyUsage(userId, credentialId, { counter = 0, origin = '' 
     safeUserId,
     safeId
   );
+}
+
+function summarizePasskeyIdentifier(value) {
+  const safeValue = String(value || '').trim();
+  if (!safeValue) return null;
+  return {
+    length: safeValue.length,
+    prefix: safeValue.slice(0, 12)
+  };
+}
+
+function summarizePasskeyContextForLog(context = {}) {
+  return {
+    available: !!context?.available,
+    runtimeAvailable: !!context?.runtimeAvailable,
+    origin: String(context?.origin || '').trim() || null,
+    rpID: String(context?.rpID || '').trim() || null,
+    rpName: String(context?.rpName || '').trim() || null,
+    secureContext: !!context?.secureContext,
+    disabledReason: String(context?.disabledReason || '').trim() || null
+  };
+}
+
+function summarizePasskeyFlowForLog(flow = null) {
+  if (!flow || typeof flow !== 'object') return null;
+  const createdAt = Number(flow.createdAt || 0) || 0;
+  return {
+    userId: Number(flow.userId || 0) || null,
+    origin: String(flow.origin || '').trim() || null,
+    rpID: String(flow.rpID || '').trim() || null,
+    label: String(flow.label || '').trim() || null,
+    challengeLength: String(flow.challenge || '').trim().length || 0,
+    ageMs: createdAt ? Math.max(0, Date.now() - createdAt) : null
+  };
+}
+
+function summarizePasskeyRegistrationPayload(payload = {}) {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+  const safeResponse = safePayload.response && typeof safePayload.response === 'object' ? safePayload.response : {};
+  const safeExtensions = safePayload.clientExtensionResults && typeof safePayload.clientExtensionResults === 'object'
+    ? Object.keys(safePayload.clientExtensionResults).slice(0, 12)
+    : [];
+
+  return {
+    credential: summarizePasskeyIdentifier(safePayload.id || safePayload.rawId || ''),
+    rawIdLength: String(safePayload.rawId || '').trim().length || 0,
+    type: String(safePayload.type || '').trim() || null,
+    authenticatorAttachment: String(safePayload.authenticatorAttachment || '').trim() || null,
+    clientExtensionKeys: safeExtensions,
+    response: {
+      clientDataJSONLength: String(safeResponse.clientDataJSON || '').trim().length || 0,
+      attestationObjectLength: String(safeResponse.attestationObject || '').trim().length || 0,
+      authenticatorDataLength: String(safeResponse.authenticatorData || '').trim().length || 0,
+      signatureLength: String(safeResponse.signature || '').trim().length || 0,
+      userHandlePresent: Object.prototype.hasOwnProperty.call(safeResponse, 'userHandle'),
+      transports: Array.isArray(safeResponse.transports)
+        ? safeResponse.transports.map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 8)
+        : []
+    }
+  };
+}
+
+function buildPasskeyRequestLogContext(req, context = null) {
+  const safeContext = context || buildPasskeyContext(req);
+  return {
+    requestId: req?.requestId || null,
+    method: req?.method || null,
+    path: req?.originalUrl || req?.path || null,
+    userId: Number(req?.user?.id || 0) || null,
+    ip: req?.ip || null,
+    appOrigin: buildAppOriginFromRequest(req) || null,
+    headers: {
+      host: String(req?.get?.('host') || '').trim() || null,
+      origin: String(req?.get?.('origin') || '').trim() || null,
+      referer: String(req?.get?.('referer') || '').trim() || null,
+      xForwardedHost: String(req?.get?.('x-forwarded-host') || '').split(',')[0].trim() || null,
+      xForwardedProto: String(req?.get?.('x-forwarded-proto') || '').split(',')[0].trim().toLowerCase() || null,
+      userAgent: String(req?.get?.('user-agent') || '').trim() || null
+    },
+    passkeyContext: summarizePasskeyContextForLog(safeContext)
+  };
+}
+
+function summarizePasskeyErrorForLog(error) {
+  return {
+    name: error?.name || null,
+    message: error?.message || null,
+    code: error?.code || null,
+    status: normalizeErrorStatus(error, 500),
+    stack: error?.stack ? String(error.stack).split('\n').slice(0, 8).join('\n') : null
+  };
+}
+
+function logPasskeyEvent(level, event, payload = {}) {
+  const safeLevel = level === 'error' ? 'error' : 'warn';
+  const emitter = safeLevel === 'error' ? console.error : console.warn;
+  emitter(`[passkey] ${event}`, payload);
 }
 
 function formatPasskeyDateTimeLabel(value) {
@@ -4654,6 +5150,15 @@ app.set("views", path.join(__dirname, "views"));
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/vendor/html2canvas", express.static(path.join(__dirname, "node_modules", "html2canvas", "dist")));
 
+app.use((req, res, next) => {
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    return next();
+  }
+
+  syncRequestUserPresence(req);
+  return next();
+});
+
 // ===== MIDDLEWARE GLOBAL =====
 app.use((req, res, next) => {
   res.locals.user = null;
@@ -4729,6 +5234,33 @@ app.use((req, res, next) => {
 });
 
 function nowIso() { return dayjs().toISOString(); }
+
+const USER_PRESENCE_TOUCH_INTERVAL_MS = 60 * 1000;
+
+function touchUserPresence(userId, timestamp = null) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return null;
+  const seenAt = timestamp || nowIso();
+  db.prepare(`UPDATE users SET last_seen_at = ? WHERE id = ?`).run(seenAt, safeUserId);
+  return seenAt;
+}
+
+function syncRequestUserPresence(req, { force = false } = {}) {
+  const safeUserId = Number(req.user?.id || req.session?.passport?.user?.id || 0);
+  if (!safeUserId) return null;
+
+  const nowMs = Date.now();
+  const lastSyncedAtMs = Number(req.session?.lastSeenSyncedAt || 0);
+  if (!force && lastSyncedAtMs && (nowMs - lastSyncedAtMs) < USER_PRESENCE_TOUCH_INTERVAL_MS) {
+    return null;
+  }
+
+  const seenAt = touchUserPresence(safeUserId, new Date(nowMs).toISOString());
+  if (req.session) {
+    req.session.lastSeenSyncedAt = nowMs;
+  }
+  return seenAt;
+}
 
 function normalizeProfilePhotoUrl(value) {
   const raw = String(value || '').trim();
@@ -4855,6 +5387,11 @@ function buildNoteSuffix(note, label = 'Recado') {
   return safeNote ? ` ${label}: ${safeNote}` : '';
 }
 
+
+function resolveCatalogText(messageKey, variables = {}, { fallbackTitle = '', fallbackBody = '' } = {}) {
+  return resolveMessage(messageKey, variables, { fallbackTitle, fallbackBody });
+}
+
 function normalizePixToggle(value) {
   return value === true || value === 1 || value === '1' || value === 'true' || value === 'on';
 }
@@ -4927,24 +5464,56 @@ function getUserPixProfile(userId) {
 function buildManualSharedDebtPixShareText({ creditorName, amountCents, description, payload } = {}) {
   const safeCreditorName = String(creditorName || 'quem vai receber').trim() || 'quem vai receber';
   const safeDescription = String(description || 'o combinado').trim() || 'o combinado';
-  return [
+  const safePayload = String(payload || '').trim();
+  const fallbackTitle = safeCreditorName ? `Cobrança com Pix de ${safeCreditorName}` : 'Cobrança com Pix';
+  const fallbackBody = [
     `Oi! Ficou pendente ${formatBRLFromCents(amountCents)} referente a ${safeDescription}.`,
     `Para facilitar, já deixei o Pix copia e cola de ${safeCreditorName} aqui embaixo:`,
-    String(payload || '').trim(),
+    safePayload,
     'Depois me avisa por aqui quando pagar 💸'
   ].filter(Boolean).join('\n\n');
+  const resolved = resolveCatalogText('pix.manual_request.share', {
+    credor: safeCreditorName,
+    valor: formatBRLFromCents(amountCents),
+    descricao: safeDescription,
+    pix_payload: safePayload
+  }, {
+    fallbackTitle,
+    fallbackBody
+  });
+
+  return {
+    title: resolved.title || fallbackTitle,
+    text: resolved.body || fallbackBody
+  };
 }
 
 
 function buildSharedDebtCardMonthlyPixShareText({ creditorName, amountCents, month, year, payload } = {}) {
   const safeCreditorName = String(creditorName || 'quem vai receber').trim() || 'quem vai receber';
   const periodLabel = month && year ? monthLabel(month, year) : 'este mês';
-  return [
+  const safePayload = String(payload || '').trim();
+  const fallbackTitle = safeCreditorName ? `Pix do mês para ${safeCreditorName}` : 'Pix do mês';
+  const fallbackBody = [
     `Oi! Separei ${formatBRLFromCents(amountCents)} para acertar ${periodLabel} por aqui.`,
     `Para facilitar, já deixei o Pix copia e cola de ${safeCreditorName} logo abaixo:`,
-    String(payload || '').trim(),
+    safePayload,
     'Depois me avisa no app quando fizer o Pix 💸'
   ].filter(Boolean).join('\n\n');
+  const resolved = resolveCatalogText('pix.monthly_settlement.share', {
+    credor: safeCreditorName,
+    valor: formatBRLFromCents(amountCents),
+    periodo: periodLabel,
+    pix_payload: safePayload
+  }, {
+    fallbackTitle,
+    fallbackBody
+  });
+
+  return {
+    title: resolved.title || fallbackTitle,
+    text: resolved.body || fallbackBody
+  };
 }
 
 function coerceMoneyValueToCents(rawValue, fallback = 0) {
@@ -5280,6 +5849,18 @@ function normalizeSharedDebtSendQueueStatus(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (['draft', 'sent', 'cancelled'].includes(normalized)) return normalized;
   return 'draft';
+}
+
+function normalizeSharedDebtQueueActionKind(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (['create', 'update', 'cancel'].includes(normalized)) return normalized;
+  return 'create';
+}
+
+function canRecreateSharedDebtDraftFromHistory(row) {
+  const status = String(row?.status || '').trim().toLowerCase();
+  if (!status) return true;
+  return ['cancelled', 'rejection_accepted_by_sender'].includes(status);
 }
 
 function detectSharedDebtOriginKindFromRows(rows) {
@@ -6115,7 +6696,8 @@ function recordSharedDebtBatchChange(context, payload) {
       descriptions: [],
       totalCents: 0,
       createdCount: 0,
-      updatedCount: 0
+      updatedCount: 0,
+      cancelledCount: 0
     });
   }
 
@@ -6127,17 +6709,31 @@ function recordSharedDebtBatchChange(context, payload) {
   if (payload?.description && entry.descriptions.length < 3 && !entry.descriptions.includes(payload.description)) {
     entry.descriptions.push(payload.description);
   }
+
   if (payload?.kind === 'updated') entry.updatedCount += 1;
+  else if (payload?.kind === 'cancelled') entry.cancelledCount += 1;
   else entry.createdCount += 1;
 }
 
-function buildSharedDebtBatchNotificationBody({ requesterDisplayName, actionLabel, itemCount, totalCents, descriptions }) {
+function buildSharedDebtBatchNotificationPayload({ requesterDisplayName, itemCount, totalCents, descriptions, messageKey }) {
   const safeCount = Math.max(0, Number(itemCount || 0));
-  const formattedTotal = formatBRLFromCents(Number(totalCents || 0));
   const preview = (descriptions || []).filter(Boolean).slice(0, 2).join(' · ');
+  const formattedTotal = formatBRLFromCents(Number(totalCents || 0));
   const countLabel = formatCountLabel(safeCount, 'cobrança', 'cobranças');
-  const previewSuffix = preview ? ` Nessa leva entraram: ${preview}.` : '';
-  return `${requesterDisplayName} ${actionLabel} ${countLabel} para você, somando ${formattedTotal}.${previewSuffix}`;
+  const resolved = resolveCatalogText(messageKey, {
+    remetente: requesterDisplayName,
+    n_cobrancas: countLabel,
+    valor_total: formattedTotal,
+    previsao_descricoes: preview
+  }, {
+    fallbackTitle: 'Tem novidade em um envio compartilhado',
+    fallbackBody: `${requesterDisplayName} ajustou ${countLabel} para você, somando ${formattedTotal}${preview ? `. Teve mexida em: ${preview}.` : '.'}`
+  });
+
+  return {
+    title: resolved.title,
+    body: resolved.body
+  };
 }
 
 function flushSharedDebtBatchNotifications(context) {
@@ -6150,35 +6746,34 @@ function flushSharedDebtBatchNotifications(context) {
     const batchSummary = refreshSharedDebtBatch(entry.batchId);
     if (!batchSummary) return;
 
-    const onlyCreated = entry.createdCount > 0 && entry.updatedCount === 0;
-    const onlyUpdated = entry.updatedCount > 0 && entry.createdCount === 0;
-    const title = onlyCreated
-      ? 'Chegou um novo envio compartilhado'
+    const onlyCreated = entry.createdCount > 0 && entry.updatedCount === 0 && entry.cancelledCount === 0;
+    const onlyUpdated = entry.updatedCount > 0 && entry.createdCount === 0 && entry.cancelledCount === 0;
+    const onlyCancelled = entry.cancelledCount > 0 && entry.createdCount === 0 && entry.updatedCount === 0;
+    const messageKey = onlyCreated
+      ? 'notification.shared_debt.batch.new'
       : onlyUpdated
-        ? 'Um envio compartilhado foi atualizado'
-        : 'Tem novidade em um envio compartilhado';
+        ? 'notification.shared_debt.batch.updated'
+        : onlyCancelled
+          ? 'notification.shared_debt.batch.adjusted'
+          : 'notification.shared_debt.batch.mixed';
 
-    const actionLabel = onlyCreated
-      ? 'enviou'
-      : onlyUpdated
-        ? 'atualizou'
-        : 'enviou e atualizou';
+    const resolvedMessage = buildSharedDebtBatchNotificationPayload({
+      requesterDisplayName: context.requesterDisplayName,
+      itemCount,
+      totalCents: entry.totalCents,
+      descriptions: entry.descriptions,
+      messageKey
+    });
 
     createNotification({
       userId: entry.receiverUserId,
       type: 'shared_debt_batch',
-      title,
-      body: buildSharedDebtBatchNotificationBody({
-        requesterDisplayName: context.requesterDisplayName,
-        actionLabel,
-        itemCount,
-        totalCents: entry.totalCents,
-        descriptions: entry.descriptions
-      }),
+      title: resolvedMessage.title,
+      body: resolvedMessage.body,
       href: `/shared-debts?batch=${entry.batchId}`,
       relatedType: 'shared_debt_batch',
       relatedId: entry.batchId,
-      groupKey: 'shared_debt_new'
+      groupKey: onlyCreated ? 'shared_debt_new' : 'shared_debt_updates'
     });
   });
 }
@@ -6287,6 +6882,261 @@ const FINANCE_TYPES = ["income", "expense"];
 const FINANCE_TYPE_SET = new Set(FINANCE_TYPES);
 const FINANCE_AMOUNT_MODES = ["fixed", "variable"];
 const FINANCE_AMOUNT_MODE_SET = new Set(FINANCE_AMOUNT_MODES);
+const FINANCE_SCHEDULE_KINDS = ["receive", "due", "pay"];
+const FINANCE_SCHEDULE_KIND_SET = new Set(FINANCE_SCHEDULE_KINDS);
+
+function normalizeFinanceDayOfMonth(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 31 ? parsed : null;
+}
+
+function normalizeFinanceScheduleKind(value, financeType = null) {
+  const safeType = normalizeFinanceType(financeType);
+  const normalized = String(value || "").trim().toLowerCase();
+
+  if (safeType === 'income') {
+    return 'receive';
+  }
+
+  if (safeType === 'expense') {
+    if (normalized === 'pay' || normalized === 'due') return normalized;
+    return 'due';
+  }
+
+  return FINANCE_SCHEDULE_KIND_SET.has(normalized) ? normalized : null;
+}
+
+function resolveFinanceScheduleKind(finance = {}) {
+  const dayOfMonth = normalizeFinanceDayOfMonth(finance?.day_of_month);
+  if (!dayOfMonth) return null;
+  return normalizeFinanceScheduleKind(finance?.schedule_kind, finance?.type);
+}
+
+function computeMonthlyFinanceEffectiveDate(year, month, dayOfMonth) {
+  const safeYear = Number(year || 0);
+  const safeMonth = Number(month || 0);
+  const safeDay = normalizeFinanceDayOfMonth(dayOfMonth);
+  if (!safeYear || safeMonth < 1 || safeMonth > 12 || !safeDay) return '';
+
+  const base = dayjs(`${safeYear}-${String(safeMonth).padStart(2, '0')}-01`);
+  if (!base.isValid()) return '';
+  const resolvedDay = Math.min(safeDay, base.daysInMonth());
+  return `${safeYear}-${String(safeMonth).padStart(2, '0')}-${String(resolvedDay).padStart(2, '0')}`;
+}
+
+function formatMonthDayLabel(value) {
+  const safeValue = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(safeValue)) return '';
+  const parsed = dayjs(safeValue);
+  return parsed.isValid() ? parsed.format('DD/MM') : '';
+}
+
+function formatMonthYearLabel(value) {
+  const safeValue = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(safeValue)) return '';
+  const parsed = dayjs(safeValue);
+  return parsed.isValid() ? parsed.format('MM/YY') : '';
+}
+
+function buildFixedFinanceScheduleChipLabel(finance = {}, { effectiveDate = '' } = {}) {
+  const dayOfMonth = normalizeFinanceDayOfMonth(finance?.day_of_month);
+  if (!dayOfMonth) return '';
+
+  const paddedDay = String(dayOfMonth).padStart(2, '0');
+  const type = normalizeFinanceType(finance?.type);
+  const scheduleKind = resolveFinanceScheduleKind(finance);
+
+  if (type === 'income') return `Entra dia ${paddedDay}`;
+  if (scheduleKind === 'pay') return `Pago dia ${paddedDay}`;
+  return `Vence dia ${paddedDay}`;
+}
+
+function buildVariableFinanceScheduleSummary(finance = {}, { todayDateKey = '', contextYear = null, contextMonth = null } = {}) {
+  const type = normalizeFinanceType(finance?.type);
+  const items = Array.isArray(finance?.items) ? finance.items : [];
+  if (!items.length) return { label: '', tone: 'default' };
+
+  const datedItems = items
+    .map((item) => ({
+      ...item,
+      date_key: normalizeFinanceItemDate(item?.item_date),
+      amount_cents: Math.max(0, Number(item?.amount_cents || 0) || 0),
+      is_paid: normalizeFinancePaidFlag(item?.is_paid)
+    }))
+    .filter((item) => item.date_key && item.amount_cents > 0)
+    .sort((a, b) => String(a.date_key).localeCompare(String(b.date_key)));
+
+  if (!datedItems.length) return { label: '', tone: 'default' };
+
+  const relevantItems = type === 'expense'
+    ? datedItems.filter((item) => item.is_paid !== 1)
+    : datedItems;
+
+  if (!relevantItems.length) {
+    return type === 'expense'
+      ? { label: 'Tudo pago na listinha', tone: 'success' }
+      : { label: `Último em ${formatMonthDayLabel(datedItems[datedItems.length - 1].date_key)}`, tone: 'default' };
+  }
+
+  const todayItems = todayDateKey ? relevantItems.filter((item) => item.date_key === todayDateKey) : [];
+  if (todayItems.length) {
+    return {
+      label: todayItems.length === 1 ? 'Tem 1 hoje' : `Tem ${todayItems.length} hoje`,
+      tone: type === 'expense' ? 'warning' : 'info'
+    };
+  }
+
+  const referenceDate = (() => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(todayDateKey || ''))) return todayDateKey;
+    if (contextYear && contextMonth) return `${contextYear}-${String(contextMonth).padStart(2, '0')}-01`;
+    return '';
+  })();
+
+  let nextItem = null;
+  if (referenceDate) {
+    nextItem = relevantItems.find((item) => item.date_key >= referenceDate) || null;
+  }
+  if (!nextItem) nextItem = relevantItems[0] || null;
+
+  if (nextItem) {
+    return {
+      label: `Próximo em ${formatMonthDayLabel(nextItem.date_key)}`,
+      tone: 'default'
+    };
+  }
+
+  return { label: '', tone: 'default' };
+}
+
+function decorateMonthlyFinancesForView(finances = [], { year = null, month = null, todayDateKey = '' } = {}) {
+  const safeYear = Number(year || 0);
+  const safeMonth = Number(month || 0);
+  return (Array.isArray(finances) ? finances : []).map((finance) => {
+    const amountMode = normalizeFinanceAmountMode(finance?.amount_mode);
+    const decorated = { ...finance };
+
+    if (amountMode === 'fixed') {
+      const dayOfMonth = normalizeFinanceDayOfMonth(finance?.day_of_month);
+      const effectiveDate = dayOfMonth ? computeMonthlyFinanceEffectiveDate(safeYear, safeMonth, dayOfMonth) : '';
+      decorated.schedule_meta = {
+        kind: 'fixed',
+        hasSchedule: !!dayOfMonth,
+        chipLabel: buildFixedFinanceScheduleChipLabel(finance, { effectiveDate }),
+        effectiveDate,
+        effectiveDateLabel: formatMonthDayLabel(effectiveDate),
+        isToday: !!effectiveDate && effectiveDate === todayDateKey,
+        buttonLabel: dayOfMonth ? buildFixedFinanceScheduleChipLabel(finance, { effectiveDate }) : 'Adicionar dia',
+        helperLabel: ''
+      };
+      return decorated;
+    }
+
+    decorated.schedule_meta = {
+      kind: 'variable',
+      ...(buildVariableFinanceScheduleSummary(finance, { todayDateKey, contextYear: safeYear, contextMonth: safeMonth }))
+    };
+    return decorated;
+  });
+}
+
+function resolveMonthlyFinanceAlertHref(type, year, month) {
+  const safeType = normalizeFinanceType(type) || 'expense';
+  return `/detalhamento/${Number(year || 0)}/${Number(month || 0)}${safeType === 'income' ? '#grana-entra' : '#grana-sai'}`;
+}
+
+function buildMonthlyFinanceOccurrencePreview(items = []) {
+  const names = Array.from(new Set((Array.isArray(items) ? items : [])
+    .map((item) => String(item?.description || '').trim())
+    .filter(Boolean)));
+  if (!names.length) return '';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} e ${names[1]}`;
+  return `${names[0]}, ${names[1]} e mais ${names.length - 2}`;
+}
+
+function buildMonthlyFinanceDateNotificationPayload(type, items = [], { year = null, month = null, dateKey = null } = {}) {
+  const safeType = normalizeFinanceType(type) || 'expense';
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  const totalCents = list.reduce((sum, item) => sum + Math.max(0, Number(item?.amount_cents || 0) || 0), 0);
+  const href = resolveMonthlyFinanceAlertHref(safeType, year, month);
+
+  if (list.length === 1) {
+    const item = list[0];
+    const label = String(item?.description || '').trim() || (safeType === 'income' ? 'essa entrada' : 'essa saída');
+    const safeKind = String(item?.schedule_kind || 'due').trim();
+    const messageKey = safeType === 'income'
+      ? 'notification.monthly_finance.income.single'
+      : safeKind === 'pay'
+        ? 'notification.monthly_finance.expense.single.pay'
+        : 'notification.monthly_finance.expense.single.due';
+    const fallbackTitle = safeType === 'income'
+      ? `Hoje entra ${label}`
+      : safeKind === 'pay'
+        ? `Hoje sai ${label}`
+        : `Hoje vence ${label}`;
+    const fallbackBody = safeType === 'income'
+      ? `${label} está no radar de hoje com ${formatBRLFromCents(item.amount_cents)}.`
+      : safeKind === 'pay'
+        ? `${label} está marcado para hoje com ${formatBRLFromCents(item.amount_cents)}.`
+        : `${label} bate hoje com ${formatBRLFromCents(item.amount_cents)} no radar.`;
+    const resolved = resolveCatalogText(messageKey, {
+      descricao: label,
+      valor: formatBRLFromCents(item.amount_cents)
+    }, {
+      fallbackTitle,
+      fallbackBody
+    });
+
+    return {
+      title: resolved.title,
+      body: resolved.body,
+      href,
+      payloadMeta: { type: safeType, dateKey, totalCents, count: 1, scheduleKind: safeKind }
+    };
+  }
+
+  const preview = buildMonthlyFinanceOccurrencePreview(list);
+  const messageKey = safeType === 'income'
+    ? 'notification.monthly_finance.income.multi'
+    : 'notification.monthly_finance.expense.multi';
+  const fallbackTitle = safeType === 'income' ? 'Hoje tem entradas do mês' : 'Hoje tem saídas do mês';
+  const fallbackBody = `${formatCountLabel(list.length, safeType === 'income' ? 'entrada' : 'saída', safeType === 'income' ? 'entradas' : 'saídas')} somam ${formatBRLFromCents(totalCents)}${preview ? ` por conta de ${preview}` : ''}.`;
+  const resolved = resolveCatalogText(messageKey, {
+    n_entradas: safeType === 'income' ? formatCountLabel(list.length, 'entrada', 'entradas') : '',
+    n_saidas: safeType === 'expense' ? formatCountLabel(list.length, 'saida', 'saidas') : '',
+    valor_total: formatBRLFromCents(totalCents),
+    previsao_descricoes: preview
+  }, {
+    fallbackTitle,
+    fallbackBody
+  });
+
+  return {
+    title: resolved.title,
+    body: resolved.body,
+    href,
+    payloadMeta: { type: safeType, dateKey, totalCents, count: list.length }
+  };
+}
+
+function buildMonthlyFinanceDashboardAlert(type, items = [], { year = null, month = null, dateKey = null } = {}) {
+  const payload = buildMonthlyFinanceDateNotificationPayload(type, items, { year, month, dateKey });
+  const resolved = resolveCatalogText('dashboard.monthly_finance.today', {
+    titulo_reaproveitado: payload.title,
+    body_reaproveitado: payload.body
+  }, {
+    fallbackTitle: payload.title,
+    fallbackBody: payload.body
+  });
+  return {
+    type: normalizeFinanceType(type) === 'expense' ? 'warning' : 'info',
+    icon: normalizeFinanceType(type) === 'expense' ? '🧾' : '✨',
+    title: resolved.title,
+    description: resolved.body,
+    href: payload.href
+  };
+}
+
 
 function normalizeFinanceType(value) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -6308,7 +7158,18 @@ function sanitizeFinanceDescription(value) {
 
 function normalizeFinanceItemDate(value) {
   const normalized = String(value || "").trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? "" + normalized : "";
+}
+
+function normalizeFinancePaidFlag(value) {
+  if (value === true || value === 1) return 1;
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return ['1', 'true', 'sim', 'yes', 'on'].includes(normalized) ? 1 : 0;
+}
+
+function normalizePositiveInteger(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function sanitizeVariableFinanceItems(items) {
@@ -6316,6 +7177,7 @@ function sanitizeVariableFinanceItems(items) {
 
   const normalizedItems = [];
   for (const rawItem of items.slice(0, 120)) {
+    const itemId = normalizePositiveInteger(rawItem?.id ?? rawItem?.item_id);
     const itemDate = normalizeFinanceItemDate(rawItem?.item_date ?? rawItem?.date);
     const itemSource = String(rawItem?.item_source ?? rawItem?.source ?? "")
       .replace(/\s+/g, " ")
@@ -6323,6 +7185,7 @@ function sanitizeVariableFinanceItems(items) {
       .slice(0, 120);
     const rawAmount = Number(rawItem?.amount_cents ?? rawItem?.amountCents ?? rawItem?.amount ?? 0);
     const amountCents = Number.isFinite(rawAmount) ? Math.max(0, Math.round(rawAmount)) : 0;
+    const isPaid = normalizeFinancePaidFlag(rawItem?.is_paid ?? rawItem?.isPaid);
 
     if (!itemDate && !itemSource && amountCents === 0) continue;
 
@@ -6331,9 +7194,11 @@ function sanitizeVariableFinanceItems(items) {
     }
 
     normalizedItems.push({
+      id: itemId || null,
       item_date: itemDate,
       item_source: itemSource,
-      amount_cents: amountCents
+      amount_cents: amountCents,
+      is_paid: isPaid
     });
   }
 
@@ -6366,11 +7231,179 @@ function getPreviousMonthYear(month, year) {
   return { month: prevMonth, year: prevYear };
 }
 
+function getNextMonthYear(month, year) {
+  let nextMonth = Number(month) + 1;
+  let nextYear = Number(year);
+  if (nextMonth > 12) {
+    nextMonth = 1;
+    nextYear += 1;
+  }
+  return { month: nextMonth, year: nextYear };
+}
+
+function normalizeMonthlyFinanceScheduleRow(row) {
+  const normalizedDay = normalizeFinanceDayOfMonth(row?.day_of_month);
+  return {
+    ...row,
+    amount_mode: normalizeFinanceAmountMode(row?.amount_mode),
+    carry_key: normalizeMonthlyFinanceCarryKey(row?.carry_key),
+    day_of_month: normalizedDay,
+    schedule_kind: normalizedDay ? normalizeFinanceScheduleKind(row?.schedule_kind, row?.type) : null
+  };
+}
+
+function getFutureFixedFinanceRowsByCarryKey(userId, carryKey, month, year) {
+  const resolvedCarryKey = normalizeMonthlyFinanceCarryKey(carryKey);
+  if (!resolvedCarryKey) return [];
+
+  return db.prepare(`
+    SELECT id, month, year, type, amount_mode, carry_key, day_of_month, schedule_kind
+    FROM monthly_finances
+    WHERE user_id = ? AND carry_key = ?
+      AND (year > ? OR (year = ? AND month > ?))
+    ORDER BY year ASC, month ASC, id ASC
+  `).all(userId, resolvedCarryKey, Number(year), Number(year), Number(month))
+    .map((row) => normalizeMonthlyFinanceScheduleRow(row))
+    .filter((row) => row.amount_mode === 'fixed');
+}
+
+function getContiguousFutureLegacyFixedFinanceRows(userId, sourceFinance) {
+  const sourceType = normalizeFinanceType(sourceFinance?.type);
+  const sourceAmountMode = normalizeFinanceAmountMode(sourceFinance?.amount_mode);
+  const sourceDescription = String(sourceFinance?.description ?? '').trim();
+  const sourceMonth = Number(sourceFinance?.month || 0);
+  const sourceYear = Number(sourceFinance?.year || 0);
+  const sourceCategoryId = sourceFinance?.category_id == null ? null : Number(sourceFinance.category_id);
+
+  if (sourceAmountMode !== 'fixed' || !sourceType || !sourceMonth || !sourceYear || !sourceDescription) {
+    return [];
+  }
+
+  const selectLegacyRows = db.prepare(`
+    SELECT id, month, year, type, amount_mode, carry_key, day_of_month, schedule_kind
+    FROM monthly_finances
+    WHERE user_id = ? AND month = ? AND year = ? AND type = ? AND amount_mode = 'fixed'
+      AND ((? IS NULL AND category_id IS NULL) OR category_id = ?)
+      AND TRIM(COALESCE(description, '')) = ?
+      AND (carry_key IS NULL OR TRIM(carry_key) = '')
+    ORDER BY id ASC
+  `);
+
+  const rows = [];
+  let cursor = getNextMonthYear(sourceMonth, sourceYear);
+
+  for (let depth = 0; depth < 120; depth += 1) {
+    const candidates = selectLegacyRows.all(
+      userId,
+      cursor.month,
+      cursor.year,
+      sourceType,
+      sourceCategoryId,
+      sourceCategoryId,
+      sourceDescription
+    );
+
+    if (candidates.length !== 1) {
+      break;
+    }
+
+    rows.push(normalizeMonthlyFinanceScheduleRow(candidates[0]));
+    cursor = getNextMonthYear(cursor.month, cursor.year);
+  }
+
+  return rows;
+}
+
+function syncFutureLegacyFixedFinanceScheduleFromRow(userId, sourceFinance, {
+  nextDayOfMonth = null,
+  nextScheduleKind = null,
+  nextCarryKey = ''
+} = {}) {
+  if (normalizeFinanceAmountMode(sourceFinance?.amount_mode) !== 'fixed') {
+    return 0;
+  }
+
+  const resolvedNextDay = normalizeFinanceDayOfMonth(nextDayOfMonth);
+  if (!resolvedNextDay) {
+    return 0;
+  }
+
+  const resolvedNextKind = normalizeFinanceScheduleKind(nextScheduleKind, sourceFinance?.type);
+  const previousDay = normalizeFinanceDayOfMonth(sourceFinance?.day_of_month);
+  const previousKind = previousDay ? normalizeFinanceScheduleKind(sourceFinance?.schedule_kind, sourceFinance?.type) : null;
+  const sourceCarryKey = normalizeMonthlyFinanceCarryKey(sourceFinance?.carry_key);
+  const resolvedNextCarryKey = normalizeMonthlyFinanceCarryKey(nextCarryKey || sourceCarryKey);
+
+  const rowsById = new Map();
+  for (const row of getFutureFixedFinanceRowsByCarryKey(userId, sourceCarryKey, sourceFinance?.month, sourceFinance?.year)) {
+    rowsById.set(Number(row.id || 0), row);
+  }
+  for (const row of getContiguousFutureLegacyFixedFinanceRows(userId, sourceFinance)) {
+    rowsById.set(Number(row.id || 0), row);
+  }
+
+  const targetRows = Array.from(rowsById.values()).sort((a, b) => {
+    const yearDiff = Number(a.year || 0) - Number(b.year || 0);
+    if (yearDiff !== 0) return yearDiff;
+    const monthDiff = Number(a.month || 0) - Number(b.month || 0);
+    if (monthDiff !== 0) return monthDiff;
+    return Number(a.id || 0) - Number(b.id || 0);
+  });
+
+  if (!targetRows.length) {
+    return 0;
+  }
+
+  const updateRow = db.prepare(`
+    UPDATE monthly_finances
+    SET day_of_month = ?, schedule_kind = ?, carry_key = COALESCE(NULLIF(TRIM(carry_key), ''), ?)
+    WHERE id = ? AND user_id = ?
+  `);
+
+  let updatedCount = 0;
+
+  db.transaction(() => {
+    for (const row of targetRows) {
+      if (row.amount_mode !== 'fixed') {
+        continue;
+      }
+
+      const rowDay = normalizeFinanceDayOfMonth(row.day_of_month);
+      const rowKind = rowDay ? normalizeFinanceScheduleKind(row.schedule_kind, row.type) : null;
+      const matchesPreviousSchedule = previousDay
+        && rowDay === previousDay
+        && (rowKind || null) === (previousKind || null);
+      const matchesNextScheduleWithoutCarryKey = !normalizeMonthlyFinanceCarryKey(row.carry_key)
+        && rowDay === resolvedNextDay
+        && (rowKind || null) === (resolvedNextKind || null);
+      const shouldUpdate = !rowDay || matchesPreviousSchedule || matchesNextScheduleWithoutCarryKey;
+
+      if (!shouldUpdate) {
+        continue;
+      }
+
+      const result = updateRow.run(
+        resolvedNextDay,
+        resolvedNextKind,
+        resolvedNextCarryKey || null,
+        row.id,
+        userId
+      );
+
+      if (Number(result.changes || 0) > 0) {
+        updatedCount += 1;
+      }
+    }
+  })();
+
+  return updatedCount;
+}
+
 function syncMonthlyFinanceCarryForward(userId, month, year) {
   const { month: prevMonth, year: prevYear } = getPreviousMonthYear(month, year);
 
   const previousRows = db.prepare(`
-    SELECT id, type, category_id, description, amount_mode, carry_key
+    SELECT id, type, category_id, description, amount_mode, carry_key, day_of_month, schedule_kind
     FROM monthly_finances
     WHERE user_id = ? AND month = ? AND year = ?
       AND carry_key IS NOT NULL AND TRIM(carry_key) <> ''
@@ -6378,23 +7411,30 @@ function syncMonthlyFinanceCarryForward(userId, month, year) {
   `).all(userId, prevMonth, prevYear).map((row) => ({
     ...row,
     amount_mode: normalizeFinanceAmountMode(row.amount_mode),
-    carry_key: normalizeMonthlyFinanceCarryKey(row.carry_key)
+    carry_key: normalizeMonthlyFinanceCarryKey(row.carry_key),
+    day_of_month: normalizeFinanceDayOfMonth(row.day_of_month),
+    schedule_kind: normalizeFinanceDayOfMonth(row.day_of_month) ? normalizeFinanceScheduleKind(row.schedule_kind, row.type) : null
   })).filter((row) => row.carry_key);
 
   if (!previousRows.length) {
     return 0;
   }
 
-  const currentCarryKeys = new Set(
-    db.prepare(`
-      SELECT carry_key
-      FROM monthly_finances
-      WHERE user_id = ? AND month = ? AND year = ?
-        AND carry_key IS NOT NULL AND TRIM(carry_key) <> ''
-    `).all(userId, month, year)
-      .map((row) => normalizeMonthlyFinanceCarryKey(row.carry_key))
-      .filter(Boolean)
-  );
+  const currentRows = db.prepare(`
+    SELECT id, type, amount_mode, carry_key, day_of_month, schedule_kind
+    FROM monthly_finances
+    WHERE user_id = ? AND month = ? AND year = ?
+      AND carry_key IS NOT NULL AND TRIM(carry_key) <> ''
+  `).all(userId, month, year).map((row) => ({
+    ...row,
+    amount_mode: normalizeFinanceAmountMode(row.amount_mode),
+    carry_key: normalizeMonthlyFinanceCarryKey(row.carry_key),
+    day_of_month: normalizeFinanceDayOfMonth(row.day_of_month),
+    schedule_kind: normalizeFinanceDayOfMonth(row.day_of_month) ? normalizeFinanceScheduleKind(row.schedule_kind, row.type) : null
+  })).filter((row) => row.carry_key);
+
+  const currentRowsByCarryKey = new Map(currentRows.map((row) => [row.carry_key, row]));
+  const currentCarryKeys = new Set(currentRowsByCarryKey.keys());
 
   const blockedCarryKeys = new Set(
     db.prepare(`
@@ -6407,16 +7447,47 @@ function syncMonthlyFinanceCarryForward(userId, month, year) {
   );
 
   const insertClone = db.prepare(`
-    INSERT OR IGNORE INTO monthly_finances (user_id, month, year, type, category_id, description, formula, amount_cents, amount_mode, carry_key, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, '', 0, ?, ?, ?)
+    INSERT OR IGNORE INTO monthly_finances (user_id, month, year, type, category_id, description, formula, amount_cents, amount_mode, carry_key, day_of_month, schedule_kind, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, '', 0, ?, ?, ?, ?, ?)
+  `);
+  const updateExistingSchedule = db.prepare(`
+    UPDATE monthly_finances
+    SET day_of_month = ?, schedule_kind = ?
+    WHERE id = ? AND user_id = ?
   `);
 
   const currentNowIso = nowIso();
   let insertedCount = 0;
+  let updatedCount = 0;
 
   db.transaction(() => {
     for (const row of previousRows) {
-      if (currentCarryKeys.has(row.carry_key) || blockedCarryKeys.has(row.carry_key)) {
+      if (blockedCarryKeys.has(row.carry_key)) {
+        continue;
+      }
+
+      const currentRow = currentRowsByCarryKey.get(row.carry_key) || null;
+      if (currentRow) {
+        const previousDay = normalizeFinanceDayOfMonth(row.day_of_month);
+        const currentDay = normalizeFinanceDayOfMonth(currentRow.day_of_month);
+        const previousKind = previousDay ? normalizeFinanceScheduleKind(row.schedule_kind, row.type) : null;
+        const currentKind = currentDay ? normalizeFinanceScheduleKind(currentRow.schedule_kind, currentRow.type) : null;
+
+        const shouldBackfillSchedule = currentRow.amount_mode === 'fixed'
+          && previousDay
+          && ((!currentDay) || (currentDay === previousDay && previousKind && currentKind !== previousKind));
+
+        if (shouldBackfillSchedule) {
+          const result = updateExistingSchedule.run(previousDay, previousKind, currentRow.id, userId);
+          if (Number(result.changes || 0) > 0) {
+            currentRowsByCarryKey.set(row.carry_key, {
+              ...currentRow,
+              day_of_month: previousDay,
+              schedule_kind: previousKind
+            });
+            updatedCount += 1;
+          }
+        }
         continue;
       }
 
@@ -6429,17 +7500,27 @@ function syncMonthlyFinanceCarryForward(userId, month, year) {
         row.description ?? '',
         row.amount_mode,
         row.carry_key,
+        row.day_of_month,
+        row.schedule_kind,
         currentNowIso
       );
 
       if (Number(result.changes || 0) > 0) {
         currentCarryKeys.add(row.carry_key);
+        currentRowsByCarryKey.set(row.carry_key, {
+          id: Number(result.lastInsertRowid || 0),
+          type: row.type,
+          amount_mode: row.amount_mode,
+          carry_key: row.carry_key,
+          day_of_month: row.day_of_month,
+          schedule_kind: row.schedule_kind
+        });
         insertedCount += 1;
       }
     }
   })();
 
-  return insertedCount;
+  return insertedCount + updatedCount;
 }
 
 function ensureMonthlyFinanceScaffold(userId, month, year) {
@@ -6469,15 +7550,15 @@ function ensureMonthlyFinanceScaffold(userId, month, year) {
   );
 
   const selectPrevious = db.prepare(`
-    SELECT type, category_id, description, amount_mode, carry_key
+    SELECT type, category_id, description, amount_mode, carry_key, day_of_month, schedule_kind
     FROM monthly_finances
     WHERE user_id = ? AND month = ? AND year = ? AND type = ?
     ORDER BY id ASC
   `);
 
   const insertClone = db.prepare(`
-    INSERT INTO monthly_finances (user_id, month, year, type, category_id, description, formula, amount_cents, amount_mode, carry_key, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, '', 0, ?, ?, ?)
+    INSERT INTO monthly_finances (user_id, month, year, type, category_id, description, formula, amount_cents, amount_mode, carry_key, day_of_month, schedule_kind, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, '', 0, ?, ?, ?, ?, ?)
   `);
 
   const nowIso = new Date().toISOString();
@@ -6497,6 +7578,8 @@ function ensureMonthlyFinanceScaffold(userId, month, year) {
           row.description ?? "",
           normalizeFinanceAmountMode(row.amount_mode),
           normalizeMonthlyFinanceCarryKey(row.carry_key) || null,
+          normalizeFinanceDayOfMonth(row.day_of_month),
+          row.day_of_month ? normalizeFinanceScheduleKind(row.schedule_kind, type) : null,
           nowIso
         );
       }
@@ -6506,7 +7589,7 @@ function ensureMonthlyFinanceScaffold(userId, month, year) {
 
 function getFinanceItemsByFinanceId(userId, financeId) {
   return db.prepare(`
-    SELECT id, finance_id, item_date, item_source, amount_cents
+    SELECT id, finance_id, item_date, item_source, amount_cents, is_paid, paid_at
     FROM monthly_finance_items
     WHERE finance_id = ? AND user_id = ?
     ORDER BY CASE WHEN item_date IS NULL OR item_date = '' THEN 1 ELSE 0 END, item_date ASC, id ASC
@@ -6520,7 +7603,7 @@ function getFinanceItemsMap(userId, financeIds) {
 
   const placeholders = financeIds.map(() => '?').join(', ');
   const rows = db.prepare(`
-    SELECT id, finance_id, item_date, item_source, amount_cents
+    SELECT id, finance_id, item_date, item_source, amount_cents, is_paid, paid_at
     FROM monthly_finance_items
     WHERE user_id = ? AND finance_id IN (${placeholders})
     ORDER BY CASE WHEN item_date IS NULL OR item_date = '' THEN 1 ELSE 0 END, item_date ASC, id ASC
@@ -6555,14 +7638,25 @@ function syncVariableFinanceAggregate(userId, financeId) {
 
 function hydrateMonthlyFinances(userId, finances) {
   const normalizedFinances = Array.isArray(finances)
-    ? finances.map((finance) => ({ ...finance, amount_mode: normalizeFinanceAmountMode(finance.amount_mode) }))
+    ? finances.map((finance) => ({
+      ...finance,
+      amount_mode: normalizeFinanceAmountMode(finance.amount_mode),
+      day_of_month: normalizeFinanceDayOfMonth(finance?.day_of_month),
+      schedule_kind: normalizeFinanceDayOfMonth(finance?.day_of_month) ? normalizeFinanceScheduleKind(finance?.schedule_kind, finance?.type) : null,
+      is_paid: normalizeFinancePaidFlag(finance?.is_paid),
+      paid_at: finance?.paid_at || null
+    }))
     : [];
 
   const itemsByFinance = getFinanceItemsMap(userId, normalizedFinances.map((finance) => finance.id));
   const dirtyVariableRows = [];
 
   for (const finance of normalizedFinances) {
-    const items = itemsByFinance.get(finance.id) || [];
+    const items = (itemsByFinance.get(finance.id) || []).map((item) => ({
+      ...item,
+      is_paid: normalizeFinancePaidFlag(item?.is_paid),
+      paid_at: item?.paid_at || null
+    }));
     finance.items = items;
     finance.item_count = items.length;
 
@@ -6602,6 +7696,10 @@ function getFinanceByIdForUser(userId, financeId) {
 
   if (!finance) return null;
   finance.amount_mode = normalizeFinanceAmountMode(finance.amount_mode);
+  finance.day_of_month = normalizeFinanceDayOfMonth(finance?.day_of_month);
+  finance.schedule_kind = finance.day_of_month ? normalizeFinanceScheduleKind(finance?.schedule_kind, finance?.type) : null;
+  finance.is_paid = normalizeFinancePaidFlag(finance?.is_paid);
+  finance.paid_at = finance?.paid_at || null;
   return finance;
 }
 
@@ -6610,7 +7708,11 @@ function serializeFinanceForApi(userId, financeId) {
   if (!finance) return null;
 
   if (finance.amount_mode === 'variable') {
-    finance.items = getFinanceItemsByFinanceId(userId, financeId);
+    finance.items = getFinanceItemsByFinanceId(userId, financeId).map((item) => ({
+      ...item,
+      is_paid: normalizeFinancePaidFlag(item?.is_paid),
+      paid_at: item?.paid_at || null
+    }));
     finance.item_count = finance.items.length;
     finance.amount_cents = syncVariableFinanceAggregate(userId, financeId);
     finance.formula = '';
@@ -6622,7 +7724,143 @@ function serializeFinanceForApi(userId, financeId) {
   return finance;
 }
 
+function buildFinancePaymentState(finance = {}) {
+  const isVariable = normalizeFinanceAmountMode(finance?.amount_mode) === 'variable';
+  const totalCents = Math.max(0, Number(finance?.amount_cents || 0));
+
+  if (!isVariable) {
+    const isPaid = normalizeFinancePaidFlag(finance?.is_paid) === 1;
+    const paidCents = isPaid ? totalCents : 0;
+    const totalItemCount = totalCents > 0 ? 1 : 0;
+    const paidItemCount = isPaid && totalItemCount ? 1 : 0;
+    return {
+      mode: 'fixed',
+      isPaid,
+      totalItemCount,
+      paidItemCount,
+      totalCents,
+      paidCents,
+      remainingCents: Math.max(0, totalCents - paidCents),
+      progressPct: totalCents > 0 ? Math.max(0, Math.min(100, Math.round((paidCents / totalCents) * 100))) : 0,
+      isComplete: totalCents > 0 && paidCents >= totalCents
+    };
+  }
+
+  const items = Array.isArray(finance?.items) ? finance.items : [];
+  const paidItems = items.filter((item) => normalizeFinancePaidFlag(item?.is_paid) === 1);
+  const paidCents = paidItems.reduce((sum, item) => sum + Math.max(0, Number(item?.amount_cents || 0)), 0);
+  const totalItemCount = items.length;
+  const paidItemCount = paidItems.length;
+  return {
+    mode: 'variable',
+    isPaid: totalItemCount > 0 && paidItemCount === totalItemCount,
+    totalItemCount,
+    paidItemCount,
+    totalCents,
+    paidCents,
+    remainingCents: Math.max(0, totalCents - paidCents),
+    progressPct: totalCents > 0 ? Math.max(0, Math.min(100, Math.round((paidCents / totalCents) * 100))) : 0,
+    isComplete: totalCents > 0 && paidCents >= totalCents
+  };
+}
+
+function buildExpensePaymentProgress(userId, month, year, hydratedFinances = null) {
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  const finances = Array.isArray(hydratedFinances)
+    ? hydratedFinances
+    : hydrateMonthlyFinances(userId, db.prepare(`
+      SELECT *
+      FROM monthly_finances
+      WHERE user_id = ? AND month = ? AND year = ? AND type = 'expense'
+      ORDER BY id ASC
+    `).all(userId, safeMonth, safeYear));
+
+  const expenseFinances = finances.filter((finance) => finance?.type === 'expense');
+  const summary = {
+    totalCents: 0,
+    paidCents: 0,
+    remainingCents: 0,
+    progressPct: 0,
+    totalItemCount: 0,
+    paidItemCount: 0,
+    fixedCount: 0,
+    variableParentCount: 0,
+    isComplete: false,
+    hasValue: false
+  };
+
+  expenseFinances.forEach((finance) => {
+    const state = buildFinancePaymentState(finance);
+    summary.totalCents += Math.max(0, Number(finance?.amount_cents || 0));
+    summary.paidCents += Math.max(0, Number(state.paidCents || 0));
+    summary.totalItemCount += Math.max(0, Number(state.totalItemCount || 0));
+    summary.paidItemCount += Math.max(0, Number(state.paidItemCount || 0));
+    if (state.mode === 'variable') summary.variableParentCount += 1;
+    else summary.fixedCount += 1;
+  });
+
+  summary.remainingCents = Math.max(0, summary.totalCents - summary.paidCents);
+  summary.progressPct = summary.totalCents > 0
+    ? Math.max(0, Math.min(100, Math.round((summary.paidCents / summary.totalCents) * 100)))
+    : 0;
+  summary.isComplete = summary.totalCents > 0 && summary.paidCents >= summary.totalCents;
+  summary.hasValue = summary.totalCents > 0;
+  summary.label = summary.totalCents > 0
+    ? `Pago ${formatBRLFromCents(summary.paidCents)} de ${formatBRLFromCents(summary.totalCents)} · ${summary.progressPct}%`
+    : 'Quando pintar saída, o progresso aparece aqui.';
+  return summary;
+}
+
+function buildSelfCardPaymentProgress(userId, month, year, { ownerPersonId = null, totalCents = null } = {}) {
+  const selfPerson = ownerPersonId
+    ? { id: Number(ownerPersonId) }
+    : (getSelfPerson(userId) || null);
+  const selfPersonId = Number(selfPerson?.id || 0);
+
+  let resolvedTotalCents = Number.isFinite(Number(totalCents)) ? Math.max(0, Number(totalCents)) : null;
+  if (resolvedTotalCents == null) {
+    resolvedTotalCents = selfPersonId
+      ? Math.max(0, Number(db.prepare(`
+          SELECT COALESCE(SUM(a.share_cents), 0) AS total
+          FROM allocations a
+          JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+          LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+          WHERE a.user_id = ?
+            AND a.person_id = ?
+            AND (
+              (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+              (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+            )
+        `).get(userId, selfPersonId, month, year, month, year)?.total || 0))
+      : 0;
+  }
+
+  const paymentBreakdown = selfPersonId
+    ? getPersonPaymentBreakdownForMonth(userId, month, year, selfPersonId)
+    : { manualCents: 0, autoCents: 0, totalPaidCents: 0 };
+  const paidCents = Math.max(0, Number(paymentBreakdown.totalPaidCents || 0));
+  const progressPct = resolvedTotalCents > 0
+    ? Math.max(0, Math.min(100, Math.round((paidCents / resolvedTotalCents) * 100)))
+    : 0;
+
+  return {
+    totalCents: resolvedTotalCents,
+    paidCents,
+    manualPaidCents: Math.max(0, Number(paymentBreakdown.manualCents || 0)),
+    autoPaidCents: Math.max(0, Number(paymentBreakdown.autoCents || 0)),
+    remainingCents: Math.max(0, resolvedTotalCents - paidCents),
+    progressPct,
+    isComplete: resolvedTotalCents > 0 && paidCents >= resolvedTotalCents,
+    hasValue: resolvedTotalCents > 0,
+    label: resolvedTotalCents > 0
+      ? `Já entrou ${formatBRLFromCents(paidCents)} de ${formatBRLFromCents(resolvedTotalCents)} · ${progressPct}%`
+      : 'Quando aparecer parcela sua nos cartões, o progresso mora aqui.'
+  };
+}
+
 function monthLabel(month, year) {
+
   return `${String(month).padStart(2, "0")}/${year}`;
 }
 
@@ -7789,7 +9027,7 @@ function createPrivateDebtReminder({ ownerUserId, person, description, amountCen
       is_archived,
       created_at,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', 0, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', 0, ?, ?)
   `).run(
     cleanOwnerUserId,
     snapshots.personId,
@@ -8068,14 +9306,26 @@ function buildDueTodayPushPayload(cards, zonedToday, sequenceNo = 1) {
 
   if (cards.length === 1) {
     const card = cards[0];
-    const title = sequenceNo > 1 ? 'Lembrete: sua fatura vence hoje' : 'Hoje vence sua fatura';
-    const body = card.paid_cents > 0
+    const hasPartialPayment = Number(card.paid_cents || 0) > 0;
+    const messageKey = hasPartialPayment
+      ? (sequenceNo > 1 ? 'push.card_due_today.single.repeat.partial' : 'push.card_due_today.single.first.partial')
+      : (sequenceNo > 1 ? 'push.card_due_today.single.repeat.expected' : 'push.card_due_today.single.first.expected');
+    const fallbackTitle = sequenceNo > 1 ? 'Lembrete: sua fatura vence hoje' : 'Hoje vence sua fatura';
+    const fallbackBody = hasPartialPayment
       ? `${card.card_name} vence hoje. Ainda faltam ${formatBRLFromCents(card.remaining_cents)} para fechar essa conta.`
       : `${card.card_name} vence hoje. O valor previsto é ${formatBRLFromCents(card.total_cents)}.`;
+    const resolved = resolveCatalogText(messageKey, {
+      cartao: card.card_name,
+      valor_restante: formatBRLFromCents(card.remaining_cents),
+      valor_total: formatBRLFromCents(card.total_cents)
+    }, {
+      fallbackTitle,
+      fallbackBody
+    });
 
     return {
-      title,
-      body,
+      title: resolved.title,
+      body: resolved.body,
       href,
       tag: `card-due-today:${zonedToday.dateKey}`
     };
@@ -8083,10 +9333,21 @@ function buildDueTodayPushPayload(cards, zonedToday, sequenceNo = 1) {
 
   const previewNames = cards.slice(0, 2).map(item => item.card_name).join(', ');
   const extraCount = cards.length > 2 ? ` e mais ${cards.length - 2}` : '';
+  const messageKey = sequenceNo > 1 ? 'push.card_due_today.multi.repeat' : 'push.card_due_today.multi.first';
+  const fallbackTitle = sequenceNo > 1 ? 'Lembrete: tem fatura vencendo hoje' : 'Hoje tem fatura vencendo';
+  const fallbackBody = `${formatCountLabel(cards.length, 'fatura', 'faturas')} vencem hoje. Entre elas: ${previewNames}${extraCount}. Ainda faltam ${formatBRLFromCents(totalRemaining)} para quitar tudo no resumo.`;
+  const resolved = resolveCatalogText(messageKey, {
+    n_faturas: formatCountLabel(cards.length, 'fatura', 'faturas'),
+    previsao_cartoes: `${previewNames}${extraCount}`,
+    valor_total_pendente: formatBRLFromCents(totalRemaining)
+  }, {
+    fallbackTitle,
+    fallbackBody
+  });
 
   return {
-    title: sequenceNo > 1 ? 'Lembrete: tem fatura vencendo hoje' : 'Hoje tem fatura vencendo',
-    body: `${formatCountLabel(cards.length, 'fatura', 'faturas')} vencem hoje. Entre elas: ${previewNames}${extraCount}. Ainda faltam ${formatBRLFromCents(totalRemaining)} para quitar tudo no resumo.`,
+    title: resolved.title,
+    body: resolved.body,
     href,
     tag: `card-due-today:${zonedToday.dateKey}`
   };
@@ -8132,7 +9393,7 @@ async function sendPushNotificationToUser(userId, payload) {
 async function runCardDueTodayPushSweep() {
   if (scheduledDuePushSweepRunning) return;
 
-  const pushConfig = getPushRuntimeConfig();
+  const pushConfig = getCardDueTodayPushRuntimeConfig();
   if (!isPushConfigured() || !pushConfig.duePushEnabled || pushConfig.maxSendsPerDay <= 0) return;
 
   scheduledDuePushSweepRunning = true;
@@ -8198,11 +9459,17 @@ function queuePushNotification(userId, payload) {
     .catch(err => console.error('Falha ao disparar push notification:', err?.message || err));
 }
 
-function createNotification({ userId, type, title, body = null, href = null, relatedType = null, relatedId = null, groupKey = null }) {
+function createNotification({ userId, type, title, body = null, href = null, relatedType = null, relatedId = null, groupKey = null, messageKey = null, messageVariables = null }) {
   const targetUser = getUserRecord(userId, { includeDeleted: false });
   if (!targetUser) return null;
 
-  const resolvedGroupKey = resolveNotificationPreferenceGroupKey({ groupKey, type, title, relatedType });
+  const resolvedMessage = messageKey
+    ? resolveCatalogText(messageKey, messageVariables || {}, { fallbackTitle: title, fallbackBody: body })
+    : null;
+  const finalTitle = resolvedMessage?.title || title;
+  const finalBody = resolvedMessage?.body || body;
+
+  const resolvedGroupKey = resolveNotificationPreferenceGroupKey({ groupKey, type, title: finalTitle, relatedType });
   if (resolvedGroupKey && !isUserNotificationGroupEnabled(targetUser.id, resolvedGroupKey)) {
     return null;
   }
@@ -8210,10 +9477,10 @@ function createNotification({ userId, type, title, body = null, href = null, rel
   const result = db.prepare(`
     INSERT INTO notifications (user_id, type, title, body, href, is_read, related_type, related_id, created_at)
     VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
-  `).run(targetUser.id, type, title, body, href, relatedType, relatedId, nowIso());
+  `).run(targetUser.id, type, finalTitle, finalBody, href, relatedType, relatedId, nowIso());
 
   const pushTag = relatedType && relatedId ? `${relatedType}:${relatedId}` : `${type}:${result.lastInsertRowid || nowIso()}`;
-  queuePushNotification(targetUser.id, { title, body, href, tag: pushTag });
+  queuePushNotification(targetUser.id, { title: finalTitle, body: finalBody, href, tag: pushTag });
 
   return result;
 }
@@ -8230,13 +9497,7 @@ function normalizeManualDebtDueUserIds(userIds = null) {
 }
 
 function getManualDebtDueRuntimeConfig() {
-  const pushConfig = getPushRuntimeConfig();
-  return {
-    timezone: pushConfig.timezone || 'America/Sao_Paulo',
-    hour: Math.max(0, Math.min(23, Number(pushConfig.hour || 0))),
-    minute: Math.max(0, Math.min(59, Number(pushConfig.minute || 0))),
-    checkIntervalMinutes: Math.max(1, Number(pushConfig.checkIntervalMinutes || 10) || 10)
-  };
+  return getDateDrivenAlertRuntimeConfig();
 }
 
 function getManualDebtDueScheduleContext(reference = dayjs()) {
@@ -8422,11 +9683,25 @@ function buildManualDebtDueNotificationPayload(scope, items = [], dateKey = null
     const item = list[0];
     const counterpart = item.counterpart_name || item.counterpart_email || 'alguém';
     const description = item.description_snapshot || 'esse combinado';
+    const messageKey = safeScope === 'pay'
+      ? 'notification.manual_debt_due.pay.single'
+      : 'notification.manual_debt_due.receive.single';
+    const fallbackTitle = safeScope === 'pay' ? 'Hoje é o dia combinado para pagar' : 'Hoje é o dia combinado para receber';
+    const fallbackBody = safeScope === 'pay'
+      ? `Tem ${formatBRLFromCents(item.amount_cents)} combinado com ${counterpart} em ${description}.`
+      : `Tem ${formatBRLFromCents(item.amount_cents)} combinado com ${counterpart} em ${description} batendo hoje.`;
+    const resolved = resolveCatalogText(messageKey, {
+      valor: formatBRLFromCents(item.amount_cents),
+      contraparte: counterpart,
+      descricao: description
+    }, {
+      fallbackTitle,
+      fallbackBody
+    });
+
     return {
-      title: safeScope === 'pay' ? 'Hoje é o dia combinado para pagar' : 'Hoje é o dia combinado para receber',
-      body: safeScope === 'pay'
-        ? `Tem ${formatBRLFromCents(item.amount_cents)} combinado com ${counterpart} em ${description}.`
-        : `Tem ${formatBRLFromCents(item.amount_cents)} combinado com ${counterpart} em ${description} batendo hoje.`,
+      title: resolved.title,
+      body: resolved.body,
       href,
       relatedType: item.item_kind === 'private_reminder' ? 'private_debt_reminder' : 'shared_debt_request',
       relatedId: item.id || null,
@@ -8434,9 +9709,23 @@ function buildManualDebtDueNotificationPayload(scope, items = [], dateKey = null
     };
   }
 
+  const messageKey = safeScope === 'pay'
+    ? 'notification.manual_debt_due.pay.multi'
+    : 'notification.manual_debt_due.receive.multi';
+  const fallbackTitle = safeScope === 'pay' ? 'Hoje tem combinados para pagar' : 'Hoje tem combinados para receber';
+  const fallbackBody = `São ${formatCountLabel(list.length, 'combinado', 'combinados')} batendo hoje, somando ${formatBRLFromCents(totalCents)}${counterpartPreview ? ` com ${counterpartPreview}` : ''}.`;
+  const resolved = resolveCatalogText(messageKey, {
+    n_combinados: formatCountLabel(list.length, 'combinado', 'combinados'),
+    valor_total: formatBRLFromCents(totalCents),
+    previsao_contrapartes: counterpartPreview
+  }, {
+    fallbackTitle,
+    fallbackBody
+  });
+
   return {
-    title: safeScope === 'pay' ? 'Hoje tem combinados para pagar' : 'Hoje tem combinados para receber',
-    body: `São ${formatCountLabel(list.length, 'combinado', 'combinados')} batendo hoje, somando ${formatBRLFromCents(totalCents)}${counterpartPreview ? ` com ${counterpartPreview}` : ''}.`,
+    title: resolved.title,
+    body: resolved.body,
     href,
     relatedType: list.every((item) => item.item_kind === 'private_reminder') ? 'private_debt_reminder' : 'shared_debt_request',
     relatedId: list.length === 1 ? list[0].id || null : null,
@@ -8446,13 +9735,23 @@ function buildManualDebtDueNotificationPayload(scope, items = [], dateKey = null
 
 function buildManualDebtDueDashboardAlert(scope, items = [], dateKey = null) {
   const payload = buildManualDebtDueNotificationPayload(scope, items, dateKey);
+  const safeScope = normalizeManualDebtDueScope(scope);
+  const messageKey = safeScope === 'pay' ? 'dashboard.manual_debt_due.pay' : 'dashboard.manual_debt_due.receive';
+  const fallbackTitle = safeScope === 'pay'
+    ? 'Tem combinado batendo hoje para pagar'
+    : 'Tem combinado batendo hoje para receber';
+  const resolved = resolveCatalogText(messageKey, {
+    body_reaproveitado: payload.body
+  }, {
+    fallbackTitle,
+    fallbackBody: payload.body
+  });
+
   return {
-    type: normalizeManualDebtDueScope(scope) === 'pay' ? 'warning' : 'info',
-    icon: normalizeManualDebtDueScope(scope) === 'pay' ? '💸' : '📥',
-    title: normalizeManualDebtDueScope(scope) === 'pay'
-      ? 'Tem combinado batendo hoje para pagar'
-      : 'Tem combinado batendo hoje para receber',
-    description: payload.body,
+    type: safeScope === 'pay' ? 'warning' : 'info',
+    icon: safeScope === 'pay' ? '💸' : '📥',
+    title: resolved.title,
+    description: resolved.body || payload.body,
     href: payload.href
   };
 }
@@ -8476,7 +9775,7 @@ async function deliverManualDebtDueAlertsForDate(dateKey, { userIds = null } = {
         href: payload.href,
         relatedType: payload.relatedType,
         relatedId: payload.relatedId,
-        groupKey: 'shared_debt_payments'
+        groupKey: 'due_date_alerts'
       });
 
       if (result) {
@@ -8490,7 +9789,8 @@ async function deliverManualDebtDueAlertsForDate(dateKey, { userIds = null } = {
 }
 
 async function runManualDebtDueAlertSweep() {
-  if (scheduledManualDebtDueSweepRunning) return;
+  const config = getDateDrivenAlertRuntimeConfig();
+  if (!config.enabled || scheduledManualDebtDueSweepRunning) return;
   scheduledManualDebtDueSweepRunning = true;
 
   try {
@@ -8502,6 +9802,245 @@ async function runManualDebtDueAlertSweep() {
   } finally {
     scheduledManualDebtDueSweepRunning = false;
   }
+}
+
+
+function getUsersWithMonthlyFinanceAlertCandidates(month, year) {
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  if (!safeMonth || !safeYear) return [];
+
+  const previous = getPreviousMonthYear(safeMonth, safeYear);
+  const targetPrefix = `${safeYear}-${String(safeMonth).padStart(2, '0')}`;
+  const rows = db.prepare(`
+    SELECT DISTINCT user_id
+    FROM monthly_finances
+    WHERE (month = ? AND year = ?) OR (month = ? AND year = ?)
+    UNION
+    SELECT DISTINCT mf.user_id
+    FROM monthly_finance_items fi
+    JOIN monthly_finances mf ON mf.id = fi.finance_id AND mf.user_id = fi.user_id
+    WHERE substr(COALESCE(fi.item_date, ''), 1, 7) = ?
+    ORDER BY user_id ASC
+  `).all(safeMonth, safeYear, previous.month, previous.year, targetPrefix);
+
+  return rows.map((row) => Number(row.user_id || 0)).filter(Boolean);
+}
+
+function materializeMonthlyFinanceStructureForUsers(userIds, month, year) {
+  const normalizedUserIds = normalizeManualDebtDueUserIds(userIds) || [];
+  normalizedUserIds.forEach((userId) => {
+    ensureMonthlyFinanceScaffold(userId, Number(month), Number(year));
+    syncMonthlyFinanceCarryForward(userId, Number(month), Number(year));
+  });
+}
+
+function getMonthlyFinanceBucketsForDate(dateKey, { userIds = null, month = null, year = null } = {}) {
+  const safeDateKey = String(dateKey || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(safeDateKey)) return new Map();
+
+  const safeYear = Number(year || safeDateKey.slice(0, 4));
+  const safeMonth = Number(month || safeDateKey.slice(5, 7));
+  if (!safeYear || !safeMonth) return new Map();
+
+  const filteredUserIds = normalizeManualDebtDueUserIds(userIds);
+  const userFilterSql = filteredUserIds ? ` AND mf.user_id IN (${filteredUserIds.map(() => '?').join(', ')})` : '';
+
+  const fixedRows = db.prepare(`
+    SELECT mf.id AS finance_id, mf.user_id, mf.type, mf.description, mf.amount_cents,
+           mf.day_of_month, mf.schedule_kind, mf.is_paid
+    FROM monthly_finances mf
+    WHERE mf.month = ?
+      AND mf.year = ?
+      AND mf.amount_mode = 'fixed'
+      AND COALESCE(mf.amount_cents, 0) > 0
+      AND COALESCE(mf.day_of_month, 0) > 0
+      ${userFilterSql}
+    ORDER BY mf.id ASC
+  `).all(safeMonth, safeYear, ...(filteredUserIds || []));
+
+  const itemRows = db.prepare(`
+    SELECT fi.id AS item_id, fi.finance_id, fi.user_id, fi.item_date, fi.item_source,
+           fi.amount_cents, fi.is_paid, mf.type, mf.description
+    FROM monthly_finance_items fi
+    JOIN monthly_finances mf ON mf.id = fi.finance_id AND mf.user_id = fi.user_id
+    WHERE mf.month = ?
+      AND mf.year = ?
+      AND mf.amount_mode = 'variable'
+      AND fi.item_date = ?
+      AND COALESCE(fi.amount_cents, 0) > 0
+      ${userFilterSql}
+    ORDER BY fi.id ASC
+  `).all(safeMonth, safeYear, safeDateKey, ...(filteredUserIds || []));
+
+  const buckets = new Map();
+  const append = (userId, type, payload) => {
+    const safeUserId = Number(userId || 0);
+    const safeType = normalizeFinanceType(type);
+    if (!safeUserId || !safeType) return;
+    if (!buckets.has(safeUserId)) {
+      buckets.set(safeUserId, { userId: safeUserId, income: [], expense: [] });
+    }
+    buckets.get(safeUserId)[safeType].push(payload);
+  };
+
+  fixedRows.forEach((row) => {
+    const effectiveDate = computeMonthlyFinanceEffectiveDate(safeYear, safeMonth, row.day_of_month);
+    if (effectiveDate !== safeDateKey) return;
+    if (normalizeFinanceType(row.type) === 'expense' && normalizeFinancePaidFlag(row.is_paid) === 1) return;
+
+    append(row.user_id, row.type, {
+      source_kind: 'fixed_finance',
+      source_ref: String(row.finance_id),
+      finance_id: Number(row.finance_id || 0) || null,
+      finance_item_id: null,
+      description: String(row.description || '').trim() || (normalizeFinanceType(row.type) === 'income' ? 'entrada do mês' : 'saída do mês'),
+      amount_cents: Math.max(0, Number(row.amount_cents || 0) || 0),
+      schedule_kind: resolveFinanceScheduleKind(row)
+    });
+  });
+
+  itemRows.forEach((row) => {
+    if (normalizeFinanceType(row.type) === 'expense' && normalizeFinancePaidFlag(row.is_paid) === 1) return;
+    append(row.user_id, row.type, {
+      source_kind: 'variable_item',
+      source_ref: String(row.item_id),
+      finance_id: Number(row.finance_id || 0) || null,
+      finance_item_id: Number(row.item_id || 0) || null,
+      description: String(row.item_source || row.description || '').trim() || (normalizeFinanceType(row.type) === 'income' ? 'entrada do mês' : 'saída do mês'),
+      amount_cents: Math.max(0, Number(row.amount_cents || 0) || 0),
+      schedule_kind: normalizeFinanceType(row.type) === 'income' ? 'receive' : 'pay'
+    });
+  });
+
+  return buckets;
+}
+
+function hasMonthlyFinanceAlertLog({ userId, sourceKind, sourceRef, type, dateKey }) {
+  const safeUserId = Number(userId || 0);
+  const safeType = normalizeFinanceType(type);
+  const safeDateKey = String(dateKey || '').trim();
+  const safeSourceKind = String(sourceKind || '').trim();
+  const safeSourceRef = String(sourceRef || '').trim();
+  if (!safeUserId || !safeType || !safeSourceKind || !safeSourceRef || !/^\d{4}-\d{2}-\d{2}$/.test(safeDateKey)) return false;
+
+  const row = db.prepare(`
+    SELECT id
+    FROM monthly_finance_alert_logs
+    WHERE user_id = ? AND source_kind = ? AND source_ref = ? AND type = ? AND date_key = ?
+    LIMIT 1
+  `).get(safeUserId, safeSourceKind, safeSourceRef, safeType, safeDateKey);
+
+  return !!row;
+}
+
+function recordMonthlyFinanceAlertLog({ userId, sourceKind, sourceRef, type, dateKey, payload = null }) {
+  const safeUserId = Number(userId || 0);
+  const safeType = normalizeFinanceType(type);
+  const safeDateKey = String(dateKey || '').trim();
+  const safeSourceKind = String(sourceKind || '').trim();
+  const safeSourceRef = String(sourceRef || '').trim();
+  if (!safeUserId || !safeType || !safeSourceKind || !safeSourceRef || !/^\d{4}-\d{2}-\d{2}$/.test(safeDateKey)) return false;
+
+  const info = db.prepare(`
+    INSERT OR IGNORE INTO monthly_finance_alert_logs (user_id, source_kind, source_ref, type, date_key, payload_json, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(safeUserId, safeSourceKind, safeSourceRef, safeType, safeDateKey, payload ? JSON.stringify(payload) : null, nowIso());
+
+  return Number(info.changes || 0) > 0;
+}
+
+async function deliverMonthlyFinanceDateAlertsForDate(dateKey, { userIds = null } = {}) {
+  const safeDateKey = String(dateKey || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(safeDateKey)) return 0;
+
+  const safeYear = Number(safeDateKey.slice(0, 4));
+  const safeMonth = Number(safeDateKey.slice(5, 7));
+  let candidateUserIds = normalizeManualDebtDueUserIds(userIds);
+  if (!candidateUserIds) {
+    candidateUserIds = getUsersWithMonthlyFinanceAlertCandidates(safeMonth, safeYear);
+  }
+  if (!candidateUserIds || !candidateUserIds.length) return 0;
+
+  materializeMonthlyFinanceStructureForUsers(candidateUserIds, safeMonth, safeYear);
+  const buckets = getMonthlyFinanceBucketsForDate(safeDateKey, { userIds: candidateUserIds, month: safeMonth, year: safeYear });
+  let deliveredCount = 0;
+
+  candidateUserIds.forEach((userId) => {
+    const bucket = buckets.get(userId) || { income: [], expense: [] };
+
+    ['income', 'expense'].forEach((type) => {
+      const freshItems = (Array.isArray(bucket[type]) ? bucket[type] : []).filter((item) => !hasMonthlyFinanceAlertLog({
+        userId,
+        sourceKind: item.source_kind,
+        sourceRef: item.source_ref,
+        type,
+        dateKey: safeDateKey
+      }));
+
+      if (!freshItems.length) return;
+
+      const payload = buildMonthlyFinanceDateNotificationPayload(type, freshItems, {
+        year: safeYear,
+        month: safeMonth,
+        dateKey: safeDateKey
+      });
+
+      const result = createNotification({
+        userId,
+        type: 'monthly_finance_date',
+        title: payload.title,
+        body: payload.body,
+        href: payload.href,
+        relatedType: 'monthly_finance',
+        relatedId: freshItems.length === 1
+          ? Number(freshItems[0].finance_item_id || freshItems[0].finance_id || 0) || null
+          : null,
+        groupKey: 'finance_date_alerts'
+      });
+
+      if (result) {
+        freshItems.forEach((item) => {
+          recordMonthlyFinanceAlertLog({
+            userId,
+            sourceKind: item.source_kind,
+            sourceRef: item.source_ref,
+            type,
+            dateKey: safeDateKey,
+            payload: {
+              amountCents: item.amount_cents,
+              description: item.description,
+              scheduleKind: item.schedule_kind
+            }
+          });
+        });
+        deliveredCount += 1;
+      }
+    });
+  });
+
+  return deliveredCount;
+}
+
+async function runMonthlyFinanceDateAlertSweep() {
+  const config = getMonthlyFinanceDateAlertRuntimeConfig();
+  if (!config.enabled || scheduledMonthlyFinanceAlertSweepRunning) return;
+  scheduledMonthlyFinanceAlertSweepRunning = true;
+
+  try {
+    const { now, scheduledAt, dateKey } = getManualDebtDueScheduleContext();
+    if (now.isBefore(scheduledAt)) return;
+    await deliverMonthlyFinanceDateAlertsForDate(dateKey);
+  } catch (error) {
+    console.error('Falha no sweep das datas do mês:', error?.message || error);
+  } finally {
+    scheduledMonthlyFinanceAlertSweepRunning = false;
+  }
+}
+
+async function runDateDrivenAlertSweep() {
+  await runManualDebtDueAlertSweep();
+  await runMonthlyFinanceDateAlertSweep();
 }
 
 function getUnreadNotificationCount(userId) {
@@ -8869,79 +10408,242 @@ function buildSharedDebtDraftHistoryBlockerMessage(rows = []) {
   if (!items.length) return null;
   if (items.length === 1) {
     const label = String(items[0].description_snapshot || 'essa compra').trim() || 'essa compra';
-    return `${label} já chegou a nascer como cobrança compartilhada antes. Para não criar dívida fantasma nem reescrever envio antigo, o modo “guardar e mandar depois” fica só para compras novas.`;
+    return `${label} já chegou a nascer como cobrança compartilhada antes. A boa notícia é que a caixa de saída continua cuidando disso sem mandar nada automaticamente.`;
   }
-  return `Parte dessa seleção já virou cobrança em algum momento. Para não embaralhar histórico, aceite, Pix e envio antigo, a caixa de saída só guarda compras novas por aqui.`;
+  return `Parte dessa seleção já virou cobrança em algum momento. A caixa de saída continua segurando essas mudanças por aqui até você revisar e enviar.`;
+}
+
+function getSharedDebtCardTransactionSnapshot(userId, txnId) {
+  return db.prepare(`
+    SELECT
+      t.id,
+      t.parent_txn_id,
+      t.txn_date,
+      t.description,
+      t.amount_cents,
+      t.card_id,
+      c.name AS card_name,
+      COALESCE(t.due_month, i.month) AS due_month,
+      COALESCE(t.due_year, i.year) AS due_year
+    FROM transactions t
+    LEFT JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE t.id = ? AND t.user_id = ?
+  `).get(txnId, userId);
+}
+
+function buildSharedDebtDraftQueueActionsForTransaction(userId, txnId) {
+  const cleanTxnId = Number(txnId || 0);
+  if (!cleanTxnId) return [];
+
+  const txn = getSharedDebtCardTransactionSnapshot(userId, cleanTxnId);
+  if (!txn) return [];
+
+  const eligibleRows = getSharedDebtEligibleAllocationRows(userId, cleanTxnId);
+  const existingRequests = db.prepare(`
+    SELECT *
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND request_kind = 'card'
+      AND source_transaction_id = ?
+    ORDER BY id DESC
+  `).all(userId, cleanTxnId);
+
+  const pendingByPerson = new Map();
+  const latestByPerson = new Map();
+  existingRequests.forEach((row) => {
+    const personId = Number(row.source_person_id || 0);
+    if (!personId) return;
+    if (!latestByPerson.has(personId)) latestByPerson.set(personId, row);
+    if (String(row.status || '').trim().toLowerCase() === 'pending' && !pendingByPerson.has(personId)) {
+      pendingByPerson.set(personId, row);
+    }
+  });
+
+  const handledPendingRequestIds = new Set();
+  const actions = [];
+
+  const pushAction = (payload) => {
+    const receiverUserId = Number(payload?.receiverUserId || 0);
+    const sourceTransactionId = Number(payload?.sourceTransactionId || 0);
+    const sourcePersonId = Number(payload?.sourcePersonId || 0);
+    const sourceDueMonth = Number(payload?.sourceDueMonth || 0);
+    const sourceDueYear = Number(payload?.sourceDueYear || 0);
+    if (!receiverUserId || !sourceTransactionId || !sourcePersonId || !sourceDueMonth || !sourceDueYear) return;
+
+    actions.push({
+      requesterUserId: userId,
+      receiverUserId,
+      sourceTransactionId,
+      sourceAllocationId: Number(payload?.sourceAllocationId || 0) || null,
+      sourcePersonId,
+      sourceDueMonth,
+      sourceDueYear,
+      sourceTxnDateSnapshot: payload?.sourceTxnDateSnapshot || null,
+      cardId: Number(payload?.cardId || 0) || null,
+      cardNameSnapshot: payload?.cardNameSnapshot || null,
+      descriptionSnapshot: payload?.descriptionSnapshot || txn.description,
+      amountCents: Number(payload?.amountCents || 0),
+      receiverEmailSnapshot: normalizeEmail(payload?.receiverEmailSnapshot),
+      receiverNameSnapshot: payload?.receiverNameSnapshot || null,
+      actionKind: normalizeSharedDebtQueueActionKind(payload?.actionKind),
+      targetRequestId: Number(payload?.targetRequestId || 0) || null,
+      baselineStatusSnapshot: payload?.baselineStatusSnapshot || null
+    });
+  };
+
+  const enqueueCancelAction = (requestRow) => {
+    const requestId = Number(requestRow?.id || 0);
+    if (!requestId || handledPendingRequestIds.has(requestId)) return;
+    handledPendingRequestIds.add(requestId);
+
+    pushAction({
+      receiverUserId: Number(requestRow.receiver_user_id || 0),
+      sourceTransactionId: cleanTxnId,
+      sourceAllocationId: Number(requestRow.source_allocation_id || 0) || null,
+      sourcePersonId: Number(requestRow.source_person_id || 0),
+      sourceDueMonth: Number(requestRow.source_due_month || txn.due_month || 0),
+      sourceDueYear: Number(requestRow.source_due_year || txn.due_year || 0),
+      sourceTxnDateSnapshot: requestRow.source_txn_date_snapshot || txn.txn_date || null,
+      cardId: Number(requestRow.card_id || 0) || null,
+      cardNameSnapshot: requestRow.card_name_snapshot || txn.card_name || null,
+      descriptionSnapshot: requestRow.description_snapshot || txn.description,
+      amountCents: Number(requestRow.amount_cents || 0),
+      receiverEmailSnapshot: requestRow.receiver_email_snapshot || null,
+      receiverNameSnapshot: requestRow.receiver_name_snapshot || null,
+      actionKind: 'cancel',
+      targetRequestId: requestId,
+      baselineStatusSnapshot: requestRow.status || 'pending'
+    });
+  };
+
+  eligibleRows.forEach((row) => {
+    const personId = Number(row.person_id || 0);
+    const receiverUserId = Number(row.receiver_user_id || 0);
+    if (!personId || !receiverUserId) return;
+
+    const receiverEmailSnapshot = normalizeEmail(row.person_email || row.receiver_user_email);
+    const receiverNameSnapshot = row.person_name || row.receiver_user_name || null;
+    const existingPending = pendingByPerson.get(personId);
+    const latestRequest = latestByPerson.get(personId);
+
+    if (existingPending && Number(existingPending.receiver_user_id || 0) === receiverUserId) {
+      handledPendingRequestIds.add(Number(existingPending.id || 0));
+
+      const changed = [
+        Number(existingPending.source_allocation_id || 0) !== Number(row.allocation_id || 0),
+        Number(existingPending.amount_cents || 0) !== Number(row.share_cents || 0),
+        Number(existingPending.card_id || 0) !== Number(txn.card_id || 0),
+        String(existingPending.card_name_snapshot || '') !== String(txn.card_name || ''),
+        String(existingPending.description_snapshot || '') !== String(txn.description || ''),
+        Number(existingPending.source_due_month || 0) !== Number(txn.due_month || 0),
+        Number(existingPending.source_due_year || 0) !== Number(txn.due_year || 0),
+        String(existingPending.source_txn_date_snapshot || '') !== String(txn.txn_date || ''),
+        String(existingPending.receiver_email_snapshot || '') !== String(receiverEmailSnapshot || ''),
+        String(existingPending.receiver_name_snapshot || '') !== String(receiverNameSnapshot || '')
+      ].some(Boolean);
+
+      if (!changed) return;
+
+      pushAction({
+        receiverUserId,
+        sourceTransactionId: cleanTxnId,
+        sourceAllocationId: Number(row.allocation_id || 0) || null,
+        sourcePersonId: personId,
+        sourceDueMonth: Number(txn.due_month || 0),
+        sourceDueYear: Number(txn.due_year || 0),
+        sourceTxnDateSnapshot: txn.txn_date || null,
+        cardId: Number(txn.card_id || 0) || null,
+        cardNameSnapshot: txn.card_name || null,
+        descriptionSnapshot: txn.description,
+        amountCents: Number(row.share_cents || 0),
+        receiverEmailSnapshot,
+        receiverNameSnapshot,
+        actionKind: 'update',
+        targetRequestId: Number(existingPending.id || 0),
+        baselineStatusSnapshot: existingPending.status || 'pending'
+      });
+      return;
+    }
+
+    if (existingPending) {
+      enqueueCancelAction(existingPending);
+    }
+
+    const canCreate = !latestRequest || canRecreateSharedDebtDraftFromHistory(latestRequest) || Number(latestRequest?.id || 0) === Number(existingPending?.id || 0);
+    if (!canCreate) return;
+
+    pushAction({
+      receiverUserId,
+      sourceTransactionId: cleanTxnId,
+      sourceAllocationId: Number(row.allocation_id || 0) || null,
+      sourcePersonId: personId,
+      sourceDueMonth: Number(txn.due_month || 0),
+      sourceDueYear: Number(txn.due_year || 0),
+      sourceTxnDateSnapshot: txn.txn_date || null,
+      cardId: Number(txn.card_id || 0) || null,
+      cardNameSnapshot: txn.card_name || null,
+      descriptionSnapshot: txn.description,
+      amountCents: Number(row.share_cents || 0),
+      receiverEmailSnapshot,
+      receiverNameSnapshot,
+      actionKind: 'create'
+    });
+  });
+
+  pendingByPerson.forEach((requestRow) => {
+    enqueueCancelAction(requestRow);
+  });
+
+  return actions;
 }
 
 function queueSharedDebtDraftsForTransactions(userId, targetRows = []) {
   const rows = dedupeTxnRows(targetRows);
   const txnIds = rows.map((row) => Number(row.id || 0)).filter(Boolean);
   if (!txnIds.length) {
-    return { queueCount: 0, itemCount: 0, totalCents: 0, shareableCount: 0 };
-  }
-
-  const blockers = getSharedDebtDraftHistoryBlockersForTransactions(userId, txnIds);
-  if (blockers.length) {
-    throw new Error(buildSharedDebtDraftHistoryBlockerMessage(blockers));
+    return { queueCount: 0, itemCount: 0, totalCents: 0, shareableCount: 0, createCount: 0, updateCount: 0, cancelCount: 0 };
   }
 
   clearDraftSharedDebtSendQueueItemsForTransactions(userId, txnIds);
 
-  const queueGroups = new Map();
-  rows.forEach((targetTxn) => {
-    const dueMonth = Number(targetTxn.due_month || targetTxn.month || 0);
-    const dueYear = Number(targetTxn.due_year || targetTxn.year || 0);
-    if (!dueMonth || !dueYear) return;
-
-    getSharedDebtEligibleAllocationRows(userId, targetTxn.id).forEach((row) => {
-      const receiverUserId = Number(row.receiver_user_id || 0);
-      const sourcePersonId = Number(row.person_id || 0);
-      if (!receiverUserId || !sourcePersonId) return;
-
-      const key = `${receiverUserId}:${dueYear}:${dueMonth}`;
-      if (!queueGroups.has(key)) {
-        queueGroups.set(key, {
-          receiverUserId,
-          month: dueMonth,
-          year: dueYear,
-          receiverEmailSnapshot: normalizeEmail(row.person_email || row.receiver_user_email),
-          receiverNameSnapshot: row.person_name || row.receiver_user_name || null,
-          items: []
-        });
-      }
-
-      queueGroups.get(key).items.push({
-        requesterUserId: userId,
-        receiverUserId,
-        sourceTransactionId: Number(targetTxn.id || 0),
-        sourceAllocationId: Number(row.allocation_id || 0) || null,
-        sourcePersonId,
-        sourceDueMonth: dueMonth,
-        sourceDueYear: dueYear,
-        sourceTxnDateSnapshot: targetTxn.txn_date || null,
-        cardId: Number(targetTxn.card_id || 0) || null,
-        cardNameSnapshot: targetTxn.card_name || null,
-        descriptionSnapshot: targetTxn.description,
-        amountCents: Number(row.share_cents || 0),
-        receiverEmailSnapshot: normalizeEmail(row.person_email || row.receiver_user_email),
-        receiverNameSnapshot: row.person_name || row.receiver_user_name || null
-      });
-    });
+  const actions = [];
+  rows.forEach((row) => {
+    buildSharedDebtDraftQueueActionsForTransaction(userId, row.id).forEach((action) => actions.push(action));
   });
 
-  if (!queueGroups.size) {
-    return { queueCount: 0, itemCount: 0, totalCents: 0, shareableCount: 0 };
+  if (!actions.length) {
+    return { queueCount: 0, itemCount: 0, totalCents: 0, shareableCount: 0, createCount: 0, updateCount: 0, cancelCount: 0 };
   }
+
+  const queueGroups = new Map();
+  actions.forEach((action) => {
+    const key = `${action.receiverUserId}:${action.sourceDueYear}:${action.sourceDueMonth}`;
+    if (!queueGroups.has(key)) {
+      queueGroups.set(key, {
+        receiverUserId: action.receiverUserId,
+        month: action.sourceDueMonth,
+        year: action.sourceDueYear,
+        receiverEmailSnapshot: action.receiverEmailSnapshot,
+        receiverNameSnapshot: action.receiverNameSnapshot,
+        items: []
+      });
+    }
+
+    const group = queueGroups.get(key);
+    if (!group.receiverEmailSnapshot && action.receiverEmailSnapshot) group.receiverEmailSnapshot = action.receiverEmailSnapshot;
+    if (!group.receiverNameSnapshot && action.receiverNameSnapshot) group.receiverNameSnapshot = action.receiverNameSnapshot;
+    group.items.push(action);
+  });
 
   const upsertItem = db.prepare(`
     INSERT INTO shared_debt_send_queue_items (
       queue_id, requester_user_id, receiver_user_id, source_transaction_id,
       source_allocation_id, source_person_id, source_due_month, source_due_year,
       source_txn_date_snapshot, card_id, card_name_snapshot, description_snapshot,
-      amount_cents, receiver_email_snapshot, receiver_name_snapshot,
-      sent_request_id, cancelled_at, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+      amount_cents, receiver_email_snapshot, receiver_name_snapshot, action_kind,
+      target_request_id, baseline_status_snapshot, sent_request_id, cancelled_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
     ON CONFLICT(queue_id, source_transaction_id, source_person_id) DO UPDATE SET
       requester_user_id = excluded.requester_user_id,
       receiver_user_id = excluded.receiver_user_id,
@@ -8955,12 +10657,15 @@ function queueSharedDebtDraftsForTransactions(userId, targetRows = []) {
       amount_cents = excluded.amount_cents,
       receiver_email_snapshot = excluded.receiver_email_snapshot,
       receiver_name_snapshot = excluded.receiver_name_snapshot,
+      action_kind = excluded.action_kind,
+      target_request_id = excluded.target_request_id,
+      baseline_status_snapshot = excluded.baseline_status_snapshot,
       sent_request_id = NULL,
       cancelled_at = NULL,
       updated_at = excluded.updated_at
   `);
 
-  const touchedQueueIds = [];
+  const touchedQueueIds = new Set();
   db.transaction(() => {
     queueGroups.forEach((group) => {
       const existingQueue = getSharedDebtDraftQueueRow({
@@ -8981,7 +10686,7 @@ function queueSharedDebtDraftsForTransactions(userId, targetRows = []) {
         receiverNameSnapshot: group.receiverNameSnapshot
       });
 
-      touchedQueueIds.push(queueId);
+      touchedQueueIds.add(queueId);
       group.items.forEach((item) => {
         const now = nowIso();
         upsertItem.run(
@@ -9000,6 +10705,9 @@ function queueSharedDebtDraftsForTransactions(userId, targetRows = []) {
           item.amountCents,
           item.receiverEmailSnapshot,
           item.receiverNameSnapshot,
+          item.actionKind,
+          item.targetRequestId,
+          item.baselineStatusSnapshot,
           now,
           now
         );
@@ -9008,13 +10716,24 @@ function queueSharedDebtDraftsForTransactions(userId, targetRows = []) {
     });
   })();
 
-  const draftQueues = getSharedDebtSendQueueDraftsForUser(userId).filter((queue) => touchedQueueIds.includes(Number(queue.id || 0)));
-  return draftQueues.reduce((acc, queue) => {
-    acc.queueCount += 1;
-    acc.itemCount += Number(queue.itemCount || 0);
-    acc.totalCents += Number(queue.totalCents || 0);
+  const summary = actions.reduce((acc, action) => {
+    acc.itemCount += 1;
+    acc.totalCents += Math.max(0, Number(action.amountCents || 0));
+    if (action.actionKind === 'update') acc.updateCount += 1;
+    else if (action.actionKind === 'cancel') acc.cancelCount += 1;
+    else acc.createCount += 1;
     return acc;
-  }, { queueCount: 0, itemCount: 0, totalCents: 0, shareableCount: touchedQueueIds.length });
+  }, {
+    queueCount: touchedQueueIds.size,
+    itemCount: 0,
+    totalCents: 0,
+    shareableCount: touchedQueueIds.size,
+    createCount: 0,
+    updateCount: 0,
+    cancelCount: 0
+  });
+
+  return summary;
 }
 
 function getSharedDebtSendQueueDraftSummary(userId, options = {}) {
@@ -9071,6 +10790,7 @@ function getSharedDebtSendQueueDraftsForUser(userId) {
     if (!itemsByQueueId.has(queueId)) itemsByQueueId.set(queueId, []);
     itemsByQueueId.get(queueId).push({
       ...row,
+      actionKind: normalizeSharedDebtQueueActionKind(row.action_kind),
       amountFormatted: formatBRLFromCents(Number(row.amount_cents || 0)),
       txnDateLabel: row.source_txn_date_snapshot ? formatDateBR(row.source_txn_date_snapshot) : null
     });
@@ -9122,7 +10842,10 @@ function sendSharedDebtDraftQueue(userId, queueId) {
     WHERE queue_id = ?
       AND cancelled_at IS NULL
     ORDER BY COALESCE(source_txn_date_snapshot, '') ASC, id ASC
-  `).all(cleanQueueId);
+  `).all(cleanQueueId).map((item) => ({
+    ...item,
+    action_kind: normalizeSharedDebtQueueActionKind(item.action_kind)
+  }));
 
   if (!queueItems.length) {
     refreshSharedDebtSendQueue(cleanQueueId);
@@ -9131,34 +10854,30 @@ function sendSharedDebtDraftQueue(userId, queueId) {
     throw error;
   }
 
-  const conflictingItem = queueItems.find((item) => db.prepare(`
-    SELECT 1
-    FROM shared_debt_requests
-    WHERE requester_user_id = ?
-      AND request_kind = 'card'
-      AND status <> 'cancelled'
-      AND source_transaction_id = ?
-      AND source_person_id = ?
-    LIMIT 1
-  `).get(userId, item.source_transaction_id, item.source_person_id));
-
-  if (conflictingItem) {
-    const error = new Error('Uma dessas compras já ganhou cobrança real antes de você apertar enviar. Revise esse rascunho e tenta de novo.');
-    error.code = 'QUEUE_CONFLICT';
-    throw error;
-  }
-
   const requesterPerson = getOwnerPerson(userId);
   const actor = getUserRecord(userId);
   const requesterDisplayName = requesterPerson?.name || actor?.name || actor?.email || 'Um usuário';
   const now = nowIso();
-  const batchId = createSharedDebtBatch({
-    requesterUserId: userId,
-    receiverUserId: queueRow.receiver_user_id,
-    originKind: queueItems.length > 1 ? 'multiple' : 'single',
-    createdAt: now
+  const notificationContext = createSharedDebtSyncContext(userId, {
+    originKind: queueItems.length > 1 ? 'multiple' : 'single'
   });
+  notificationContext.requesterDisplayName = requesterDisplayName;
 
+  const loadTargetRequest = db.prepare(`
+    SELECT *
+    FROM shared_debt_requests
+    WHERE id = ? AND requester_user_id = ?
+    LIMIT 1
+  `);
+  const loadCurrentAllocation = db.prepare(`
+    SELECT a.id
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    WHERE a.user_id = ?
+      AND a.transaction_id = ?
+      AND a.person_id = ?
+    LIMIT 1
+  `);
   const insertRequest = db.prepare(`
     INSERT INTO shared_debt_requests (
       requester_user_id, requester_person_id, receiver_user_id, source_person_id,
@@ -9167,6 +10886,30 @@ function sendSharedDebtDraftQueue(userId, queueId) {
       receiver_email_snapshot, receiver_name_snapshot, request_note, response_note,
       status, batch_id, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'pending', ?, ?, ?)
+  `);
+  const updateRequest = db.prepare(`
+    UPDATE shared_debt_requests
+    SET requester_person_id = ?,
+        receiver_user_id = ?,
+        source_person_id = ?,
+        source_allocation_id = ?,
+        source_due_month = ?,
+        source_due_year = ?,
+        source_txn_date_snapshot = ?,
+        card_id = ?,
+        card_name_snapshot = ?,
+        description_snapshot = ?,
+        amount_cents = ?,
+        receiver_email_snapshot = ?,
+        receiver_name_snapshot = ?,
+        batch_id = ?,
+        updated_at = ?
+    WHERE id = ? AND requester_user_id = ?
+  `);
+  const cancelRequest = db.prepare(`
+    UPDATE shared_debt_requests
+    SET status = 'cancelled', updated_at = ?, resolved_at = COALESCE(resolved_at, ?)
+    WHERE id = ? AND requester_user_id = ? AND status = 'pending'
   `);
   const updateQueue = db.prepare(`
     UPDATE shared_debt_send_queues
@@ -9182,73 +10925,183 @@ function sendSharedDebtDraftQueue(userId, queueId) {
     WHERE id = ?
   `);
 
-  const createdRequestIds = [];
+  const requestIds = [];
+  const affectedBatchIds = new Set();
+  const actionCounts = { create: 0, update: 0, cancel: 0 };
+
   db.transaction(() => {
     queueItems.forEach((item) => {
-      const currentAllocation = db.prepare(`
-        SELECT a.id
-        FROM allocations a
-        JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
-        WHERE a.user_id = ?
-          AND a.transaction_id = ?
-          AND a.person_id = ?
-        LIMIT 1
-      `).get(userId, item.source_transaction_id, item.source_person_id);
+      const actionKind = normalizeSharedDebtQueueActionKind(item.action_kind);
 
-      const info = insertRequest.run(
-        userId,
-        requesterPerson?.id || null,
-        queueRow.receiver_user_id,
-        item.source_person_id,
-        item.source_transaction_id,
-        Number(currentAllocation?.id || item.source_allocation_id || 0) || null,
-        item.source_due_month,
-        item.source_due_year,
-        item.source_txn_date_snapshot || null,
-        Number(item.card_id || 0) || null,
-        item.card_name_snapshot || null,
-        item.description_snapshot,
-        Number(item.amount_cents || 0),
-        item.receiver_email_snapshot || queueRow.receiver_email_snapshot || null,
-        item.receiver_name_snapshot || queueRow.receiver_name_snapshot || null,
+      if (actionKind === 'create') {
+        const batchId = Number(getOrCreateSharedDebtBatchId(notificationContext, queueRow.receiver_user_id) || createSharedDebtBatch({
+          requesterUserId: userId,
+          receiverUserId: queueRow.receiver_user_id,
+          originKind: queueItems.length > 1 ? 'multiple' : 'single',
+          createdAt: now
+        }));
+
+        const currentAllocation = loadCurrentAllocation.get(userId, item.source_transaction_id, item.source_person_id);
+        const info = insertRequest.run(
+          userId,
+          requesterPerson?.id || null,
+          queueRow.receiver_user_id,
+          item.source_person_id,
+          item.source_transaction_id,
+          Number(currentAllocation?.id || item.source_allocation_id || 0) || null,
+          item.source_due_month,
+          item.source_due_year,
+          item.source_txn_date_snapshot || null,
+          Number(item.card_id || 0) || null,
+          item.card_name_snapshot || null,
+          item.description_snapshot,
+          Number(item.amount_cents || 0),
+          item.receiver_email_snapshot || queueRow.receiver_email_snapshot || null,
+          item.receiver_name_snapshot || queueRow.receiver_name_snapshot || null,
+          batchId,
+          now,
+          now
+        );
+
+        const requestId = Number(info.lastInsertRowid);
+        requestIds.push(requestId);
+        actionCounts.create += 1;
+        affectedBatchIds.add(batchId);
+        updateQueueItem.run(requestId, now, item.id);
+        addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'created' });
+        recordSharedDebtBatchChange(notificationContext, {
+          batchId,
+          receiverUserId: queueRow.receiver_user_id,
+          receiverName: item.receiver_name_snapshot || queueRow.receiver_name_snapshot || null,
+          requestId,
+          kind: 'created',
+          amountCents: Number(item.amount_cents || 0),
+          description: item.description_snapshot
+        });
+        return;
+      }
+
+      const targetRequestId = Number(item.target_request_id || item.sent_request_id || 0);
+      const targetRequest = loadTargetRequest.get(targetRequestId, userId);
+      if (!targetRequest) {
+        const error = new Error('Uma dessas pendências mudou antes do envio manual. Revise a caixa de saída e tenta de novo.');
+        error.code = 'QUEUE_TARGET_MISSING';
+        throw error;
+      }
+
+      const currentStatus = String(targetRequest.status || '').trim().toLowerCase();
+      const baselineStatus = String(item.baseline_status_snapshot || 'pending').trim().toLowerCase() || 'pending';
+      if (currentStatus !== baselineStatus || currentStatus !== 'pending') {
+        const error = new Error('Uma dessas pendências saiu do ponto em que o rascunho foi montado. Revise a caixa de saída antes de enviar.');
+        error.code = 'QUEUE_TARGET_STALE';
+        throw error;
+      }
+
+      if (actionKind === 'update') {
+        const currentAllocation = loadCurrentAllocation.get(userId, item.source_transaction_id, item.source_person_id);
+        const existingBatchId = Number(targetRequest.batch_id || 0);
+        let nextBatchId = existingBatchId;
+        if (!nextBatchId || batchHasStartedResponse(existingBatchId)) {
+          nextBatchId = Number(getOrCreateSharedDebtBatchId(notificationContext, Number(targetRequest.receiver_user_id || item.receiver_user_id || queueRow.receiver_user_id)) || createSharedDebtBatch({
+            requesterUserId: userId,
+            receiverUserId: Number(targetRequest.receiver_user_id || item.receiver_user_id || queueRow.receiver_user_id),
+            originKind: queueItems.length > 1 ? 'multiple' : 'single',
+            createdAt: now
+          }));
+        }
+
+        updateRequest.run(
+          requesterPerson?.id || null,
+          Number(targetRequest.receiver_user_id || item.receiver_user_id || queueRow.receiver_user_id),
+          item.source_person_id,
+          Number(currentAllocation?.id || item.source_allocation_id || 0) || null,
+          item.source_due_month,
+          item.source_due_year,
+          item.source_txn_date_snapshot || null,
+          Number(item.card_id || 0) || null,
+          item.card_name_snapshot || null,
+          item.description_snapshot,
+          Number(item.amount_cents || 0),
+          item.receiver_email_snapshot || targetRequest.receiver_email_snapshot || null,
+          item.receiver_name_snapshot || targetRequest.receiver_name_snapshot || null,
+          nextBatchId || null,
+          now,
+          targetRequestId,
+          userId
+        );
+
+        requestIds.push(targetRequestId);
+        actionCounts.update += 1;
+        updateQueueItem.run(targetRequestId, now, item.id);
+        addSharedDebtEvent({
+          requestId: targetRequestId,
+          actorUserId: userId,
+          eventType: 'updated',
+          note: nextBatchId !== existingBatchId
+            ? 'Solicitação atualizada pela caixa de saída em um novo envio.'
+            : 'Solicitação atualizada pela caixa de saída.'
+        });
+
+        if (existingBatchId) affectedBatchIds.add(existingBatchId);
+        if (nextBatchId) affectedBatchIds.add(nextBatchId);
+        recordSharedDebtBatchChange(notificationContext, {
+          batchId: nextBatchId || existingBatchId,
+          receiverUserId: Number(targetRequest.receiver_user_id || item.receiver_user_id || queueRow.receiver_user_id),
+          receiverName: item.receiver_name_snapshot || targetRequest.receiver_name_snapshot || queueRow.receiver_name_snapshot || null,
+          requestId: targetRequestId,
+          kind: 'updated',
+          amountCents: Number(item.amount_cents || 0),
+          description: item.description_snapshot
+        });
+        return;
+      }
+
+      const cancelInfo = cancelRequest.run(now, now, targetRequestId, userId);
+      if (!Number(cancelInfo.changes || 0)) {
+        const error = new Error('Uma dessas pendências saiu do ponto em que o rascunho foi montado. Revise a caixa de saída antes de enviar.');
+        error.code = 'QUEUE_TARGET_CANCEL_STALE';
+        throw error;
+      }
+
+      requestIds.push(targetRequestId);
+      actionCounts.cancel += 1;
+      updateQueueItem.run(targetRequestId, now, item.id);
+      addSharedDebtEvent({
+        requestId: targetRequestId,
+        actorUserId: userId,
+        eventType: 'cancelled',
+        note: 'Solicitação cancelada a partir da caixa de saída.'
+      });
+
+      const batchId = Number(targetRequest.batch_id || 0);
+      if (batchId) affectedBatchIds.add(batchId);
+      recordSharedDebtBatchChange(notificationContext, {
         batchId,
-        now,
-        now
-      );
-
-      const requestId = Number(info.lastInsertRowid);
-      createdRequestIds.push(requestId);
-      updateQueueItem.run(requestId, now, item.id);
-      addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'created' });
+        receiverUserId: Number(targetRequest.receiver_user_id || queueRow.receiver_user_id),
+        receiverName: targetRequest.receiver_name_snapshot || queueRow.receiver_name_snapshot || null,
+        requestId: targetRequestId,
+        kind: 'cancelled',
+        amountCents: Number(targetRequest.amount_cents || item.amount_cents || 0),
+        description: targetRequest.description_snapshot || item.description_snapshot
+      });
     });
 
-    updateQueue.run(now, batchId, now, cleanQueueId);
+    const primaryBatchId = Array.from(affectedBatchIds).find(Boolean) || null;
+    updateQueue.run(now, primaryBatchId, now, cleanQueueId);
   })();
 
-  refreshSharedDebtBatch(batchId, now);
-  createNotification({
-    userId: queueRow.receiver_user_id,
-    type: 'shared_debt_batch',
-    title: 'Chegou um novo envio compartilhado',
-    body: buildSharedDebtBatchNotificationBody({
-      requesterDisplayName,
-      actionLabel: 'enviou',
-      itemCount: queueItems.length,
-      totalCents: Number(queueRow.total_cents || 0),
-      descriptions: queueItems.map((item) => item.description_snapshot)
-    }),
-    href: `/shared-debts?batch=${batchId}`,
-    relatedType: 'shared_debt_batch',
-    relatedId: batchId,
-    groupKey: 'shared_debt_new'
+  affectedBatchIds.forEach((batchId) => {
+    if (batchId) refreshSharedDebtBatch(batchId, now);
   });
+  flushSharedDebtBatchNotifications(notificationContext);
 
   return {
     queueRow,
-    batchId,
-    requestIds: createdRequestIds,
+    batchIds: Array.from(affectedBatchIds).filter(Boolean),
+    requestIds,
     itemCount: queueItems.length,
-    totalCents: Number(queueRow.total_cents || 0)
+    totalCents: Number(queueRow.total_cents || 0),
+    actionCounts
   };
 }
 
@@ -9285,19 +11138,10 @@ function discardSharedDebtDraftQueue(userId, queueId) {
 
 function applySharedDebtDispatchModeForTransactions(userId, targetRows, options = {}) {
   const rows = dedupeTxnRows(targetRows);
-  const deliveryMode = normalizeSharedDebtDispatchMode(options?.deliveryMode);
-  if (deliveryMode === 'draft') {
-    return {
-      deliveryMode,
-      summary: queueSharedDebtDraftsForTransactions(userId, rows)
-    };
-  }
-
-  clearDraftSharedDebtSendQueueItemsForTransactions(userId, rows.map((row) => Number(row.id || 0)));
-  syncSharedDebtRequestsForTransactions(userId, rows.map((row) => row.id), {
-    originKind: options?.originKind || detectSharedDebtOriginKindFromRows(rows)
-  });
-  return { deliveryMode, summary: null };
+  return {
+    deliveryMode: 'draft',
+    summary: queueSharedDebtDraftsForTransactions(userId, rows)
+  };
 }
 
 function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) {
@@ -9450,11 +11294,19 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
               description: txn.description
             });
           } else {
+            const resolvedMessage = resolveCatalogText('notification.shared_debt.single.updated', {
+              remetente: requesterDisplayName,
+              valor: formatBRLFromCents(row.share_cents),
+              descricao: txn.description
+            }, {
+              fallbackTitle: 'Uma cobrança compartilhada foi atualizada',
+              fallbackBody: `${requesterDisplayName} ajustou a cobrança de ${formatBRLFromCents(row.share_cents)} (${txn.description}).`
+            });
             createNotification({
               userId: row.receiver_user_id,
               type: 'shared_debt_request',
-              title: 'Uma cobrança compartilhada foi atualizada',
-              body: `${requesterDisplayName} ajustou a cobrança de ${formatBRLFromCents(row.share_cents)} (${txn.description}).`,
+              title: resolvedMessage.title,
+              body: resolvedMessage.body,
               href: `/shared-debts?request=${existing.id}`,
               relatedType: 'shared_debt_request',
               relatedId: existing.id,
@@ -9525,11 +11377,19 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
               description: txn.description
             });
           } else {
+            const resolvedMessage = resolveCatalogText('notification.shared_debt.single.created', {
+              remetente: requesterDisplayName,
+              valor: formatBRLFromCents(row.share_cents),
+              descricao: txn.description
+            }, {
+              fallbackTitle: 'Chegou uma cobrança compartilhada',
+              fallbackBody: `${requesterDisplayName} te enviou uma cobrança de ${formatBRLFromCents(row.share_cents)} (${txn.description}).`
+            });
             createNotification({
               userId: row.receiver_user_id,
               type: 'shared_debt_request',
-              title: 'Chegou uma cobrança compartilhada',
-              body: `${requesterDisplayName} te enviou uma cobrança de ${formatBRLFromCents(row.share_cents)} (${txn.description}).`,
+              title: resolvedMessage.title,
+              body: resolvedMessage.body,
               href: `/shared-debts?request=${requestId}`,
               relatedType: 'shared_debt_request',
               relatedId: requestId,
@@ -9627,6 +11487,65 @@ function getTransactionScopeRow(userId, txnId) {
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
     WHERE t.id = ? AND t.user_id = ?
   `).get(txnId, userId);
+}
+
+
+function getImportOverwriteTargetRow(userId, txnId) {
+  return db.prepare(`
+    SELECT t.id, t.user_id, t.import_id, t.card_id, t.txn_date, t.description, t.amount_cents, t.card_number, t.raw_json,
+           t.due_month, t.due_year, t.parent_txn_id, t.recurring_rule_id, t.purchase_category_id, t.created_at,
+           COALESCE(t.due_month, i.month) AS month,
+           COALESCE(t.due_year, i.year) AS year,
+           pc.name AS purchase_category_name
+    FROM transactions t
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
+    WHERE t.id = ? AND t.user_id = ?
+  `).get(txnId, userId);
+}
+
+function buildImportOverwriteAuditSnapshot(userId, txnRow, extra = {}) {
+  if (!txnRow || !txnRow.id) return null;
+  const allocations = getAllocationRowsByTransactionIds(userId, [txnRow.id]).get(Number(txnRow.id || 0)) || [];
+  const sharedDebtRequestCount = Number(db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM shared_debt_requests
+    WHERE requester_user_id = ? AND source_transaction_id = ?
+  `).get(userId, txnRow.id)?.total || 0);
+  const sharedDebtDraftCount = Number(db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM shared_debt_send_queue_items
+    WHERE requester_user_id = ? AND source_transaction_id = ?
+  `).get(userId, txnRow.id)?.total || 0);
+
+  return {
+    transaction: {
+      id: Number(txnRow.id || 0),
+      user_id: Number(txnRow.user_id || userId),
+      import_id: Number(txnRow.import_id || 0) || null,
+      card_id: Number(txnRow.card_id || 0) || null,
+      txn_date: String(txnRow.txn_date || '').trim() || null,
+      description: String(txnRow.description || '').trim() || null,
+      amount_cents: Number(txnRow.amount_cents || 0),
+      card_number: normalizeImportCardNumber(txnRow.card_number) || null,
+      raw_json: txnRow.raw_json || null,
+      due_month: Number(txnRow.due_month || 0) || null,
+      due_year: Number(txnRow.due_year || 0) || null,
+      month: Number(txnRow.month || 0) || null,
+      year: Number(txnRow.year || 0) || null,
+      purchase_category_id: Number(txnRow.purchase_category_id || 0) || null,
+      purchase_category_name: String(txnRow.purchase_category_name || '').trim() || null,
+      parent_txn_id: Number(txnRow.parent_txn_id || 0) || null,
+      recurring_rule_id: Number(txnRow.recurring_rule_id || 0) || null,
+      created_at: txnRow.created_at || null
+    },
+    allocations,
+    shared_debt: {
+      request_count: sharedDebtRequestCount,
+      draft_count: sharedDebtDraftCount
+    },
+    ...extra
+  };
 }
 
 function hasFutureInstallments(userId, txnRow) {
@@ -9819,6 +11738,19 @@ function formatInstallmentDescription(baseDescription, position, total) {
   const normalizedPosition = Math.min(normalizedTotal, Math.max(1, Number(position || 1)));
   if (normalizedTotal <= 1) return cleanBase;
   return `${cleanBase} (${String(normalizedPosition).padStart(2, '0')}/${String(normalizedTotal).padStart(2, '0')})`;
+}
+
+
+function buildImportOverwriteDescription(userId, txnRow, nextBaseDescription) {
+  const cleanBaseDescription = String(nextBaseDescription || '').trim() || '(sem descricao)';
+  if (!txnRow || !txnRow.id) return cleanBaseDescription;
+
+  const installmentChain = getInstallmentChainRows(userId, txnRow);
+  if (!installmentChain.length) return cleanBaseDescription;
+
+  const currentIndex = installmentChain.findIndex((row) => Number(row.id || 0) === Number(txnRow.id || 0));
+  if (currentIndex < 0 || installmentChain.length <= 1) return cleanBaseDescription;
+  return formatInstallmentDescription(cleanBaseDescription, currentIndex + 1, installmentChain.length);
 }
 
 function getEditableTransactionScopeRows(userId, txnRow, scope = 'single') {
@@ -10629,6 +12561,955 @@ function getAcceptedSharedDebtSummaryForMonth(userId, month, year) {
 }
 
 
+
+function getSharedDebtCardDetailBreakdownForMonth(userId, month, year, scope = 'owed') {
+  const safeUserId = Number(userId || 0);
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  if (!safeUserId || !safeMonth || !safeYear) {
+    return { totalCents: 0, itemCount: 0, settlementCount: 0 };
+  }
+
+  const roleColumn = scope === 'owed' ? 'receiver_user_id' : 'requester_user_id';
+  const pairRows = db.prepare(`
+    SELECT DISTINCT r.requester_user_id, r.receiver_user_id
+    FROM shared_debt_requests r
+    LEFT JOIN transactions t ON t.id = r.source_transaction_id AND t.user_id = r.requester_user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE r.${roleColumn} = ?
+      AND COALESCE(r.request_kind, 'card') = 'card'
+      AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
+      AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
+      AND r.status IN ('accepted', 'settled')
+  `).all(safeUserId, safeMonth, safeYear);
+
+  return pairRows.reduce((acc, row) => {
+    const snapshot = getSharedDebtCardMonthlySettlementSnapshot({
+      requesterUserId: row.requester_user_id,
+      receiverUserId: row.receiver_user_id,
+      month: safeMonth,
+      year: safeYear
+    });
+
+    if (!snapshot || Number(snapshot.openCents || 0) <= 0) {
+      return acc;
+    }
+
+    const openCents = Math.max(0, Number(snapshot.openCents || 0));
+    const preview = buildSharedDebtCardMonthlyIntentPreview(snapshot, openCents, {
+      maxAmountCents: openCents
+    });
+
+    acc.totalCents += openCents;
+    acc.itemCount += Math.max(1, Number(preview?.touchedCount || 0));
+    acc.settlementCount += 1;
+    return acc;
+  }, { totalCents: 0, itemCount: 0, settlementCount: 0 });
+}
+
+function buildSharedDebtDetailPayStatus(summary = {}) {
+  const pendingReceivedCount = Math.max(0, Number(summary.pendingReceivedCount || 0));
+  const manualOwedCount = Math.max(0, Number(summary.manual?.owedCount || 0));
+  const cardOwedCount = Math.max(0, Number(summary.card?.owedItemCount || 0));
+  const totalOwedCents = Math.max(0, Number(summary.pay?.amountCents || 0));
+
+  if (pendingReceivedCount > 0) {
+    return {
+      tone: 'warning',
+      label: pendingReceivedCount === 1
+        ? '1 envio ainda aguarda sua decisão.'
+        : `${pendingReceivedCount} envios ainda aguardam sua decisão.`
+    };
+  }
+
+  if (totalOwedCents > 0) {
+    if (manualOwedCount > 0 && cardOwedCount > 0) {
+      return {
+        tone: 'info',
+        label: 'Tem combinado avulso e cartão batendo ponto aqui.'
+      };
+    }
+
+    if (cardOwedCount > 0) {
+      return {
+        tone: 'info',
+        label: cardOwedCount === 1
+          ? '1 item do cartão segue em aberto.'
+          : `${cardOwedCount} itens do cartão seguem em aberto.`
+      };
+    }
+
+    return {
+      tone: 'info',
+      label: manualOwedCount === 1
+        ? '1 combinado ainda segue em aberto.'
+        : `${manualOwedCount} combinados ainda seguem em aberto.`
+    };
+  }
+
+  return {
+    tone: 'success',
+    label: 'Nada puxando seu mês desse lado.'
+  };
+}
+
+function buildSharedDebtDetailReceiveStatus(summary = {}) {
+  const pendingReceiptConfirmationCount = Math.max(0, Number(summary.pendingReceiptConfirmationCount || 0));
+  const senderDecisionCount = Math.max(0, Number(summary.senderDecisionCount || 0));
+  const pendingSentCount = Math.max(0, Number(summary.pendingSentCount || 0));
+  const manualReceivableCount = Math.max(0, Number(summary.manual?.receivableCount || 0));
+  const privateActiveCount = Math.max(0, Number(summary.manual?.privateActiveCount || 0));
+  const cardReceivableCount = Math.max(0, Number(summary.card?.receivableItemCount || 0));
+  const totalReceivableCents = Math.max(0, Number(summary.receive?.amountCents || 0));
+
+  if (pendingReceiptConfirmationCount > 0) {
+    return {
+      tone: 'warning',
+      label: pendingReceiptConfirmationCount === 1
+        ? '1 pagamento já pode receber seu ok.'
+        : `${pendingReceiptConfirmationCount} pagamentos já podem receber seu ok.`
+    };
+  }
+
+  if (senderDecisionCount > 0) {
+    return {
+      tone: 'warning',
+      label: senderDecisionCount === 1
+        ? '1 recusa pede sua decisão.'
+        : `${senderDecisionCount} recusas pedem sua decisão.`
+    };
+  }
+
+  if (pendingSentCount > 0) {
+    return {
+      tone: 'info',
+      label: pendingSentCount === 1
+        ? '1 envio ainda aguarda aceite.'
+        : `${pendingSentCount} envios ainda aguardam aceite.`
+    };
+  }
+
+  if (totalReceivableCents > 0) {
+    if (!manualReceivableCount && !cardReceivableCount && privateActiveCount > 0) {
+      return {
+        tone: 'info',
+        label: privateActiveCount === 1
+          ? '1 lembrete privado segue no seu radar.'
+          : `${privateActiveCount} lembretes privados seguem no seu radar.`
+      };
+    }
+
+    if ((manualReceivableCount + privateActiveCount) > 0 && cardReceivableCount > 0) {
+      return {
+        tone: 'info',
+        label: 'Tem avulsas e cartão rodando daqui.'
+      };
+    }
+
+    if (cardReceivableCount > 0) {
+      return {
+        tone: 'info',
+        label: cardReceivableCount === 1
+          ? '1 item do cartão segue esperando acerto.'
+          : `${cardReceivableCount} itens do cartão seguem esperando acerto.`
+      };
+    }
+
+    const manualLikeCount = manualReceivableCount + privateActiveCount;
+    return {
+      tone: 'info',
+      label: manualLikeCount === 1
+        ? '1 cobrança segue em aberto daqui.'
+        : `${manualLikeCount} cobranças seguem em aberto daqui.`
+    };
+  }
+
+  return {
+    tone: 'success',
+    label: 'Nada pendurado do lado de cá.'
+  };
+}
+
+function getSharedDebtDetailModuleSummary(userId, month, year) {
+  const safeUserId = Number(userId || 0);
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+
+  if (!safeUserId || !safeMonth || !safeYear) {
+    return {
+      hasAnySignal: false,
+      headerHref: '/shared-debts',
+      pay: { amountCents: 0, count: 0, href: '/shared-debts#received', ctaLabel: 'Ver recebidas', status: { tone: 'success', label: 'Nada puxando seu mês desse lado.' } },
+      receive: { amountCents: 0, count: 0, href: '/shared-debts#sent', ctaLabel: 'Ver enviadas', status: { tone: 'success', label: 'Nada pendurado do lado de cá.' } },
+      manual: { owedCents: 0, receivableCents: 0, owedCount: 0, receivableCount: 0, bilateralCount: 0, privateActiveCents: 0, privateActiveCount: 0, totalCount: 0, href: '/shared-debts' },
+      card: { owedCents: 0, receivableCents: 0, owedItemCount: 0, receivableItemCount: 0, itemCount: 0, settlementCount: 0, href: '/shared-debts' },
+      chips: []
+    };
+  }
+
+  const manualOwedRow = db.prepare(`
+    SELECT
+      COUNT(*) AS total_requests,
+      COALESCE(SUM(CASE
+        WHEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0)) > 0 THEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0))
+        ELSE 0
+      END), 0) AS total_cents
+    FROM shared_debt_requests r
+    WHERE r.receiver_user_id = ?
+      AND COALESCE(r.request_kind, 'card') = 'manual'
+      AND r.status = 'accepted'
+  `).get(safeUserId) || { total_requests: 0, total_cents: 0 };
+
+  const manualReceivableRow = db.prepare(`
+    SELECT
+      COUNT(*) AS total_requests,
+      COALESCE(SUM(CASE
+        WHEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0)) > 0 THEN (r.amount_cents - COALESCE(r.amount_paid_cents, 0))
+        ELSE 0
+      END), 0) AS total_cents
+    FROM shared_debt_requests r
+    WHERE r.requester_user_id = ?
+      AND COALESCE(r.request_kind, 'card') = 'manual'
+      AND r.status = 'accepted'
+  `).get(safeUserId) || { total_requests: 0, total_cents: 0 };
+
+  const cardOwed = getSharedDebtCardDetailBreakdownForMonth(safeUserId, safeMonth, safeYear, 'owed');
+  const cardReceivable = getSharedDebtCardDetailBreakdownForMonth(safeUserId, safeMonth, safeYear, 'receivable');
+  const privateReminderSummary = getPrivateDebtReminderDashboardSummary(safeUserId);
+
+  const pendingReceivedCount = db.prepare(`
+    SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS total
+    FROM shared_debt_requests
+    WHERE receiver_user_id = ?
+      AND status = 'pending'
+  `).get(safeUserId)?.total || 0;
+
+  const pendingSentCount = db.prepare(`
+    SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS total
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND status = 'pending'
+  `).get(safeUserId)?.total || 0;
+
+  const senderDecisionCount = db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND status = 'rejected_by_receiver'
+  `).get(safeUserId)?.total || 0;
+
+  const legacyPendingReceiptConfirmationCount = db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND status = 'accepted'
+      AND payment_marked_at IS NOT NULL
+  `).get(safeUserId)?.total || 0;
+
+  const monthlyPendingReceiptConfirmationCount = db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM shared_debt_payment_intents
+    WHERE requester_user_id = ?
+      AND request_kind = 'card'
+      AND status = 'reported'
+  `).get(safeUserId)?.total || 0;
+
+  const pendingReceiptConfirmationCount = legacyPendingReceiptConfirmationCount + monthlyPendingReceiptConfirmationCount;
+
+  const manualOwedCount = Math.max(0, Number(manualOwedRow.total_requests || 0));
+  const manualReceivableCount = Math.max(0, Number(manualReceivableRow.total_requests || 0));
+  const manualOwedCents = Math.max(0, Number(manualOwedRow.total_cents || 0));
+  const manualReceivableCents = Math.max(0, Number(manualReceivableRow.total_cents || 0));
+  const privateActiveCount = Math.max(0, Number(privateReminderSummary.activeCount || 0));
+  const privateActiveCents = Math.max(0, Number(privateReminderSummary.activeCents || 0));
+  const cardOwedCents = Math.max(0, Number(cardOwed.totalCents || 0));
+  const cardReceivableCents = Math.max(0, Number(cardReceivable.totalCents || 0));
+  const cardOwedCount = Math.max(0, Number(cardOwed.itemCount || 0));
+  const cardReceivableCount = Math.max(0, Number(cardReceivable.itemCount || 0));
+
+  const summary = {
+    headerHref: '/shared-debts',
+    pendingReceivedCount: Math.max(0, Number(pendingReceivedCount || 0)),
+    pendingSentCount: Math.max(0, Number(pendingSentCount || 0)),
+    senderDecisionCount: Math.max(0, Number(senderDecisionCount || 0)),
+    pendingReceiptConfirmationCount: Math.max(0, Number(pendingReceiptConfirmationCount || 0)),
+    pay: {
+      amountCents: manualOwedCents + cardOwedCents,
+      count: manualOwedCount + cardOwedCount,
+      href: '/shared-debts#received',
+      ctaLabel: 'Ver recebidas'
+    },
+    receive: {
+      amountCents: manualReceivableCents + cardReceivableCents + privateActiveCents,
+      count: manualReceivableCount + cardReceivableCount + privateActiveCount,
+      href: (manualReceivableCount + cardReceivableCount + pendingSentCount + senderDecisionCount + pendingReceiptConfirmationCount) > 0
+        ? '/shared-debts#sent'
+        : (privateActiveCount > 0 ? '/shared-debts#private-reminders' : '/shared-debts#sent'),
+      ctaLabel: (manualReceivableCount + cardReceivableCount + pendingSentCount + senderDecisionCount + pendingReceiptConfirmationCount) > 0
+        ? 'Ver enviadas'
+        : (privateActiveCount > 0 ? 'Ver privadas' : 'Ver enviadas')
+    },
+    manual: {
+      owedCents: manualOwedCents,
+      receivableCents: manualReceivableCents + privateActiveCents,
+      owedCount: manualOwedCount,
+      receivableCount: manualReceivableCount,
+      bilateralCount: manualOwedCount + manualReceivableCount,
+      privateActiveCents,
+      privateActiveCount,
+      totalCount: manualOwedCount + manualReceivableCount + privateActiveCount,
+      href: '/shared-debts'
+    },
+    card: {
+      owedCents: cardOwedCents,
+      receivableCents: cardReceivableCents,
+      owedItemCount: cardOwedCount,
+      receivableItemCount: cardReceivableCount,
+      itemCount: cardOwedCount + cardReceivableCount,
+      settlementCount: Math.max(0, Number(cardOwed.settlementCount || 0)) + Math.max(0, Number(cardReceivable.settlementCount || 0)),
+      href: '/shared-debts'
+    },
+    chips: []
+  };
+
+  summary.pay.status = buildSharedDebtDetailPayStatus(summary);
+  summary.receive.status = buildSharedDebtDetailReceiveStatus(summary);
+
+  summary.hasAnySignal = summary.pay.amountCents > 0
+    || summary.receive.amountCents > 0
+    || summary.pendingReceivedCount > 0
+    || summary.pendingSentCount > 0
+    || summary.senderDecisionCount > 0
+    || summary.pendingReceiptConfirmationCount > 0;
+
+  if (summary.pendingReceivedCount > 0) {
+    summary.chips.push({
+      tone: 'warning',
+      label: summary.pendingReceivedCount === 1 ? '1 aguardando decisão' : `${summary.pendingReceivedCount} aguardando decisão`,
+      href: '/shared-debts#received'
+    });
+  }
+
+  if (summary.pendingReceiptConfirmationCount > 0) {
+    summary.chips.push({
+      tone: 'warning',
+      label: summary.pendingReceiptConfirmationCount === 1 ? '1 pronto para confirmar' : `${summary.pendingReceiptConfirmationCount} prontos para confirmar`,
+      href: '/shared-debts#sent'
+    });
+  }
+
+  if (summary.senderDecisionCount > 0) {
+    summary.chips.push({
+      tone: 'info',
+      label: summary.senderDecisionCount === 1 ? '1 recusa pedindo decisão' : `${summary.senderDecisionCount} recusas pedindo decisão`,
+      href: '/shared-debts#sent'
+    });
+  }
+
+  if (summary.manual.privateActiveCount > 0) {
+    summary.chips.push({
+      tone: 'info',
+      label: summary.manual.privateActiveCount === 1 ? '1 privado no radar' : `${summary.manual.privateActiveCount} privados no radar`,
+      href: '/shared-debts#private-reminders'
+    });
+  }
+
+  if (!summary.chips.length && summary.pendingSentCount > 0) {
+    summary.chips.push({
+      tone: 'info',
+      label: summary.pendingSentCount === 1 ? '1 aguardando aceite' : `${summary.pendingSentCount} aguardando aceite`,
+      href: '/shared-debts#sent'
+    });
+  }
+
+  return summary;
+}
+
+
+function getPeopleComprasComigoContact(userId, personId) {
+  const safeUserId = Number(userId || 0);
+  const safePersonId = Number(personId || 0);
+  if (!safeUserId || !safePersonId) return null;
+
+  return getPeopleAll(safeUserId).find((person) => Number(person?.id || 0) === safePersonId) || null;
+}
+
+function isPeopleComprasComigoOpenStatus(status = 'pending') {
+  const normalized = String(status || 'pending').trim().toLowerCase();
+  return ['pending', 'accepted', 'rejected_by_receiver', 'rejection_contested_by_sender'].includes(normalized);
+}
+
+function getIsoMonthRank(dateValue = null) {
+  if (!dateValue) return null;
+  const parsed = dayjs(dateValue);
+  if (!parsed.isValid()) return null;
+  return (parsed.year() * 100) + (parsed.month() + 1);
+}
+
+function getPeopleComprasComigoManualStartRank(item = {}) {
+  return getIsoMonthRank(item?.created_at || item?.source_txn_date || item?.updated_at || null);
+}
+
+function getPeopleComprasComigoManualHistoryRank(item = {}) {
+  return getIsoMonthRank(
+    item?.resolved_at
+      || item?.settled_at
+      || item?.cancelled_at
+      || item?.responded_at
+      || item?.updated_at
+      || item?.created_at
+      || null
+  );
+}
+
+function getPeopleComprasComigoCurrentRank() {
+  const now = dayjs();
+  return (now.year() * 100) + (now.month() + 1);
+}
+
+function isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item = {}, month, year, tab = 'open') {
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  if (!safeMonth || !safeYear) return false;
+
+  const requestKind = normalizeSharedDebtRequestKind(item?.request_kind);
+  const targetRank = (safeYear * 100) + safeMonth;
+  const wantsOpen = String(tab || 'open').trim().toLowerCase() !== 'history';
+  const isOpen = isPeopleComprasComigoOpenStatus(item?.status);
+
+  if (requestKind === 'card') {
+    const dueMonth = Number(item?.source_due_month || 0);
+    const dueYear = Number(item?.source_due_year || 0);
+    if (!dueMonth || !dueYear) return false;
+    const dueRank = (dueYear * 100) + dueMonth;
+    if (dueRank != targetRank) return false;
+    return wantsOpen ? isOpen : !isOpen;
+  }
+
+  const startRank = getPeopleComprasComigoManualStartRank(item);
+  if (!startRank) return false;
+
+  if (wantsOpen) {
+    if (!isOpen) return false;
+    return targetRank >= startRank;
+  }
+
+  if (isOpen) return false;
+  const historyRank = getPeopleComprasComigoManualHistoryRank(item) || startRank;
+  return historyRank === targetRank;
+}
+
+function getPeopleComprasComigoRelevantMonthRanks(items = []) {
+  const currentRank = getPeopleComprasComigoCurrentRank();
+  const ranks = new Set([currentRank]);
+
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const requestKind = normalizeSharedDebtRequestKind(item?.request_kind);
+    if (requestKind === 'card') {
+      const month = Number(item?.source_due_month || 0);
+      const year = Number(item?.source_due_year || 0);
+      if (month && year) ranks.add((year * 100) + month);
+      return;
+    }
+
+    const startRank = getPeopleComprasComigoManualStartRank(item);
+    if (startRank) ranks.add(startRank);
+
+    if (isPeopleComprasComigoOpenStatus(item?.status)) {
+      ranks.add(currentRank);
+      return;
+    }
+
+    const historyRank = getPeopleComprasComigoManualHistoryRank(item);
+    if (historyRank) ranks.add(historyRank);
+  });
+
+  return Array.from(ranks).filter(Boolean).sort((a, b) => b - a);
+}
+
+function rankToMonthYear(rank) {
+  const safeRank = Number(rank || 0);
+  if (!safeRank) return null;
+  const year = Math.floor(safeRank / 100);
+  const month = safeRank % 100;
+  if (!parseMonthYear(month, year)) return null;
+  return { year, month };
+}
+
+function getPeopleComprasComigoPrimaryActionMeta(item = {}) {
+  const requestId = Number(item?.id || 0);
+  const settlementId = Number(item?.card_monthly_settlement_id || 0);
+  const isCard = normalizeSharedDebtRequestKind(item?.request_kind) === 'card';
+  const requestHref = requestId ? `/shared-debts?request=${requestId}` : '/shared-debts';
+  const settlementHref = settlementId ? `/shared-debts?settlement=${settlementId}` : requestHref;
+  const status = String(item?.status || 'pending').trim().toLowerCase();
+
+  if (status === 'pending') {
+    return { label: 'Ver detalhes antes de responder', href: requestHref };
+  }
+
+  if (status === 'accepted') {
+    if (item?.payment_marked_at) {
+      return {
+        label: isCard && settlementId ? 'Abrir carteira do mês' : 'Abrir para acompanhar',
+        href: isCard && settlementId ? settlementHref : requestHref
+      };
+    }
+
+    return {
+      label: isCard && settlementId ? 'Abrir carteira do mês' : 'Abrir na cobrança',
+      href: isCard && settlementId ? settlementHref : requestHref
+    };
+  }
+
+  if (status === 'rejection_contested_by_sender') {
+    return { label: 'Revisar contestação', href: requestHref };
+  }
+
+  if (status === 'rejected_by_receiver') {
+    return { label: 'Acompanhar decisão', href: requestHref };
+  }
+
+  return { label: 'Abrir no histórico', href: requestHref };
+}
+
+function getPeopleComprasComigoQuickActions(item = {}) {
+  const requestId = Number(item?.id || 0);
+  if (!requestId) return [];
+
+  const requestKind = normalizeSharedDebtRequestKind(item?.request_kind);
+  const settlementId = Number(item?.card_monthly_settlement_id || 0);
+  const statusMeta = getPeopleComprasComigoStatusMeta(item);
+  const statusKey = String(statusMeta?.key || '').trim();
+  const requestHref = `/shared-debts?request=${requestId}`;
+  const settlementHref = settlementId ? `/shared-debts?settlement=${settlementId}` : requestHref;
+
+  if (statusKey === 'pending') {
+    return [
+      {
+        kind: 'form',
+        action: `/shared-debts/${requestId}/respond`,
+        fields: [{ name: 'action', value: 'accept' }],
+        label: 'Aceitar',
+        tone: 'success'
+      },
+      {
+        kind: 'form',
+        action: `/shared-debts/${requestId}/respond`,
+        fields: [{ name: 'action', value: 'reject' }],
+        label: 'Recusar',
+        tone: 'danger',
+        confirmPrompt: 'Recusar essa cobrança agora? Ela continua no radar até quem enviou decidir o próximo passo.'
+      }
+    ];
+  }
+
+  if ((statusKey === 'accepted' || statusKey === 'accepted_partial') && requestKind === 'manual') {
+    return [{
+      kind: 'form',
+      action: `/shared-debts/${requestId}/mark-paid`,
+      label: statusKey === 'accepted_partial' ? 'Informar restante pago' : 'Informar pagamento',
+      tone: 'primary'
+    }];
+  }
+
+  if ((statusKey === 'accepted' || statusKey === 'accepted_partial') && requestKind === 'card') {
+    return [{
+      kind: 'link',
+      href: settlementHref,
+      label: statusKey === 'accepted_partial' ? 'Pagar restante do mês' : 'Pagar este mês',
+      tone: 'primary'
+    }];
+  }
+
+  return [];
+}
+
+function getPeopleComprasComigoStatusMeta(item = {}) {
+  const status = String(item?.status || 'pending').trim().toLowerCase();
+  const totalCents = Math.max(0, Number(item?.amount_cents || 0));
+  const paidCents = Math.min(totalCents, Math.max(0, Number(item?.amount_paid_cents || 0)));
+
+  if (status === 'accepted' && item?.payment_marked_at) {
+    return {
+      key: 'accepted_paid_marked',
+      label: 'Pago aguardando confirmação',
+      tone: 'info',
+      classes: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200'
+    };
+  }
+
+  if (status === 'accepted' && paidCents > 0 && paidCents < totalCents) {
+    return {
+      key: 'accepted_partial',
+      label: 'Parcial',
+      tone: 'warning',
+      classes: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
+    };
+  }
+
+  switch (status) {
+    case 'accepted':
+      return {
+        key: 'accepted',
+        label: 'Pra eu pagar',
+        tone: 'success',
+        classes: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200'
+      };
+    case 'rejected_by_receiver':
+      return {
+        key: 'rejected_by_receiver',
+        label: 'Rejeição aguardando decisão',
+        tone: 'warning',
+        classes: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
+      };
+    case 'rejection_contested_by_sender':
+      return {
+        key: 'rejection_contested_by_sender',
+        label: 'Contestação em andamento',
+        tone: 'warning',
+        classes: 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-200'
+      };
+    case 'rejection_accepted_by_sender':
+      return {
+        key: 'rejection_accepted_by_sender',
+        label: 'Rejeição encerrada',
+        tone: 'muted',
+        classes: 'border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+      };
+    case 'cancelled':
+      return {
+        key: 'cancelled',
+        label: 'Cancelada',
+        tone: 'muted',
+        classes: 'border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+      };
+    case 'settled':
+      return {
+        key: 'settled',
+        label: 'Concluído',
+        tone: 'info',
+        classes: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200'
+      };
+    default:
+      return {
+        key: 'pending',
+        label: 'Aguardando meu aceite',
+        tone: 'primary',
+        classes: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200'
+      };
+  }
+}
+
+function getPeopleComprasComigoHint(item = {}, contactName = 'essa amizade') {
+  const status = String(item?.status || 'pending').trim().toLowerCase();
+  const isCard = normalizeSharedDebtRequestKind(item?.request_kind) === 'card';
+  const mediumLabel = isCard ? 'compra no cartão' : 'combinado avulso';
+
+  if (status === 'pending') {
+    return `${contactName} te envolveu nessa ${mediumLabel} e ainda falta o seu aceite.`;
+  }
+
+  if (status === 'accepted' && item?.payment_marked_at) {
+    return `Você já avisou o pagamento. Agora falta o ok final de ${contactName}.`;
+  }
+
+  if (status === 'accepted') {
+    return `Essa cobrança já foi aceita e agora o próximo passo mora no seu pagamento.`;
+  }
+
+  if (status === 'rejected_by_receiver') {
+    return `Você recusou essa cobrança e agora a bola está com ${contactName}.`;
+  }
+
+  if (status === 'rejection_contested_by_sender') {
+    return `${contactName} contestou a recusa. Se quiser revisar o contexto, é só abrir a cobrança.`;
+  }
+
+  if (status === 'rejection_accepted_by_sender') {
+    return `${contactName} aceitou a recusa e esse item saiu de cena.`;
+  }
+
+  if (status === 'cancelled') {
+    return 'Essa cobrança foi cancelada e ficou só no histórico.';
+  }
+
+  return 'Pagamento confirmado. Esse item já encerrou a conversa financeira de vocês.';
+}
+
+function decoratePeopleComprasComigoItem(item = {}, { contactName = 'essa amizade', viewedMonth = 0, viewedYear = 0 } = {}) {
+  const requestKind = normalizeSharedDebtRequestKind(item?.request_kind);
+  const statusMeta = getPeopleComprasComigoStatusMeta(item);
+  const actionMeta = getPeopleComprasComigoPrimaryActionMeta(item);
+  const quickActions = getPeopleComprasComigoQuickActions(item);
+  const totalCents = Math.max(0, Number(item?.amount_cents || 0));
+  let paidCents = Math.max(0, Number(item?.amount_paid_cents || 0));
+  if (String(item?.status || '').trim().toLowerCase() === 'settled' && paidCents < totalCents) paidCents = totalCents;
+  if (paidCents > totalCents) paidCents = totalCents;
+  const pendingCents = Math.max(0, totalCents - paidCents);
+  const createdRank = getPeopleComprasComigoManualStartRank(item);
+  const createdMonthInfo = rankToMonthYear(createdRank);
+  const historyRank = getPeopleComprasComigoManualHistoryRank(item);
+  const historyMonthInfo = rankToMonthYear(historyRank);
+  const createdAtLabel = item?.created_at ? formatDateBR(item.created_at) : null;
+  const sourceDateLabel = item?.source_txn_date ? formatDateBR(item.source_txn_date) : createdAtLabel;
+  const promisedDateLabel = item?.promised_payment_date ? formatDateBR(item.promised_payment_date) : null;
+  const paymentDateLabel = item?.payment_marked_at ? formatDateBR(item.payment_marked_at) : (item?.payment_date ? formatDateBR(item.payment_date) : null);
+  const dueLabel = item?.source_due_month && item?.source_due_year ? monthLabel(item.source_due_month, item.source_due_year) : null;
+  const viewedRank = Number(viewedYear || 0) && Number(viewedMonth || 0) ? ((Number(viewedYear) * 100) + Number(viewedMonth)) : null;
+  const isCarriedManual = requestKind === 'manual' && createdRank && viewedRank && viewedRank > createdRank && isPeopleComprasComigoOpenStatus(item?.status);
+
+  const detailPieces = [];
+  if (requestKind === 'card') {
+    detailPieces.push(item?.card_name_snapshot ? `Cartão ${item.card_name_snapshot}` : 'Compra no cartão');
+    if (dueLabel) detailPieces.push(`Fatura ${dueLabel}`);
+  } else {
+    detailPieces.push('Cobrança avulsa');
+    if (createdAtLabel) detailPieces.push(`Criada em ${createdAtLabel}`);
+  }
+
+  if (requestKind === 'manual' && isCarriedManual && createdMonthInfo) {
+    detailPieces.push(`Segue viva desde ${monthLabel(createdMonthInfo.month, createdMonthInfo.year)}`);
+  }
+
+  const metaRows = [];
+  if (sourceDateLabel) {
+    metaRows.push({ label: requestKind === 'card' ? 'Compra lançada em' : 'Criada em', value: sourceDateLabel });
+  }
+  if (promisedDateLabel) {
+    metaRows.push({ label: 'Pagamento combinado', value: promisedDateLabel });
+  }
+  if (paymentDateLabel && String(item?.status || '').trim().toLowerCase() === 'accepted' && item?.payment_marked_at) {
+    metaRows.push({ label: 'Pagamento avisado em', value: paymentDateLabel });
+  } else if (paymentDateLabel && String(item?.status || '').trim().toLowerCase() === 'settled') {
+    metaRows.push({ label: 'Fechado em', value: paymentDateLabel });
+  } else if (requestKind === 'manual' && !isPeopleComprasComigoOpenStatus(item?.status) && historyMonthInfo) {
+    metaRows.push({ label: 'Entrou no histórico em', value: monthLabel(historyMonthInfo.month, historyMonthInfo.year) });
+  }
+
+  const myActionNeeded = statusMeta.key === 'pending' || statusMeta.key === 'accepted' || statusMeta.key === 'accepted_partial';
+  const waitingOtherSide = ['accepted_paid_marked', 'rejected_by_receiver', 'rejection_contested_by_sender'].includes(statusMeta.key);
+
+  return {
+    ...item,
+    request_kind: requestKind,
+    total_cents: totalCents,
+    amount_paid_cents: paidCents,
+    amount_pending_cents: pendingCents,
+    statusMeta,
+    actionMeta,
+    quickActions,
+    detailLine: detailPieces.join(' · '),
+    hint: getPeopleComprasComigoHint(item, contactName),
+    createdMonthLabel: createdMonthInfo ? monthLabel(createdMonthInfo.month, createdMonthInfo.year) : null,
+    historyMonthLabel: historyMonthInfo ? monthLabel(historyMonthInfo.month, historyMonthInfo.year) : null,
+    metaRows,
+    sourceDateLabel,
+    promisedDateLabel,
+    paymentDateLabel,
+    isCard: requestKind === 'card',
+    isManual: requestKind === 'manual',
+    isCarriedManual,
+    myActionNeeded,
+    waitingOtherSide
+  };
+}
+
+function buildPeopleComprasComigoBadgeMap(userId, people = []) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return new Map();
+
+  const eligiblePeople = (Array.isArray(people) ? people : [])
+    .filter((person) => person && person.friendship_active && Number(person.linked_user_id || 0) > 0 && !person.is_self);
+
+  if (!eligiblePeople.length) return new Map();
+
+  const linkedUserToPersonId = new Map();
+  eligiblePeople.forEach((person) => {
+    linkedUserToPersonId.set(Number(person.linked_user_id || 0), Number(person.id || 0));
+  });
+
+  const archivedRequestIds = getSharedDebtArchivedRequestIdSet(safeUserId);
+  const counts = new Map();
+
+  getSharedDebtRequestsReceived(safeUserId).forEach((item) => {
+    const requestId = Number(item?.id || 0);
+    if (!requestId || archivedRequestIds.has(requestId)) return;
+
+    const personId = linkedUserToPersonId.get(Number(item?.requester_user_id || 0));
+    if (!personId) return;
+
+    const statusMeta = getPeopleComprasComigoStatusMeta(item);
+    const statusKey = String(statusMeta?.key || '').trim();
+    const bucket = counts.get(personId) || {
+      needsMyActionCount: 0,
+      openCount: 0,
+      waitingOtherSideCount: 0
+    };
+
+    if (isPeopleComprasComigoOpenStatus(item?.status)) bucket.openCount += 1;
+    if (['pending', 'accepted', 'accepted_partial'].includes(statusKey)) bucket.needsMyActionCount += 1;
+    else if (['accepted_paid_marked', 'rejected_by_receiver', 'rejection_contested_by_sender'].includes(statusKey)) bucket.waitingOtherSideCount += 1;
+
+    counts.set(personId, bucket);
+  });
+
+  eligiblePeople.forEach((person) => {
+    const personId = Number(person.id || 0);
+    if (!counts.has(personId)) {
+      counts.set(personId, {
+        needsMyActionCount: 0,
+        openCount: 0,
+        waitingOtherSideCount: 0
+      });
+    }
+  });
+
+  return counts;
+}
+
+function sortPeopleComprasComigoOpenItems(items = []) {
+  const priority = (item = {}) => {
+    const key = String(item?.statusMeta?.key || '').trim();
+    switch (key) {
+      case 'pending': return 0;
+      case 'accepted': return 1;
+      case 'accepted_partial': return 1;
+      case 'accepted_paid_marked': return 2;
+      case 'rejected_by_receiver': return 3;
+      case 'rejection_contested_by_sender': return 4;
+      default: return 5;
+    }
+  };
+
+  const stamp = (item = {}) => {
+    const candidates = [
+      item?.promised_payment_date,
+      item?.source_txn_date,
+      item?.created_at,
+      item?.updated_at
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+      const parsed = dayjs(candidate);
+      if (parsed.isValid()) return parsed.valueOf();
+    }
+
+    return 0;
+  };
+
+  return (Array.isArray(items) ? items.slice() : []).sort((a, b) => {
+    const weightDiff = priority(a) - priority(b);
+    if (weightDiff !== 0) return weightDiff;
+    return stamp(b) - stamp(a);
+  });
+}
+
+function sortPeopleComprasComigoHistoryItems(items = []) {
+  const historyStamp = (item = {}) => {
+    const candidates = [
+      item?.resolved_at,
+      item?.settled_at,
+      item?.cancelled_at,
+      item?.responded_at,
+      item?.updated_at,
+      item?.created_at
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+      const parsed = dayjs(candidate);
+      if (parsed.isValid()) return parsed.valueOf();
+    }
+
+    return 0;
+  };
+
+  return (Array.isArray(items) ? items.slice() : []).sort((a, b) => historyStamp(b) - historyStamp(a));
+}
+
+function buildPeopleComprasComigoLedger(userId, personId, month, year) {
+  const safeUserId = Number(userId || 0);
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  if (!safeUserId || !safeMonth || !safeYear) {
+    throw new Error('Competência inválida para abrir as compras com essa amizade.');
+  }
+
+  const contact = getPeopleComprasComigoContact(safeUserId, personId);
+  if (!contact) {
+    throw new Error('Não encontrei esse contato por aqui.');
+  }
+
+  if (!contact.friendship_active || !Number(contact.linked_user_id || 0)) {
+    throw new Error('Essa amizade ainda não está pronta para abrir as compras por aqui.');
+  }
+
+  const archivedRequestIds = getSharedDebtArchivedRequestIdSet(safeUserId);
+  const received = attachSharedDebtCardMonthlyMeta(
+    attachSharedDebtPixMeta(getSharedDebtRequestsReceived(safeUserId), safeUserId)
+  ).items.filter((item) => {
+    const requestId = Number(item?.id || 0);
+    return Number(item?.requester_user_id || 0) === Number(contact.linked_user_id || 0)
+      && !archivedRequestIds.has(requestId);
+  });
+
+  const openItems = sortPeopleComprasComigoOpenItems(
+    received
+      .filter((item) => isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, safeMonth, safeYear, 'open'))
+      .map((item) => decoratePeopleComprasComigoItem(item, { contactName: contact.name || contact.linked_user_name || 'essa amizade', viewedMonth: safeMonth, viewedYear: safeYear }))
+  );
+
+  const historyItems = sortPeopleComprasComigoHistoryItems(
+    received
+      .filter((item) => isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, safeMonth, safeYear, 'history'))
+      .map((item) => decoratePeopleComprasComigoItem(item, { contactName: contact.name || contact.linked_user_name || 'essa amizade', viewedMonth: safeMonth, viewedYear: safeYear }))
+  );
+
+  const availableRanks = getPeopleComprasComigoRelevantMonthRanks(received);
+  const summary = {
+    openAmountCents: openItems.reduce((sum, item) => {
+      if (!['pending', 'accepted', 'accepted_partial', 'accepted_paid_marked'].includes(String(item?.statusMeta?.key || ''))) return sum;
+      const amount = String(item?.statusMeta?.key || '') === 'accepted_paid_marked'
+        ? Math.max(0, Number(item?.total_cents || 0))
+        : Math.max(0, Number(item?.amount_pending_cents || item?.total_cents || 0));
+      return sum + amount;
+    }, 0),
+    needsMyActionCount: openItems.filter((item) => item?.myActionNeeded).length,
+    waitingOtherSideCount: openItems.filter((item) => item?.waitingOtherSide).length,
+    openCount: openItems.length,
+    historyCount: historyItems.length
+  };
+
+  return {
+    contact,
+    openItems,
+    historyItems,
+    availableRanks,
+    summary
+  };
+}
+
+function getPreferredPeopleComprasComigoMonth(userId, personId) {
+  const contact = getPeopleComprasComigoContact(userId, personId);
+  if (!contact || !contact.friendship_active || !Number(contact.linked_user_id || 0)) return null;
+
+  const archivedRequestIds = getSharedDebtArchivedRequestIdSet(userId);
+  const received = getSharedDebtRequestsReceived(userId).filter((item) => {
+    const requestId = Number(item?.id || 0);
+    return Number(item?.requester_user_id || 0) === Number(contact.linked_user_id || 0)
+      && !archivedRequestIds.has(requestId);
+  });
+
+  const today = dayjs();
+  const current = { year: today.year(), month: today.month() + 1 };
+  const currentHasItems = received.some((item) => isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, current.month, current.year, 'open') || isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, current.month, current.year, 'history'));
+  if (currentHasItems || !received.length) return current;
+
+  const ranks = getPeopleComprasComigoRelevantMonthRanks(received);
+  const preferred = rankToMonthYear(ranks[0]);
+  return preferred || current;
+}
+
 function normalizeSharedDebtSearchTerm(value = '') {
   return String(value || '')
     .normalize('NFD')
@@ -11008,7 +13889,7 @@ app.post('/shared-debts/draft-queues/:id/send', ensureAuthenticated, (req, res) 
 
   try {
     const result = sendSharedDebtDraftQueue(userId, queueId);
-    setFlash(req, 'success', `Pronto! ${formatCountLabel(result.itemCount, 'cobrança saiu', 'cobranças saíram')} da caixa de saída e foram para ${formatBRLFromCents(result.totalCents)} num envio só.`);
+    setFlash(req, 'success', `Pronto! ${formatCountLabel(result.itemCount, 'item saiu', 'itens saíram')} da caixa de saída e seguiram o combinado.`);
   } catch (error) {
     setFlash(req, 'error', error.message || 'Não consegui disparar esse rascunho agora.');
   }
@@ -11025,7 +13906,7 @@ app.post('/shared-debts/draft-queues/:id/discard', ensureAuthenticated, (req, re
   if (!discarded) {
     setFlash(req, 'info', 'Esse rascunho já tinha saído de cena ou não existe mais.');
   } else {
-    setFlash(req, 'success', 'Rascunho descartado. A caixa de saída ficou mais leve por aqui.');
+    setFlash(req, 'success', 'Rascunho descartado. A divisão local continuou salva por aqui.');
   }
 
   return res.redirect(fallbackRedirect);
@@ -11143,11 +14024,21 @@ app.post('/shared-debts/manual', ensureAuthenticated, (req, res) => {
   addSharedDebtEvent({ requestId, actorUserId: userId, eventType: 'created', note: note || 'Lembrete avulso enviado.' });
   refreshSharedDebtBatch(batchId, now);
 
+  const resolvedManualReminderMessage = resolveCatalogText('notification.shared_debt.single.manual_created', {
+    remetente: actorName,
+    valor: formatBRLFromCents(amountCents),
+    descricao: description,
+    nota: note || ''
+  }, {
+    fallbackTitle: 'Chegou um lembrete avulso',
+    fallbackBody: `${actorName} te enviou um lembrete de ${formatBRLFromCents(amountCents)} (${description}).${buildNoteSuffix(note, 'Recado')}`
+  });
+
   createNotification({
     userId: linkedUserId,
     type: 'shared_debt_request',
-    title: 'Chegou um lembrete avulso',
-    body: `${actorName} te enviou um lembrete de ${formatBRLFromCents(amountCents)} (${description}).${buildNoteSuffix(note, 'Recado')}`,
+    title: resolvedManualReminderMessage.title,
+    body: resolvedManualReminderMessage.body,
     href: `/shared-debts?request=${requestId}`,
     relatedType: 'shared_debt_request',
     relatedId: requestId,
@@ -11217,6 +14108,8 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
   const batchId = Number(req.params.id);
   const action = String(req.body.action || '').trim().toLowerCase();
   const note = String(req.body.note || '').trim() || null;
+  const fallbackRedirect = batchId ? `/shared-debts?batch=${batchId}` : '/shared-debts';
+  const redirectTo = redirectBackOr(req, fallbackRedirect);
 
   if (!batchId) {
     setFlash(req, 'error', 'Ops, esse envio não é válido.');
@@ -11225,7 +14118,7 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
 
   if (!['accept', 'reject'].includes(action)) {
     setFlash(req, 'error', 'Essa ação não combina com esse envio.');
-    return res.redirect(`/shared-debts?batch=${batchId}`);
+    return res.redirect(redirectTo);
   }
 
   const batchRow = db.prepare(`
@@ -11238,7 +14131,7 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
 
   if (!batchRow) {
     setFlash(req, 'error', 'Envio não encontrado.');
-    return res.redirect('/shared-debts');
+    return res.redirect(redirectTo);
   }
 
   const pendingItems = db.prepare(`
@@ -11252,7 +14145,7 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
 
   if (!pendingItems.length) {
     setFlash(req, 'info', 'Este envio não possui mais cobranças pendentes para você.');
-    return res.redirect(`/shared-debts?batch=${batchId}`);
+    return res.redirect(redirectTo);
   }
 
   const actor = getUserRecord(userId);
@@ -11268,13 +14161,26 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
   const itemCountLabel = isManualBatch
     ? formatCountLabel(pendingItems.length, 'lembrete avulso', 'lembretes avulsos')
     : chargeCountLabel;
-  const title = accepted
+  const batchResponseMessageKey = accepted
+    ? (isManualBatch ? 'notification.shared_debt.batch.response.accept.manual' : 'notification.shared_debt.batch.response.accept.regular')
+    : (isManualBatch ? 'notification.shared_debt.batch.response.reject.manual' : 'notification.shared_debt.batch.response.reject.regular');
+  const fallbackTitle = accepted
     ? (isManualBatch ? 'Seu lembrete avulso foi aceito' : 'Seu envio foi aceito')
     : (isManualBatch ? 'Seu lembrete avulso foi recusado' : 'Seu envio foi recusado');
   const baseBody = accepted
     ? `${actorName} aceitou ${itemCountLabel} do seu envio, somando ${formatBRLFromCents(totalCents)}.`
     : `${actorName} recusou ${itemCountLabel} do seu envio, somando ${formatBRLFromCents(totalCents)}.`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
+  const resolvedBatchResponseMessage = resolveCatalogText(batchResponseMessageKey, {
+    destinatario: actorName,
+    n_cobrancas: chargeCountLabel,
+    n_lembretes: itemCountLabel,
+    valor_total: formatBRLFromCents(totalCents),
+    nota: note || ''
+  }, {
+    fallbackTitle,
+    fallbackBody: body
+  });
 
   const updateStmt = db.prepare(`
     UPDATE shared_debt_requests
@@ -11293,8 +14199,8 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
     createNotification({
       userId: batchRow.requester_user_id,
       type: 'shared_debt_batch',
-      title,
-      body,
+      title: resolvedBatchResponseMessage.title,
+      body: resolvedBatchResponseMessage.body,
       href: firstRequestId ? `/shared-debts?request=${firstRequestId}` : '/shared-debts',
       relatedType: 'shared_debt_batch',
       relatedId: batchId,
@@ -11305,7 +14211,7 @@ app.post('/shared-debts/batches/:id/respond', ensureAuthenticated, (req, res) =>
   setFlash(req, 'success', accepted
     ? `Pronto! Você aceitou ${chargeCountLabel} deste envio.`
     : `Pronto! Você recusou ${chargeCountLabel} deste envio.`);
-  return res.redirect(`/shared-debts?batch=${batchId}`);
+  return res.redirect(redirectTo);
 });
 
 app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
@@ -11313,6 +14219,8 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
   const requestId = Number(req.params.id);
   const action = String(req.body.action || '').trim().toLowerCase();
   const note = String(req.body.note || '').trim() || null;
+  const fallbackRedirect = requestId ? `/shared-debts?request=${requestId}` : '/shared-debts';
+  const redirectTo = redirectBackOr(req, fallbackRedirect);
 
   if (!requestId) {
     setFlash(req, 'error', 'Ops, essa solicitação não é válida.');
@@ -11321,7 +14229,7 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
 
   if (!['accept', 'reject'].includes(action)) {
     setFlash(req, 'error', 'Essa ação não combina com essa solicitação.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   const requestRow = db.prepare(`
@@ -11334,12 +14242,12 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
 
   if (!requestRow) {
     setFlash(req, 'error', 'Ops, não encontrei essa solicitação.');
-    return res.redirect('/shared-debts');
+    return res.redirect(redirectTo);
   }
 
   if (requestRow.status !== 'pending') {
     setFlash(req, 'info', 'Essa solicitação já tinha sido resolvida antes.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   const actor = getUserRecord(userId);
@@ -11350,13 +14258,25 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
   const eventType = nextStatus;
   const requestKind = normalizeSharedDebtRequestKind(requestRow.request_kind);
   const isManualRequest = requestKind === 'manual';
-  const title = accepted
+  const singleResponseMessageKey = accepted
+    ? (isManualRequest ? 'notification.shared_debt.single.response.accept.manual' : 'notification.shared_debt.single.response.accept.regular')
+    : (isManualRequest ? 'notification.shared_debt.single.response.reject.manual' : 'notification.shared_debt.single.response.reject.regular');
+  const fallbackTitle = accepted
     ? (isManualRequest ? 'Aceitaram seu lembrete avulso' : 'Aceitaram sua cobrança compartilhada')
     : (isManualRequest ? 'Recusaram seu lembrete avulso' : 'Recusaram sua cobrança compartilhada');
   const baseBody = accepted
     ? `${actorName} aceitou ${isManualRequest ? 'o lembrete avulso' : 'a cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`
     : `${actorName} recusou ${isManualRequest ? 'o lembrete avulso' : 'a cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
+  const resolvedSingleResponseMessage = resolveCatalogText(singleResponseMessageKey, {
+    destinatario: actorName,
+    valor: formatBRLFromCents(requestRow.amount_cents),
+    descricao: requestRow.description_snapshot,
+    nota: note || ''
+  }, {
+    fallbackTitle,
+    fallbackBody: body
+  });
 
   db.transaction(() => {
     db.prepare(`
@@ -11371,8 +14291,8 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
     createNotification({
       userId: requestRow.requester_user_id,
       type: 'shared_debt_request',
-      title,
-      body,
+      title: resolvedSingleResponseMessage.title,
+      body: resolvedSingleResponseMessage.body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
       relatedId: requestId,
@@ -11381,7 +14301,7 @@ app.post("/shared-debts/:id/respond", ensureAuthenticated, (req, res) => {
   })();
 
   setFlash(req, 'success', accepted ? 'Pronto! Você aceitou essa solicitação.' : 'Pronto! Você recusou essa solicitação.');
-  return res.redirect(`/shared-debts?request=${requestId}`);
+  return res.redirect(redirectTo);
 });
 
 app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
@@ -11389,6 +14309,8 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
   const requestId = Number(req.params.id);
   const action = String(req.body.action || '').trim().toLowerCase();
   const note = String(req.body.note || '').trim() || null;
+  const fallbackRedirect = requestId ? `/shared-debts?request=${requestId}` : '/shared-debts';
+  const redirectTo = redirectBackOr(req, fallbackRedirect);
 
   if (!requestId) {
     setFlash(req, 'error', 'Ops, essa solicitação não é válida.');
@@ -11397,7 +14319,7 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
 
   if (!['accept_rejection', 'contest_rejection'].includes(action)) {
     setFlash(req, 'error', 'Essa ação não combina com essa solicitação.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   const requestRow = db.prepare(`
@@ -11410,12 +14332,12 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
 
   if (!requestRow) {
     setFlash(req, 'error', 'Ops, não encontrei essa solicitação.');
-    return res.redirect('/shared-debts');
+    return res.redirect(redirectTo);
   }
 
   if (requestRow.status !== 'rejected_by_receiver') {
     setFlash(req, 'info', 'Essa solicitação não está esperando uma decisão de quem enviou.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   const actor = getUserRecord(userId);
@@ -11426,13 +14348,25 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
   const eventType = nextStatus;
   const requestKind = normalizeSharedDebtRequestKind(requestRow.request_kind);
   const isManualRequest = requestKind === 'manual';
-  const title = acceptingRejection
+  const senderActionMessageKey = acceptingRejection
+    ? (isManualRequest ? 'notification.shared_debt.single.sender_action.accept_rejection.manual' : 'notification.shared_debt.single.sender_action.accept_rejection.regular')
+    : (isManualRequest ? 'notification.shared_debt.single.sender_action.contest_rejection.manual' : 'notification.shared_debt.single.sender_action.contest_rejection.regular');
+  const fallbackTitle = acceptingRejection
     ? (isManualRequest ? 'A recusa do lembrete foi aceita' : 'Sua recusa foi aceita')
     : (isManualRequest ? 'A recusa do lembrete foi contestada' : 'Sua recusa foi contestada');
   const baseBody = acceptingRejection
     ? `${actorName} aceitou a sua recusa ${isManualRequest ? 'do lembrete avulso' : 'da cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`
     : `${actorName} contestou a sua recusa ${isManualRequest ? 'do lembrete avulso' : 'da cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
+  const resolvedSenderActionMessage = resolveCatalogText(senderActionMessageKey, {
+    remetente: actorName,
+    valor: formatBRLFromCents(requestRow.amount_cents),
+    descricao: requestRow.description_snapshot,
+    nota: note || ''
+  }, {
+    fallbackTitle,
+    fallbackBody: body
+  });
 
   db.transaction(() => {
     if (acceptingRejection) {
@@ -11455,8 +14389,8 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
     createNotification({
       userId: requestRow.receiver_user_id,
       type: 'shared_debt_request',
-      title,
-      body,
+      title: resolvedSenderActionMessage.title,
+      body: resolvedSenderActionMessage.body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
       relatedId: requestId,
@@ -11465,7 +14399,7 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
   })();
 
   setFlash(req, 'success', acceptingRejection ? 'Pronto! Você aceitou a recusa e encerrou essa cobrança.' : 'Pronto! Você contestou a recusa dessa cobrança.');
-  return res.redirect(`/shared-debts?request=${requestId}`);
+  return res.redirect(redirectTo);
 });
 
 app.get('/shared-debts/monthly-settlements/:id/prepare', ensureAuthenticated, (req, res) => {
@@ -11630,7 +14564,7 @@ app.post('/shared-debts/monthly-settlements/:id/pix', ensureAuthenticated, async
     const qrDataUrl = QRCode
       ? await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', margin: 1, width: 320 })
       : null;
-    const shareText = buildSharedDebtCardMonthlyPixShareText({
+    const shareContent = buildSharedDebtCardMonthlyPixShareText({
       creditorName: creditorProfile.ownerName || creditorRecord?.name || creditorRecord?.email || 'quem vai receber',
       amountCents: requestedAmountCents,
       month: settlementRow.month,
@@ -11653,7 +14587,8 @@ app.post('/shared-debts/monthly-settlements/:id/pix', ensureAuthenticated, async
       keyType: creditorProfile.pixKeyType,
       keyTypeLabel: creditorProfile.pixKeyTypeLabel,
       city: creditorProfile.pixCity,
-      shareText,
+      shareText: shareContent.text,
+      shareTitle: shareContent.title,
       keyValue: creditorProfile.pixKeyValue,
       monthLabel: monthLabel(settlementRow.month, settlementRow.year),
       preview,
@@ -11743,11 +14678,20 @@ app.post('/shared-debts/monthly-settlements/:id/report-payment', ensureAuthentic
 
     cancelSharedDebtGeneratedMonthlyIntents(settlementId, userId);
 
+    const resolvedMonthlyPixReportedMessage = resolveCatalogText('notification.monthly_pix.reported', {
+      pagador: actorName,
+      valor: formatBRLFromCents(intentAmountCents),
+      mes_referencia: monthLabel(settlementRow.month, settlementRow.year),
+      nota: note || ''
+    }, {
+      fallbackTitle: 'Pix do mês informado',
+      fallbackBody: `${actorName} avisou um Pix de ${formatBRLFromCents(intentAmountCents)} para ${monthLabel(settlementRow.month, settlementRow.year)}.${buildNoteSuffix(note)}`
+    });
     createNotification({
       userId: settlementRow.requester_user_id,
       type: 'shared_debt_request',
-      title: 'Pix do mês informado',
-      body: `${actorName} avisou um Pix de ${formatBRLFromCents(intentAmountCents)} para ${monthLabel(settlementRow.month, settlementRow.year)}.${buildNoteSuffix(note)}`,
+      title: resolvedMonthlyPixReportedMessage.title,
+      body: resolvedMonthlyPixReportedMessage.body,
       href: `/shared-debts?settlement=${settlementId}`,
       relatedType: 'shared_debt_payment_intent',
       relatedId: intentId,
@@ -11920,11 +14864,21 @@ app.post('/shared-debts/monthly-settlements/:id/confirm-payment', ensureAuthenti
       touchSharedDebtBatch(batchId, now);
     });
 
+    const resolvedMonthlyPixConfirmedMessage = resolveCatalogText('notification.monthly_pix.confirmed', {
+      credor: actorName,
+      valor: formatBRLFromCents(intentRow.amount_cents),
+      mes_referencia: monthText,
+      resumo_distribuicao_pix: buildSharedDebtCardMonthlyIntentResultSummary(preview),
+      nota: note || ''
+    }, {
+      fallbackTitle: 'Pix do mês confirmado',
+      fallbackBody: `${actorName} confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. ${buildSharedDebtCardMonthlyIntentResultSummary(preview)}${buildNoteSuffix(note)}`
+    });
     createNotification({
       userId: settlementRow.receiver_user_id,
       type: 'shared_debt_request',
-      title: 'Pix do mês confirmado',
-      body: `${actorName} confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. ${buildSharedDebtCardMonthlyIntentResultSummary(preview)}${buildNoteSuffix(note)}`,
+      title: resolvedMonthlyPixConfirmedMessage.title,
+      body: resolvedMonthlyPixConfirmedMessage.body,
       href: `/shared-debts?settlement=${settlementId}`,
       relatedType: 'shared_debt_payment_intent',
       relatedId: intentId,
@@ -12015,11 +14969,20 @@ app.post('/shared-debts/monthly-settlements/:id/reject-payment', ensureAuthentic
       throw new Error('Esse Pix do mês já mudou de estado enquanto você estava por aqui.');
     }
 
+    const resolvedMonthlyPixRevisionMessage = resolveCatalogText('notification.monthly_pix.revision', {
+      credor: actorName,
+      valor: formatBRLFromCents(intentRow.amount_cents),
+      mes_referencia: monthText,
+      nota: note || ''
+    }, {
+      fallbackTitle: 'Pix do mês voltou para revisão',
+      fallbackBody: `${actorName} não confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. O valor voltou para o saldo aberto dessa carteira.${buildNoteSuffix(note)}`
+    });
     createNotification({
       userId: settlementRow.receiver_user_id,
       type: 'shared_debt_request',
-      title: 'Pix do mês voltou para revisão',
-      body: `${actorName} não confirmou o Pix de ${formatBRLFromCents(intentRow.amount_cents)} em ${monthText}. O valor voltou para o saldo aberto dessa carteira.${buildNoteSuffix(note)}`,
+      title: resolvedMonthlyPixRevisionMessage.title,
+      body: resolvedMonthlyPixRevisionMessage.body,
       href: `/shared-debts?settlement=${settlementId}`,
       relatedType: 'shared_debt_payment_intent',
       relatedId: intentId,
@@ -12109,7 +15072,7 @@ app.get('/shared-debts/:id/pix', ensureAuthenticated, async (req, res) => {
     const qrDataUrl = QRCode
       ? await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', margin: 1, width: 320 })
       : null;
-    const shareText = buildManualSharedDebtPixShareText({
+    const shareContent = buildManualSharedDebtPixShareText({
       creditorName: creditorProfile.ownerName || requestRow.requester_name || requestRow.requester_email || 'quem vai receber',
       amountCents: pendingCents,
       description: requestRow.description_snapshot,
@@ -12139,7 +15102,8 @@ app.get('/shared-debts/:id/pix', ensureAuthenticated, async (req, res) => {
       keyType: creditorProfile.pixKeyType,
       keyTypeLabel: creditorProfile.pixKeyTypeLabel,
       city: creditorProfile.pixCity,
-      shareText,
+      shareText: shareContent.text,
+      shareTitle: shareContent.title,
       keyValue: creditorProfile.pixKeyValue,
       description: requestRow.description_snapshot,
       isCreditor: Number(requestRow.requester_user_id || 0) === Number(userId || 0)
@@ -12153,6 +15117,8 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const requestId = Number(req.params.id);
   const note = String(req.body.note || '').trim() || null;
+  const fallbackRedirect = requestId ? `/shared-debts?request=${requestId}` : '/shared-debts';
+  const redirectTo = redirectBackOr(req, fallbackRedirect);
 
   if (!requestId) {
     setFlash(req, 'error', 'Ops, essa solicitação não é válida.');
@@ -12169,7 +15135,7 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
 
   if (!requestRow) {
     setFlash(req, 'error', 'Ops, não encontrei essa solicitação.');
-    return res.redirect('/shared-debts');
+    return res.redirect(redirectTo);
   }
 
   const requestKind = normalizeSharedDebtRequestKind(requestRow.request_kind);
@@ -12182,22 +15148,22 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
     });
     const redirectHref = snapshot?.id ? `/shared-debts?settlement=${snapshot.id}` : `/shared-debts?request=${requestId}`;
     setFlash(req, 'info', 'Agora o pagamento do cartão anda pela carteira do mês. Abre a competência e usa “Pagar este mês”.');
-    return res.redirect(redirectHref);
+    return res.redirect(redirectBackOr(req, redirectHref));
   }
 
   if (requestRow.status === 'settled') {
     setFlash(req, 'info', 'Essa cobrança já foi encerrada antes.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   if (requestRow.status !== 'accepted') {
     setFlash(req, 'info', 'Só dá para marcar pagamento em solicitações já aceitas.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   if (requestRow.payment_marked_at) {
     setFlash(req, 'info', 'O pagamento dessa solicitação já foi avisado e agora está esperando confirmação.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   const actor = getUserRecord(userId);
@@ -12206,6 +15172,19 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
   const isManualRequest = requestKind === 'manual';
   const baseBody = `${actorName} avisou que já pagou ${isManualRequest ? 'o lembrete avulso' : 'a cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
+  const resolvedPaymentMarkedMessage = resolveCatalogText(
+    isManualRequest ? 'notification.shared_debt.payment_marked.manual' : 'notification.shared_debt.payment_marked.regular',
+    {
+      pagador: actorName,
+      valor: formatBRLFromCents(requestRow.amount_cents),
+      descricao: requestRow.description_snapshot,
+      nota: note || ''
+    },
+    {
+      fallbackTitle: isManualRequest ? 'Pagamento do lembrete marcado como feito' : 'Pagamento marcado como feito',
+      fallbackBody: body
+    }
+  );
 
   db.transaction(() => {
     db.prepare(`
@@ -12220,8 +15199,8 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
     createNotification({
       userId: requestRow.requester_user_id,
       type: 'shared_debt_request',
-      title: isManualRequest ? 'Pagamento do lembrete marcado como feito' : 'Pagamento marcado como feito',
-      body,
+      title: resolvedPaymentMarkedMessage.title,
+      body: resolvedPaymentMarkedMessage.body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
       relatedId: requestId,
@@ -12230,13 +15209,15 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
   })();
 
   setFlash(req, 'success', 'Pronto! Agora quem enviou a cobrança já pode confirmar o recebimento.');
-  return res.redirect(`/shared-debts?request=${requestId}`);
+  return res.redirect(redirectTo);
 });
 
 app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const requestId = Number(req.params.id);
   const note = String(req.body.note || '').trim() || null;
+  const fallbackRedirect = requestId ? `/shared-debts?request=${requestId}` : '/shared-debts';
+  const redirectTo = redirectBackOr(req, fallbackRedirect);
 
   if (!requestId) {
     setFlash(req, 'error', 'Ops, essa solicitação não é válida.');
@@ -12253,22 +15234,22 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
 
   if (!requestRow) {
     setFlash(req, 'error', 'Ops, não encontrei essa solicitação.');
-    return res.redirect('/shared-debts');
+    return res.redirect(redirectTo);
   }
 
   if (requestRow.status === 'settled') {
     setFlash(req, 'info', 'Essa cobrança já foi encerrada antes.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   if (requestRow.status !== 'accepted') {
     setFlash(req, 'info', 'Só dá para encerrar solicitações já aceitas.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   if (!requestRow.payment_marked_at) {
     setFlash(req, 'info', 'Essa cobrança ainda não foi marcada como paga por quem recebeu.');
-    return res.redirect(`/shared-debts?request=${requestId}`);
+    return res.redirect(redirectTo);
   }
 
   const actor = getUserRecord(userId);
@@ -12278,6 +15259,19 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
   const isManualRequest = requestKind === 'manual';
   const baseBody = `${actorName} confirmou o recebimento ${isManualRequest ? 'do lembrete avulso' : 'da cobrança'} de ${formatBRLFromCents(requestRow.amount_cents)} (${requestRow.description_snapshot}).`;
   const body = `${baseBody}${buildNoteSuffix(note)}`;
+  const resolvedPaymentConfirmedMessage = resolveCatalogText(
+    isManualRequest ? 'notification.shared_debt.payment_confirmed.manual' : 'notification.shared_debt.payment_confirmed.regular',
+    {
+      credor: actorName,
+      valor: formatBRLFromCents(requestRow.amount_cents),
+      descricao: requestRow.description_snapshot,
+      nota: note || ''
+    },
+    {
+      fallbackTitle: isManualRequest ? 'Pagamento do lembrete confirmado' : 'Pagamento confirmado',
+      fallbackBody: body
+    }
+  );
 
   db.transaction(() => {
     db.prepare(`
@@ -12295,8 +15289,8 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
     createNotification({
       userId: requestRow.receiver_user_id,
       type: 'shared_debt_request',
-      title: isManualRequest ? 'Pagamento do lembrete confirmado' : 'Pagamento confirmado',
-      body,
+      title: resolvedPaymentConfirmedMessage.title,
+      body: resolvedPaymentConfirmedMessage.body,
       href: `/shared-debts?request=${requestId}`,
       relatedType: 'shared_debt_request',
       relatedId: requestId,
@@ -12305,7 +15299,7 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
   })();
 
   setFlash(req, 'success', 'Pronto! Recebimento confirmado e cobrança encerrada.');
-  return res.redirect(`/shared-debts?request=${requestId}`);
+  return res.redirect(redirectTo);
 });
 
 
@@ -12362,11 +15356,22 @@ app.post('/shared-debts/bulk/mark-paid', ensureAuthenticated, (req, res) => {
       const body = `${bodyBase}${buildNoteSuffix(note)}`;
       const firstRow = group.rows[0];
 
+      const resolvedBulkMarkedMessage = resolveCatalogText('notification.shared_debt.payment_marked.bulk', {
+        pagador: actorName,
+        n_cobrancas: chargeCountLabel,
+        periodo: periodLabel || '',
+        valor_total: formatBRLFromCents(group.totalCents),
+        nota: note || ''
+      }, {
+        fallbackTitle: group.rows.length > 1 ? 'Pagamentos marcados como feitos' : 'Pagamento marcado como feito',
+        fallbackBody: body
+      });
+
       createNotification({
         userId: firstRow.requester_user_id,
         type: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
-        title: group.rows.length > 1 ? 'Pagamentos marcados como feitos' : 'Pagamento marcado como feito',
-        body,
+        title: resolvedBulkMarkedMessage.title,
+        body: resolvedBulkMarkedMessage.body,
         href: group.batchId ? `/shared-debts?batch=${group.batchId}` : `/shared-debts?request=${firstRow.id}`,
         relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
         relatedId: group.batchId || firstRow.id,
@@ -12432,11 +15437,22 @@ app.post('/shared-debts/bulk/confirm-receipt', ensureAuthenticated, (req, res) =
       const body = `${bodyBase}${buildNoteSuffix(note)}`;
       const firstRow = group.rows[0];
 
+      const resolvedBulkConfirmedMessage = resolveCatalogText('notification.shared_debt.payment_confirmed.bulk', {
+        credor: actorName,
+        n_cobrancas: chargeCountLabel,
+        periodo: periodLabel || '',
+        valor_total: formatBRLFromCents(group.totalCents),
+        nota: note || ''
+      }, {
+        fallbackTitle: group.rows.length > 1 ? 'Pagamentos confirmados' : 'Pagamento confirmado',
+        fallbackBody: body
+      });
+
       createNotification({
         userId: firstRow.receiver_user_id,
         type: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
-        title: group.rows.length > 1 ? 'Pagamentos confirmados' : 'Pagamento confirmado',
-        body,
+        title: resolvedBulkConfirmedMessage.title,
+        body: resolvedBulkConfirmedMessage.body,
         href: group.batchId ? `/shared-debts?batch=${group.batchId}` : `/shared-debts?request=${firstRow.id}`,
         relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
         relatedId: group.batchId || firstRow.id,
@@ -12825,68 +15841,11 @@ app.post('/purchase-categories/:id/restore', ensureAuthenticated, (req, res) => 
   return res.redirect(redirectBackOr(req, '/month'));
 });
 
-app.post('/people/profile-photo', ensureAuthenticated, (req, res) => {
-  profilePhotoUpload.single('profile_photo')(req, res, async (error) => {
-    const userId = req.user.id;
-    const uploadedPath = req.file ? `/uploads/profile-photos/${req.file.filename}` : '';
-    if (error) {
-      if (uploadedPath) await removeManagedProfilePhoto(uploadedPath);
-      setFlash(req, 'error', error.message || 'Não consegui salvar sua foto agora.');
-      return res.redirect('/people');
-    }
+function resolvePeopleSettingsRedirectTarget(req, fallback = '/people') {
+  return sanitizeInternalRedirectTarget(req.body?.return_to || req.query?.return_to || '', fallback);
+}
 
-    if (!uploadedPath) {
-      setFlash(req, 'error', 'Escolha uma imagem antes de salvar a foto do perfil.');
-      return res.redirect('/people');
-    }
-
-    try {
-      const currentUser = getUserRecord(userId, { includeDeleted: false });
-      db.prepare("UPDATE users SET profile_photo_url = ?, profile_photo_mode = 'manual' WHERE id = ?").run(uploadedPath, userId);
-      req.user.profile_photo_url = uploadedPath;
-      req.user.profile_photo_mode = 'manual';
-      if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
-      setFlash(req, 'success', 'Foto nova no crachá! Já deixei seu perfil mais reconhecível por aqui.');
-    } catch (err) {
-      await removeManagedProfilePhoto(uploadedPath);
-      setFlash(req, 'error', 'A foto tropeçou no caminho. Tenta de novo daqui a pouquinho.');
-    }
-
-    return res.redirect('/people#profile-photo');
-  });
-});
-
-app.post('/people/profile-photo/use-default', ensureAuthenticated, async (req, res) => {
-  const userId = req.user.id;
-  try {
-    const currentUser = getUserRecord(userId, { includeDeleted: false });
-    db.prepare("UPDATE users SET profile_photo_url = NULL, profile_photo_mode = 'default' WHERE id = ?").run(userId);
-    req.user.profile_photo_url = '';
-    req.user.profile_photo_mode = 'default';
-    if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
-    setFlash(req, 'success', currentUser?.google_photo_url && !looksLikeGoogleDefaultAvatar(currentUser.google_photo_url) ? 'Voltei para sua foto do Google aqui no app.' : 'Voltei para o visual padrão com o ícone do app no cabeçalho.');
-  } catch (error) {
-    setFlash(req, 'error', 'Não consegui voltar para o padrão agora.');
-  }
-  return res.redirect('/people#profile-photo');
-});
-
-app.post('/people/profile-photo/remove', ensureAuthenticated, async (req, res) => {
-  const userId = req.user.id;
-  try {
-    const currentUser = getUserRecord(userId, { includeDeleted: false });
-    db.prepare("UPDATE users SET profile_photo_url = NULL, profile_photo_mode = 'none' WHERE id = ?").run(userId);
-    req.user.profile_photo_url = '';
-    req.user.profile_photo_mode = 'none';
-    if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
-    setFlash(req, 'success', 'Pronto, escondi sua foto por aqui e deixei o app no modo sem avatar.');
-  } catch (error) {
-    setFlash(req, 'error', 'Não consegui remover a foto agora.');
-  }
-  return res.redirect('/people#profile-photo');
-});
-
-app.get("/people", ensureAuthenticated, (req, res) => {
+function buildPeoplePageViewModel(req) {
   const userId = req.user.id;
   ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
   const allPeople = getPeopleAll(userId).map((person) => decoratePersonPhoneForView(person, { fallbackCountry: DEFAULT_PHONE_COUNTRY }));
@@ -12903,13 +15862,23 @@ app.get("/people", ensureAuthenticated, (req, res) => {
     selfPerson.has_profile_signature = !!(selfPerson.profile_signature_text || selfPerson.profile_signature_vibe);
   }
   const contacts = allPeople.filter((person) => person && !person.is_self);
+  const comprasComigoBadgeMap = buildPeopleComprasComigoBadgeMap(userId, contacts);
+  const contactsWithComprasComigoBadge = contacts.map((person) => {
+    const badge = comprasComigoBadgeMap.get(Number(person.id || 0)) || {};
+    return {
+      ...person,
+      compras_comigo_badge_count: Math.max(0, Number(badge.needsMyActionCount || 0)),
+      compras_comigo_open_count: Math.max(0, Number(badge.openCount || 0)),
+      compras_comigo_waiting_count: Math.max(0, Number(badge.waitingOtherSideCount || 0))
+    };
+  });
   const pendingFriendRequests = getPendingReceivedFriendRequests(userId);
   const highlightedFriendRequestId = Number(req.query.friendRequest || req.query.friend_request || 0) || null;
 
-  return safeRenderView(res, "people", {
+  return {
     selfPerson,
-    contacts,
-    people: contacts,
+    contacts: contactsWithComprasComigoBadge,
+    people: contactsWithComprasComigoBadge,
     pendingFriendRequests,
     highlightedFriendRequestId,
     pixStateOptions: PIX_STATE_OPTIONS,
@@ -12923,9 +15892,158 @@ app.get("/people", ensureAuthenticated, (req, res) => {
     profileSignatureMaxLength: PROFILE_SIGNATURE_MAX_LENGTH,
     appPinSecurity: buildAppPinViewModel(getUserSecuritySettings(userId), { reauthFresh: hasFreshPinReauthSession(req, userId) }),
     appPasskeys: buildPasskeyManagementViewModel(req, userId),
-    notificationPreferences: buildUserNotificationPreferenceViewModel(userId),
+    notificationPreferences: buildUserNotificationPreferenceViewModel(userId)
+  };
+}
+
+app.post('/people/profile-photo', ensureAuthenticated, (req, res) => {
+  profilePhotoUpload.single('profile_photo')(req, res, async (error) => {
+    const userId = req.user.id;
+    const uploadedPath = req.file ? `/uploads/profile-photos/${req.file.filename}` : '';
+    const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#profile-photo');
+    if (error) {
+      if (uploadedPath) await removeManagedProfilePhoto(uploadedPath);
+      setFlash(req, 'error', error.message || 'Não consegui salvar sua foto agora.');
+      return res.redirect(redirectTarget);
+    }
+
+    if (!uploadedPath) {
+      setFlash(req, 'error', 'Escolha uma imagem antes de salvar a foto do perfil.');
+      return res.redirect(redirectTarget);
+    }
+
+    try {
+      const currentUser = getUserRecord(userId, { includeDeleted: false });
+      db.prepare("UPDATE users SET profile_photo_url = ?, profile_photo_mode = 'manual' WHERE id = ?").run(uploadedPath, userId);
+      req.user.profile_photo_url = uploadedPath;
+      req.user.profile_photo_mode = 'manual';
+      if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
+      setFlash(req, 'success', 'Foto nova no crachá! Já deixei seu perfil mais reconhecível por aqui.');
+    } catch (err) {
+      await removeManagedProfilePhoto(uploadedPath);
+      setFlash(req, 'error', 'A foto tropeçou no caminho. Tenta de novo daqui a pouquinho.');
+    }
+
+    return res.redirect(redirectTarget);
+  });
+});
+
+app.post('/people/profile-photo/use-default', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#profile-photo');
+  try {
+    const currentUser = getUserRecord(userId, { includeDeleted: false });
+    db.prepare("UPDATE users SET profile_photo_url = NULL, profile_photo_mode = 'default' WHERE id = ?").run(userId);
+    req.user.profile_photo_url = '';
+    req.user.profile_photo_mode = 'default';
+    if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
+    setFlash(req, 'success', currentUser?.google_photo_url && !looksLikeGoogleDefaultAvatar(currentUser.google_photo_url) ? 'Voltei para sua foto do Google aqui no app.' : 'Voltei para o visual padrão com o ícone do app no cabeçalho.');
+  } catch (error) {
+    setFlash(req, 'error', 'Não consegui voltar para o padrão agora.');
+  }
+  return res.redirect(redirectTarget);
+});
+
+app.post('/people/profile-photo/remove', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#profile-photo');
+  try {
+    const currentUser = getUserRecord(userId, { includeDeleted: false });
+    db.prepare("UPDATE users SET profile_photo_url = NULL, profile_photo_mode = 'none' WHERE id = ?").run(userId);
+    req.user.profile_photo_url = '';
+    req.user.profile_photo_mode = 'none';
+    if (currentUser?.profile_photo_url) await removeManagedProfilePhoto(currentUser.profile_photo_url);
+    setFlash(req, 'success', 'Pronto, escondi sua foto por aqui e deixei o app no modo sem avatar.');
+  } catch (error) {
+    setFlash(req, 'error', 'Não consegui remover a foto agora.');
+  }
+  return res.redirect(redirectTarget);
+});
+
+app.get("/people", ensureAuthenticated, (req, res) => {
+  return safeRenderView(res, "people", {
+    ...buildPeoplePageViewModel(req),
     title: "Amigos"
   });
+});
+
+app.get('/settings', ensureAuthenticated, (req, res) => {
+  return safeRenderView(res, 'settings', {
+    ...buildPeoplePageViewModel(req),
+    title: 'AcerttaPay | Configurações'
+  });
+});
+
+
+app.get('/people/:id/compras-comigo', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const personId = Number(req.params.id || 0);
+
+  if (!personId) {
+    setFlash(req, 'error', 'Esse atalho de amizade chegou sem endereço.');
+    return res.redirect('/people');
+  }
+
+  try {
+    const preferred = getPreferredPeopleComprasComigoMonth(userId, personId);
+    if (!preferred) {
+      setFlash(req, 'error', 'Essa amizade ainda não está pronta para abrir as compras por aqui.');
+      return res.redirect('/people');
+    }
+
+    return res.redirect(`/people/${personId}/compras-comigo/${preferred.year}/${preferred.month}`);
+  } catch (error) {
+    setFlash(req, 'error', error?.message || 'Não consegui abrir esse resumo agora.');
+    return res.redirect('/people');
+  }
+});
+
+app.get('/people/:id/compras-comigo/:year/:month', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const personId = Number(req.params.id || 0);
+  const parsed = parseMonthYear(req.params.month, req.params.year);
+  if (!parsed) return res.status(400).send('Mês/ano inválidos.');
+
+  const tab = String(req.query.tab || 'open').trim().toLowerCase() === 'history' ? 'history' : 'open';
+
+  try {
+    const ledger = buildPeopleComprasComigoLedger(userId, personId, parsed.month, parsed.year);
+    const contact = ledger.contact;
+    const prevMonth = shiftMonth(parsed.year, parsed.month, -1);
+    const nextMonth = shiftMonth(parsed.year, parsed.month, 1);
+    const now = dayjs();
+    const currentMonth = { year: now.year(), month: now.month() + 1 };
+    const isCurrentMonth = currentMonth.year === parsed.year && currentMonth.month === parsed.month;
+    const basePath = `/people/${personId}/compras-comigo/${parsed.year}/${parsed.month}`;
+    const currentMonthPath = `/people/${personId}/compras-comigo/${currentMonth.year}/${currentMonth.month}`;
+
+    return safeRenderView(res, 'people-compras-comigo', {
+      title: `AcerttaPay | Compras comigo · ${contact.name || 'Amizade'}`,
+      person: contact,
+      contact,
+      month: parsed.month,
+      year: parsed.year,
+      monthLabel,
+      formatBRLFromCents,
+      formatDateBR,
+      openItems: ledger.openItems,
+      historyItems: ledger.historyItems,
+      summary: ledger.summary,
+      activeTab: tab,
+      availableRanks: ledger.availableRanks,
+      previousMonthHref: `/people/${personId}/compras-comigo/${prevMonth.year}/${prevMonth.month}?tab=${tab}`,
+      nextMonthHref: `/people/${personId}/compras-comigo/${nextMonth.year}/${nextMonth.month}?tab=${tab}`,
+      currentMonthHref: `${currentMonthPath}?tab=${tab}`,
+      openTabHref: `${basePath}?tab=open`,
+      historyTabHref: `${basePath}?tab=history`,
+      backHref: '/people#network-lounge',
+      sharedDebtsHref: '/shared-debts#received',
+      isCurrentMonth
+    });
+  } catch (error) {
+    setFlash(req, 'error', error?.message || 'Não consegui abrir as compras dessa amizade agora.');
+    return res.redirect('/people');
+  }
 });
 
 app.post('/people/notification-preferences', ensureAuthenticated, (req, res) => {
@@ -12943,7 +16061,7 @@ app.post('/people/notification-preferences', ensureAuthenticated, (req, res) => 
     setFlash(req, 'error', error?.message || 'Não consegui salvar suas preferências de alerta agora.');
   }
 
-  return res.redirect('/people#my-profile');
+  return res.redirect(resolvePeopleSettingsRedirectTarget(req, '/settings#alerts'));
 });
 
 app.post("/people", ensureAuthenticated, (req, res) => {
@@ -12969,9 +16087,10 @@ app.post("/people", ensureAuthenticated, (req, res) => {
     : null;
   const isSelfTarget = isSelfPersonRow(targetPerson);
   const requestedSection = isSelfTarget ? String(req.body.profile_section || '').trim().toLowerCase() : '';
-  const redirectTarget = isSelfTarget
-    ? (requestedSection === 'pix' ? '/people#self-pix-config' : requestedSection === 'signature' ? '/people#profile-signature' : '/people#my-profile')
+  const defaultRedirectTarget = isSelfTarget
+    ? (requestedSection === 'pix' ? '/settings#pix' : requestedSection === 'signature' ? '/people#profile-signature' : '/settings#profile')
     : '/people#network-lounge';
+  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, defaultRedirectTarget);
 
   const currentName = targetPerson ? String(targetPerson.name || '').trim() : '';
   const currentPhone = targetPerson ? String(targetPerson.phone || '').trim() : '';
@@ -13041,7 +16160,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
 
   if (id && !targetPerson) {
     setFlash(req, 'error', 'Não encontrei essa pessoa por aqui para atualizar.');
-    return res.redirect('/people');
+    return res.redirect(resolvePeopleSettingsRedirectTarget(req, '/people'));
   }
 
   if (isSelfTarget && requestedSection === 'signature') {
@@ -13156,7 +16275,7 @@ app.post("/people", ensureAuthenticated, (req, res) => {
 app.post('/people/security/pin/setup', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const currentSettings = getUserSecuritySettings(userId);
-  const redirectTarget = '/people#app-security';
+  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#security');
 
   try {
     saveUserAppPinFromRequest(userId, req, { allowReauthOverride: false });
@@ -13170,9 +16289,24 @@ app.post('/people/security/pin/setup', ensureAuthenticated, (req, res) => {
   return res.redirect(redirectTarget);
 });
 
+
+app.post('/people/security/pin/idle', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#security');
+
+  try {
+    const updated = updateUserAppPinIdleSecondsFromRequest(userId, req, { allowReauthOverride: false });
+    setFlash(req, 'success', `Tempo de bloqueio atualizado. Agora o app volta a pedir PIN em ${getPinIdleOptionLabel(updated.pin_idle_seconds)}.`);
+  } catch (error) {
+    setFlash(req, 'error', error.message || 'Não consegui atualizar o tempo de bloqueio agora.');
+  }
+
+  return res.redirect(redirectTarget);
+});
+
 app.post('/people/security/pin/disable', ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
-  const redirectTarget = '/people#app-security';
+  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#security');
 
   try {
     disableUserAppPinFromRequest(userId, req, { allowReauthOverride: false });
@@ -13189,18 +16323,32 @@ app.post('/people/security/passkeys/register/options', ensureAuthenticated, asyn
   setNoStoreHeaders(res);
   const userId = req.user.id;
   const settings = getUserSecuritySettings(userId);
+  const context = buildPasskeyContext(req);
+  const logContext = buildPasskeyRequestLogContext(req, context);
 
   if (!settings.pin_enabled) {
+    logPasskeyEvent('warn', 'register-options-blocked-pin-disabled', {
+      ...logContext,
+      pinEnabled: false
+    });
     return res.status(422).json({ ok: false, message: 'Primeiro liga o PIN. Aí eu consigo preparar o desbloqueio pelo aparelho.' });
   }
 
-  const context = buildPasskeyContext(req);
   if (!context.available) {
+    logPasskeyEvent('warn', 'register-options-context-unavailable', {
+      ...logContext,
+      disabledMessage: context.disabledMessage || null
+    });
     return res.status(422).json({ ok: false, message: context.disabledMessage || 'Esse desbloqueio ainda não ficou disponível neste ambiente.' });
   }
 
   const currentPasskeys = listUserPasskeys(userId);
   if (currentPasskeys.length >= PASSKEY_MAX_CREDENTIALS_PER_USER) {
+    logPasskeyEvent('warn', 'register-options-limit-reached', {
+      ...logContext,
+      existingCount: currentPasskeys.length,
+      maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER
+    });
     return res.status(409).json({ ok: false, message: `Você já preparou ${PASSKEY_MAX_CREDENTIALS_PER_USER} aparelhos por aqui. Se quiser abrir espaço, é só remover um deles.` });
   }
 
@@ -13231,7 +16379,15 @@ app.post('/people/security/passkeys/register/options', ensureAuthenticated, asyn
       maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER
     });
   } catch (error) {
-    return res.status(normalizeErrorStatus(error, 500)).json({
+    const status = normalizeErrorStatus(error, 500);
+    logPasskeyEvent(status >= 500 ? 'error' : 'warn', 'register-options-error', {
+      ...logContext,
+      label: normalizePasskeyLabel(req.body?.label || '', 'Este aparelho'),
+      existingCount: currentPasskeys.length,
+      maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER,
+      error: summarizePasskeyErrorForLog(error)
+    });
+    return res.status(status).json({
       ok: false,
       message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui preparar esse aparelho agora.' })
     });
@@ -13242,8 +16398,13 @@ app.post('/people/security/passkeys/register/verify', ensureAuthenticated, async
   setNoStoreHeaders(res);
   const userId = req.user.id;
   const flow = consumePasskeySessionFlow(req, 'register');
+  const logContext = buildPasskeyRequestLogContext(req);
 
   if (!flow || Number(flow.userId || 0) !== Number(userId || 0)) {
+    logPasskeyEvent('warn', 'register-verify-flow-missing', {
+      ...logContext,
+      flow: summarizePasskeyFlowForLog(flow)
+    });
     return res.status(410).json({ ok: false, message: 'Esse preparo perdeu a validade. Começa de novo que eu acompanho daqui.' });
   }
 
@@ -13256,11 +16417,23 @@ app.post('/people/security/passkeys/register/verify', ensureAuthenticated, async
     });
 
     if (!verification.verified || !verification.credential) {
+      logPasskeyEvent('warn', 'register-verify-unverified', {
+        ...logContext,
+        flow: summarizePasskeyFlowForLog(flow),
+        response: summarizePasskeyRegistrationPayload(req.body)
+      });
       return res.status(422).json({ ok: false, message: 'Não consegui confirmar esse aparelho agora. Vamos tentar de novo?' });
     }
 
     const currentPasskeys = listUserPasskeys(userId);
     if (currentPasskeys.length >= PASSKEY_MAX_CREDENTIALS_PER_USER) {
+      logPasskeyEvent('warn', 'register-verify-limit-reached', {
+        ...logContext,
+        flow: summarizePasskeyFlowForLog(flow),
+        response: summarizePasskeyRegistrationPayload(req.body),
+        existingCount: currentPasskeys.length,
+        maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER
+      });
       return res.status(409).json({ ok: false, message: `Você já preparou ${PASSKEY_MAX_CREDENTIALS_PER_USER} aparelhos por aqui. Se quiser abrir espaço, é só remover um deles.` });
     }
 
@@ -13275,7 +16448,14 @@ app.post('/people/security/passkeys/register/verify', ensureAuthenticated, async
       count: listUserPasskeys(userId).length
     });
   } catch (error) {
-    return res.status(normalizeErrorStatus(error, 500)).json({
+    const status = normalizeErrorStatus(error, 500);
+    logPasskeyEvent(status >= 500 ? 'error' : 'warn', 'register-verify-error', {
+      ...logContext,
+      flow: summarizePasskeyFlowForLog(flow),
+      response: summarizePasskeyRegistrationPayload(req.body),
+      error: summarizePasskeyErrorForLog(error)
+    });
+    return res.status(status).json({
       ok: false,
       message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui confirmar esse aparelho agora.' })
     });
@@ -13286,14 +16466,16 @@ app.post('/people/security/passkeys/:id/delete', ensureAuthenticated, (req, res)
   const userId = req.user.id;
   const passkey = getUserPasskey(userId, req.params.id);
 
+  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#security');
+
   if (!passkey) {
     setFlash(req, 'error', 'Esse aparelho já tinha saído da lista por aqui.');
-    return res.redirect('/people#app-security');
+    return res.redirect(redirectTarget);
   }
 
   deleteUserPasskey(userId, req.params.id);
   setFlash(req, 'success', `${passkey.label || 'Esse aparelho'} saiu da lista de desbloqueio.`);
-  return res.redirect('/people#app-security');
+  return res.redirect(redirectTarget);
 });
 
 app.post('/lock/passkey/options', ensureAuthenticatedIgnoringPin, async (req, res) => {
@@ -13532,6 +16714,7 @@ app.post('/lock/touch', ensureAuthenticatedIgnoringPin, (req, res) => {
 
   if (!settings.pin_enabled) {
     clearAppLockSession(req);
+    syncRequestUserPresence(req, { force: true });
     return res.status(204).end();
   }
 
@@ -13558,6 +16741,13 @@ app.post('/lock/touch', ensureAuthenticatedIgnoringPin, (req, res) => {
   }
 
   touchAppSession(req);
+  syncRequestUserPresence(req, { force: true });
+  return res.status(204).end();
+});
+
+app.post('/presence/touch', ensureAuthenticatedIgnoringPin, (req, res) => {
+  setNoStoreHeaders(res);
+  syncRequestUserPresence(req, { force: true });
   return res.status(204).end();
 });
 
@@ -13698,11 +16888,17 @@ app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {
   );
 
   const requestId = Number(info.lastInsertRowid || 0);
+  const resolvedFriendRequestMessage = resolveCatalogText('notification.friendship.request_received', {
+    pessoa: requester?.name || person.name || 'Alguém'
+  }, {
+    fallbackTitle: 'Chegou um pedido de amizade',
+    fallbackBody: `${requester?.name || person.name || 'Alguém'} quer virar seu contato de confiança no AcerttaPay.`
+  });
   createNotification({
     userId: resolved.linked_user_id,
     type: 'friend_request',
-    title: 'Chegou um pedido de amizade',
-    body: `${requester?.name || person.name || 'Alguém'} quer virar seu contato de confiança no AcerttaPay.`,
+    title: resolvedFriendRequestMessage.title,
+    body: resolvedFriendRequestMessage.body,
     href: `/people?friendRequest=${requestId}`,
     relatedType: 'friend_request',
     relatedId: requestId,
@@ -13787,11 +16983,17 @@ app.post('/friend-requests/:id/respond', ensureAuthenticated, (req, res) => {
         preferredEmail: requestRow.requester_email_snapshot || requesterUser?.email
       });
 
+      const resolvedFriendAcceptedMessage = resolveCatalogText('notification.friendship.request_accepted', {
+        pessoa: targetUser?.name || 'Essa pessoa'
+      }, {
+        fallbackTitle: 'Amizade ativada',
+        fallbackBody: `${targetUser?.name || 'Essa pessoa'} aceitou seu pedido. Agora vocês já podem trocar cobranças automáticas com mais privacidade.`
+      });
       createNotification({
         userId: requestRow.requester_user_id,
         type: 'friendship_update',
-        title: 'Amizade ativada',
-        body: `${targetUser?.name || 'Essa pessoa'} aceitou seu pedido. Agora vocês já podem trocar cobranças automáticas com mais privacidade.`,
+        title: resolvedFriendAcceptedMessage.title,
+        body: resolvedFriendAcceptedMessage.body,
         href: '/people',
         relatedType: 'friend_request',
         relatedId: requestId,
@@ -13809,11 +17011,17 @@ app.post('/friend-requests/:id/respond', ensureAuthenticated, (req, res) => {
     WHERE id = ? AND target_user_id = ? AND status = 'pending'
   `).run(now, now, now, requestId, userId);
 
+  const resolvedFriendRejectedMessage = resolveCatalogText('notification.friendship.request_rejected', {
+    pessoa: targetUser?.name || 'Essa pessoa'
+  }, {
+    fallbackTitle: 'Pedido não aceito',
+    fallbackBody: `${targetUser?.name || 'Essa pessoa'} preferiu não ativar a amizade agora.`
+  });
   createNotification({
     userId: requestRow.requester_user_id,
     type: 'friendship_update',
-    title: 'Pedido não aceito',
-    body: `${targetUser?.name || 'Essa pessoa'} preferiu não ativar a amizade agora.`,
+    title: resolvedFriendRejectedMessage.title,
+    body: resolvedFriendRejectedMessage.body,
     href: '/people',
     relatedType: 'friend_request',
     relatedId: requestId,
@@ -13869,11 +17077,17 @@ app.post('/people/:id/unfriend', ensureAuthenticated, (req, res) => {
   closeOtherPendingFriendRequestsBetweenUsers(userId, resolved.linked_user_id, null, 'merged');
 
   const actor = getUserRecord(userId);
+  const resolvedFriendEndedMessage = resolveCatalogText('notification.friendship.ended', {
+    pessoa: actor?.name || 'Um contato'
+  }, {
+    fallbackTitle: 'Amizade desfeita',
+    fallbackBody: `${actor?.name || 'Um contato'} desfez a amizade no AcerttaPay. O histórico continua, mas novos envios automáticos param por aqui.`
+  });
   createNotification({
     userId: resolved.linked_user_id,
     type: 'friendship_update',
-    title: 'Amizade desfeita',
-    body: `${actor?.name || 'Um contato'} desfez a amizade no AcerttaPay. O histórico continua, mas novos envios automáticos param por aqui.`,
+    title: resolvedFriendEndedMessage.title,
+    body: resolvedFriendEndedMessage.body,
     href: '/people',
     relatedType: 'friendship',
     relatedId: friendship.id,
@@ -14312,11 +17526,96 @@ function buildImportPreviewItem(txn, sourceIndex) {
   };
 }
 
+function buildImportExistingMatchVersion(row) {
+  return JSON.stringify({
+    id: Number(row?.id || 0) || null,
+    importId: Number(row?.importId || row?.import_id || 0) || null,
+    cardId: Number(row?.cardId || row?.card_id || 0) || null,
+    month: Number(row?.month || 0) || null,
+    year: Number(row?.year || 0) || null,
+    txnDate: String(row?.txnDate || row?.txn_date || '').trim() || null,
+    description: String(row?.description || '').trim() || null,
+    amountCents: Number(row?.amountCents ?? row?.amount_cents ?? 0) || 0,
+    cardNumber: normalizeImportCardNumber(row?.cardNumber || row?.card_number) || null,
+    parentTxnId: Number(row?.parentTxnId || row?.parent_txn_id || 0) || null,
+    recurringRuleId: Number(row?.recurringRuleId || row?.recurring_rule_id || 0) || null
+  });
+}
+
+function buildImportSharedDebtSummary({ requestCount = 0, draftCount = 0 } = {}) {
+  const safeRequestCount = Math.max(0, Number(requestCount || 0));
+  const safeDraftCount = Math.max(0, Number(draftCount || 0));
+  if (!safeRequestCount && !safeDraftCount) return null;
+  const parts = [];
+  if (safeRequestCount > 0) {
+    parts.push(formatCountLabel(safeRequestCount, 'cobranca vinculada', 'cobrancas vinculadas'));
+  }
+  if (safeDraftCount > 0) {
+    parts.push(formatCountLabel(safeDraftCount, 'rascunho de envio', 'rascunhos de envio'));
+  }
+  return parts.join(' · ');
+}
+
+function compareImportExistingMatches(a, b) {
+  const rank = (row) => {
+    if (row?.overwriteEligible) return 0;
+    if (row?.isManual) return 1;
+    return 2;
+  };
+
+  const rankDiff = rank(a) - rank(b);
+  if (rankDiff !== 0) return rankDiff;
+
+  const exactTextA = normalizeImportDuplicateText(a?.description);
+  const exactTextB = normalizeImportDuplicateText(b?.description);
+  if (exactTextA !== exactTextB) return exactTextA.localeCompare(exactTextB, 'pt-BR');
+
+  const dateA = String(a?.txnDate || '');
+  const dateB = String(b?.txnDate || '');
+  if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+  const amountA = Number(a?.amountCents || 0);
+  const amountB = Number(b?.amountCents || 0);
+  if (amountA !== amountB) return amountB - amountA;
+
+  return Number(a?.id || 0) - Number(b?.id || 0);
+}
+
 function getExistingImportMonthRows(userId, cardId, month, year) {
   const rows = db.prepare(`
-    SELECT t.id, t.import_id, t.txn_date, t.description, t.amount_cents, t.card_number
+    SELECT t.id, t.import_id, t.card_id, t.txn_date, t.description, t.amount_cents, t.card_number,
+           t.purchase_category_id, t.parent_txn_id, t.recurring_rule_id,
+           COALESCE(t.due_month, i.month) AS month,
+           COALESCE(t.due_year, i.year) AS year,
+           pc.name AS purchase_category_name,
+           (
+             SELECT COUNT(*)
+             FROM allocations a
+             WHERE a.user_id = t.user_id
+               AND a.transaction_id = t.id
+           ) AS allocation_count,
+           EXISTS(
+             SELECT 1
+             FROM transactions tx_child
+             WHERE tx_child.user_id = t.user_id
+               AND tx_child.parent_txn_id = t.id
+             LIMIT 1
+           ) AS has_child_installments,
+           (
+             SELECT COUNT(*)
+             FROM shared_debt_requests r
+             WHERE r.requester_user_id = t.user_id
+               AND r.source_transaction_id = t.id
+           ) AS shared_debt_request_count,
+           (
+             SELECT COUNT(*)
+             FROM shared_debt_send_queue_items q
+             WHERE q.requester_user_id = t.user_id
+               AND q.source_transaction_id = t.id
+           ) AS shared_debt_queue_count
     FROM transactions t
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
     WHERE t.user_id = ?
       AND t.card_id = ?
       AND ${EFFECTIVE_DUE_MONTH_SQL} = ?
@@ -14324,17 +17623,59 @@ function getExistingImportMonthRows(userId, cardId, month, year) {
     ORDER BY t.txn_date IS NULL ASC, t.txn_date ASC, t.amount_cents DESC, t.id ASC
   `).all(userId, cardId, month, year);
 
-  return rows.map((row) => ({
-    id: Number(row.id),
-    txnDate: String(row.txn_date || '').trim() || null,
-    dateLabel: formatImportPreviewDateLabel(row.txn_date),
-    description: String(row.description || '').trim() || '(sem descricao)',
-    amountCents: Number(row.amount_cents) || 0,
-    amountLabel: formatBRLFromCents(Number(row.amount_cents) || 0),
-    cardNumber: normalizeImportCardNumber(row.card_number) || null,
-    cardNumberLabel: formatImportPreviewCardNumberLabel(row.card_number),
-    originLabel: Number(row.import_id || 0) > 0 ? 'Ja importada' : 'Lancada manualmente'
-  }));
+  return rows.map((row) => {
+    const importId = Number(row.import_id || 0) || null;
+    const monthNumber = Number(row.month || 0) || null;
+    const yearNumber = Number(row.year || 0) || null;
+    const isManual = !importId;
+    const isClosedMonth = Boolean(monthNumber && yearNumber && isMonthClosed(userId, monthNumber, yearNumber));
+    const allocationCount = Math.max(0, Number(row.allocation_count || 0));
+    const sharedDebtRequestCount = Math.max(0, Number(row.shared_debt_request_count || 0));
+    const sharedDebtQueueCount = Math.max(0, Number(row.shared_debt_queue_count || 0));
+    const hasInstallmentChain = Number(row.parent_txn_id || 0) > 0 || Number(row.has_child_installments || 0) > 0;
+
+    const mapped = {
+      id: Number(row.id),
+      importId,
+      cardId: Number(row.card_id || 0) || null,
+      month: monthNumber,
+      year: yearNumber,
+      txnDate: String(row.txn_date || '').trim() || null,
+      dateLabel: formatImportPreviewDateLabel(row.txn_date),
+      description: String(row.description || '').trim() || '(sem descricao)',
+      amountCents: Number(row.amount_cents) || 0,
+      amountLabel: formatBRLFromCents(Number(row.amount_cents) || 0),
+      cardNumber: normalizeImportCardNumber(row.card_number) || null,
+      cardNumberLabel: formatImportPreviewCardNumberLabel(row.card_number),
+      originLabel: importId ? 'Ja importada' : 'Lancada manualmente',
+      isManual,
+      isImported: !!importId,
+      overwriteEligible: Boolean(isManual && !isClosedMonth),
+      isClosedMonth,
+      overwriteUnavailableReason: importId
+        ? 'Essa coincidencia ja veio de importacao e fica so como referencia.'
+        : (isClosedMonth ? getMonthLockMessage(monthNumber, yearNumber) : null),
+      purchaseCategoryId: Number(row.purchase_category_id || 0) || null,
+      purchaseCategoryName: String(row.purchase_category_name || '').trim() || null,
+      allocationCount,
+      hasInstallmentChain,
+      hasRecurringRule: Number(row.recurring_rule_id || 0) > 0,
+      parentTxnId: Number(row.parent_txn_id || 0) || null,
+      recurringRuleId: Number(row.recurring_rule_id || 0) || null,
+      sharedDebtRequestCount,
+      sharedDebtQueueCount,
+      sharedDebtSummary: buildImportSharedDebtSummary({
+        requestCount: sharedDebtRequestCount,
+        draftCount: sharedDebtQueueCount
+      })
+    };
+
+    mapped.overwriteBadgeLabel = mapped.overwriteEligible
+      ? 'Manual · elegivel'
+      : (mapped.isManual ? 'Manual travado' : 'Ja importada');
+    mapped.version = buildImportExistingMatchVersion(mapped);
+    return mapped;
+  }).sort(compareImportExistingMatches);
 }
 
 function countExactExistingMatchesForImportItem(item, matches, cardId, month, year) {
@@ -14395,6 +17736,8 @@ function buildImportPreviewSummary({ parsedCount, parsedTotalCents, existingCoun
     csvDuplicateTotalCents,
     csvDuplicateTotalLabel: formatBRLFromCents(csvDuplicateTotalCents),
     defaultFinalCount,
+    defaultNewImportCount: defaultFinalCount,
+    defaultOverwriteCount: 0,
     defaultFinalTotalCents,
     defaultFinalTotalLabel: formatBRLFromCents(defaultFinalTotalCents),
     projectedCardCount,
@@ -14469,9 +17812,15 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
   for (const item of sortedItems) {
     if (csvGroupIdByItemId.has(item.id)) continue;
 
-    const existingMatches = existingByDayAmount.get(buildImportDayAmountKey({ txnDate: item.isoDate, amountCents: item.amountCents })) || [];
+    const existingMatches = (existingByDayAmount.get(buildImportDayAmountKey({ txnDate: item.isoDate, amountCents: item.amountCents })) || [])
+      .slice()
+      .sort(compareImportExistingMatches);
     if (existingMatches.length) {
       const exactMatchCount = countExactExistingMatchesForImportItem(item, existingMatches, cardId, month, year);
+      const overwriteCandidates = existingMatches.filter((match) => match.overwriteEligible);
+      const lockedManualMatches = existingMatches.filter((match) => match.isManual && !match.overwriteEligible);
+      const importedMatches = existingMatches.filter((match) => match.isImported);
+
       appDuplicateCandidates.push({
         id: `app_group_${appDuplicateCandidates.length + 1}`,
         itemId: item.id,
@@ -14479,7 +17828,19 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
         amountLabel: item.amountLabel,
         existingMatchCount: existingMatches.length,
         exactMatchCount,
-        existingMatches
+        existingMatches,
+        overwriteCandidateIds: overwriteCandidates.map((match) => Number(match.id || 0)).filter(Boolean),
+        overwriteEligibleCount: overwriteCandidates.length,
+        overwriteEligible: overwriteCandidates.length > 0,
+        hasMultipleOverwriteTargets: overwriteCandidates.length > 1,
+        defaultOverwriteTargetId: overwriteCandidates.length === 1 ? Number(overwriteCandidates[0].id || 0) : null,
+        lockedManualCount: lockedManualMatches.length,
+        importedMatchCount: importedMatches.length,
+        overwriteUnavailableReason: overwriteCandidates.length > 0
+          ? null
+          : (lockedManualMatches.length > 0
+              ? 'Os manuais encontrados ficam só como referência porque esse mês está fechado.'
+              : 'As coincidências daqui ficam só como referência, porque já vieram de importação.')
       });
       continue;
     }
@@ -14524,25 +17885,50 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
 
 function resolveImportPreviewSelection(preview, body) {
   const safeBody = body || {};
-  const selectedIds = [];
-  const seenIds = new Set();
+  const importedItemIds = [];
+  const seenImportedItemIds = new Set();
+  const overwriteActions = [];
   const itemMap = new Map((preview?.items || []).map((item) => [item.id, item]));
 
-  const pushItemId = (itemId) => {
-    if (!itemId || seenIds.has(itemId)) return;
+  const pushImportedItemId = (itemId) => {
+    if (!itemId || seenImportedItemIds.has(itemId)) return;
     if (!itemMap.has(itemId)) return;
-    seenIds.add(itemId);
-    selectedIds.push(itemId);
+    seenImportedItemIds.add(itemId);
+    importedItemIds.push(itemId);
+  };
+
+  const normalizeResolution = (candidateId) => {
+    const explicitResolution = String(safeBody[`app_resolution_${candidateId}`] || '').trim().toLowerCase();
+    if (['skip', 'import', 'overwrite'].includes(explicitResolution)) return explicitResolution;
+    return String(safeBody[`keep_app_${candidateId}`] || '') === '1' ? 'import' : 'skip';
   };
 
   for (const itemId of preview?.autoItemIds || []) {
-    pushItemId(itemId);
+    pushImportedItemId(itemId);
   }
 
   for (const candidate of preview?.appDuplicateCandidates || []) {
-    if (String(safeBody[`keep_app_${candidate.id}`] || '') === '1') {
-      pushItemId(candidate.itemId);
+    const resolution = normalizeResolution(candidate.id);
+    if (resolution === 'import') {
+      pushImportedItemId(candidate.itemId);
+      continue;
     }
+    if (resolution !== 'overwrite') continue;
+
+    const eligibleIds = Array.isArray(candidate.overwriteCandidateIds)
+      ? candidate.overwriteCandidateIds.map((value) => Number(value || 0)).filter(Boolean)
+      : [];
+    let targetTransactionId = Number(safeBody[`app_overwrite_target_${candidate.id}`] || 0);
+    if ((!targetTransactionId || !eligibleIds.includes(targetTransactionId)) && eligibleIds.length === 1) {
+      targetTransactionId = eligibleIds[0];
+    }
+
+    overwriteActions.push({
+      candidateId: candidate.id,
+      itemId: candidate.itemId,
+      targetTransactionId: targetTransactionId || null,
+      resolution: 'overwrite'
+    });
   }
 
   for (const group of preview?.csvDuplicateGroups || []) {
@@ -14553,22 +17939,27 @@ function resolveImportPreviewSelection(preview, body) {
     keepCount = Math.max(0, Math.min(Number(group.occurrenceCount || 0), keepCount));
 
     for (const itemId of (group.itemIds || []).slice(0, keepCount)) {
-      pushItemId(itemId);
+      pushImportedItemId(itemId);
     }
   }
 
-  return selectedIds
-    .map((itemId) => itemMap.get(itemId))
-    .filter(Boolean)
-    .sort((a, b) => Number(a.sourceIndex || 0) - Number(b.sourceIndex || 0));
+  return {
+    importedItems: importedItemIds
+      .map((itemId) => itemMap.get(itemId))
+      .filter(Boolean)
+      .sort((a, b) => Number(a.sourceIndex || 0) - Number(b.sourceIndex || 0)),
+    overwriteActions
+  };
 }
 
-function buildImportConfirmationMessage(preview, importedCount) {
+function buildImportConfirmationMessage(preview, importedCount, overwrittenCount = 0) {
   const periodLabel = preview?.periodLabel || monthLabel(preview?.month, preview?.year);
-  if (importedCount <= 0) {
+  const safeImportedCount = Math.max(0, Number(importedCount || 0));
+  const safeOverwrittenCount = Math.max(0, Number(overwrittenCount || 0));
+  if (safeImportedCount <= 0 && safeOverwrittenCount <= 0) {
     return {
       type: 'info',
-      message: `Nada ficou marcado para entrar em ${periodLabel}. A previa continua aberta para voce ajustar.`
+      message: `Nada ficou marcado para entrar em ${periodLabel}. A previa continua aberta para você ajustar.`
     };
   }
 
@@ -14581,9 +17972,19 @@ function buildImportConfirmationMessage(preview, importedCount) {
     reviewedParts.push(formatCountLabel(summary.csvDuplicateGroupCount, 'grupo repetido no CSV', 'grupos repetidos no CSV'));
   }
 
-  const baseMessage = importedCount === 1
-    ? `1 compra entrou em ${periodLabel}.`
-    : `${importedCount} compras entraram em ${periodLabel}.`;
+  const actionParts = [];
+  if (safeImportedCount > 0) {
+    actionParts.push(safeImportedCount === 1
+      ? '1 compra nova entrou'
+      : `${safeImportedCount} compras novas entraram`);
+  }
+  if (safeOverwrittenCount > 0) {
+    actionParts.push(safeOverwrittenCount === 1
+      ? '1 lancamento manual foi sobrescrito'
+      : `${safeOverwrittenCount} lancamentos manuais foram sobrescritos`);
+  }
+
+  const baseMessage = `${actionParts.join(' e ')} em ${periodLabel}.`;
 
   if (!reviewedParts.length) {
     return { type: 'success', message: `${baseMessage} Tudo certinho por aqui.` };
@@ -14678,40 +18079,208 @@ app.post('/import/confirm', ensureAuthenticated, ensureCanImport, (req, res) => 
     const card = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(preview.cardId, userId);
     if (!card) throw new Error('Esse cartao nao esta mais disponivel para receber a importacao.');
 
-    const selectedItems = resolveImportPreviewSelection(preview, req.body);
-    if (!selectedItems.length) {
-      setFlash(req, 'info', 'Nenhuma compra ficou marcada para entrar. Ajuste a revisao e confirme de novo.');
+    const selection = resolveImportPreviewSelection(preview, req.body);
+    const importedItems = Array.isArray(selection?.importedItems) ? selection.importedItems : [];
+    const overwriteActions = Array.isArray(selection?.overwriteActions) ? selection.overwriteActions : [];
+    if (!importedItems.length && !overwriteActions.length) {
+      setFlash(req, 'info', 'Nenhuma compra ficou marcada para entrar ou sobrescrever. Ajuste a revisao e confirme de novo.');
       return res.redirect('/import');
     }
 
-    const createImportWithTransactions = db.transaction((items) => {
-      const info = db.prepare(`
-        INSERT INTO imports(user_id, card_id, month, year, created_at, original_filename)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(userId, preview.cardId, preview.month, preview.year, nowIso(), preview.originalFilename || 'fatura.csv');
-
-      const insTxn = db.prepare(`
-        INSERT INTO transactions(user_id, import_id, card_id, txn_date, description, amount_cents, card_number, raw_json, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      for (const item of items) {
-        insTxn.run(
-          userId,
-          info.lastInsertRowid,
-          preview.cardId,
-          item.isoDate || null,
-          item.description,
-          item.amountCents,
-          item.cardNumber || null,
-          JSON.stringify(item.raw || {}),
-          nowIso()
-        );
+    const itemMap = new Map((preview.items || []).map((item) => [item.id, item]));
+    const candidateMap = new Map((preview.appDuplicateCandidates || []).map((candidate) => [candidate.id, candidate]));
+    const preparedOverwriteActions = overwriteActions.map((action) => {
+      const candidate = candidateMap.get(action.candidateId);
+      if (!candidate) {
+        throw new Error('Uma das suspeitas revisadas nao existe mais. Refaz a analise do CSV para seguir.');
       }
+      const item = itemMap.get(action.itemId);
+      if (!item) {
+        throw new Error('Nao consegui localizar uma das linhas do CSV que voce revisou. Refaz a analise para seguir.');
+      }
+
+      const eligibleMatches = (candidate.existingMatches || []).filter((match) => Number(match.overwriteEligible || 0) || match.overwriteEligible === true);
+      if (!eligibleMatches.length) {
+        throw new Error('Essa suspeita nao tem mais um lancamento manual elegivel para sobrescrita.');
+      }
+
+      let targetTransactionId = Number(action.targetTransactionId || 0);
+      if (!targetTransactionId && eligibleMatches.length === 1) {
+        targetTransactionId = Number(eligibleMatches[0].id || 0);
+      }
+      if (!targetTransactionId) {
+        throw new Error('Escolha qual lancamento manual voce quer sobrescrever antes de confirmar.');
+      }
+
+      const previewTargetMatch = eligibleMatches.find((match) => Number(match.id || 0) === targetTransactionId);
+      if (!previewTargetMatch) {
+        throw new Error('O alvo escolhido para sobrescrita nao bate mais com a revisao. Refaz a analise para seguir.');
+      }
+
+      return {
+        candidate,
+        item,
+        targetTransactionId,
+        previewTargetMatch
+      };
     });
 
-    createImportWithTransactions(selectedItems);
-    const feedback = buildImportConfirmationMessage(preview, selectedItems.length);
+    const targetIds = preparedOverwriteActions.map((action) => Number(action.targetTransactionId || 0)).filter(Boolean);
+    if (new Set(targetIds).size !== targetIds.length) {
+      throw new Error('O mesmo lancamento manual foi escolhido mais de uma vez. Cada sobrescrita precisa de um alvo proprio.');
+    }
+
+    const persistImportConfirmation = db.transaction((payload) => {
+      const now = nowIso();
+      let importId = null;
+
+      if (payload.importedItems.length) {
+        const info = db.prepare(`
+          INSERT INTO imports(user_id, card_id, month, year, created_at, original_filename)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(userId, preview.cardId, preview.month, preview.year, now, preview.originalFilename || 'fatura.csv');
+        importId = Number(info.lastInsertRowid || 0) || null;
+
+        const insertTransaction = db.prepare(`
+          INSERT INTO transactions(user_id, import_id, card_id, txn_date, description, amount_cents, card_number, raw_json, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        payload.importedItems.forEach((item) => {
+          insertTransaction.run(
+            userId,
+            importId,
+            preview.cardId,
+            item.isoDate || null,
+            item.description,
+            item.amountCents,
+            item.cardNumber || null,
+            JSON.stringify(item.raw || {}),
+            now
+          );
+        });
+      }
+
+      const updateTransaction = db.prepare(`
+        UPDATE transactions
+        SET txn_date = ?, description = ?, amount_cents = ?, card_number = ?, raw_json = ?
+        WHERE id = ? AND user_id = ?
+      `);
+      const insertOverwriteEvent = db.prepare(`
+        INSERT INTO import_overwrite_events (
+          user_id, transaction_id, import_id, card_id, month, year,
+          original_filename, preview_item_id, before_snapshot_json, after_snapshot_json, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const overwrittenIds = [];
+      payload.overwriteActions.forEach((action) => {
+        const currentTarget = getImportOverwriteTargetRow(userId, action.targetTransactionId);
+        if (!currentTarget) {
+          throw new Error('Um dos lancamentos escolhidos para sobrescrita nao existe mais. Refaz a revisao para seguir.');
+        }
+        if (Number(currentTarget.import_id || 0) > 0) {
+          throw new Error('Um dos lancamentos escolhidos deixou de ser manual. Refaz a revisao antes de confirmar.');
+        }
+
+        const currentMonth = Number(currentTarget.month || 0);
+        const currentYear = Number(currentTarget.year || 0);
+        if (Number(currentTarget.card_id || 0) !== Number(preview.cardId || 0)
+          || currentMonth !== Number(preview.month || 0)
+          || currentYear !== Number(preview.year || 0)) {
+          throw new Error('Uma das coincidencias mudou de contexto depois da revisao. Refaça a analise do CSV para continuar.');
+        }
+        if (isMonthClosed(userId, currentMonth, currentYear)) {
+          throw new Error(getMonthLockMessage(currentMonth, currentYear));
+        }
+
+        const currentVersion = buildImportExistingMatchVersion({
+          id: currentTarget.id,
+          import_id: currentTarget.import_id,
+          card_id: currentTarget.card_id,
+          month: currentTarget.month,
+          year: currentTarget.year,
+          txn_date: currentTarget.txn_date,
+          description: currentTarget.description,
+          amount_cents: currentTarget.amount_cents,
+          card_number: currentTarget.card_number,
+          parent_txn_id: currentTarget.parent_txn_id,
+          recurring_rule_id: currentTarget.recurring_rule_id
+        });
+        if (currentVersion !== action.previewTargetMatch.version) {
+          throw new Error('Uma das coincidencias mudou depois da revisao. Refaz a analise do CSV para evitar sobrescrever o item errado.');
+        }
+        if (Number(currentTarget.amount_cents || 0) !== Number(action.item.amountCents || 0)) {
+          throw new Error('O valor do alvo mudou depois da revisao. Refaz a analise do CSV antes de sobrescrever.');
+        }
+
+        const previewItemSnapshot = {
+          id: action.item.id,
+          txn_date: action.item.isoDate || null,
+          description: action.item.description,
+          amount_cents: Number(action.item.amountCents || 0),
+          card_number: action.item.cardNumber || null,
+          raw: action.item.raw || {}
+        };
+        const beforeSnapshot = buildImportOverwriteAuditSnapshot(userId, currentTarget, {
+          preview_item: previewItemSnapshot,
+          preview_id: preview.id,
+          original_filename: preview.originalFilename || 'fatura.csv'
+        });
+
+        const nextDescription = buildImportOverwriteDescription(userId, currentTarget, action.item.description);
+        updateTransaction.run(
+          action.item.isoDate || null,
+          nextDescription,
+          action.item.amountCents,
+          action.item.cardNumber || null,
+          JSON.stringify(action.item.raw || {}),
+          action.targetTransactionId,
+          userId
+        );
+
+        const refreshedTarget = getImportOverwriteTargetRow(userId, action.targetTransactionId);
+        const afterSnapshot = buildImportOverwriteAuditSnapshot(userId, refreshedTarget, {
+          preview_item: previewItemSnapshot,
+          preview_id: preview.id,
+          original_filename: preview.originalFilename || 'fatura.csv',
+          import_id: importId
+        });
+
+        insertOverwriteEvent.run(
+          userId,
+          action.targetTransactionId,
+          importId,
+          preview.cardId,
+          preview.month,
+          preview.year,
+          preview.originalFilename || 'fatura.csv',
+          action.item.id,
+          JSON.stringify(beforeSnapshot),
+          JSON.stringify(afterSnapshot),
+          now
+        );
+        overwrittenIds.push(action.targetTransactionId);
+      });
+
+      return {
+        importId,
+        overwrittenIds: Array.from(new Set(overwrittenIds))
+      };
+    });
+
+    const persistResult = persistImportConfirmation({ importedItems, overwriteActions: preparedOverwriteActions });
+    const overwrittenRows = persistResult.overwrittenIds.length
+      ? getTransactionScopeRowsByIds(userId, persistResult.overwrittenIds)
+      : [];
+
+    if (overwrittenRows.length) {
+      syncEqualAllocationsForEditedTransactions(userId, overwrittenRows);
+      queueSharedDebtDraftsForTransactions(userId, overwrittenRows);
+    }
+
+    const feedback = buildImportConfirmationMessage(preview, importedItems.length, persistResult.overwrittenIds.length);
     clearImportPreview(req);
     setImportFormSeed(req, preview.formSeed || null);
     setFlash(req, feedback.type, feedback.message);
@@ -14733,7 +18302,7 @@ app.post('/import/preview/cancel', ensureAuthenticated, ensureCanImport, (req, r
 
   setImportFormSeed(req, preview.formSeed || null);
   clearImportPreview(req);
-  setFlash(req, 'info', 'Fechei essa previa. O formulario continua preenchido para voce ajustar o que quiser.');
+  setFlash(req, 'info', 'Fechei essa previa. O formulario continua preenchido para você ajustar o que quiser.');
   return res.redirect('/import');
 });
 
@@ -14785,6 +18354,500 @@ function buildOverduePaymentAlertDescription(items) {
     : preview.join(' ');
 }
 
+function buildCardHealthDetailModuleSummary(userId, month, year, {
+  visibleCards = null,
+  statementByCard = null,
+  cardTotalsMap = null,
+  isClosed = false,
+  today = dayjs()
+} = {}) {
+  const safeUserId = Number(userId || 0);
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  const referenceToday = dayjs(today).isValid() ? dayjs(today).startOf('day') : dayjs().startOf('day');
+
+  const baseSummary = {
+    eyebrow: 'Saúde dos cartões',
+    title: 'Saúde dos cartões',
+    subtitle: 'Aqui entra a visão operacional do crédito: fatura do mês, próximos meses, o pedaço que depende de terceiros e o que pede sua mão agora.',
+    primaryCta: {
+      href: `/summary/${safeYear}/${safeMonth}`,
+      label: 'Fechamento do mês'
+    },
+    secondaryCta: {
+      href: '/geral',
+      label: 'Ver cartões'
+    },
+    chips: [],
+    hasAnyData: false,
+    useCompactState: true,
+    isAllClear: false,
+    compact: {
+      tone: 'default',
+      title: 'Seu painel de cartão está quietinho.',
+      description: 'Quando entrar fatura, mês futuro ou rateio com terceiros, esse bloco acorda sem bagunçar o topo.',
+      badges: [
+        { tone: 'default', label: 'Sem fatura aberta' },
+        { tone: 'default', label: 'Sem próximo mês puxando' },
+        { tone: 'default', label: 'Sem radar urgente' }
+      ]
+    },
+    current: {
+      totalCents: 0,
+      paidCents: 0,
+      remainingCents: 0,
+      progressPct: 0,
+      cardCount: 0,
+      countLabel: 'Sem cartão puxando esta referência.',
+      nextDueLabel: null,
+      nextDueCardName: null,
+      pressureLabel: 'Sem cartão pressionando o mês por aqui.',
+      ctaHref: `/summary/${safeYear}/${safeMonth}`,
+      ctaLabel: 'Abrir fechamento'
+    },
+    future: {
+      totalCents: 0,
+      paidCents: 0,
+      remainingCents: 0,
+      monthCount: 0,
+      countLabel: 'Nenhuma competência futura aberta por enquanto.',
+      firstLabel: null,
+      leadLabel: 'Quando os próximos meses aparecerem em /geral, eles pousam aqui.',
+      ctaHref: '/geral',
+      ctaLabel: 'Ver próximos meses'
+    },
+    thirdParties: {
+      totalCents: 0,
+      paidCents: 0,
+      remainingCents: 0,
+      progressPct: 0,
+      personCount: 0,
+      countLabel: 'Sem rateio com terceiros neste mês.',
+      highlightLabel: 'Quando alguém participar da conta, o retrato aparece aqui.',
+      ctaHref: `/summary/${safeYear}/${safeMonth}`,
+      ctaLabel: 'Ver pessoas do mês'
+    },
+    radar: {
+      signalCount: 0,
+      signalLabel: 'Sem susto operacional por agora.',
+      items: [],
+      ctaHref: `/month/${safeYear}/${safeMonth}`,
+      ctaLabel: 'Abrir mês'
+    }
+  };
+
+  if (!safeUserId || !safeMonth || !safeYear) {
+    return baseSummary;
+  }
+
+  const cards = Array.isArray(visibleCards) ? visibleCards : getVisibleCardsForMonth(safeUserId, safeMonth, safeYear);
+
+  let localCardTotalsMap = cardTotalsMap instanceof Map ? cardTotalsMap : null;
+  if (!localCardTotalsMap) {
+    const cardTotalsRows = db.prepare(`
+      SELECT t.card_id, SUM(t.amount_cents) AS total_cents
+      FROM transactions t
+      LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+      WHERE t.user_id = ?
+        AND (
+          (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+          (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+        )
+      GROUP BY t.card_id
+    `).all(safeUserId, safeMonth, safeYear, safeMonth, safeYear);
+    localCardTotalsMap = new Map(cardTotalsRows.map((row) => [Number(row.card_id || 0), Math.max(0, Number(row.total_cents || 0))]));
+  }
+
+  let localStatementByCard = statementByCard instanceof Map ? statementByCard : null;
+  if (!localStatementByCard) {
+    const statementRows = db.prepare(`
+      SELECT card_id, computed_due_date, override_due_date, paid_cents
+      FROM card_statements
+      WHERE user_id = ? AND month = ? AND year = ?
+    `).all(safeUserId, safeMonth, safeYear);
+    localStatementByCard = new Map(statementRows.map((row) => [Number(row.card_id || 0), row]));
+  }
+
+  const currentCards = cards
+    .map((card) => {
+      const safeCardId = Number(card?.id || 0);
+      const stmt = localStatementByCard.get(safeCardId);
+      const computedDueDate = computeDueDate({
+        year: safeYear,
+        month: safeMonth,
+        dueDay: card?.due_day,
+        holidayScope: card?.holiday_scope || 'BR'
+      });
+      const dueDate = stmt?.override_due_date || stmt?.computed_due_date || computedDueDate || null;
+      const totalCents = Math.max(0, Number(localCardTotalsMap.get(safeCardId) || 0));
+      const paidCents = Math.max(0, Number(stmt?.paid_cents || 0));
+      const remainingCents = Math.max(0, totalCents - paidCents);
+      const diffDays = dueDate ? dayjs(dueDate).startOf('day').diff(referenceToday, 'day') : null;
+      return {
+        card_id: safeCardId,
+        card_name: card?.name || 'Cartão',
+        total_cents: totalCents,
+        paid_cents: paidCents,
+        remaining_cents: remainingCents,
+        due_date: dueDate,
+        diff_days: diffDays,
+        close_day: normalizeDayNumber(card?.close_day),
+        due_day: normalizeDayNumber(card?.due_day)
+      };
+    })
+    .filter((item) => item.total_cents > 0 || item.paid_cents > 0)
+    .sort((a, b) => {
+      const aTime = a.due_date ? dayjs(a.due_date).valueOf() : Number.MAX_SAFE_INTEGER;
+      const bTime = b.due_date ? dayjs(b.due_date).valueOf() : Number.MAX_SAFE_INTEGER;
+      if (aTime !== bTime) return aTime - bTime;
+      return a.card_name.localeCompare(b.card_name, 'pt-BR', { sensitivity: 'base' });
+    });
+
+  const currentTotals = currentCards.reduce((acc, item) => {
+    acc.totalCents += Number(item.total_cents || 0);
+    acc.paidCents += Number(item.paid_cents || 0);
+    acc.remainingCents += Number(item.remaining_cents || 0);
+    return acc;
+  }, { totalCents: 0, paidCents: 0, remainingCents: 0 });
+
+  const nextDueCard = currentCards.find((item) => item.due_date && item.remaining_cents > 0)
+    || currentCards.find((item) => item.due_date)
+    || null;
+
+  const pressureCard = currentCards.reduce((best, item) => {
+    if (!best) return item;
+    const itemWeight = Number(item.remaining_cents || 0) > 0 ? Number(item.remaining_cents || 0) : Number(item.total_cents || 0);
+    const bestWeight = Number(best.remaining_cents || 0) > 0 ? Number(best.remaining_cents || 0) : Number(best.total_cents || 0);
+    if (itemWeight !== bestWeight) return itemWeight > bestWeight ? item : best;
+    return item.card_name.localeCompare(best.card_name, 'pt-BR', { sensitivity: 'base' }) < 0 ? item : best;
+  }, null);
+
+  baseSummary.current = {
+    totalCents: currentTotals.totalCents,
+    paidCents: currentTotals.paidCents,
+    remainingCents: currentTotals.remainingCents,
+    progressPct: currentTotals.totalCents > 0 ? Math.max(0, Math.min(100, Math.round((currentTotals.paidCents / currentTotals.totalCents) * 100))) : 0,
+    cardCount: currentCards.length,
+    countLabel: currentCards.length > 0
+      ? formatCountLabel(currentCards.length, 'cartão entrou nesta fatura', 'cartões entraram nesta fatura')
+      : 'Sem cartão puxando esta referência.',
+    nextDueLabel: nextDueCard?.due_date ? dayjs(nextDueCard.due_date).format('DD/MM') : null,
+    nextDueCardName: nextDueCard?.card_name || null,
+    pressureLabel: pressureCard
+      ? (Number(pressureCard.remaining_cents || 0) > 0
+        ? `${pressureCard.card_name} é o que mais puxa agora, com ${formatBRLFromCents(pressureCard.remaining_cents)} ainda faltando.`
+        : `${pressureCard.card_name} levou a maior fatia da fatura, com ${formatBRLFromCents(pressureCard.total_cents)}.`)
+      : 'Sem cartão pressionando o mês por aqui.',
+    ctaHref: `/summary/${safeYear}/${safeMonth}`,
+    ctaLabel: currentTotals.totalCents > 0 ? 'Abrir fechamento' : 'Revisar fechamento'
+  };
+
+  const personAllocationRows = db.prepare(`
+    SELECT a.person_id, SUM(a.share_cents) AS total_cents
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND (
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+      )
+    GROUP BY a.person_id
+  `).all(safeUserId, safeMonth, safeYear, safeMonth, safeYear);
+
+  const personTotalsMap = new Map(personAllocationRows.map((row) => [Number(row.person_id || 0), Math.max(0, Number(row.total_cents || 0))]));
+  const paymentBreakdownMap = getCombinedPersonPaymentBreakdownMap(safeUserId, safeMonth, safeYear);
+  const visiblePeople = getVisiblePeopleForMonth(safeUserId, safeMonth, safeYear, { includePayments: true });
+
+  const thirdPartyRows = visiblePeople
+    .filter((person) => !isSelfPersonRow(person))
+    .map((person) => {
+      const personId = Number(person?.id || 0);
+      const paymentBreakdown = paymentBreakdownMap.get(personId) || { manualCents: 0, autoCents: 0, totalPaidCents: 0 };
+      const totalCents = Math.max(0, Number(personTotalsMap.get(personId) || 0));
+      const paidCents = Math.max(0, Number(paymentBreakdown.totalPaidCents || 0));
+      return {
+        person_id: personId,
+        person_name: person?.name || 'Pessoa',
+        total_cents: totalCents,
+        paid_cents: paidCents,
+        remaining_cents: Math.max(0, totalCents - paidCents)
+      };
+    })
+    .filter((item) => item.total_cents > 0 || item.paid_cents > 0)
+    .sort((a, b) => {
+      if (Number(b.remaining_cents || 0) !== Number(a.remaining_cents || 0)) {
+        return Number(b.remaining_cents || 0) - Number(a.remaining_cents || 0);
+      }
+      if (Number(b.total_cents || 0) !== Number(a.total_cents || 0)) {
+        return Number(b.total_cents || 0) - Number(a.total_cents || 0);
+      }
+      return a.person_name.localeCompare(b.person_name, 'pt-BR', { sensitivity: 'base' });
+    });
+
+  const thirdPartyTotals = thirdPartyRows.reduce((acc, item) => {
+    acc.totalCents += Number(item.total_cents || 0);
+    acc.paidCents += Number(item.paid_cents || 0);
+    acc.remainingCents += Number(item.remaining_cents || 0);
+    return acc;
+  }, { totalCents: 0, paidCents: 0, remainingCents: 0 });
+
+  const leadThirdParty = thirdPartyRows[0] || null;
+
+  baseSummary.thirdParties = {
+    totalCents: thirdPartyTotals.totalCents,
+    paidCents: thirdPartyTotals.paidCents,
+    remainingCents: thirdPartyTotals.remainingCents,
+    progressPct: thirdPartyTotals.totalCents > 0 ? Math.max(0, Math.min(100, Math.round((thirdPartyTotals.paidCents / thirdPartyTotals.totalCents) * 100))) : 0,
+    personCount: thirdPartyRows.length,
+    countLabel: thirdPartyRows.length > 0
+      ? formatCountLabel(thirdPartyRows.length, 'pessoa entrou nesse rateio', 'pessoas entraram nesse rateio')
+      : 'Sem rateio com terceiros neste mês.',
+    highlightLabel: leadThirdParty
+      ? (Number(leadThirdParty.remaining_cents || 0) > 0
+        ? `${leadThirdParty.person_name} ainda tem ${formatBRLFromCents(leadThirdParty.remaining_cents)} nessa rodada.`
+        : `${leadThirdParty.person_name} já ficou em dia nessa rodada.`)
+      : 'Quando alguém participar da conta, o retrato aparece aqui.',
+    ctaHref: `/summary/${safeYear}/${safeMonth}`,
+    ctaLabel: thirdPartyRows.length > 0 ? 'Ver pessoas do mês' : 'Abrir fechamento'
+  };
+
+  const futureTransactionRows = db.prepare(`
+    SELECT effective_due_year AS year, effective_due_month AS month, COALESCE(SUM(amount_cents), 0) AS total_cents
+    FROM (
+      SELECT
+        t.amount_cents,
+        ${EFFECTIVE_DUE_MONTH_SQL} AS effective_due_month,
+        ${EFFECTIVE_DUE_YEAR_SQL} AS effective_due_year
+      FROM transactions t
+      LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+      WHERE t.user_id = ?
+    ) grouped
+    WHERE effective_due_year > ? OR (effective_due_year = ? AND effective_due_month > ?)
+    GROUP BY effective_due_year, effective_due_month
+    ORDER BY effective_due_year ASC, effective_due_month ASC
+  `).all(safeUserId, safeYear, safeYear, safeMonth);
+
+  const futurePaidRows = db.prepare(`
+    SELECT year, month, COALESCE(SUM(paid_cents), 0) AS paid_cents
+    FROM card_statements
+    WHERE user_id = ?
+      AND (year > ? OR (year = ? AND month > ?))
+    GROUP BY year, month
+  `).all(safeUserId, safeYear, safeYear, safeMonth);
+
+  const futurePaidMap = new Map(futurePaidRows.map((row) => [monthKey(row.month, row.year), Math.max(0, Number(row.paid_cents || 0))]));
+  const closedMonths = getClosedMonthsSet(safeUserId);
+
+  const futureGroups = futureTransactionRows
+    .map((row) => {
+      const groupMonth = Number(row.month || 0);
+      const groupYear = Number(row.year || 0);
+      if (!groupMonth || !groupYear) return null;
+      if (closedMonths.has(monthKey(groupMonth, groupYear))) return null;
+      const totalCents = Math.max(0, Number(row.total_cents || 0));
+      const paidCents = Math.max(0, Number(futurePaidMap.get(monthKey(groupMonth, groupYear)) || 0));
+      return {
+        month: groupMonth,
+        year: groupYear,
+        label: monthLabel(groupMonth, groupYear),
+        total_cents: totalCents,
+        paid_cents: paidCents,
+        remaining_cents: Math.max(0, totalCents - paidCents)
+      };
+    })
+    .filter(Boolean);
+
+  const futureTotals = futureGroups.reduce((acc, item) => {
+    acc.totalCents += Number(item.total_cents || 0);
+    acc.paidCents += Number(item.paid_cents || 0);
+    acc.remainingCents += Number(item.remaining_cents || 0);
+    return acc;
+  }, { totalCents: 0, paidCents: 0, remainingCents: 0 });
+
+  const firstFutureGroup = futureGroups[0] || null;
+  const leadFutureGroup = futureGroups.reduce((best, item) => {
+    if (!best) return item;
+    if (Number(item.total_cents || 0) !== Number(best.total_cents || 0)) {
+      return Number(item.total_cents || 0) > Number(best.total_cents || 0) ? item : best;
+    }
+    return compareMonthYear(item.year, item.month, best.year, best.month) < 0 ? item : best;
+  }, null);
+
+  baseSummary.future = {
+    totalCents: futureTotals.totalCents,
+    paidCents: futureTotals.paidCents,
+    remainingCents: futureTotals.remainingCents,
+    monthCount: futureGroups.length,
+    countLabel: futureGroups.length > 0
+      ? formatCountLabel(futureGroups.length, 'competência futura já está aberta', 'competências futuras já estão abertas')
+      : 'Nenhuma competência futura aberta por enquanto.',
+    firstLabel: firstFutureGroup?.label || null,
+    leadLabel: leadFutureGroup
+      ? `${leadFutureGroup.label} carrega a maior fatia à frente, com ${formatBRLFromCents(leadFutureGroup.total_cents)}.`
+      : 'Quando os próximos meses aparecerem em /geral, eles pousam aqui.',
+    ctaHref: '/geral',
+    ctaLabel: futureGroups.length > 0 ? 'Ver próximos meses' : 'Abrir cartões'
+  };
+
+  const unassignedRow = !isClosed
+    ? (db.prepare(`
+        SELECT COUNT(*) AS total_count, COALESCE(SUM(t.amount_cents), 0) AS total_cents
+        FROM transactions t
+        LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+        WHERE t.user_id = ?
+          AND (
+            (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
+            (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id
+          )
+      `).get(safeUserId, safeMonth, safeYear, safeMonth, safeYear) || { total_count: 0, total_cents: 0 })
+    : { total_count: 0, total_cents: 0 };
+
+  const unassignedCount = Math.max(0, Number(unassignedRow?.total_count || 0));
+  const unassignedCents = Math.max(0, Number(unassignedRow?.total_cents || 0));
+
+  const isCurrentReferenceMonth = safeYear === referenceToday.year() && safeMonth === (referenceToday.month() + 1);
+  const currentCardMap = new Map(currentCards.map((item) => [item.card_id, item]));
+
+  const closingTodayCards = isCurrentReferenceMonth
+    ? cards
+      .map((card) => {
+        const currentCard = currentCardMap.get(Number(card?.id || 0));
+        return {
+          card_name: card?.name || 'Cartão',
+          close_day: normalizeDayNumber(card?.close_day),
+          total_cents: Number(currentCard?.total_cents || 0)
+        };
+      })
+      .filter((item) => Number(item.close_day || 0) > 0 && Math.min(Number(item.close_day || 0), referenceToday.daysInMonth()) === referenceToday.date() && Number(item.total_cents || 0) > 0)
+    : [];
+
+  const dueSoonCards = isCurrentReferenceMonth
+    ? currentCards.filter((item) => item.due_date && Number(item.remaining_cents || 0) > 0 && Number(item.diff_days) >= 0 && Number(item.diff_days) <= 2)
+    : [];
+
+  const overdueCards = isCurrentReferenceMonth
+    ? currentCards.filter((item) => item.due_date && Number(item.remaining_cents || 0) > 0 && Number(item.diff_days) < 0)
+    : [];
+
+  const radarItems = [];
+
+  if (overdueCards.length) {
+    radarItems.push({
+      tone: 'warning',
+      priority: 40,
+      icon: '🚨',
+      label: overdueCards.length === 1 ? '1 fatura vencida' : `${overdueCards.length} faturas vencidas`,
+      title: overdueCards.length === 1 ? 'Fatura vencida com pendência' : 'Faturas vencidas com pendência',
+      description: buildOverduePaymentAlertDescription(overdueCards),
+      href: `/summary/${safeYear}/${safeMonth}`
+    });
+  }
+
+  if (unassignedCount > 0) {
+    radarItems.push({
+      tone: 'warning',
+      priority: 35,
+      icon: '👥',
+      label: unassignedCount === 1 ? '1 compra sem dono' : `${unassignedCount} compras sem dono`,
+      title: unassignedCount === 1 ? 'Compra sem dono no mês' : 'Compras sem dono no mês',
+      description: `${formatCountLabel(unassignedCount, 'item ainda não foi dividido', 'itens ainda não foram divididos')}, somando ${formatBRLFromCents(unassignedCents)}.`,
+      href: `/month/${safeYear}/${safeMonth}?f_allocated=nao`
+    });
+  }
+
+  if (dueSoonCards.length) {
+    const preview = dueSoonCards.slice(0, 3).map((item) => `${item.card_name} (${dayjs(item.due_date).format('DD/MM')})`).join(', ');
+    const extraCount = dueSoonCards.length - Math.min(dueSoonCards.length, 3);
+    radarItems.push({
+      tone: 'warning',
+      priority: 30,
+      icon: '📅',
+      label: dueSoonCards.length === 1 ? '1 vence em até 2 dias' : `${dueSoonCards.length} vencem em até 2 dias`,
+      title: dueSoonCards.length === 1 ? 'Vencimento em até 2 dias' : 'Vencimentos em até 2 dias',
+      description: extraCount > 0 ? `${preview} e mais ${formatCountLabel(extraCount, 'fatura chegando', 'faturas chegando')}.` : preview,
+      href: `/summary/${safeYear}/${safeMonth}`
+    });
+  }
+
+  if (closingTodayCards.length) {
+    const preview = closingTodayCards.slice(0, 3).map((item) => item.card_name).join(', ');
+    const extraCount = closingTodayCards.length - Math.min(closingTodayCards.length, 3);
+    radarItems.push({
+      tone: 'info',
+      priority: 20,
+      icon: '⏰',
+      label: closingTodayCards.length === 1 ? '1 fecha hoje' : `${closingTodayCards.length} fecham hoje`,
+      title: closingTodayCards.length === 1 ? 'Cartão fecha hoje' : 'Cartões fecham hoje',
+      description: extraCount > 0 ? `${preview} e mais ${formatCountLabel(extraCount, 'cartão', 'cartões')} fecham hoje.` : `${preview} ${closingTodayCards.length === 1 ? 'fecha' : 'fecham'} hoje.`,
+      href: `/month/${safeYear}/${safeMonth}`
+    });
+  }
+
+  radarItems.sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0));
+
+  baseSummary.radar = {
+    signalCount: radarItems.length,
+    signalLabel: radarItems.length > 0
+      ? formatCountLabel(radarItems.length, 'sinal pedindo sua mão', 'sinais pedindo sua mão')
+      : 'Sem susto operacional por agora.',
+    items: radarItems.slice(0, 4),
+    ctaHref: radarItems[0]?.href || `/month/${safeYear}/${safeMonth}`,
+    ctaLabel: radarItems.length > 0 ? 'Resolver agora' : 'Abrir mês'
+  };
+
+  baseSummary.hasAnyData = currentTotals.totalCents > 0
+    || currentTotals.paidCents > 0
+    || futureTotals.totalCents > 0
+    || thirdPartyTotals.totalCents > 0
+    || radarItems.length > 0;
+
+  baseSummary.isAllClear = !radarItems.length
+    && currentTotals.remainingCents === 0
+    && futureTotals.totalCents === 0
+    && thirdPartyTotals.remainingCents === 0
+    && (currentTotals.totalCents > 0 || thirdPartyTotals.totalCents > 0);
+
+  baseSummary.useCompactState = !baseSummary.hasAnyData || baseSummary.isAllClear;
+
+  if (baseSummary.isAllClear) {
+    baseSummary.chips = [{ tone: 'success', label: 'cartões em dia', href: `/summary/${safeYear}/${safeMonth}` }];
+    baseSummary.compact = {
+      tone: 'success',
+      title: 'Cartões redondinhos por aqui.',
+      description: 'A fatura desse mês já está domada e não há próximo mês aberto puxando assunto. Dá pra respirar sem promessa furada.',
+      badges: [
+        { tone: 'success', label: currentTotals.totalCents > 0 ? 'Fatura do mês em dia' : 'Sem fatura aberta' },
+        { tone: 'success', label: 'Sem próximo mês aberto' },
+        { tone: 'success', label: thirdPartyTotals.remainingCents > 0 ? 'Terceiros no radar' : 'Terceiros zerados' }
+      ]
+    };
+  } else if (!baseSummary.hasAnyData) {
+    baseSummary.compact = {
+      tone: 'default',
+      title: 'Seu painel de cartão está quietinho.',
+      description: 'Quando entrar fatura, mês futuro ou rateio com terceiros, esse bloco acorda sem bagunçar o topo.',
+      badges: [
+        { tone: 'default', label: 'Sem fatura aberta' },
+        { tone: 'default', label: 'Sem próximo mês puxando' },
+        { tone: 'default', label: 'Sem radar urgente' }
+      ]
+    };
+  } else {
+    baseSummary.chips = radarItems.slice(0, 3).map((item) => ({
+      tone: item.tone,
+      label: item.label,
+      href: item.href
+    }));
+  }
+
+  return baseSummary;
+}
+
+
 app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const { year, month } = req.params;
@@ -14797,6 +18860,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 
   const owner = getSelfPerson(userId) || ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
   if (!owner) return res.status(400).send("Ajuste seu perfil em Amigos antes de seguir por aqui.");
+
+  const dashboardAlertContext = getManualDebtDueScheduleContext();
 
   const cardTotal = db.prepare(`
     SELECT COALESCE(SUM(a.share_cents), 0) as total
@@ -14811,12 +18876,20 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       )
   `).get(userId, owner.id, currentMonth, currentYear, currentMonth, currentYear);
 
-  const finances = hydrateMonthlyFinances(userId, db.prepare(`
+  const rawFinances = hydrateMonthlyFinances(userId, db.prepare(`
     SELECT *
     FROM monthly_finances
     WHERE user_id = ? AND month = ? AND year = ?
     ORDER BY CASE type WHEN 'income' THEN 0 ELSE 1 END, id ASC
   `).all(userId, currentMonth, currentYear));
+  const decorateFinanceTodayKey = currentYear === dashboardAlertContext.now.year() && currentMonth === (dashboardAlertContext.now.month() + 1)
+    ? dashboardAlertContext.dateKey
+    : '';
+  const finances = decorateMonthlyFinancesForView(rawFinances, {
+    year: currentYear,
+    month: currentMonth,
+    todayDateKey: decorateFinanceTodayKey
+  });
 
   const categories = db.prepare("SELECT * FROM finance_categories WHERE user_id = ? AND is_active = 1").all(userId);
 
@@ -14831,6 +18904,11 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const visibleCards = getVisibleCardsForMonth(userId, currentMonth, currentYear);
   const cards = getActiveCards(userId).map(({ id, name, close_day, due_day, brand }) => ({ id, name, close_day, due_day, brand }));
   const purchaseCategories = getPurchaseCategories(userId);
+  const expensePaymentProgress = buildExpensePaymentProgress(userId, currentMonth, currentYear, finances);
+  const cardPaymentProgress = buildSelfCardPaymentProgress(userId, currentMonth, currentYear, {
+    ownerPersonId: owner.id,
+    totalCents: Number(cardTotal?.total || 0)
+  });
 
   const cardTotalsRows = db.prepare(`
     SELECT t.card_id, SUM(t.amount_cents) AS total_cents
@@ -14851,8 +18929,6 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     WHERE user_id = ? AND month = ? AND year = ?
   `).all(userId, currentMonth, currentYear);
   const statementByCard = new Map(statementRows.map(row => [row.card_id, row]));
-
-  const sharedDebtSummary = getAcceptedSharedDebtSummaryForMonth(userId, currentMonth, currentYear);
 
   const alerts = [];
   const pendingFriendRequests = db.prepare(`
@@ -14877,24 +18953,43 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 
   if (pendingFriendRequests.length) {
     const newestFriendRequest = pendingFriendRequests[0];
+    const friendPendingMessageKey = pendingFriendRequests.length === 1
+      ? 'dashboard.friendship.pending.single'
+      : 'dashboard.friendship.pending.multi';
+    const friendPendingTitle = pendingFriendRequests.length === 1
+      ? `${newestFriendRequest.requester_name || 'Alguém'} quer entrar na sua rede`
+      : 'Pedidos de amizade esperando resposta';
+    const friendPendingDescription = pendingFriendRequests.length === 1
+      ? 'Aceitando, vocês liberam cobranças automáticas dos dois lados com um ok de verdade.'
+      : `${formatCountLabel(pendingFriendRequests.length, 'pedido de amizade está', 'pedidos de amizade estão')} te esperando lá em Amigos.`;
+    const resolvedFriendPendingAlert = resolveCatalogText(friendPendingMessageKey, {
+      pessoa: newestFriendRequest.requester_name || 'Alguém',
+      n_pedidos: formatCountLabel(pendingFriendRequests.length, 'pedido', 'pedidos')
+    }, {
+      fallbackTitle: friendPendingTitle,
+      fallbackBody: friendPendingDescription
+    });
     alerts.push({
       type: 'info',
       icon: '💚',
-      title: pendingFriendRequests.length === 1
-        ? `${newestFriendRequest.requester_name || 'Alguém'} quer entrar na sua rede`
-        : 'Pedidos de amizade esperando resposta',
-      description: pendingFriendRequests.length === 1
-        ? 'Aceitando, vocês liberam cobranças automáticas dos dois lados com um ok de verdade.'
-        : `${formatCountLabel(pendingFriendRequests.length, 'pedido de amizade está', 'pedidos de amizade estão')} te esperando lá em Amigos.`,
+      title: resolvedFriendPendingAlert.title,
+      description: resolvedFriendPendingAlert.body,
       href: `/people?friendRequest=${newestFriendRequest.id}`
     });
   } else if (unreadFriendNotifications.length) {
     const newestFriendNotification = unreadFriendNotifications[0];
+    const resolvedUnreadFriendAlert = resolveCatalogText('dashboard.friendship.unread', {
+      titulo_reaproveitado: newestFriendNotification.title || 'Tem novidade na sua rede',
+      body_reaproveitado: newestFriendNotification.body || 'Seu espaço de amizades ganhou novidade no AcerttaPay.'
+    }, {
+      fallbackTitle: newestFriendNotification.title || 'Tem novidade na sua rede',
+      fallbackBody: newestFriendNotification.body || 'Seu espaço de amizades ganhou novidade no AcerttaPay.'
+    });
     alerts.push({
       type: 'info',
       icon: '💌',
-      title: newestFriendNotification.title || 'Tem novidade na sua rede',
-      description: newestFriendNotification.body || 'Seu espaço de amizades ganhou novidade no AcerttaPay.',
+      title: resolvedUnreadFriendAlert.title,
+      description: resolvedUnreadFriendAlert.body,
       href: newestFriendNotification.href || '/people'
     });
   }
@@ -14912,13 +19007,26 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 
   if (unreadSharedDebtNotifications.length) {
     const newest = unreadSharedDebtNotifications[0];
+    const sharedDebtAlertMessageKey = unreadSharedDebtNotifications.length === 1
+      ? 'dashboard.shared_debt.unread.single'
+      : 'dashboard.shared_debt.unread.multi';
+    const sharedDebtAlertTitle = unreadSharedDebtNotifications.length === 1 ? (newest.title || 'Tem cobrança esperando você') : 'Cobranças pendentes';
+    const sharedDebtAlertBody = unreadSharedDebtNotifications.length === 1
+      ? (newest.body || 'Você recebeu uma nova cobrança para analisar.')
+      : `Você tem ${formatCountLabel(unreadSharedDebtNotifications.length, 'novidade', 'novidades')} em Cobranças esperando sua olhada.`;
+    const resolvedSharedDebtAlert = resolveCatalogText(sharedDebtAlertMessageKey, {
+      titulo_reaproveitado: sharedDebtAlertTitle,
+      body_reaproveitado: newest.body || 'Você recebeu uma nova cobrança para analisar.',
+      n_novidades: formatCountLabel(unreadSharedDebtNotifications.length, 'novidade', 'novidades')
+    }, {
+      fallbackTitle: sharedDebtAlertTitle,
+      fallbackBody: sharedDebtAlertBody
+    });
     alerts.push({
       type: 'info',
       icon: '🤝',
-      title: unreadSharedDebtNotifications.length === 1 ? newest.title : 'Cobranças pendentes',
-      description: unreadSharedDebtNotifications.length === 1
-        ? (newest.body || 'Você recebeu uma nova cobrança para analisar.')
-        : `Você tem ${formatCountLabel(unreadSharedDebtNotifications.length, 'novidade', 'novidades')} em Cobranças esperando sua olhada.`,
+      title: resolvedSharedDebtAlert.title,
+      description: resolvedSharedDebtAlert.body,
       href: newest.href || '/shared-debts'
     });
   } else {
@@ -14929,11 +19037,18 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     `).get(userId)?.total || 0;
 
     if (pendingSharedDebtCount > 0) {
+      const pendingSharedDebtDescription = `${formatCountLabel(pendingSharedDebtCount, 'cobrança', 'cobranças')} ${pendingSharedDebtCount === 1 ? 'está' : 'estão'} te esperando.`;
+      const resolvedPendingSharedDebtAlert = resolveCatalogText('dashboard.shared_debt.pending', {
+        n_novidades: formatCountLabel(pendingSharedDebtCount, 'cobrança', 'cobranças')
+      }, {
+        fallbackTitle: 'Envios aguardando sua análise',
+        fallbackBody: pendingSharedDebtDescription
+      });
       alerts.push({
         type: 'warning',
         icon: '📨',
-        title: 'Envios aguardando sua análise',
-        description: `${formatCountLabel(pendingSharedDebtCount, 'cobrança', 'cobranças')} ${pendingSharedDebtCount === 1 ? 'está' : 'estão'} te esperando.`,
+        title: resolvedPendingSharedDebtAlert.title,
+        description: resolvedPendingSharedDebtAlert.body,
         href: '/shared-debts#received'
       });
     }
@@ -14941,11 +19056,20 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 
   const draftSendQueueSummary = getSharedDebtSendQueueDraftSummary(userId);
   if (draftSendQueueSummary.queueCount > 0) {
+    const draftQueueTitle = draftSendQueueSummary.queueCount === 1 ? 'Tem 1 envio guardado na caixa de saída' : 'Tem envios guardados na caixa de saída';
+    const draftQueueDescription = `${formatCountLabel(draftSendQueueSummary.itemCount, 'cobrança está', 'cobranças estão')} prontas para disparar, somando ${formatBRLFromCents(draftSendQueueSummary.totalCents)}.`;
+    const resolvedDraftQueueAlert = resolveCatalogText('dashboard.shared_debt.draft_queue', {
+      n_cobrancas: formatCountLabel(draftSendQueueSummary.itemCount, 'cobrança', 'cobranças'),
+      valor_total: formatBRLFromCents(draftSendQueueSummary.totalCents)
+    }, {
+      fallbackTitle: draftQueueTitle,
+      fallbackBody: draftQueueDescription
+    });
     alerts.push({
       type: 'info',
       icon: '📤',
-      title: draftSendQueueSummary.queueCount === 1 ? 'Tem 1 envio guardado na caixa de saída' : 'Tem envios guardados na caixa de saída',
-      description: `${formatCountLabel(draftSendQueueSummary.itemCount, 'cobrança está', 'cobranças estão')} prontas para disparar, somando ${formatBRLFromCents(draftSendQueueSummary.totalCents)}.`,
+      title: resolvedDraftQueueAlert.title,
+      description: resolvedDraftQueueAlert.body,
       href: '/shared-debts#draft-queues'
     });
   }
@@ -14960,20 +19084,44 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       descriptionParts.push(`${formatCountLabel(privateDebtReminderSummary.readyToArchiveCount, 'lembrete já pode', 'lembretes já podem')} ir para o arquivo.`);
     }
 
+    const privateReminderTitle = privateDebtReminderSummary.hasActive
+      ? (privateDebtReminderSummary.activeCount === 1 ? 'Tem 1 lembrete privado em aberto' : 'Tem lembretes privados em aberto')
+      : (privateDebtReminderSummary.readyToArchiveCount === 1 ? 'Tem 1 lembrete privado pronto para arquivo' : 'Tem lembretes privados prontos para arquivo');
+    const privateReminderDescription = `${descriptionParts.join(' ')} Esse radar existe só no seu app.`;
+    const resolvedPrivateReminderAlert = resolveCatalogText('dashboard.private_reminders.radar', {
+      titulo_radar: privateReminderTitle,
+      descricao_radar: privateReminderDescription
+    }, {
+      fallbackTitle: privateReminderTitle,
+      fallbackBody: privateReminderDescription
+    });
+
     alerts.push({
       type: privateDebtReminderSummary.hasActive ? 'info' : 'success',
       icon: privateDebtReminderSummary.hasActive ? '🧾' : '🗂️',
-      title: privateDebtReminderSummary.hasActive
-        ? (privateDebtReminderSummary.activeCount === 1 ? 'Tem 1 lembrete privado em aberto' : 'Tem lembretes privados em aberto')
-        : (privateDebtReminderSummary.readyToArchiveCount === 1 ? 'Tem 1 lembrete privado pronto para arquivo' : 'Tem lembretes privados prontos para arquivo'),
-      description: `${descriptionParts.join(' ')} Esse radar existe só no seu app.`,
+      title: resolvedPrivateReminderAlert.title,
+      description: resolvedPrivateReminderAlert.body,
       href: '/shared-debts#private-reminders'
     });
   }
 
-  const manualDebtDueContext = getManualDebtDueScheduleContext();
+  const manualDebtDueContext = dashboardAlertContext;
   const today = manualDebtDueContext.now;
   const todayManualDebtBucket = getManualDebtDueBucketsForDate(manualDebtDueContext.dateKey, { userIds: [userId] }).get(userId) || { pay: [], receive: [] };
+  const todayFinanceBucket = getMonthlyFinanceBucketsForDate(manualDebtDueContext.dateKey, {
+    userIds: [userId],
+    month: currentMonth,
+    year: currentYear
+  }).get(userId) || { income: [], expense: [] };
+
+  const sharedDebtDetailModuleSummary = getSharedDebtDetailModuleSummary(userId, currentMonth, currentYear);
+  const cardHealthDetailModuleSummary = buildCardHealthDetailModuleSummary(userId, currentMonth, currentYear, {
+    visibleCards,
+    statementByCard,
+    cardTotalsMap,
+    isClosed,
+    today
+  });
 
   if ((todayManualDebtBucket.pay || []).length) {
     alerts.push(buildManualDebtDueDashboardAlert('pay', todayManualDebtBucket.pay, manualDebtDueContext.dateKey));
@@ -14986,17 +19134,41 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const isCurrentReferenceMonth = currentYear === today.year() && currentMonth === (today.month() + 1);
 
   if (isCurrentReferenceMonth) {
+    if ((todayFinanceBucket.income || []).length) {
+      alerts.push(buildMonthlyFinanceDashboardAlert('income', todayFinanceBucket.income, {
+        year: currentYear,
+        month: currentMonth,
+        dateKey: manualDebtDueContext.dateKey
+      }));
+    }
+
+    if ((todayFinanceBucket.expense || []).length) {
+      alerts.push(buildMonthlyFinanceDashboardAlert('expense', todayFinanceBucket.expense, {
+        year: currentYear,
+        month: currentMonth,
+        dateKey: manualDebtDueContext.dateKey
+      }));
+    }
     const closingTodayCards = getActiveCards(userId).filter(card => {
       const closeDay = normalizeDayNumber(card.close_day);
       return closeDay && Math.min(closeDay, today.daysInMonth()) === today.date();
     });
 
     if (closingTodayCards.length) {
+      const closingTodayTitle = closingTodayCards.length === 1 ? 'Cartão fecha hoje' : 'Cartões fecham hoje';
+      const closingTodayDescription = `${closingTodayCards.map(card => card.name).join(', ')} ${closingTodayCards.length === 1 ? 'fecha' : 'fecham'} hoje.`;
+      const resolvedClosingTodayAlert = resolveCatalogText('dashboard.cards.closing_today', {
+        titulo_radar: closingTodayTitle,
+        descricao_radar: closingTodayDescription
+      }, {
+        fallbackTitle: closingTodayTitle,
+        fallbackBody: closingTodayDescription
+      });
       alerts.push({
         type: 'info',
         icon: '⏰',
-        title: 'Cartão fecha hoje',
-        description: `${closingTodayCards.map(card => card.name).join(', ')} ${closingTodayCards.length === 1 ? 'fecha' : 'fecham'} hoje.`
+        title: resolvedClosingTodayAlert.title,
+        description: resolvedClosingTodayAlert.body
       });
     }
 
@@ -15012,11 +19184,19 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       .filter(item => item.total_cents > 0 && item.due_date && item.diff_days >= 0 && item.diff_days <= 2);
 
     if (dueSoonCards.length) {
+      const dueSoonDescription = dueSoonCards.map(item => `${item.card_name} (${dayjs(item.due_date).format('DD/MM')})`).join(', ');
+      const resolvedDueSoonAlert = resolveCatalogText('dashboard.cards.due_soon', {
+        descricao_radar: dueSoonDescription,
+        lista_cartoes_com_datas: dueSoonDescription
+      }, {
+        fallbackTitle: 'Vencimento em até 2 dias',
+        fallbackBody: dueSoonDescription
+      });
       alerts.push({
         type: 'warning',
         icon: '📅',
-        title: 'Vencimento em até 2 dias',
-        description: dueSoonCards.map(item => `${item.card_name} (${dayjs(item.due_date).format('DD/MM')})`).join(', ')
+        title: resolvedDueSoonAlert.title,
+        description: resolvedDueSoonAlert.body
       });
     }
   }
@@ -15028,11 +19208,18 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   `).get(userId)?.total || 0;
 
   if (senderDecisionCount > 0) {
+    const senderDecisionDescription = `${formatCountLabel(senderDecisionCount, 'recusa', 'recusas')} ${senderDecisionCount === 1 ? 'ainda aguarda' : 'ainda aguardam'} sua decisão para encerrar ou contestar.`;
+    const resolvedSenderDecisionAlert = resolveCatalogText('dashboard.shared_debt.rejections_pending', {
+      n_recusas: formatCountLabel(senderDecisionCount, 'recusa', 'recusas')
+    }, {
+      fallbackTitle: 'Rejeições aguardando sua decisão',
+      fallbackBody: senderDecisionDescription
+    });
     alerts.push({
       type: 'warning',
       icon: '⚖️',
-      title: 'Rejeições aguardando sua decisão',
-      description: `${formatCountLabel(senderDecisionCount, 'recusa', 'recusas')} ${senderDecisionCount === 1 ? 'ainda aguarda' : 'ainda aguardam'} sua decisão para encerrar ou contestar.`,
+      title: resolvedSenderDecisionAlert.title,
+      description: resolvedSenderDecisionAlert.body,
       href: '/shared-debts#sent'
     });
   }
@@ -15058,22 +19245,35 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   if (pendingReceiptConfirmationCount > 0) {
     let title = 'Pagamentos aguardando sua confirmação';
     let description = `${formatCountLabel(pendingReceiptConfirmationCount, 'pagamento', 'pagamentos')} já ${pendingReceiptConfirmationCount === 1 ? 'foi marcado como feito e está' : 'foram marcados como feitos e estão'} esperando seu ok final.`;
+    let messageKey = 'dashboard.shared_debt.payments_pending';
+    const variables = {
+      n_pagamentos: formatCountLabel(pendingReceiptConfirmationCount, 'pagamento', 'pagamentos'),
+      n_pix_mes: formatCountLabel(monthlyPendingReceiptConfirmationCount, 'Pix do mês', 'Pix do mês'),
+      dica_pix_mes: ''
+    };
 
     if (monthlyPendingReceiptConfirmationCount > 0 && legacyPendingReceiptConfirmationCount === 0) {
-      title = monthlyPendingReceiptConfirmationCount === 1 ? 'Pix do mês aguardando seu ok' : 'Pix do mês aguardando seu ok';
+      title = 'Pix do mês aguardando seu ok';
       description = `${formatCountLabel(monthlyPendingReceiptConfirmationCount, 'Pix do mês', 'Pix do mês')} já ${monthlyPendingReceiptConfirmationCount === 1 ? 'foi avisado e está' : 'foram avisados e estão'} esperando sua confirmação na carteira mensal.`;
+      messageKey = 'dashboard.monthly_pix.pending_confirmation';
     } else if (monthlyPendingReceiptConfirmationCount > 0) {
       const monthlyHint = monthlyPendingReceiptConfirmationCount === 1
         ? '1 deles é Pix do mês.'
         : `${monthlyPendingReceiptConfirmationCount} deles são Pix do mês.`;
       description = `${description} ${monthlyHint}`;
+      variables.dica_pix_mes = monthlyHint;
     }
+
+    const resolvedPendingPaymentAlert = resolveCatalogText(messageKey, variables, {
+      fallbackTitle: title,
+      fallbackBody: description
+    });
 
     alerts.push({
       type: 'warning',
       icon: '✅',
-      title,
-      description,
+      title: resolvedPendingPaymentAlert.title,
+      description: resolvedPendingPaymentAlert.body,
       href: '/shared-debts#sent'
     });
   }
@@ -15094,11 +19294,18 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     `).get(userId, currentMonth, currentYear, currentMonth, currentYear)?.total || 0;
 
     if (unassignedCount > 0) {
+      const unassignedDescription = `${formatCountLabel(unassignedCount, 'item', 'itens')} deste mês ainda ${unassignedCount === 1 ? 'não foi dividido' : 'não foram divididos'} entre as pessoas.`;
+      const resolvedUnassignedAlert = resolveCatalogText('dashboard.month.unassigned', {
+        n_itens: formatCountLabel(unassignedCount, 'item', 'itens')
+      }, {
+        fallbackTitle: 'Itens sem distribuição',
+        fallbackBody: unassignedDescription
+      });
       alerts.push({
         type: 'warning',
         icon: '👥',
-        title: 'Itens sem distribuição',
-        description: `${formatCountLabel(unassignedCount, 'item', 'itens')} deste mês ainda ${unassignedCount === 1 ? 'não foi dividido' : 'não foram divididos'} entre as pessoas.`,
+        title: resolvedUnassignedAlert.title,
+        description: resolvedUnassignedAlert.body,
         href: `/month/${currentYear}/${currentMonth}?f_allocated=nao`
       });
     }
@@ -15124,11 +19331,20 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       .filter(item => item.total_cents > 0 && item.due_passed && item.remaining_cents > 0);
 
     if (overduePendingCards.length) {
+      const overdueTitle = overduePendingCards.length === 1 ? 'Fatura vencida com pendência' : 'Faturas vencidas com pendência';
+      const overdueDescription = buildOverduePaymentAlertDescription(overduePendingCards);
+      const resolvedOverdueAlert = resolveCatalogText('dashboard.cards.overdue', {
+        titulo_radar: overdueTitle,
+        descricao_radar: overdueDescription
+      }, {
+        fallbackTitle: overdueTitle,
+        fallbackBody: overdueDescription
+      });
       alerts.push({
         type: 'warning',
         icon: '🚨',
-        title: overduePendingCards.length === 1 ? 'Fatura vencida com pendência' : 'Faturas vencidas com pendência',
-        description: buildOverduePaymentAlertDescription(overduePendingCards),
+        title: resolvedOverdueAlert.title,
+        description: resolvedOverdueAlert.body,
         href: `/summary/${currentYear}/${currentMonth}`
       });
     }
@@ -15148,7 +19364,10 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     alerts,
     cards,
     purchaseCategories,
-    sharedDebtSummary
+    expensePaymentProgress,
+    cardPaymentProgress,
+    sharedDebtDetailModuleSummary,
+    cardHealthDetailModuleSummary
   });
 });
 
@@ -15434,9 +19653,9 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
       }
     })();
 
-    syncSharedDebtRequestsForTransactions(userId, createdTxnIds, {
-      originKind: createdTxnIds.length > 1 ? 'installment' : 'single'
-    });
+    if (createdTxnIds.length) {
+      queueSharedDebtDraftsForTransactions(userId, getTransactionScopeRowsByIds(userId, createdTxnIds));
+    }
 
     if (isRecurring) {
       setFlash(req, "success", "Lançamento recorrente mensal criado com sucesso.");
@@ -15536,12 +19755,10 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
       originKind: detectSharedDebtOriginKindFromRows(targetRows)
     });
 
-    if (dispatchResult.deliveryMode === 'draft') {
-      const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
-      setFlash(req, 'success', summary.itemCount > 0
-        ? `Divisão salva e ${formatCountLabel(summary.itemCount, 'cobrança ficou guardada', 'cobranças ficaram guardadas')} na caixa de saída.`
-        : 'Divisão salva. Como ainda não encontrei amizade pronta nessa seleção, nada ficou pendente de envio.');
-    }
+    const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
+    setFlash(req, 'success', summary.itemCount > 0
+      ? `Divisão salva. ${formatCountLabel(summary.itemCount, 'item foi para a caixa de saída', 'itens foram para a caixa de saída')}.`
+      : 'Divisão salva. Nada entrou na caixa de saída dessa vez.');
 
     res.redirect(`/month/${txn.year}/${txn.month}`);
   } catch (error) {
@@ -15800,7 +20017,6 @@ app.post("/txn/:id/edit", ensureAuthenticated, (req, res) => {
     return respondError(409, error.message || 'A divisão dessa compra precisa de uma revisão antes de trocar o valor.');
   }
 
-  const draftQueuedTxnIdSet = getSharedDebtDraftQueuedTxnIdSet(userId, targetRows.map((row) => row.id));
   const updateTxn = db.prepare(`
     UPDATE transactions
     SET txn_date = ?, description = ?, amount_cents = ?, card_id = ?, due_month = ?, due_year = ?, purchase_category_id = ?
@@ -15863,17 +20079,8 @@ app.post("/txn/:id/edit", ensureAuthenticated, (req, res) => {
   const refreshedRows = getTransactionScopeRowsByIds(userId, targetRows.map((row) => row.id));
   syncEqualAllocationsForEditedTransactions(userId, refreshedRows);
 
-  const draftRows = refreshedRows.filter((row) => draftQueuedTxnIdSet.has(Number(row.id || 0)));
-  const liveRows = refreshedRows.filter((row) => !draftQueuedTxnIdSet.has(Number(row.id || 0)));
-
-  if (draftRows.length) {
-    queueSharedDebtDraftsForTransactions(userId, draftRows);
-  }
-
-  if (liveRows.length) {
-    syncSharedDebtRequestsForTransactions(userId, liveRows.map((row) => row.id), {
-      originKind: detectSharedDebtOriginKindFromRows(liveRows)
-    });
+  if (refreshedRows.length) {
+    queueSharedDebtDraftsForTransactions(userId, refreshedRows);
   }
 
   const movedMonth = futureScope && dueShiftDelta !== 0;
@@ -15977,12 +20184,10 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
       originKind: detectSharedDebtOriginKindFromRows(targetRows)
     });
 
-    if (dispatchResult.deliveryMode === 'draft') {
-      const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
-      setFlash(req, 'success', summary.itemCount > 0
-        ? `Divisão salva e ${formatCountLabel(summary.itemCount, 'cobrança ficou guardada', 'cobranças ficaram guardadas')} na caixa de saída.`
-        : 'Divisão salva. Como ainda não encontrei amizade pronta nessa seleção, nada ficou pendente de envio.');
-    }
+    const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
+    setFlash(req, 'success', summary.itemCount > 0
+      ? `Divisão salva. ${formatCountLabel(summary.itemCount, 'item foi para a caixa de saída', 'itens foram para a caixa de saída')}.`
+      : 'Divisão salva. Nada entrou na caixa de saída dessa vez.');
 
     res.redirect(`/month/${txn.year}/${txn.month}`);
   } catch (error) {
@@ -16081,17 +20286,10 @@ app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
       originKind: detectSharedDebtOriginKindFromRows(targetRows)
     });
 
-    const baseMessage = targetRows.length > 1
-      ? `${targetRows.length} lançamento(s) tiveram a distribuição atualizada.`
-      : 'Distribuição atualizada com sucesso.';
-
-    let message = baseMessage;
-    if (dispatchResult.deliveryMode === 'draft') {
-      const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
-      message = summary.itemCount > 0
-        ? `${baseMessage} ${formatCountLabel(summary.itemCount, 'cobrança ficou guardada', 'cobranças ficaram guardadas')} na caixa de saída.`
-        : `${baseMessage} Não achei amizade pronta nessa seleção, então nada ficou pendente de envio.`;
-    }
+    const summary = dispatchResult.summary || { queueCount: 0, itemCount: 0, totalCents: 0 };
+    const message = summary.itemCount > 0
+      ? `Divisão salva. ${formatCountLabel(summary.itemCount, 'item foi para a caixa de saída', 'itens foram para a caixa de saída')}.`
+      : 'Divisão salva. Nada entrou na caixa de saída dessa vez.';
 
     return res.json({
       ok: true,
@@ -16256,8 +20454,6 @@ app.post("/month/:year/:month/bulk/move", ensureAuthenticated, (req, res) => {
     SET due_month = ?, due_year = ?
     WHERE id = ? AND user_id = ?
   `);
-  const draftQueuedTxnIdSet = getSharedDebtDraftQueuedTxnIdSet(userId, moveTargets.map((targetTxn) => targetTxn.id));
-
   db.transaction(() => {
     moveTargets.forEach(targetTxn => {
       updateTxn.run(targetTxn.target_month, targetTxn.target_year, targetTxn.id, userId);
@@ -16265,17 +20461,8 @@ app.post("/month/:year/:month/bulk/move", ensureAuthenticated, (req, res) => {
   })();
 
   const refreshedRows = getTransactionScopeRowsByIds(userId, moveTargets.map((targetTxn) => targetTxn.id));
-  const draftRows = refreshedRows.filter((row) => draftQueuedTxnIdSet.has(Number(row.id || 0)));
-  const liveRows = refreshedRows.filter((row) => !draftQueuedTxnIdSet.has(Number(row.id || 0)));
-
-  if (draftRows.length) {
-    queueSharedDebtDraftsForTransactions(userId, draftRows);
-  }
-
-  if (liveRows.length) {
-    syncSharedDebtRequestsForTransactions(userId, liveRows.map((targetTxn) => targetTxn.id), {
-      originKind: detectSharedDebtOriginKindFromRows(liveRows)
-    });
+  if (refreshedRows.length) {
+    queueSharedDebtDraftsForTransactions(userId, refreshedRows);
   }
 
   return res.json({
@@ -18074,22 +22261,23 @@ function buildStatementShareMessageContext({ state, personName, periodLabel, tot
   const totalLabel = formatBRLFromCents(totalCents);
   const paidLabel = formatBRLFromCents(paidCents);
   const remainingLabel = formatBRLFromCents(remainingCents);
-  const hasPix = !!String(pixPayload || '').trim();
+  const safePixPayload = String(pixPayload || '').trim();
+  const hasPix = !!safePixPayload;
 
+  let nativeShareTitle = `Resumo ${periodLabel} — ${safePersonName}`;
   let nativeShareText = '';
   let whatsappCaption = '';
   let whatsappFollowUpMessage = '';
 
   if (safeState === 'settled') {
-    nativeShareText = [
+    const nativeFallback = [
       `Separei o resumo de ${periodLabel} só para registro.`,
       'Já ficou tudo certinho por aqui. Obrigado por fechar essa com a gente.',
       '',
       `Total do período: ${totalLabel}.`,
       `Valor pago: ${paidLabel}.`
     ].join('\n');
-
-    whatsappCaption = [
+    const whatsappFallback = [
       `*Oi, ${safePersonName}!* ✨`,
       '',
       `Separei o resumo de *${periodLabel}* só para registro.`,
@@ -18097,67 +22285,142 @@ function buildStatementShareMessageContext({ state, personName, periodLabel, tot
       '',
       'A imagem com os detalhes foi logo abaixo 👇'
     ].join('\n');
+
+    const resolvedNative = resolveCatalogText('share.summary.settled.native', {
+      periodo: periodLabel,
+      pessoa: safePersonName,
+      valor_total: totalLabel,
+      valor_pago: paidLabel
+    }, {
+      fallbackTitle: nativeShareTitle,
+      fallbackBody: nativeFallback
+    });
+
+    nativeShareTitle = resolvedNative.title || nativeShareTitle;
+    nativeShareText = resolvedNative.body;
+    whatsappCaption = resolveCatalogText('whatsapp.summary.settled.caption', {
+      periodo: periodLabel,
+      pessoa: safePersonName
+    }, {
+      fallbackTitle: `Resumo ${periodLabel}`,
+      fallbackBody: whatsappFallback
+    }).body;
   } else if (safeState === 'partial_due') {
-    nativeShareText = [
+    const nativeFallback = [
       `Separei o resumo de ${periodLabel}. Já entrou ${paidLabel} e ainda falta ${remainingLabel} para fechar tudo.`,
       'A imagem vai junto com os detalhes.'
     ].join('\n\n');
-
-    whatsappCaption = [
+    const nativeFallbackWithPix = [
+      nativeFallback,
+      'Pix copia e cola do saldo restante:',
+      safePixPayload
+    ].join('\n\n');
+    const whatsappFallback = [
       `*Oi, ${safePersonName}!* 💳`,
       '',
       `Separei o resumo de *${periodLabel}*. Já entrou *${paidLabel}* e ainda falta *${remainingLabel}* para fechar tudo.`,
       '',
       'A imagem com os detalhes foi logo abaixo 👇'
     ].join('\n');
+    const whatsappFollowFallback = [
+      `Pix copia e cola do saldo restante (${remainingLabel}):`,
+      '',
+      safePixPayload,
+      '',
+      'Quando pagar, me manda o comprovante por aqui 💸'
+    ].join('\n');
+
+    const resolvedNative = resolveCatalogText(hasPix ? 'share.summary.partial.native.with_pix' : 'share.summary.partial.native.no_pix', {
+      periodo: periodLabel,
+      pessoa: safePersonName,
+      valor_pago: paidLabel,
+      valor_restante: remainingLabel,
+      pix_payload: safePixPayload
+    }, {
+      fallbackTitle: nativeShareTitle,
+      fallbackBody: hasPix ? nativeFallbackWithPix : nativeFallback
+    });
+
+    nativeShareTitle = resolvedNative.title || nativeShareTitle;
+    nativeShareText = resolvedNative.body;
+    whatsappCaption = resolveCatalogText('whatsapp.summary.partial.caption', {
+      periodo: periodLabel,
+      pessoa: safePersonName,
+      valor_pago: paidLabel,
+      valor_restante: remainingLabel
+    }, {
+      fallbackTitle: `Resumo ${periodLabel}`,
+      fallbackBody: whatsappFallback
+    }).body;
 
     if (hasPix) {
-      nativeShareText = [
-        nativeShareText,
-        'Pix copia e cola do saldo restante:',
-        String(pixPayload || '').trim()
-      ].join('\n\n');
-
-      whatsappFollowUpMessage = [
-        `Pix copia e cola do saldo restante (${remainingLabel}):`,
-        '',
-        String(pixPayload || '').trim(),
-        '',
-        'Quando pagar, me manda o comprovante por aqui 💸'
-      ].join('\n');
+      whatsappFollowUpMessage = resolveCatalogText('whatsapp.summary.partial.followup', {
+        valor_restante: remainingLabel,
+        pix_payload: safePixPayload
+      }, {
+        fallbackTitle: 'Pix copia e cola do saldo restante',
+        fallbackBody: whatsappFollowFallback
+      }).body;
     }
   } else {
-    nativeShareText = [
+    const nativeFallback = [
       `Separei o resumo de ${periodLabel}. O total em aberto ficou em ${remainingLabel}.`,
       'A imagem vai junto com os detalhes.'
     ].join('\n\n');
-
-    whatsappCaption = [
+    const nativeFallbackWithPix = [
+      nativeFallback,
+      'Pix copia e cola para facilitar o acerto:',
+      safePixPayload
+    ].join('\n\n');
+    const whatsappFallback = [
       `*Oi, ${safePersonName}!* 💳`,
       '',
       `Separei o resumo de *${periodLabel}*. O total em aberto ficou em *${remainingLabel}*.`,
       '',
       'A imagem com os detalhes foi logo abaixo 👇'
     ].join('\n');
+    const whatsappFollowFallback = [
+      `Pix copia e cola para fechar esse resumo (${remainingLabel}):`,
+      '',
+      safePixPayload,
+      '',
+      'Quando pagar, me manda o comprovante por aqui 💸'
+    ].join('\n');
+
+    const resolvedNative = resolveCatalogText(hasPix ? 'share.summary.open.native.with_pix' : 'share.summary.open.native.no_pix', {
+      periodo: periodLabel,
+      pessoa: safePersonName,
+      valor_restante: remainingLabel,
+      pix_payload: safePixPayload
+    }, {
+      fallbackTitle: nativeShareTitle,
+      fallbackBody: hasPix ? nativeFallbackWithPix : nativeFallback
+    });
+
+    nativeShareTitle = resolvedNative.title || nativeShareTitle;
+    nativeShareText = resolvedNative.body;
+    whatsappCaption = resolveCatalogText('whatsapp.summary.open.caption', {
+      periodo: periodLabel,
+      pessoa: safePersonName,
+      valor_restante: remainingLabel
+    }, {
+      fallbackTitle: `Resumo ${periodLabel}`,
+      fallbackBody: whatsappFallback
+    }).body;
 
     if (hasPix) {
-      nativeShareText = [
-        nativeShareText,
-        'Pix copia e cola para facilitar o acerto:',
-        String(pixPayload || '').trim()
-      ].join('\n\n');
-
-      whatsappFollowUpMessage = [
-        `Pix copia e cola para fechar esse resumo (${remainingLabel}):`,
-        '',
-        String(pixPayload || '').trim(),
-        '',
-        'Quando pagar, me manda o comprovante por aqui 💸'
-      ].join('\n');
+      whatsappFollowUpMessage = resolveCatalogText('whatsapp.summary.open.followup', {
+        valor_restante: remainingLabel,
+        pix_payload: safePixPayload
+      }, {
+        fallbackTitle: 'Pix copia e cola do resumo',
+        fallbackBody: whatsappFollowFallback
+      }).body;
     }
   }
 
   return {
+    nativeShareTitle,
     nativeShareText,
     whatsappCaption,
     whatsappFollowUpMessage
@@ -18245,14 +22508,23 @@ async function buildSharePixContext({ userId, month, year, person, totalCents, p
     remainingCents: safeRemainingCents,
     pixPayload: pix.available ? pix.payload : ''
   });
+  const whatsappAutoSecondMessage = pix.available
+    ? resolveCatalogText('whatsapp.summary.auto.second.pix_only', {
+      pix_payload: pix.payload
+    }, {
+      fallbackTitle: 'Automação do WhatsApp — Pix bruto',
+      fallbackBody: pix.payload
+    }).body
+    : '';
 
   return {
     state,
     periodLabel,
-    shareTitle: `Resumo ${periodLabel} — ${person?.name || 'AcerttaPay'}`,
+    shareTitle: messages.nativeShareTitle || `Resumo ${periodLabel} — ${person?.name || 'AcerttaPay'}`,
     nativeShareText: messages.nativeShareText,
     whatsappCaption: messages.whatsappCaption,
     whatsappFollowUpMessage: messages.whatsappFollowUpMessage,
+    whatsappAutoSecondMessage,
     pix
   };
 }
@@ -18518,7 +22790,7 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
   }
 
   try {
-    const { personPhone, personPhoneCountry, message, followUpMessage, pixPayload, imageBase64 } = req.body;
+    const { personPhone, personPhoneCountry, message, followUpMessage, pixPayload, autoSecondMessage, imageBase64 } = req.body;
 
     const apiUrl = getSettingText('EVOLUTION_API_URL');
     const apiKey = getSettingText('EVOLUTION_API_KEY');
@@ -18543,9 +22815,12 @@ app.post("/whatsapp/send-automation", ensureAuthenticated, express.json({ limit:
 
     await sendEvolutionMediaWithFallback(apiUrl, apiKey, instance, cleanNumber, message, base64Data);
 
+    const automationSecondMessage = String(autoSecondMessage || '').trim();
     const pixCopyPaste = String(pixPayload || '').trim();
     const fallbackText = String(followUpMessage || '').trim();
-    if (pixCopyPaste) {
+    if (automationSecondMessage) {
+      await sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, automationSecondMessage);
+    } else if (pixCopyPaste) {
       await sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, pixCopyPaste);
     } else if (fallbackText) {
       await sendEvolutionTextWithFallback(apiUrl, apiKey, instance, cleanNumber, fallbackText);
@@ -18601,6 +22876,8 @@ app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) =>
     const amountMode = normalizeFinanceAmountMode(req.body.amount_mode);
     const description = sanitizeFinanceDescription(req.body.description);
     const items = amountMode === 'variable' ? sanitizeVariableFinanceItems(req.body.items) : [];
+    const dayOfMonth = amountMode === 'fixed' ? normalizeFinanceDayOfMonth(req.body.day_of_month) : null;
+    const scheduleKind = dayOfMonth ? normalizeFinanceScheduleKind(req.body.schedule_kind, type) : null;
 
     if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 2000) {
       return res.status(400).json({ error: "Mês ou ano inválido." });
@@ -18614,27 +22891,28 @@ app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) =>
       return res.status(423).json({ error: getMonthLockMessage(month, year) });
     }
 
-    const nowIso = new Date().toISOString();
+    const nowIsoValue = new Date().toISOString();
     const totalCents = amountMode === 'variable' ? sumFinanceItemCents(items) : 0;
     const carryKey = createMonthlyFinanceCarryKey();
 
     const insertFinance = db.prepare(`
-      INSERT INTO monthly_finances (user_id, month, year, type, description, formula, amount_cents, amount_mode, carry_key, created_at)
-      VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, ?)
+      INSERT INTO monthly_finances (user_id, month, year, type, description, formula, amount_cents, amount_mode, carry_key, day_of_month, schedule_kind, created_at)
+      VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?)
     `);
 
     const insertItem = db.prepare(`
-      INSERT INTO monthly_finance_items (finance_id, user_id, item_date, item_source, amount_cents, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO monthly_finance_items (finance_id, user_id, item_date, item_source, amount_cents, is_paid, paid_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const financeId = db.transaction(() => {
-      const result = insertFinance.run(userId, month, year, type, description, totalCents, amountMode, carryKey, nowIso);
+      const result = insertFinance.run(userId, month, year, type, description, totalCents, amountMode, carryKey, dayOfMonth, scheduleKind, nowIsoValue);
       const createdFinanceId = Number(result.lastInsertRowid);
 
       if (amountMode === 'variable') {
         for (const item of items) {
-          insertItem.run(createdFinanceId, userId, item.item_date, item.item_source, item.amount_cents, nowIso, nowIso);
+          const itemIsPaid = normalizeFinancePaidFlag(item?.is_paid);
+          insertItem.run(createdFinanceId, userId, item.item_date, item.item_source, item.amount_cents, itemIsPaid, itemIsPaid ? nowIsoValue : null, nowIsoValue, nowIsoValue);
         }
       }
 
@@ -18669,34 +22947,199 @@ app.post("/finances/variable/:id", ensureAuthenticated, express.json(), (req, re
     const description = sanitizeFinanceDescription(req.body.description);
     const items = sanitizeVariableFinanceItems(req.body.items);
     const totalCents = sumFinanceItemCents(items);
-    const nowIso = new Date().toISOString();
+    const nowIsoValue = new Date().toISOString();
+    const currentItems = getFinanceItemsByFinanceId(userId, id);
+    const currentItemsById = new Map(currentItems.map((item) => [Number(item.id || 0), item]));
 
     const updateFinance = db.prepare(`
       UPDATE monthly_finances
       SET description = ?, formula = '', amount_cents = ?, amount_mode = 'variable'
       WHERE id = ? AND user_id = ?
     `);
-    const deleteItems = db.prepare(`
-      DELETE FROM monthly_finance_items
-      WHERE finance_id = ? AND user_id = ?
+    const updateItem = db.prepare(`
+      UPDATE monthly_finance_items
+      SET item_date = ?, item_source = ?, amount_cents = ?, is_paid = ?, paid_at = ?, updated_at = ?
+      WHERE id = ? AND finance_id = ? AND user_id = ?
     `);
     const insertItem = db.prepare(`
-      INSERT INTO monthly_finance_items (finance_id, user_id, item_date, item_source, amount_cents, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO monthly_finance_items (finance_id, user_id, item_date, item_source, amount_cents, is_paid, paid_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const deleteItem = db.prepare(`
+      DELETE FROM monthly_finance_items
+      WHERE finance_id = ? AND user_id = ? AND id = ?
     `);
 
     db.transaction(() => {
       updateFinance.run(description, totalCents, id, userId);
-      deleteItems.run(id, userId);
+
+      const retainedIds = new Set();
       for (const item of items) {
-        insertItem.run(id, userId, item.item_date, item.item_source, item.amount_cents, nowIso, nowIso);
+        const itemId = normalizePositiveInteger(item?.id);
+        const nextPaid = normalizeFinancePaidFlag(item?.is_paid);
+        if (itemId && currentItemsById.has(itemId)) {
+          const currentItem = currentItemsById.get(itemId);
+          const currentPaid = normalizeFinancePaidFlag(currentItem?.is_paid);
+          const paidAt = nextPaid ? (currentPaid ? (currentItem?.paid_at || nowIsoValue) : nowIsoValue) : null;
+          updateItem.run(item.item_date, item.item_source, item.amount_cents, nextPaid, paidAt, nowIsoValue, itemId, id, userId);
+          retainedIds.add(itemId);
+        } else {
+          insertItem.run(id, userId, item.item_date, item.item_source, item.amount_cents, nextPaid, nextPaid ? nowIsoValue : null, nowIsoValue, nowIsoValue);
+        }
+      }
+
+      for (const currentItem of currentItems) {
+        const currentId = Number(currentItem.id || 0);
+        if (!currentId || retainedIds.has(currentId)) continue;
+        deleteItem.run(id, userId, currentId);
       }
     })();
 
-    return res.json({ success: true, finance: serializeFinanceForApi(userId, id) });
+    return res.json({
+      success: true,
+      finance: serializeFinanceForApi(userId, id),
+      expenseProgress: buildExpensePaymentProgress(userId, Number(finance.month), Number(finance.year))
+    });
   } catch (e) {
     const status = /certinhos|nome para esse item/i.test(String(e.message || '')) ? 400 : 500;
     return res.status(status).json({ error: getFriendlyErrorMessage(e, { defaultMessage: 'Não consegui salvar esses lançamentos agora.' }) });
+  }
+});
+
+
+app.post("/finances/fixed/:id", ensureAuthenticated, express.json(), (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const id = Number(req.params.id);
+    const finance = getFinanceByIdForUser(userId, id);
+    if (!finance) {
+      return res.status(404).json({ error: "Item não encontrado." });
+    }
+
+    if (finance.amount_mode !== 'fixed') {
+      return res.status(400).json({ error: "Esse item usa vários lançamentos." });
+    }
+
+    if (isMonthClosed(userId, Number(finance.month), Number(finance.year))) {
+      return res.status(423).json({ error: getMonthLockMessage(Number(finance.month), Number(finance.year)) });
+    }
+
+    const description = sanitizeFinanceDescription(req.body.description);
+    const dayOfMonth = normalizeFinanceDayOfMonth(req.body.day_of_month);
+    const scheduleKind = dayOfMonth ? normalizeFinanceScheduleKind(req.body.schedule_kind, finance.type) : null;
+    const currentCarryKey = normalizeMonthlyFinanceCarryKey(finance.carry_key);
+    const nextCarryKey = dayOfMonth && !currentCarryKey ? createMonthlyFinanceCarryKey() : currentCarryKey;
+
+    db.prepare(`
+      UPDATE monthly_finances
+      SET description = ?, day_of_month = ?, schedule_kind = ?, carry_key = CASE
+        WHEN ? IS NOT NULL AND TRIM(?) <> '' AND (carry_key IS NULL OR TRIM(carry_key) = '') THEN ?
+        ELSE carry_key
+      END
+      WHERE id = ? AND user_id = ?
+    `).run(description, dayOfMonth, scheduleKind, nextCarryKey || null, nextCarryKey || '', nextCarryKey || null, id, userId);
+
+    if (dayOfMonth) {
+      syncFutureLegacyFixedFinanceScheduleFromRow(userId, finance, {
+        nextDayOfMonth: dayOfMonth,
+        nextScheduleKind: scheduleKind,
+        nextCarryKey
+      });
+    }
+
+    return res.json({
+      success: true,
+      finance: serializeFinanceForApi(userId, id),
+      expenseProgress: finance.type === 'expense' ? buildExpensePaymentProgress(userId, Number(finance.month), Number(finance.year)) : null
+    });
+  } catch (e) {
+    const status = /nome para esse item/i.test(String(e.message || '')) ? 400 : 500;
+    return res.status(status).json({ error: getFriendlyErrorMessage(e, { defaultMessage: 'Não consegui salvar a data desse item agora.' }) });
+  }
+});
+
+app.post("/finances/payment-toggle/:id", ensureAuthenticated, express.json(), (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const id = Number(req.params.id);
+    const finance = getFinanceByIdForUser(userId, id);
+    if (!finance) {
+      return res.status(404).json({ error: "Item não encontrado." });
+    }
+
+    if (finance.type !== 'expense' || finance.amount_mode !== 'fixed') {
+      return res.status(400).json({ error: "Esse controle rápido vale só para saídas de valor único." });
+    }
+
+    if (isMonthClosed(userId, Number(finance.month), Number(finance.year))) {
+      return res.status(423).json({ error: getMonthLockMessage(Number(finance.month), Number(finance.year)) });
+    }
+
+    const nextPaid = normalizeFinancePaidFlag(req.body?.is_paid ?? req.body?.isPaid);
+    const paidAt = nextPaid ? (normalizeFinancePaidFlag(finance?.is_paid) ? (finance?.paid_at || nowIso()) : nowIso()) : null;
+
+    db.prepare(`
+      UPDATE monthly_finances
+      SET is_paid = ?, paid_at = ?
+      WHERE id = ? AND user_id = ?
+    `).run(nextPaid, paidAt, id, userId);
+
+    return res.json({
+      success: true,
+      finance: serializeFinanceForApi(userId, id),
+      expenseProgress: buildExpensePaymentProgress(userId, Number(finance.month), Number(finance.year))
+    });
+  } catch (e) {
+    const details = getFriendlyErrorDetails(e, { defaultMessage: 'Não consegui marcar essa conta agora.' });
+    return res.status(details.status).json({ error: details.message });
+  }
+});
+
+app.post("/finance-items/payment-toggle/:id", ensureAuthenticated, express.json(), (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const itemId = Number(req.params.id);
+    const item = db.prepare(`
+      SELECT fi.id, fi.finance_id, fi.user_id, fi.is_paid, fi.paid_at,
+             mf.month, mf.year, mf.type, mf.amount_mode
+      FROM monthly_finance_items fi
+      JOIN monthly_finances mf ON mf.id = fi.finance_id AND mf.user_id = fi.user_id
+      WHERE fi.id = ? AND fi.user_id = ?
+      LIMIT 1
+    `).get(itemId, userId);
+
+    if (!item) {
+      return res.status(404).json({ error: "Lançamento não encontrado." });
+    }
+
+    if (item.type !== 'expense' || normalizeFinanceAmountMode(item.amount_mode) !== 'variable') {
+      return res.status(400).json({ error: "Esse atalho vale só para lançamentos variáveis das saídas." });
+    }
+
+    if (isMonthClosed(userId, Number(item.month), Number(item.year))) {
+      return res.status(423).json({ error: getMonthLockMessage(Number(item.month), Number(item.year)) });
+    }
+
+    const nextPaid = normalizeFinancePaidFlag(req.body?.is_paid ?? req.body?.isPaid);
+    const paidAt = nextPaid ? (normalizeFinancePaidFlag(item?.is_paid) ? (item?.paid_at || nowIso()) : nowIso()) : null;
+
+    db.prepare(`
+      UPDATE monthly_finance_items
+      SET is_paid = ?, paid_at = ?, updated_at = ?
+      WHERE id = ? AND user_id = ?
+    `).run(nextPaid, paidAt, nowIso(), itemId, userId);
+
+    return res.json({
+      success: true,
+      finance: serializeFinanceForApi(userId, Number(item.finance_id)),
+      expenseProgress: buildExpensePaymentProgress(userId, Number(item.month), Number(item.year))
+    });
+  } catch (e) {
+    const details = getFriendlyErrorDetails(e, { defaultMessage: 'Não consegui marcar esse lançamento agora.' });
+    return res.status(details.status).json({ error: details.message });
   }
 });
 
@@ -18827,6 +23270,320 @@ app.get("/admin", ensureAuthenticated, (req, res) => {
   return renderAdmin(res);
 });
 
+app.get('/admin/messages', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado. Apenas administradores podem acessar esta página.');
+  }
+
+  return renderAdminMessages(res, {
+    filters: normalizeAdminMessageActionFilters(req.query),
+    openMessageKey: req.query.open,
+    importPreview: getAdminMessageImportPreview(req)
+  });
+});
+
+app.get('/admin/messages/export.csv', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  try {
+    const exportFile = buildMessageCsvExport();
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${exportFile.filename}"`);
+    return res.send(exportFile.content);
+  } catch (error) {
+    return renderAdminMessages(res, {
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui montar o CSV do catálogo agora.' }),
+      filters: normalizeAdminMessageActionFilters(req.query),
+      importPreview: getAdminMessageImportPreview(req)
+    });
+  }
+});
+
+app.post('/admin/messages/import', ensureAuthenticated, upload.single('catalog_csv'), (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  const filters = normalizeAdminMessageActionFilters(req.body);
+  const uploadedFile = req.file;
+  if (!uploadedFile || !uploadedFile.buffer) {
+    clearAdminMessageImportPreview(req);
+    return renderAdminMessages(res, {
+      error: 'Escolha um CSV do catálogo antes de pedir a prévia do lote.',
+      filters,
+      importPreview: null
+    });
+  }
+
+  try {
+    const importPreview = buildImportPreviewFromBuffer({
+      fileBuffer: uploadedFile.buffer,
+      fileName: uploadedFile.originalname
+    });
+
+    setAdminMessageImportPreview(req, importPreview);
+    const infoMessage = importPreview.errorRows > 0
+      ? 'A prévia encontrou algumas linhas pedindo ajuste antes de importar.'
+      : (importPreview.changedRows > 0
+        ? 'Prévia do lote pronta. Confere os impactos antes de aplicar.'
+        : 'Prévia pronta. Esse arquivo não trouxe mudança nova para aplicar.');
+
+    return renderAdminMessages(res, {
+      success: infoMessage,
+      filters,
+      importPreview
+    });
+  } catch (error) {
+    clearAdminMessageImportPreview(req);
+    return renderAdminMessages(res, {
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui ler esse CSV agora.' }),
+      filters,
+      importPreview: null
+    });
+  }
+});
+
+app.post('/admin/messages/import/confirm', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  const filters = normalizeAdminMessageActionFilters(req.body);
+  const preview = getAdminMessageImportPreview(req);
+  if (!preview) {
+    setFlash(req, 'error', 'A prévia do lote expirou por aqui. Reimporte o CSV para seguir.');
+    return res.redirect(buildAdminMessagesPath(filters));
+  }
+
+  try {
+    const result = applyImportPreview({ preview, changedByUserId: userId });
+    clearAdminMessageImportPreview(req);
+    const success = result.appliedCount > 0
+      ? `Lote aplicado. ${result.appliedCount} mensagem(ns) já saíram atualizadas sem precisar de deploy.`
+      : 'Esse lote não tinha mudança nova para aplicar.';
+    setFlash(req, 'success', success);
+    return res.redirect(buildAdminMessagesPath(filters));
+  } catch (error) {
+    return renderAdminMessages(res, {
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui aplicar esse lote agora.' }),
+      filters,
+      importPreview: preview
+    });
+  }
+});
+
+app.post('/admin/messages/import/cancel', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  clearAdminMessageImportPreview(req);
+  setFlash(req, 'info', 'Prévia do lote descartada. Nada foi aplicado no catálogo.');
+  return res.redirect(buildAdminMessagesPath(normalizeAdminMessageActionFilters(req.body)));
+});
+
+app.post('/admin/messages/:messageKey', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  const messageKey = String(req.params.messageKey || '').trim();
+  const filters = normalizeAdminMessageActionFilters(req.body);
+
+  try {
+    const result = saveMessageTemplateCustomization({
+      messageKey,
+      customTitle: req.body.custom_title,
+      customBody: req.body.custom_body,
+      changedByUserId: userId,
+      source: 'admin_panel'
+    });
+
+    const success = result.changed
+      ? 'Mensagem salva com sucesso. Agora o catálogo já fala esse texto sem depender de deploy.'
+      : 'Mensagem conferida. Não achei mudança nova para guardar aqui.';
+
+    clearAdminMessageImportPreview(req);
+    setFlash(req, 'success', success);
+    return res.redirect(buildAdminMessagesPath(filters, { open: messageKey }));
+  } catch (error) {
+    const validationMessage = Array.isArray(error?.validationErrors) && error.validationErrors.length
+      ? error.validationErrors.map((item) => item.message).join(' ')
+      : getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui salvar essa mensagem agora.' });
+
+    return renderAdminMessages(res, {
+      error: validationMessage,
+      filters,
+      openMessageKey: messageKey,
+      importPreview: getAdminMessageImportPreview(req),
+      draftByMessageKey: {
+        [messageKey]: {
+          custom_title: req.body.custom_title,
+          custom_body: req.body.custom_body
+        }
+      }
+    });
+  }
+});
+
+app.post('/admin/messages/:messageKey/reset', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).send('Acesso negado.');
+  }
+
+  const messageKey = String(req.params.messageKey || '').trim();
+  const filters = normalizeAdminMessageActionFilters(req.body);
+
+  try {
+    const result = resetMessageTemplateCustomization({
+      messageKey,
+      changedByUserId: userId,
+      source: 'admin_reset'
+    });
+
+    const success = result.changed
+      ? 'Mensagem restaurada para o padrão do app. Voltou para a versão nativa sem drama.'
+      : 'Essa mensagem já estava usando o padrão do app. Nada precisou ser desfeito.';
+
+    clearAdminMessageImportPreview(req);
+    setFlash(req, 'success', success);
+    return res.redirect(buildAdminMessagesPath(filters, { open: messageKey }));
+  } catch (error) {
+    return renderAdminMessages(res, {
+      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui restaurar essa mensagem agora.' }),
+      filters,
+      openMessageKey: messageKey,
+      importPreview: getAdminMessageImportPreview(req)
+    });
+  }
+});
+
+app.post('/admin/messages/:messageKey/preview', ensureAuthenticated, (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).json({ ok: false, message: 'Acesso negado.' });
+  }
+
+  const messageKey = String(req.params.messageKey || '').trim();
+
+  try {
+    const preview = buildMessagePreview(messageKey, {
+      templateOverrides: {
+        titleTemplate: req.body.custom_title,
+        bodyTemplate: req.body.custom_body
+      }
+    });
+
+    if (Array.isArray(preview.validationErrors) && preview.validationErrors.length) {
+      return res.status(422).json({
+        ok: false,
+        message: 'A prévia encontrou placeholder pedindo atenção antes de seguir.',
+        validationErrors: preview.validationErrors
+      });
+    }
+
+    return res.json({ ok: true, preview });
+  } catch (error) {
+    return res.status(error?.status || 500).json({
+      ok: false,
+      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui montar a prévia agora.' })
+    });
+  }
+});
+
+app.post('/admin/messages/:messageKey/push-test', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  if (!isAdminUser(userId)) {
+    return res.status(403).json({ ok: false, message: 'Acesso negado.' });
+  }
+
+  if (!isPushConfigured() || !webPush) {
+    return res.status(503).json({ ok: false, message: 'O push ainda não está configurado neste servidor.' });
+  }
+
+  const messageKey = String(req.params.messageKey || '').trim();
+  const rateKey = `${userId}:${messageKey}`;
+  const lastSentAt = adminMessagePushTestRateLimit.get(rateKey) || 0;
+  const elapsed = Date.now() - lastSentAt;
+
+  if (elapsed < ADMIN_MESSAGE_PUSH_TEST_RATE_LIMIT_MS) {
+    const secondsLeft = Math.max(1, Math.ceil((ADMIN_MESSAGE_PUSH_TEST_RATE_LIMIT_MS - elapsed) / 1000));
+    return res.status(429).json({
+      ok: false,
+      message: `Segura só ${secondsLeft}s para repetir esse push de teste neste aparelho.`
+    });
+  }
+
+  const subscription = req.body?.subscription;
+  const endpoint = String(subscription?.endpoint || '').trim();
+  if (!endpoint) {
+    return res.status(409).json({ ok: false, message: 'Antes do teste, ative os alertas neste aparelho para a gente saber onde bater.' });
+  }
+
+  try {
+    const preview = buildMessagePreview(messageKey, {
+      templateOverrides: {
+        titleTemplate: req.body.custom_title,
+        bodyTemplate: req.body.custom_body
+      }
+    });
+
+    if (preview.preview?.kind !== 'push') {
+      return res.status(400).json({ ok: false, message: 'Esse item usa prévia visual na tela. O push de teste só entra em campo quando o canal é push.' });
+    }
+
+    if (Array.isArray(preview.validationErrors) && preview.validationErrors.length) {
+      return res.status(422).json({
+        ok: false,
+        message: 'O push de teste encontrou placeholder pedindo atenção antes de seguir.',
+        validationErrors: preview.validationErrors
+      });
+    }
+
+    const payload = buildPushTestPayload(messageKey, {
+      templateOverrides: {
+        titleTemplate: req.body.custom_title,
+        bodyTemplate: req.body.custom_body
+      }
+    });
+
+    payload.href = '/admin/messages';
+    payload.tag = `preview:${messageKey}:${userId}`;
+    upsertPushSubscription(userId, subscription);
+
+    await webPush.sendNotification(subscription, JSON.stringify({
+      title: payload.title,
+      body: payload.body,
+      href: payload.href,
+      tag: payload.tag,
+      isTest: true,
+      previewMessageKey: payload.previewMessageKey
+    }));
+
+    adminMessagePushTestRateLimit.set(rateKey, Date.now());
+    return res.json({ ok: true, message: 'Push de teste enviado para este aparelho. Dá uma olhadinha se ele apareceu redondinho por aí.' });
+  } catch (error) {
+    if (error?.statusCode === 404 || error?.statusCode === 410) {
+      removePushSubscriptionForUser(userId, endpoint);
+      return res.status(410).json({ ok: false, message: 'A inscrição deste aparelho expirou. Liga os alertas de novo e a gente tenta mais uma.' });
+    }
+
+    return res.status(500).json({
+      ok: false,
+      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui mandar o push de teste agora.' })
+    });
+  }
+});
+
 app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const sectionKey = String(req.params.section || '').trim();
@@ -18883,8 +23640,14 @@ app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
       success += ' Enquanto Client ID e secret não estiverem completos, o login com Google segue de folga.';
     }
 
-    if (sectionKey === 'push' && !isPushConfigured()) {
-      success += ' Sem o trio VAPID completo, o sininho ainda não acorda.';
+    if (sectionKey === 'push') {
+      const pushPanel = buildPushAdminState();
+      success += ` Agenda automática em ${pushPanel.schedule.label}. ${pushPanel.activeCount} de ${pushPanel.totalCount} rotinas estão ligadas.`;
+      if (!pushPanel.infrastructure.configured) {
+        success += pushPanel.hasInAppFallback
+          ? ' O push web ainda depende do trio VAPID, mas os alertas que também viram aviso interno continuam no jogo.'
+          : ' Sem o trio VAPID completo, o sininho ainda não acorda.';
+      }
     }
 
     if (sectionKey === 'backup') {
@@ -19402,4 +24165,5 @@ app.listen(PORT, () => {
   console.log(`✅ Rodando em http://localhost:${PORT}`);
   startCardDueTodayPushScheduler();
   startManualDebtDueScheduler();
+  restartBackupScheduler();
 });

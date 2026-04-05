@@ -445,7 +445,7 @@
                         <div>
                           <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Bloco 3</div>
                           <h3 class="mt-2 text-xl font-black tracking-tight text-slate-900 dark:text-white">Rotinas automáticas</h3>
-                          <p class="mt-2 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">Cada família ganhou seu próprio interruptor. Assim o admin não apaga a luz da fatura achando que a sala inteira ficou no escuro.</p>
+                          <p class="mt-2 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">Cada família ganhou seu próprio interruptor, agora com switch visível no card. Assim o admin não apaga a luz da fatura achando que a sala inteira ficou no escuro.</p>
                         </div>
                         <div class="mt-4 grid gap-4 xl:grid-cols-3">
                           <% pushStateForSection.routines.forEach((routine) => { %>
@@ -894,28 +894,32 @@
         </select>
       </div>
 
-      <label class="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3">
+      <label class="flex flex-wrap items-start gap-4 rounded-[24px] border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-4 cursor-pointer transition hover:border-slate-300 hover:shadow-sm dark:hover:border-slate-600">
         <input type="checkbox" id="can_import" name="can_import" value="1" checked
-          class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-800">
-        <span>
-          <span class="block text-sm font-bold text-slate-800 dark:text-white">Permitir importação de fatura</span>
-          <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Desative para ocultar os recursos de importação para esse usuário.</span>
+          class="peer sr-only">
+        <span class="min-w-0 flex-1 basis-full sm:basis-auto">
+          <span class="block text-sm font-black text-slate-800 dark:text-white">Permitir importação de fatura</span>
+          <span class="mt-1 block text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">Desative para ocultar os recursos de importação para esse usuário.</span>
         </span>
+        <span class="sm:ml-auto inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 before:content-['Bloqueada'] peer-checked:border-blue-200 peer-checked:bg-blue-50 peer-checked:text-blue-700 peer-checked:before:content-['Liberada'] dark:peer-checked:border-blue-900/60 dark:peer-checked:bg-blue-950/40 dark:peer-checked:text-blue-200 peer-focus-visible:ring-4 peer-focus-visible:ring-blue-100 dark:peer-focus-visible:ring-blue-900/40"></span>
+        <span aria-hidden="true" class="relative inline-flex h-8 w-14 shrink-0 rounded-full border border-slate-300 bg-slate-200 shadow-inner transition duration-200 ease-out after:absolute after:left-1 after:top-1 after:h-6 after:w-6 after:rounded-full after:bg-white after:shadow-sm after:transition after:duration-200 after:ease-out after:content-[''] peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:after:translate-x-6 dark:border-slate-600 dark:bg-slate-700 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 peer-focus-visible:ring-4 peer-focus-visible:ring-blue-100 dark:peer-focus-visible:ring-blue-900/40"></span>
       </label>
 
       <div id="welcomeEmailControls" class="space-y-3">
-        <label class="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 <%= emailState && emailState.active ? '' : 'opacity-70' %>">
+        <label class="flex flex-wrap items-start gap-4 rounded-[24px] border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-4 cursor-pointer transition hover:border-slate-300 hover:shadow-sm dark:hover:border-slate-600 <%= emailState && emailState.active ? '' : 'opacity-70 cursor-not-allowed' %>">
           <input type="checkbox" id="send_welcome_email" name="send_welcome_email" value="1" <%= emailState && emailState.active ? 'checked' : '' %> <%= emailState && emailState.active ? '' : 'disabled' %>
-            class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-800">
-          <span>
-            <span class="block text-sm font-bold text-slate-800 dark:text-white">Enviar e-mail de boas-vindas</span>
-            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
+            class="peer sr-only">
+          <span class="min-w-0 flex-1 basis-full sm:basis-auto">
+            <span class="block text-sm font-black text-slate-800 dark:text-white">Enviar e-mail de boas-vindas</span>
+            <span class="mt-1 block text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">
               Esse envio não cria senha. O acesso continua sendo feito com a conta Google vinculada a este e-mail.
               <% if (!(emailState && emailState.active)) { %>
                 Para habilitar esse envio, conclua a configuração SMTP na seção de e-mail.
               <% } %>
             </span>
           </span>
+          <span class="sm:ml-auto inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 before:content-['Pausado'] peer-checked:border-blue-200 peer-checked:bg-blue-50 peer-checked:text-blue-700 peer-checked:before:content-['Envia'] dark:peer-checked:border-blue-900/60 dark:peer-checked:bg-blue-950/40 dark:peer-checked:text-blue-200 peer-focus-visible:ring-4 peer-focus-visible:ring-blue-100 dark:peer-focus-visible:ring-blue-900/40 peer-disabled:opacity-60"></span>
+          <span aria-hidden="true" class="relative inline-flex h-8 w-14 shrink-0 rounded-full border border-slate-300 bg-slate-200 shadow-inner transition duration-200 ease-out after:absolute after:left-1 after:top-1 after:h-6 after:w-6 after:rounded-full after:bg-white after:shadow-sm after:transition after:duration-200 after:ease-out after:content-[''] peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:after:translate-x-6 dark:border-slate-600 dark:bg-slate-700 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 peer-focus-visible:ring-4 peer-focus-visible:ring-blue-100 dark:peer-focus-visible:ring-blue-900/40 peer-disabled:opacity-60"></span>
         </label>
 
         <label class="block rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3">

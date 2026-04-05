@@ -1,4 +1,4 @@
-<%- include("partials/header", { title: "Mandar resumo" }) %>
+<%- include("partials/header", { title: "Compartilhar resumo" }) %>
 <%
   const periodLabel = `${String(month).padStart(2, '0')}/${year}`;
   const getItemCents = (item) => {
@@ -41,9 +41,9 @@
 <div class="op-page-shell">
   <section class="op-page-hero op-fade-up">
     <div>
-      <span class="op-page-hero__eyebrow">Compartilhamento rápido</span>
-      <h1 class="op-page-hero__title mt-4">Mandar resumo</h1>
-      <p class="op-page-hero__subtitle mt-3">Monte uma imagem bonitinha e pronta para mandar para a pessoa certa.</p>
+      <span class="op-page-hero__eyebrow">Pronto pra mandar</span>
+      <h1 class="op-page-hero__title mt-4">Compartilhar resumo</h1>
+      <p class="op-page-hero__subtitle mt-3">Monte uma imagem bonitinha e pronta para mandar pra pessoa certa.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= person.name %></span>
         <span class="badge">Ref. <%= periodLabel %></span>
@@ -71,7 +71,7 @@
   <div class="op-surface-card op-fade-up rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 mb-6">
     <form method="get" action="/whatsapp/<%= year %>/<%= month %>/<%= person.id %>" class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
       <div class="w-full md:max-w-sm">
-        <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Como ordenar os itens</label>
+        <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Como você quer ordenar os itens?</label>
         <select name="order" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950">
           <option value="recent" <%= selectedItemOrder === 'recent' ? 'selected' : '' %>>Mais recentes primeiro</option>
           <option value="oldest" <%= selectedItemOrder === 'oldest' ? 'selected' : '' %>>Mais antigos primeiro</option>
@@ -102,7 +102,7 @@
       </div>
       <div class="flex flex-wrap gap-3">
         <% if (pixAvailable) { %>
-          <button id="btnCopyPix" type="button" class="inline-flex items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 px-5 py-3 text-sm font-bold text-blue-700 transition-all hover:-translate-y-0.5 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-950/50">Copiar Pix</button>
+          <button id="btnCopyPix" type="button" class="inline-flex items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 px-5 py-3 text-sm font-bold text-blue-700 transition-all hover:-translate-y-0.5 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-950/50">Copiar Pix 💸</button>
         <% } %>
         <button id="btnCopyWhatsappText" type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-bold text-slate-700 transition-all hover:-translate-y-0.5 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"><%= copyTextButtonLabel %></button>
       </div>
@@ -115,14 +115,14 @@
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M10.29 3.86l-8 14A1 1 0 003.17 19h17.66a1 1 0 00.88-1.5l-8-14a1 1 0 00-1.74 0z"></path></svg>
       </div>
       <div>
-        <div class="op-inline-alert__title">Faltou um telefone</div>
-        <div class="op-inline-alert__text">O download da imagem continua disponível. Para liberar o envio pelo WhatsApp, preencha um telefone válido em Amigos.</div>
+        <div class="op-inline-alert__title">Faltou um telefone por aqui</div>
+        <div class="op-inline-alert__text">O download da imagem continua disponível. Para liberar o envio pelo WhatsApp, preencha um telefone válido em Minha Rede.</div>
       </div>
     </div>
   <% } %>
 
   <div class="op-preview-shell op-fade-up">
-    <div class="op-preview-shell__label">Prévia da imagem</div>
+    <div class="op-preview-shell__label">Como vai ficar a imagem</div>
     <div class="flex justify-center pb-2">
       <%- include('partials/share-summary-card', {
         cardId: 'cardPreview',

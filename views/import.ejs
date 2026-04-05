@@ -32,13 +32,13 @@
   <section class="op-page-hero op-fade-up">
     <div>
       <span class="op-page-hero__eyebrow">Trazer fatura pro app</span>
-      <h1 class="op-page-hero__title mt-4">Importar fatura em CSV</h1>
-      <p class="op-page-hero__subtitle mt-3">Agora o fluxo ganhou um pit-stop: antes de gravar, voce revisa o que entrou no arquivo, confere suspeitas de duplicidade e decide o que realmente vai pousar por aqui.</p>
+      <h1 class="op-page-hero__title mt-4">Trazer fatura em CSV</h1>
+      <p class="op-page-hero__subtitle mt-3">Agora o fluxo ganhou um pit-stop: antes de gravar, você revisa o que entrou no arquivo, confere suspeitas de duplicidade e decide o que realmente vai pousar por aqui.</p>
       <div class="op-page-hero__meta mt-4">
-        <span class="badge"><%= cards.length %> cartao(oes) disponivel(is)</span>
-        <span class="badge">Disponivel conforme sua permissao</span>
+        <span class="badge"><%= cards.length %> cartão(ões) disponível(is)</span>
+        <span class="badge">Disponível conforme seu acesso</span>
         <% if (reviewReady) { %>
-          <span class="badge">Previa pronta para revisao</span>
+          <span class="badge">Prévia pronta para revisão</span>
         <% } %>
       </div>
     </div>
@@ -48,7 +48,7 @@
     <div class="op-inline-alert op-inline-alert--danger">
       <div class="op-inline-alert__icon">⚠️</div>
       <div>
-        <div class="op-inline-alert__title">Nao foi possivel analisar o arquivo</div>
+        <div class="op-inline-alert__title">Não foi possível analisar o arquivo</div>
         <div class="op-inline-alert__text"><%= error %></div>
       </div>
     </div>
@@ -58,7 +58,7 @@
     <section class="rounded-[30px] border border-violet-200 bg-violet-50/90 p-5 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/25">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div class="text-xs font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Previa pronta</div>
+          <div class="text-xs font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Prévia pronta</div>
           <h2 class="mt-2 text-lg font-black text-slate-900 dark:text-slate-100"><%= preview.cardName %> · <%= preview.periodLabel %></h2>
           <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Arquivo <span class="font-bold"><%= preview.originalFilename %></span> analisado. Agora voce confere o pente-fino e decide com calma o que entra.</p>
         </div>
@@ -80,15 +80,15 @@
   <div class="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
     <section class="op-surface-card rounded-[32px] border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-700 dark:bg-slate-800">
       <div class="mb-5">
-        <h2 class="text-lg font-black text-slate-900 dark:text-slate-100">Trazer nova fatura</h2>
-        <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">Escolha o cartao, diga em qual mes essa fatura entra e envie o CSV original da operadora. Em seguida, o app abre a revisao antes de gravar.</p>
+        <h2 class="text-lg font-black text-slate-900 dark:text-slate-100">Trazer outra fatura</h2>
+        <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">Escolha o cartão, diga em qual mês essa fatura entra e envie o CSV original da operadora. Em seguida, o app abre a revisão antes de gravar.</p>
       </div>
 
       <form method="post" action="/import" enctype="multipart/form-data" class="space-y-5">
         <div>
-          <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartao</label>
+          <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartão</label>
           <select name="card_id" required class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">
-            <option value="">Selecione um cartao</option>
+            <option value="">Selecione um cartão</option>
             <% cards.forEach((card) => { %>
               <option value="<%= card.id %>" <%= Number(card.id) === selectedCardId ? 'selected' : '' %>><%= card.name %></option>
             <% }) %>
@@ -97,7 +97,7 @@
 
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
-            <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Vai entrar em qual mes?</label>
+            <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Vai entrar em qual mês?</label>
             <select name="month" required class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">
               <% monthNames.forEach((label, index) => { %>
                 <option value="<%= index + 1 %>" <%= (index + 1) === selectedMonth ? 'selected' : '' %>><%= label %></option>
@@ -126,12 +126,12 @@
               <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
             </span>
             <span>
-              <span class="block text-sm font-black text-slate-900 dark:text-slate-100">Escolher CSV</span>
+              <span class="block text-sm font-black text-slate-900 dark:text-slate-100">Escolher o CSV</span>
               <span data-import-file-label class="mt-1 block text-sm font-medium text-slate-500 dark:text-slate-400">Use o arquivo exportado da operadora do cartao. Formatos aceitos: .csv</span>
             </span>
             <input type="file" name="csvfile" accept=".csv,text/csv" required class="sr-only" data-import-file-input>
           </label>
-          <p class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">Depois do upload, o app monta a revisao com as suspeitas no app, repeticoes no CSV e o que realmente vai entrar.</p>
+          <p class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">Depois do upload, o app monta a revisão com as suspeitas no app, repetições no CSV e o que realmente vai entrar.</p>
         </div>
 
         <div class="flex flex-col gap-3 pt-2 sm:flex-row">
@@ -144,7 +144,7 @@
 
     <aside class="space-y-4">
       <section class="op-surface-card rounded-[32px] border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-700 dark:bg-slate-800">
-        <h2 class="text-sm font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Como a revisao funciona</h2>
+        <h2 class="text-sm font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Como a revisão funciona</h2>
         <ul class="mt-4 space-y-3 text-sm font-medium text-slate-600 dark:text-slate-300">
           <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">1</span><span>O CSV eh lido sem gravar nada primeiro. O app so monta a previa.</span></li>
           <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">2</span><span>Compras com mesmo dia e valor no mes escolhido aparecem na aba de suspeitas do app.</span></li>
@@ -156,7 +156,7 @@
 
       <section class="rounded-[28px] border border-amber-200 bg-amber-50/90 p-5 text-sm font-medium text-amber-900 shadow-sm dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
         <div class="text-xs font-black uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">Dica de uso</div>
-        <p class="mt-3 leading-6">Se o total final selecionado nao bater com o arquivo, vale checar se parte da fatura ja foi lancada manualmente por aqui. A diferenca aparece na tela justamente para evitar pegadinha.</p>
+        <p class="mt-3 leading-6">Se o total final selecionado não bater com o arquivo, vale checar se parte da fatura já foi lançada manualmente por aqui. A diferença aparece na tela justamente para evitar pegadinha.</p>
       </section>
     </aside>
   </div>
@@ -180,7 +180,7 @@
         <div class="border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-6 lg:px-7">
           <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div class="min-w-0">
-              <div class="text-[11px] font-black uppercase tracking-[0.22em] text-violet-600 dark:text-violet-300">Revisao antes de importar</div>
+              <div class="text-[11px] font-black uppercase tracking-[0.22em] text-violet-600 dark:text-violet-300">Revisão antes de importar</div>
               <h2 id="import-review-title" class="mt-2 text-[clamp(1.6rem,1.2rem+0.9vw,2.2rem)] font-black tracking-tight text-slate-900 dark:text-slate-100"><%= preview.cardName %> · <%= preview.periodLabel %></h2>
               <p class="mt-2 max-w-4xl text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Arquivo <span class="font-bold text-slate-800 dark:text-slate-100"><%= preview.originalFilename %></span> com <span class="font-bold"><%= previewSummary.parsedCount || 0 %></span> compra(s), somando <span class="font-bold"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></span>.</p>
             </div>
@@ -201,7 +201,7 @@
               <div class="mt-1.5 text-[13px] font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.parsedCount || 0 %> linha(s) lida(s)</div>
             </div>
             <div class="rounded-[20px] border border-slate-200 bg-white px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/70">
-              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Ja estava no cartao</div>
+              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Já estava no cartão</div>
               <div class="mt-2 text-[1.65rem] font-black leading-none text-slate-900 dark:text-slate-100"><%= previewSummary.existingTotalLabel || formatBRLFromCents(0) %></div>
               <div class="mt-1.5 text-[13px] font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.existingCount || 0 %> compra(s) no mes</div>
             </div>
@@ -211,7 +211,7 @@
               <div class="mt-1.5 text-[13px] font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultNewImportCount || previewSummary.defaultFinalCount || 0 %></span> nova(s) · <span data-overwrite-count><%= previewSummary.defaultOverwriteCount || 0 %></span> sobrescrita(s)</div>
             </div>
             <div class="rounded-[20px] border border-violet-200 bg-violet-50 px-4 py-3.5 dark:border-violet-900/60 dark:bg-violet-950/20">
-              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">O cartao fica em</div>
+              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">O cartão fica em</div>
               <div class="mt-2 text-[1.65rem] font-black leading-none text-violet-900 dark:text-violet-100" data-projected-total><%= previewSummary.projectedCardTotalLabel || formatBRLFromCents(0) %></div>
               <div class="mt-1.5 text-[13px] font-semibold text-violet-700/80 dark:text-violet-200/80"><span data-projected-count><%= previewSummary.projectedCardCount || 0 %></span> compra(s) no mes depois da importacao</div>
             </div>
@@ -271,7 +271,7 @@
                         <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200"><%= candidate.exactMatchCount %> praticamente igual(is)</span>
                       <% } %>
                       <% if (candidate.overwriteEligibleCount > 0) { %>
-                        <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-900/30 dark:text-emerald-200"><%= candidate.overwriteEligibleCount %> manual(is) elegivel(is)</span>
+                        <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-900/30 dark:text-emerald-200"><%= candidate.overwriteEligibleCount %> manual(is) elegível(is)</span>
                       <% } %>
                     </div>
                     <h3 class="mt-2 text-sm font-black leading-6 text-slate-900 dark:text-slate-100"><%= item.description %></h3>
@@ -298,7 +298,7 @@
                     <div class="mt-3 overflow-x-auto">
                       <div class="min-w-[700px] space-y-2">
                         <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                          <div>Lancamento</div>
+                          <div>Lançamento</div>
                           <div>Data</div>
                           <div>Final</div>
                           <div>Status</div>
@@ -307,7 +307,7 @@
                         <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-3 py-3 text-sm dark:border-amber-900/60 dark:bg-amber-950/20">
                           <div class="min-w-0">
                             <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
-                            <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Linha trazida pelo CSV</div>
+                            <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Linha que veio do CSV</div>
                           </div>
                           <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
                           <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
@@ -320,13 +320,13 @@
 
                   <section class="rounded-[20px] border border-slate-200 bg-white/90 p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
                     <div class="flex flex-wrap items-center justify-between gap-3">
-                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Ja esta no app</div>
+                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Já está no app</div>
                       <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200"><%= candidate.existingMatchCount %> coincidencia(s)</span>
                     </div>
                     <div class="mt-3 overflow-x-auto">
                       <div class="min-w-[700px] space-y-2">
                         <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                          <div>Lancamento</div>
+                          <div>Lançamento</div>
                           <div>Data</div>
                           <div>Final</div>
                           <div>Origem</div>
@@ -379,24 +379,24 @@
                 <div class="mt-3 rounded-[20px] border border-amber-200 bg-white px-4 py-3 shadow-sm dark:border-amber-900/60 dark:bg-slate-900/80">
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div class="min-w-0">
-                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Resolucao</div>
+                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Decisão</div>
                     </div>
                     <div class="flex flex-wrap gap-2 sm:justify-end">
                       <label class="group relative overflow-hidden rounded-2xl">
                         <input type="radio" name="app_resolution_<%= candidate.id %>" value="skip" checked data-app-resolution data-candidate-id="<%= candidate.id %>" class="peer absolute inset-0 h-full w-full cursor-pointer opacity-0">
-                        <span class="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-600 transition peer-checked:border-slate-900 peer-checked:bg-slate-900 peer-checked:text-white dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:peer-checked:border-slate-200 dark:peer-checked:bg-slate-100 dark:peer-checked:text-slate-900">Pular</span>
+                        <span class="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-600 transition peer-checked:border-slate-900 peer-checked:bg-slate-900 peer-checked:text-white dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:peer-checked:border-slate-200 dark:peer-checked:bg-slate-100 dark:peer-checked:text-slate-900">Deixar de fora</span>
                       </label>
                       <label class="group relative overflow-hidden rounded-2xl">
                         <input type="radio" name="app_resolution_<%= candidate.id %>" value="import" data-app-resolution data-candidate-id="<%= candidate.id %>" class="peer absolute inset-0 h-full w-full cursor-pointer opacity-0">
-                        <span class="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-emerald-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-emerald-700 transition peer-checked:border-emerald-600 peer-checked:bg-emerald-600 peer-checked:text-white dark:border-emerald-900/60 dark:bg-slate-950 dark:text-emerald-300 dark:peer-checked:border-emerald-500 dark:peer-checked:bg-emerald-500 dark:peer-checked:text-slate-950">Importar</span>
+                        <span class="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-emerald-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-emerald-700 transition peer-checked:border-emerald-600 peer-checked:bg-emerald-600 peer-checked:text-white dark:border-emerald-900/60 dark:bg-slate-950 dark:text-emerald-300 dark:peer-checked:border-emerald-500 dark:peer-checked:bg-emerald-500 dark:peer-checked:text-slate-950">Trazer pro app</span>
                       </label>
                       <% if (candidate.overwriteEligibleCount > 0) { %>
                         <label class="group relative overflow-hidden rounded-2xl">
                           <input type="radio" name="app_resolution_<%= candidate.id %>" value="overwrite" data-app-resolution data-candidate-id="<%= candidate.id %>" class="peer absolute inset-0 h-full w-full cursor-pointer opacity-0">
-                          <span class="inline-flex min-w-[132px] items-center justify-center rounded-2xl border border-violet-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-violet-700 transition peer-checked:border-violet-600 peer-checked:bg-violet-600 peer-checked:text-white dark:border-violet-900/60 dark:bg-slate-950 dark:text-violet-300 dark:peer-checked:border-violet-500 dark:peer-checked:bg-violet-500 dark:peer-checked:text-slate-950">Sobrescrever</span>
+                          <span class="inline-flex min-w-[132px] items-center justify-center rounded-2xl border border-violet-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-violet-700 transition peer-checked:border-violet-600 peer-checked:bg-violet-600 peer-checked:text-white dark:border-violet-900/60 dark:bg-slate-950 dark:text-violet-300 dark:peer-checked:border-violet-500 dark:peer-checked:bg-violet-500 dark:peer-checked:text-slate-950">Atualizar com CSV</span>
                         </label>
                       <% } else { %>
-                        <span class="inline-flex min-w-[132px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-500">Sobrescrever</span>
+                        <span class="inline-flex min-w-[132px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-500">Atualizar com CSV</span>
                       <% } %>
                     </div>
                   </div>
@@ -409,8 +409,8 @@
                       <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Alvo da sobrescrita</div>
                       <% if (overwriteMatches.length === 1) { %>
                         <div class="mt-2 rounded-2xl border border-violet-200 bg-white px-3 py-3 text-sm dark:border-violet-900/60 dark:bg-slate-900/80">
-                          <div class="font-black text-slate-900 dark:text-slate-100"><%= defaultOverwriteMatch ? defaultOverwriteMatch.description : 'Lancamento manual' %></div>
-                          <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Esse manual sera atualizado, mantendo categoria, divisao e vinculos.</div>
+                          <div class="font-black text-slate-900 dark:text-slate-100"><%= defaultOverwriteMatch ? defaultOverwriteMatch.description : 'Lançamento manual' %></div>
+                          <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Esse manual vai ser atualizado, mantendo categoria, divisão e vínculos.</div>
                         </div>
                       <% } else { %>
                         <div class="mt-2 space-y-2">
@@ -456,7 +456,7 @@
                       <span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-sky-700 dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-sky-200">Grupo <%= groupIndex + 1 %></span>
                       <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= group.occurrenceCount %> linha(s)</span>
                       <% if (group.existingMatchCount > 0) { %>
-                        <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200"><%= group.existingMatchCount %> coincidencia(s) no app</span>
+                        <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200"><%= group.existingMatchCount %> coincidência(s) no app</span>
                       <% } %>
                     </div>
                     <h3 class="mt-2 text-sm font-black leading-6 text-slate-900 dark:text-slate-100"><%= representative.description %></h3>
@@ -478,7 +478,7 @@
                       <div class="mt-3 overflow-x-auto">
                         <div class="min-w-[700px] space-y-2">
                           <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                            <div>Lancamento</div>
+                            <div>Lançamento</div>
                             <div>Data</div>
                             <div>Final</div>
                             <div>Status</div>
@@ -503,13 +503,13 @@
                     <% if (group.existingMatches && group.existingMatches.length) { %>
                       <section class="rounded-[20px] border border-amber-200 bg-amber-50/70 p-3.5 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/20">
                         <div class="flex items-center justify-between gap-3">
-                          <div class="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Coincidencias no app</div>
+                          <div class="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Coincidências no app</div>
                           <span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900/70 dark:text-amber-200"><%= group.existingMatches.length %> encontrada(s)</span>
                         </div>
                         <div class="mt-3 overflow-x-auto">
                           <div class="min-w-[700px] space-y-2">
                             <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                              <div>Lancamento</div>
+                              <div>Lançamento</div>
                               <div>Data</div>
                               <div>Final</div>
                               <div>Origem</div>
@@ -534,18 +534,18 @@
                   </div>
 
                   <aside class="rounded-[20px] border border-slate-200 bg-white/95 p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 xl:sticky xl:top-0 xl:self-start">
-                    <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Quantas linhas entram?</div>
+                    <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Quantas linhas entram de verdade?</div>
                     <label class="mt-3 block">
                       <span class="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Escolha a quantidade</span>
                       <select name="keep_csv_<%= group.id %>" data-csv-keep data-group-id="<%= group.id %>" class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:bg-slate-900">
                         <% for (let keepCount = 0; keepCount <= group.occurrenceCount; keepCount += 1) { %>
                           <option value="<%= keepCount %>" <%= keepCount === Number(group.defaultKeepCount || 0) ? 'selected' : '' %>>
                             <% if (keepCount === 0) { %>
-                              Pular todas as <%= group.occurrenceCount %> linhas
+                              Deixar de fora todas as <%= group.occurrenceCount %> linhas
                             <% } else if (keepCount === group.occurrenceCount) { %>
-                              Importar todas as <%= group.occurrenceCount %> linhas
+                              Trazer pro app todas as <%= group.occurrenceCount %> linhas
                             <% } else { %>
-                              Importar <%= keepCount %> de <%= group.occurrenceCount %> linhas
+                              Trazer pro app <%= keepCount %> de <%= group.occurrenceCount %> linhas
                             <% } %>
                           </option>
                         <% } %>
@@ -553,9 +553,9 @@
                     </label>
 
                     <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/70">
-                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Sugestao automatica</div>
+                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Sugestão automática</div>
                       <div class="mt-2 text-xl font-black text-slate-900 dark:text-slate-100"><span data-csv-current-count="<%= group.id %>"><%= group.defaultKeepCount %></span> linha(s)</div>
-                      <p class="mt-2 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300">A sugestao considera as coincidencias ja encontradas no app para esse mesmo dia e valor.</p>
+                      <p class="mt-2 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300">A sugestão considera as coincidências já encontradas no app para esse mesmo dia e valor.</p>
                     </div>
                   </aside>
                 </div>
@@ -571,14 +571,14 @@
                 <div class="mt-1.5 text-[13px] font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultNewImportCount || previewSummary.defaultFinalCount || 0 %></span> nova(s) · <span data-overwrite-count><%= previewSummary.defaultOverwriteCount || 0 %></span> sobrescrita(s)</div>
               </div>
               <div class="rounded-[20px] border border-violet-200 bg-violet-50/80 px-4 py-3.5 dark:border-violet-900/60 dark:bg-violet-950/20">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">O cartao fica em</div>
+                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">O cartão fica em</div>
                 <div class="mt-2 text-[1.7rem] font-black leading-none text-violet-900 dark:text-violet-100" data-projected-total><%= previewSummary.projectedCardTotalLabel || formatBRLFromCents(0) %></div>
-                <div class="mt-1.5 text-[13px] font-semibold text-violet-700/80 dark:text-violet-200/80"><span data-projected-count><%= previewSummary.projectedCardCount || 0 %></span> compra(s) no mes depois de gravar</div>
+                <div class="mt-1.5 text-[13px] font-semibold text-violet-700/80 dark:text-violet-200/80"><span data-projected-count><%= previewSummary.projectedCardCount || 0 %></span> compra(s) no mês depois de gravar</div>
               </div>
               <div class="rounded-[20px] border border-slate-200 bg-white px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/80">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Comparacao com o arquivo</div>
+                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Comparação com o arquivo</div>
                 <div class="mt-2 text-[1.45rem] font-black leading-none text-slate-900 dark:text-slate-100"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></div>
-                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300" data-final-diff-text>Agora a comparacao usa o total que o cartao vai ter depois da importacao, nao so o que entrou nesta rodada.</p>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300" data-final-diff-text>Agora a comparação usa o total que o cartão vai ter depois da importação, não só o que entrou nesta rodada.</p>
               </div>
             </div>
 
@@ -587,15 +587,15 @@
                 <div class="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Lista final</div>
-                    <h3 class="mt-1.5 text-base font-black text-slate-900 dark:text-slate-100">Novas compras que vao entrar</h3>
+                    <h3 class="mt-1.5 text-base font-black text-slate-900 dark:text-slate-100">Compras novas que vão entrar</h3>
                   </div>
-                  <div class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Compras unicas entram sozinhas. O restante segue exatamente as escolhas das abas anteriores.</div>
+                  <div class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Compras únicas entram sozinhas. O restante segue exatamente as escolhas das abas anteriores.</div>
                 </div>
 
                 <div class="mt-4 overflow-x-auto" data-final-item-list>
                   <div class="min-w-[700px] space-y-2">
                     <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                      <div>Lancamento</div>
+                      <div>Lançamento</div>
                       <div>Data</div>
                       <div>Final</div>
                       <div>Status</div>
@@ -606,11 +606,11 @@
                       <article data-final-item data-final-import-item data-amount-cents="<%= item.amountCents %>" class="grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-3 py-3 text-sm dark:border-emerald-900/60 dark:bg-emerald-950/20">
                         <div class="min-w-0">
                           <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
-                          <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Compra unica do arquivo</div>
+                          <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Compra única do arquivo</div>
                         </div>
                         <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
                         <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
-                        <div><span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-slate-900 dark:text-emerald-200">Unica no arquivo</span></div>
+                        <div><span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-slate-900 dark:text-emerald-200">Única no arquivo</span></div>
                         <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
                       </article>
                     <% }) %>
@@ -658,9 +658,9 @@
                 <div class="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Lista final</div>
-                    <h3 class="mt-1.5 text-base font-black text-slate-900 dark:text-slate-100">Lançamentos manuais que vao ser sobrescritos</h3>
+                    <h3 class="mt-1.5 text-base font-black text-slate-900 dark:text-slate-100">Lançamentos manuais que vão ser atualizados</h3>
                   </div>
-                  <div class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">A compra manual continua a mesma. O app atualiza os dados vindos do CSV e preserva categoria/divisao.</div>
+                  <div class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">A compra manual continua a mesma. O app atualiza os dados vindos do CSV e preserva categoria/divisão.</div>
                 </div>
 
                 <div class="mt-4 space-y-2" data-final-overwrite-list>
@@ -703,7 +703,7 @@
 
         <div class="border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-6 lg:px-7">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div class="max-w-4xl text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Agora o espelho compara o valor do arquivo com o total que esse cartao vai ter depois da importacao. Assim fica mais facil decidir se a fatura fechada realmente vai bater.</div>
+            <div class="max-w-4xl text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Agora o espelho compara o valor do arquivo com o total que esse cartão vai ter depois da importação. Assim fica mais fácil decidir se a fatura fechada realmente vai bater.</div>
             <div class="flex shrink-0 flex-col gap-2.5 sm:flex-row">
               <button type="button" data-import-review-close class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800">
                 Voltar ao formulario

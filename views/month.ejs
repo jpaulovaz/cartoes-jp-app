@@ -47,8 +47,8 @@
   <div class="op-screen op-screen--month max-w-7xl mx-auto space-y-6 pb-24">
     <section class="op-page-hero op-fade-up">
       <div>
-        <span class="op-page-hero__eyebrow">Gestão do mês</span>
-        <h1 class="op-page-hero__title mt-4">Compras do mês — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
+        <span class="op-page-hero__eyebrow">Mês rodando</span>
+        <h1 class="op-page-hero__title mt-4">Rodando no mês — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
         <p class="op-page-hero__subtitle mt-3">Revise as compras do mês, divida valores e deixe tudo redondinho sem sofrer no caminho.</p>
         <div class="op-page-hero__meta mt-4">
           <span class="badge"><%= isClosed ? 'Mês fechado' : 'Mês em edição' %></span>
@@ -127,7 +127,7 @@
         <div class="op-inline-alert__icon">📤</div>
         <div>
           <div class="op-inline-alert__title">Caixa de saída aquecendo para <%= String(month).padStart(2,'0') %>/<%= year %></div>
-          <div class="op-inline-alert__text">Você tem <strong><%= monthDraftQueueSummary.itemCount %> cobrança(s)</strong> guardada(s) em <strong><%= monthDraftQueueSummary.queueCount %> rascunho(s)</strong>, somando <strong><%= formatBRLFromCents(monthDraftQueueSummary.totalCents) %></strong>. Quando quiser, é só disparar tudo lá em <a href="/shared-debts#draft-queues" class="underline underline-offset-2">Cobranças</a>.</div>
+          <div class="op-inline-alert__text">Você tem <strong><%= monthDraftQueueSummary.itemCount %> acerto(s)</strong> guardada(s) em <strong><%= monthDraftQueueSummary.queueCount %> rascunho(s)</strong>, somando <strong><%= formatBRLFromCents(monthDraftQueueSummary.totalCents) %></strong>. Quando quiser, é só disparar tudo lá em <a href="/shared-debts#draft-queues" class="underline underline-offset-2">Acertos</a>.</div>
         </div>
       </div>
     <% } %>
@@ -200,7 +200,7 @@
           <div class="op-empty-state__icon">
             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10m-11 9h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v11a2 2 0 002 2z"></path></svg>
           </div>
-          <div class="op-empty-state__title">Nenhuma compra recorrente por aqui</div>
+          <div class="op-empty-state__title">Nada recorrente por aqui ainda ✨</div>
           <p class="op-empty-state__text">Crie uma compra manual e marque <strong class="text-slate-700 dark:text-slate-200">Repetir todo mês</strong> para deixar essa rotina no piloto semi-automático.</p>
         </div>
       <% } %>
@@ -213,7 +213,7 @@
       <div class="pointer-events-none flex min-h-full items-end justify-center sm:items-center">
         <div class="pointer-events-auto flex w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 lg:max-w-4xl xl:max-w-5xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]">
         <div class="flex shrink-0 justify-between items-center border-b border-slate-200 px-4 py-4 sm:px-6 dark:border-slate-700">
-          <h2 class="text-xl font-black text-slate-800 dark:text-white">Adicionar compra</h2>
+          <h2 class="text-xl font-black text-slate-800 dark:text-white">Anotar compra</h2>
           <button type="button" data-manual-modal-close
             class="op-icon-btn" aria-label="Fechar janela">✕</button>
         </div>
@@ -221,7 +221,7 @@
         <div class="op-manual-modal__scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6"><form action="/txn/manual" method="POST" class="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0" data-auto-first-due-form>
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data da Compra</label>
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Quando rolou a compra?</label>
               <input type="date" name="date" required data-manual-date-input <%= isClosed ? "disabled" : "" %>
                 class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
             </div>
@@ -240,7 +240,7 @@
 
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Quanto foi? (R$)</label>
               <input type="text" name="amount" placeholder="0,00" required data-money-mask data-manual-amount-input inputmode="decimal" enterkeyhint="next" autocapitalize="off" autocomplete="off" <%= isClosed ? "disabled" : "" %>
                 class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
             </div>
@@ -252,24 +252,24 @@
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Vai cair em qual fatura?</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Em qual fatura isso vai cair?</label>
             <input type="month" name="first_due" value="<%= year %>-<%= String(month).padStart(2, '0') %>" required data-manual-first-due <%= isClosed ? "disabled" : "" %>
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
             <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">A gente sugere isso pela data da compra e pelo fechamento do cartão. Se precisar, pode ajustar sem cerimônia.</p>
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Descrição</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">O que foi comprado?</label>
             <input type="text" name="description" placeholder="Ex: Monitor Dell" required <%= isClosed ? "disabled" : "" %>
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
 
           <div data-purchase-category-control class="space-y-3 lg:col-span-2">
             <div>
-              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Categoria (opcional)</label>
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Categoria (se quiser organizar já)</label>
               <select name="purchase_category_id" data-purchase-category-select <%= isClosed ? "disabled" : "" %>
                 class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
-                <option value="">Sem categoria por enquanto</option>
+                <option value="">Deixar sem categoria por enquanto</option>
                 <% sortedActivePurchaseCategories.forEach(category => { %>
                   <option value="<%= category.id %>"><%= category.name %></option>
                 <% }) %>
@@ -288,7 +288,7 @@
           <input type="checkbox" name="assign_to_owner" value="1" <%= typeof isClosed !== 'undefined' && isClosed ? 'disabled' : '' %>
             class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
           <span>
-            <span class="block text-sm font-bold text-slate-800 dark:text-white">Essa ficou comigo</span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Essa ficou 100% comigo</span>
             <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque aqui quando essa compra for só sua. Se tiver parcela ou repetição, a ideia segue junto.</span>
           </span>
         </label>
@@ -298,7 +298,7 @@
               class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
             <span>
               <span class="block text-sm font-bold text-slate-800 dark:text-white">Repetir todo mês</span>
-              <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Perfeito para academia, streaming, escola, internet e afins. Só funciona com 1 parcela.</span>
+              <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Ótimo para academia, streaming, escola, internet e outras figurinhas carimbadas. Só funciona com 1 parcela.</span>
             </span>
           </label>
 
@@ -321,7 +321,7 @@
     <details class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6 group">
       <summary class="flex cursor-pointer list-none items-start justify-between gap-3">
         <div>
-          <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Categorias de compra</h2>
+          <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Caixinhas pra organizar</h2>
           <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Use esse cantinho para organizar suas categorias sem bagunçar o histórico que já existe.</p>
         </div>
         <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600 transition group-open:rotate-180 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">⌄</span>
@@ -374,7 +374,7 @@
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none" />
         </div>
         <div class="md:col-span-2">
-          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Descrição</label>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">O que foi comprado?</label>
           <input name="f_desc" value="<%= filters.f_desc || '' %>"
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
             placeholder="Ex: Uber, Mercado..." />
@@ -432,7 +432,7 @@
         </div>
 
         <div class="md:col-span-2 lg:col-span-2 xl:col-span-2">
-          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Ordem dos itens</label>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Como você quer ver isso?</label>
           <select name="order"
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none">
             <option value="recent" <%= listOrder === 'recent' ? 'selected' : '' %>>Mais recentes primeiro</option>
@@ -486,7 +486,7 @@
               <th class="px-4 py-4"><a class="hover:text-blue-600 transition-colors flex items-center"
                   href="<%= sortLink('date') %>">Data</a></th>
               <th class="px-4 py-4"><a class="hover:text-blue-600 transition-colors flex items-center"
-                  href="<%= sortLink('desc') %>">Descrição</a></th>
+                  href="<%= sortLink('desc') %>">O que foi comprado?</a></th>
               <th class="hidden md:table-cell px-4 py-4 text-center min-w-[13rem]">Categoria</th>
               <th class="px-4 py-4 text-center min-w-[13rem]"><a class="hover:text-blue-600 transition-colors inline-flex items-center justify-center"
                   href="<%= sortLink('card') %>">Cartão</a></th>
@@ -515,7 +515,7 @@
                 </td>
                 <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-bold text-slate-800 dark:text-white" title="<%= t.description %>">
                   <div class="flex items-start justify-between gap-3 md:block">
-                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 pt-0.5">Descrição</span>
+                    <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 pt-0.5">O que foi comprado?</span>
                     <span class="text-right md:text-left break-words whitespace-normal block flex-1"><%= t.description %></span>
                   </div>
                 </td>
@@ -1580,7 +1580,7 @@
         firstDueInput.required = true;
         firstDueInput.value = `${String(item.year || currentYear).padStart(4, '0')}-${String(item.month || currentMonth).padStart(2, '0')}`;
         firstDueInput.className = buildInputBase();
-        amountGrid.appendChild(buildPurchaseFormField(item.recurring_rule_id ? 'Próxima fatura desta recorrência' : 'Vai cair em qual fatura?', firstDueInput));
+        amountGrid.appendChild(buildPurchaseFormField(item.recurring_rule_id ? 'Próxima fatura desta recorrência' : 'Em qual fatura isso vai cair?', firstDueInput));
         form.appendChild(amountGrid);
 
         const descriptionInput = document.createElement('input');
@@ -1589,7 +1589,7 @@
         descriptionInput.required = true;
         descriptionInput.value = item.description || '';
         descriptionInput.className = buildInputBase();
-        form.appendChild(buildPurchaseFormField('Descrição', descriptionInput));
+        form.appendChild(buildPurchaseFormField('O que foi comprado?', descriptionInput));
 
         const categoryBlock = document.createElement('div');
         categoryBlock.setAttribute('data-purchase-category-control', '1');
@@ -1601,7 +1601,7 @@
         categorySelect.setAttribute('data-purchase-category-select', '1');
         const emptyOption = document.createElement('option');
         emptyOption.value = '';
-        emptyOption.textContent = 'Sem categoria por enquanto';
+        emptyOption.textContent = 'Deixar sem categoria por enquanto';
         categorySelect.appendChild(emptyOption);
         sortedPurchaseCategories.forEach((category) => {
           const option = document.createElement('option');
@@ -2172,7 +2172,7 @@
         select.name = 'purchase_category_id';
         select.setAttribute('data-purchase-category-select', '');
         select.className = 'w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950';
-        select.innerHTML = '<option value="">Sem categoria por enquanto</option>';
+        select.innerHTML = '<option value="">Deixar sem categoria por enquanto</option>';
 
         sortedPurchaseCategories.forEach((category) => {
           const option = document.createElement('option');

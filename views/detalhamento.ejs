@@ -351,7 +351,7 @@
                     <div class="pointer-events-none flex min-h-full items-end justify-center sm:items-center">
                       <div class="pointer-events-auto flex w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 lg:max-w-4xl xl:max-w-5xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]">
                         <div class="flex shrink-0 justify-between items-center border-b border-slate-200 px-4 py-4 sm:px-6 dark:border-slate-700">
-                            <h2 class="text-xl font-black text-slate-800 dark:text-white">Adicionar compra</h2>
+                            <h2 class="text-xl font-black text-slate-800 dark:text-white">Anotar uma compra</h2>
                             <button type="button" data-manual-modal-close
                                 class="op-icon-btn" aria-label="Fechar janela">✕</button>
                         </div>
@@ -359,7 +359,7 @@
                         <div class="op-manual-modal__scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6"><form action="/txn/manual" method="POST" class="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0" data-auto-first-due-form>
                             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
-                                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data da Compra</label>
+                                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Quando rolou a compra?</label>
                                     <input type="date" name="date" required data-manual-date-input <%= isClosed ? 'disabled' : '' %>
                                         class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                                 </div>
@@ -378,7 +378,7 @@
 
                             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
-                                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor Total (R$)</label>
+                                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Quanto foi? (R$)</label>
                                     <input type="text" name="amount" placeholder="0,00" required data-money-mask data-manual-amount-input inputmode="decimal" enterkeyhint="next" autocapitalize="off" autocomplete="off" <%= isClosed ? 'disabled' : '' %>
                                         class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                                 </div>
@@ -390,24 +390,24 @@
                             </div>
 
                             <div>
-                                <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Vai cair em qual fatura?</label>
+                                <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Em qual fatura isso vai cair?</label>
                                 <input type="month" name="first_due" value="<%= year %>-<%= String(month).padStart(2, '0') %>" required data-manual-first-due <%= isClosed ? 'disabled' : '' %>
                                     class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                                 <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">A gente sugere isso pela data da compra e pelo fechamento do cartão. Se precisar, pode ajustar sem cerimônia.</p>
                             </div>
 
                             <div>
-                                <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Descrição</label>
+                                <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">O que foi comprado?</label>
                                 <input type="text" name="description" placeholder="Ex: Monitor Dell" required <%= isClosed ? 'disabled' : '' %>
                                     class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                             </div>
 
                             <div data-purchase-category-control class="space-y-3 lg:col-span-2">
                                 <div>
-                                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Categoria (opcional)</label>
+                                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Categoria (se quiser organizar já)</label>
                                     <select name="purchase_category_id" data-purchase-category-select <%= isClosed ? 'disabled' : '' %>
                                         class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
-                                        <option value="">Sem categoria por enquanto</option>
+                                        <option value="">Deixar sem categoria por enquanto</option>
                                         <% (purchaseCategories || []).forEach(category => { %>
                                             <option value="<%= category.id %>"><%= category.name %></option>
                                         <% }) %>
@@ -416,7 +416,7 @@
                                     <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Se quiser, você já organiza agora. Se não quiser, tudo bem também.</p>
                                 </div>
                                 <div data-purchase-category-custom-shell hidden>
-                                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nome da nova categoria</label>
+                                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Como vai chamar essa categoria nova?</label>
                                     <input type="text" name="purchase_category_custom" maxlength="60" placeholder="Ex: Feira de sábado" data-purchase-category-custom-input disabled <%= isClosed ? 'disabled' : '' %>
                                         class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
                                 </div>
@@ -519,7 +519,7 @@
                         <a href="<%= sharedDebtTrailPay.href || '/shared-debts#received' %>" class="group block rounded-3xl border border-sky-600 bg-gradient-to-br from-sky-500 via-sky-600 to-blue-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
                             <div class="flex items-start justify-between gap-4">
                                 <div class="min-w-0">
-                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Cobranças pra pagar</p>
+                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Acertos pra pagar</p>
                                     <h2 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(sharedDebtTrailPay.amountCents || 0)) %></h2>
                                     <p class="mt-2 text-sm font-semibold opacity-95"><%= buildSharedDebtTrailCountLabel(sharedDebtTrailPay.count) %></p>
                                     <p class="mt-2 text-[13px] font-semibold leading-5 opacity-95"><%= (sharedDebtTrailPay.status && sharedDebtTrailPay.status.label) || 'Nada puxando seu mês desse lado.' %></p>
@@ -533,7 +533,7 @@
                         <a href="<%= sharedDebtTrailReceive.href || '/shared-debts#sent' %>" class="group block rounded-3xl border border-cyan-700 bg-gradient-to-br from-cyan-600 via-cyan-600 to-blue-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
                             <div class="flex items-start justify-between gap-4">
                                 <div class="min-w-0">
-                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Cobranças pra receber</p>
+                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Acertos pra receber</p>
                                     <h2 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(sharedDebtTrailReceive.amountCents || 0)) %></h2>
                                     <p class="mt-2 text-sm font-semibold opacity-95"><%= buildSharedDebtTrailCountLabel(sharedDebtTrailReceive.count) %></p>
                                     <p class="mt-2 text-[13px] font-semibold leading-5 opacity-95"><%= (sharedDebtTrailReceive.status && sharedDebtTrailReceive.status.label) || 'Nada pendurado do lado de cá.' %></p>

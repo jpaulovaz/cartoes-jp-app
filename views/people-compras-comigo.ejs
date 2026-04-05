@@ -53,7 +53,7 @@
 <div class="op-screen op-screen--month mx-auto max-w-7xl space-y-6 pb-24">
   <section class="op-page-hero op-fade-up">
     <div>
-      <span class="op-page-hero__eyebrow">Amizade + competência mensal</span>
+      <span class="op-page-hero__eyebrow">Parceria + competência do mês</span>
       <h1 class="op-page-hero__title mt-4">Compras comigo — <%= contactPerson.name || 'Amizade' %></h1>
       <p class="op-page-hero__subtitle mt-3">Aqui entram só as compras em que <%= contactPerson.name || 'essa pessoa' %> te envolveu, sem virar vitrine da vida financeira do outro lado.</p>
       <div class="op-page-hero__meta mt-4">
@@ -65,8 +65,8 @@
     </div>
 
     <div class="op-page-hero__actions w-full lg:max-w-[32rem]">
-      <a href="<%= backHref || '/people' %>" class="op-btn op-btn-accent-soft op-btn--block">← Voltar para Amigos</a>
-      <a href="<%= sharedDebtsHref || '/shared-debts' %>" class="op-btn op-btn-info op-btn--block">Abrir Cobranças</a>
+      <a href="<%= backHref || '/people' %>" class="op-btn op-btn-accent-soft op-btn--block">← Voltar para Minha Rede</a>
+      <a href="<%= sharedDebtsHref || '/shared-debts' %>" class="op-btn op-btn-info op-btn--block">Abrir Acertos</a>
 
       <div class="w-full flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 p-1 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/70">
         <a href="<%= previousMonthHref %>" class="op-btn op-btn-ghost flex-1">← Anterior</a>
@@ -85,7 +85,7 @@
   <div class="op-inline-alert op-inline-alert--info">
     <div class="op-inline-alert__icon">🔎</div>
     <div>
-      <div class="op-inline-alert__title">Recorte bem comportado</div>
+      <div class="op-inline-alert__title">Recorte sem invasão</div>
       <div class="op-inline-alert__text">Essa tela mostra só o que <strong><%= contactPerson.name || 'essa pessoa' %></strong> lançou para você. Nada de abrir compras em que você não entra na dança.</div>
     </div>
   </div>
@@ -103,9 +103,9 @@
         </div>
 
         <div class="min-w-0">
-          <p class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Leitura mensal da relação</p>
+          <p class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Leitura mensal da parceria</p>
           <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white"><%= contactPerson.name || 'Amizade' %> · <%= monthText %></h2>
-          <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">A navegação segue mês a mês, no mesmo espírito do /month, para ninguém se perder no meio das competências.</p>
+          <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">A navegação segue mês a mês, no mesmo espírito do /month, pra ninguém se perder no meio das competências.</p>
         </div>
       </div>
 
@@ -180,7 +180,7 @@
                 <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= item.hint %></p>
                 <% if (item.request_note) { %>
                   <div class="mt-3 rounded-2xl border border-dashed border-slate-200 bg-white/90 px-3 py-2.5 text-sm font-medium leading-6 text-slate-600 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300">
-                    <span class="font-black text-slate-700 dark:text-slate-100">Recado:</span> <%= item.request_note %>
+                    <span class="font-black text-slate-700 dark:text-slate-100">Bom saber:</span> <%= item.request_note %>
                   </div>
                 <% } %>
               </div>
@@ -223,7 +223,7 @@
                 <a href="/shared-debts?settlement=<%= item.card_monthly_settlement_id %>" class="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Abrir carteira do mês</a>
               <% } %>
               <% if (actionHref !== requestHref) { %>
-                <a href="<%= requestHref %>" class="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Ver na cobrança</a>
+                <a href="<%= requestHref %>" class="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Ver no acerto</a>
               <% } %>
             </div>
           </div>

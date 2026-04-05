@@ -443,8 +443,15 @@
     }
   }
 
+  function moveManualPurchaseModalToBody(modal) {
+    if (!(modal instanceof HTMLElement)) return modal;
+    if (modal.parentElement === document.body) return modal;
+    document.body.appendChild(modal);
+    return modal;
+  }
+
   function setupManualPurchaseModal() {
-    const modal = document.querySelector('[data-manual-modal]');
+    const modal = moveManualPurchaseModalToBody(document.querySelector('[data-manual-modal]'));
     if (!(modal instanceof HTMLElement)) return;
 
     const form = modal.querySelector('[data-auto-first-due-form]');

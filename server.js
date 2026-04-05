@@ -2178,7 +2178,7 @@ async function createServerBackup({ triggerKind = 'manual', createdByUserId = nu
   let sizeBytes = 0;
   let manifestJson = '';
   let finalStatus = 'success';
-  let finalMessage = messagePrefix ? String(messagePrefix).trim() : 'Backup criado com sucesso.';
+  let finalMessage = messagePrefix ? String(messagePrefix).trim() : 'Backup criado direitinho.';
 
   try {
     assertBackupDirectories(config);
@@ -2375,7 +2375,7 @@ async function restoreServerBackupFromZip({ zipPath, uploadedFilename, restoredB
       backupName,
       uploadedFilename || path.basename(zipPath),
       'success',
-      'Backup restaurado com sucesso. O banco voltou para a foto salva no zip.',
+      'Backup restaurado direitinho. O banco voltou para a foto salva no zip.',
       safetyBackupRunId || null,
       restoredByUserId || null,
       startedAt,
@@ -2385,7 +2385,7 @@ async function restoreServerBackupFromZip({ zipPath, uploadedFilename, restoredB
     return {
       backupName,
       safetyBackupRunId,
-      message: 'Backup restaurado com sucesso. O banco voltou para a foto salva no zip.'
+      message: 'Backup restaurado direitinho. O banco voltou para a foto salva no zip.'
     };
   } catch (error) {
     const finishedAt = currentConfigTimestamp();
@@ -3109,7 +3109,7 @@ function getPurchaseCategoryById(userId, categoryId, { includeInactive = false }
 
 function createOrReusePurchaseCategory(userId, rawName) {
   const safeUserId = Number(userId || 0);
-  if (!safeUserId) throw new Error('Usuário inválido para criar categoria.');
+  if (!safeUserId) throw new Error('Não encontrei essa pessoa para criar a categoria.');
 
   ensurePurchaseCategoriesForUser(safeUserId);
 
@@ -3172,7 +3172,7 @@ function resolvePurchaseCategorySelection(userId, rawCategoryId, rawCustomName, 
 
   const category = getPurchaseCategoryById(userId, categoryId, { includeInactive: true });
   if (!category) {
-    throw new Error('Categoria não encontrada por aqui.');
+    throw new Error('Não achei essa categoria por aqui.');
   }
 
   if (Number(category.active || 0) === 0 && !safeAllowInactiveIds.has(categoryId)) {
@@ -3184,7 +3184,7 @@ function resolvePurchaseCategorySelection(userId, rawCategoryId, rawCustomName, 
 
 function setPurchaseCategoryActiveState(userId, categoryId, active) {
   const category = getPurchaseCategoryById(userId, categoryId, { includeInactive: true });
-  if (!category) throw new Error('Categoria não encontrada por aqui.');
+  if (!category) throw new Error('Não achei essa categoria por aqui.');
 
   db.prepare(`
     UPDATE purchase_categories
@@ -3575,7 +3575,7 @@ function getUserNotificationPreferences(userId) {
 
 function upsertUserNotificationPreferences(userId, overrides = {}) {
   const safeUserId = Number(userId || 0);
-  if (!safeUserId) throw new Error('Não encontrei o usuário para salvar as preferências de alerta.');
+  if (!safeUserId) throw new Error('Não encontrei essa pessoa para salvar as preferências de alerta.');
 
   const current = getUserNotificationPreferences(safeUserId);
   const next = {
@@ -3719,7 +3719,7 @@ function getUserSecuritySettings(userId) {
 
 function upsertUserSecuritySettings(userId, overrides = {}) {
   const safeUserId = Number(userId || 0);
-  if (!safeUserId) throw new Error('Não encontrei o usuário para salvar a segurança do app.');
+  if (!safeUserId) throw new Error('Não encontrei essa pessoa para salvar a segurança do app.');
 
   const current = getUserSecuritySettings(safeUserId);
   const next = {
@@ -4556,7 +4556,7 @@ function buildPasskeyLockViewModel(req, userId, pinSettings = null) {
   if (!Number(settings.pin_enabled || 0)) {
     message = 'O desbloqueio pelo aparelho entra em cena junto com o PIN.';
   } else if (!passkeys.length) {
-    message = 'Se quiser, depois dá para preparar este aparelho lá em Amigos > Segurança do app.';
+    message = 'Se quiser, depois dá para preparar este aparelho lá em Minha Rede > Segurança do app.';
   } else if (!context.available) {
     message = context.disabledMessage || 'Hoje o desbloqueio pelo aparelho não ficou disponível neste endereço.';
   } else {
@@ -5465,7 +5465,7 @@ function buildManualSharedDebtPixShareText({ creditorName, amountCents, descript
   const safeCreditorName = String(creditorName || 'quem vai receber').trim() || 'quem vai receber';
   const safeDescription = String(description || 'o combinado').trim() || 'o combinado';
   const safePayload = String(payload || '').trim();
-  const fallbackTitle = safeCreditorName ? `Cobrança com Pix de ${safeCreditorName}` : 'Cobrança com Pix';
+  const fallbackTitle = safeCreditorName ? `Acerto com Pix de ${safeCreditorName}` : 'Acerto com Pix';
   const fallbackBody = [
     `Oi! Ficou pendente ${formatBRLFromCents(amountCents)} referente a ${safeDescription}.`,
     `Para facilitar, já deixei o Pix copia e cola de ${safeCreditorName} aqui embaixo:`,
@@ -5573,7 +5573,7 @@ function buildSharedDebtCardMonthlyIntentPreview(snapshot, rawAmountCents, optio
     const paidCents = Math.min(totalCents, Math.max(0, Number(row?.amount_paid_cents || (row?.status === 'settled' ? totalCents : 0))));
     return {
       id: Number(row?.id || 0),
-      description: String(row?.description_snapshot || 'Cobrança do mês').trim() || 'Cobrança do mês',
+      description: String(row?.description_snapshot || 'Acerto do mês').trim() || 'Acerto do mês',
       pendingCents: Math.max(0, totalCents - paidCents),
       totalCents,
       paidCents,
@@ -5801,11 +5801,11 @@ function attachSharedDebtPixMeta(items = [], currentUserId = null) {
       pixUnavailableReason = 'Esse lembrete já está com o valor fechado por aqui.';
     } else if (!creditorProfile || !creditorProfile.pixEnabled) {
       pixUnavailableReason = currentUserIsCreditor
-        ? 'Configure seu Pix em Amigos para liberar o copia e cola deste lembrete.'
+        ? 'Configure seu Pix em Minha Rede para liberar o copia e cola deste lembrete.'
         : 'Quem enviou ainda não deixou um Pix prontinho por aqui.';
     } else if (!creditorProfile.pixValid) {
       pixUnavailableReason = currentUserIsCreditor
-        ? (creditorProfile.pixReason || 'Seu Pix ainda precisa de um ajuste em Amigos.')
+        ? (creditorProfile.pixReason || 'Seu Pix ainda precisa de um ajuste em Minha Rede.')
         : 'Quem enviou começou a configurar o Pix, mas ainda falta acertar um detalhe.';
     } else {
       pixAvailable = true;
@@ -6495,7 +6495,7 @@ function renderSharedDebtsPage(req, res, { archiveMode = false } = {}) {
 
   const payload = buildSharedDebtsPagePayload(userId, req.query, archiveMode);
   return safeRenderView(res, 'shared-debts', {
-    title: archiveMode ? 'AcerttaPay | Arquivo de cobranças' : 'AcerttaPay | Cobranças',
+    title: archiveMode ? 'AcerttaPay | Arquivo de acertos' : 'AcerttaPay | Acertos',
     ...payload,
     formatBRLFromCents,
     monthLabel,
@@ -12185,7 +12185,7 @@ function sendMonthTransactionsCsv(res, userId, month, year) {
 app.get("/geral/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
   const { month, year } = parsed;
 
   return sendMonthTransactionsCsv(res, userId, month, year);
@@ -12194,7 +12194,7 @@ app.get("/geral/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
 app.get("/month/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
   const { month, year } = parsed;
 
   return sendMonthTransactionsCsv(res, userId, month, year);
@@ -13672,7 +13672,7 @@ app.post('/shared-debts/:id/archive', ensureAuthenticated, (req, res) => {
   `).get(requestId, userId, userId);
 
   if (!requestRow) {
-    setFlash(req, 'error', 'Cobrança não encontrada.');
+    setFlash(req, 'error', 'Não achei esse acerto por aqui.');
     return res.redirect(fallbackRedirect);
   }
 
@@ -13689,7 +13689,7 @@ app.post('/shared-debts/:id/archive', ensureAuthenticated, (req, res) => {
     timestamp: nowIso()
   });
 
-  setFlash(req, 'success', 'Cobrança arquivada. A fila principal agradeceu o respiro.');
+  setFlash(req, 'success', 'Acerto arquivado. A fila principal agradeceu o respiro.');
   return res.redirect(fallbackRedirect);
 });
 
@@ -13711,7 +13711,7 @@ app.post('/shared-debts/:id/unarchive', ensureAuthenticated, (req, res) => {
   `).get(requestId, userId, userId);
 
   if (!requestRow) {
-    setFlash(req, 'error', 'Cobrança não encontrada.');
+    setFlash(req, 'error', 'Não achei esse acerto por aqui.');
     return res.redirect(fallbackRedirect);
   }
 
@@ -13723,7 +13723,7 @@ app.post('/shared-debts/:id/unarchive', ensureAuthenticated, (req, res) => {
     timestamp: nowIso()
   });
 
-  setFlash(req, 'success', 'Cobrança restaurada. Ela voltou para as ativas sem perder nadinha do histórico.');
+  setFlash(req, 'success', 'Acerto restaurado. Ele voltou para os ativos sem perder nadinha do histórico.');
   return res.redirect(fallbackRedirect);
 });
 
@@ -14398,7 +14398,7 @@ app.post("/shared-debts/:id/sender-action", ensureAuthenticated, (req, res) => {
     });
   })();
 
-  setFlash(req, 'success', acceptingRejection ? 'Pronto! Você aceitou a recusa e encerrou essa cobrança.' : 'Pronto! Você contestou a recusa dessa cobrança.');
+  setFlash(req, 'success', acceptingRejection ? 'Pronto! Você aceitou a recusa e encerrou esse acerto.' : 'Pronto! Você contestou a recusa desse acerto.');
   return res.redirect(redirectTo);
 });
 
@@ -14421,7 +14421,7 @@ app.get('/shared-debts/monthly-settlements/:id/prepare', ensureAuthenticated, (r
 
   const snapshot = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
   if (!snapshot || !Number(snapshot.requestCount || 0)) {
-    return res.status(404).json({ ok: false, message: 'Ainda não encontrei cobranças aceitas para montar esse mês por aqui.' });
+    return res.status(404).json({ ok: false, message: 'Ainda não encontrei acertos aceitos para montar esse mês por aqui.' });
   }
 
   const creditorProfile = getUserPixProfile(settlementRow.requester_user_id);
@@ -14484,7 +14484,7 @@ app.post('/shared-debts/monthly-settlements/:id/pix', ensureAuthenticated, async
 
   const snapshot = getSharedDebtCardMonthlySettlementSnapshotById(settlementId);
   if (!snapshot || !Number(snapshot.requestCount || 0)) {
-    return res.status(404).json({ ok: false, message: 'Ainda não encontrei cobranças aceitas para montar esse mês por aqui.' });
+    return res.status(404).json({ ok: false, message: 'Ainda não encontrei acertos aceitos para montar esse mês por aqui.' });
   }
 
   const openCents = Math.max(0, Number(snapshot.openCents || 0));
@@ -15006,7 +15006,7 @@ app.get('/shared-debts/:id/pix', ensureAuthenticated, async (req, res) => {
   const requestId = Number(req.params.id);
 
   if (!requestId) {
-    return res.status(400).json({ ok: false, message: 'Não consegui descobrir qual cobrança avulsa você quer abrir no Pix.' });
+    return res.status(400).json({ ok: false, message: 'Não consegui descobrir qual acerto avulso você quer abrir no Pix.' });
   }
 
   const requestRow = db.prepare(`
@@ -15025,11 +15025,11 @@ app.get('/shared-debts/:id/pix', ensureAuthenticated, async (req, res) => {
   `).get(requestId, userId, userId);
 
   if (!requestRow) {
-    return res.status(404).json({ ok: false, message: 'Essa cobrança avulsa não apareceu por aqui.' });
+    return res.status(404).json({ ok: false, message: 'Esse acerto avulso não apareceu por aqui.' });
   }
 
   if (normalizeSharedDebtRequestKind(requestRow.request_kind) !== 'manual') {
-    return res.status(400).json({ ok: false, message: 'Nesta fase, o Pix vive só nas cobranças avulsas.' });
+    return res.status(400).json({ ok: false, message: 'Nesta fase, o Pix vive só nos acertos avulsos.' });
   }
 
   const status = String(requestRow.status || 'pending').trim().toLowerCase();
@@ -15152,7 +15152,7 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
   }
 
   if (requestRow.status === 'settled') {
-    setFlash(req, 'info', 'Essa cobrança já foi encerrada antes.');
+    setFlash(req, 'info', 'Esse acerto já foi encerrado antes.');
     return res.redirect(redirectTo);
   }
 
@@ -15208,7 +15208,7 @@ app.post("/shared-debts/:id/mark-paid", ensureAuthenticated, (req, res) => {
     });
   })();
 
-  setFlash(req, 'success', 'Pronto! Agora quem enviou a cobrança já pode confirmar o recebimento.');
+  setFlash(req, 'success', 'Pronto! Agora quem enviou o acerto já pode confirmar o recebimento.');
   return res.redirect(redirectTo);
 });
 
@@ -15238,7 +15238,7 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
   }
 
   if (requestRow.status === 'settled') {
-    setFlash(req, 'info', 'Essa cobrança já foi encerrada antes.');
+    setFlash(req, 'info', 'Esse acerto já foi encerrado antes.');
     return res.redirect(redirectTo);
   }
 
@@ -15248,7 +15248,7 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
   }
 
   if (!requestRow.payment_marked_at) {
-    setFlash(req, 'info', 'Essa cobrança ainda não foi marcada como paga por quem recebeu.');
+    setFlash(req, 'info', 'Esse acerto ainda não foi marcado como pago por quem recebeu.');
     return res.redirect(redirectTo);
   }
 
@@ -15298,7 +15298,7 @@ app.post("/shared-debts/:id/confirm-receipt", ensureAuthenticated, (req, res) =>
     });
   })();
 
-  setFlash(req, 'success', 'Pronto! Recebimento confirmado e cobrança encerrada.');
+  setFlash(req, 'success', 'Pronto! Recebimento confirmado e acerto encerrado.');
   return res.redirect(redirectTo);
 });
 
@@ -15310,7 +15310,7 @@ app.post('/shared-debts/bulk/mark-paid', ensureAuthenticated, (req, res) => {
   const fallbackRedirect = redirectBackOr(req, '/shared-debts');
 
   if (!requestIds.length) {
-    setFlash(req, 'error', 'Nenhuma cobrança válida foi escolhida para marcar como paga.');
+    setFlash(req, 'error', 'Nenhum acerto válido foi escolhido para marcar como pago.');
     return res.redirect(fallbackRedirect);
   }
 
@@ -15327,7 +15327,7 @@ app.post('/shared-debts/bulk/mark-paid', ensureAuthenticated, (req, res) => {
   `).all(...requestIds, userId);
 
   if (!rows.length) {
-    setFlash(req, 'info', 'Não achei cobranças desse grupo esperando marcação de pagamento.');
+    setFlash(req, 'info', 'Não achei acertos desse grupo esperando marcação de pagamento.');
     return res.redirect(fallbackRedirect);
   }
 
@@ -15391,7 +15391,7 @@ app.post('/shared-debts/bulk/confirm-receipt', ensureAuthenticated, (req, res) =
   const fallbackRedirect = redirectBackOr(req, '/shared-debts');
 
   if (!requestIds.length) {
-    setFlash(req, 'error', 'Nenhuma cobrança válida foi escolhida para confirmar o recebimento.');
+    setFlash(req, 'error', 'Nenhum acerto válido foi escolhido para confirmar o recebimento.');
     return res.redirect(fallbackRedirect);
   }
 
@@ -15408,7 +15408,7 @@ app.post('/shared-debts/bulk/confirm-receipt', ensureAuthenticated, (req, res) =
   `).all(...requestIds, userId);
 
   if (!rows.length) {
-    setFlash(req, 'info', 'Não achei cobranças desse grupo esperando confirmação de recebimento.');
+    setFlash(req, 'info', 'Não achei acertos desse grupo esperando confirmação de recebimento.');
     return res.redirect(fallbackRedirect);
   }
 
@@ -15963,7 +15963,7 @@ app.post('/people/profile-photo/remove', ensureAuthenticated, async (req, res) =
 app.get("/people", ensureAuthenticated, (req, res) => {
   return safeRenderView(res, "people", {
     ...buildPeoplePageViewModel(req),
-    title: "Amigos"
+    title: "Minha Rede"
   });
 });
 
@@ -16002,7 +16002,7 @@ app.get('/people/:id/compras-comigo/:year/:month', ensureAuthenticated, (req, re
   const userId = req.user.id;
   const personId = Number(req.params.id || 0);
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send('Mês/ano inválidos.');
+  if (!parsed) return res.status(400).send('Esse mês/ano veio estranho por aqui.');
 
   const tab = String(req.query.tab || 'open').trim().toLowerCase() === 'history' ? 'history' : 'open';
 
@@ -17001,7 +17001,7 @@ app.post('/friend-requests/:id/respond', ensureAuthenticated, (req, res) => {
       });
     })();
 
-    setFlash(req, 'success', `${requestRow.requester_name || 'Pedido aceito'} entrou para sua rede. Cobranças automáticas entre vocês já estão liberadas.`);
+    setFlash(req, 'success', `${requestRow.requester_name || 'Pedido aceito'} entrou para sua rede. Os acertos automáticos entre vocês já estão liberados.`);
     return res.redirect('/people');
   }
 
@@ -17156,7 +17156,7 @@ app.post("/people/:id/delete", ensureAuthenticated, (req, res) => {
   }
 
   if (isSelfPersonRow(person)) {
-    setFlash(req, "info", "Seu perfil não pode ser excluído daqui. Ele é a base da sua conta e das suas cobranças.");
+    setFlash(req, "info", "Seu perfil não pode ser excluído daqui. Ele é a base da sua conta e dos seus acertos.");
     return res.redirect('/people');
   }
 
@@ -17174,7 +17174,7 @@ app.post("/people/:id/delete", ensureAuthenticated, (req, res) => {
   }
 
   if (blockers.hasDraftQueue) {
-    setFlash(req, 'info', `${person.name} ainda está em uma caixa de saída de cobranças. Envie ou descarte esse rascunho antes de excluir da sua lista.`);
+    setFlash(req, 'info', `${person.name} ainda está em uma caixa de saída de acertos. Envie ou descarte esse rascunho antes de excluir da sua lista.`);
     return res.redirect('/people');
   }
 
@@ -17184,7 +17184,7 @@ app.post("/people/:id/delete", ensureAuthenticated, (req, res) => {
   }
 
   if (blockers.hasOpenRequests) {
-    setFlash(req, 'info', `${person.name} ainda participa de cobranças em aberto. Resolve isso primeiro e depois eu libero a exclusão sem apagar o passado.`);
+    setFlash(req, 'info', `${person.name} ainda participa de acertos em aberto. Resolve isso primeiro e depois eu libero a exclusão sem apagar o passado.`);
     return res.redirect('/people');
   }
 
@@ -18859,7 +18859,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   syncMonthlyFinanceCarryForward(userId, currentMonth, currentYear);
 
   const owner = getSelfPerson(userId) || ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
-  if (!owner) return res.status(400).send("Ajuste seu perfil em Amigos antes de seguir por aqui.");
+  if (!owner) return res.status(400).send("Ajuste seu perfil em Minha Rede antes de seguir por aqui.");
 
   const dashboardAlertContext = getManualDebtDueScheduleContext();
 
@@ -18961,7 +18961,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       : 'Pedidos de amizade esperando resposta';
     const friendPendingDescription = pendingFriendRequests.length === 1
       ? 'Aceitando, vocês liberam cobranças automáticas dos dois lados com um ok de verdade.'
-      : `${formatCountLabel(pendingFriendRequests.length, 'pedido de amizade está', 'pedidos de amizade estão')} te esperando lá em Amigos.`;
+      : `${formatCountLabel(pendingFriendRequests.length, 'pedido de amizade está', 'pedidos de amizade estão')} te esperando na sua rede.`;
     const resolvedFriendPendingAlert = resolveCatalogText(friendPendingMessageKey, {
       pessoa: newestFriendRequest.requester_name || 'Alguém',
       n_pedidos: formatCountLabel(pendingFriendRequests.length, 'pedido', 'pedidos')
@@ -19010,10 +19010,10 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     const sharedDebtAlertMessageKey = unreadSharedDebtNotifications.length === 1
       ? 'dashboard.shared_debt.unread.single'
       : 'dashboard.shared_debt.unread.multi';
-    const sharedDebtAlertTitle = unreadSharedDebtNotifications.length === 1 ? (newest.title || 'Tem cobrança esperando você') : 'Cobranças pendentes';
+    const sharedDebtAlertTitle = unreadSharedDebtNotifications.length === 1 ? (newest.title || 'Tem um acerto te esperando') : 'Acertos pendentes';
     const sharedDebtAlertBody = unreadSharedDebtNotifications.length === 1
       ? (newest.body || 'Você recebeu uma nova cobrança para analisar.')
-      : `Você tem ${formatCountLabel(unreadSharedDebtNotifications.length, 'novidade', 'novidades')} em Cobranças esperando sua olhada.`;
+      : `Você tem ${formatCountLabel(unreadSharedDebtNotifications.length, 'novidade', 'novidades')} em Acertos esperando sua olhada.`;
     const resolvedSharedDebtAlert = resolveCatalogText(sharedDebtAlertMessageKey, {
       titulo_reaproveitado: sharedDebtAlertTitle,
       body_reaproveitado: newest.body || 'Você recebeu uma nova cobrança para analisar.',
@@ -19374,7 +19374,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
   const { month, year } = parsed;
 
   syncRecurringTransactions(userId, year, month);
@@ -19574,7 +19574,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
 
     const ownerPerson = assignToOwner ? getOwnerPerson(userId) : null;
     if (assignToOwner && !ownerPerson) {
-      setFlash(req, "error", "Ajuste seu perfil em Amigos antes de usar 'Atribuir esse item a mim'.");
+      setFlash(req, "error", "Ajuste seu perfil em Minha Rede antes de usar 'Atribuir esse item a mim'.");
       return res.redirect(redirectBackOr(req, "/geral"));
     }
 
@@ -20203,7 +20203,7 @@ app.post("/txn/:id/delete", ensureAuthenticated, (req, res) => {
   const txn = getTransactionScopeRow(userId, id);
 
   if (!txn) {
-    setFlash(req, "error", "Lançamento não encontrado.");
+    setFlash(req, "error", "Não achei esse lançamento por aqui.");
     return res.redirect("/geral");
   }
   if (isMonthClosed(userId, txn.month, txn.year)) {
@@ -20244,7 +20244,7 @@ app.post("/txn/:id/delete", ensureAuthenticated, (req, res) => {
 app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
+  if (!parsed) return res.status(400).json({ ok: false, error: "Esse mês/ano veio estranho por aqui." });
 
   const sourceRows = getTransactionScopeRowsByIds(userId, req.body.txn_ids);
   if (!sourceRows.length) {
@@ -20306,7 +20306,7 @@ app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
 app.post("/month/:year/:month/bulk/category", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
+  if (!parsed) return res.status(400).json({ ok: false, error: "Esse mês/ano veio estranho por aqui." });
 
   const sourceRows = getTransactionScopeRowsByIds(userId, req.body.txn_ids);
   if (!sourceRows.length) {
@@ -20353,7 +20353,7 @@ app.post("/month/:year/:month/bulk/category", ensureAuthenticated, (req, res) =>
 app.post("/month/:year/:month/bulk/delete", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
+  if (!parsed) return res.status(400).json({ ok: false, error: "Esse mês/ano veio estranho por aqui." });
 
   const sourceRows = getTransactionScopeRowsByIds(userId, req.body.txn_ids);
   if (!sourceRows.length) {
@@ -20402,7 +20402,7 @@ app.post("/month/:year/:month/bulk/delete", ensureAuthenticated, (req, res) => {
 app.post("/month/:year/:month/bulk/move", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
+  if (!parsed) return res.status(400).json({ ok: false, error: "Esse mês/ano veio estranho por aqui." });
 
   const targetMonth = Number(req.body.target_month);
   const targetYear = Number(req.body.target_year);
@@ -21960,7 +21960,7 @@ function buildMonthlyReviewViewModel(userId, month, year) {
 app.get("/analytics/:year/:month", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
   const { month, year } = parsed;
 
   const viewModel = buildMonthlyReviewViewModel(userId, month, year);
@@ -21973,7 +21973,7 @@ app.get("/analytics/:year/:month", ensureAuthenticated, (req, res) => {
 app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
   const { month, year } = parsed;
 
   const viewModel = buildMonthlyReviewViewModel(userId, month, year);
@@ -21986,7 +21986,7 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
 app.post(["/summary/:year/:month/merchant-suggestions/confirm", "/analytics/:year/:month/merchant-suggestions/confirm"], ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
   const { month, year } = parsed;
   const normalizedPattern = buildMerchantPatternFromDescription(req.body.pattern || req.body.sample_description || '');
   const merchantLabel = humanizeMerchantLabel(req.body.label || req.body.preview_label || '');
@@ -22017,7 +22017,7 @@ app.post(["/summary/:year/:month/merchant-suggestions/confirm", "/analytics/:yea
 app.post(["/summary/:year/:month/merchant-suggestions/dismiss", "/analytics/:year/:month/merchant-suggestions/dismiss"], ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
   const { month, year } = parsed;
   const normalizedPattern = buildMerchantPatternFromDescription(req.body.pattern || req.body.sample_description || '');
   const merchantLabel = humanizeMerchantLabel(req.body.label || req.body.preview_label || 'Agrupamento adiado');
@@ -22049,7 +22049,7 @@ app.post(["/summary/:year/:month/merchant-suggestions/dismiss", "/analytics/:yea
 app.post(["/summary/:year/:month/merchant-learning/pause", "/analytics/:year/:month/merchant-learning/pause"], ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
   const { month, year } = parsed;
   const normalizedPattern = normalizeMerchantText(req.body.pattern || '');
   const merchantLabel = humanizeMerchantLabel(req.body.label || 'Agrupamento pausado');
@@ -22080,7 +22080,7 @@ app.post(["/summary/:year/:month/merchant-learning/pause", "/analytics/:year/:mo
 app.post(["/summary/:year/:month/merchant-learning/resume", "/analytics/:year/:month/merchant-learning/resume"], ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
   const { month, year } = parsed;
   const normalizedPattern = normalizeMerchantText(req.body.pattern || '');
   const merchantLabel = humanizeMerchantLabel(req.body.label || req.body.preview_label || 'Agrupamento retomado');
@@ -22111,7 +22111,7 @@ app.post(["/summary/:year/:month/merchant-learning/resume", "/analytics/:year/:m
 app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
   const { month, year } = parsed;
   if (isMonthClosed(userId, month, year)) {
     setFlash(req, "error", getMonthLockMessage(month, year));
@@ -22134,7 +22134,7 @@ app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {
 app.post("/summary/:year/:month/cards/async", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
+  if (!parsed) return res.status(400).json({ ok: false, error: "Esse mês/ano veio estranho por aqui." });
   const { month, year } = parsed;
   if (isMonthClosed(userId, month, year)) {
     return res.status(423).json({ ok: false, error: getMonthLockMessage(month, year) });
@@ -22152,7 +22152,7 @@ app.post("/summary/:year/:month/cards/async", ensureAuthenticated, (req, res) =>
 app.post("/summary/:year/:month/people", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
+  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
   const { month, year } = parsed;
   if (isMonthClosed(userId, month, year)) {
     setFlash(req, "error", getMonthLockMessage(month, year));
@@ -22170,7 +22170,7 @@ app.post("/summary/:year/:month/people", ensureAuthenticated, (req, res) => {
 app.post("/summary/:year/:month/people/async", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
+  if (!parsed) return res.status(400).json({ ok: false, error: "Esse mês/ano veio estranho por aqui." });
   const { month, year } = parsed;
   if (isMonthClosed(userId, month, year)) {
     return res.status(423).json({ ok: false, error: getMonthLockMessage(month, year) });
@@ -22453,9 +22453,9 @@ async function buildSharePixContext({ userId, month, year, person, totalCents, p
 
   if (safeRemainingCents > 0) {
     if (!ownerPixProfile || !ownerPixProfile.pixEnabled) {
-      pix.reason = 'Salve o Pix do seu perfil em Amigos para este resumo já sair com copia e cola.';
+      pix.reason = 'Salve o Pix do seu perfil em Minha Rede para este resumo já sair com copia e cola.';
     } else if (!ownerPixProfile.pixValid) {
-      pix.reason = ownerPixProfile.pixReason || 'Seu Pix ainda precisa de um ajuste em Amigos.';
+      pix.reason = ownerPixProfile.pixReason || 'Seu Pix ainda precisa de um ajuste em Minha Rede.';
     } else {
       try {
         const txid = buildStatementSharePixTxid(userId, person?.id, month, year, safeRemainingCents);
@@ -22534,12 +22534,12 @@ app.get("/share/:year/:month/:personId", ensureAuthenticated, async (req, res) =
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
   const personId = Number(req.params.personId);
-  if (!parsed) return res.status(400).send("Parâmetros inválidos.");
+  if (!parsed) return res.status(400).send("Os dados dessa chamada vieram tortos.");
 
   const { month, year } = parsed;
   const itemOrder = parseChronologicalOrder(req.query.order) || "oldest";
   const exportData = getPersonStatementExportData(userId, month, year, personId, itemOrder);
-  if (!exportData) return res.status(400).send("Pessoa inválida.");
+  if (!exportData) return res.status(400).send("Não achei essa pessoa por aqui.");
 
   const shareContext = await buildSharePixContext({
     userId,
@@ -22558,7 +22558,7 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, async (req, res
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
   const personId = Number(req.params.personId);
-  if (!parsed) return res.status(400).send("Parâmetros inválidos.");
+  if (!parsed) return res.status(400).send("Os dados dessa chamada vieram tortos.");
 
   if (!isAdminUser(userId)) {
     setFlash(req, "error", "O envio via WhatsApp está disponível apenas para administradores.");
@@ -22570,7 +22570,7 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, async (req, res
   const { month, year } = parsed;
   const itemOrder = parseChronologicalOrder(req.query.order) || "oldest";
   const exportData = getPersonStatementExportData(userId, month, year, personId, itemOrder);
-  if (!exportData) return res.status(400).send("Pessoa inválida.");
+  if (!exportData) return res.status(400).send("Não achei essa pessoa por aqui.");
 
   const decoratedPerson = decoratePersonPhoneForView(exportData.person, { fallbackCountry: DEFAULT_PHONE_COUNTRY });
   const shareContext = await buildSharePixContext({
@@ -22855,7 +22855,7 @@ app.get("/finances/details/:id", ensureAuthenticated, (req, res) => {
   const finance = serializeFinanceForApi(userId, req.params.id);
 
   if (!finance) {
-    return res.status(404).json({ error: "Item não encontrado." });
+    return res.status(404).json({ error: "Não achei esse item por aqui." });
   }
 
   return res.json({
@@ -22880,11 +22880,11 @@ app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) =>
     const scheduleKind = dayOfMonth ? normalizeFinanceScheduleKind(req.body.schedule_kind, type) : null;
 
     if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 2000) {
-      return res.status(400).json({ error: "Mês ou ano inválido." });
+      return res.status(400).json({ error: "Esse mês ou ano veio estranho por aqui." });
     }
 
     if (!type) {
-      return res.status(400).json({ error: "Tipo de lançamento inválido." });
+      return res.status(400).json({ error: "Esse tipo de lançamento não fez sentido por aqui." });
     }
 
     if (isMonthClosed(userId, month, year)) {
@@ -22933,7 +22933,7 @@ app.post("/finances/variable/:id", ensureAuthenticated, express.json(), (req, re
     const id = Number(req.params.id);
     const finance = getFinanceByIdForUser(userId, id);
     if (!finance) {
-      return res.status(404).json({ error: "Item não encontrado." });
+      return res.status(404).json({ error: "Não achei esse item por aqui." });
     }
 
     if (finance.amount_mode !== 'variable') {
@@ -23014,7 +23014,7 @@ app.post("/finances/fixed/:id", ensureAuthenticated, express.json(), (req, res) 
     const id = Number(req.params.id);
     const finance = getFinanceByIdForUser(userId, id);
     if (!finance) {
-      return res.status(404).json({ error: "Item não encontrado." });
+      return res.status(404).json({ error: "Não achei esse item por aqui." });
     }
 
     if (finance.amount_mode !== 'fixed') {
@@ -23066,7 +23066,7 @@ app.post("/finances/payment-toggle/:id", ensureAuthenticated, express.json(), (r
     const id = Number(req.params.id);
     const finance = getFinanceByIdForUser(userId, id);
     if (!finance) {
-      return res.status(404).json({ error: "Item não encontrado." });
+      return res.status(404).json({ error: "Não achei esse item por aqui." });
     }
 
     if (finance.type !== 'expense' || finance.amount_mode !== 'fixed') {
@@ -23112,7 +23112,7 @@ app.post("/finance-items/payment-toggle/:id", ensureAuthenticated, express.json(
     `).get(itemId, userId);
 
     if (!item) {
-      return res.status(404).json({ error: "Lançamento não encontrado." });
+      return res.status(404).json({ error: "Não achei esse lançamento por aqui." });
     }
 
     if (item.type !== 'expense' || normalizeFinanceAmountMode(item.amount_mode) !== 'variable') {
@@ -23408,7 +23408,7 @@ app.post('/admin/messages/:messageKey', ensureAuthenticated, (req, res) => {
     });
 
     const success = result.changed
-      ? 'Mensagem salva com sucesso. Agora o catálogo já fala esse texto sem depender de deploy.'
+      ? 'Mensagem guardada por aqui. Agora o catálogo já fala esse texto sem depender de deploy.'
       : 'Mensagem conferida. Não achei mudança nova para guardar aqui.';
 
     clearAdminMessageImportPreview(req);
@@ -23625,7 +23625,7 @@ app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
     const restartChanges = changedDefinitions.filter((definition) => definition.restartRequired);
 
     let success = changedDefinitions.length
-      ? `${section.title} salva com sucesso.`
+      ? `${section.title} guardada com sucesso.`
       : `${section.title} conferida. Não achei nada novo para salvar.`;
 
     if (liveChanges.length) {
@@ -23715,7 +23715,7 @@ app.post('/admin/email/send-test', ensureAuthenticated, async (req, res) => {
       req
     });
     return renderAdmin(res, {
-      success: `E-mail de teste enviado com sucesso${result.messageId ? ` (messageId ${result.messageId})` : ''}. Agora o SMTP já mostrou que sabe o caminho.`,
+      success: `E-mail de teste enviado direitinho${result.messageId ? ` (messageId ${result.messageId})` : ''}. Agora o SMTP já mostrou que sabe o caminho.`,
       activeSection: 'email'
     });
   } catch (error) {
@@ -23912,7 +23912,7 @@ app.get('/admin/backup/download/:backupId/:slot', ensureAuthenticated, (req, res
   const slot = String(req.params.slot || '').trim().toLowerCase();
   const row = Number.isInteger(backupId) && backupId > 0 ? backupRunsSelectById.get(backupId) : null;
   if (!row) {
-    return renderAdmin(res, { error: 'Backup não encontrado para download.', activeSection: 'backup' });
+    return renderAdmin(res, { error: 'Não achei esse backup para download.', activeSection: 'backup' });
   }
 
   const targetPath = slot === 'secondary' ? row.local_secondary_path : row.local_primary_path;
@@ -23938,7 +23938,7 @@ app.post("/admin/add-user", ensureAuthenticated, async (req, res) => {
   }
 
   if (!safeEmail || !safeEmail.includes('@')) {
-    return renderAdmin(res, { error: 'Email inválido' });
+    return renderAdmin(res, { error: 'Esse e-mail não parece válido.' });
   }
 
   const duplicatedUser = db.prepare('SELECT id FROM users WHERE email = ?').get(safeEmail);
@@ -23955,7 +23955,7 @@ app.post("/admin/add-user", ensureAuthenticated, async (req, res) => {
     DEFAULT_FINANCE_CATEGORIES.forEach(cat => insertCat.run(newUser.id, cat));
     ensurePurchaseCategoriesForUser(newUser.id);
 
-    let success = `Usuário ${safeEmail} adicionado com sucesso!`;
+    let success = `Acesso para ${safeEmail} criado com sucesso!`;
     const emailConfig = getEmailRuntimeConfig();
     if (wantsWelcomeEmail) {
       if (!emailConfig.enabled) {
@@ -23998,12 +23998,12 @@ app.post('/admin/users/:id/resend-welcome', ensureAuthenticated, async (req, res
   }
 
   if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
-    return renderAdmin(res, { error: 'Usuário inválido.', activeSection: 'access' });
+    return renderAdmin(res, { error: 'Não encontrei esse usuário por aqui.', activeSection: 'access' });
   }
 
   const targetUser = getUserRecord(targetUserId, { includeDeleted: false });
   if (!targetUser) {
-    return renderAdmin(res, { error: 'Usuário não encontrado.', activeSection: 'access' });
+    return renderAdmin(res, { error: 'Não achei esse usuário por aqui.', activeSection: 'access' });
   }
 
   try {
@@ -24015,7 +24015,7 @@ app.post('/admin/users/:id/resend-welcome', ensureAuthenticated, async (req, res
       req
     });
     return renderAdmin(res, {
-      success: `Boas-vindas reenviado para ${targetUser.email}. Agora o convite foi de novo para o correio.`,
+      success: `E-mail de boas-vindas reenviado para ${targetUser.email}. Agora o convite foi de novo para o correio.`,
       activeSection: 'access'
     });
   } catch (error) {
@@ -24048,16 +24048,16 @@ app.post("/admin/update-user/:id", ensureAuthenticated, (req, res) => {
   }
 
   if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
-    return renderAdmin(res, { error: 'Usuário inválido.' });
+    return renderAdmin(res, { error: 'Não encontrei esse usuário por aqui.' });
   }
 
   if (!safeEmail || !safeEmail.includes('@')) {
-    return renderAdmin(res, { error: 'Email inválido' });
+    return renderAdmin(res, { error: 'Esse e-mail não parece válido.' });
   }
 
   const targetUser = getUserRecord(targetUserId);
   if (!targetUser) {
-    return renderAdmin(res, { error: 'Usuário não encontrado.' });
+    return renderAdmin(res, { error: 'Não achei esse usuário por aqui.' });
   }
 
   const duplicatedEmail = db.prepare('SELECT id FROM users WHERE email = ? AND id <> ?').get(safeEmail, targetUserId);
@@ -24088,7 +24088,7 @@ app.post("/admin/update-user/:id", ensureAuthenticated, (req, res) => {
       req.user.can_import = canImport;
     }
 
-    return renderAdmin(res, { success: 'Usuário atualizado com sucesso!' });
+    return renderAdmin(res, { success: 'Acesso atualizado com sucesso!' });
   } catch (err) {
     return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui atualizar esse usuário agora.' }) });
   }
@@ -24108,7 +24108,7 @@ app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
 
   const targetUser = getUserRecord(targetUserId, { includeDeleted: true });
   if (!targetUser) {
-    return renderAdmin(res, { error: 'Usuário não encontrado.' });
+    return renderAdmin(res, { error: 'Não achei esse usuário por aqui.' });
   }
 
   if (isDeletedUserRow(targetUser)) {
@@ -24117,7 +24117,7 @@ app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
 
   const blockers = getUserDeletionBlockers(targetUserId);
   if (blockers.hasDraftQueue) {
-    return renderAdmin(res, { error: 'Esse acesso ainda tem caixa de saída com cobrança guardada. Envie ou descarte esses rascunhos antes de excluir.' });
+    return renderAdmin(res, { error: 'Esse acesso ainda tem caixa de saída com acerto guardado. Envie ou descarte esses rascunhos antes de excluir.' });
   }
 
   if (blockers.hasOpenPixIntent) {
@@ -24125,7 +24125,7 @@ app.post("/admin/remove-user/:id", ensureAuthenticated, (req, res) => {
   }
 
   if (blockers.hasOpenRequests) {
-    return renderAdmin(res, { error: 'Esse acesso ainda está ligado a cobranças em aberto. Resolve essas pendências antes de excluir.' });
+    return renderAdmin(res, { error: 'Esse acesso ainda está ligado a acertos em aberto. Resolve essas pendências antes de excluir.' });
   }
 
   try {

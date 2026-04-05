@@ -1,5 +1,5 @@
 
-<%- include("partials/header", { title: "AcerttaPay | Configurações" }) %>
+<%- include("partials/header", { title: "AcerttaPay | Seu jeito no app" }) %>
 
 <%
   const pendingRequests = Array.isArray(pendingFriendRequests) ? pendingFriendRequests : [];
@@ -58,11 +58,11 @@
       description: 'Pedidos, aceites e mudanças por aqui.'
     },
     shared_debt_new: {
-      title: 'Novas cobranças',
-      description: 'Quando chega cobrança, envio ou lembrete novo.'
+      title: 'Novos acertos',
+      description: 'Quando chega acerto, leva ou lembrete novo.'
     },
     shared_debt_updates: {
-      title: 'Respostas de cobranças',
+      title: 'Respostas dos acertos',
       description: 'Atualizações, aceites, recusas e revisões.'
     },
     shared_debt_payments: {
@@ -75,7 +75,7 @@
     },
     due_date_alerts: {
       title: 'Datas combinadas',
-      description: 'Lembretes automáticos quando uma cobrança avulsa ou lembrete privado bate na data.'
+      description: 'Lembretes automáticos quando um acerto avulso ou lembrete privado bate na data.'
     },
     monthly_pix_updates: {
       title: 'Pix do mês',
@@ -129,11 +129,11 @@
     }
 
     if (!person.is_self && person.friendship_active) {
-      addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Amigos');
+      addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Minha Rede');
       if (person.can_share_charge) {
         addChip('border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200', 'Pode cobrar');
       } else if (!person.active) {
-        addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Cobrança pausada');
+        addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Acerto pausado');
       }
       if (person.linked_user_pix_ready) {
         addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix ok');
@@ -155,7 +155,7 @@
     if (person && person.friendship_state === 'active') {
       return {
         key: 'friend',
-        label: 'Amigos',
+        label: 'Minha Rede',
         summary: 'Já podem dividir e cobrar.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
         barClasses: 'from-emerald-400 via-cyan-400 to-sky-500'
@@ -248,7 +248,7 @@
     <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <span class="op-page-hero__eyebrow">Seu jeito no app</span>
-        <h1 class="op-page-hero__title mt-4">Configurações</h1>
+        <h1 class="op-page-hero__title mt-4">Seu jeito no app</h1>
         <p class="op-page-hero__subtitle mt-3">Perfil, alertas, Pix e segurança agora ficam em uma casa só, sem bagunçar a parte social da sua rede.</p>
       </div>
     </div>
@@ -259,7 +259,7 @@
     <a href="#alerts" class="inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-bold text-sky-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-100/80 dark:border-sky-900 dark:bg-sky-900/20 dark:text-sky-200 dark:hover:bg-sky-900/35"><span>🔔</span>Alertas</a>
     <a href="#pix" class="inline-flex items-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-bold text-violet-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-violet-100/80 dark:border-violet-900 dark:bg-violet-900/20 dark:text-violet-200 dark:hover:bg-violet-900/35"><span>💜</span>Pix</a>
     <a href="#security" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"><span>🔐</span>Segurança</a>
-    <a href="/people#my-profile" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"><span>🫶</span>Voltar para amigos</a>
+    <a href="/people#my-profile" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"><span>🫶</span>Voltar pra Minha Rede</a>
   </div>
 
   <% if (selfProfile) { %>
@@ -331,7 +331,7 @@
 
             <div class="pt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button type="button" id="selfIdentityCancel" onclick="resetSelfIdentityForm()" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto">Cancelar</button>
-              <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400 sm:w-auto">Salvar alterações</button>
+              <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400 sm:w-auto">Guardar mudanças</button>
             </div>
           </form>
         </div>

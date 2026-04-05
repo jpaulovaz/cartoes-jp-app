@@ -28,7 +28,7 @@
     if (response.headers.get('x-session-expired') === '1') {
       const redirectUrl = response.headers.get('x-session-expired-redirect') || '/login?reason=idle';
       window.location.href = redirectUrl;
-      const error = new Error('Sua sessão expirou por inatividade. Faça login novamente.');
+      const error = new Error('Sua sessão cochilou por inatividade. Entre de novo para seguir.');
       error.code = 'SESSION_EXPIRED';
       error.response = response;
       throw error;
@@ -125,7 +125,7 @@
     const container = btn.closest('.bg-slate-50\\/50');
 
     if (!container) {
-      console.error("Container de distribuição não encontrado.");
+      console.error("Não achei a caixinha dessa divisão por aqui.");
       return;
     }
 
@@ -134,7 +134,7 @@
       .map(cb => cb.value);
 
     if (selected.length === 0) {
-      alert("Selecione pelo menos uma pessoa antes de copiar.");
+      alert("Escolha pelo menos uma pessoa antes de copiar essa divisão.");
       return;
     }
 
@@ -143,14 +143,14 @@
 
     // Feedback visual no botão
     const originalText = btn.innerText;
-    btn.innerText = "✅ Copiado!";
+    btn.innerText = "✅ Levei!";
     setTimeout(() => { btn.innerText = originalText; }, 1000);
   }
   function pasteAlloc(btn) {
     const data = localStorage.getItem('copiedAlloc');
 
     if (!data) {
-      alert("Nada copiado ainda. Use o botão Copiar primeiro.");
+      alert("Ainda não há nada copiado. Primeiro copie uma divisão e depois cole aqui.");
       return;
     }
 
@@ -170,7 +170,7 @@
 
     // Feedback visual
     const originalText = btn.innerText;
-    btn.innerText = "✅ Colado!";
+    btn.innerText = "✅ Ficou igual!";
     setTimeout(() => { btn.innerText = originalText; }, 1000);
   }
 
@@ -1589,7 +1589,7 @@
     });
 
     if (!response.ok) {
-      throw new Error('Não consegui guardar este aparelho para receber alertas.');
+      throw new Error('Não consegui guardar este aparelho para receber os alertas agora.');
     }
   }
 
@@ -1601,7 +1601,7 @@
     });
 
     if (!response.ok) {
-      throw new Error('Não consegui desligar os alertas deste aparelho agora.');
+      throw new Error('Não consegui desligar os alertas deste aparelho agora. Tenta mais uma vez em instantes.');
     }
   }
 
@@ -1647,7 +1647,7 @@
         const nextState = await syncPushUi();
         showPushToast(nextState === 'blocked'
           ? 'Os alertas ficaram bloqueados neste navegador.'
-          : 'Pronto! Os alertas deste aparelho foram desligados.', 'info');
+          : 'Pronto! Este aparelho ficou sem alertas por enquanto.', 'info');
         return;
       }
 
@@ -1655,7 +1655,7 @@
       if (permission !== 'granted') {
         await syncPushUi();
         throw new Error(permission === 'denied'
-          ? 'Os alertas foram bloqueados pelo navegador. Para liberar, ajuste a permissão nas configurações do navegador.'
+          ? 'O navegador bloqueou os alertas. Para liberar, ajuste a permissão nas configurações dele.'
           : 'Sem permissão para alertas. Se quiser, é só liberar no navegador.');
       }
 
@@ -1666,7 +1666,7 @@
 
       await sendSubscriptionToServer(subscription);
       await syncPushUi();
-      showPushToast('Boa! Este aparelho já está pronto para receber alertas.', 'success');
+      showPushToast('Boa! Este aparelho já está pronto para receber os alertas.', 'success');
     } catch (error) {
       console.error(error);
       await syncPushUi().catch((syncError) => console.error(syncError));
@@ -1774,7 +1774,7 @@
     if (!hasFuture) {
       if (destructive) {
         const confirmed = await window.confirmTypedAction(
-          form?.dataset?.confirmPrompt || 'Excluir este item? Isso apaga a compra e a divisão dela.'
+          form?.dataset?.confirmPrompt || 'Quer mesmo apagar este item? Isso remove a compra e a divisão dela.'
         );
         if (!confirmed) return null;
       }
@@ -1795,17 +1795,17 @@
     ].filter(Boolean).join('\n\n');
 
     const result = await window.showActionDialog({
-      title: destructive ? `Excluir ${entityLabel}` : `Aplicar em ${entityLabel}`,
+      title: destructive ? `Apagar ${entityLabel}` : `Aplicar em ${entityLabel}`,
       message,
       options: destructive
         ? [
-            { label: `Excluir Só ${isRecurring ? 'Esta Compra' : 'Esta Parcela'}`, value: 'single', tone: 'danger' },
-            { label: `Excluir ${isRecurring ? 'Esta Compra e Próximas Recorrências' : 'Esta e Próximas'}`, value: 'future', tone: 'danger' },
+            { label: `Apagar Só ${isRecurring ? 'esta compra' : 'esta parcela'}`, value: 'single', tone: 'danger' },
+            { label: `Apagar ${isRecurring ? 'esta compra e as próximas recorrências' : 'esta e as próximas'}`, value: 'future', tone: 'danger' },
             { label: 'Cancelar', value: null, tone: 'cancel' }
           ]
         : [
             { label: `Aplicar Só ${isRecurring ? 'Nesta Compra' : 'Nesta Parcela'}`, value: 'single', tone: 'primary' },
-            { label: `Aplicar ${isRecurring ? 'Nesta Compra e nas Próximas Recorrências' : 'Nesta e nas Próximas'}`, value: 'future', tone: 'primary' },
+            { label: `Aplicar ${isRecurring ? 'Nesta Compra e nas próximas recorrências' : 'Nesta e nas Próximas'}`, value: 'future', tone: 'primary' },
             { label: 'Cancelar', value: null, tone: 'cancel' }
           ]
     });
@@ -2940,7 +2940,7 @@
       }
       const response = await previousFetch(input, sameOrigin ? { ...init, headers } : init);
       if (sameOrigin && await handleLockedResponse(response, 'locked')) {
-        const error = new Error('O app foi bloqueado por PIN.');
+        const error = new Error('O app foi travado pelo PIN.');
         error.code = 'APP_PIN_LOCKED';
         error.response = response;
         throw error;

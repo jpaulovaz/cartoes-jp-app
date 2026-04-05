@@ -54,18 +54,18 @@ function buildWelcomeEmailTemplate({
   const safeCustomMessage = String(customMessage || '').trim();
   const safeSubject = String(subject || '').trim();
   const roleLabel = buildRoleLabel(role);
-  const fallbackSubject = safeSubject || `Seu acesso ao ${safeAppName} foi liberado`;
+  const fallbackSubject = safeSubject || `Seu acesso ao ${safeAppName} já está liberado 🎉`;
   const fallbackBody = [
     safeRecipientName ? `Oi, ${safeRecipientName}!` : 'Oi!',
     '',
     safeAdminName
       ? `${safeAdminName} liberou o seu acesso ao ${safeAppName}.`
-      : `Seu acesso ao ${safeAppName} foi liberado.`,
+      : `Seu acesso ao ${safeAppName} já está liberado 🎉.`,
     `Seu perfil entrou como ${roleLabel}.`,
     'Para entrar, use a mesma conta Google deste e-mail.',
     safeLoginUrl ? `Link de entrada: ${safeLoginUrl}` : '',
     safeCustomMessage ? '' : '',
-    safeCustomMessage ? `Recado do admin: ${safeCustomMessage}` : ''
+    safeCustomMessage ? `Recado de quem te chamou: ${safeCustomMessage}` : ''
   ].filter(Boolean).join('\n');
 
   const resolved = resolveMessage('email.admin_access.welcome', {
@@ -108,7 +108,7 @@ function buildTestEmailTemplate({
   const safeRecipientName = String(recipientName || '').trim();
   const safeAdminName = String(adminName || '').trim();
   const safeLoginUrl = String(loginUrl || '').trim();
-  const fallbackSubject = `Teste de e-mail do ${safeAppName}`;
+  const fallbackSubject = `Teste de e-mail do ${safeAppName} ✉️`;
   const fallbackBody = [
     safeRecipientName ? `Oi, ${safeRecipientName}!` : 'Oi!',
     '',

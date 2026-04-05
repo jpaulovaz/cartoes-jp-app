@@ -212,6 +212,20 @@ function normalizeCardBrand(value) {
   return CARD_BRAND_ALIASES.get(cleaned) || '';
 }
 
+function tableHasColumn(tableName, columnName) {
+  const safeTableName = String(tableName || '').trim();
+  const safeColumnName = String(columnName || '').trim();
+  if (!/^[a-zA-Z0-9_]+$/.test(safeTableName) || !/^[a-zA-Z0-9_]+$/.test(safeColumnName)) {
+    return false;
+  }
+
+  try {
+    return db.prepare(`PRAGMA table_info(${safeTableName})`).all().some((row) => String(row?.name || '').trim() === safeColumnName);
+  } catch (error) {
+    return false;
+  }
+}
+
 function getCardBrandMeta(value) {
   const normalized = normalizeCardBrand(value);
   if (!normalized) return null;
@@ -266,10 +280,13 @@ db.prepare(`
     monthly_pix_updates INTEGER NOT NULL DEFAULT 1,
     card_due_today INTEGER NOT NULL DEFAULT 1,
     finance_date_alerts INTEGER NOT NULL DEFAULT 1,
+    due_date_alerts INTEGER NOT NULL DEFAULT 1,
     updated_at TEXT,
     FOREIGN KEY (user_id) REFERENCES users(id)
   )
 `).run();
+
+const hasDueDateAlertsPreferenceColumn = tableHasColumn('user_notification_preferences', 'due_date_alerts');
 
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN friendship_activity INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN shared_debt_new INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
@@ -278,6 +295,10 @@ try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN shared_de
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN monthly_pix_updates INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN card_due_today INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN finance_date_alerts INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+if (!hasDueDateAlertsPreferenceColumn) {
+  try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN due_date_alerts INTEGER NOT NULL DEFAULT 1").run(); } catch (e) { /* Coluna já existe */ }
+  try { db.prepare("UPDATE user_notification_preferences SET due_date_alerts = COALESCE(shared_debt_payments, 1)").run(); } catch (e) { /* Tabela ainda pode não existir neste ponto */ }
+}
 try { db.prepare("ALTER TABLE user_notification_preferences ADD COLUMN updated_at TEXT").run(); } catch (e) { /* Coluna já existe */ }
 
 try { db.prepare("ALTER TABLE shared_debt_requests ADD COLUMN source_person_id INTEGER").run(); } catch (e) { /* Coluna já existe */ }
@@ -1248,19 +1269,49 @@ function clearInternalSettings(keys, updatedByUserId = null) {
   })();
 }
 
-function getPushRuntimeConfig() {
+function getPushInfrastructureRuntimeConfig() {
   return {
     publicKey: getSettingText('VAPID_PUBLIC_KEY'),
     privateKey: getSettingText('VAPID_PRIVATE_KEY'),
-    subject: getSettingText('VAPID_SUBJECT', 'mailto:no-reply@acerttapay.local'),
-    duePushEnabled: getSettingBoolean('CARD_DUE_PUSH_ENABLED', true),
-    timezone: getSettingText('CARD_DUE_PUSH_TIMEZONE', 'America/Sao_Paulo') || 'America/Sao_Paulo',
-    hour: getSettingInt('CARD_DUE_PUSH_HOUR', 10),
-    minute: getSettingInt('CARD_DUE_PUSH_MINUTE', 0),
-    maxSendsPerDay: getSettingInt('CARD_DUE_PUSH_MAX_SENDS_PER_DAY', 1),
-    repeatIntervalMinutes: getSettingInt('CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES', 0),
-    checkIntervalMinutes: getSettingInt('CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES', 10)
+    subject: getSettingText('VAPID_SUBJECT', 'mailto:no-reply@acerttapay.local')
   };
+}
+
+function getAutomaticAlertScheduleRuntimeConfig() {
+  return {
+    timezone: getSettingText('CARD_DUE_PUSH_TIMEZONE', 'America/Sao_Paulo') || 'America/Sao_Paulo',
+    hour: Math.max(0, Math.min(23, Number(getSettingInt('CARD_DUE_PUSH_HOUR', 10) || 10))),
+    minute: Math.max(0, Math.min(59, Number(getSettingInt('CARD_DUE_PUSH_MINUTE', 0) || 0))),
+    checkIntervalMinutes: Math.max(1, Number(getSettingInt('CARD_DUE_PUSH_CHECK_INTERVAL_MINUTES', 10) || 10))
+  };
+}
+
+function getCardDueTodayPushRuntimeConfig() {
+  return {
+    ...getPushInfrastructureRuntimeConfig(),
+    ...getAutomaticAlertScheduleRuntimeConfig(),
+    duePushEnabled: getSettingBoolean('CARD_DUE_PUSH_ENABLED', true),
+    maxSendsPerDay: Math.max(0, Number(getSettingInt('CARD_DUE_PUSH_MAX_SENDS_PER_DAY', 1) || 0)),
+    repeatIntervalMinutes: Math.max(0, Number(getSettingInt('CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES', 0) || 0))
+  };
+}
+
+function getMonthlyFinanceDateAlertRuntimeConfig() {
+  return {
+    enabled: getSettingBoolean('MONTHLY_FINANCE_DATE_ALERT_ENABLED', true),
+    ...getAutomaticAlertScheduleRuntimeConfig()
+  };
+}
+
+function getDateDrivenAlertRuntimeConfig() {
+  return {
+    enabled: getSettingBoolean('DATE_DRIVEN_ALERTS_ENABLED', true),
+    ...getAutomaticAlertScheduleRuntimeConfig()
+  };
+}
+
+function getPushRuntimeConfig() {
+  return getCardDueTodayPushRuntimeConfig();
 }
 
 function getEmailRuntimeConfig() {
@@ -1624,7 +1675,7 @@ function getPushPublicKey() {
 }
 
 function applyPushRuntimeConfig() {
-  const config = getPushRuntimeConfig();
+  const config = getPushInfrastructureRuntimeConfig();
   pushRuntimeEnabled = false;
 
   if (!webPush) {
@@ -2127,7 +2178,7 @@ async function createServerBackup({ triggerKind = 'manual', createdByUserId = nu
   let sizeBytes = 0;
   let manifestJson = '';
   let finalStatus = 'success';
-  let finalMessage = messagePrefix ? String(messagePrefix).trim() : 'Backup criado direitinho.';
+  let finalMessage = messagePrefix ? String(messagePrefix).trim() : 'Backup criado com sucesso.';
 
   try {
     assertBackupDirectories(config);
@@ -2324,7 +2375,7 @@ async function restoreServerBackupFromZip({ zipPath, uploadedFilename, restoredB
       backupName,
       uploadedFilename || path.basename(zipPath),
       'success',
-      'Backup restaurado direitinho. O banco voltou para a foto salva no zip.',
+      'Backup restaurado com sucesso. O banco voltou para a foto salva no zip.',
       safetyBackupRunId || null,
       restoredByUserId || null,
       startedAt,
@@ -2334,7 +2385,7 @@ async function restoreServerBackupFromZip({ zipPath, uploadedFilename, restoredB
     return {
       backupName,
       safetyBackupRunId,
-      message: 'Backup restaurado direitinho. O banco voltou para a foto salva no zip.'
+      message: 'Backup restaurado com sucesso. O banco voltou para a foto salva no zip.'
     };
   } catch (error) {
     const finishedAt = currentConfigTimestamp();
@@ -2552,8 +2603,14 @@ function clearManualDebtDueScheduler() {
 function restartManualDebtDueScheduler() {
   clearManualDebtDueScheduler();
 
-  const config = getManualDebtDueRuntimeConfig();
-  const intervalMs = Math.max(1, config.checkIntervalMinutes) * 60 * 1000;
+  const scheduleConfig = getAutomaticAlertScheduleRuntimeConfig();
+  const dateDrivenConfig = getDateDrivenAlertRuntimeConfig();
+  const monthlyFinanceConfig = getMonthlyFinanceDateAlertRuntimeConfig();
+  if (!dateDrivenConfig.enabled && !monthlyFinanceConfig.enabled) {
+    return;
+  }
+
+  const intervalMs = Math.max(1, scheduleConfig.checkIntervalMinutes) * 60 * 1000;
 
   manualDebtDueSchedulerInitialHandle = setTimeout(() => {
     runDateDrivenAlertSweep().catch(err => console.error('Falha no agendamento inicial dos alertas do dia:', err?.message || err));
@@ -2567,7 +2624,7 @@ function restartManualDebtDueScheduler() {
 function restartCardDueTodayPushScheduler() {
   clearCardDueTodayPushScheduler();
 
-  const config = getPushRuntimeConfig();
+  const config = getCardDueTodayPushRuntimeConfig();
   if (!isPushConfigured() || !config.duePushEnabled || config.maxSendsPerDay <= 0) {
     return;
   }
@@ -2613,14 +2670,136 @@ function updateAppSettings(entries, updatedByUserId = null) {
   return refreshRuntimeSettings();
 }
 
-function buildAdminStatusCards() {
+function formatAdminHourMinuteLabel(hour, minute) {
+  return `${String(Math.max(0, Number(hour || 0))).padStart(2, '0')}:${String(Math.max(0, Number(minute || 0))).padStart(2, '0')}`;
+}
+
+function buildPushAdminState() {
+  const infrastructureConfig = getPushInfrastructureRuntimeConfig();
+  const scheduleConfig = getAutomaticAlertScheduleRuntimeConfig();
+  const cardDueConfig = getCardDueTodayPushRuntimeConfig();
+  const monthlyFinanceConfig = getMonthlyFinanceDateAlertRuntimeConfig();
+  const dateDrivenConfig = getDateDrivenAlertRuntimeConfig();
+  const pushReady = isPushConfigured();
+
+  const buildRoutineMeta = ({ key, title, description, scopeLabel, enabled, usesInternalNotification, channelLabel, helperText, fieldKeys }) => {
+    let status = 'Pausada';
+    let tone = 'muted';
+
+    if (enabled) {
+      if (pushReady) {
+        status = 'Ligada';
+        tone = 'success';
+      } else if (usesInternalNotification) {
+        status = 'Ligada no app';
+        tone = 'success';
+      } else {
+        status = 'Sem canal';
+        tone = 'warning';
+      }
+    }
+
+    return {
+      key,
+      title,
+      description,
+      scopeLabel,
+      enabled,
+      usesInternalNotification,
+      channelLabel: pushReady ? channelLabel : (usesInternalNotification ? 'Aviso interno' : 'Push web'),
+      helperText,
+      fieldKeys,
+      status,
+      tone
+    };
+  };
+
+  const cardDueEnabled = !!cardDueConfig.duePushEnabled && Number(cardDueConfig.maxSendsPerDay || 0) > 0;
+  const cardDueHelper = !cardDueConfig.duePushEnabled
+    ? 'A rotina da fatura está pausada pelo interruptor principal.'
+    : Number(cardDueConfig.maxSendsPerDay || 0) <= 0
+      ? 'O máximo diário ficou zerado, então a rotina não dispara nenhum lembrete.'
+      : Number(cardDueConfig.maxSendsPerDay || 0) > 1
+        ? `Até ${cardDueConfig.maxSendsPerDay} envios por dia, com repetição a cada ${cardDueConfig.repeatIntervalMinutes} minuto(s).`
+        : 'Até 1 envio por dia no horário base configurado.';
+
+  const routines = [
+    buildRoutineMeta({
+      key: 'card_due_today',
+      title: 'Vencimento da fatura',
+      description: 'Avisa quando existe fatura vencendo hoje.',
+      scopeLabel: 'Faturas vencendo hoje',
+      enabled: cardDueEnabled,
+      usesInternalNotification: false,
+      channelLabel: 'Push web',
+      helperText: cardDueHelper,
+      fieldKeys: ['CARD_DUE_PUSH_ENABLED', 'CARD_DUE_PUSH_MAX_SENDS_PER_DAY', 'CARD_DUE_PUSH_REPEAT_INTERVAL_MINUTES']
+    }),
+    buildRoutineMeta({
+      key: 'monthly_finance_date',
+      title: 'Datas do mês',
+      description: 'Lembra o dia marcado da grana que entra e da grana que sai.',
+      scopeLabel: 'Entradas e saídas do mês',
+      enabled: !!monthlyFinanceConfig.enabled,
+      usesInternalNotification: true,
+      channelLabel: 'Aviso interno + push web',
+      helperText: pushReady
+        ? 'Usa a agenda automática e também tenta tocar o sininho quando o navegador estiver pronto.'
+        : 'Sem VAPID, continua deixando aviso dentro do app para não sumir no mapa.',
+      fieldKeys: ['MONTHLY_FINANCE_DATE_ALERT_ENABLED']
+    }),
+    buildRoutineMeta({
+      key: 'date_driven_alerts',
+      title: 'Datas combinadas',
+      description: 'Cobre cobranças avulsas com data e lembretes privados com data combinada.',
+      scopeLabel: 'Cobranças avulsas e lembretes privados',
+      enabled: !!dateDrivenConfig.enabled,
+      usesInternalNotification: true,
+      channelLabel: 'Aviso interno + push web',
+      helperText: pushReady
+        ? 'Usa a mesma agenda automática e deixa o histórico salvo na central do app.'
+        : 'Mesmo sem push web, segue avisando na central do app quando o dia combinado chega.',
+      fieldKeys: ['DATE_DRIVEN_ALERTS_ENABLED']
+    })
+  ];
+
+  const activeCount = routines.filter((routine) => routine.enabled).length;
+  const inAppFallbackCount = routines.filter((routine) => routine.enabled && routine.usesInternalNotification && !pushReady).length;
+
+  return {
+    infrastructure: {
+      configured: pushReady,
+      status: pushReady ? 'Configurado' : 'Pendente',
+      tone: pushReady ? 'success' : 'warning',
+      subject: infrastructureConfig.subject || 'mailto:no-reply@acerttapay.local',
+      helperText: pushReady
+        ? 'Com as chaves VAPID válidas, o navegador pode receber push web sem mistério.'
+        : 'Sem o trio VAPID completo, nenhum push web toca neste navegador.'
+    },
+    schedule: {
+      timezone: scheduleConfig.timezone,
+      hour: scheduleConfig.hour,
+      minute: scheduleConfig.minute,
+      checkIntervalMinutes: scheduleConfig.checkIntervalMinutes,
+      label: `${formatAdminHourMinuteLabel(scheduleConfig.hour, scheduleConfig.minute)} em ${scheduleConfig.timezone}`,
+      helperText: 'Esse relógio move as rotinas automáticas de fatura, datas do mês e datas combinadas.'
+    },
+    routines,
+    activeCount,
+    totalCount: routines.length,
+    inAppFallbackCount,
+    hasInAppFallback: inAppFallbackCount > 0,
+    pushTestHref: '/admin/messages'
+  };
+}
+
+function buildAdminStatusCards(pushPanelState = null) {
   const googleReady = isGoogleAuthConfigured();
   const whatsappReady = !!(getSettingText('EVOLUTION_API_URL') && getSettingText('EVOLUTION_API_KEY') && getSettingText('EVOLUTION_INSTANCE_NAME'));
   const emailConfig = getEmailRuntimeConfig();
   const emailConfigured = isEmailConfigured(emailConfig);
-  const pushReady = isPushConfigured();
+  const pushPanel = pushPanelState || buildPushAdminState();
   const timeoutMinutes = getSettingInt('INACTIVITY_TIMEOUT_MINUTES', 0);
-  const duePushEnabled = getSettingBoolean('CARD_DUE_PUSH_ENABLED', true);
   const backupConfig = getBackupRuntimeConfig();
   const lastBackup = backupRunsSelectRecent.all(1).map((row) => mapBackupRunForAdmin(row, backupConfig.timeZone))[0] || null;
   const backupConnectedToGoogle = !!backupConfig.googleRefreshToken;
@@ -2641,6 +2820,20 @@ function buildAdminStatusCards() {
     : lastBackup
       ? `${lastBackup.triggerLabel} em ${lastBackup.startedAtLabel}. ${lastBackup.message}`
       : 'A rotina automática está armada e esperando a próxima janela para salvar a memória do app.';
+
+  const pushTone = pushPanel.infrastructure.configured
+    ? (pushPanel.activeCount > 0 ? 'success' : 'muted')
+    : 'warning';
+  const pushStatus = pushPanel.infrastructure.configured
+    ? `${pushPanel.activeCount}/${pushPanel.totalCount} ativas`
+    : (pushPanel.hasInAppFallback ? 'Push parcial' : 'Push pendente');
+  const pushText = pushPanel.infrastructure.configured
+    ? (pushPanel.activeCount > 0
+      ? `Push web pronto. Agenda automática em ${pushPanel.schedule.label} e ${pushPanel.activeCount} de ${pushPanel.totalCount} rotinas ligadas.`
+      : `Push web pronto, mas nenhuma das ${pushPanel.totalCount} rotinas automáticas está ligada agora.`)
+    : (pushPanel.hasInAppFallback
+      ? `O push web ainda está sem VAPID completo, mas a agenda ${pushPanel.schedule.label} continua valendo para ${pushPanel.inAppFallbackCount} rotina(s) que também viram aviso interno.`
+      : 'Faltam as chaves VAPID completas para o push acordar.');
 
   return [
     {
@@ -2674,12 +2867,10 @@ function buildAdminStatusCards() {
     },
     {
       key: 'push',
-      title: 'Alertas push',
-      tone: pushReady ? 'success' : 'warning',
-      status: pushReady ? (duePushEnabled ? 'Tinindo' : 'Push ok, lembrete pausado') : 'Ainda em silêncio',
-      text: pushReady
-        ? 'As chaves VAPID estão válidas e o sininho pode tocar neste navegador.'
-        : 'Faltam as chaves VAPID completas para o push acordar.'
+      title: 'Alertas automáticos',
+      tone: pushTone,
+      status: pushStatus,
+      text: pushText
     },
     {
       key: 'backup',
@@ -2981,7 +3172,7 @@ function resolvePurchaseCategorySelection(userId, rawCategoryId, rawCustomName, 
 
   const category = getPurchaseCategoryById(userId, categoryId, { includeInactive: true });
   if (!category) {
-    throw new Error('Não achei essa categoria por aqui.');
+    throw new Error('Categoria não encontrada por aqui.');
   }
 
   if (Number(category.active || 0) === 0 && !safeAllowInactiveIds.has(categoryId)) {
@@ -2993,7 +3184,7 @@ function resolvePurchaseCategorySelection(userId, rawCategoryId, rawCustomName, 
 
 function setPurchaseCategoryActiveState(userId, categoryId, active) {
   const category = getPurchaseCategoryById(userId, categoryId, { includeInactive: true });
-  if (!category) throw new Error('Não achei essa categoria por aqui.');
+  if (!category) throw new Error('Categoria não encontrada por aqui.');
 
   db.prepare(`
     UPDATE purchase_categories
@@ -3139,6 +3330,8 @@ function ensureDefaultOwnerPerson(userId, preferredName, preferredEmail = null) 
 }
 
 function renderAdmin(res, { error = null, success = null, activeSection = 'access' } = {}) {
+  const pushPanel = buildPushAdminState();
+
   return safeRenderView(res, 'admin', {
     title: 'AcerttaPay | Administração',
     users: buildAdminUsers(),
@@ -3146,9 +3339,10 @@ function renderAdmin(res, { error = null, success = null, activeSection = 'acces
     success,
     activeSection,
     settingsSections: buildAdminSettingsSections(),
-    statusCards: buildAdminStatusCards(),
+    statusCards: buildAdminStatusCards(pushPanel),
     backupPanel: buildBackupAdminState(),
     emailPanel: buildEmailAdminState(res?.req, { timeZone: getBackupRuntimeConfig().timeZone }),
+    pushPanel,
     totalConfigItems: SETTING_DEFINITIONS.length,
     autoReloadCount: SETTING_DEFINITIONS.filter((item) => !item.restartRequired).length,
     restartRequiredCount: SETTING_DEFINITIONS.filter((item) => item.restartRequired).length,
@@ -3325,6 +3519,11 @@ const USER_NOTIFICATION_PREFERENCE_GROUPS = Object.freeze([
     key: 'finance_date_alerts',
     title: 'Datas do mês',
     description: 'Avisos quando chega o dia marcado nas suas entradas e saídas.'
+  },
+  {
+    key: 'due_date_alerts',
+    title: 'Datas combinadas',
+    description: 'Lembretes automáticos de cobranças avulsas e lembretes privados quando o dia combinado chega.'
   }
 ]);
 
@@ -3354,7 +3553,7 @@ function getUserNotificationPreferences(userId) {
 
   const row = db.prepare(`
     SELECT user_id, friendship_activity, shared_debt_new, shared_debt_updates,
-           shared_debt_payments, monthly_pix_updates, card_due_today, finance_date_alerts, updated_at
+           shared_debt_payments, monthly_pix_updates, card_due_today, finance_date_alerts, due_date_alerts, updated_at
     FROM user_notification_preferences
     WHERE user_id = ?
     LIMIT 1
@@ -3376,7 +3575,7 @@ function getUserNotificationPreferences(userId) {
 
 function upsertUserNotificationPreferences(userId, overrides = {}) {
   const safeUserId = Number(userId || 0);
-  if (!safeUserId) throw new Error('Não encontrei essa pessoa para salvar as preferências de alerta.');
+  if (!safeUserId) throw new Error('Não encontrei o usuário para salvar as preferências de alerta.');
 
   const current = getUserNotificationPreferences(safeUserId);
   const next = {
@@ -3393,8 +3592,8 @@ function upsertUserNotificationPreferences(userId, overrides = {}) {
   db.prepare(`
     INSERT INTO user_notification_preferences (
       user_id, friendship_activity, shared_debt_new, shared_debt_updates,
-      shared_debt_payments, monthly_pix_updates, card_due_today, finance_date_alerts, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      shared_debt_payments, monthly_pix_updates, card_due_today, finance_date_alerts, due_date_alerts, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       friendship_activity = excluded.friendship_activity,
       shared_debt_new = excluded.shared_debt_new,
@@ -3403,6 +3602,7 @@ function upsertUserNotificationPreferences(userId, overrides = {}) {
       monthly_pix_updates = excluded.monthly_pix_updates,
       card_due_today = excluded.card_due_today,
       finance_date_alerts = excluded.finance_date_alerts,
+      due_date_alerts = excluded.due_date_alerts,
       updated_at = excluded.updated_at
   `).run(
     next.user_id,
@@ -3413,6 +3613,7 @@ function upsertUserNotificationPreferences(userId, overrides = {}) {
     next.monthly_pix_updates,
     next.card_due_today,
     next.finance_date_alerts,
+    next.due_date_alerts,
     next.updated_at
   );
 
@@ -3518,7 +3719,7 @@ function getUserSecuritySettings(userId) {
 
 function upsertUserSecuritySettings(userId, overrides = {}) {
   const safeUserId = Number(userId || 0);
-  if (!safeUserId) throw new Error('Não encontrei essa pessoa para salvar a segurança do app.');
+  if (!safeUserId) throw new Error('Não encontrei o usuário para salvar a segurança do app.');
 
   const current = getUserSecuritySettings(safeUserId);
   const next = {
@@ -4116,7 +4317,7 @@ function getUserPasskey(userId, credentialId) {
 function saveUserPasskey(userId, payload) {
   const safeUserId = Number(userId || 0);
   if (!safeUserId) {
-    throw new Error('Não encontrei quem vai receber esse desbloqueio por este aparelho.');
+    throw new Error('Não encontrei quem vai receber esse desbloqueio pelo aparelho.');
   }
 
   const safeId = String(payload?.id || payload?.credential_id || payload?.credentialId || '').trim();
@@ -4355,7 +4556,7 @@ function buildPasskeyLockViewModel(req, userId, pinSettings = null) {
   if (!Number(settings.pin_enabled || 0)) {
     message = 'O desbloqueio pelo aparelho entra em cena junto com o PIN.';
   } else if (!passkeys.length) {
-    message = 'Se quiser, depois dá para preparar este aparelho lá em Minha Rede > Segurança do app.';
+    message = 'Se quiser, depois dá para preparar este aparelho lá em Amigos > Segurança do app.';
   } else if (!context.available) {
     message = context.disabledMessage || 'Hoje o desbloqueio pelo aparelho não ficou disponível neste endereço.';
   } else {
@@ -5264,7 +5465,7 @@ function buildManualSharedDebtPixShareText({ creditorName, amountCents, descript
   const safeCreditorName = String(creditorName || 'quem vai receber').trim() || 'quem vai receber';
   const safeDescription = String(description || 'o combinado').trim() || 'o combinado';
   const safePayload = String(payload || '').trim();
-  const fallbackTitle = safeCreditorName ? `Acerto com Pix de ${safeCreditorName}` : 'Acerto com Pix';
+  const fallbackTitle = safeCreditorName ? `Cobrança com Pix de ${safeCreditorName}` : 'Cobrança com Pix';
   const fallbackBody = [
     `Oi! Ficou pendente ${formatBRLFromCents(amountCents)} referente a ${safeDescription}.`,
     `Para facilitar, já deixei o Pix copia e cola de ${safeCreditorName} aqui embaixo:`,
@@ -5372,7 +5573,7 @@ function buildSharedDebtCardMonthlyIntentPreview(snapshot, rawAmountCents, optio
     const paidCents = Math.min(totalCents, Math.max(0, Number(row?.amount_paid_cents || (row?.status === 'settled' ? totalCents : 0))));
     return {
       id: Number(row?.id || 0),
-      description: String(row?.description_snapshot || 'Acerto do mês').trim() || 'Acerto do mês',
+      description: String(row?.description_snapshot || 'Cobrança do mês').trim() || 'Cobrança do mês',
       pendingCents: Math.max(0, totalCents - paidCents),
       totalCents,
       paidCents,
@@ -5600,11 +5801,11 @@ function attachSharedDebtPixMeta(items = [], currentUserId = null) {
       pixUnavailableReason = 'Esse lembrete já está com o valor fechado por aqui.';
     } else if (!creditorProfile || !creditorProfile.pixEnabled) {
       pixUnavailableReason = currentUserIsCreditor
-        ? 'Configure seu Pix em Minha Rede para liberar o copia e cola deste lembrete.'
+        ? 'Configure seu Pix em Amigos para liberar o copia e cola deste lembrete.'
         : 'Quem enviou ainda não deixou um Pix prontinho por aqui.';
     } else if (!creditorProfile.pixValid) {
       pixUnavailableReason = currentUserIsCreditor
-        ? (creditorProfile.pixReason || 'Seu Pix ainda precisa de um ajuste em Minha Rede.')
+        ? (creditorProfile.pixReason || 'Seu Pix ainda precisa de um ajuste em Amigos.')
         : 'Quem enviou começou a configurar o Pix, mas ainda falta acertar um detalhe.';
     } else {
       pixAvailable = true;
@@ -6294,7 +6495,7 @@ function renderSharedDebtsPage(req, res, { archiveMode = false } = {}) {
 
   const payload = buildSharedDebtsPagePayload(userId, req.query, archiveMode);
   return safeRenderView(res, 'shared-debts', {
-    title: archiveMode ? 'AcerttaPay | Arquivo de acertos' : 'AcerttaPay | Acertos',
+    title: archiveMode ? 'AcerttaPay | Arquivo de cobranças' : 'AcerttaPay | Cobranças',
     ...payload,
     formatBRLFromCents,
     monthLabel,
@@ -9192,7 +9393,7 @@ async function sendPushNotificationToUser(userId, payload) {
 async function runCardDueTodayPushSweep() {
   if (scheduledDuePushSweepRunning) return;
 
-  const pushConfig = getPushRuntimeConfig();
+  const pushConfig = getCardDueTodayPushRuntimeConfig();
   if (!isPushConfigured() || !pushConfig.duePushEnabled || pushConfig.maxSendsPerDay <= 0) return;
 
   scheduledDuePushSweepRunning = true;
@@ -9296,13 +9497,7 @@ function normalizeManualDebtDueUserIds(userIds = null) {
 }
 
 function getManualDebtDueRuntimeConfig() {
-  const pushConfig = getPushRuntimeConfig();
-  return {
-    timezone: pushConfig.timezone || 'America/Sao_Paulo',
-    hour: Math.max(0, Math.min(23, Number(pushConfig.hour || 0))),
-    minute: Math.max(0, Math.min(59, Number(pushConfig.minute || 0))),
-    checkIntervalMinutes: Math.max(1, Number(pushConfig.checkIntervalMinutes || 10) || 10)
-  };
+  return getDateDrivenAlertRuntimeConfig();
 }
 
 function getManualDebtDueScheduleContext(reference = dayjs()) {
@@ -9580,7 +9775,7 @@ async function deliverManualDebtDueAlertsForDate(dateKey, { userIds = null } = {
         href: payload.href,
         relatedType: payload.relatedType,
         relatedId: payload.relatedId,
-        groupKey: 'shared_debt_payments'
+        groupKey: 'due_date_alerts'
       });
 
       if (result) {
@@ -9594,7 +9789,8 @@ async function deliverManualDebtDueAlertsForDate(dateKey, { userIds = null } = {
 }
 
 async function runManualDebtDueAlertSweep() {
-  if (scheduledManualDebtDueSweepRunning) return;
+  const config = getDateDrivenAlertRuntimeConfig();
+  if (!config.enabled || scheduledManualDebtDueSweepRunning) return;
   scheduledManualDebtDueSweepRunning = true;
 
   try {
@@ -9827,7 +10023,8 @@ async function deliverMonthlyFinanceDateAlertsForDate(dateKey, { userIds = null 
 }
 
 async function runMonthlyFinanceDateAlertSweep() {
-  if (scheduledMonthlyFinanceAlertSweepRunning) return;
+  const config = getMonthlyFinanceDateAlertRuntimeConfig();
+  if (!config.enabled || scheduledMonthlyFinanceAlertSweepRunning) return;
   scheduledMonthlyFinanceAlertSweepRunning = true;
 
   try {
@@ -11988,7 +12185,7 @@ function sendMonthTransactionsCsv(res, userId, month, year) {
 app.get("/geral/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
 
   return sendMonthTransactionsCsv(res, userId, month, year);
@@ -11997,7 +12194,7 @@ app.get("/geral/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
 app.get("/month/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
 
   return sendMonthTransactionsCsv(res, userId, month, year);
@@ -13067,7 +13264,7 @@ function decoratePeopleComprasComigoItem(item = {}, { contactName = 'essa amizad
     detailPieces.push(item?.card_name_snapshot ? `Cartão ${item.card_name_snapshot}` : 'Compra no cartão');
     if (dueLabel) detailPieces.push(`Fatura ${dueLabel}`);
   } else {
-    detailPieces.push('Acerto avulso');
+    detailPieces.push('Cobrança avulsa');
     if (createdAtLabel) detailPieces.push(`Criada em ${createdAtLabel}`);
   }
 
@@ -13475,7 +13672,7 @@ app.post('/shared-debts/:id/archive', ensureAuthenticated, (req, res) => {
   `).get(requestId, userId, userId);
 
   if (!requestRow) {
-    setFlash(req, 'error', 'Não achei esse acerto por aqui.');
+    setFlash(req, 'error', 'Cobrança não encontrada.');
     return res.redirect(fallbackRedirect);
   }
 
@@ -13492,7 +13689,7 @@ app.post('/shared-debts/:id/archive', ensureAuthenticated, (req, res) => {
     timestamp: nowIso()
   });
 
-  setFlash(req, 'success', 'Acerto arquivado. A fila principal agradeceu o respiro.');
+  setFlash(req, 'success', 'Cobrança arquivada. A fila principal agradeceu o respiro.');
   return res.redirect(fallbackRedirect);
 });
 
@@ -13514,7 +13711,7 @@ app.post('/shared-debts/:id/unarchive', ensureAuthenticated, (req, res) => {
   `).get(requestId, userId, userId);
 
   if (!requestRow) {
-    setFlash(req, 'error', 'Não achei esse acerto por aqui.');
+    setFlash(req, 'error', 'Cobrança não encontrada.');
     return res.redirect(fallbackRedirect);
   }
 
@@ -13526,7 +13723,7 @@ app.post('/shared-debts/:id/unarchive', ensureAuthenticated, (req, res) => {
     timestamp: nowIso()
   });
 
-  setFlash(req, 'success', 'Acerto restaurado. Ele voltou para os ativos sem perder nadinha do histórico.');
+  setFlash(req, 'success', 'Cobrança restaurada. Ela voltou para as ativas sem perder nadinha do histórico.');
   return res.redirect(fallbackRedirect);
 });
 
@@ -15766,7 +15963,7 @@ app.post('/people/profile-photo/remove', ensureAuthenticated, async (req, res) =
 app.get("/people", ensureAuthenticated, (req, res) => {
   return safeRenderView(res, "people", {
     ...buildPeoplePageViewModel(req),
-    title: "Minha Rede"
+    title: "Amigos"
   });
 });
 
@@ -16804,7 +17001,7 @@ app.post('/friend-requests/:id/respond', ensureAuthenticated, (req, res) => {
       });
     })();
 
-    setFlash(req, 'success', `${requestRow.requester_name || 'Pedido aceito'} entrou para sua rede. Os acertos automáticos entre vocês já estão liberados.`);
+    setFlash(req, 'success', `${requestRow.requester_name || 'Pedido aceito'} entrou para sua rede. Cobranças automáticas entre vocês já estão liberadas.`);
     return res.redirect('/people');
   }
 
@@ -18662,7 +18859,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   syncMonthlyFinanceCarryForward(userId, currentMonth, currentYear);
 
   const owner = getSelfPerson(userId) || ensureSelfPerson(userId, req.user?.name || req.user?.email, req.user?.email);
-  if (!owner) return res.status(400).send("Ajuste seu perfil em Minha Rede antes de seguir por aqui.");
+  if (!owner) return res.status(400).send("Ajuste seu perfil em Amigos antes de seguir por aqui.");
 
   const dashboardAlertContext = getManualDebtDueScheduleContext();
 
@@ -18764,7 +18961,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       : 'Pedidos de amizade esperando resposta';
     const friendPendingDescription = pendingFriendRequests.length === 1
       ? 'Aceitando, vocês liberam cobranças automáticas dos dois lados com um ok de verdade.'
-      : `${formatCountLabel(pendingFriendRequests.length, 'pedido de amizade está', 'pedidos de amizade estão')} te esperando na sua rede.`;
+      : `${formatCountLabel(pendingFriendRequests.length, 'pedido de amizade está', 'pedidos de amizade estão')} te esperando lá em Amigos.`;
     const resolvedFriendPendingAlert = resolveCatalogText(friendPendingMessageKey, {
       pessoa: newestFriendRequest.requester_name || 'Alguém',
       n_pedidos: formatCountLabel(pendingFriendRequests.length, 'pedido', 'pedidos')
@@ -18813,10 +19010,10 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     const sharedDebtAlertMessageKey = unreadSharedDebtNotifications.length === 1
       ? 'dashboard.shared_debt.unread.single'
       : 'dashboard.shared_debt.unread.multi';
-    const sharedDebtAlertTitle = unreadSharedDebtNotifications.length === 1 ? (newest.title || 'Tem um acerto te esperando') : 'Acertos pendentes';
+    const sharedDebtAlertTitle = unreadSharedDebtNotifications.length === 1 ? (newest.title || 'Tem cobrança esperando você') : 'Cobranças pendentes';
     const sharedDebtAlertBody = unreadSharedDebtNotifications.length === 1
       ? (newest.body || 'Você recebeu uma nova cobrança para analisar.')
-      : `Você tem ${formatCountLabel(unreadSharedDebtNotifications.length, 'novidade', 'novidades')} em Acertos esperando sua olhada.`;
+      : `Você tem ${formatCountLabel(unreadSharedDebtNotifications.length, 'novidade', 'novidades')} em Cobranças esperando sua olhada.`;
     const resolvedSharedDebtAlert = resolveCatalogText(sharedDebtAlertMessageKey, {
       titulo_reaproveitado: sharedDebtAlertTitle,
       body_reaproveitado: newest.body || 'Você recebeu uma nova cobrança para analisar.',
@@ -19177,7 +19374,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
 app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
 
   syncRecurringTransactions(userId, year, month);
@@ -19377,7 +19574,7 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
 
     const ownerPerson = assignToOwner ? getOwnerPerson(userId) : null;
     if (assignToOwner && !ownerPerson) {
-      setFlash(req, "error", "Ajuste seu perfil em Minha Rede antes de usar 'Atribuir esse item a mim'.");
+      setFlash(req, "error", "Ajuste seu perfil em Amigos antes de usar 'Atribuir esse item a mim'.");
       return res.redirect(redirectBackOr(req, "/geral"));
     }
 
@@ -20047,7 +20244,7 @@ app.post("/txn/:id/delete", ensureAuthenticated, (req, res) => {
 app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).json({ ok: false, error: "Esse mês/ano veio estranho por aqui." });
+  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
 
   const sourceRows = getTransactionScopeRowsByIds(userId, req.body.txn_ids);
   if (!sourceRows.length) {
@@ -20109,7 +20306,7 @@ app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
 app.post("/month/:year/:month/bulk/category", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).json({ ok: false, error: "Esse mês/ano veio estranho por aqui." });
+  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
 
   const sourceRows = getTransactionScopeRowsByIds(userId, req.body.txn_ids);
   if (!sourceRows.length) {
@@ -20156,7 +20353,7 @@ app.post("/month/:year/:month/bulk/category", ensureAuthenticated, (req, res) =>
 app.post("/month/:year/:month/bulk/delete", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).json({ ok: false, error: "Esse mês/ano veio estranho por aqui." });
+  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
 
   const sourceRows = getTransactionScopeRowsByIds(userId, req.body.txn_ids);
   if (!sourceRows.length) {
@@ -20205,7 +20402,7 @@ app.post("/month/:year/:month/bulk/delete", ensureAuthenticated, (req, res) => {
 app.post("/month/:year/:month/bulk/move", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).json({ ok: false, error: "Esse mês/ano veio estranho por aqui." });
+  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
 
   const targetMonth = Number(req.body.target_month);
   const targetYear = Number(req.body.target_year);
@@ -21763,7 +21960,7 @@ function buildMonthlyReviewViewModel(userId, month, year) {
 app.get("/analytics/:year/:month", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
 
   const viewModel = buildMonthlyReviewViewModel(userId, month, year);
@@ -21776,7 +21973,7 @@ app.get("/analytics/:year/:month", ensureAuthenticated, (req, res) => {
 app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
 
   const viewModel = buildMonthlyReviewViewModel(userId, month, year);
@@ -21789,7 +21986,7 @@ app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
 app.post(["/summary/:year/:month/merchant-suggestions/confirm", "/analytics/:year/:month/merchant-suggestions/confirm"], ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
   const normalizedPattern = buildMerchantPatternFromDescription(req.body.pattern || req.body.sample_description || '');
   const merchantLabel = humanizeMerchantLabel(req.body.label || req.body.preview_label || '');
@@ -21820,7 +22017,7 @@ app.post(["/summary/:year/:month/merchant-suggestions/confirm", "/analytics/:yea
 app.post(["/summary/:year/:month/merchant-suggestions/dismiss", "/analytics/:year/:month/merchant-suggestions/dismiss"], ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
   const normalizedPattern = buildMerchantPatternFromDescription(req.body.pattern || req.body.sample_description || '');
   const merchantLabel = humanizeMerchantLabel(req.body.label || req.body.preview_label || 'Agrupamento adiado');
@@ -21852,7 +22049,7 @@ app.post(["/summary/:year/:month/merchant-suggestions/dismiss", "/analytics/:yea
 app.post(["/summary/:year/:month/merchant-learning/pause", "/analytics/:year/:month/merchant-learning/pause"], ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
   const normalizedPattern = normalizeMerchantText(req.body.pattern || '');
   const merchantLabel = humanizeMerchantLabel(req.body.label || 'Agrupamento pausado');
@@ -21883,7 +22080,7 @@ app.post(["/summary/:year/:month/merchant-learning/pause", "/analytics/:year/:mo
 app.post(["/summary/:year/:month/merchant-learning/resume", "/analytics/:year/:month/merchant-learning/resume"], ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
   const normalizedPattern = normalizeMerchantText(req.body.pattern || '');
   const merchantLabel = humanizeMerchantLabel(req.body.label || req.body.preview_label || 'Agrupamento retomado');
@@ -21914,7 +22111,7 @@ app.post(["/summary/:year/:month/merchant-learning/resume", "/analytics/:year/:m
 app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
   if (isMonthClosed(userId, month, year)) {
     setFlash(req, "error", getMonthLockMessage(month, year));
@@ -21937,7 +22134,7 @@ app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {
 app.post("/summary/:year/:month/cards/async", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).json({ ok: false, error: "Esse mês/ano veio estranho por aqui." });
+  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
   const { month, year } = parsed;
   if (isMonthClosed(userId, month, year)) {
     return res.status(423).json({ ok: false, error: getMonthLockMessage(month, year) });
@@ -21955,7 +22152,7 @@ app.post("/summary/:year/:month/cards/async", ensureAuthenticated, (req, res) =>
 app.post("/summary/:year/:month/people", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
+  if (!parsed) return res.status(400).send("Mês/ano inválidos.");
   const { month, year } = parsed;
   if (isMonthClosed(userId, month, year)) {
     setFlash(req, "error", getMonthLockMessage(month, year));
@@ -21973,7 +22170,7 @@ app.post("/summary/:year/:month/people", ensureAuthenticated, (req, res) => {
 app.post("/summary/:year/:month/people/async", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).json({ ok: false, error: "Esse mês/ano veio estranho por aqui." });
+  if (!parsed) return res.status(400).json({ ok: false, error: "Mês/ano inválidos." });
   const { month, year } = parsed;
   if (isMonthClosed(userId, month, year)) {
     return res.status(423).json({ ok: false, error: getMonthLockMessage(month, year) });
@@ -22256,9 +22453,9 @@ async function buildSharePixContext({ userId, month, year, person, totalCents, p
 
   if (safeRemainingCents > 0) {
     if (!ownerPixProfile || !ownerPixProfile.pixEnabled) {
-      pix.reason = 'Salve o Pix do seu perfil em Minha Rede para este resumo já sair com copia e cola.';
+      pix.reason = 'Salve o Pix do seu perfil em Amigos para este resumo já sair com copia e cola.';
     } else if (!ownerPixProfile.pixValid) {
-      pix.reason = ownerPixProfile.pixReason || 'Seu Pix ainda precisa de um ajuste em Minha Rede.';
+      pix.reason = ownerPixProfile.pixReason || 'Seu Pix ainda precisa de um ajuste em Amigos.';
     } else {
       try {
         const txid = buildStatementSharePixTxid(userId, person?.id, month, year, safeRemainingCents);
@@ -22337,12 +22534,12 @@ app.get("/share/:year/:month/:personId", ensureAuthenticated, async (req, res) =
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
   const personId = Number(req.params.personId);
-  if (!parsed) return res.status(400).send("Os dados dessa chamada vieram tortos.");
+  if (!parsed) return res.status(400).send("Parâmetros inválidos.");
 
   const { month, year } = parsed;
   const itemOrder = parseChronologicalOrder(req.query.order) || "oldest";
   const exportData = getPersonStatementExportData(userId, month, year, personId, itemOrder);
-  if (!exportData) return res.status(400).send("Não achei essa pessoa por aqui.");
+  if (!exportData) return res.status(400).send("Pessoa inválida.");
 
   const shareContext = await buildSharePixContext({
     userId,
@@ -22361,7 +22558,7 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, async (req, res
   const userId = req.user.id;
   const parsed = parseMonthYear(req.params.month, req.params.year);
   const personId = Number(req.params.personId);
-  if (!parsed) return res.status(400).send("Os dados dessa chamada vieram tortos.");
+  if (!parsed) return res.status(400).send("Parâmetros inválidos.");
 
   if (!isAdminUser(userId)) {
     setFlash(req, "error", "O envio via WhatsApp está disponível apenas para administradores.");
@@ -22373,7 +22570,7 @@ app.get("/whatsapp/:year/:month/:personId", ensureAuthenticated, async (req, res
   const { month, year } = parsed;
   const itemOrder = parseChronologicalOrder(req.query.order) || "oldest";
   const exportData = getPersonStatementExportData(userId, month, year, personId, itemOrder);
-  if (!exportData) return res.status(400).send("Não achei essa pessoa por aqui.");
+  if (!exportData) return res.status(400).send("Pessoa inválida.");
 
   const decoratedPerson = decoratePersonPhoneForView(exportData.person, { fallbackCountry: DEFAULT_PHONE_COUNTRY });
   const shareContext = await buildSharePixContext({
@@ -22658,7 +22855,7 @@ app.get("/finances/details/:id", ensureAuthenticated, (req, res) => {
   const finance = serializeFinanceForApi(userId, req.params.id);
 
   if (!finance) {
-    return res.status(404).json({ error: "Não achei esse item por aqui." });
+    return res.status(404).json({ error: "Item não encontrado." });
   }
 
   return res.json({
@@ -22683,11 +22880,11 @@ app.post("/finances/add-row", ensureAuthenticated, express.json(), (req, res) =>
     const scheduleKind = dayOfMonth ? normalizeFinanceScheduleKind(req.body.schedule_kind, type) : null;
 
     if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 2000) {
-      return res.status(400).json({ error: "Esse mês ou ano veio estranho por aqui." });
+      return res.status(400).json({ error: "Mês ou ano inválido." });
     }
 
     if (!type) {
-      return res.status(400).json({ error: "Esse tipo de lançamento não fez sentido por aqui." });
+      return res.status(400).json({ error: "Tipo de lançamento inválido." });
     }
 
     if (isMonthClosed(userId, month, year)) {
@@ -22736,7 +22933,7 @@ app.post("/finances/variable/:id", ensureAuthenticated, express.json(), (req, re
     const id = Number(req.params.id);
     const finance = getFinanceByIdForUser(userId, id);
     if (!finance) {
-      return res.status(404).json({ error: "Não achei esse item por aqui." });
+      return res.status(404).json({ error: "Item não encontrado." });
     }
 
     if (finance.amount_mode !== 'variable') {
@@ -22817,7 +23014,7 @@ app.post("/finances/fixed/:id", ensureAuthenticated, express.json(), (req, res) 
     const id = Number(req.params.id);
     const finance = getFinanceByIdForUser(userId, id);
     if (!finance) {
-      return res.status(404).json({ error: "Não achei esse item por aqui." });
+      return res.status(404).json({ error: "Item não encontrado." });
     }
 
     if (finance.amount_mode !== 'fixed') {
@@ -22869,7 +23066,7 @@ app.post("/finances/payment-toggle/:id", ensureAuthenticated, express.json(), (r
     const id = Number(req.params.id);
     const finance = getFinanceByIdForUser(userId, id);
     if (!finance) {
-      return res.status(404).json({ error: "Não achei esse item por aqui." });
+      return res.status(404).json({ error: "Item não encontrado." });
     }
 
     if (finance.type !== 'expense' || finance.amount_mode !== 'fixed') {
@@ -22915,7 +23112,7 @@ app.post("/finance-items/payment-toggle/:id", ensureAuthenticated, express.json(
     `).get(itemId, userId);
 
     if (!item) {
-      return res.status(404).json({ error: "Não achei esse lançamento por aqui." });
+      return res.status(404).json({ error: "Lançamento não encontrado." });
     }
 
     if (item.type !== 'expense' || normalizeFinanceAmountMode(item.amount_mode) !== 'variable') {
@@ -23211,7 +23408,7 @@ app.post('/admin/messages/:messageKey', ensureAuthenticated, (req, res) => {
     });
 
     const success = result.changed
-      ? 'Mensagem guardada por aqui. Agora o catálogo já fala esse texto sem depender de deploy.'
+      ? 'Mensagem salva com sucesso. Agora o catálogo já fala esse texto sem depender de deploy.'
       : 'Mensagem conferida. Não achei mudança nova para guardar aqui.';
 
     clearAdminMessageImportPreview(req);
@@ -23428,7 +23625,7 @@ app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
     const restartChanges = changedDefinitions.filter((definition) => definition.restartRequired);
 
     let success = changedDefinitions.length
-      ? `${section.title} guardada com sucesso.`
+      ? `${section.title} salva com sucesso.`
       : `${section.title} conferida. Não achei nada novo para salvar.`;
 
     if (liveChanges.length) {
@@ -23443,8 +23640,14 @@ app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
       success += ' Enquanto Client ID e secret não estiverem completos, o login com Google segue de folga.';
     }
 
-    if (sectionKey === 'push' && !isPushConfigured()) {
-      success += ' Sem o trio VAPID completo, o sininho ainda não acorda.';
+    if (sectionKey === 'push') {
+      const pushPanel = buildPushAdminState();
+      success += ` Agenda automática em ${pushPanel.schedule.label}. ${pushPanel.activeCount} de ${pushPanel.totalCount} rotinas estão ligadas.`;
+      if (!pushPanel.infrastructure.configured) {
+        success += pushPanel.hasInAppFallback
+          ? ' O push web ainda depende do trio VAPID, mas os alertas que também viram aviso interno continuam no jogo.'
+          : ' Sem o trio VAPID completo, o sininho ainda não acorda.';
+      }
     }
 
     if (sectionKey === 'backup') {
@@ -23512,7 +23715,7 @@ app.post('/admin/email/send-test', ensureAuthenticated, async (req, res) => {
       req
     });
     return renderAdmin(res, {
-      success: `E-mail de teste enviado direitinho${result.messageId ? ` (messageId ${result.messageId})` : ''}. Agora o SMTP já mostrou que sabe o caminho.`,
+      success: `E-mail de teste enviado com sucesso${result.messageId ? ` (messageId ${result.messageId})` : ''}. Agora o SMTP já mostrou que sabe o caminho.`,
       activeSection: 'email'
     });
   } catch (error) {
@@ -23709,7 +23912,7 @@ app.get('/admin/backup/download/:backupId/:slot', ensureAuthenticated, (req, res
   const slot = String(req.params.slot || '').trim().toLowerCase();
   const row = Number.isInteger(backupId) && backupId > 0 ? backupRunsSelectById.get(backupId) : null;
   if (!row) {
-    return renderAdmin(res, { error: 'Não achei esse backup para download.', activeSection: 'backup' });
+    return renderAdmin(res, { error: 'Backup não encontrado para download.', activeSection: 'backup' });
   }
 
   const targetPath = slot === 'secondary' ? row.local_secondary_path : row.local_primary_path;
@@ -23735,7 +23938,7 @@ app.post("/admin/add-user", ensureAuthenticated, async (req, res) => {
   }
 
   if (!safeEmail || !safeEmail.includes('@')) {
-    return renderAdmin(res, { error: 'Esse e-mail não parece válido.' });
+    return renderAdmin(res, { error: 'Email inválido' });
   }
 
   const duplicatedUser = db.prepare('SELECT id FROM users WHERE email = ?').get(safeEmail);
@@ -23752,7 +23955,7 @@ app.post("/admin/add-user", ensureAuthenticated, async (req, res) => {
     DEFAULT_FINANCE_CATEGORIES.forEach(cat => insertCat.run(newUser.id, cat));
     ensurePurchaseCategoriesForUser(newUser.id);
 
-    let success = `Acesso de ${safeEmail} criado com sucesso!`;
+    let success = `Usuário ${safeEmail} adicionado com sucesso!`;
     const emailConfig = getEmailRuntimeConfig();
     if (wantsWelcomeEmail) {
       if (!emailConfig.enabled) {
@@ -23795,12 +23998,12 @@ app.post('/admin/users/:id/resend-welcome', ensureAuthenticated, async (req, res
   }
 
   if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
-    return renderAdmin(res, { error: 'Não encontrei esse usuário por aqui.', activeSection: 'access' });
+    return renderAdmin(res, { error: 'Usuário inválido.', activeSection: 'access' });
   }
 
   const targetUser = getUserRecord(targetUserId, { includeDeleted: false });
   if (!targetUser) {
-    return renderAdmin(res, { error: 'Não achei esse usuário por aqui.', activeSection: 'access' });
+    return renderAdmin(res, { error: 'Usuário não encontrado.', activeSection: 'access' });
   }
 
   try {
@@ -23845,11 +24048,11 @@ app.post("/admin/update-user/:id", ensureAuthenticated, (req, res) => {
   }
 
   if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
-    return renderAdmin(res, { error: 'Não encontrei esse usuário por aqui.' });
+    return renderAdmin(res, { error: 'Usuário inválido.' });
   }
 
   if (!safeEmail || !safeEmail.includes('@')) {
-    return renderAdmin(res, { error: 'Esse e-mail não parece válido.' });
+    return renderAdmin(res, { error: 'Email inválido' });
   }
 
   const targetUser = getUserRecord(targetUserId);

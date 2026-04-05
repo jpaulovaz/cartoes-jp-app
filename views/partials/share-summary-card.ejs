@@ -63,7 +63,7 @@
           <img src="/icon-192.png" alt="AcerttaPay" class="share-summary-card__brand-logo">
           <div class="min-w-0">
             <div class="share-summary-card__brand-title">AcerttaPay</div>
-            <div class="share-summary-card__brand-subtitle">Resumo da ópera</div>
+            <div class="share-summary-card__brand-subtitle">Resumo financeiro</div>
           </div>
         </div>
         <h2 class="mt-4 text-[28px] font-black leading-tight tracking-[-0.03em] text-slate-900"><%= person.name %></h2>
@@ -97,7 +97,7 @@
     <% if (safeSharePixContext && safeSharePixContext.available && normalizedRemainingCents > 0) { %>
       <div class="relative z-10 mt-5 share-summary-card__pix-shell">
         <div class="share-summary-card__pix-copy">
-          <div class="share-summary-card__section-label">Pix desse acerto</div>
+          <div class="share-summary-card__section-label">Pix desta vez</div>
           <div class="mt-2 share-summary-card__pix-amount"><%= formatBRL(Number(safeSharePixContext.amountCents || normalizedRemainingCents)) %></div>
           <p class="mt-2 share-summary-card__pix-text"><%= safeSharePixContext.helperText || 'No banco, é só escanear ou usar o código que segue no texto.' %></p>
           <div class="mt-3 share-summary-card__pix-chips">
@@ -108,7 +108,7 @@
               <span class="share-summary-card__pix-chip"><%= safeSharePixContext.maskedKey %></span>
             <% } %>
             <% if (safeSharePixContext.ownerName) { %>
-              <span class="share-summary-card__pix-chip">Quem recebe: <%= safeSharePixContext.ownerName %></span>
+              <span class="share-summary-card__pix-chip">Recebe: <%= safeSharePixContext.ownerName %></span>
             <% } %>
           </div>
         </div>
@@ -116,7 +116,7 @@
           <% if (safeSharePixContext.qrDataUrl) { %>
             <img src="<%= safeSharePixContext.qrDataUrl %>" alt="QR Code Pix" class="share-summary-card__pix-qr-image">
           <% } else { %>
-            <div class="share-summary-card__pix-qr-fallback">O QR não apareceu aqui, mas o código completo vai no texto logo abaixo.</div>
+            <div class="share-summary-card__pix-qr-fallback">O QR não apareceu aqui, mas o código completo segue no texto.</div>
           <% } %>
         </div>
       </div>
@@ -126,7 +126,7 @@
       <div class="share-summary-card__list-head">
         <div>
           <div class="share-summary-card__section-label"><%= safeListTitle %></div>
-          <div class="mt-1 text-sm font-bold text-slate-700"><%= visibleItems.length %> item(ns) na vitrine</div>
+          <div class="mt-1 text-sm font-bold text-slate-700"><%= visibleItems.length %> item(ns) exibido(s)</div>
         </div>
       </div>
 

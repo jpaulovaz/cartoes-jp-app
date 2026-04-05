@@ -1,4 +1,4 @@
-<%- include("partials/header", { title: "Compartilhar resumo" }) %>
+<%- include("partials/header", { title: "Mandar resumo" }) %>
 <%
   const periodLabel = `${String(month).padStart(2, '0')}/${year}`;
   const getItemCents = (item) => {
@@ -38,9 +38,9 @@
 <div class="op-page-shell">
   <section class="op-page-hero op-fade-up">
     <div>
-      <span class="op-page-hero__eyebrow">Resumo pronto pra mandar</span>
-      <h1 class="op-page-hero__title mt-4">Compartilhar resumo</h1>
-      <p class="op-page-hero__subtitle mt-3">Deixe esse resumo bonito, claro e pronto para cair no chat certo.</p>
+      <span class="op-page-hero__eyebrow">Compartilhamento rápido</span>
+      <h1 class="op-page-hero__title mt-4">Mandar resumo</h1>
+      <p class="op-page-hero__subtitle mt-3">Monte uma imagem bonitinha e pronta para mandar para a pessoa certa.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= person.name %></span>
         <span class="badge">Ref. <%= periodLabel %></span>
@@ -73,7 +73,7 @@
         </select>
       </div>
       <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
-        Reorganizar lista
+        Atualizar ordem
       </button>
     </form>
   </div>
@@ -81,7 +81,7 @@
   <div class="op-surface-card op-fade-up rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 mb-6">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
       <div class="min-w-0">
-        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/70 dark:text-sky-300/80"><%= pixAvailable ? 'Pix no resumo' : 'Texto do resumo' %></div>
+        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/70 dark:text-sky-300/80"><%= pixAvailable ? 'Pix no compartilhamento' : 'Texto do compartilhamento' %></div>
         <% if (pixAvailable) { %>
           <h2 class="mt-2 text-lg font-black tracking-[-0.03em] text-slate-900 dark:text-slate-100"><%= remainingCents > 0 && paidCents > 0 ? 'O texto já sai com o Pix do saldo restante.' : 'O texto já sai com o Pix prontinho para facilitar.' %></h2>
           <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= sharePixContext.helperText %></p>
@@ -105,7 +105,7 @@
   </div>
 
   <div class="op-preview-shell op-fade-up">
-    <div class="op-preview-shell__label">Prévia do resumo</div>
+    <div class="op-preview-shell__label">Prévia da imagem</div>
     <div class="flex justify-center pb-2">
       <%- include('partials/share-summary-card', {
         cardId: 'cardPreview',
@@ -661,7 +661,7 @@
   async function copyShareText() {
     try {
       await copyTextToClipboard(shareMessageText);
-      alert('Texto do resumo copiado. Agora é só colar onde quiser.');
+      alert('Texto do compartilhamento copiado. Agora é só colar onde quiser.');
     } catch (error) {
       console.error('[share] copy text failure', error);
       alert(error && error.message ? error.message : 'Não consegui copiar o texto agora.');

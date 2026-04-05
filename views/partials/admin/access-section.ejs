@@ -13,7 +13,7 @@
     <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div class="max-w-3xl">
         <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Acessos</span>
-        <h2 class="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Quem entra e com que chave</h2>
+        <h2 class="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Usuários e permissões</h2>
         <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
           Tabela centralizada para revisar permissões, status do convite e atividade recente sem fragmentar a leitura em vários cards.
         </p>
@@ -34,7 +34,7 @@
 
     <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-4 py-4">
-        <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Acessos liberados</div>
+        <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Total de acessos</div>
         <div class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white"><%= usersList.length %></div>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-300"><%= adminUsersCount %> administrador(es) e <%= Math.max(usersList.length - adminUsersCount, 0) %> usuário(s).</p>
       </div>
@@ -49,7 +49,7 @@
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Usuários sem confirmação de boas-vindas.</p>
       </div>
       <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-4 py-4">
-        <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Ainda sem acesso por aqui</div>
+        <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Sem acesso registrado</div>
         <div class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white"><%= neverAccessedCount %></div>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Útil para acompanhar quem recebeu acesso, mas ainda não gerou atividade no app.</p>
       </div>
@@ -57,7 +57,7 @@
 
     <div class="grid gap-3 xl:grid-cols-[minmax(0,1.5fr),220px,180px,180px] xl:items-end">
       <label class="block xl:col-span-1">
-        <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Buscar pessoa</span>
+        <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Buscar usuário</span>
         <div class="relative mt-2">
           <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 dark:text-slate-500">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.6-5.15a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -215,7 +215,7 @@
             <% }) %>
             <tr data-access-empty hidden>
               <td colspan="7" class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-                Ainda não achei ninguém por aqui com os filtros atuais.
+                Nenhum usuário encontrado com os filtros atuais.
               </td>
             </tr>
           </tbody>
@@ -235,8 +235,8 @@
         <div class="op-empty-state__icon">
           <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v6m3-3h-6m-6 6H5a2 2 0 01-2-2V8a2 2 0 012-2h4l2-2h2l2 2h4a2 2 0 012 2v4"></path></svg>
         </div>
-        <div class="op-empty-state__title">Ainda não achei ninguém por aqui</div>
-        <p class="op-empty-state__text">Cadastre o primeiro e-mail autorizado para começar a abrir as portas do app.</p>
+        <div class="op-empty-state__title">Nenhum usuário encontrado</div>
+        <p class="op-empty-state__text">Cadastre o primeiro e-mail autorizado para começar a distribuir acessos ao aplicativo.</p>
       </div>
     <% } %>
 

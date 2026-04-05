@@ -1,4 +1,4 @@
-<%- include("partials/header", { title: title || "AcerttaPay | Acertos" }) %>
+<%- include("partials/header", { title: title || "AcerttaPay | Cobranças" }) %>
 
 <%
   function itemTotalCents(item) {
@@ -351,7 +351,7 @@
   }
 
   function itemContextValue(item) {
-    return isManualItem(item) ? 'Acerto avulso' : (item?.card_name_snapshot || 'Não informado');
+    return isManualItem(item) ? 'Cobrança avulsa' : (item?.card_name_snapshot || 'Não informado');
   }
 
   function itemPeriodLabel(item) {
@@ -395,7 +395,7 @@
     if (item?.person_email_snapshot) parts.push(item.person_email_snapshot);
     if (item?.person_phone_snapshot) parts.push(item.person_phone_snapshot);
     if (item?.is_contact_detached) {
-      parts.push('contato saiu da sua rede');
+      parts.push('contato removido de Amigos');
     } else if (String(item?.current_person_status || '').trim().toLowerCase() === 'inactive' || Number(item?.current_person_active ?? 1) === 0) {
       parts.push('contato inativo');
     }
@@ -861,7 +861,7 @@
   <section class="op-page-hero op-fade-up">
     <div>
       <span class="op-page-hero__eyebrow"><%= isArchiveMode ? 'Histórico guardado com carinho' : 'Pedidos, acertos e lembretes' %></span>
-      <h1 class="op-page-hero__title mt-4"><%= isArchiveMode ? 'Arquivo de acertos' : 'Acertos' %></h1>
+      <h1 class="op-page-hero__title mt-4"><%= isArchiveMode ? 'Arquivo de cobranças' : 'Cobranças' %></h1>
       <p class="op-page-hero__subtitle mt-3"><%= isArchiveMode
         ? 'Aqui ficam as cobranças que já não pedem nenhuma ação futura dentro do app. Sai da fila principal, mas continua facinho de achar e restaurar quando você quiser.'
         : 'Tudo o que você enviou ou recebeu dos amigos fica aqui - tanto o que nasceu no cartão quanto os lembretes avulsos do dia a dia.' %></p>
@@ -938,7 +938,7 @@
           <div class="flex flex-wrap gap-2 lg:justify-end op-shared-action-row op-shared-action-row--compact">
             <a href="#received" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Ir para Recebidas</a>
             <a href="#sent" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Ir para Enviadas</a>
-            <a href="<%= monthlyGuideHref %>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Como usar os acertos</a>
+            <a href="<%= monthlyGuideHref %>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Como usar cobranças</a>
           </div>
         </div>
 
@@ -983,7 +983,7 @@
             <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Enquanto o outro lado não confirma, o valor fica reservado. Ele aparece como aguardando confirmação, reduz o que ainda pode ser gerado em novo Pix e ainda não entra no total confirmado do mês.</p>
           </details>
         </div>
-        <a href="<%= monthlyGuideHref %>" target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Abrir guia dos acertos</a>
+        <a href="<%= monthlyGuideHref %>" target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Abrir guia de uso das cobranças</a>
       </article>
     </div>
   </section>
@@ -993,7 +993,7 @@
       <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div class="max-w-2xl">
           <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Acerto fora do cartão</div>
-          <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Acerto avulso</h2>
+          <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Cobrança avulsa</h2>
           <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">Perfeita para aquele “depois você me manda” do almoço, do ingresso ou do Pix salvador. Agora você escolhe se a outra pessoa recebe no app ou se esse combinado fica só no seu radar.</p>
         </div>
 
@@ -1014,7 +1014,7 @@
 
       <% if (!manualDebtPeopleList.length) { %>
         <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-          Para criar uma cobrança avulsa por aqui, você precisa ter pelo menos um contato ativo na <strong>Minha Rede</strong>. Criou o contato, voltou, e o fluxo já fica pronto para uso.
+          Para criar uma cobrança avulsa por aqui, você precisa ter pelo menos um contato ativo em <strong>Amigos</strong>. Criou o contato, voltou, e o fluxo já fica pronto para uso.
         </div>
       <% } else { %>
         <div class="mt-4 flex flex-wrap gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
@@ -1127,8 +1127,8 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
     <div class="absolute inset-x-0 bottom-0 flex max-h-[90vh] flex-col overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[84vh] sm:max-w-2xl sm:rounded-[32px]">
       <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
         <div>
-          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Acerto avulso</div>
-          <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Mandar um acerto sem cartão</h3>
+          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Cobrança avulsa</div>
+          <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Mandar um lembrete sem cartão</h3>
           <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Vai com a data de hoje e você ainda pode marcar uma data combinada para o app lembrar no dia certinho.</p>
         </div>
         <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar envio avulso">
@@ -1166,7 +1166,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
             <% }) %>
           </select>
           <% if (!manualDebtPeopleList.length) { %>
-            <p class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">Sem contato ativo por aqui ainda. Dá para criar rapidinho em <a href="/people" class="font-bold text-violet-600 hover:text-violet-700 dark:text-violet-300 dark:hover:text-violet-200">Minha Rede</a>.</p>
+            <p class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">Sem contato ativo por aqui ainda. Dá para criar rapidinho em <a href="/people" class="font-bold text-violet-600 hover:text-violet-700 dark:text-violet-300 dark:hover:text-violet-200">Amigos</a>.</p>
           <% } %>
         </label>
 
@@ -1199,7 +1199,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
 
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
           <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
-          <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600" data-manual-debt-submit>Mandar acerto no app</button>
+          <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600" data-manual-debt-submit>Enviar cobrança no app</button>
         </div>
         </div>
       </form>
@@ -1211,7 +1211,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
     <div class="absolute inset-x-0 bottom-0 max-h-[92vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[84vh] sm:max-w-3xl sm:rounded-[32px]">
       <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
         <div>
-          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-500 dark:text-emerald-300">Pix do acerto avulso</div>
+          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-500 dark:text-emerald-300">Pix da cobrança avulsa</div>
           <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white" data-pix-sheet-title>Preparando o Pix...</h3>
           <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400" data-pix-sheet-subtitle>Deixa comigo que eu monto o copia e cola certinho.</p>
         </div>
@@ -1668,7 +1668,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
                 <span class="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-200"><%= receivedActionCount %> ação(ões)</span>
               <% } %>
             </div>
-            <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none"><%= isArchiveMode ? "Histórico arquivado do lado de quem recebeu. Tudo o que não pede mais ação futura continua aqui para consulta ou restauração." : "Acertos que chegaram para seu ok, baixa e lembretes avulsos que podem seguir no radar até a quitação." %></p>
+            <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none"><%= isArchiveMode ? "Histórico arquivado do lado de quem recebeu. Tudo o que não pede mais ação futura continua aqui para consulta ou restauração." : "Cobranças que chegaram para sua aprovação, baixa e lembretes avulsos que podem seguir te acompanhando até a quitação." %></p>
           </div>
           <div class="flex flex-wrap gap-2 sm:justify-end">
             <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= trackingFiltersActive ? `${countLabel(receivedBaseItems.length, 'cobrança', 'cobranças')} de ${countLabel(received.length, 'cobrança', 'cobranças')}` : countLabel(received.length, 'cobrança', 'cobranças') %></span>
@@ -1816,7 +1816,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
                           <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= item.pix_unavailable_reason %></div>
                           <% if (item.pix_is_current_user_creditor) { %>
                             <div class="mt-3">
-                              <a href="/people" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir Minha Rede</a>
+                              <a href="/people" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir Amigos para ajustar</a>
                             </div>
                           <% } %>
                         </div>
@@ -2172,7 +2172,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
                         </div>
                       <% } else if (item.status === 'accepted' && !item.payment_marked_at) { const itemSettlement = cardMonthlySnapshotForItem(item); const canOpenSettlement = itemSettlement && Number(itemSettlement.id || 0) && Math.max(0, Number(itemSettlement.openCents || 0)) > 0; const hasReservedSettlement = itemSettlement && Math.max(0, Number(itemSettlement.reservedCents || 0)) > 0; %>
                         <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-4">
-                          <div class="text-sm font-bold text-slate-900 dark:text-white">Acerto aceito e em aberto</div>
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Dívida aceita e em aberto</div>
                           <p class="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300"><%= hasReservedSettlement ? 'Já tem um Pix desse mês aguardando confirmação. O restante continua aparecendo na carteira mensal até fechar tudo.' : 'Agora o pagamento do cartão anda pela carteira do mês. Você pode pagar tudo ou escolher só uma parte e deixar o app distribuir do mais antigo para o mais novo.' %></p>
                           <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
                             <% if (itemSettlement) { %>
@@ -2197,7 +2197,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
                         </div>
                       <% } else if (item.status === 'rejection_contested_by_sender') { %>
                         <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
-                          <div class="text-sm font-bold text-slate-900 dark:text-white">Acerto em disputa</div>
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Cobrança em disputa</div>
                           <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">O remetente contestou a sua recusa. A solicitação permanece apenas para acompanhamento e não entra no seu quadro financeiro.</div>
                         </div>
                       <% } else if (item.status === 'rejection_accepted_by_sender') { %>
@@ -2207,7 +2207,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
                         </div>
                       <% } else if (item.status === 'settled') { %>
                         <div class="rounded-2xl border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20 px-4 py-3">
-                          <div class="text-sm font-bold text-slate-900 dark:text-white">Acerto quitado</div>
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Dívida liquidada</div>
                           <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">O recebimento foi confirmado em <strong><%= item.resolved_at ? formatDateBR(item.resolved_at) : 'data não informada' %></strong><% if (item.resolved_at) { %> às <strong><%= formatTimeBR(item.resolved_at) %></strong><% } %>.</div>
                         </div>
                       <% } %>
@@ -2265,7 +2265,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
                 <span class="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-200"><%= sentActionCount %> ação(ões)</span>
               <% } %>
             </div>
-            <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none"><%= isArchiveMode ? "Histórico arquivado do lado de quem enviou. Tudo o que já encerrou o papo dentro do app continua guardado aqui para consulta ou restauração." : "Acertos que você enviou para aprovação, baixa e lembretes avulsos que continuam no radar até a quitação." %></p>
+            <p class="op-dual-accordion__intro mt-1 text-sm font-medium text-slate-500 dark:text-slate-400 sm:max-w-none"><%= isArchiveMode ? "Histórico arquivado do lado de quem enviou. Tudo o que já encerrou o papo dentro do app continua guardado aqui para consulta ou restauração." : "Cobranças que você enviou para aprovação, baixa e lembretes avulsos que continuam no radar até a quitação." %></p>
           </div>
           <div class="flex flex-wrap gap-2 sm:justify-end">
             <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200"><%= trackingFiltersActive ? `${countLabel(sentVisibleCount, 'cobrança', 'cobranças')} de ${countLabel(sentTotalCount, 'cobrança', 'cobranças')}` : countLabel(sentTotalCount, 'cobrança', 'cobranças') %></span>
@@ -2416,7 +2416,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
                           <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= item.pix_unavailable_reason %></div>
                           <% if (item.pix_is_current_user_creditor) { %>
                             <div class="mt-3">
-                              <a href="/people" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir Minha Rede</a>
+                              <a href="/people" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir Amigos para ajustar</a>
                             </div>
                           <% } %>
                         </div>
@@ -2588,7 +2588,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
                       </div>
 
                       <% if (item.is_contact_detached) { %>
-                        <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm font-medium text-amber-800 dark:text-amber-200">Esse contato saiu da sua rede, mas o lembrete continua guardado por aqui com os dados da época para você não perder o histórico.</div>
+                        <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm font-medium text-amber-800 dark:text-amber-200">Esse contato saiu de Amigos, mas o lembrete continua guardado por aqui com os dados da época para você não perder o histórico.</div>
                       <% } %>
 
                       <% if (item.status === 'open') { %>
@@ -2604,7 +2604,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
                               <div class="rounded-2xl border border-emerald-200/70 bg-white/80 px-4 py-3 dark:border-emerald-800/70 dark:bg-slate-900/50">
                                 <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor que sai do radar</div>
                                 <div class="mt-1 text-sm font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amount_cents) %></div>
-                                <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Assim que confirmar, esse valor deixa de pesar em <strong>Acertos a receber</strong>.</div>
+                                <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Assim que confirmar, esse valor deixa de pesar em <strong>Cobranças a receber</strong>.</div>
                               </div>
                             </div>
                             <label class="block">
@@ -3064,7 +3064,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
                         </div>
                       <% } else if (item.status === 'accepted' && !item.payment_marked_at) { const itemSettlement = cardMonthlySnapshotForItem(item); const settlementHasReserved = itemSettlement && Math.max(0, Number(itemSettlement.reservedCents || 0)) > 0; %>
                         <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3">
-                          <div class="text-sm font-bold text-slate-900 dark:text-white">Acerto aceito e aguardando pagamento</div>
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Cobrança aceita e aguardando pagamento</div>
                           <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= settlementHasReserved ? 'Já existe um Pix desse mês esperando seu ok final. Enquanto isso, o restante continua aparecendo na carteira mensal sem bagunçar as compras lá de baixo.' : 'O pagamento deste cartão agora corre pela carteira do mês. Quando a outra pessoa avisar um Pix, você vai confirmar esse recebimento pelo resumo mensal.' %></div>
                           <% if (itemSettlement) { %>
                             <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
@@ -3093,17 +3093,17 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
                         </div>
                       <% } else if (item.status === 'rejection_contested_by_sender') { %>
                         <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
-                          <div class="text-sm font-bold text-slate-900 dark:text-white">Acerto em disputa</div>
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Cobrança em disputa</div>
                           <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Esta solicitação foi contestada por você e permanece apenas para acompanhamento, sem entrar no quadro financeiro do destinatário.</div>
                         </div>
                       <% } else if (item.status === 'rejection_accepted_by_sender') { %>
                         <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">
-                          <div class="text-sm font-bold text-slate-900 dark:text-white">Acerto encerrado</div>
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Cobrança encerrada</div>
                           <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Você aceitou a rejeição desta cobrança. Ela permanece apenas no histórico para consulta futura.</div>
                         </div>
                       <% } else if (item.status === 'settled') { %>
                         <div class="rounded-2xl border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20 px-4 py-3">
-                          <div class="text-sm font-bold text-slate-900 dark:text-white">Acerto quitado</div>
+                          <div class="text-sm font-bold text-slate-900 dark:text-white">Dívida liquidada</div>
                           <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">O recebimento foi confirmado em <strong><%= item.resolved_at ? formatDateBR(item.resolved_at) : 'data não informada' %></strong><% if (item.resolved_at) { %> às <strong><%= formatTimeBR(item.resolved_at) %></strong><% } %>.</div>
                         </div>
                       <% } %>
@@ -3275,7 +3275,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
     const qrImg = document.querySelector('[data-pix-sheet-qr]');
     const qrHint = document.querySelector('[data-pix-sheet-qr-hint]');
 
-    if (title) title.textContent = data?.creditorName ? `Pix de ${data.creditorName}` : 'Pix do acerto avulso';
+    if (title) title.textContent = data?.creditorName ? `Pix de ${data.creditorName}` : 'Pix da cobrança avulsa';
     if (subtitle) subtitle.textContent = data?.description ? `${data.description} · confirmação continua manual por aqui.` : 'Confirmação manual por aqui, pagamento no banco da pessoa.';
     if (amount) amount.textContent = data?.amountFormatted || '—';
     if (keyMeta) keyMeta.textContent = data?.maskedKey ? `${data.keyTypeLabel || 'Chave Pix'} · ${data.maskedKey}` : (data?.keyTypeLabel || '—');
@@ -3337,10 +3337,10 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
 
     if (navigator.share) {
       await navigator.share({
-        title: data?.shareTitle || (data?.creditorName ? `Acerto com Pix de ${data.creditorName}` : 'Acerto com Pix'),
+        title: data?.shareTitle || (data?.creditorName ? `Cobrança com Pix de ${data.creditorName}` : 'Cobrança com Pix'),
         text: shareText
       });
-      showPixToast('Acerto compartilhado. Agora é só deixar o combinado seguir.','success');
+      showPixToast('Cobrança compartilhada. Agora é só aguardar o combinado andar.','success');
       return;
     }
 
@@ -3936,7 +3936,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
         if (submitBtn) submitBtn.disabled = true;
         if (noteBox) {
           noteBox.className = 'rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200';
-          noteBox.textContent = 'Sem contato ativo por aqui ainda. Criou na Minha Rede, voltou, e esse fluxo já fica pronto.';
+          noteBox.textContent = 'Sem contato ativo por aqui ainda. Criou em Amigos, voltou, e esse fluxo já fica pronto.';
         }
         setManualDebtModeCardState(appCard, false, true);
         setManualDebtModeCardState(privateCard, false, true);
@@ -3957,7 +3957,7 @@ Enquanto estiver guardado aqui, nada aparece para quem vai pagar, nada dispara n
 
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.textContent = selectedMode === 'private' ? 'Salvar lembrete privado' : 'Mandar acerto no app';
+        submitBtn.textContent = selectedMode === 'private' ? 'Salvar lembrete privado' : 'Enviar cobrança no app';
       }
 
       if (noteBox) {

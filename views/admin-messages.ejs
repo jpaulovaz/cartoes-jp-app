@@ -17,8 +17,8 @@
           </a>
           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/50"><%= migratedMessageCount %> mensagem(ns) nesta fase</span>
         </div>
-        <span class="mt-4 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Catálogo de recados</span>
-        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">Textos que o app fala</h1>
+        <span class="mt-4 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Catálogo de mensagens</span>
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">Mensagens do app</h1>
         <p class="mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">
           Aqui você ajusta título e texto das mensagens já migradas para o catálogo, com prévia contextual antes de salvar,
           exporta o catálogo em CSV e também importa revisões em lote com uma prévia antes de aplicar.
@@ -58,7 +58,7 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
       </div>
       <div>
-        <div class="op-inline-alert__title">Ainda pede carinho</div>
+        <div class="op-inline-alert__title">Ajuste pendente</div>
         <div class="op-inline-alert__text"><%= pageError %></div>
       </div>
     </div>
@@ -70,7 +70,7 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
       </div>
       <div>
-        <div class="op-inline-alert__title">Tudo certinho</div>
+        <div class="op-inline-alert__title">Tudo certo</div>
         <div class="op-inline-alert__text"><%= pageSuccess %></div>
       </div>
     </div>
@@ -94,7 +94,7 @@
 
       <form action="/admin/messages" method="GET" class="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr),repeat(3,minmax(0,0.7fr)),auto]">
         <label class="block">
-          <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Procurar</span>
+          <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Buscar</span>
           <input type="search" name="q" value="<%= filters.q %>" placeholder="ID, canal, função ou trecho do texto"
                  class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-300 dark:focus:border-slate-500 dark:focus:ring-slate-700">
         </label>
@@ -270,8 +270,8 @@
   <% if (!messageItems.length) { %>
     <section class="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center shadow-sm dark:border-slate-700 dark:bg-slate-800">
       <div class="mx-auto max-w-xl space-y-3">
-        <div class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Nada por aqui ainda</div>
-        <h2 class="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Nenhuma mensagem bateu com esse filtro.</h2>
+        <div class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Nada por aqui</div>
+        <h2 class="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Nenhuma mensagem bateu com esse filtro</h2>
         <p class="text-sm leading-relaxed text-slate-500 dark:text-slate-400">
           Tenta aliviar a busca ou trocar o status. O catálogo continua inteiro guardado aqui, só ficou escondido por esse recorte.
         </p>
@@ -420,7 +420,7 @@
       <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6 dark:border-slate-700">
         <div>
           <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400" data-message-preview-eyebrow>Prévia contextual</div>
-          <h2 class="mt-2 text-xl font-black tracking-tight text-slate-900 dark:text-white" data-message-preview-title>Como a mensagem vai aparecer</h2>
+          <h2 class="mt-2 text-xl font-black tracking-tight text-slate-900 dark:text-white" data-message-preview-title>Prévia da mensagem</h2>
           <p class="mt-2 text-sm text-slate-500 dark:text-slate-400" data-message-preview-note>Carregando exemplo...</p>
         </div>
         <button type="button" class="op-icon-btn" aria-label="Fechar prévia" data-message-preview-close>✕</button>
@@ -591,7 +591,7 @@
           <div class="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm dark:border-emerald-900/60 dark:bg-emerald-950/20">
             <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Exemplo de WhatsApp</div>
             <div class="mt-3 max-w-md rounded-[28px] border border-emerald-200/80 bg-white px-4 py-4 dark:border-emerald-900/60 dark:bg-slate-900/70">
-              <div class="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700/80 dark:text-emerald-300/80">Mensagem pronta pra colar</div>
+              <div class="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700/80 dark:text-emerald-300/80">Mensagem pronta para colar</div>
               <div class="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-700 dark:text-slate-200">${escapeHtml(body)}</div>
             </div>
           </div>
@@ -665,7 +665,7 @@
 
         currentPushSubscription = typeof subscription.toJSON === 'function' ? subscription.toJSON() : JSON.parse(JSON.stringify(subscription));
         pushSendButton.disabled = false;
-        pushHelper.textContent = 'Tudo certinho! Este aparelho já está pronto para receber um push de teste.';
+        pushHelper.textContent = 'Tudo certo! Este aparelho já está pronto para receber um push de teste.';
       } catch (error) {
         pushHelper.textContent = 'Não consegui confirmar o estado do push neste aparelho agora.';
       }
@@ -680,7 +680,7 @@
       modalError.textContent = '';
       modalStage.innerHTML = '<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">Montando a prévia com dados de exemplo...</div>';
       modalEyebrow.textContent = `${form.dataset.catalogId || 'Prévia'} · ${form.dataset.previewRenderer === 'push' ? 'Push' : (form.dataset.previewRenderer === 'dashboard_alert' ? 'Aba Geral' : (form.dataset.previewRenderer === 'share_text' ? 'Compartilhamento nativo' : (form.dataset.previewRenderer === 'whatsapp' ? 'WhatsApp' : (form.dataset.previewRenderer === 'pix_copy' ? 'Pix / copiar e colar' : (form.dataset.previewRenderer === 'email' ? 'E-mail' : 'Central do app')))))}`;
-      modalTitle.textContent = 'Como a mensagem vai aparecer';
+      modalTitle.textContent = 'Prévia da mensagem';
       modalNote.textContent = 'Carregando exemplo...';
       openModal();
 
@@ -705,7 +705,7 @@
         }
 
         activePreview = data.preview;
-        modalTitle.textContent = activePreview.title || activePreview.preview?.title || 'Como a mensagem vai aparecer';
+        modalTitle.textContent = activePreview.title || activePreview.preview?.title || 'Prévia da mensagem';
         modalNote.textContent = activePreview.preview?.note || 'Prévia com dados de exemplo';
         modalStage.innerHTML = renderPreviewCard(activePreview);
         await syncPushAvailability();

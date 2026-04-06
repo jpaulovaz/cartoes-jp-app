@@ -857,6 +857,23 @@
   const draftQueueRows = Array.isArray(draftSendQueues) ? draftSendQueues : [];
 %>
 
+<div hidden data-offline-snapshot
+  data-snapshot-page="<%= isArchiveMode ? 'Arquivo de acertos' : 'Central de acertos' %>"
+  data-snapshot-title="<%= isArchiveMode ? 'Arquivo de acertos' : 'Central de acertos' %>"
+  data-snapshot-summary="<%= isArchiveMode
+    ? `Último arquivo salvo com ${archivedTotalVisible} item(ns) pronto(s) para restaurar.`
+    : (draftQueueSummaryMeta.queueCount > 0
+      ? `${actionCount} pedindo sua atenção e ${draftQueueSummaryMeta.queueCount} rascunho(s) guardado(s) na caixa de saída antes do envio.`
+      : `${actionCount} pedindo sua atenção, com ${received.length} chegando para você e ${sentHeroCount} já enviado(s) por aqui.`) %>"
+  data-snapshot-primary-label="<%= isArchiveMode ? 'No arquivo' : 'Sua vez' %>"
+  data-snapshot-primary-value="<%= isArchiveMode ? `${archivedTotalVisible} item(ns)` : `${actionCount} pendência(s)` %>"
+  data-snapshot-secondary-label="Chegou pra você"
+  data-snapshot-secondary-value="<%= `${received.length} item(ns)` %>"
+  data-snapshot-tertiary-label="<%= isArchiveMode ? 'Restaurar depois' : 'Caixa de saída' %>"
+  data-snapshot-tertiary-value="<%= isArchiveMode ? `${archiveTotalCount || archivedTotalVisible} item(ns)` : `${draftQueueSummaryMeta.queueCount} rascunho(s)` %>"
+  data-snapshot-cta-label="<%= isArchiveMode ? 'Voltar para o arquivo' : 'Voltar para os acertos' %>"
+  data-snapshot-cta-href="<%= isArchiveMode ? otherPath : '/shared-debts' %>"></div>
+
 <div class="op-screen op-screen--shared-debts max-w-7xl mx-auto space-y-8">
   <section class="op-page-hero op-fade-up">
     <div>

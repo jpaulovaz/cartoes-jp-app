@@ -34,6 +34,23 @@
       throw error;
     }
 
+    if (isSameOriginRequest(input) && response && response.ok) {
+      try {
+        const rawUrl = typeof input === 'string'
+          ? input
+          : (input && typeof input.url === 'string' ? input.url : window.location.href);
+        const targetUrl = new URL(rawUrl, window.location.href);
+        window.dispatchEvent(new CustomEvent('acerttapay:sync-success', {
+          detail: {
+            path: `${targetUrl.pathname}${targetUrl.search}${targetUrl.hash}`,
+            status: response.status
+          }
+        }));
+      } catch (error) {
+        // Se não der para anunciar a sync, o fetch segue normal.
+      }
+    }
+
     return response;
   };
 })();
@@ -2325,32 +2342,185 @@
 
 (function () {
   const LAST_VISIT_STORAGE_KEY = 'acerttapay:last-visit';
+  const OFFLINE_SNAPSHOT_STORAGE_KEY = 'acerttapay:offline-snapshot';
+  const LAST_SYNC_STORAGE_KEY = 'acerttapay:last-sync-at';
   const STATUS_STYLE_ID = 'acerttapay-network-pill-style';
+  const SNAPSHOT_CAPTURE_DELAY_MS = 180;
+
+  function safeStorageSet(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      // Se o navegador não topar guardar isso agora, seguimos em frente.
+    }
+  }
+
+  function safeStorageRemove(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      // Sem drama.
+    }
+  }
+
+  function safeText(value) {
+    if (value == null) return '';
+    return String(value).replace(/\s+/g, ' ').trim();
+  }
+
+  function pathForDisplay(path) {
+    const safePath = safeText(path);
+    if (!safePath) return '';
+    if (safePath === '/geral') return 'Meu Radar';
+    if (safePath === '/shared-debts') return 'Central de acertos';
+    if (safePath === '/shared-debts/archive') return 'Arquivo de acertos';
+    if (safePath.startsWith('/summary/')) return 'Resumo da ópera';
+    if (safePath.startsWith('/analytics/')) return 'Análises';
+    if (safePath.startsWith('/month/')) return 'Compras do mês';
+    if (safePath.startsWith('/txn/')) return 'Detalhe da compra';
+    return safePath;
+  }
+
+  function getCurrentPath() {
+    return `${window.location.pathname || '/'}${window.location.search || ''}${window.location.hash || ''}`;
+  }
+
+  function shouldCaptureOfflineMemory() {
+    if (window.location.pathname === '/offline.html') return false;
+    const path = window.location.pathname || '/';
+    if (/^\/(login|setup)(?:$|\/|\?)/i.test(path)) return false;
+    if (/^\/privacy-policy(?:$|\/|\?)/i.test(path)) return false;
+    if (/^\/docs(?:$|\/|\?)/i.test(path)) return false;
+    return !!document.querySelector('[data-offline-snapshot], .op-screen');
+  }
+
+  function collectMetricsFromDataset(dataset) {
+    const metrics = [
+      { label: safeText(dataset.snapshotPrimaryLabel), value: safeText(dataset.snapshotPrimaryValue) },
+      { label: safeText(dataset.snapshotSecondaryLabel), value: safeText(dataset.snapshotSecondaryValue) },
+      { label: safeText(dataset.snapshotTertiaryLabel), value: safeText(dataset.snapshotTertiaryValue) }
+    ];
+    return metrics.filter((metric) => metric.label && metric.value);
+  }
+
+  function buildGenericSnapshot() {
+    const pageTitle = safeText(document.title).replace(/^AcerttaPay\s*\|\s*/i, '') || 'Seu resumo salvo';
+    const heroTitle = safeText(document.querySelector('.op-page-hero__title, h1')?.textContent) || pageTitle;
+    const heroSummary = safeText(document.querySelector('.op-page-hero__subtitle, main p, p')?.textContent) || 'A última tela carregada com sucesso continua guardada por aqui.';
+    const path = getCurrentPath();
+    return {
+      page: pathForDisplay(path) || pageTitle,
+      title: heroTitle,
+      summary: heroSummary,
+      metrics: [
+        { label: 'Página', value: pathForDisplay(path) || path },
+        { label: 'Última rota', value: path },
+        { label: 'Status', value: navigator.onLine ? 'Tudo sincronizado agora há pouco' : 'Resumo guardado no aparelho' }
+      ],
+      ctaLabel: 'Voltar para esse ponto',
+      ctaHref: path
+    };
+  }
+
+  function readExplicitSnapshot() {
+    const node = document.querySelector('[data-offline-snapshot]');
+    if (!(node instanceof HTMLElement)) return null;
+    const dataset = node.dataset || {};
+    const generic = buildGenericSnapshot();
+    const metrics = collectMetricsFromDataset(dataset);
+    return {
+      page: safeText(dataset.snapshotPage) || generic.page,
+      title: safeText(dataset.snapshotTitle) || generic.title,
+      summary: safeText(dataset.snapshotSummary) || generic.summary,
+      metrics: metrics.length ? metrics : generic.metrics,
+      ctaLabel: safeText(dataset.snapshotCtaLabel) || 'Voltar para esse ponto',
+      ctaHref: safeText(dataset.snapshotCtaHref) || getCurrentPath()
+    };
+  }
 
   function rememberLastVisit() {
     if (window.location.pathname === '/offline.html') return;
 
     const payload = {
       title: document.title || 'AcerttaPay',
-      path: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+      label: pathForDisplay(window.location.pathname || '/'),
+      path: getCurrentPath(),
       timestamp: new Date().toISOString()
     };
 
-    try {
-      localStorage.setItem(LAST_VISIT_STORAGE_KEY, JSON.stringify(payload));
-    } catch (error) {
-      // Sem drama: se o navegador bloquear storage, o app segue o baile.
-    }
+    safeStorageSet(LAST_VISIT_STORAGE_KEY, JSON.stringify(payload));
+  }
+
+  function rememberOfflineSnapshot() {
+    if (!shouldCaptureOfflineMemory()) return;
+    const capturedAt = new Date().toISOString();
+    const snapshot = readExplicitSnapshot() || buildGenericSnapshot();
+
+    const payload = {
+      version: 1,
+      path: getCurrentPath(),
+      routeLabel: snapshot.page || pathForDisplay(window.location.pathname || '/'),
+      title: snapshot.title || document.title || 'Resumo salvo',
+      summary: snapshot.summary || '',
+      metrics: Array.isArray(snapshot.metrics) ? snapshot.metrics.slice(0, 3) : [],
+      ctaLabel: snapshot.ctaLabel || 'Voltar para esse ponto',
+      ctaHref: snapshot.ctaHref || getCurrentPath(),
+      updatedAt: capturedAt
+    };
+
+    safeStorageSet(OFFLINE_SNAPSHOT_STORAGE_KEY, JSON.stringify(payload));
+    safeStorageSet(LAST_SYNC_STORAGE_KEY, capturedAt);
+  }
+
+  function scheduleOfflineSnapshot() {
+    window.clearTimeout(scheduleOfflineSnapshot._timer);
+    scheduleOfflineSnapshot._timer = window.setTimeout(() => {
+      rememberLastVisit();
+      rememberOfflineSnapshot();
+    }, SNAPSHOT_CAPTURE_DELAY_MS);
+  }
+
+  function clearOfflineMemory() {
+    safeStorageRemove(LAST_VISIT_STORAGE_KEY);
+    safeStorageRemove(OFFLINE_SNAPSHOT_STORAGE_KEY);
+    safeStorageRemove(LAST_SYNC_STORAGE_KEY);
+  }
+
+  function isSensitiveExitPath(rawPath) {
+    const safePath = safeText(rawPath);
+    if (!safePath) return false;
+    return /^\/logout(?:$|\/|\?)/i.test(safePath) || /^\/lock\/engage(?:$|\/|\?)/i.test(safePath);
+  }
+
+  function bindSensitiveExitCleanup() {
+    document.addEventListener('click', (event) => {
+      const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+      if (!(link instanceof HTMLAnchorElement)) return;
+      if (isSensitiveExitPath(link.getAttribute('href') || '')) {
+        clearOfflineMemory();
+      }
+    }, true);
+
+    document.addEventListener('submit', (event) => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      if (isSensitiveExitPath(form.getAttribute('action') || '')) {
+        clearOfflineMemory();
+      }
+    }, true);
   }
 
   function initLastVisitMemory() {
     rememberLastVisit();
-    window.addEventListener('pageshow', rememberLastVisit);
+    rememberOfflineSnapshot();
+    window.addEventListener('pageshow', scheduleOfflineSnapshot);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        rememberLastVisit();
+        scheduleOfflineSnapshot();
       }
     });
+    window.addEventListener('acerttapay:sync-success', scheduleOfflineSnapshot);
+    bindSensitiveExitCleanup();
   }
 
   function injectStatusStyles() {
@@ -2448,12 +2618,12 @@
 
     function handleOffline() {
       hasShownOffline = true;
-      show('Sem internet. Entramos no modo sobrevivência até a conexão voltar.', 'offline');
+      show('Sem internet. Guardamos o último resumo e seguramos as pontas até a conexão voltar.', 'offline');
     }
 
     function handleOnline() {
       if (!hasShownOffline) return;
-      show('Conexão de volta. Bora continuar de onde parou.', 'online', 2600);
+      show('Conexão de volta. Bora retomar de onde parou.', 'online', 2600);
     }
 
     if (!navigator.onLine) {
@@ -2474,7 +2644,6 @@
     initConnectivityFeedback();
   }
 })();
-
 
 (function () {
   function sortPurchaseCategoryOptions(select) {

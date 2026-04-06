@@ -20,12 +20,6 @@
       </div>
     </section>
 
-    <% if (isClosed) { %>
-      <div class="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-        🔒 Este mês já foi fechado. As compras continuam visíveis, mas os campos de pagamento e vencimento ficam só para consulta.
-      </div>
-    <% } %>
-
     <% const privateReminderRadar = privateDebtReminderSummary || { activeCount: 0, activeCents: 0, readyToArchiveCount: 0, readyToArchiveCents: 0, hasActive: false, hasReadyToArchive: false }; %>
     <%
       const visibleCardsPanel = (cardsPanel || []).filter((cp) => Number(cp?.total_cents || 0) > 0);
@@ -35,7 +29,30 @@
       const visibleDetailCards = (cards || []).filter((card) => visibleDetailCardIds.has(Number(card?.id || 0)));
       const visibleDetailPersonIds = new Set(detailRowsWithValue.map((row) => Number(row?.person_id || 0)).filter(Boolean));
       const visibleDetailPeople = (people || []).filter((person) => visibleDetailPersonIds.has(Number(person?.id || 0)));
+      const summaryCardsRemainingCents = visibleCardsPanel.reduce((acc, cp) => acc + Math.max(0, Number(cp?.total_cents || 0) - Number(cp?.paid_cents || 0)), 0);
+      const summaryPeopleRemainingCents = visiblePersonPanel.reduce((acc, pp) => acc + Math.max(0, Number(pp?.total_cents || 0) - Number(pp?.paid_cents || 0)), 0);
+      const nextDueCard = visibleCardsPanel[0] || null;
+      const nextDueLabel = nextDueCard?.due_date ? new Date(`${nextDueCard.due_date}T12:00:00`).toLocaleDateString('pt-BR') : 'Sem data salva';
     %>
+    <div hidden data-offline-snapshot
+      data-snapshot-page="Resumo da ópera"
+      data-snapshot-title="Resumo da ópera - <%= String(month).padStart(2,'0') %>/<%= year %>"
+      data-snapshot-summary="<%= `Cartões com ${formatBRLFromCents(summaryCardsRemainingCents)} ainda respirando e parcerias com ${formatBRLFromCents(summaryPeopleRemainingCents)} pendentes.` %>"
+      data-snapshot-primary-label="Próxima fatura"
+      data-snapshot-primary-value="<%= nextDueCard ? `${nextDueCard.card_name} · ${nextDueLabel}` : 'Sem fatura visível' %>"
+      data-snapshot-secondary-label="Ainda nos cartões"
+      data-snapshot-secondary-value="<%= formatBRLFromCents(summaryCardsRemainingCents) %>"
+      data-snapshot-tertiary-label="Parcerias em aberto"
+      data-snapshot-tertiary-value="<%= formatBRLFromCents(summaryPeopleRemainingCents) %>"
+      data-snapshot-cta-label="Voltar para este resumo"
+      data-snapshot-cta-href="/summary/<%= year %>/<%= month %>"></div>
+
+    <% if (isClosed) { %>
+      <div class="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+        🔒 Este mês já foi fechado. As compras continuam visíveis, mas os campos de pagamento e vencimento ficam só para consulta.
+      </div>
+    <% } %>
+
     <% if (privateReminderRadar.hasActive || privateReminderRadar.hasReadyToArchive) { %>
       <div class="mb-8 rounded-3xl border border-cyan-200 bg-cyan-50/80 px-5 py-4 shadow-sm dark:border-cyan-800 dark:bg-cyan-900/20">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

@@ -137,18 +137,26 @@ html.dark .badge {
 html.dark input[type="date"],
 html.dark input[type="month"] {
   color-scheme: dark;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23ffffff' stroke-width='1.9'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M8 2v3m8-3v3M3 10h18M5 5h14a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.9rem center;
+  background-size: 1.1rem 1.1rem;
+  padding-right: 2.9rem;
 }
 
 html.dark input[type="date"]::-webkit-calendar-picker-indicator,
 html.dark input[type="month"]::-webkit-calendar-picker-indicator {
-  filter: invert(1) brightness(1.7) contrast(1.1);
-  opacity: 0.95;
+  filter: invert(1) brightness(2.4) contrast(1.2);
+  opacity: 0.02;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin: 0;
   cursor: pointer;
 }
 
 html.dark input[type="date"]::-webkit-calendar-picker-indicator:hover,
 html.dark input[type="month"]::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
+  opacity: 0.08;
 }
 
 html.dark input[type="date"]::-webkit-datetime-edit,

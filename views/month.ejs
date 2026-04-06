@@ -2439,6 +2439,8 @@
             }
           ];
 
+          const scopeVisualSyncHandlers = [];
+
           options.forEach((option, index) => {
             const label = document.createElement('label');
             label.className = 'group block cursor-pointer';
@@ -2449,18 +2451,41 @@
             input.value = option.value;
             input.className = 'peer sr-only';
             input.checked = index === 0;
-            input.addEventListener('change', () => {
-              if (input.checked) scopeValue = option.value;
-            });
 
             const card = document.createElement('span');
-            card.className = 'block rounded-[22px] border border-slate-200 bg-white px-4 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-red-300 group-hover:shadow-md peer-checked:border-red-400 peer-checked:bg-red-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-red-500 dark:peer-checked:border-red-500 dark:peer-checked:bg-red-950/30';
-            card.innerHTML = `<span class="flex items-start justify-between gap-3"><span><span class="block text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(option.title)}</span><span class="mt-1 block text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">${escapeHtml(option.description)}</span></span><span class="mt-0.5 inline-flex h-6 w-6 flex-none items-center justify-center rounded-full border border-slate-300 bg-white text-transparent peer-checked:border-red-500 peer-checked:bg-red-600 peer-checked:text-white dark:border-slate-600 dark:bg-slate-950 dark:peer-checked:border-red-500 dark:peer-checked:bg-red-500">✓</span></span>`;
+            card.className = 'block rounded-[22px] border border-slate-200 bg-white px-4 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-red-300 group-hover:shadow-md dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-red-500';
+            card.innerHTML = `<span class="flex items-start justify-between gap-3"><span><span class="block text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(option.title)}</span><span class="mt-1 block text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">${escapeHtml(option.description)}</span></span><span data-delete-scope-indicator class="mt-0.5 inline-flex h-6 w-6 flex-none items-center justify-center rounded-full border border-slate-300 bg-white text-transparent transition-colors dark:border-slate-600 dark:bg-slate-950">✓</span></span>`;
+
+            const indicator = card.querySelector('[data-delete-scope-indicator]');
+            const syncVisualState = () => {
+              const isChecked = !!input.checked;
+              if (isChecked) {
+                card.classList.add('border-red-400', 'bg-red-50', 'shadow-lg', 'dark:border-red-500', 'dark:bg-red-950/30');
+                if (indicator instanceof HTMLElement) {
+                  indicator.classList.add('border-red-500', 'bg-red-600', 'text-white', 'dark:border-red-500', 'dark:bg-red-500');
+                  indicator.classList.remove('text-transparent');
+                }
+                scopeValue = option.value;
+              } else {
+                card.classList.remove('border-red-400', 'bg-red-50', 'shadow-lg', 'dark:border-red-500', 'dark:bg-red-950/30');
+                if (indicator instanceof HTMLElement) {
+                  indicator.classList.remove('border-red-500', 'bg-red-600', 'text-white', 'dark:border-red-500', 'dark:bg-red-500');
+                  indicator.classList.add('text-transparent');
+                }
+              }
+            };
+
+            scopeVisualSyncHandlers.push(syncVisualState);
+            input.addEventListener('change', () => {
+              scopeVisualSyncHandlers.forEach((handler) => handler());
+            });
 
             label.appendChild(input);
             label.appendChild(card);
             scopeGroup.appendChild(label);
           });
+
+          scopeVisualSyncHandlers.forEach((handler) => handler());
 
           wrapper.appendChild(scopeGroup);
         }

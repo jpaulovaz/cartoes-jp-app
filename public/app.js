@@ -404,10 +404,45 @@
 })();
 
 (function () {
+  const MANUAL_PURCHASE_LAST_CARD_KEY = 'op:last-manual-card-id';
+
   function getLocalTodayISO() {
     const now = new Date();
     const local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
     return local.toISOString().slice(0, 10);
+  }
+
+  function readLastManualCardId() {
+    try {
+      return window.localStorage.getItem(MANUAL_PURCHASE_LAST_CARD_KEY) || '';
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function writeLastManualCardId(cardId) {
+    const normalized = String(cardId || '').trim();
+    if (!normalized) return;
+    try {
+      window.localStorage.setItem(MANUAL_PURCHASE_LAST_CARD_KEY, normalized);
+    } catch (error) {
+      // Sem drama: se o navegador travar o storage, o formulário segue normal.
+    }
+  }
+
+  function restoreLastManualCard(form) {
+    if (!(form instanceof HTMLFormElement)) return;
+
+    const cardSelect = form.querySelector('[data-manual-card-select]');
+    if (!(cardSelect instanceof HTMLSelectElement) || !cardSelect.options.length) return;
+
+    const lastCardId = readLastManualCardId();
+    if (!lastCardId) return;
+
+    const matchingOption = Array.from(cardSelect.options).find((option) => String(option.value || '') === lastCardId);
+    if (!matchingOption) return;
+
+    cardSelect.value = lastCardId;
   }
 
   function focusManualAmount(input) {
@@ -442,6 +477,8 @@
       dateInput.value = getLocalTodayISO();
     }
 
+    restoreLastManualCard(form);
+
     if (typeof form.__opRefreshFirstDue === 'function') {
       form.__opRefreshFirstDue();
     }
@@ -460,6 +497,7 @@
 
     const form = modal.querySelector('[data-auto-first-due-form]');
     const amountInput = modal.querySelector('[data-manual-amount-input]');
+    const cardSelect = modal.querySelector('[data-manual-card-select]');
     const openButtons = Array.from(document.querySelectorAll('[data-manual-modal-open]')).filter((element) => element instanceof HTMLElement);
     const closeButtons = Array.from(modal.querySelectorAll('[data-manual-modal-close]')).filter((element) => element instanceof HTMLElement);
 
@@ -499,8 +537,17 @@
       }
     });
 
+    if (cardSelect instanceof HTMLSelectElement) {
+      cardSelect.addEventListener('change', () => {
+        writeLastManualCardId(cardSelect.value);
+      });
+    }
+
     if (form instanceof HTMLFormElement) {
       form.addEventListener('submit', () => {
+        if (cardSelect instanceof HTMLSelectElement) {
+          writeLastManualCardId(cardSelect.value);
+        }
         modal.setAttribute('aria-hidden', 'true');
       });
     }

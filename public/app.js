@@ -34,23 +34,6 @@
       throw error;
     }
 
-    if (isSameOriginRequest(input) && response && response.ok) {
-      try {
-        const rawUrl = typeof input === 'string'
-          ? input
-          : (input && typeof input.url === 'string' ? input.url : window.location.href);
-        const targetUrl = new URL(rawUrl, window.location.href);
-        window.dispatchEvent(new CustomEvent('acerttapay:sync-success', {
-          detail: {
-            path: `${targetUrl.pathname}${targetUrl.search}${targetUrl.hash}`,
-            status: response.status
-          }
-        }));
-      } catch (error) {
-        // Se não der para anunciar a sync, o fetch segue normal.
-      }
-    }
-
     return response;
   };
 })();
@@ -422,6 +405,11 @@
 
 (function () {
   const MANUAL_PURCHASE_LAST_CARD_KEY = 'op:last-manual-card-id';
+  const MANUAL_PURCHASE_DRAFT_DB_NAME = 'acerttapay-local-drafts-v1';
+  const MANUAL_PURCHASE_DRAFT_STORE_NAME = 'drafts';
+  const MANUAL_PURCHASE_DRAFT_KEY = 'manual_purchase';
+  const MANUAL_PURCHASE_DRAFT_SUMMARY_KEY = 'acerttapay:offline-draft-summary';
+  const MANUAL_PURCHASE_DRAFT_PURGE_KEY = 'acerttapay:purge-local-drafts';
 
   function getLocalTodayISO() {
     const now = new Date();
@@ -429,22 +417,38 @@
     return local.toISOString().slice(0, 10);
   }
 
-  function readLastManualCardId() {
+  function safeLocalStorageGet(key) {
     try {
-      return window.localStorage.getItem(MANUAL_PURCHASE_LAST_CARD_KEY) || '';
+      return window.localStorage.getItem(key);
     } catch (error) {
-      return '';
+      return null;
     }
+  }
+
+  function safeLocalStorageSet(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (error) {
+      // Sem drama: se o navegador travar o storage, o app segue normal.
+    }
+  }
+
+  function safeLocalStorageRemove(key) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch (error) {
+      // noop
+    }
+  }
+
+  function readLastManualCardId() {
+    return safeLocalStorageGet(MANUAL_PURCHASE_LAST_CARD_KEY) || '';
   }
 
   function writeLastManualCardId(cardId) {
     const normalized = String(cardId || '').trim();
     if (!normalized) return;
-    try {
-      window.localStorage.setItem(MANUAL_PURCHASE_LAST_CARD_KEY, normalized);
-    } catch (error) {
-      // Sem drama: se o navegador travar o storage, o formulário segue normal.
-    }
+    safeLocalStorageSet(MANUAL_PURCHASE_LAST_CARD_KEY, normalized);
   }
 
   function restoreLastManualCard(form) {
@@ -486,7 +490,7 @@
   function syncManualPurchaseDefaults(modal) {
     if (!(modal instanceof HTMLElement)) return;
 
-    const form = modal.querySelector('[data-auto-first-due-form]');
+    const form = modal.querySelector('[data-local-draft-flow="manual_purchase"]');
     if (!(form instanceof HTMLFormElement)) return;
 
     const dateInput = form.querySelector('[data-manual-date-input]');
@@ -508,21 +512,435 @@
     return modal;
   }
 
+  function getDraftDbPromise() {
+    if (window.__opManualPurchaseDraftDbPromise) {
+      return window.__opManualPurchaseDraftDbPromise;
+    }
+
+    if (!('indexedDB' in window)) {
+      return Promise.reject(new Error('IndexedDB indisponível neste navegador.'));
+    }
+
+    window.__opManualPurchaseDraftDbPromise = new Promise((resolve, reject) => {
+      const request = window.indexedDB.open(MANUAL_PURCHASE_DRAFT_DB_NAME, 1);
+
+      request.onerror = () => {
+        reject(request.error || new Error('Não consegui abrir a base local de rascunhos.'));
+      };
+
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(MANUAL_PURCHASE_DRAFT_STORE_NAME)) {
+          db.createObjectStore(MANUAL_PURCHASE_DRAFT_STORE_NAME, { keyPath: 'key' });
+        }
+      };
+
+      request.onsuccess = () => {
+        resolve(request.result);
+      };
+    }).catch((error) => {
+      delete window.__opManualPurchaseDraftDbPromise;
+      throw error;
+    });
+
+    return window.__opManualPurchaseDraftDbPromise;
+  }
+
+  async function withDraftStore(mode, callback) {
+    const db = await getDraftDbPromise();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(MANUAL_PURCHASE_DRAFT_STORE_NAME, mode);
+      const store = transaction.objectStore(MANUAL_PURCHASE_DRAFT_STORE_NAME);
+
+      let settled = false;
+      function finish(handler) {
+        return (value) => {
+          if (settled) return;
+          settled = true;
+          handler(value);
+        };
+      }
+
+      transaction.oncomplete = finish(resolve);
+      transaction.onabort = finish(() => reject(transaction.error || new Error('A operação local foi interrompida.')));
+      transaction.onerror = finish(() => reject(transaction.error || new Error('A operação local falhou.')));
+
+      try {
+        callback(store, transaction);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  async function getManualPurchaseDraftRecord() {
+    try {
+      const db = await getDraftDbPromise();
+      return await new Promise((resolve, reject) => {
+        const transaction = db.transaction(MANUAL_PURCHASE_DRAFT_STORE_NAME, 'readonly');
+        const store = transaction.objectStore(MANUAL_PURCHASE_DRAFT_STORE_NAME);
+        const request = store.get(MANUAL_PURCHASE_DRAFT_KEY);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error || new Error('Não consegui ler o rascunho local.'));
+      });
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function syncManualPurchaseDraftSummary(summary) {
+    if (!summary) {
+      safeLocalStorageRemove(MANUAL_PURCHASE_DRAFT_SUMMARY_KEY);
+      return;
+    }
+
+    safeLocalStorageSet(MANUAL_PURCHASE_DRAFT_SUMMARY_KEY, JSON.stringify(summary));
+  }
+
+  async function saveManualPurchaseDraftRecord(record) {
+    try {
+      await withDraftStore('readwrite', (store) => {
+        store.put(record);
+      });
+      syncManualPurchaseDraftSummary({
+        flow: 'manual_purchase',
+        updatedAt: record.updatedAt,
+        description: record.payload?.description || '',
+        amount: record.payload?.amount || '',
+        sourceLabel: record.payload?.sourceLabel || '',
+        sourcePath: record.payload?.sourcePath || ''
+      });
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async function clearManualPurchaseDraftRecord() {
+    try {
+      await withDraftStore('readwrite', (store) => {
+        store.delete(MANUAL_PURCHASE_DRAFT_KEY);
+      });
+    } catch (error) {
+      // noop
+    }
+    syncManualPurchaseDraftSummary(null);
+  }
+
+  async function clearAllLocalDraftRecords() {
+    try {
+      await withDraftStore('readwrite', (store) => {
+        store.clear();
+      });
+    } catch (error) {
+      // noop
+    }
+    syncManualPurchaseDraftSummary(null);
+  }
+
+  function requestLocalDraftPurge() {
+    safeLocalStorageSet(MANUAL_PURCHASE_DRAFT_PURGE_KEY, '1');
+    syncManualPurchaseDraftSummary(null);
+  }
+
+  async function consumeLocalDraftPurgeRequest() {
+    if (safeLocalStorageGet(MANUAL_PURCHASE_DRAFT_PURGE_KEY) !== '1') return;
+    safeLocalStorageRemove(MANUAL_PURCHASE_DRAFT_PURGE_KEY);
+    await clearAllLocalDraftRecords();
+  }
+
+  function formatDraftTimestamp(isoValue) {
+    if (!isoValue) return '';
+    const parsed = new Date(isoValue);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short'
+    }).format(parsed);
+  }
+
+  function getCurrentRouteLabel() {
+    const path = String(window.location.pathname || '/');
+    if (path === '/' || path === '/geral') return 'Meu Radar';
+    if (/^\/month\//.test(path) || path === '/month') return 'Ver mês';
+    if (/^\/detalhamento\//.test(path) || path === '/detalhamento') return 'Detalhamento';
+    return document.title || 'app';
+  }
+
+  function buildManualPurchaseDraftPayload(form) {
+    const readValue = (selector) => {
+      const field = form.querySelector(selector);
+      if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) {
+        return String(field.value || '').trim();
+      }
+      return '';
+    };
+
+    const readChecked = (selector) => {
+      const field = form.querySelector(selector);
+      return field instanceof HTMLInputElement ? field.checked : false;
+    };
+
+    return {
+      date: readValue('input[name="date"]'),
+      card_id: readValue('select[name="card_id"]'),
+      amount: readValue('input[name="amount"]'),
+      installments: readValue('input[name="installments"]') || '1',
+      first_due: readValue('input[name="first_due"]'),
+      description: readValue('input[name="description"]'),
+      purchase_category_id: readValue('select[name="purchase_category_id"]'),
+      purchase_category_custom: readValue('input[name="purchase_category_custom"]'),
+      assign_to_owner: readChecked('input[name="assign_to_owner"]'),
+      is_recurring: readChecked('input[name="is_recurring"]'),
+      sourcePath: `${window.location.pathname || '/'}${window.location.search || ''}${window.location.hash || ''}`,
+      sourceLabel: getCurrentRouteLabel()
+    };
+  }
+
+  function hasMeaningfulManualPurchaseDraft(payload) {
+    if (!payload || typeof payload !== 'object') return false;
+    if (String(payload.amount || '').trim()) return true;
+    if (String(payload.description || '').trim()) return true;
+    if (String(payload.purchase_category_id || '').trim()) return true;
+    if (String(payload.purchase_category_custom || '').trim()) return true;
+    if (payload.assign_to_owner || payload.is_recurring) return true;
+    if (String(payload.installments || '1').trim() !== '1') return true;
+    const today = getLocalTodayISO();
+    if (String(payload.date || '').trim() && String(payload.date).trim() !== today) return true;
+    return false;
+  }
+
+  async function persistManualPurchaseDraftFromForm(form) {
+    if (!(form instanceof HTMLFormElement)) return;
+    const payload = buildManualPurchaseDraftPayload(form);
+
+    if (!hasMeaningfulManualPurchaseDraft(payload)) {
+      await clearManualPurchaseDraftRecord();
+      return;
+    }
+
+    await saveManualPurchaseDraftRecord({
+      key: MANUAL_PURCHASE_DRAFT_KEY,
+      flow: 'manual_purchase',
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      payload
+    });
+  }
+
+  function restoreSubmitButtonsAfterCanceledSubmit(form) {
+    if (!(form instanceof HTMLFormElement)) return;
+
+    const submitButtons = Array.from(form.querySelectorAll('button[type="submit"], input[type="submit"]'));
+    submitButtons.forEach((button) => {
+      if (button instanceof HTMLButtonElement) {
+        if (button.dataset.originalHtml) {
+          button.innerHTML = button.dataset.originalHtml;
+          delete button.dataset.originalHtml;
+        }
+        button.disabled = false;
+        button.classList.remove('op-button-loading');
+      } else if (button instanceof HTMLInputElement) {
+        if (button.dataset.originalValue) {
+          button.value = button.dataset.originalValue;
+          delete button.dataset.originalValue;
+        }
+        button.disabled = false;
+        button.classList.remove('op-button-loading');
+      }
+    });
+  }
+
+  function applyManualPurchaseDraftToForm(form, payload) {
+    if (!(form instanceof HTMLFormElement) || !payload || typeof payload !== 'object') return;
+
+    const setInputValue = (selector, value) => {
+      const field = form.querySelector(selector);
+      if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) {
+        field.value = String(value || '');
+      }
+    };
+
+    const setCheckboxValue = (selector, checked) => {
+      const field = form.querySelector(selector);
+      if (field instanceof HTMLInputElement) {
+        field.checked = !!checked;
+      }
+    };
+
+    const cardSelect = form.querySelector('select[name="card_id"]');
+    if (cardSelect instanceof HTMLSelectElement) {
+      const nextCardId = String(payload.card_id || '').trim();
+      if (nextCardId && Array.from(cardSelect.options).some((option) => String(option.value || '') === nextCardId)) {
+        cardSelect.value = nextCardId;
+      }
+    }
+
+    setInputValue('input[name="date"]', payload.date || '');
+    setInputValue('input[name="amount"]', payload.amount || '');
+    setInputValue('input[name="installments"]', payload.installments || '1');
+    setInputValue('input[name="description"]', payload.description || '');
+
+    const categorySelect = form.querySelector('select[name="purchase_category_id"]');
+    if (categorySelect instanceof HTMLSelectElement) {
+      const rawCategoryValue = String(payload.purchase_category_id || '').trim();
+      const wantsCustom = rawCategoryValue === '__new__' || (!!payload.purchase_category_custom && !rawCategoryValue);
+      const nextValue = wantsCustom
+        ? '__new__'
+        : (Array.from(categorySelect.options).some((option) => String(option.value || '') === rawCategoryValue) ? rawCategoryValue : '');
+      categorySelect.value = nextValue;
+      categorySelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    const customCategoryInput = form.querySelector('input[name="purchase_category_custom"]');
+    if (customCategoryInput instanceof HTMLInputElement) {
+      customCategoryInput.value = String(payload.purchase_category_custom || '');
+    }
+
+    setCheckboxValue('input[name="assign_to_owner"]', payload.assign_to_owner);
+    setCheckboxValue('input[name="is_recurring"]', payload.is_recurring);
+
+    const recurringToggle = form.querySelector('[data-recurring-toggle]');
+    if (recurringToggle instanceof HTMLInputElement) {
+      recurringToggle.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    if (payload.first_due) {
+      setInputValue('input[name="first_due"]', payload.first_due);
+    } else if (typeof form.__opRefreshFirstDue === 'function') {
+      form.__opRefreshFirstDue();
+    }
+  }
+
+  function resetManualPurchaseForm(modal, form) {
+    if (!(modal instanceof HTMLElement) || !(form instanceof HTMLFormElement)) return;
+    form.reset();
+    syncManualPurchaseDefaults(modal);
+
+    const categorySelect = form.querySelector('select[name="purchase_category_id"]');
+    if (categorySelect instanceof HTMLSelectElement) {
+      categorySelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    const recurringToggle = form.querySelector('[data-recurring-toggle]');
+    if (recurringToggle instanceof HTMLInputElement) {
+      recurringToggle.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    if (typeof form.__opRefreshFirstDue === 'function') {
+      form.__opRefreshFirstDue();
+    }
+  }
+
+  function formAlreadyHasMeaningfulDraftData(form) {
+    if (!(form instanceof HTMLFormElement)) return false;
+    return hasMeaningfulManualPurchaseDraft(buildManualPurchaseDraftPayload(form));
+  }
+
+  async function maybeRestoreManualPurchaseDraft(modal, form) {
+    if (!(modal instanceof HTMLElement) || !(form instanceof HTMLFormElement)) return;
+    if (form.dataset.manualDraftPromptOpen === '1') return;
+    if (formAlreadyHasMeaningfulDraftData(form)) return;
+
+    const draftRecord = await getManualPurchaseDraftRecord();
+    if (!draftRecord || !draftRecord.payload || !hasMeaningfulManualPurchaseDraft(draftRecord.payload)) return;
+
+    form.dataset.manualDraftPromptOpen = '1';
+
+    const updatedLabel = formatDraftTimestamp(draftRecord.updatedAt || draftRecord.payload.capturedAt);
+    const sourceLabel = draftRecord.payload.sourceLabel ? `Ele veio de ${draftRecord.payload.sourceLabel}.` : '';
+    const message = [
+      updatedLabel ? `Tem uma compra guardada neste aparelho desde ${updatedLabel}.` : 'Tem uma compra guardada neste aparelho.',
+      sourceLabel,
+      'Nada foi enviado para o app ainda. Você pode continuar de onde parou ou começar do zero.'
+    ].filter(Boolean).join('\n\n');
+
+    const choice = await window.showActionDialog({
+      title: 'Quer retomar esse rascunho?',
+      message,
+      options: [
+        { label: 'Continuar daqui', value: 'resume', tone: 'primary' },
+        { label: 'Agora não', value: 'later', tone: 'secondary' },
+        { label: 'Descartar rascunho', value: 'discard', tone: 'cancel' }
+      ]
+    });
+
+    if (choice === 'resume') {
+      applyManualPurchaseDraftToForm(form, draftRecord.payload);
+    } else if (choice === 'discard') {
+      await clearManualPurchaseDraftRecord();
+      resetManualPurchaseForm(modal, form);
+    }
+  }
+
+  function bindManualPurchaseDraftLifecycle(modal, form) {
+    if (!(modal instanceof HTMLElement) || !(form instanceof HTMLFormElement) || form.dataset.manualDraftBound === '1') return;
+    form.dataset.manualDraftBound = '1';
+
+    let persistTimer = null;
+    const schedulePersist = () => {
+      window.clearTimeout(persistTimer);
+      persistTimer = window.setTimeout(() => {
+        persistManualPurchaseDraftFromForm(form);
+      }, 180);
+    };
+
+    form.addEventListener('input', schedulePersist, true);
+    form.addEventListener('change', schedulePersist, true);
+    window.addEventListener('pagehide', () => {
+      persistManualPurchaseDraftFromForm(form);
+    });
+
+    form.addEventListener('submit', async (event) => {
+      const cardSelect = form.querySelector('[data-manual-card-select]');
+      if (cardSelect instanceof HTMLSelectElement) {
+        writeLastManualCardId(cardSelect.value);
+      }
+
+      await persistManualPurchaseDraftFromForm(form);
+
+      if (navigator.onLine) {
+        return;
+      }
+
+      event.preventDefault();
+      restoreSubmitButtonsAfterCanceledSubmit(form);
+      await window.showActionDialog({
+        title: 'Sem internet agora',
+        message: 'Guardamos essa compra como rascunho só neste aparelho. Quando a conexão voltar, é só abrir Anotar compra de novo para revisar e enviar com calma.',
+        options: [
+          { label: 'Tudo certo', value: 'ok', tone: 'primary' }
+        ]
+      });
+    });
+  }
+
+  function bindManualPurchaseDraftCleanup() {
+    const requestPurge = () => {
+      requestLocalDraftPurge();
+    };
+
+    document.querySelectorAll('a[href="/logout"]').forEach((link) => {
+      link.addEventListener('click', requestPurge, { capture: true });
+    });
+  }
+
   function setupManualPurchaseModal() {
     const modal = moveManualPurchaseModalToBody(document.querySelector('[data-manual-modal]'));
     if (!(modal instanceof HTMLElement)) return;
 
-    const form = modal.querySelector('[data-auto-first-due-form]');
+    const form = modal.querySelector('[data-local-draft-flow="manual_purchase"]');
     const amountInput = modal.querySelector('[data-manual-amount-input]');
     const cardSelect = modal.querySelector('[data-manual-card-select]');
     const openButtons = Array.from(document.querySelectorAll('[data-manual-modal-open]')).filter((element) => element instanceof HTMLElement);
     const closeButtons = Array.from(modal.querySelectorAll('[data-manual-modal-close]')).filter((element) => element instanceof HTMLElement);
 
-    const openModal = () => {
+    const openModal = async () => {
       document.body.classList.add('op-manual-modal-open');
       modal.classList.remove('hidden');
       modal.setAttribute('aria-hidden', 'false');
       syncManualPurchaseDefaults(modal);
+      await maybeRestoreManualPurchaseDraft(modal, form);
       if (amountInput instanceof HTMLInputElement) {
         focusManualAmount(amountInput);
       }
@@ -532,10 +950,15 @@
       modal.classList.add('hidden');
       modal.setAttribute('aria-hidden', 'true');
       document.body.classList.remove('op-manual-modal-open');
+      if (form instanceof HTMLFormElement) {
+        delete form.dataset.manualDraftPromptOpen;
+      }
     };
 
     openButtons.forEach((button) => {
-      button.addEventListener('click', openModal);
+      button.addEventListener('click', () => {
+        openModal();
+      });
     });
 
     closeButtons.forEach((button) => {
@@ -560,19 +983,15 @@
       });
     }
 
-    if (form instanceof HTMLFormElement) {
-      form.addEventListener('submit', () => {
-        if (cardSelect instanceof HTMLSelectElement) {
-          writeLastManualCardId(cardSelect.value);
-        }
-        modal.setAttribute('aria-hidden', 'true');
-      });
-    }
-
+    bindManualPurchaseDraftLifecycle(modal, form);
     syncManualPurchaseDefaults(modal);
   }
 
-  document.addEventListener('DOMContentLoaded', setupManualPurchaseModal);
+  document.addEventListener('DOMContentLoaded', async () => {
+    await consumeLocalDraftPurgeRequest();
+    bindManualPurchaseDraftCleanup();
+    setupManualPurchaseModal();
+  });
 })();
 
 (function () {
@@ -2342,185 +2761,32 @@
 
 (function () {
   const LAST_VISIT_STORAGE_KEY = 'acerttapay:last-visit';
-  const OFFLINE_SNAPSHOT_STORAGE_KEY = 'acerttapay:offline-snapshot';
-  const LAST_SYNC_STORAGE_KEY = 'acerttapay:last-sync-at';
   const STATUS_STYLE_ID = 'acerttapay-network-pill-style';
-  const SNAPSHOT_CAPTURE_DELAY_MS = 180;
-
-  function safeStorageSet(key, value) {
-    try {
-      localStorage.setItem(key, value);
-    } catch (error) {
-      // Se o navegador não topar guardar isso agora, seguimos em frente.
-    }
-  }
-
-  function safeStorageRemove(key) {
-    try {
-      localStorage.removeItem(key);
-    } catch (error) {
-      // Sem drama.
-    }
-  }
-
-  function safeText(value) {
-    if (value == null) return '';
-    return String(value).replace(/\s+/g, ' ').trim();
-  }
-
-  function pathForDisplay(path) {
-    const safePath = safeText(path);
-    if (!safePath) return '';
-    if (safePath === '/geral') return 'Meu Radar';
-    if (safePath === '/shared-debts') return 'Central de acertos';
-    if (safePath === '/shared-debts/archive') return 'Arquivo de acertos';
-    if (safePath.startsWith('/summary/')) return 'Resumo da ópera';
-    if (safePath.startsWith('/analytics/')) return 'Análises';
-    if (safePath.startsWith('/month/')) return 'Compras do mês';
-    if (safePath.startsWith('/txn/')) return 'Detalhe da compra';
-    return safePath;
-  }
-
-  function getCurrentPath() {
-    return `${window.location.pathname || '/'}${window.location.search || ''}${window.location.hash || ''}`;
-  }
-
-  function shouldCaptureOfflineMemory() {
-    if (window.location.pathname === '/offline.html') return false;
-    const path = window.location.pathname || '/';
-    if (/^\/(login|setup)(?:$|\/|\?)/i.test(path)) return false;
-    if (/^\/privacy-policy(?:$|\/|\?)/i.test(path)) return false;
-    if (/^\/docs(?:$|\/|\?)/i.test(path)) return false;
-    return !!document.querySelector('[data-offline-snapshot], .op-screen');
-  }
-
-  function collectMetricsFromDataset(dataset) {
-    const metrics = [
-      { label: safeText(dataset.snapshotPrimaryLabel), value: safeText(dataset.snapshotPrimaryValue) },
-      { label: safeText(dataset.snapshotSecondaryLabel), value: safeText(dataset.snapshotSecondaryValue) },
-      { label: safeText(dataset.snapshotTertiaryLabel), value: safeText(dataset.snapshotTertiaryValue) }
-    ];
-    return metrics.filter((metric) => metric.label && metric.value);
-  }
-
-  function buildGenericSnapshot() {
-    const pageTitle = safeText(document.title).replace(/^AcerttaPay\s*\|\s*/i, '') || 'Seu resumo salvo';
-    const heroTitle = safeText(document.querySelector('.op-page-hero__title, h1')?.textContent) || pageTitle;
-    const heroSummary = safeText(document.querySelector('.op-page-hero__subtitle, main p, p')?.textContent) || 'A última tela carregada com sucesso continua guardada por aqui.';
-    const path = getCurrentPath();
-    return {
-      page: pathForDisplay(path) || pageTitle,
-      title: heroTitle,
-      summary: heroSummary,
-      metrics: [
-        { label: 'Página', value: pathForDisplay(path) || path },
-        { label: 'Última rota', value: path },
-        { label: 'Status', value: navigator.onLine ? 'Tudo sincronizado agora há pouco' : 'Resumo guardado no aparelho' }
-      ],
-      ctaLabel: 'Voltar para esse ponto',
-      ctaHref: path
-    };
-  }
-
-  function readExplicitSnapshot() {
-    const node = document.querySelector('[data-offline-snapshot]');
-    if (!(node instanceof HTMLElement)) return null;
-    const dataset = node.dataset || {};
-    const generic = buildGenericSnapshot();
-    const metrics = collectMetricsFromDataset(dataset);
-    return {
-      page: safeText(dataset.snapshotPage) || generic.page,
-      title: safeText(dataset.snapshotTitle) || generic.title,
-      summary: safeText(dataset.snapshotSummary) || generic.summary,
-      metrics: metrics.length ? metrics : generic.metrics,
-      ctaLabel: safeText(dataset.snapshotCtaLabel) || 'Voltar para esse ponto',
-      ctaHref: safeText(dataset.snapshotCtaHref) || getCurrentPath()
-    };
-  }
 
   function rememberLastVisit() {
     if (window.location.pathname === '/offline.html') return;
 
     const payload = {
       title: document.title || 'AcerttaPay',
-      label: pathForDisplay(window.location.pathname || '/'),
-      path: getCurrentPath(),
+      path: `${window.location.pathname}${window.location.search}${window.location.hash}`,
       timestamp: new Date().toISOString()
     };
 
-    safeStorageSet(LAST_VISIT_STORAGE_KEY, JSON.stringify(payload));
-  }
-
-  function rememberOfflineSnapshot() {
-    if (!shouldCaptureOfflineMemory()) return;
-    const capturedAt = new Date().toISOString();
-    const snapshot = readExplicitSnapshot() || buildGenericSnapshot();
-
-    const payload = {
-      version: 1,
-      path: getCurrentPath(),
-      routeLabel: snapshot.page || pathForDisplay(window.location.pathname || '/'),
-      title: snapshot.title || document.title || 'Resumo salvo',
-      summary: snapshot.summary || '',
-      metrics: Array.isArray(snapshot.metrics) ? snapshot.metrics.slice(0, 3) : [],
-      ctaLabel: snapshot.ctaLabel || 'Voltar para esse ponto',
-      ctaHref: snapshot.ctaHref || getCurrentPath(),
-      updatedAt: capturedAt
-    };
-
-    safeStorageSet(OFFLINE_SNAPSHOT_STORAGE_KEY, JSON.stringify(payload));
-    safeStorageSet(LAST_SYNC_STORAGE_KEY, capturedAt);
-  }
-
-  function scheduleOfflineSnapshot() {
-    window.clearTimeout(scheduleOfflineSnapshot._timer);
-    scheduleOfflineSnapshot._timer = window.setTimeout(() => {
-      rememberLastVisit();
-      rememberOfflineSnapshot();
-    }, SNAPSHOT_CAPTURE_DELAY_MS);
-  }
-
-  function clearOfflineMemory() {
-    safeStorageRemove(LAST_VISIT_STORAGE_KEY);
-    safeStorageRemove(OFFLINE_SNAPSHOT_STORAGE_KEY);
-    safeStorageRemove(LAST_SYNC_STORAGE_KEY);
-  }
-
-  function isSensitiveExitPath(rawPath) {
-    const safePath = safeText(rawPath);
-    if (!safePath) return false;
-    return /^\/logout(?:$|\/|\?)/i.test(safePath) || /^\/lock\/engage(?:$|\/|\?)/i.test(safePath);
-  }
-
-  function bindSensitiveExitCleanup() {
-    document.addEventListener('click', (event) => {
-      const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
-      if (!(link instanceof HTMLAnchorElement)) return;
-      if (isSensitiveExitPath(link.getAttribute('href') || '')) {
-        clearOfflineMemory();
-      }
-    }, true);
-
-    document.addEventListener('submit', (event) => {
-      const form = event.target;
-      if (!(form instanceof HTMLFormElement)) return;
-      if (isSensitiveExitPath(form.getAttribute('action') || '')) {
-        clearOfflineMemory();
-      }
-    }, true);
+    try {
+      localStorage.setItem(LAST_VISIT_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+      // Sem drama: se o navegador bloquear storage, o app segue o baile.
+    }
   }
 
   function initLastVisitMemory() {
     rememberLastVisit();
-    rememberOfflineSnapshot();
-    window.addEventListener('pageshow', scheduleOfflineSnapshot);
+    window.addEventListener('pageshow', rememberLastVisit);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        scheduleOfflineSnapshot();
+        rememberLastVisit();
       }
     });
-    window.addEventListener('acerttapay:sync-success', scheduleOfflineSnapshot);
-    bindSensitiveExitCleanup();
   }
 
   function injectStatusStyles() {
@@ -2618,12 +2884,12 @@
 
     function handleOffline() {
       hasShownOffline = true;
-      show('Sem internet. Guardamos o último resumo e seguramos as pontas até a conexão voltar.', 'offline');
+      show('Sem internet. Entramos no modo sobrevivência até a conexão voltar.', 'offline');
     }
 
     function handleOnline() {
       if (!hasShownOffline) return;
-      show('Conexão de volta. Bora retomar de onde parou.', 'online', 2600);
+      show('Conexão de volta. Bora continuar de onde parou.', 'online', 2600);
     }
 
     if (!navigator.onLine) {
@@ -2644,6 +2910,7 @@
     initConnectivityFeedback();
   }
 })();
+
 
 (function () {
   function sortPurchaseCategoryOptions(select) {

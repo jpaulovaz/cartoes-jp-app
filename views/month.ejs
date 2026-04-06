@@ -34,9 +34,6 @@
   const sortedActivePurchaseCategories = sortByFriendlyName(activePurchaseCategories || []);
   const sortedPurchaseCategories = sortByFriendlyName(purchaseCategories || []);
   const sortedPeopleForSelection = sortPeopleForSelection(people || []);
-  const monthTotalCents = (txns || []).reduce((acc, txn) => acc + Number(txn?.amount_cents || 0), 0);
-  const monthAssignedCount = (txns || []).filter((txn) => Number(txn?.alloc_count || 0) > 0).length;
-  const monthDraftQueueSummary = draftQueueSummaryForMonth || { queueCount: 0, itemCount: 0, totalCents: 0 };
 
   function getParticipantChipLabel(person, totalParticipants) {
     const label = getParticipantDisplayName(person);
@@ -48,19 +45,6 @@
 %>
 
   <div class="op-screen op-screen--month max-w-7xl mx-auto space-y-6 pb-24">
-    <div hidden data-offline-snapshot
-      data-snapshot-page="Compras do mês"
-      data-snapshot-title="Compras do mês - <%= String(month).padStart(2,'0') %>/<%= year %>"
-      data-snapshot-summary="<%= `${txns ? txns.length : 0} item(ns) guardados neste mês, somando ${formatBRLFromCents(monthTotalCents)}.` %>"
-      data-snapshot-primary-label="Status"
-      data-snapshot-primary-value="<%= isClosed ? 'Mês fechado' : 'Mês em edição' %>"
-      data-snapshot-secondary-label="Total anotado"
-      data-snapshot-secondary-value="<%= formatBRLFromCents(monthTotalCents) %>"
-      data-snapshot-tertiary-label="Divisões prontas"
-      data-snapshot-tertiary-value="<%= `${monthAssignedCount} ${monthAssignedCount === 1 ? 'item dividido' : 'itens divididos'}` %>"
-      data-snapshot-cta-label="Voltar para este mês"
-      data-snapshot-cta-href="/month/<%= year %>/<%= month %>"></div>
-
     <section class="op-page-hero op-fade-up">
       <div>
         <span class="op-page-hero__eyebrow">Gestão do mês</span>
@@ -131,6 +115,7 @@
       </div>
     <% } %>
 
+    <% const monthDraftQueueSummary = draftQueueSummaryForMonth || { queueCount: 0, itemCount: 0, totalCents: 0 }; %>
     <% if (monthDraftQueueSummary.queueCount > 0) { %>
       <div class="op-inline-alert op-inline-alert--info">
         <div class="op-inline-alert__icon">📤</div>
@@ -227,7 +212,7 @@
             class="op-icon-btn" aria-label="Fechar janela">✕</button>
         </div>
 
-        <div class="op-manual-modal__scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6"><form action="/txn/manual" method="POST" class="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0" data-auto-first-due-form>
+        <div class="op-manual-modal__scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6"><form action="/txn/manual" method="POST" class="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0" data-auto-first-due-form data-local-draft-flow="manual_purchase">
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data da Compra</label>

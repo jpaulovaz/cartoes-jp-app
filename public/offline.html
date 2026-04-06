@@ -3,26 +3,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AcerttaPay | Offline 2.0</title>
+  <title>AcerttaPay | Sem internet</title>
   <meta name="theme-color" content="#020617">
   <style>
     :root {
       color-scheme: dark;
       --bg-1: #020617;
       --bg-2: #0f172a;
-      --bg-3: #111c34;
-      --card: rgba(15, 23, 42, 0.86);
-      --card-soft: rgba(15, 23, 42, 0.72);
-      --line: rgba(148, 163, 184, 0.18);
+      --card: rgba(15, 23, 42, 0.84);
+      --line: rgba(148, 163, 184, 0.16);
       --text: #e2e8f0;
       --muted: #94a3b8;
       --accent: #38bdf8;
+      --accent-2: #22c55e;
       --warning: #f59e0b;
       --shadow: 0 30px 80px rgba(2, 6, 23, 0.48);
     }
 
     * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
 
     body {
       margin: 0;
@@ -30,15 +28,16 @@
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--text);
       background:
-        radial-gradient(circle at top, rgba(56, 189, 248, 0.24), transparent 28%),
-        radial-gradient(circle at right bottom, rgba(34, 197, 94, 0.18), transparent 24%),
-        linear-gradient(165deg, var(--bg-1), var(--bg-2) 56%, var(--bg-3));
+        radial-gradient(circle at top, rgba(56, 189, 248, 0.22), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.18), transparent 22%),
+        linear-gradient(160deg, var(--bg-1), var(--bg-2));
+      display: grid;
+      place-items: center;
       padding: 24px;
     }
 
     .shell {
-      width: min(100%, 1060px);
-      margin: 0 auto;
+      width: min(100%, 980px);
       display: grid;
       gap: 20px;
     }
@@ -46,7 +45,7 @@
     .card {
       background: var(--card);
       border: 1px solid var(--line);
-      border-radius: 30px;
+      border-radius: 28px;
       box-shadow: var(--shadow);
       overflow: hidden;
       backdrop-filter: blur(16px);
@@ -58,9 +57,9 @@
       padding: clamp(24px, 5vw, 42px);
     }
 
-    @media (min-width: 900px) {
+    @media (min-width: 860px) {
       .hero {
-        grid-template-columns: minmax(0, 1.2fr) minmax(300px, 360px);
+        grid-template-columns: minmax(0, 1.1fr) minmax(280px, 360px);
         align-items: center;
       }
     }
@@ -71,11 +70,11 @@
       gap: 10px;
       padding: 10px 14px;
       border-radius: 999px;
-      background: rgba(15, 23, 42, 0.58);
+      background: rgba(15, 23, 42, 0.56);
       border: 1px solid rgba(148, 163, 184, 0.14);
       color: #f8fafc;
       font-size: 0.92rem;
-      font-weight: 800;
+      font-weight: 700;
     }
 
     .eyebrow__dot {
@@ -88,14 +87,9 @@
 
     h1 {
       margin: 16px 0 12px;
-      font-size: clamp(2.1rem, 4vw, 3.5rem);
+      font-size: clamp(2rem, 4vw, 3.4rem);
       line-height: 1.02;
       letter-spacing: -0.04em;
-    }
-
-    h2, h3 {
-      margin: 0;
-      letter-spacing: -0.02em;
     }
 
     p {
@@ -105,13 +99,15 @@
       line-height: 1.72;
     }
 
-    .hero p + p { margin-top: 14px; }
+    .hero p + p {
+      margin-top: 14px;
+    }
 
     .actions {
       display: flex;
       flex-wrap: wrap;
       gap: 12px;
-      margin-top: 28px;
+      margin-top: 26px;
     }
 
     .btn {
@@ -122,7 +118,7 @@
       font: inherit;
       font-weight: 800;
       cursor: pointer;
-      transition: transform 160ms ease, opacity 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
+      transition: transform 160ms ease, opacity 160ms ease, background 160ms ease, border-color 160ms ease;
       text-decoration: none;
       display: inline-flex;
       align-items: center;
@@ -139,15 +135,9 @@
     }
 
     .btn--secondary {
-      background: rgba(15, 23, 42, 0.58);
+      background: rgba(15, 23, 42, 0.56);
       color: var(--text);
       border: 1px solid rgba(148, 163, 184, 0.18);
-    }
-
-    .btn--ghost {
-      background: rgba(56, 189, 248, 0.12);
-      color: #dbeafe;
-      border: 1px solid rgba(56, 189, 248, 0.22);
     }
 
     .btn[disabled],
@@ -158,13 +148,10 @@
       pointer-events: none;
     }
 
-    .side-panel,
-    .snapshot,
-    .guide,
-    .honesty {
-      border-radius: 26px;
+    .side-panel {
+      border-radius: 24px;
       padding: 22px;
-      background: var(--card-soft);
+      background: rgba(2, 6, 23, 0.54);
       border: 1px solid rgba(148, 163, 184, 0.14);
       display: grid;
       gap: 18px;
@@ -196,8 +183,7 @@
       font-size: 0.92rem;
     }
 
-    .meta-list,
-    .metric-list {
+    .meta-list {
       display: grid;
       gap: 12px;
       margin: 0;
@@ -205,17 +191,14 @@
       list-style: none;
     }
 
-    .meta-item,
-    .metric-item {
+    .meta-item {
       padding: 14px 16px;
       border-radius: 18px;
-      background: rgba(15, 23, 42, 0.74);
+      background: rgba(15, 23, 42, 0.72);
       border: 1px solid rgba(148, 163, 184, 0.12);
     }
 
-    .meta-item small,
-    .metric-item small,
-    .section-kicker {
+    .meta-item small {
       display: block;
       color: var(--muted);
       margin-bottom: 6px;
@@ -225,109 +208,67 @@
       font-weight: 800;
     }
 
-    .meta-item strong,
-    .metric-item strong {
+    .meta-item strong {
       display: block;
       font-size: 0.98rem;
       line-height: 1.45;
     }
 
-    .status-note {
-      font-weight: 800;
-      color: #f8fafc;
-    }
-
-    .content-grid {
+    .tips {
       display: grid;
-      gap: 20px;
+      gap: 12px;
+      padding: clamp(22px, 4vw, 32px);
     }
 
-    @media (min-width: 900px) {
-      .content-grid {
-        grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
-      }
-    }
-
-    .snapshot__top {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      border-radius: 999px;
-      font-size: 0.82rem;
-      font-weight: 800;
-      background: rgba(56, 189, 248, 0.12);
-      border: 1px solid rgba(56, 189, 248, 0.2);
-      color: #dbeafe;
-    }
-
-    .snapshot h2 {
-      font-size: clamp(1.5rem, 2vw, 2rem);
-      line-height: 1.1;
-    }
-
-    .snapshot__actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .guide-grid {
+    .tips__grid {
       display: grid;
       gap: 12px;
     }
 
-    .guide-item {
+    @media (min-width: 680px) {
+      .tips__grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    .tip {
       border-radius: 22px;
       padding: 18px;
-      background: rgba(15, 23, 42, 0.74);
+      background: rgba(15, 23, 42, 0.72);
       border: 1px solid rgba(148, 163, 184, 0.12);
     }
 
-    .guide-item strong {
+    .tip strong {
       display: block;
       margin-bottom: 10px;
       font-size: 1rem;
     }
 
-    .guide-item p {
+    .tip p {
       font-size: 0.94rem;
     }
 
-    .honesty {
-      background: rgba(8, 47, 73, 0.72);
-      border-color: rgba(34, 211, 238, 0.18);
+    .status-note {
+      font-weight: 700;
+      color: #f8fafc;
     }
-
-    .honesty p { color: #cbd5e1; }
-    .helper-text { font-size: 0.9rem; color: var(--muted); }
   </style>
 </head>
 <body>
   <main class="shell">
     <section class="card hero">
       <div>
-        <span class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>Sem internet agora</span>
-        <h1>Mas o que já estava salvo continua com você.</h1>
+        <span class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>Modo sobrevivência ativado</span>
+        <h1>Sem internet, mas o AcerttaPay não te abandona.</h1>
         <p>
-          A rede caiu no meio do caminho. Enquanto ela não volta, te mostramos o último resumo guardado e os atalhos mais seguros para retomar.
+          A conexão caiu e a gente segurou as pontas com uma tela offline própria. Assim você não toma aquele susto com a página quebrada nem acha que o app saiu correndo com suas contas.
         </p>
         <p>
-          Nada de tela quebrada nem susto desnecessário: aqui você entende o que aconteceu, o que ainda dá para consultar e qual é o melhor próximo passo.
+          Assim que a rede voltar, é só tentar novamente para retomar o fluxo normal. Enquanto isso, deixamos logo abaixo um lembrete da sua última visita bem-sucedida.
         </p>
         <div class="actions">
-          <button type="button" class="btn btn--primary" id="retryButton">Tentar de novo</button>
-          <a class="btn btn--ghost" id="snapshotButton" href="#savedSnapshot">Ver último resumo salvo</a>
+          <button type="button" class="btn btn--primary" id="retryButton">Tentar novamente</button>
           <a class="btn btn--secondary" id="lastPageButton" href="/geral">Abrir última página</a>
-          <a class="btn btn--secondary" id="radarButton" href="/geral">Ir pro Meu Radar</a>
         </div>
       </div>
 
@@ -336,7 +277,7 @@
           <img src="/icon-192.png" alt="AcerttaPay">
           <div>
             <strong>AcerttaPay</strong>
-            <span>Seu parceiro financeiro continua por perto, mesmo quando a internet resolve tirar folga.</span>
+            <span>Seu cantinho financeiro, até quando a internet resolve tirar folga.</span>
           </div>
         </div>
 
@@ -346,214 +287,160 @@
             <strong id="networkStatus" class="status-note">Sem conexão com a internet.</strong>
           </li>
           <li class="meta-item">
-            <small>Última sincronização</small>
-            <strong id="lastSyncLabel">Ainda sem resumo salvo neste aparelho.</strong>
-          </li>
-          <li class="meta-item">
             <small>Última página vista</small>
-            <strong id="lastPageLabel">Ainda não deu tempo de guardar esse caminho.</strong>
+            <strong id="lastPageLabel">Ainda não deu tempo de guardar esse mimo.</strong>
           </li>
           <li class="meta-item">
-            <small>O que fica pausado</small>
-            <strong>Envios e salvamentos seguem esperando a conexão voltar.</strong>
+            <small>Última visita registrada</small>
+            <strong id="lastVisitLabel">Sem registro salvo por enquanto.</strong>
+          </li>
+          <li class="meta-item" id="draftSummaryItem" hidden>
+            <small>Rascunho guardado</small>
+            <strong id="draftSummaryLabel">Tem um registro local esperando você retomar.</strong>
           </li>
         </ul>
       </aside>
     </section>
 
-    <section class="content-grid">
-      <article class="card snapshot" id="savedSnapshot" tabindex="-1" aria-labelledby="snapshotTitleNode">
-        <div class="snapshot__top">
-          <div>
-            <span class="section-kicker" id="snapshotPageNode">Último resumo salvo</span>
-            <h2 id="snapshotTitleNode">Ainda não deu tempo de guardar um resumo por aqui.</h2>
-          </div>
-          <span class="tag" id="snapshotFreshnessTag">Esperando um resumo salvo</span>
-        </div>
-        <p id="snapshotSummaryNode">Assim que você abrir uma área principal do app com internet, a gente deixa um retrato enxuto dela salvo neste aparelho para te ajudar na próxima queda.</p>
-        <ul class="metric-list" id="snapshotMetrics"></ul>
-        <div class="snapshot__actions">
-          <a class="btn btn--secondary" id="snapshotCtaButton" href="/geral">Retomar esse ponto</a>
-        </div>
-      </article>
-
-      <section class="card guide" aria-label="Como seguir no modo offline">
-        <div>
-          <span class="section-kicker">Enquanto isso</span>
-          <h2>O que ainda vale fazer daqui</h2>
-          <p class="helper-text">O objetivo é simples: te orientar rápido e te devolver para o fluxo certo assim que a rede aparecer.</p>
-        </div>
-        <div class="guide-grid">
-          <article class="guide-item">
-            <strong>1. Conferir o último retrato salvo</strong>
-            <p>Você continua vendo o contexto da última tela carregada com sucesso, com resumo, rota e pistas do que estava acompanhando.</p>
-          </article>
-          <article class="guide-item">
-            <strong>2. Tentar de novo no momento certo</strong>
-            <p>Quando o status acima ficar verdinho, os atalhos voltam a funcionar e você retoma com menos vai-e-volta.</p>
-          </article>
-          <article class="guide-item">
-            <strong>3. Sem promessa furada</strong>
-            <p>O que depende de enviar, salvar ou sincronizar dados continua pausado até a conexão voltar de verdade.</p>
-          </article>
-        </div>
-      </section>
-    </section>
-
-    <section class="card honesty">
+    <section class="card tips">
       <div>
-        <span class="section-kicker">Sem pegadinha</span>
-        <h3>Offline aqui serve para orientar, não para fingir que deu tudo certo.</h3>
+        <h2 style="margin:0 0 10px;font-size:1.35rem;letter-spacing:-0.02em;">O que dá para esperar deste modo offline?</h2>
+        <p>Honestidade em primeiro lugar: o app não vai fingir que consegue salvar alterações sem rede. A ideia aqui é proteger a experiência e te orientar bem até a conexão voltar.</p>
       </div>
-      <p>Se algo ainda não pode ser salvo ou enviado sem internet, a gente fala isso com clareza. A ideia é te manter no controle e pronto para retomar, sem sumir com contexto nem inventar confirmação que não aconteceu.</p>
+      <div class="tips__grid">
+        <article class="tip">
+          <strong>Sem susto visual</strong>
+          <p>A tela offline entra no lugar do erro cru do navegador, mantendo o clima do app e explicando o que aconteceu.</p>
+        </article>
+        <article class="tip">
+          <strong>Botão de recuperação</strong>
+          <p>O botão tentar novamente fica pronto para recarregar a navegação assim que a internet der as caras.</p>
+        </article>
+        <article class="tip">
+          <strong>Lembrete da última visita</strong>
+          <p>Guardamos a última rota aberta com sucesso para te ajudar a se reencontrar rapidinho depois.</p>
+        </article>
+      </div>
     </section>
   </main>
 
   <script>
     (function () {
-      const LAST_VISIT_STORAGE_KEY = 'acerttapay:last-visit';
-      const OFFLINE_SNAPSHOT_STORAGE_KEY = 'acerttapay:offline-snapshot';
-      const LAST_SYNC_STORAGE_KEY = 'acerttapay:last-sync-at';
+      const STORAGE_KEY = 'acerttapay:last-visit';
+      const DRAFT_SUMMARY_KEY = 'acerttapay:offline-draft-summary';
+      const DRAFT_PURGE_KEY = 'acerttapay:purge-local-drafts';
       const retryButton = document.getElementById('retryButton');
-      const snapshotButton = document.getElementById('snapshotButton');
       const lastPageButton = document.getElementById('lastPageButton');
-      const radarButton = document.getElementById('radarButton');
-      const snapshotCtaButton = document.getElementById('snapshotCtaButton');
       const networkStatus = document.getElementById('networkStatus');
-      const lastSyncLabel = document.getElementById('lastSyncLabel');
       const lastPageLabel = document.getElementById('lastPageLabel');
-      const snapshotPageNode = document.getElementById('snapshotPageNode');
-      const snapshotTitleNode = document.getElementById('snapshotTitleNode');
-      const snapshotSummaryNode = document.getElementById('snapshotSummaryNode');
-      const snapshotFreshnessTag = document.getElementById('snapshotFreshnessTag');
-      const snapshotMetrics = document.getElementById('snapshotMetrics');
-
-      function safeRead(key) {
-        try {
-          return localStorage.getItem(key);
-        } catch (error) {
-          return null;
-        }
-      }
-
-      function safeParse(raw) {
-        if (!raw) return null;
-        try {
-          return JSON.parse(raw);
-        } catch (error) {
-          return null;
-        }
-      }
+      const lastVisitLabel = document.getElementById('lastVisitLabel');
+      const draftSummaryItem = document.getElementById('draftSummaryItem');
+      const draftSummaryLabel = document.getElementById('draftSummaryLabel');
 
       function formatVisit(isoDate) {
         if (!isoDate) return 'Sem registro salvo por enquanto.';
         const date = new Date(isoDate);
         if (Number.isNaN(date.getTime())) return 'Sem registro salvo por enquanto.';
-        return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date);
+        return new Intl.DateTimeFormat('pt-BR', {
+          dateStyle: 'short',
+          timeStyle: 'short'
+        }).format(date);
       }
 
-      function prettifyPath(path, label) {
-        if (label) return label;
-        if (!path) return 'Ainda não deu tempo de guardar esse caminho.';
-        if (path === '/' || path === '/geral') return 'Meu Radar';
-        if (path === '/shared-debts') return 'Central de acertos';
-        if (path === '/shared-debts/archive') return 'Arquivo de acertos';
-        if (/^\/month\//.test(path)) return 'Compras do mês';
-        if (/^\/summary\//.test(path)) return 'Resumo da ópera';
-        if (/^\/analytics\//.test(path)) return 'Análises';
-        if (/^\/txn\//.test(path)) return 'Detalhe da compra';
+      function prettifyPath(path) {
+        if (!path) return 'Ainda não deu tempo de guardar esse mimo.';
+        if (path === '/') return 'Página inicial';
         return path;
       }
 
-      function setButtonAvailability(button, enabled) {
-        if (!(button instanceof HTMLElement)) return;
-        button.setAttribute('aria-disabled', enabled ? 'false' : 'true');
-        if ('tabIndex' in button) button.tabIndex = enabled ? 0 : -1;
-      }
+      function hydrateDraftSummary() {
+        if (!(draftSummaryItem instanceof HTMLElement) || !(draftSummaryLabel instanceof HTMLElement)) return;
 
-      function renderMetrics(metrics) {
-        snapshotMetrics.innerHTML = '';
-        const safeMetrics = Array.isArray(metrics) ? metrics.filter((metric) => metric && metric.label && metric.value).slice(0, 3) : [];
-        if (!safeMetrics.length) {
-          const fallback = document.createElement('li');
-          fallback.className = 'metric-item';
-          fallback.innerHTML = '<small>Sem resumo salvo</small><strong>Assim que uma tela principal carregar com sucesso, ela aparece aqui.</strong>';
-          snapshotMetrics.appendChild(fallback);
+        try {
+          if (localStorage.getItem(DRAFT_PURGE_KEY) === '1') {
+            localStorage.removeItem(DRAFT_SUMMARY_KEY);
+          }
+        } catch (error) {
+          // noop
+        }
+
+        let raw = null;
+        try {
+          raw = localStorage.getItem(DRAFT_SUMMARY_KEY);
+        } catch (error) {
+          raw = null;
+        }
+
+        if (!raw) {
+          draftSummaryItem.hidden = true;
           return;
         }
 
-        safeMetrics.forEach((metric) => {
-          const item = document.createElement('li');
-          item.className = 'metric-item';
-          item.innerHTML = `<small>${metric.label}</small><strong>${metric.value}</strong>`;
-          snapshotMetrics.appendChild(item);
-        });
-      }
-
-      function hydrateLastVisit() {
-        const data = safeParse(safeRead(LAST_VISIT_STORAGE_KEY)) || {};
-        const safePath = typeof data.path === 'string' && data.path.trim() ? data.path : '/geral';
-        lastPageButton.href = safePath;
-        lastPageLabel.textContent = prettifyPath(safePath, data.label);
-      }
-
-      function hydrateSnapshot() {
-        const snapshot = safeParse(safeRead(OFFLINE_SNAPSHOT_STORAGE_KEY));
-        const lastSync = safeRead(LAST_SYNC_STORAGE_KEY);
-        lastSyncLabel.textContent = formatVisit(lastSync || snapshot?.updatedAt || '');
-
-        if (!snapshot) {
-          renderMetrics([]);
-          snapshotCtaButton.dataset.hasSnapshot = '0';
-          setButtonAvailability(snapshotButton, false);
-          setButtonAvailability(snapshotCtaButton, false);
-          return;
+        try {
+          const data = JSON.parse(raw);
+          const when = formatVisit(data.updatedAt);
+          const parts = [];
+          if (data.description) parts.push(data.description);
+          if (data.amount) parts.push(data.amount);
+          const headline = parts.length ? parts.join(' · ') : 'Tem uma compra guardada só neste aparelho.';
+          draftSummaryLabel.textContent = when && when !== 'Sem registro salvo por enquanto.'
+            ? `${headline} Revisão pronta desde ${when}.`
+            : headline;
+          draftSummaryItem.hidden = false;
+        } catch (error) {
+          draftSummaryItem.hidden = true;
         }
-
-        snapshotCtaButton.dataset.hasSnapshot = '1';
-        snapshotPageNode.textContent = snapshot.routeLabel || 'Último resumo salvo';
-        snapshotTitleNode.textContent = snapshot.title || 'Resumo salvo neste aparelho';
-        snapshotSummaryNode.textContent = snapshot.summary || 'A última tela carregada com sucesso continua guardada aqui até a conexão voltar.';
-        snapshotFreshnessTag.textContent = `Atualizado em ${formatVisit(snapshot.updatedAt)}`;
-        snapshotCtaButton.href = snapshot.ctaHref || snapshot.path || '/geral';
-        snapshotCtaButton.textContent = snapshot.ctaLabel || 'Retomar esse ponto';
-        renderMetrics(snapshot.metrics || []);
       }
 
       function updateConnectionStatus() {
         const isOnline = navigator.onLine;
         networkStatus.textContent = isOnline
-          ? 'Conexão de volta. Agora os atalhos já podem te levar de volta.'
+          ? 'Conexão restabelecida. Agora você já pode tentar novamente.'
           : 'Sem conexão com a internet.';
-        setButtonAvailability(lastPageButton, isOnline);
-        setButtonAvailability(radarButton, isOnline);
-        setButtonAvailability(snapshotCtaButton, isOnline && snapshotCtaButton.dataset.hasSnapshot === '1' && !!snapshotCtaButton.getAttribute('href'));
+        lastPageButton.setAttribute('aria-disabled', isOnline ? 'false' : 'true');
+        lastPageButton.tabIndex = isOnline ? 0 : -1;
+      }
+
+      function hydrateLastVisit() {
+        let raw = null;
+        try {
+          raw = localStorage.getItem(STORAGE_KEY);
+        } catch (error) {
+          raw = null;
+        }
+
+        if (!raw) {
+          updateConnectionStatus();
+          return;
+        }
+
+        try {
+          const data = JSON.parse(raw);
+          const safePath = typeof data.path === 'string' && data.path.trim() ? data.path : '/geral';
+          lastPageButton.href = safePath;
+          lastPageLabel.textContent = prettifyPath(safePath);
+          lastVisitLabel.textContent = formatVisit(data.timestamp);
+        } catch (error) {
+          lastPageButton.href = '/geral';
+        }
+
+        updateConnectionStatus();
       }
 
       retryButton.addEventListener('click', function () {
         window.location.reload();
       });
 
-      [lastPageButton, radarButton, snapshotCtaButton].forEach((button) => {
-        button.addEventListener('click', function (event) {
-          if (!navigator.onLine) event.preventDefault();
-        });
-      });
-
-      snapshotButton.addEventListener('click', function (event) {
-        if (snapshotButton.getAttribute('aria-disabled') === 'true') {
+      lastPageButton.addEventListener('click', function (event) {
+        if (!navigator.onLine) {
           event.preventDefault();
-          return;
         }
-        const target = document.getElementById('savedSnapshot');
-        if (target) target.focus({ preventScroll: true });
       });
 
       window.addEventListener('online', updateConnectionStatus);
       window.addEventListener('offline', updateConnectionStatus);
       hydrateLastVisit();
-      hydrateSnapshot();
-      updateConnectionStatus();
+      hydrateDraftSummary();
     })();
   </script>
 </body>

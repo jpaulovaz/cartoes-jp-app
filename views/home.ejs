@@ -2,24 +2,6 @@
 
   <div class="op-screen op-screen--home max-w-6xl mx-auto space-y-6">
 
-  <% const visibleRadarGroups = (groupedRecent || []).filter(group => !group.__section); %>
-  <% const offlineFeaturedGroup = featuredOpenGroup || visibleRadarGroups[0] || null; %>
-  <% const offlineRadarPeriods = visibleRadarGroups.length; %>
-  <div hidden data-offline-snapshot
-    data-snapshot-page="Meu Radar"
-    data-snapshot-title="<%= offlineFeaturedGroup ? `Radar em ${offlineFeaturedGroup.label}` : 'Seu radar está pronto' %>"
-    data-snapshot-summary="<%= offlineFeaturedGroup
-      ? `Último resumo salvo com ${offlineFeaturedGroup.cards.length} cartão(ões) e ${formatBRLFromCents(offlineFeaturedGroup.remaining_cents || 0)} ainda respirando.`
-      : 'Assim que você abrir um mês com compras, a gente deixa um resumo salvo aqui para te ajudar offline.' %>"
-    data-snapshot-primary-label="Período em foco"
-    data-snapshot-primary-value="<%= offlineFeaturedGroup ? offlineFeaturedGroup.label : 'Ainda sem período' %>"
-    data-snapshot-secondary-label="Total do período"
-    data-snapshot-secondary-value="<%= offlineFeaturedGroup ? formatBRLFromCents(offlineFeaturedGroup.total_cents || 0) : formatBRLFromCents(0) %>"
-    data-snapshot-tertiary-label="Períodos no radar"
-    data-snapshot-tertiary-value="<%= `${offlineRadarPeriods} ${offlineRadarPeriods === 1 ? 'período' : 'períodos'}` %>"
-    data-snapshot-cta-label="<%= offlineFeaturedGroup ? 'Voltar para o período em foco' : 'Abrir Meu Radar' %>"
-    data-snapshot-cta-href="<%= offlineFeaturedGroup ? `/month/${offlineFeaturedGroup.year}/${offlineFeaturedGroup.month}` : '/geral' %>"></div>
-
   <section class="op-page-hero op-fade-up">
     <div>
       <span class="op-page-hero__eyebrow">Seu QG financeiro</span>
@@ -64,7 +46,7 @@
           class="op-icon-btn" aria-label="Fechar">✕</button>
       </div>
 
-      <div class="op-manual-modal__scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6"><form action="/txn/manual" method="POST" class="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0" data-auto-first-due-form>
+      <div class="op-manual-modal__scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6"><form action="/txn/manual" method="POST" class="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0" data-auto-first-due-form data-local-draft-flow="manual_purchase">
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Quando rolou a compra?</label>

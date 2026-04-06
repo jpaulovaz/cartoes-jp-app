@@ -55,12 +55,14 @@
     const body = document.body;
     const isIOS = detectIOS();
     const isStandalone = detectStandalone();
+    const hasCoarsePointer = window.matchMedia('(pointer: coarse)').matches || Number(navigator.maxTouchPoints || 0) > 0;
     const visualViewport = window.visualViewport;
     const viewportHeight = Math.round((visualViewport && visualViewport.height) || window.innerHeight || document.documentElement.clientHeight || 0);
     const viewportWidth = Math.round((visualViewport && visualViewport.width) || window.innerWidth || document.documentElement.clientWidth || 0);
     const offsetTop = Math.round((visualViewport && visualViewport.offsetTop) || 0);
     const keyboardInset = Math.max(0, Math.round((window.innerHeight || viewportHeight) - viewportHeight - offsetTop));
     const keyboardOpen = keyboardInset > 120;
+    const landscapePhoneChrome = hasCoarsePointer && viewportWidth >= 768 && viewportHeight <= 560;
     const cozyViewport = viewportWidth <= 430;
     const compactViewport = viewportWidth <= 390;
     const tightViewport = viewportWidth <= 360;
@@ -74,6 +76,7 @@
     root.classList.toggle('op-vp-compact', compactViewport);
     root.classList.toggle('op-vp-tight', tightViewport);
     root.classList.toggle('op-vp-short', shortViewport);
+    root.classList.toggle('op-force-mobile-chrome', landscapePhoneChrome);
     root.dataset.opPlatform = isIOS ? 'ios' : 'default';
     root.dataset.opDisplayMode = isStandalone ? 'standalone' : 'browser';
     root.dataset.opViewportTier = viewportTier;
@@ -92,6 +95,7 @@
       body.classList.toggle('op-vp-compact', compactViewport);
       body.classList.toggle('op-vp-tight', tightViewport);
       body.classList.toggle('op-vp-short', shortViewport);
+      body.classList.toggle('op-force-mobile-chrome', landscapePhoneChrome);
       body.classList.toggle('op-virtual-keyboard-open', isIOS && keyboardOpen);
       body.dataset.opViewportTier = viewportTier;
     }
@@ -400,66 +404,10 @@
 })();
 
 (function () {
-  const MANUAL_CARD_STORAGE_KEY = 'op-last-manual-card-id';
-
   function getLocalTodayISO() {
     const now = new Date();
     const local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
     return local.toISOString().slice(0, 10);
-  }
-
-  function readStoredManualCardId() {
-    try {
-      return String(window.localStorage.getItem(MANUAL_CARD_STORAGE_KEY) || '').trim();
-    } catch (error) {
-      return '';
-    }
-  }
-
-  function storeManualCardId(value) {
-    const safeValue = String(value || '').trim();
-    if (!safeValue) return;
-    try {
-      window.localStorage.setItem(MANUAL_CARD_STORAGE_KEY, safeValue);
-    } catch (error) {
-      // noop
-    }
-  }
-
-  function applyStoredManualCardToForm(form) {
-    if (!(form instanceof HTMLFormElement)) return false;
-    const cardSelect = form.querySelector('[data-manual-card-select]');
-    if (!(cardSelect instanceof HTMLSelectElement) || !cardSelect.options.length) return false;
-
-    const storedCardId = readStoredManualCardId();
-    if (!storedCardId) return false;
-
-    const hasMatchingOption = Array.from(cardSelect.options).some((option) => String(option.value) === storedCardId);
-    if (!hasMatchingOption) return false;
-
-    if (String(cardSelect.value) !== storedCardId) {
-      cardSelect.value = storedCardId;
-    }
-
-    return true;
-  }
-
-  function bindManualCardMemory(form) {
-    if (!(form instanceof HTMLFormElement) || form.dataset.manualCardMemoryBound === '1') return;
-    form.dataset.manualCardMemoryBound = '1';
-
-    const cardSelect = form.querySelector('[data-manual-card-select]');
-    if (!(cardSelect instanceof HTMLSelectElement)) return;
-
-    applyStoredManualCardToForm(form);
-
-    const rememberCurrentCard = () => {
-      if (cardSelect.disabled) return;
-      storeManualCardId(cardSelect.value);
-    };
-
-    cardSelect.addEventListener('change', rememberCurrentCard);
-    form.addEventListener('submit', rememberCurrentCard);
   }
 
   function focusManualAmount(input) {
@@ -488,8 +436,6 @@
 
     const form = modal.querySelector('[data-auto-first-due-form]');
     if (!(form instanceof HTMLFormElement)) return;
-
-    applyStoredManualCardToForm(form);
 
     const dateInput = form.querySelector('[data-manual-date-input]');
     if (dateInput instanceof HTMLInputElement && !dateInput.value) {
@@ -554,7 +500,6 @@
     });
 
     if (form instanceof HTMLFormElement) {
-      bindManualCardMemory(form);
       form.addEventListener('submit', () => {
         modal.setAttribute('aria-hidden', 'true');
       });
@@ -1968,7 +1913,7 @@
     const mainShell = document.querySelector('.op-app-main');
     let hideTimer = null;
 
-    const isMobileViewport = () => !window.matchMedia('(min-width: 768px)').matches;
+    const isMobileViewport = () => !window.matchMedia('(min-width: 768px)').matches || root.classList.contains('op-force-mobile-chrome');
     const showNav = () => nav.classList.remove('is-idle-hidden');
     const hideNav = () => nav.classList.add('is-idle-hidden');
     const scheduleHide = (delay = 1900) => {
@@ -2169,7 +2114,8 @@
     if (getLinks().length < 2) return;
 
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const isMobileViewport = () => window.matchMedia('(max-width: 767px)').matches;
+    const root = document.documentElement;
+    const isMobileViewport = () => window.matchMedia('(max-width: 767px)').matches || root.classList.contains('op-force-mobile-chrome');
 
     let snapTimer = null;
     let isPointerDown = false;

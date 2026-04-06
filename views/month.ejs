@@ -60,11 +60,11 @@
         <div class="op-month-hero-actions__row op-month-hero-actions__row--dual">
           <a href="/summary/<%= year %>/<%= month %>"
             class="op-btn op-btn--compact op-hero-link op-hero-link--summary whitespace-nowrap">
-            Resumo da ópera</a>
+            Fechamento</a>
 
           <a href="/analytics/<%= year %>/<%= month %>"
             class="op-btn op-btn--compact op-hero-link op-hero-link--analytics whitespace-nowrap">
-            Ler sinais</a>
+            Análises</a>
         </div>
 
         <div class="op-month-hero-actions__row op-month-hero-actions__row--triple">
@@ -2449,46 +2449,17 @@
             input.value = option.value;
             input.className = 'peer sr-only';
             input.checked = index === 0;
+            input.addEventListener('change', () => {
+              if (input.checked) scopeValue = option.value;
+            });
 
             const card = document.createElement('span');
-            card.setAttribute('data-delete-scope-card', '');
             card.className = 'block rounded-[22px] border border-slate-200 bg-white px-4 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-red-300 group-hover:shadow-md peer-checked:border-red-400 peer-checked:bg-red-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-red-500 dark:peer-checked:border-red-500 dark:peer-checked:bg-red-950/30';
-            card.innerHTML = `<span class="flex items-start justify-between gap-3"><span><span class="block text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(option.title)}</span><span class="mt-1 block text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">${escapeHtml(option.description)}</span></span><span data-delete-scope-indicator class="mt-0.5 inline-flex h-6 w-6 flex-none items-center justify-center rounded-full border border-slate-300 bg-white text-transparent transition-all dark:border-slate-600 dark:bg-slate-950">✓</span></span>`;
-
-            const syncDeleteScopeOption = () => {
-              const indicator = card.querySelector('[data-delete-scope-indicator]');
-              const isChecked = input.checked;
-              if (isChecked) {
-                scopeValue = option.value;
-              }
-              if (indicator) {
-                indicator.style.borderColor = isChecked ? 'rgb(239 68 68)' : '';
-                indicator.style.backgroundColor = isChecked ? 'rgb(220 38 38)' : '';
-                indicator.style.color = isChecked ? '#ffffff' : 'transparent';
-                indicator.style.boxShadow = isChecked ? '0 0 0 1px rgba(220, 38, 38, 0.18)' : '';
-              }
-            };
-
-            input.addEventListener('change', () => {
-              scopeGroup.querySelectorAll('input[name="delete_scope_choice"]').forEach((node) => {
-                const optionLabel = node.closest('label');
-                const optionCard = optionLabel ? optionLabel.querySelector('[data-delete-scope-card]') : null;
-                const optionIndicator = optionCard ? optionCard.querySelector('[data-delete-scope-indicator]') : null;
-                const checked = node.checked;
-                if (optionIndicator) {
-                  optionIndicator.style.borderColor = checked ? 'rgb(239 68 68)' : '';
-                  optionIndicator.style.backgroundColor = checked ? 'rgb(220 38 38)' : '';
-                  optionIndicator.style.color = checked ? '#ffffff' : 'transparent';
-                  optionIndicator.style.boxShadow = checked ? '0 0 0 1px rgba(220, 38, 38, 0.18)' : '';
-                }
-              });
-              syncDeleteScopeOption();
-            });
+            card.innerHTML = `<span class="flex items-start justify-between gap-3"><span><span class="block text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(option.title)}</span><span class="mt-1 block text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">${escapeHtml(option.description)}</span></span><span class="mt-0.5 inline-flex h-6 w-6 flex-none items-center justify-center rounded-full border border-slate-300 bg-white text-transparent peer-checked:border-red-500 peer-checked:bg-red-600 peer-checked:text-white dark:border-slate-600 dark:bg-slate-950 dark:peer-checked:border-red-500 dark:peer-checked:bg-red-500">✓</span></span>`;
 
             label.appendChild(input);
             label.appendChild(card);
             scopeGroup.appendChild(label);
-            syncDeleteScopeOption();
           });
 
           wrapper.appendChild(scopeGroup);

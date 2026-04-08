@@ -1140,7 +1140,30 @@
     cell.classList.add(remainingCents > 0 ? 'text-red-500' : 'text-emerald-500');
   }
 
+  function syncCashBalanceValue(cell, balanceCents) {
+    if (!cell) return;
+    cell.textContent = formatCents(balanceCents);
+    cell.classList.remove(
+      'text-emerald-600',
+      'dark:text-emerald-300',
+      'text-red-500',
+      'dark:text-red-300',
+      'text-slate-700',
+      'dark:text-slate-200'
+    );
+    if (balanceCents > 0) {
+      cell.classList.add('text-emerald-600', 'dark:text-emerald-300');
+      return;
+    }
+    if (balanceCents < 0) {
+      cell.classList.add('text-red-500', 'dark:text-red-300');
+      return;
+    }
+    cell.classList.add('text-slate-700', 'dark:text-slate-200');
+  }
+
   function syncCardsSummary(root) {
+    let totalTotal = 0;
     let paidTotal = 0;
     let remainingTotal = 0;
     root.querySelectorAll('[data-summary-card-row]').forEach((row) => {
@@ -1149,6 +1172,7 @@
       const paidInput = root.querySelector(`[data-summary-card-paid][data-card-id="${cardId}"]`);
       const paidCents = centsFromValue(paidInput ? paidInput.value : '');
       const remainingCents = totalCents - paidCents;
+      totalTotal += totalCents;
       paidTotal += paidCents;
       remainingTotal += remainingCents;
       syncRemainingCell(root.querySelector(`[data-summary-card-remaining][data-card-id="${cardId}"]`), remainingCents);
@@ -1158,12 +1182,17 @@
     const remainingCell = root.querySelector('[data-summary-cards-total-remaining]');
     if (paidCell) paidCell.textContent = formatCents(paidTotal);
     syncRemainingCell(remainingCell, remainingTotal);
+
+    return { totalTotal, paidTotal, remainingTotal };
   }
 
   function syncPeopleSummary(root) {
+    let totalTotal = 0;
     let paidTotal = 0;
     let manualTotal = 0;
     let remainingTotal = 0;
+    let overpaidTotal = 0;
+
     root.querySelectorAll('[data-summary-person-row]').forEach((row) => {
       const totalCents = Number(row.getAttribute('data-total-cents') || 0);
       const autoPaidCents = Number(row.getAttribute('data-auto-paid-cents') || 0);
@@ -1171,10 +1200,13 @@
       const paidInput = root.querySelector(`[data-summary-person-paid][data-person-id="${personId}"]`);
       const manualPaidCents = centsFromValue(paidInput ? paidInput.value : '');
       const paidCents = autoPaidCents + manualPaidCents;
-      const remainingCents = totalCents - paidCents;
+      const remainingCents = Math.max(0, totalCents - paidCents);
+      const overpaidCents = Math.max(0, paidCents - totalCents);
+      totalTotal += totalCents;
       paidTotal += paidCents;
       manualTotal += manualPaidCents;
       remainingTotal += remainingCents;
+      overpaidTotal += overpaidCents;
       const combinedCell = root.querySelector(`[data-summary-person-combined][data-person-id="${personId}"]`);
       if (combinedCell) combinedCell.textContent = formatCents(paidCents);
       syncRemainingCell(root.querySelector(`[data-summary-person-remaining][data-person-id="${personId}"]`), remainingCents);
@@ -1186,6 +1218,49 @@
     if (paidCell) paidCell.textContent = formatCents(paidTotal);
     if (manualCell) manualCell.textContent = formatCents(manualTotal);
     syncRemainingCell(remainingCell, remainingTotal);
+
+    return { totalTotal, paidTotal, manualTotal, remainingTotal, overpaidTotal };
+  }
+
+  function syncCashSummary(root, cardsState, peopleState) {
+    const balanceCents = Number(peopleState?.paidTotal || 0) - Number(cardsState?.paidTotal || 0);
+    const totalBillsCell = root.querySelector('[data-summary-cash-total-bills]');
+    const inflowCell = root.querySelector('[data-summary-cash-inflow]');
+    const outflowCell = root.querySelector('[data-summary-cash-outflow]');
+    const balanceCell = root.querySelector('[data-summary-cash-balance-value]');
+    const captionCell = root.querySelector('[data-summary-cash-balance-caption]');
+    const pendingCell = root.querySelector('[data-summary-cash-pending]');
+    const overpaidChip = root.querySelector('[data-summary-cash-overpaid-chip]');
+    const overpaidCell = root.querySelector('[data-summary-cash-overpaid]');
+    const peopleOverpaidNote = root.querySelector('[data-summary-people-overpaid-note]');
+    const peopleOverpaidCell = root.querySelector('[data-summary-people-overpaid]');
+
+    if (totalBillsCell) totalBillsCell.textContent = formatCents(cardsState?.totalTotal || 0);
+    if (inflowCell) inflowCell.textContent = formatCents(peopleState?.paidTotal || 0);
+    if (outflowCell) outflowCell.textContent = formatCents(cardsState?.paidTotal || 0);
+    if (pendingCell) pendingCell.textContent = formatCents(peopleState?.remainingTotal || 0);
+    if (overpaidCell) overpaidCell.textContent = formatCents(peopleState?.overpaidTotal || 0);
+    if (peopleOverpaidCell) peopleOverpaidCell.textContent = formatCents(peopleState?.overpaidTotal || 0);
+    if (overpaidChip) overpaidChip.hidden = Number(peopleState?.overpaidTotal || 0) <= 0;
+    if (peopleOverpaidNote) peopleOverpaidNote.hidden = Number(peopleState?.overpaidTotal || 0) <= 0;
+
+    syncCashBalanceValue(balanceCell, balanceCents);
+    if (captionCell) {
+      if (balanceCents > 0) {
+        captionCell.textContent = 'Tem dinheiro guardado para as próximas faturas.';
+      } else if (balanceCents < 0) {
+        captionCell.textContent = 'Já saiu mais para as faturas do que entrou nas parcerias.';
+      } else {
+        captionCell.textContent = 'O que já entrou está casando certinho com o que já saiu.';
+      }
+    }
+  }
+
+  function syncSummaryPanels(root) {
+    const cardsState = syncCardsSummary(root);
+    const peopleState = syncPeopleSummary(root);
+    syncCashSummary(root, cardsState, peopleState);
+    return { cardsState, peopleState };
   }
 
   async function postForm(url, data) {
@@ -1223,7 +1298,7 @@
       const paidInput = root.querySelector(`[data-summary-card-paid][data-card-id="${cardId}"]`);
       const dueInput = root.querySelector(`[data-summary-card-due][data-card-id="${cardId}"]`);
       if (!paidInput && !dueInput) return;
-      syncCardsSummary(root);
+      syncSummaryPanels(root);
       postForm(`/summary/${year}/${month}/cards/async`, {
         card_id: cardId,
         paid: paidInput ? paidInput.value : 'R$ 0,00',
@@ -1234,7 +1309,7 @@
     const savePerson = (personId) => {
       const paidInput = root.querySelector(`[data-summary-person-paid][data-person-id="${personId}"]`);
       if (!paidInput) return;
-      syncPeopleSummary(root);
+      syncSummaryPanels(root);
       postForm(`/summary/${year}/${month}/people/async`, {
         person_id: personId,
         paid: paidInput.value
@@ -1246,7 +1321,7 @@
       const cardId = input.getAttribute('data-card-id');
       if (!cardId) return;
       input.addEventListener('input', () => {
-        syncCardsSummary(root);
+        syncSummaryPanels(root);
         debounceWithKey(timers, `card-paid-${cardId}`, () => saveCard(cardId));
       });
       input.addEventListener('blur', () => saveCard(cardId));
@@ -1265,15 +1340,14 @@
       const personId = input.getAttribute('data-person-id');
       if (!personId) return;
       input.addEventListener('input', () => {
-        syncPeopleSummary(root);
+        syncSummaryPanels(root);
         debounceWithKey(timers, `person-paid-${personId}`, () => savePerson(personId));
       });
       input.addEventListener('blur', () => savePerson(personId));
       input.addEventListener('change', () => savePerson(personId));
     });
 
-    syncCardsSummary(root);
-    syncPeopleSummary(root);
+    syncSummaryPanels(root);
   });
 })();
 

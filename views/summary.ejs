@@ -56,10 +56,10 @@
         ? 'text-emerald-600 dark:text-emerald-300'
         : (cashReserveCents < 0 ? 'text-red-500 dark:text-red-300' : 'text-slate-700 dark:text-slate-200');
       const cashReserveHint = cashReserveCents > 0
-        ? 'Tem dinheiro reservado para as próximas faturas.'
+        ? 'Livre para próximos vencimentos.'
         : (cashReserveCents < 0
-          ? 'Já saiu mais para as faturas do que entrou nas parcerias.'
-          : 'O que já entrou está casando certinho com o que já saiu.');
+          ? 'Saiu mais do que entrou.'
+          : 'Entrou e saiu no mesmo valor.');
     %>
     <div hidden data-offline-snapshot
       data-snapshot-page="Resumo da ópera"
@@ -215,36 +215,32 @@
 
             <div class="mt-4 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden" data-summary-cash-section>
               <div class="border-b border-slate-200 bg-slate-50/80 px-5 py-4 dark:border-slate-700 dark:bg-slate-900/70">
-                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Leitura rápida do caixa</div>
-                <h3 class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white">Quanto já ficou em caixa para as faturas</h3>
-                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Aqui a conta é simples: o que já foi reunido nas parcerias, menos o que você já marcou como pago nas faturas.</p>
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Caixa das faturas</div>
+                <h3 class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white">Quanto já ficou em caixa</h3>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Entrou das parcerias menos o que já saiu nas faturas.</p>
               </div>
               <div class="p-5">
                 <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <article class="rounded-2xl border border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70">
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Faturas do mês</div>
-                    <div data-summary-cash-total-bills class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotals.total_cents) %></div>
-                    <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Tudo o que caiu neste resumo, somando todos os cartões.</p>
+                    <div data-summary-cash-total-bills class="op-summary-kpi-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotals.total_cents) %></div>
+                    <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400">Total dos cartões.</p>
                   </article>
                   <article class="rounded-2xl border border-cyan-200 bg-cyan-50/70 px-4 py-4 dark:border-cyan-800 dark:bg-cyan-950/20">
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-200">Já reunido</div>
-                    <div data-summary-cash-inflow class="mt-2 text-2xl font-black text-cyan-700 dark:text-cyan-200"><%= formatBRLFromCents(personPanelTotals.paid_cents) %></div>
-                    <p class="mt-2 text-xs font-medium leading-5 text-cyan-900/80 dark:text-cyan-100/80">Soma o que já foi marcado como pago nas parcerias, inclusive a sua parte.</p>
+                    <div data-summary-cash-inflow class="op-summary-kpi-value mt-2 text-cyan-700 dark:text-cyan-200"><%= formatBRLFromCents(personPanelTotals.paid_cents) %></div>
+                    <p class="op-summary-kpi-note mt-2 text-cyan-900/80 dark:text-cyan-100/80">Já entrou.</p>
                   </article>
                   <article class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/80">
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Já saiu nas faturas</div>
-                    <div data-summary-cash-outflow class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotals.paid_cents) %></div>
-                    <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">É o que você já anotou como pago ali em cima, cartão por cartão.</p>
+                    <div data-summary-cash-outflow class="op-summary-kpi-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotals.paid_cents) %></div>
+                    <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400">Já foi pago.</p>
                   </article>
                   <article class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 dark:border-emerald-800 dark:bg-emerald-950/20">
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Saldo em caixa</div>
-                    <div data-summary-cash-balance-value class="mt-2 text-2xl font-black <%= cashReserveToneClass %>"><%= formatBRLFromCents(cashReserveCents) %></div>
-                    <p data-summary-cash-balance-caption class="mt-2 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300"><%= cashReserveHint %></p>
+                    <div data-summary-cash-balance-value class="op-summary-kpi-value mt-2 <%= cashReserveToneClass %>"><%= formatBRLFromCents(cashReserveCents) %></div>
+                    <p data-summary-cash-balance-caption class="op-summary-kpi-note mt-2 text-slate-600 dark:text-slate-300"><%= cashReserveHint %></p>
                   </article>
-                </div>
-                <div class="mt-4 flex flex-wrap gap-2 text-xs font-bold">
-                  <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-violet-700 dark:border-violet-800 dark:bg-violet-950/20 dark:text-violet-200">Ainda falta reunir <span data-summary-cash-pending class="ml-1"><%= formatBRLFromCents(personPanelTotals.remaining_cents) %></span></span>
-                  <span data-summary-cash-overpaid-chip <%= personPanelTotals.overpaid_cents > 0 ? '' : 'hidden' %> class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-3 py-1 text-emerald-700 dark:border-emerald-800 dark:bg-slate-900/70 dark:text-emerald-200">Inclui <span data-summary-cash-overpaid class="ml-1"><%= formatBRLFromCents(personPanelTotals.overpaid_cents) %></span> pagos acima do combinado</span>
                 </div>
               </div>
             </div>
@@ -334,7 +330,7 @@
                       <% } %>
                       <tr>
                         <td colspan="5" class="px-4 pb-4 text-right text-[11px] font-semibold leading-5 text-slate-500 dark:text-slate-400">
-                          Se alguém pagar a mais, esse extra entra no caixa — mas o que falta dos outros continua intacto.
+                          Pago a mais entra no caixa, sem reduzir o restante dos outros.
                           <span data-summary-people-overpaid-note <%= personPanelTotals.overpaid_cents > 0 ? '' : 'hidden' %>> Hoje isso soma <span data-summary-people-overpaid class="font-bold text-emerald-600 dark:text-emerald-300"><%= formatBRLFromCents(personPanelTotals.overpaid_cents) %></span>.</span>
                         </td>
                       </tr>

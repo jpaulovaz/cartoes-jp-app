@@ -1229,29 +1229,23 @@
     const outflowCell = root.querySelector('[data-summary-cash-outflow]');
     const balanceCell = root.querySelector('[data-summary-cash-balance-value]');
     const captionCell = root.querySelector('[data-summary-cash-balance-caption]');
-    const pendingCell = root.querySelector('[data-summary-cash-pending]');
-    const overpaidChip = root.querySelector('[data-summary-cash-overpaid-chip]');
-    const overpaidCell = root.querySelector('[data-summary-cash-overpaid]');
     const peopleOverpaidNote = root.querySelector('[data-summary-people-overpaid-note]');
     const peopleOverpaidCell = root.querySelector('[data-summary-people-overpaid]');
 
     if (totalBillsCell) totalBillsCell.textContent = formatCents(cardsState?.totalTotal || 0);
     if (inflowCell) inflowCell.textContent = formatCents(peopleState?.paidTotal || 0);
     if (outflowCell) outflowCell.textContent = formatCents(cardsState?.paidTotal || 0);
-    if (pendingCell) pendingCell.textContent = formatCents(peopleState?.remainingTotal || 0);
-    if (overpaidCell) overpaidCell.textContent = formatCents(peopleState?.overpaidTotal || 0);
     if (peopleOverpaidCell) peopleOverpaidCell.textContent = formatCents(peopleState?.overpaidTotal || 0);
-    if (overpaidChip) overpaidChip.hidden = Number(peopleState?.overpaidTotal || 0) <= 0;
     if (peopleOverpaidNote) peopleOverpaidNote.hidden = Number(peopleState?.overpaidTotal || 0) <= 0;
 
     syncCashBalanceValue(balanceCell, balanceCents);
     if (captionCell) {
       if (balanceCents > 0) {
-        captionCell.textContent = 'Tem dinheiro guardado para as próximas faturas.';
+        captionCell.textContent = 'Livre para próximos vencimentos.';
       } else if (balanceCents < 0) {
-        captionCell.textContent = 'Já saiu mais para as faturas do que entrou nas parcerias.';
+        captionCell.textContent = 'Saiu mais do que entrou.';
       } else {
-        captionCell.textContent = 'O que já entrou está casando certinho com o que já saiu.';
+        captionCell.textContent = 'Entrou e saiu no mesmo valor.';
       }
     }
   }

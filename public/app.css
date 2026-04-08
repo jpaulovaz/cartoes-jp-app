@@ -3158,6 +3158,22 @@ html.dark .op-surface-card table tbody th {
   font-variant-numeric: tabular-nums;
 }
 
+
+.op-summary-kpi-value {
+  font-size: clamp(1.15rem, 0.7rem + 1vw, 1.55rem);
+  line-height: 1.15;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.op-summary-kpi-note {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
 @media (min-width: 1024px) {
   .op-summary-money-input {
     width: 7rem;
@@ -3166,6 +3182,10 @@ html.dark .op-surface-card table tbody th {
 }
 
 @media (max-width: 1023px) {
+  .op-summary-kpi-value {
+    font-size: 1.1rem;
+  }
+
   .op-summary-money-input {
     width: 8.75rem;
     min-width: 8.75rem;

@@ -1,5 +1,5 @@
 
-<%- include("partials/header", { title: "AcerttaPay | Amigos" }) %>
+<%- include("partials/header", { title: "AcerttaPay | Minha Rede" }) %>
 
 <%
   const pendingRequests = Array.isArray(pendingFriendRequests) ? pendingFriendRequests : [];
@@ -54,20 +54,20 @@
   const notificationPreferenceTotalCount = Number(notificationPreferenceState.totalCount || 0) || notificationPreferenceGroups.length;
   const notificationPreferenceCopy = {
     friendship_activity: {
-      title: 'Amizades',
+      title: 'Minha rede',
       description: 'Pedidos, aceites e mudanças por aqui.'
     },
     shared_debt_new: {
-      title: 'Novas cobranças',
-      description: 'Quando chega cobrança, envio ou lembrete novo.'
+      title: 'Novos acertos',
+      description: 'Quando chega acerto, leva ou lembrete novo.'
     },
     shared_debt_updates: {
-      title: 'Respostas de cobranças',
+      title: 'Respostas dos acertos',
       description: 'Atualizações, aceites, recusas e revisões.'
     },
     shared_debt_payments: {
       title: 'Pagamentos',
-      description: 'Quando alguém marca ou confirma pagamento.'
+      description: 'Quando alguém avisa que pagou ou confirma o recebimento.'
     },
     finance_date_alerts: {
       title: 'Datas do mês',
@@ -75,7 +75,7 @@
     },
     due_date_alerts: {
       title: 'Datas combinadas',
-      description: 'Lembretes automáticos quando uma cobrança avulsa ou lembrete privado bate na data.'
+      description: 'Lembretes automáticos quando um acerto avulso ou lembrete privado bate na data.'
     },
     monthly_pix_updates: {
       title: 'Pix do mês',
@@ -132,11 +132,11 @@
     }
 
     if (!person.is_self && person.friendship_active) {
-      addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Amigos');
+      addChip('border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200', 'Minha Rede');
       if (person.can_share_charge) {
         addChip('border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200', 'Pode cobrar');
       } else if (!person.active) {
-        addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Cobrança pausada');
+        addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Acerto pausado');
       }
       if (person.linked_user_pix_ready) {
         addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix ok');
@@ -158,7 +158,7 @@
     if (person && person.friendship_state === 'active') {
       return {
         key: 'friend',
-        label: 'Amigos',
+        label: 'Minha Rede',
         summary: 'Já podem dividir e cobrar.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
         barClasses: 'from-emerald-400 via-cyan-400 to-sky-500'
@@ -250,7 +250,7 @@
   <section class="op-page-hero op-fade-up mb-8">
     <div>
       <span class="op-page-hero__eyebrow">Seu perfil social + sua rede</span>
-      <h1 class="op-page-hero__title mt-4">Amigos</h1>
+      <h1 class="op-page-hero__title mt-4">Minha Rede</h1>
       <p class="op-page-hero__subtitle mt-3">Aqui fica a parte mais social do OrganizaPay: seu perfil público, seus convites e a galera que já faz parte da sua rede.</p>
     </div>
   </section>
@@ -266,7 +266,7 @@
         Convites recebidos
       </a>
     <% } %>
-    <a href="/settings#alerts" class="inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-amber-100/80 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">
+    <a href="/settings" class="inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-amber-100/80 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">
       <span>🔔</span>
       Seus ajustes
     </a>
@@ -340,11 +340,11 @@
 
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
               <div class="rounded-[22px] border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Amizades</div>
+                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Minha rede</div>
                 <div class="mt-2 text-xl font-black text-slate-900 dark:text-white"><%= activeFriendCount %></div>
               </div>
               <div class="rounded-[22px] border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Contatos</div>
+                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Parcerias</div>
                 <div class="mt-2 text-xl font-black text-slate-900 dark:text-white"><%= contactList.length %></div>
               </div>
               <div class="rounded-[22px] border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
@@ -410,7 +410,7 @@
           </div>
 
           <div class="mt-auto flex justify-end pt-2">
-            <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 sm:w-auto">Salvar assinatura</button>
+            <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 sm:w-auto">Guardar recado</button>
           </div>
         </form>
       </article>
@@ -421,7 +421,7 @@
     <section id="friend-requests" class="scroll-mt-28 mb-8 rounded-[32px] border border-emerald-200 bg-white p-6 shadow-sm dark:border-emerald-900/50 dark:bg-slate-800 sm:p-7">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Convites que chegaram</div>
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Quem está batendo na sua rede</div>
           <h2 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Tem gente batendo na porta da sua rede</h2>
           <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Aceitando, vocês podem usar cobranças entre si com mais facilidade. Se não quiser, é só recusar.</p>
         </div>
@@ -482,7 +482,7 @@
       <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 dark:border-slate-700 sm:px-6">
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2">
-            <div id="contactFormEyebrow" class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Adicionar à sua rede</div>
+            <div id="contactFormEyebrow" class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Chamar pra rede 🙋</div>
             <span id="contactEditingBadge" class="hidden inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-bold text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">Modo edição</span>
           </div>
           <h2 id="contactFormTitle" class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Quem vai entrar nessa roda?</h2>
@@ -577,7 +577,7 @@
   <section id="network-list" class="scroll-mt-28 mb-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
     <div>
       <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Sua rede ativa</div>
-      <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Amigos e contatos</h2>
+      <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Minha Rede e contatos</h2>
       <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Use a busca, filtre do seu jeito e ache alguém rapidinho.</p>
     </div>
 
@@ -593,7 +593,7 @@
 
         <div class="flex flex-wrap gap-2">
           <button type="button" data-network-filter="all" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Todos <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= contactList.length %></span></button>
-          <button type="button" data-network-filter="friend" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Amizades <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= activeFriendCount %></span></button>
+          <button type="button" data-network-filter="friend" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Minha rede <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= activeFriendCount %></span></button>
           <button type="button" data-network-filter="pending" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Convites <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= pendingContactCount %></span></button>
           <button type="button" data-network-filter="discover" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Já no app <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= discoverableCount %></span></button>
           <button type="button" data-network-filter="local" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Só na sua lista <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= localOnlyCount %></span></button>
@@ -733,7 +733,7 @@
                 <% } else if (p.has_app_user && p.active) { %>
                   <form method="post" action="/people/<%= p.id %>/send-friend-request" class="min-w-0">
                     <button class="<%= personActionMatchComprasClass %> border-sky-600 bg-sky-600 text-white hover:bg-sky-700 dark:border-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400">
-                      <span class="<%= personActionMatchComprasLabelClass %>">Enviar pedido</span>
+                      <span class="<%= personActionMatchComprasLabelClass %>">Mandar convite</span>
                     </button>
                   </form>
                 <% } else { %>
@@ -1172,7 +1172,7 @@ function resetContactForm() {
   }
 
   if (cancel) cancel.classList.add('hidden');
-  if (eyebrow) eyebrow.textContent = 'Adicionar à sua rede';
+  if (eyebrow) eyebrow.textContent = 'Chamar pra rede 🙋';
   if (title) title.textContent = 'Quem vai entrar nessa roda?';
   if (hint) hint.textContent = 'Salve nome, telefone e e-mail. Se essa pessoa também usa o app, você pode mandar o convite depois. O Pix fica por conta dela.';
   if (badge) badge.classList.add('hidden');

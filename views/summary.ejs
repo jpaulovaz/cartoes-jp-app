@@ -1,36 +1,24 @@
-<%- include("partials/header", { title: `AcerttaPay | Fechamento ${String(month).padStart(2,'0')}/${year}` }) %>
+<%- include("partials/header", { title: `AcerttaPay | Resumo da ópera ${String(month).padStart(2,'0')}/${year}` }) %>
 
   <div class="op-screen op-screen--summary w-full" data-summary-autosave-root data-year="<%= year %>" data-month="<%= month %>">
 
     <section class="op-page-hero op-fade-up mb-8">
       <div>
-        <span class="op-page-hero__eyebrow">Conferência do mês</span>
-        <h1 class="op-page-hero__title mt-4">Fechamento do mês — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
-        <p class="op-page-hero__subtitle mt-3">Confira cartões, pessoas e pagamentos do mês sem misturar isso com os gráficos.</p>
+        <span class="op-page-hero__eyebrow">Resumo da rodada</span>
+        <h1 class="op-page-hero__title mt-4">Resumo da ópera — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
+        <p class="op-page-hero__subtitle mt-3">Confira cartões, parcerias e pagamentos do mês sem misturar isso com os gráficos.</p>
       </div>
       <div class="op-page-hero__actions">
         <a href="/month/<%= year %>/<%= month %>"
-          class="inline-flex items-center justify-center rounded-2xl bg-rose-500 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-rose-500/20 transition-all hover:-translate-y-0.5 hover:bg-rose-600">
-          <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
-          </svg>
-          Ver compras
+          class="op-btn op-btn--compact op-hero-link op-hero-link--month whitespace-nowrap">
+          Ver mês
         </a>
         <a href="/analytics/<%= year %>/<%= month %>"
-          class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
-          <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6m4 6V7m4 10v-3M5 19h14"></path>
-          </svg>
-          Ver análises
+          class="op-btn op-btn--compact op-hero-link op-hero-link--analytics whitespace-nowrap">
+          Análises
         </a>
       </div>
     </section>
-
-    <% if (isClosed) { %>
-      <div class="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-        🔒 Este mês já foi fechado. As compras continuam visíveis, mas os campos de pagamento e vencimento ficam só para consulta.
-      </div>
-    <% } %>
 
     <% const privateReminderRadar = privateDebtReminderSummary || { activeCount: 0, activeCents: 0, readyToArchiveCount: 0, readyToArchiveCents: 0, hasActive: false, hasReadyToArchive: false }; %>
     <%
@@ -41,12 +29,62 @@
       const visibleDetailCards = (cards || []).filter((card) => visibleDetailCardIds.has(Number(card?.id || 0)));
       const visibleDetailPersonIds = new Set(detailRowsWithValue.map((row) => Number(row?.person_id || 0)).filter(Boolean));
       const visibleDetailPeople = (people || []).filter((person) => visibleDetailPersonIds.has(Number(person?.id || 0)));
+      const cardsPanelTotals = visibleCardsPanel.reduce((acc, cp) => {
+        acc.total_cents += Number(cp?.total_cents || 0);
+        acc.paid_cents += Number(cp?.paid_cents || 0);
+        acc.remaining_cents += Number(cp?.total_cents || 0) - Number(cp?.paid_cents || 0);
+        return acc;
+      }, { total_cents: 0, paid_cents: 0, remaining_cents: 0 });
+      const personPanelTotals = visiblePersonPanel.reduce((acc, pp) => {
+        const totalCents = Number(pp?.total_cents || 0);
+        const paidCents = Number(pp?.paid_cents || 0);
+        acc.total_cents += totalCents;
+        acc.paid_cents += paidCents;
+        acc.manual_paid_cents += Number(pp?.manual_paid_cents || 0);
+        acc.auto_paid_cents += Number(pp?.auto_paid_cents || 0);
+        acc.remaining_cents += Math.max(0, totalCents - paidCents);
+        acc.overpaid_cents += Math.max(0, paidCents - totalCents);
+        return acc;
+      }, { total_cents: 0, paid_cents: 0, manual_paid_cents: 0, auto_paid_cents: 0, remaining_cents: 0, overpaid_cents: 0 });
+      const hasAutoPersonPayments = visiblePersonPanel.some((pp) => Number(pp?.auto_paid_cents || 0) > 0);
+      const summaryCardsRemainingCents = visibleCardsPanel.reduce((acc, cp) => acc + Math.max(0, Number(cp?.total_cents || 0) - Number(cp?.paid_cents || 0)), 0);
+      const summaryPeopleRemainingCents = visiblePersonPanel.reduce((acc, pp) => acc + Math.max(0, Number(pp?.total_cents || 0) - Number(pp?.paid_cents || 0)), 0);
+      const nextDueCard = visibleCardsPanel[0] || null;
+      const nextDueLabel = nextDueCard?.due_date ? new Date(`${nextDueCard.due_date}T12:00:00`).toLocaleDateString('pt-BR') : 'Sem data salva';
+      const cashReserveCents = personPanelTotals.paid_cents - cardsPanelTotals.paid_cents;
+      const cashReserveToneClass = cashReserveCents > 0
+        ? 'text-emerald-600 dark:text-emerald-300'
+        : (cashReserveCents < 0 ? 'text-red-500 dark:text-red-300' : 'text-slate-700 dark:text-slate-200');
+      const cashReserveHint = cashReserveCents > 0
+        ? 'Livre para próximos vencimentos.'
+        : (cashReserveCents < 0
+          ? 'Saiu mais do que entrou.'
+          : 'Entrou e saiu no mesmo valor.');
     %>
+    <div hidden data-offline-snapshot
+      data-snapshot-page="Resumo da ópera"
+      data-snapshot-title="Resumo da ópera - <%= String(month).padStart(2,'0') %>/<%= year %>"
+      data-snapshot-summary="<%= `Cartões com ${formatBRLFromCents(summaryCardsRemainingCents)} ainda respirando e parcerias com ${formatBRLFromCents(summaryPeopleRemainingCents)} pendentes.` %>"
+      data-snapshot-primary-label="Próxima fatura"
+      data-snapshot-primary-value="<%= nextDueCard ? `${nextDueCard.card_name} · ${nextDueLabel}` : 'Sem fatura visível' %>"
+      data-snapshot-secondary-label="Ainda nos cartões"
+      data-snapshot-secondary-value="<%= formatBRLFromCents(summaryCardsRemainingCents) %>"
+      data-snapshot-tertiary-label="Parcerias em aberto"
+      data-snapshot-tertiary-value="<%= formatBRLFromCents(summaryPeopleRemainingCents) %>"
+      data-snapshot-cta-label="Voltar para este resumo"
+      data-snapshot-cta-href="/summary/<%= year %>/<%= month %>"></div>
+
+    <% if (isClosed) { %>
+      <div class="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+        🔒 Este mês já foi fechado. As compras continuam visíveis, mas os campos de pagamento e vencimento ficam só para consulta.
+      </div>
+    <% } %>
+
     <% if (privateReminderRadar.hasActive || privateReminderRadar.hasReadyToArchive) { %>
       <div class="mb-8 rounded-3xl border border-cyan-200 bg-cyan-50/80 px-5 py-4 shadow-sm dark:border-cyan-800 dark:bg-cyan-900/20">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div class="min-w-0">
-            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-200">Radar privado</div>
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-200">Radar só seu</div>
             <h3 class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white">Tem combinado fora do cartão pedindo sua lembrança</h3>
             <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
               <% if (privateReminderRadar.hasActive) { %>
@@ -64,7 +102,7 @@
             <% if (privateReminderRadar.hasReadyToArchive) { %>
               <span class="inline-flex items-center rounded-full border border-cyan-200 bg-white px-3 py-1 text-xs font-bold text-cyan-700 dark:border-cyan-800 dark:bg-slate-900/70 dark:text-cyan-200"><%= privateReminderRadar.readyToArchiveCount %> prontos para arquivo</span>
             <% } %>
-            <a href="/shared-debts#private-reminders" class="inline-flex items-center justify-center rounded-2xl bg-cyan-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-cyan-700 dark:bg-cyan-500 dark:hover:bg-cyan-600">Abrir central</a>
+            <a href="/shared-debts#private-reminders" class="inline-flex items-center justify-center rounded-2xl bg-cyan-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-cyan-700 dark:bg-cyan-500 dark:hover:bg-cyan-600">Abrir acertos</a>
           </div>
         </div>
       </div>
@@ -107,15 +145,9 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
               </svg>
-              Como estão os cartões
+              Como a fatura está andando
             </h2>
             <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-              <% const cardsPanelTotals = visibleCardsPanel.reduce((acc, cp) => {
-                   acc.total_cents += cp.total_cents || 0;
-                   acc.paid_cents += cp.paid_cents || 0;
-                   acc.remaining_cents += (cp.total_cents || 0) - (cp.paid_cents || 0);
-                   return acc;
-                 }, { total_cents: 0, paid_cents: 0, remaining_cents: 0 }); %>
               <div data-summary-cards-panel>
                 <% if (visibleCardsPanel.length > 0) { %>
                 <div class="overflow-x-auto op-summary-scroll-shell">
@@ -126,8 +158,8 @@
                         <th class="px-3 py-4">Cartão</th>
                         <th class="px-2 py-4 text-center">Vencimento</th>
                         <th class="px-3 py-4 text-right">Fatura</th>
-                        <th class="px-3 py-4 text-right">Valor Pago</th>
-                        <th class="px-3 py-4 text-right">Falta</th>
+                        <th class="px-3 py-4 text-right">Já saiu daqui</th>
+                        <th class="px-3 py-4 text-right">Ainda falta</th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
@@ -139,7 +171,7 @@
                             <%= cp.card_name %>
                           </td>
                           <td class="px-2 py-3 text-center">
-                            <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1">Calculado: <%=
+                            <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1">A gente calculou: <%=
                                 formatDateBR(cp.computed_due_date) %>
                             </div>
                             <input name="override_due" type="date" value="<%= (cp.due_date || '') %>" <%= isClosed ? 'disabled' : '' %>
@@ -180,6 +212,38 @@
                 <% } %>
               </div>
             </div>
+
+            <div class="mt-4 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden" data-summary-cash-section>
+              <div class="border-b border-slate-200 bg-slate-50/80 px-5 py-4 dark:border-slate-700 dark:bg-slate-900/70">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Caixa das faturas</div>
+                <h3 class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white">Quanto já ficou em caixa</h3>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Entrou das parcerias menos o que já saiu nas faturas.</p>
+              </div>
+              <div class="p-5">
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <article class="rounded-2xl border border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Faturas do mês</div>
+                    <div data-summary-cash-total-bills class="op-summary-kpi-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotals.total_cents) %></div>
+                    <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400">Total dos cartões.</p>
+                  </article>
+                  <article class="rounded-2xl border border-cyan-200 bg-cyan-50/70 px-4 py-4 dark:border-cyan-800 dark:bg-cyan-950/20">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-200">Já reunido</div>
+                    <div data-summary-cash-inflow class="op-summary-kpi-value mt-2 text-cyan-700 dark:text-cyan-200"><%= formatBRLFromCents(personPanelTotals.paid_cents) %></div>
+                    <p class="op-summary-kpi-note mt-2 text-cyan-900/80 dark:text-cyan-100/80">Já entrou.</p>
+                  </article>
+                  <article class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/80">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Já saiu nas faturas</div>
+                    <div data-summary-cash-outflow class="op-summary-kpi-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotals.paid_cents) %></div>
+                    <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400">Já foi pago.</p>
+                  </article>
+                  <article class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 dark:border-emerald-800 dark:bg-emerald-950/20">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Saldo em caixa</div>
+                    <div data-summary-cash-balance-value class="op-summary-kpi-value mt-2 <%= cashReserveToneClass %>"><%= formatBRLFromCents(cashReserveCents) %></div>
+                    <p data-summary-cash-balance-caption class="op-summary-kpi-note mt-2 text-slate-600 dark:text-slate-300"><%= cashReserveHint %></p>
+                  </article>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div>
@@ -189,18 +253,9 @@
                   d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z">
                 </path>
               </svg>
-              Como está cada pessoa
+              Como está cada parceria
             </h2>
             <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-              <% const personPanelTotals = visiblePersonPanel.reduce((acc, pp) => {
-                   acc.total_cents += pp.total_cents || 0;
-                   acc.paid_cents += pp.paid_cents || 0;
-                   acc.manual_paid_cents += pp.manual_paid_cents || 0;
-                   acc.auto_paid_cents += pp.auto_paid_cents || 0;
-                   acc.remaining_cents += (pp.total_cents || 0) - (pp.paid_cents || 0);
-                   return acc;
-                 }, { total_cents: 0, paid_cents: 0, manual_paid_cents: 0, auto_paid_cents: 0, remaining_cents: 0 });
-                 const hasAutoPersonPayments = visiblePersonPanel.some((pp) => Number(pp.auto_paid_cents || 0) > 0); %>
               <% if (hasAutoPersonPayments) { %>
                 <div class="border-b border-indigo-100 bg-indigo-50/80 px-5 py-4 text-sm font-medium leading-6 text-indigo-900 dark:border-indigo-900/40 dark:bg-indigo-950/20 dark:text-indigo-100">
                   💡 O Pix confirmado do cartão entra sozinho nessa conta. O campo editável continua sendo só o ajuste manual do mês.
@@ -217,12 +272,12 @@
                         <th class="px-4 py-4 text-right">Total (Deve)</th>
                         <th class="px-4 py-4 text-right">Já entrou</th>
                         <th class="px-4 py-4 text-right">Ajuste manual</th>
-                        <th class="px-4 py-4 text-right">Falta</th>
+                        <th class="px-4 py-4 text-right">Ainda falta</th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                       <% visiblePersonPanel.forEach(pp=> {
-                        const falta = (pp.total_cents || 0) - (pp.paid_cents || 0);
+                        const falta = Math.max(0, (pp.total_cents || 0) - (pp.paid_cents || 0));
                         %>
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors" data-summary-person-row data-person-id="<%= pp.person_id %>" data-total-cents="<%= pp.total_cents || 0 %>" data-auto-paid-cents="<%= pp.auto_paid_cents || 0 %>">
                           <td class="px-4 py-3 font-bold text-slate-800 dark:text-white">
@@ -249,7 +304,7 @@
                               value="<%= formatBRLFromCents(pp.manual_paid_cents || 0) %>" <%= isClosed ? 'disabled' : '' %>
                               data-money-mask data-summary-person-paid data-person-id="<%= pp.person_id %>"
                               class="op-summary-money-input text-right border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" />
-                            <p class="mt-2 text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400">Entrada Manual</p>
+                            <p class="mt-2 text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400">Ajuste manual</p>
                           </td>
                           <td data-summary-person-remaining data-person-id="<%= pp.person_id %>"
                             class="px-4 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">
@@ -273,6 +328,12 @@
                           </td>
                         </tr>
                       <% } %>
+                      <tr>
+                        <td colspan="5" class="px-4 pb-4 text-right text-[11px] font-semibold leading-5 text-slate-500 dark:text-slate-400">
+                          Pago a mais entra no caixa, sem reduzir o restante dos outros.
+                          <span data-summary-people-overpaid-note <%= personPanelTotals.overpaid_cents > 0 ? '' : 'hidden' %>> Hoje isso soma <span data-summary-people-overpaid class="font-bold text-emerald-600 dark:text-emerald-300"><%= formatBRLFromCents(personPanelTotals.overpaid_cents) %></span>.</span>
+                        </td>
+                      </tr>
                     </tfoot>
                   </table>
                 </div>
@@ -292,7 +353,7 @@
               d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z">
             </path>
           </svg>
-          Resumo Detalhado (Pessoa x Cartão)
+          Mapa cruzado (pessoa x cartão)
         </h2>
         <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-8">
           <% if (visibleDetailPeople.length > 0 && visibleDetailCards.length > 0) { %>
@@ -307,7 +368,7 @@
                     </th>
                     <% }) %>
                       <th class="px-5 py-4 text-right border-l border-slate-700 dark:border-slate-600">Total Geral</th>
-                      <th class="px-5 py-4 text-center rounded-tr-3xl">Ações</th>
+                      <th class="px-5 py-4 text-center rounded-tr-3xl">Próximo passo</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 dark:divide-slate-700">

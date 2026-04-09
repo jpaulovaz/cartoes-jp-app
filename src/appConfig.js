@@ -46,10 +46,10 @@ const SETTING_SECTIONS = [
   },
   {
     key: 'sharedDebt',
-    title: 'Cobranças entre amigos',
+    title: 'Acertos na rede',
     eyebrow: 'Regra de vínculo',
-    description: 'Decide quando a cobrança automática depende de amizade ativa e quando o e-mail já basta.',
-    shortDescription: 'Ajusta a regra de vínculo das cobranças.',
+    description: 'Decide quando o acerto automático depende de amizade ativa e quando o e-mail já basta.',
+    shortDescription: 'Ajusta a regra de vínculo dos acertos.',
     group: 'rules',
     icon: 'friends'
   },
@@ -417,7 +417,7 @@ const SETTING_DEFINITIONS = [
     key: 'DATE_DRIVEN_ALERTS_ENABLED',
     section: 'push',
     label: 'Datas combinadas ligadas',
-    helper: 'Liga ou pausa os alertas automáticos de cobranças avulsas com data e lembretes privados com data. Eles criam aviso interno e tentam push quando disponível.',
+    helper: 'Liga ou pausa os alertas automáticos de acertos avulsos com data e lembretes privados com data. Eles criam aviso interno e tentam push quando disponível.',
     input: 'switch',
     defaultValue: '1',
     required: false,
@@ -465,8 +465,8 @@ const SETTING_DEFINITIONS = [
   {
     key: 'FRIENDSHIP_GATE_SHARED_DEBT_ENABLED',
     section: 'sharedDebt',
-    label: 'Cobrança automática só com amizade ativa',
-    helper: 'Ligado: só amigos ativos podem receber cobrança automática. Desligado: o match por e-mail já libera o atalho.',
+    label: 'Acerto automático só com amizade ativa',
+    helper: 'Ligado: só amizades ativas podem receber acerto automático. Desligado: o match por e-mail já libera o atalho.',
     input: 'switch',
     defaultValue: '1',
     required: false,

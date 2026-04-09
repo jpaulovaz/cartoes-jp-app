@@ -32,7 +32,7 @@
   <section class="op-page-hero op-fade-up">
     <div>
       <span class="op-page-hero__eyebrow">Trazer fatura pro app</span>
-      <h1 class="op-page-hero__title mt-4">Importar fatura em CSV</h1>
+      <h1 class="op-page-hero__title mt-4">Trazer pro app fatura em CSV</h1>
       <p class="op-page-hero__subtitle mt-3">Agora o fluxo ganhou um pit-stop: antes de gravar, voce revisa o que entrou no arquivo, confere suspeitas de duplicidade e decide o que realmente vai pousar por aqui.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= cards.length %> cartao(oes) disponivel(is)</span>
@@ -384,11 +384,11 @@
                     <div class="flex flex-wrap gap-2 sm:justify-end">
                       <label class="group relative overflow-hidden rounded-2xl">
                         <input type="radio" name="app_resolution_<%= candidate.id %>" value="skip" checked data-app-resolution data-candidate-id="<%= candidate.id %>" class="peer absolute inset-0 h-full w-full cursor-pointer opacity-0">
-                        <span class="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-600 transition peer-checked:border-slate-900 peer-checked:bg-slate-900 peer-checked:text-white dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:peer-checked:border-slate-200 dark:peer-checked:bg-slate-100 dark:peer-checked:text-slate-900">Pular</span>
+                        <span class="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-600 transition peer-checked:border-slate-900 peer-checked:bg-slate-900 peer-checked:text-white dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:peer-checked:border-slate-200 dark:peer-checked:bg-slate-100 dark:peer-checked:text-slate-900">Deixar de fora</span>
                       </label>
                       <label class="group relative overflow-hidden rounded-2xl">
                         <input type="radio" name="app_resolution_<%= candidate.id %>" value="import" data-app-resolution data-candidate-id="<%= candidate.id %>" class="peer absolute inset-0 h-full w-full cursor-pointer opacity-0">
-                        <span class="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-emerald-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-emerald-700 transition peer-checked:border-emerald-600 peer-checked:bg-emerald-600 peer-checked:text-white dark:border-emerald-900/60 dark:bg-slate-950 dark:text-emerald-300 dark:peer-checked:border-emerald-500 dark:peer-checked:bg-emerald-500 dark:peer-checked:text-slate-950">Importar</span>
+                        <span class="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-emerald-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-emerald-700 transition peer-checked:border-emerald-600 peer-checked:bg-emerald-600 peer-checked:text-white dark:border-emerald-900/60 dark:bg-slate-950 dark:text-emerald-300 dark:peer-checked:border-emerald-500 dark:peer-checked:bg-emerald-500 dark:peer-checked:text-slate-950">Trazer pro app</span>
                       </label>
                       <% if (candidate.overwriteEligibleCount > 0) { %>
                         <label class="group relative overflow-hidden rounded-2xl">
@@ -541,11 +541,11 @@
                         <% for (let keepCount = 0; keepCount <= group.occurrenceCount; keepCount += 1) { %>
                           <option value="<%= keepCount %>" <%= keepCount === Number(group.defaultKeepCount || 0) ? 'selected' : '' %>>
                             <% if (keepCount === 0) { %>
-                              Pular todas as <%= group.occurrenceCount %> linhas
+                              Deixar de fora todas as <%= group.occurrenceCount %> linhas
                             <% } else if (keepCount === group.occurrenceCount) { %>
-                              Importar todas as <%= group.occurrenceCount %> linhas
+                              Trazer pro app todas as <%= group.occurrenceCount %> linhas
                             <% } else { %>
-                              Importar <%= keepCount %> de <%= group.occurrenceCount %> linhas
+                              Trazer pro app <%= keepCount %> de <%= group.occurrenceCount %> linhas
                             <% } %>
                           </option>
                         <% } %>
@@ -587,7 +587,7 @@
                 <div class="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Lista final</div>
-                    <h3 class="mt-1.5 text-base font-black text-slate-900 dark:text-slate-100">Novas compras que vao entrar</h3>
+                    <h3 class="mt-1.5 text-base font-black text-slate-900 dark:text-slate-100">Compras novas que vão entrar</h3>
                   </div>
                   <div class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Compras unicas entram sozinhas. O restante segue exatamente as escolhas das abas anteriores.</div>
                 </div>
@@ -650,7 +650,7 @@
                 </div>
 
                 <div data-final-import-empty class="hidden mt-4 rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
-                  Nenhuma compra nova ficou marcada para entrar por enquanto.
+                  Nada novo ficou marcado para entrar por enquanto.
                 </div>
               </section>
 
@@ -658,7 +658,7 @@
                 <div class="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Lista final</div>
-                    <h3 class="mt-1.5 text-base font-black text-slate-900 dark:text-slate-100">Lançamentos manuais que vao ser sobrescritos</h3>
+                    <h3 class="mt-1.5 text-base font-black text-slate-900 dark:text-slate-100">Lançamentos manuais que vão ser atualizados</h3>
                   </div>
                   <div class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">A compra manual continua a mesma. O app atualiza os dados vindos do CSV e preserva categoria/divisao.</div>
                 </div>

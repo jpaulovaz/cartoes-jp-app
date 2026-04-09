@@ -28,7 +28,7 @@
     if (response.headers.get('x-session-expired') === '1') {
       const redirectUrl = response.headers.get('x-session-expired-redirect') || '/login?reason=idle';
       window.location.href = redirectUrl;
-      const error = new Error('Sua sessão expirou por inatividade. Faça login novamente.');
+      const error = new Error('Sua sessão cochilou por inatividade. Entre de novo para seguir.');
       error.code = 'SESSION_EXPIRED';
       error.response = response;
       throw error;
@@ -55,12 +55,14 @@
     const body = document.body;
     const isIOS = detectIOS();
     const isStandalone = detectStandalone();
+    const hasCoarsePointer = window.matchMedia('(pointer: coarse)').matches || Number(navigator.maxTouchPoints || 0) > 0;
     const visualViewport = window.visualViewport;
     const viewportHeight = Math.round((visualViewport && visualViewport.height) || window.innerHeight || document.documentElement.clientHeight || 0);
     const viewportWidth = Math.round((visualViewport && visualViewport.width) || window.innerWidth || document.documentElement.clientWidth || 0);
     const offsetTop = Math.round((visualViewport && visualViewport.offsetTop) || 0);
     const keyboardInset = Math.max(0, Math.round((window.innerHeight || viewportHeight) - viewportHeight - offsetTop));
     const keyboardOpen = keyboardInset > 120;
+    const landscapePhoneChrome = hasCoarsePointer && viewportWidth >= 768 && viewportHeight <= 560;
     const cozyViewport = viewportWidth <= 430;
     const compactViewport = viewportWidth <= 390;
     const tightViewport = viewportWidth <= 360;
@@ -74,6 +76,7 @@
     root.classList.toggle('op-vp-compact', compactViewport);
     root.classList.toggle('op-vp-tight', tightViewport);
     root.classList.toggle('op-vp-short', shortViewport);
+    root.classList.toggle('op-force-mobile-chrome', landscapePhoneChrome);
     root.dataset.opPlatform = isIOS ? 'ios' : 'default';
     root.dataset.opDisplayMode = isStandalone ? 'standalone' : 'browser';
     root.dataset.opViewportTier = viewportTier;
@@ -92,6 +95,7 @@
       body.classList.toggle('op-vp-compact', compactViewport);
       body.classList.toggle('op-vp-tight', tightViewport);
       body.classList.toggle('op-vp-short', shortViewport);
+      body.classList.toggle('op-force-mobile-chrome', landscapePhoneChrome);
       body.classList.toggle('op-virtual-keyboard-open', isIOS && keyboardOpen);
       body.dataset.opViewportTier = viewportTier;
     }
@@ -125,7 +129,7 @@
     const container = btn.closest('.bg-slate-50\\/50');
 
     if (!container) {
-      console.error("Container de distribuição não encontrado.");
+      console.error("Não achei a caixinha dessa divisão por aqui.");
       return;
     }
 
@@ -134,7 +138,7 @@
       .map(cb => cb.value);
 
     if (selected.length === 0) {
-      alert("Selecione pelo menos uma pessoa antes de copiar.");
+      alert("Escolha pelo menos uma pessoa antes de copiar essa divisão.");
       return;
     }
 
@@ -143,14 +147,14 @@
 
     // Feedback visual no botão
     const originalText = btn.innerText;
-    btn.innerText = "✅ Copiado!";
+    btn.innerText = "✅ Levei!";
     setTimeout(() => { btn.innerText = originalText; }, 1000);
   }
   function pasteAlloc(btn) {
     const data = localStorage.getItem('copiedAlloc');
 
     if (!data) {
-      alert("Nada copiado ainda. Use o botão Copiar primeiro.");
+      alert("Ainda não há nada copiado. Primeiro copie uma divisão e depois cole aqui.");
       return;
     }
 
@@ -170,7 +174,7 @@
 
     // Feedback visual
     const originalText = btn.innerText;
-    btn.innerText = "✅ Colado!";
+    btn.innerText = "✅ Ficou igual!";
     setTimeout(() => { btn.innerText = originalText; }, 1000);
   }
 
@@ -400,10 +404,66 @@
 })();
 
 (function () {
+  const MANUAL_PURCHASE_LAST_CARD_KEY = 'op:last-manual-card-id';
+  const MANUAL_PURCHASE_DRAFT_DB_NAME = 'acerttapay-local-drafts-v1';
+  const MANUAL_PURCHASE_DRAFT_STORE_NAME = 'drafts';
+  const MANUAL_PURCHASE_DRAFT_KEY = 'manual_purchase';
+  const MANUAL_PURCHASE_DRAFT_SUMMARY_KEY = 'acerttapay:offline-draft-summary';
+  const MANUAL_PURCHASE_DRAFT_PURGE_KEY = 'acerttapay:purge-local-drafts';
+
   function getLocalTodayISO() {
     const now = new Date();
     const local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
     return local.toISOString().slice(0, 10);
+  }
+
+  function safeLocalStorageGet(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function safeLocalStorageSet(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (error) {
+      // Sem drama: se o navegador travar o storage, o app segue normal.
+    }
+  }
+
+  function safeLocalStorageRemove(key) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch (error) {
+      // noop
+    }
+  }
+
+  function readLastManualCardId() {
+    return safeLocalStorageGet(MANUAL_PURCHASE_LAST_CARD_KEY) || '';
+  }
+
+  function writeLastManualCardId(cardId) {
+    const normalized = String(cardId || '').trim();
+    if (!normalized) return;
+    safeLocalStorageSet(MANUAL_PURCHASE_LAST_CARD_KEY, normalized);
+  }
+
+  function restoreLastManualCard(form) {
+    if (!(form instanceof HTMLFormElement)) return;
+
+    const cardSelect = form.querySelector('[data-manual-card-select]');
+    if (!(cardSelect instanceof HTMLSelectElement) || !cardSelect.options.length) return;
+
+    const lastCardId = readLastManualCardId();
+    if (!lastCardId) return;
+
+    const matchingOption = Array.from(cardSelect.options).find((option) => String(option.value || '') === lastCardId);
+    if (!matchingOption) return;
+
+    cardSelect.value = lastCardId;
   }
 
   function focusManualAmount(input) {
@@ -430,13 +490,15 @@
   function syncManualPurchaseDefaults(modal) {
     if (!(modal instanceof HTMLElement)) return;
 
-    const form = modal.querySelector('[data-auto-first-due-form]');
+    const form = modal.querySelector('[data-local-draft-flow="manual_purchase"]');
     if (!(form instanceof HTMLFormElement)) return;
 
     const dateInput = form.querySelector('[data-manual-date-input]');
     if (dateInput instanceof HTMLInputElement && !dateInput.value) {
       dateInput.value = getLocalTodayISO();
     }
+
+    restoreLastManualCard(form);
 
     if (typeof form.__opRefreshFirstDue === 'function') {
       form.__opRefreshFirstDue();
@@ -450,20 +512,435 @@
     return modal;
   }
 
+  function getDraftDbPromise() {
+    if (window.__opManualPurchaseDraftDbPromise) {
+      return window.__opManualPurchaseDraftDbPromise;
+    }
+
+    if (!('indexedDB' in window)) {
+      return Promise.reject(new Error('IndexedDB indisponível neste navegador.'));
+    }
+
+    window.__opManualPurchaseDraftDbPromise = new Promise((resolve, reject) => {
+      const request = window.indexedDB.open(MANUAL_PURCHASE_DRAFT_DB_NAME, 1);
+
+      request.onerror = () => {
+        reject(request.error || new Error('Não consegui abrir a base local de rascunhos.'));
+      };
+
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(MANUAL_PURCHASE_DRAFT_STORE_NAME)) {
+          db.createObjectStore(MANUAL_PURCHASE_DRAFT_STORE_NAME, { keyPath: 'key' });
+        }
+      };
+
+      request.onsuccess = () => {
+        resolve(request.result);
+      };
+    }).catch((error) => {
+      delete window.__opManualPurchaseDraftDbPromise;
+      throw error;
+    });
+
+    return window.__opManualPurchaseDraftDbPromise;
+  }
+
+  async function withDraftStore(mode, callback) {
+    const db = await getDraftDbPromise();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(MANUAL_PURCHASE_DRAFT_STORE_NAME, mode);
+      const store = transaction.objectStore(MANUAL_PURCHASE_DRAFT_STORE_NAME);
+
+      let settled = false;
+      function finish(handler) {
+        return (value) => {
+          if (settled) return;
+          settled = true;
+          handler(value);
+        };
+      }
+
+      transaction.oncomplete = finish(resolve);
+      transaction.onabort = finish(() => reject(transaction.error || new Error('A operação local foi interrompida.')));
+      transaction.onerror = finish(() => reject(transaction.error || new Error('A operação local falhou.')));
+
+      try {
+        callback(store, transaction);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  async function getManualPurchaseDraftRecord() {
+    try {
+      const db = await getDraftDbPromise();
+      return await new Promise((resolve, reject) => {
+        const transaction = db.transaction(MANUAL_PURCHASE_DRAFT_STORE_NAME, 'readonly');
+        const store = transaction.objectStore(MANUAL_PURCHASE_DRAFT_STORE_NAME);
+        const request = store.get(MANUAL_PURCHASE_DRAFT_KEY);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error || new Error('Não consegui ler o rascunho local.'));
+      });
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function syncManualPurchaseDraftSummary(summary) {
+    if (!summary) {
+      safeLocalStorageRemove(MANUAL_PURCHASE_DRAFT_SUMMARY_KEY);
+      return;
+    }
+
+    safeLocalStorageSet(MANUAL_PURCHASE_DRAFT_SUMMARY_KEY, JSON.stringify(summary));
+  }
+
+  async function saveManualPurchaseDraftRecord(record) {
+    try {
+      await withDraftStore('readwrite', (store) => {
+        store.put(record);
+      });
+      syncManualPurchaseDraftSummary({
+        flow: 'manual_purchase',
+        updatedAt: record.updatedAt,
+        description: record.payload?.description || '',
+        amount: record.payload?.amount || '',
+        sourceLabel: record.payload?.sourceLabel || '',
+        sourcePath: record.payload?.sourcePath || ''
+      });
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async function clearManualPurchaseDraftRecord() {
+    try {
+      await withDraftStore('readwrite', (store) => {
+        store.delete(MANUAL_PURCHASE_DRAFT_KEY);
+      });
+    } catch (error) {
+      // noop
+    }
+    syncManualPurchaseDraftSummary(null);
+  }
+
+  async function clearAllLocalDraftRecords() {
+    try {
+      await withDraftStore('readwrite', (store) => {
+        store.clear();
+      });
+    } catch (error) {
+      // noop
+    }
+    syncManualPurchaseDraftSummary(null);
+  }
+
+  function requestLocalDraftPurge() {
+    safeLocalStorageSet(MANUAL_PURCHASE_DRAFT_PURGE_KEY, '1');
+    syncManualPurchaseDraftSummary(null);
+  }
+
+  async function consumeLocalDraftPurgeRequest() {
+    if (safeLocalStorageGet(MANUAL_PURCHASE_DRAFT_PURGE_KEY) !== '1') return;
+    safeLocalStorageRemove(MANUAL_PURCHASE_DRAFT_PURGE_KEY);
+    await clearAllLocalDraftRecords();
+  }
+
+  function formatDraftTimestamp(isoValue) {
+    if (!isoValue) return '';
+    const parsed = new Date(isoValue);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short'
+    }).format(parsed);
+  }
+
+  function getCurrentRouteLabel() {
+    const path = String(window.location.pathname || '/');
+    if (path === '/' || path === '/geral') return 'Meu Radar';
+    if (/^\/month\//.test(path) || path === '/month') return 'Ver mês';
+    if (/^\/detalhamento\//.test(path) || path === '/detalhamento') return 'Detalhamento';
+    return document.title || 'app';
+  }
+
+  function buildManualPurchaseDraftPayload(form) {
+    const readValue = (selector) => {
+      const field = form.querySelector(selector);
+      if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) {
+        return String(field.value || '').trim();
+      }
+      return '';
+    };
+
+    const readChecked = (selector) => {
+      const field = form.querySelector(selector);
+      return field instanceof HTMLInputElement ? field.checked : false;
+    };
+
+    return {
+      date: readValue('input[name="date"]'),
+      card_id: readValue('select[name="card_id"]'),
+      amount: readValue('input[name="amount"]'),
+      installments: readValue('input[name="installments"]') || '1',
+      first_due: readValue('input[name="first_due"]'),
+      description: readValue('input[name="description"]'),
+      purchase_category_id: readValue('select[name="purchase_category_id"]'),
+      purchase_category_custom: readValue('input[name="purchase_category_custom"]'),
+      assign_to_owner: readChecked('input[name="assign_to_owner"]'),
+      is_recurring: readChecked('input[name="is_recurring"]'),
+      sourcePath: `${window.location.pathname || '/'}${window.location.search || ''}${window.location.hash || ''}`,
+      sourceLabel: getCurrentRouteLabel()
+    };
+  }
+
+  function hasMeaningfulManualPurchaseDraft(payload) {
+    if (!payload || typeof payload !== 'object') return false;
+    if (String(payload.amount || '').trim()) return true;
+    if (String(payload.description || '').trim()) return true;
+    if (String(payload.purchase_category_id || '').trim()) return true;
+    if (String(payload.purchase_category_custom || '').trim()) return true;
+    if (payload.assign_to_owner || payload.is_recurring) return true;
+    if (String(payload.installments || '1').trim() !== '1') return true;
+    const today = getLocalTodayISO();
+    if (String(payload.date || '').trim() && String(payload.date).trim() !== today) return true;
+    return false;
+  }
+
+  async function persistManualPurchaseDraftFromForm(form) {
+    if (!(form instanceof HTMLFormElement)) return;
+    const payload = buildManualPurchaseDraftPayload(form);
+
+    if (!hasMeaningfulManualPurchaseDraft(payload)) {
+      await clearManualPurchaseDraftRecord();
+      return;
+    }
+
+    await saveManualPurchaseDraftRecord({
+      key: MANUAL_PURCHASE_DRAFT_KEY,
+      flow: 'manual_purchase',
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      payload
+    });
+  }
+
+  function restoreSubmitButtonsAfterCanceledSubmit(form) {
+    if (!(form instanceof HTMLFormElement)) return;
+
+    const submitButtons = Array.from(form.querySelectorAll('button[type="submit"], input[type="submit"]'));
+    submitButtons.forEach((button) => {
+      if (button instanceof HTMLButtonElement) {
+        if (button.dataset.originalHtml) {
+          button.innerHTML = button.dataset.originalHtml;
+          delete button.dataset.originalHtml;
+        }
+        button.disabled = false;
+        button.classList.remove('op-button-loading');
+      } else if (button instanceof HTMLInputElement) {
+        if (button.dataset.originalValue) {
+          button.value = button.dataset.originalValue;
+          delete button.dataset.originalValue;
+        }
+        button.disabled = false;
+        button.classList.remove('op-button-loading');
+      }
+    });
+  }
+
+  function applyManualPurchaseDraftToForm(form, payload) {
+    if (!(form instanceof HTMLFormElement) || !payload || typeof payload !== 'object') return;
+
+    const setInputValue = (selector, value) => {
+      const field = form.querySelector(selector);
+      if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) {
+        field.value = String(value || '');
+      }
+    };
+
+    const setCheckboxValue = (selector, checked) => {
+      const field = form.querySelector(selector);
+      if (field instanceof HTMLInputElement) {
+        field.checked = !!checked;
+      }
+    };
+
+    const cardSelect = form.querySelector('select[name="card_id"]');
+    if (cardSelect instanceof HTMLSelectElement) {
+      const nextCardId = String(payload.card_id || '').trim();
+      if (nextCardId && Array.from(cardSelect.options).some((option) => String(option.value || '') === nextCardId)) {
+        cardSelect.value = nextCardId;
+      }
+    }
+
+    setInputValue('input[name="date"]', payload.date || '');
+    setInputValue('input[name="amount"]', payload.amount || '');
+    setInputValue('input[name="installments"]', payload.installments || '1');
+    setInputValue('input[name="description"]', payload.description || '');
+
+    const categorySelect = form.querySelector('select[name="purchase_category_id"]');
+    if (categorySelect instanceof HTMLSelectElement) {
+      const rawCategoryValue = String(payload.purchase_category_id || '').trim();
+      const wantsCustom = rawCategoryValue === '__new__' || (!!payload.purchase_category_custom && !rawCategoryValue);
+      const nextValue = wantsCustom
+        ? '__new__'
+        : (Array.from(categorySelect.options).some((option) => String(option.value || '') === rawCategoryValue) ? rawCategoryValue : '');
+      categorySelect.value = nextValue;
+      categorySelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    const customCategoryInput = form.querySelector('input[name="purchase_category_custom"]');
+    if (customCategoryInput instanceof HTMLInputElement) {
+      customCategoryInput.value = String(payload.purchase_category_custom || '');
+    }
+
+    setCheckboxValue('input[name="assign_to_owner"]', payload.assign_to_owner);
+    setCheckboxValue('input[name="is_recurring"]', payload.is_recurring);
+
+    const recurringToggle = form.querySelector('[data-recurring-toggle]');
+    if (recurringToggle instanceof HTMLInputElement) {
+      recurringToggle.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    if (payload.first_due) {
+      setInputValue('input[name="first_due"]', payload.first_due);
+    } else if (typeof form.__opRefreshFirstDue === 'function') {
+      form.__opRefreshFirstDue();
+    }
+  }
+
+  function resetManualPurchaseForm(modal, form) {
+    if (!(modal instanceof HTMLElement) || !(form instanceof HTMLFormElement)) return;
+    form.reset();
+    syncManualPurchaseDefaults(modal);
+
+    const categorySelect = form.querySelector('select[name="purchase_category_id"]');
+    if (categorySelect instanceof HTMLSelectElement) {
+      categorySelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    const recurringToggle = form.querySelector('[data-recurring-toggle]');
+    if (recurringToggle instanceof HTMLInputElement) {
+      recurringToggle.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    if (typeof form.__opRefreshFirstDue === 'function') {
+      form.__opRefreshFirstDue();
+    }
+  }
+
+  function formAlreadyHasMeaningfulDraftData(form) {
+    if (!(form instanceof HTMLFormElement)) return false;
+    return hasMeaningfulManualPurchaseDraft(buildManualPurchaseDraftPayload(form));
+  }
+
+  async function maybeRestoreManualPurchaseDraft(modal, form) {
+    if (!(modal instanceof HTMLElement) || !(form instanceof HTMLFormElement)) return;
+    if (form.dataset.manualDraftPromptOpen === '1') return;
+    if (formAlreadyHasMeaningfulDraftData(form)) return;
+
+    const draftRecord = await getManualPurchaseDraftRecord();
+    if (!draftRecord || !draftRecord.payload || !hasMeaningfulManualPurchaseDraft(draftRecord.payload)) return;
+
+    form.dataset.manualDraftPromptOpen = '1';
+
+    const updatedLabel = formatDraftTimestamp(draftRecord.updatedAt || draftRecord.payload.capturedAt);
+    const sourceLabel = draftRecord.payload.sourceLabel ? `Ele veio de ${draftRecord.payload.sourceLabel}.` : '';
+    const message = [
+      updatedLabel ? `Tem uma compra guardada neste aparelho desde ${updatedLabel}.` : 'Tem uma compra guardada neste aparelho.',
+      sourceLabel,
+      'Nada foi enviado para o app ainda. Você pode continuar de onde parou ou começar do zero.'
+    ].filter(Boolean).join('\n\n');
+
+    const choice = await window.showActionDialog({
+      title: 'Quer retomar esse rascunho?',
+      message,
+      options: [
+        { label: 'Continuar daqui', value: 'resume', tone: 'primary' },
+        { label: 'Agora não', value: 'later', tone: 'secondary' },
+        { label: 'Descartar rascunho', value: 'discard', tone: 'cancel' }
+      ]
+    });
+
+    if (choice === 'resume') {
+      applyManualPurchaseDraftToForm(form, draftRecord.payload);
+    } else if (choice === 'discard') {
+      await clearManualPurchaseDraftRecord();
+      resetManualPurchaseForm(modal, form);
+    }
+  }
+
+  function bindManualPurchaseDraftLifecycle(modal, form) {
+    if (!(modal instanceof HTMLElement) || !(form instanceof HTMLFormElement) || form.dataset.manualDraftBound === '1') return;
+    form.dataset.manualDraftBound = '1';
+
+    let persistTimer = null;
+    const schedulePersist = () => {
+      window.clearTimeout(persistTimer);
+      persistTimer = window.setTimeout(() => {
+        persistManualPurchaseDraftFromForm(form);
+      }, 180);
+    };
+
+    form.addEventListener('input', schedulePersist, true);
+    form.addEventListener('change', schedulePersist, true);
+    window.addEventListener('pagehide', () => {
+      persistManualPurchaseDraftFromForm(form);
+    });
+
+    form.addEventListener('submit', async (event) => {
+      const cardSelect = form.querySelector('[data-manual-card-select]');
+      if (cardSelect instanceof HTMLSelectElement) {
+        writeLastManualCardId(cardSelect.value);
+      }
+
+      await persistManualPurchaseDraftFromForm(form);
+
+      if (navigator.onLine) {
+        return;
+      }
+
+      event.preventDefault();
+      restoreSubmitButtonsAfterCanceledSubmit(form);
+      await window.showActionDialog({
+        title: 'Sem internet agora',
+        message: 'Guardamos essa compra como rascunho só neste aparelho. Quando a conexão voltar, é só abrir Anotar compra de novo para revisar e enviar com calma.',
+        options: [
+          { label: 'Tudo certo', value: 'ok', tone: 'primary' }
+        ]
+      });
+    });
+  }
+
+  function bindManualPurchaseDraftCleanup() {
+    const requestPurge = () => {
+      requestLocalDraftPurge();
+    };
+
+    document.querySelectorAll('a[href="/logout"]').forEach((link) => {
+      link.addEventListener('click', requestPurge, { capture: true });
+    });
+  }
+
   function setupManualPurchaseModal() {
     const modal = moveManualPurchaseModalToBody(document.querySelector('[data-manual-modal]'));
     if (!(modal instanceof HTMLElement)) return;
 
-    const form = modal.querySelector('[data-auto-first-due-form]');
+    const form = modal.querySelector('[data-local-draft-flow="manual_purchase"]');
     const amountInput = modal.querySelector('[data-manual-amount-input]');
+    const cardSelect = modal.querySelector('[data-manual-card-select]');
     const openButtons = Array.from(document.querySelectorAll('[data-manual-modal-open]')).filter((element) => element instanceof HTMLElement);
     const closeButtons = Array.from(modal.querySelectorAll('[data-manual-modal-close]')).filter((element) => element instanceof HTMLElement);
 
-    const openModal = () => {
+    const openModal = async () => {
       document.body.classList.add('op-manual-modal-open');
       modal.classList.remove('hidden');
       modal.setAttribute('aria-hidden', 'false');
       syncManualPurchaseDefaults(modal);
+      await maybeRestoreManualPurchaseDraft(modal, form);
       if (amountInput instanceof HTMLInputElement) {
         focusManualAmount(amountInput);
       }
@@ -473,10 +950,15 @@
       modal.classList.add('hidden');
       modal.setAttribute('aria-hidden', 'true');
       document.body.classList.remove('op-manual-modal-open');
+      if (form instanceof HTMLFormElement) {
+        delete form.dataset.manualDraftPromptOpen;
+      }
     };
 
     openButtons.forEach((button) => {
-      button.addEventListener('click', openModal);
+      button.addEventListener('click', () => {
+        openModal();
+      });
     });
 
     closeButtons.forEach((button) => {
@@ -495,16 +977,21 @@
       }
     });
 
-    if (form instanceof HTMLFormElement) {
-      form.addEventListener('submit', () => {
-        modal.setAttribute('aria-hidden', 'true');
+    if (cardSelect instanceof HTMLSelectElement) {
+      cardSelect.addEventListener('change', () => {
+        writeLastManualCardId(cardSelect.value);
       });
     }
 
+    bindManualPurchaseDraftLifecycle(modal, form);
     syncManualPurchaseDefaults(modal);
   }
 
-  document.addEventListener('DOMContentLoaded', setupManualPurchaseModal);
+  document.addEventListener('DOMContentLoaded', async () => {
+    await consumeLocalDraftPurgeRequest();
+    bindManualPurchaseDraftCleanup();
+    setupManualPurchaseModal();
+  });
 })();
 
 (function () {
@@ -653,7 +1140,30 @@
     cell.classList.add(remainingCents > 0 ? 'text-red-500' : 'text-emerald-500');
   }
 
+  function syncCashBalanceValue(cell, balanceCents) {
+    if (!cell) return;
+    cell.textContent = formatCents(balanceCents);
+    cell.classList.remove(
+      'text-emerald-600',
+      'dark:text-emerald-300',
+      'text-red-500',
+      'dark:text-red-300',
+      'text-slate-700',
+      'dark:text-slate-200'
+    );
+    if (balanceCents > 0) {
+      cell.classList.add('text-emerald-600', 'dark:text-emerald-300');
+      return;
+    }
+    if (balanceCents < 0) {
+      cell.classList.add('text-red-500', 'dark:text-red-300');
+      return;
+    }
+    cell.classList.add('text-slate-700', 'dark:text-slate-200');
+  }
+
   function syncCardsSummary(root) {
+    let totalTotal = 0;
     let paidTotal = 0;
     let remainingTotal = 0;
     root.querySelectorAll('[data-summary-card-row]').forEach((row) => {
@@ -662,6 +1172,7 @@
       const paidInput = root.querySelector(`[data-summary-card-paid][data-card-id="${cardId}"]`);
       const paidCents = centsFromValue(paidInput ? paidInput.value : '');
       const remainingCents = totalCents - paidCents;
+      totalTotal += totalCents;
       paidTotal += paidCents;
       remainingTotal += remainingCents;
       syncRemainingCell(root.querySelector(`[data-summary-card-remaining][data-card-id="${cardId}"]`), remainingCents);
@@ -671,12 +1182,17 @@
     const remainingCell = root.querySelector('[data-summary-cards-total-remaining]');
     if (paidCell) paidCell.textContent = formatCents(paidTotal);
     syncRemainingCell(remainingCell, remainingTotal);
+
+    return { totalTotal, paidTotal, remainingTotal };
   }
 
   function syncPeopleSummary(root) {
+    let totalTotal = 0;
     let paidTotal = 0;
     let manualTotal = 0;
     let remainingTotal = 0;
+    let overpaidTotal = 0;
+
     root.querySelectorAll('[data-summary-person-row]').forEach((row) => {
       const totalCents = Number(row.getAttribute('data-total-cents') || 0);
       const autoPaidCents = Number(row.getAttribute('data-auto-paid-cents') || 0);
@@ -684,10 +1200,13 @@
       const paidInput = root.querySelector(`[data-summary-person-paid][data-person-id="${personId}"]`);
       const manualPaidCents = centsFromValue(paidInput ? paidInput.value : '');
       const paidCents = autoPaidCents + manualPaidCents;
-      const remainingCents = totalCents - paidCents;
+      const remainingCents = Math.max(0, totalCents - paidCents);
+      const overpaidCents = Math.max(0, paidCents - totalCents);
+      totalTotal += totalCents;
       paidTotal += paidCents;
       manualTotal += manualPaidCents;
       remainingTotal += remainingCents;
+      overpaidTotal += overpaidCents;
       const combinedCell = root.querySelector(`[data-summary-person-combined][data-person-id="${personId}"]`);
       if (combinedCell) combinedCell.textContent = formatCents(paidCents);
       syncRemainingCell(root.querySelector(`[data-summary-person-remaining][data-person-id="${personId}"]`), remainingCents);
@@ -699,6 +1218,43 @@
     if (paidCell) paidCell.textContent = formatCents(paidTotal);
     if (manualCell) manualCell.textContent = formatCents(manualTotal);
     syncRemainingCell(remainingCell, remainingTotal);
+
+    return { totalTotal, paidTotal, manualTotal, remainingTotal, overpaidTotal };
+  }
+
+  function syncCashSummary(root, cardsState, peopleState) {
+    const balanceCents = Number(peopleState?.paidTotal || 0) - Number(cardsState?.paidTotal || 0);
+    const totalBillsCell = root.querySelector('[data-summary-cash-total-bills]');
+    const inflowCell = root.querySelector('[data-summary-cash-inflow]');
+    const outflowCell = root.querySelector('[data-summary-cash-outflow]');
+    const balanceCell = root.querySelector('[data-summary-cash-balance-value]');
+    const captionCell = root.querySelector('[data-summary-cash-balance-caption]');
+    const peopleOverpaidNote = root.querySelector('[data-summary-people-overpaid-note]');
+    const peopleOverpaidCell = root.querySelector('[data-summary-people-overpaid]');
+
+    if (totalBillsCell) totalBillsCell.textContent = formatCents(cardsState?.totalTotal || 0);
+    if (inflowCell) inflowCell.textContent = formatCents(peopleState?.paidTotal || 0);
+    if (outflowCell) outflowCell.textContent = formatCents(cardsState?.paidTotal || 0);
+    if (peopleOverpaidCell) peopleOverpaidCell.textContent = formatCents(peopleState?.overpaidTotal || 0);
+    if (peopleOverpaidNote) peopleOverpaidNote.hidden = Number(peopleState?.overpaidTotal || 0) <= 0;
+
+    syncCashBalanceValue(balanceCell, balanceCents);
+    if (captionCell) {
+      if (balanceCents > 0) {
+        captionCell.textContent = 'Livre para próximos vencimentos.';
+      } else if (balanceCents < 0) {
+        captionCell.textContent = 'Saiu mais do que entrou.';
+      } else {
+        captionCell.textContent = 'Entrou e saiu no mesmo valor.';
+      }
+    }
+  }
+
+  function syncSummaryPanels(root) {
+    const cardsState = syncCardsSummary(root);
+    const peopleState = syncPeopleSummary(root);
+    syncCashSummary(root, cardsState, peopleState);
+    return { cardsState, peopleState };
   }
 
   async function postForm(url, data) {
@@ -736,7 +1292,7 @@
       const paidInput = root.querySelector(`[data-summary-card-paid][data-card-id="${cardId}"]`);
       const dueInput = root.querySelector(`[data-summary-card-due][data-card-id="${cardId}"]`);
       if (!paidInput && !dueInput) return;
-      syncCardsSummary(root);
+      syncSummaryPanels(root);
       postForm(`/summary/${year}/${month}/cards/async`, {
         card_id: cardId,
         paid: paidInput ? paidInput.value : 'R$ 0,00',
@@ -747,7 +1303,7 @@
     const savePerson = (personId) => {
       const paidInput = root.querySelector(`[data-summary-person-paid][data-person-id="${personId}"]`);
       if (!paidInput) return;
-      syncPeopleSummary(root);
+      syncSummaryPanels(root);
       postForm(`/summary/${year}/${month}/people/async`, {
         person_id: personId,
         paid: paidInput.value
@@ -759,7 +1315,7 @@
       const cardId = input.getAttribute('data-card-id');
       if (!cardId) return;
       input.addEventListener('input', () => {
-        syncCardsSummary(root);
+        syncSummaryPanels(root);
         debounceWithKey(timers, `card-paid-${cardId}`, () => saveCard(cardId));
       });
       input.addEventListener('blur', () => saveCard(cardId));
@@ -778,15 +1334,14 @@
       const personId = input.getAttribute('data-person-id');
       if (!personId) return;
       input.addEventListener('input', () => {
-        syncPeopleSummary(root);
+        syncSummaryPanels(root);
         debounceWithKey(timers, `person-paid-${personId}`, () => savePerson(personId));
       });
       input.addEventListener('blur', () => savePerson(personId));
       input.addEventListener('change', () => savePerson(personId));
     });
 
-    syncCardsSummary(root);
-    syncPeopleSummary(root);
+    syncSummaryPanels(root);
   });
 })();
 
@@ -1589,7 +2144,7 @@
     });
 
     if (!response.ok) {
-      throw new Error('Não consegui guardar este aparelho para receber alertas.');
+      throw new Error('Não consegui guardar este aparelho para receber os alertas agora.');
     }
   }
 
@@ -1601,7 +2156,7 @@
     });
 
     if (!response.ok) {
-      throw new Error('Não consegui desligar os alertas deste aparelho agora.');
+      throw new Error('Não consegui desligar os alertas deste aparelho agora. Tenta mais uma vez em instantes.');
     }
   }
 
@@ -1647,7 +2202,7 @@
         const nextState = await syncPushUi();
         showPushToast(nextState === 'blocked'
           ? 'Os alertas ficaram bloqueados neste navegador.'
-          : 'Pronto! Os alertas deste aparelho foram desligados.', 'info');
+          : 'Pronto! Este aparelho ficou sem alertas por enquanto.', 'info');
         return;
       }
 
@@ -1655,7 +2210,7 @@
       if (permission !== 'granted') {
         await syncPushUi();
         throw new Error(permission === 'denied'
-          ? 'Os alertas foram bloqueados pelo navegador. Para liberar, ajuste a permissão nas configurações do navegador.'
+          ? 'O navegador bloqueou os alertas. Para liberar, ajuste a permissão nas configurações dele.'
           : 'Sem permissão para alertas. Se quiser, é só liberar no navegador.');
       }
 
@@ -1666,7 +2221,7 @@
 
       await sendSubscriptionToServer(subscription);
       await syncPushUi();
-      showPushToast('Boa! Este aparelho já está pronto para receber alertas.', 'success');
+      showPushToast('Boa! Este aparelho já está pronto para receber os alertas.', 'success');
     } catch (error) {
       console.error(error);
       await syncPushUi().catch((syncError) => console.error(syncError));
@@ -1774,7 +2329,7 @@
     if (!hasFuture) {
       if (destructive) {
         const confirmed = await window.confirmTypedAction(
-          form?.dataset?.confirmPrompt || 'Excluir este item? Isso apaga a compra e a divisão dela.'
+          form?.dataset?.confirmPrompt || 'Quer mesmo apagar este item? Isso remove a compra e a divisão dela.'
         );
         if (!confirmed) return null;
       }
@@ -1795,17 +2350,17 @@
     ].filter(Boolean).join('\n\n');
 
     const result = await window.showActionDialog({
-      title: destructive ? `Excluir ${entityLabel}` : `Aplicar em ${entityLabel}`,
+      title: destructive ? `Apagar ${entityLabel}` : `Aplicar em ${entityLabel}`,
       message,
       options: destructive
         ? [
-            { label: `Excluir Só ${isRecurring ? 'Esta Compra' : 'Esta Parcela'}`, value: 'single', tone: 'danger' },
-            { label: `Excluir ${isRecurring ? 'Esta Compra e Próximas Recorrências' : 'Esta e Próximas'}`, value: 'future', tone: 'danger' },
+            { label: `Apagar Só ${isRecurring ? 'esta compra' : 'esta parcela'}`, value: 'single', tone: 'danger' },
+            { label: `Apagar ${isRecurring ? 'esta compra e as próximas recorrências' : 'esta e as próximas'}`, value: 'future', tone: 'danger' },
             { label: 'Cancelar', value: null, tone: 'cancel' }
           ]
         : [
             { label: `Aplicar Só ${isRecurring ? 'Nesta Compra' : 'Nesta Parcela'}`, value: 'single', tone: 'primary' },
-            { label: `Aplicar ${isRecurring ? 'Nesta Compra e nas Próximas Recorrências' : 'Nesta e nas Próximas'}`, value: 'future', tone: 'primary' },
+            { label: `Aplicar ${isRecurring ? 'Nesta Compra e nas próximas recorrências' : 'Nesta e nas Próximas'}`, value: 'future', tone: 'primary' },
             { label: 'Cancelar', value: null, tone: 'cancel' }
           ]
     });
@@ -1909,7 +2464,7 @@
     const mainShell = document.querySelector('.op-app-main');
     let hideTimer = null;
 
-    const isMobileViewport = () => !window.matchMedia('(min-width: 768px)').matches;
+    const isMobileViewport = () => !window.matchMedia('(min-width: 768px)').matches || root.classList.contains('op-force-mobile-chrome');
     const showNav = () => nav.classList.remove('is-idle-hidden');
     const hideNav = () => nav.classList.add('is-idle-hidden');
     const scheduleHide = (delay = 1900) => {
@@ -2110,7 +2665,8 @@
     if (getLinks().length < 2) return;
 
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const isMobileViewport = () => window.matchMedia('(max-width: 767px)').matches;
+    const root = document.documentElement;
+    const isMobileViewport = () => window.matchMedia('(max-width: 767px)').matches || root.classList.contains('op-force-mobile-chrome');
 
     let snapTimer = null;
     let isPointerDown = false;
@@ -2940,7 +3496,7 @@
       }
       const response = await previousFetch(input, sameOrigin ? { ...init, headers } : init);
       if (sameOrigin && await handleLockedResponse(response, 'locked')) {
-        const error = new Error('O app foi bloqueado por PIN.');
+        const error = new Error('O app foi travado pelo PIN.');
         error.code = 'APP_PIN_LOCKED';
         error.response = response;
         throw error;

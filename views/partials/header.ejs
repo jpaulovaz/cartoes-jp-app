@@ -178,26 +178,26 @@
           <span class="min-w-0">
             <span class="block text-[11px] font-extrabold uppercase tracking-[0.18em] text-sky-200/80">AcerttaPay</span>
             <span class="mt-1 block truncate text-lg font-black tracking-tight text-white"><%= ownerShortName %></span>
-            <span class="mt-0.5 block truncate text-sm font-medium text-slate-300">Seu cantinho financeiro</span>
+            <span class="mt-0.5 block truncate text-sm font-medium text-slate-300">Seu QG financeiro</span>
           </span>
         </a>
 
         <nav class="op-desktop-nav flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-1">
           <a href="<%= defaultDashboardHref %>" data-nav-key="painel" class="op-nav-link">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h4a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h4a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2"></path></svg>
-            Painel
+            Meu Radar
           </a>
           <a href="/geral" data-nav-key="geral" class="op-nav-link">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
-            Geral
+            Resumo
           </a>
           <a href="/people" data-nav-key="people" class="op-nav-link">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-1a4 4 0 00-5.356-3.772M17 20H7m10 0v-1c0-.653-.084-1.287-.24-1.892M7 20H2v-1a4 4 0 015.356-3.772M7 20v-1c0-.653.084-1.287.24-1.892m0 0a5.002 5.002 0 019.52 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-            Amigos
+            Minha Rede
           </a>
           <a href="/shared-debts" data-nav-key="shared" class="op-nav-link">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12m-3-9h6a2 2 0 012 2 2 2 0 01-2 2H9a2 2 0 00-2 2 2 2 0 002 2h6"></path></svg>
-            Cobranças
+            Acertos
           </a>
           <a href="/cards" data-nav-key="cards" class="op-nav-link">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M5 11h14M6 15h3m3 0h2m-9 4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
@@ -218,7 +218,7 @@
         </nav>
 
         <div class="flex items-center gap-2">
-          <button type="button" class="op-utility-btn op-utility-btn--notify" data-push-center-open data-push-center-open-variant="icon" data-push-visual-state="loading" aria-haspopup="dialog" aria-controls="notification-center" aria-expanded="false" title="Abrir central de alertas" aria-label="Abrir central de alertas">
+          <button type="button" class="op-utility-btn op-utility-btn--notify" data-push-center-open data-push-center-open-variant="icon" data-push-visual-state="loading" aria-haspopup="dialog" aria-controls="notification-center" aria-expanded="false" title="Abrir seus alertas" aria-label="Abrir seus alertas">
             <span class="op-utility-btn__icon" data-push-center-icon>
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>
               <% if (unreadNotifications > 0) { %>
@@ -247,11 +247,11 @@
             <% if (hasUserPhoto) { %><img src="<%= userPhotoUrl %>" alt="<%= ownerShortName %>" loading="lazy" referrerpolicy="no-referrer" class="h-12 w-12 rounded-full object-cover shadow-[0_10px_24px_rgba(37,99,235,0.3)] ring-2 ring-white/25"><% } else { %><img src="/icon-192.png" alt="AcerttaPay" class="h-12 w-12 rounded-[1.1rem] object-cover shadow-[0_10px_24px_rgba(37,99,235,0.3)]"><% } %>
             <span class="min-w-0">
               <span class="block truncate text-sm font-black text-white"><%= ownerShortName %></span>
-              <span class="block truncate text-xs font-medium text-slate-300 sm:hidden">Seu cantinho</span>
-              <span class="hidden truncate text-xs font-medium text-slate-300 sm:block">Seu cantinho financeiro</span>
+              <span class="block truncate text-xs font-medium text-slate-300 sm:hidden">Seu QG</span>
+              <span class="hidden truncate text-xs font-medium text-slate-300 sm:block">Seu QG financeiro</span>
             </span>
           </a>
-          <button type="button" class="op-utility-btn op-utility-btn--notify shrink-0" data-push-center-open data-push-center-open-variant="icon" data-push-visual-state="loading" aria-haspopup="dialog" aria-controls="notification-center" aria-expanded="false" title="Abrir central de alertas" aria-label="Abrir central de alertas">
+          <button type="button" class="op-utility-btn op-utility-btn--notify shrink-0" data-push-center-open data-push-center-open-variant="icon" data-push-visual-state="loading" aria-haspopup="dialog" aria-controls="notification-center" aria-expanded="false" title="Abrir seus alertas" aria-label="Abrir seus alertas">
             <span class="op-utility-btn__icon" data-push-center-icon>
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>
               <% if (unreadNotifications > 0) { %>
@@ -329,7 +329,7 @@
                 <p class="mt-2 text-xs font-semibold text-slate-400 dark:text-slate-500">Esse ajuste vale para este navegador ou celular. Se entrar em outro aparelho, é só ligar por lá também.</p>
               </div>
               <div class="w-full sm:w-[15rem] sm:flex-shrink-0">
-                <button type="button" data-push-toggle data-push-public-key="<%= pushPublicKey %>" data-push-status-target="#notification-center-push-status" class="op-btn op-btn-warning-soft op-btn--block">Ativar alertas</button>
+                <button type="button" data-push-toggle data-push-public-key="<%= pushPublicKey %>" data-push-status-target="#notification-center-push-status" class="op-btn op-btn-warning-soft op-btn--block">Ligar alertas por aqui</button>
               </div>
             </div>
           </div>
@@ -337,7 +337,7 @@
           <section class="space-y-3">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 class="text-base font-black text-slate-900 dark:text-white">Seus avisos</h3>
+                <h3 class="text-base font-black text-slate-900 dark:text-white">O que pintou por aqui</h3>
                 <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><% if (unreadNotifications > 0) { %>Você tem <strong class="text-slate-900 dark:text-white"><%= unreadNotifications %></strong> <%= unreadNotifications === 1 ? 'aviso sem abrir' : 'avisos sem abrir' %>.<% } else if (recentNotificationItems.length) { %>Tudo em dia por aqui. Os avisos mais novos aparecem primeiro.<% } else { %>Tudo em dia por aqui. Quando surgir novidade, ela aparece nesta lista.<% } %></p>
               </div>
               <% if (unreadNotifications > 0 || readNotifications > 0) { %>
@@ -349,7 +349,7 @@
                   <% } %>
                   <% if (readNotifications > 0) { %>
                     <form method="POST" action="/notifications/clear-read" class="shrink-0">
-                      <button type="submit" class="op-btn op-btn-ghost" title="Tira da lista só os avisos que você já abriu">Limpar antigas</button>
+                      <button type="submit" class="op-btn op-btn-ghost" title="Tira da lista só os avisos que você já abriu">Limpar lidas</button>
                     </form>
                   <% } %>
                 </div>
@@ -382,8 +382,8 @@
                 <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-200/80 text-slate-500 dark:bg-slate-700 dark:text-slate-300">
                   <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.389 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>
                 </div>
-                <div class="mt-3 text-sm font-black text-slate-900 dark:text-white">Nenhum aviso por enquanto</div>
-                <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Quando o app tiver algo importante para te contar, este cantinho entra em ação.</p>
+                <div class="mt-3 text-sm font-black text-slate-900 dark:text-white">Tudo tranquilo por aqui ✨</div>
+                <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Quando pintar algo importante, esse cantinho te chama.</p>
               </div>
             <% } %>
           </section>

@@ -164,8 +164,8 @@
 
         function buildSharedDebtTrailCountLabel(count) {
             const total = Number(count || 0);
-            if (total <= 0) return 'Nenhuma cobrança em aberto por aqui';
-            return total === 1 ? '1 cobrança em aberto por aqui' : `${total} cobranças em aberto por aqui`;
+            if (total <= 0) return 'Tudo tranquilo por aqui. Nenhum acerto em aberto ✨';
+            return total === 1 ? '1 acerto em aberto por aqui' : `${total} acertos em aberto por aqui`;
         }
 
         function buildSharedDebtTrailBreakdown(scope) {
@@ -176,14 +176,14 @@
                 const manualCount = Number(sharedDebtTrailManual.owedCount || 0);
 
                 if (cardCount > 0) parts.push(cardCount === 1 ? '1 item do cartão' : `${cardCount} itens do cartão`);
-                if (manualCount > 0) parts.push(manualCount === 1 ? '1 cobrança avulsa' : `${manualCount} cobranças avulsas`);
+                if (manualCount > 0) parts.push(manualCount === 1 ? '1 acerto avulso' : `${manualCount} acertos avulsos`);
             } else {
                 const cardCount = Number(sharedDebtTrailCard.receivableItemCount || 0);
                 const manualCount = Number(sharedDebtTrailManual.receivableCount || 0);
                 const privateCount = Number(sharedDebtTrailManual.privateActiveCount || 0);
 
                 if (cardCount > 0) parts.push(cardCount === 1 ? '1 item do cartão' : `${cardCount} itens do cartão`);
-                if (manualCount > 0) parts.push(manualCount === 1 ? '1 cobrança avulsa' : `${manualCount} cobranças avulsas`);
+                if (manualCount > 0) parts.push(manualCount === 1 ? '1 acerto avulso' : `${manualCount} acertos avulsos`);
                 if (privateCount > 0) parts.push(privateCount === 1 ? '1 lembrete privado' : `${privateCount} lembretes privados`);
             }
 
@@ -192,13 +192,13 @@
         }
 
         function buildSharedDebtTrailCtaLabel(scope) {
-            if (scope === 'pay') return 'Abrir cobranças recebidas';
+            if (scope === 'pay') return 'Abrir acertos recebidos';
             const receiveHref = String(sharedDebtTrailReceive.href || '');
             const hasOnlyPrivate = Number(sharedDebtTrailManual.receivableCount || 0) === 0
                 && Number(sharedDebtTrailCard.receivableItemCount || 0) === 0
                 && Number(sharedDebtTrailManual.privateActiveCount || 0) > 0;
             if (hasOnlyPrivate || receiveHref.includes('#private-reminders')) return 'Abrir lembretes privados';
-            return 'Abrir cobranças enviadas';
+            return 'Abrir acertos enviados';
         }
 
         function healthChipClasses(tone) {
@@ -238,9 +238,9 @@
                 <section class="op-page-hero op-fade-up mb-8">
                     <div class="op-detalhamento-hero__content">
                         <div class="op-detalhamento-hero__copy min-w-0">
-                            <span class="op-page-hero__eyebrow">Painel principal</span>
+                            <span class="op-page-hero__eyebrow">Seu QG financeiro</span>
                             <h1 class="op-page-hero__title mt-4">👑 Meu Controle</h1>
-                            <p class="op-page-hero__subtitle mt-3"><span class="font-bold text-blue-600 dark:text-blue-300"><%= heroOwnerName %></span>, aqui você vê o que entrou, o que saiu, os cartões e o respiro do mês sem ficar abrindo mil telas.</p>
+                            <p class="op-page-hero__subtitle mt-3">Oi, <span class="font-bold text-blue-600 dark:text-blue-300"><%= heroOwnerName %></span>! Aqui você acompanha tudo que entra, o que sai, as faturas e o fôlego do mês. Tudo no mesmo lugar, sem abrir mil telas.</p>
                         </div>
                         <button type="button"
                             class="op-icon-btn op-sensitive-toggle op-sensitive-toggle--mobile"
@@ -302,7 +302,7 @@
                                     <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                                     </svg>
-                                    Nova compra
+                                    Anotar compra
                                 </button>
                             </div>
 
@@ -310,7 +310,7 @@
                                 <a href="/detalhamento/<%= prevY %>/<%= prevM %>"
                                     class="op-btn op-btn-ghost flex-1">&larr; Anterior</a>
                                 <a href="/month/<%= year %>/<%= month %>"
-                                    class="op-btn op-btn-primary whitespace-nowrap px-4">
+                                    class="op-btn op-hero-link op-hero-link--month whitespace-nowrap px-4">
                                     <%= String(month).padStart(2, '0' ) %> / <%= year %>
                                 </a>
                                 <a href="/detalhamento/<%= nextY %>/<%= nextM %>"
@@ -351,12 +351,12 @@
                     <div class="pointer-events-none flex min-h-full items-end justify-center sm:items-center">
                       <div class="pointer-events-auto flex w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 lg:max-w-4xl xl:max-w-5xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]">
                         <div class="flex shrink-0 justify-between items-center border-b border-slate-200 px-4 py-4 sm:px-6 dark:border-slate-700">
-                            <h2 class="text-xl font-black text-slate-800 dark:text-white">Adicionar compra</h2>
+                            <h2 class="text-xl font-black text-slate-800 dark:text-white">Anotar compra</h2>
                             <button type="button" data-manual-modal-close
                                 class="op-icon-btn" aria-label="Fechar janela">✕</button>
                         </div>
 
-                        <div class="op-manual-modal__scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6"><form action="/txn/manual" method="POST" class="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0" data-auto-first-due-form>
+                        <div class="op-manual-modal__scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6"><form action="/txn/manual" method="POST" class="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0" data-auto-first-due-form data-local-draft-flow="manual_purchase">
                             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
                                     <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data da Compra</label>
@@ -519,7 +519,7 @@
                         <a href="<%= sharedDebtTrailPay.href || '/shared-debts#received' %>" class="group block rounded-3xl border border-sky-600 bg-gradient-to-br from-sky-500 via-sky-600 to-blue-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
                             <div class="flex items-start justify-between gap-4">
                                 <div class="min-w-0">
-                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Cobranças pra pagar</p>
+                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Acertos pra pagar</p>
                                     <h2 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(sharedDebtTrailPay.amountCents || 0)) %></h2>
                                     <p class="mt-2 text-sm font-semibold opacity-95"><%= buildSharedDebtTrailCountLabel(sharedDebtTrailPay.count) %></p>
                                     <p class="mt-2 text-[13px] font-semibold leading-5 opacity-95"><%= (sharedDebtTrailPay.status && sharedDebtTrailPay.status.label) || 'Nada puxando seu mês desse lado.' %></p>
@@ -533,7 +533,7 @@
                         <a href="<%= sharedDebtTrailReceive.href || '/shared-debts#sent' %>" class="group block rounded-3xl border border-cyan-700 bg-gradient-to-br from-cyan-600 via-cyan-600 to-blue-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
                             <div class="flex items-start justify-between gap-4">
                                 <div class="min-w-0">
-                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Cobranças pra receber</p>
+                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Acertos pra receber</p>
                                     <h2 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(sharedDebtTrailReceive.amountCents || 0)) %></h2>
                                     <p class="mt-2 text-sm font-semibold opacity-95"><%= buildSharedDebtTrailCountLabel(sharedDebtTrailReceive.count) %></p>
                                     <p class="mt-2 text-[13px] font-semibold leading-5 opacity-95"><%= (sharedDebtTrailReceive.status && sharedDebtTrailReceive.status.label) || 'Nada pendurado do lado de cá.' %></p>
@@ -599,7 +599,7 @@
                                 <a href="<%= cardHealthCurrent.ctaHref || cardHealthPrimaryCta.href || `/summary/${year}/${month}` %>" class="group block overflow-hidden rounded-3xl border border-blue-700 bg-gradient-to-br from-sky-600 via-blue-600 to-indigo-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5 xl:col-span-2">
                                     <div class="flex items-start justify-between gap-4">
                                         <div class="min-w-0">
-                                            <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Fatura do mês</p>
+                                            <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Fatura rolando 💳</p>
                                             <h3 class="mt-2 text-2xl font-black sm:text-[2rem]"><%= formatBRLFromCents(Number(cardHealthCurrent.totalCents || 0)) %></h3>
                                             <p class="mt-2 text-sm font-semibold opacity-90"><%= cardHealthCurrent.countLabel || 'Sem cartão puxando esta referência.' %></p>
                                         </div>

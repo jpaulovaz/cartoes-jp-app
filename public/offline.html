@@ -18,6 +18,9 @@
       --accent-2: #22c55e;
       --warning: #f59e0b;
       --shadow: 0 30px 80px rgba(2, 6, 23, 0.48);
+      --delight-warm: #fb7185;
+      --delight-gold: #fbbf24;
+      --delight-mint: #34d399;
     }
 
     * { box-sizing: border-box; }
@@ -214,7 +217,8 @@
       line-height: 1.45;
     }
 
-    .tips {
+    .tips,
+    .delight {
       display: grid;
       gap: 12px;
       padding: clamp(22px, 4vw, 32px);
@@ -231,7 +235,9 @@
       }
     }
 
-    .tip {
+    .tip,
+    .delight__panel,
+    .delight__stage {
       border-radius: 22px;
       padding: 18px;
       background: rgba(15, 23, 42, 0.72);
@@ -251,6 +257,221 @@
     .status-note {
       font-weight: 700;
       color: #f8fafc;
+    }
+
+    .delight {
+      gap: 18px;
+    }
+
+    @media (min-width: 860px) {
+      .delight {
+        grid-template-columns: minmax(0, 1.1fr) minmax(280px, 320px);
+        align-items: stretch;
+      }
+    }
+
+    .delight__eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 999px;
+      background: rgba(244, 114, 182, 0.12);
+      color: #fbcfe8;
+      font-size: 0.85rem;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+    }
+
+    .delight__eyebrow::before {
+      content: '✨';
+      font-size: 0.95rem;
+    }
+
+    .delight h2 {
+      margin: 14px 0 10px;
+      font-size: clamp(1.4rem, 2.8vw, 2rem);
+      letter-spacing: -0.03em;
+      line-height: 1.08;
+    }
+
+    .delight__message {
+      margin-top: 16px;
+      min-height: 3.6em;
+      color: #f8fafc;
+      font-size: 1.04rem;
+      line-height: 1.66;
+      letter-spacing: -0.01em;
+      transition: opacity 180ms ease;
+    }
+
+    .delight__hint {
+      margin-top: 14px;
+      font-size: 0.92rem;
+    }
+
+    .delight__stage {
+      display: grid;
+      gap: 16px;
+      align-content: start;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .delight__stage::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at top right, rgba(251, 191, 36, 0.12), transparent 24%),
+        radial-gradient(circle at bottom left, rgba(52, 211, 153, 0.12), transparent 26%);
+      pointer-events: none;
+    }
+
+    .delight__stage > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .delight__stage-copy h3 {
+      margin: 0 0 6px;
+      font-size: 1.02rem;
+      letter-spacing: -0.02em;
+    }
+
+    .delight__stage-copy p {
+      font-size: 0.93rem;
+    }
+
+    .piggy-scene {
+      position: relative;
+      min-height: 220px;
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.32), rgba(2, 6, 23, 0.44));
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      overflow: hidden;
+    }
+
+    .piggy-scene svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .coin-drop {
+      position: absolute;
+      top: 8px;
+      right: 24px;
+      width: 50px;
+      height: 50px;
+      opacity: 0;
+      transform: translate3d(0, -18px, 0) scale(0.88);
+      pointer-events: none;
+      filter: drop-shadow(0 12px 18px rgba(251, 191, 36, 0.24));
+    }
+
+    .sparkle {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(251, 191, 36, 0.95);
+      opacity: 0;
+      transform: scale(0.4);
+      pointer-events: none;
+    }
+
+    .sparkle--one { left: 34%; top: 38%; }
+    .sparkle--two { left: 44%; top: 28%; background: rgba(52, 211, 153, 0.95); }
+    .sparkle--three { left: 53%; top: 35%; background: rgba(251, 113, 133, 0.95); }
+
+    .piggy-scene.is-dropping .coin-drop {
+      animation: coinDrop 900ms cubic-bezier(0.2, 0.9, 0.2, 1);
+    }
+
+    .piggy-scene.is-dropping .sparkle {
+      animation: sparklePop 620ms ease-out 260ms;
+    }
+
+    .piggy-belly {
+      transition: transform 220ms ease, filter 220ms ease;
+      transform-origin: center;
+    }
+
+    .piggy-scene.is-dropping .piggy-belly {
+      transform: translateY(-3px) scale(1.01);
+      filter: drop-shadow(0 0 18px rgba(56, 189, 248, 0.18));
+    }
+
+    @keyframes coinDrop {
+      0% {
+        opacity: 0;
+        transform: translate3d(0, -18px, 0) scale(0.88);
+      }
+      12% {
+        opacity: 1;
+      }
+      68% {
+        opacity: 1;
+        transform: translate3d(-72px, 112px, 0) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translate3d(-76px, 132px, 0) scale(0.68);
+      }
+    }
+
+    @keyframes sparklePop {
+      0% {
+        opacity: 0;
+        transform: translateY(0) scale(0.4);
+      }
+      40% {
+        opacity: 1;
+        transform: translateY(-10px) scale(1.1);
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(-18px) scale(0.5);
+      }
+    }
+
+    .coin-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .coin-counter {
+      font-size: 0.9rem;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .coin-reward {
+      min-height: 1.5em;
+      font-size: 0.94rem;
+      color: #f8fafc;
+      font-weight: 700;
+    }
+
+    .btn--coin {
+      background: linear-gradient(135deg, rgba(251, 191, 36, 0.22), rgba(251, 113, 133, 0.16));
+      border: 1px solid rgba(251, 191, 36, 0.24);
+      color: #fef3c7;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .btn,
+      .delight__message,
+      .piggy-belly,
+      .coin-drop,
+      .sparkle {
+        transition: none !important;
+        animation: none !important;
+      }
     }
   </style>
 </head>
@@ -294,6 +515,10 @@
             <small>Última visita registrada</small>
             <strong id="lastVisitLabel">Sem registro salvo por enquanto.</strong>
           </li>
+          <li class="meta-item" id="draftSummaryItem" hidden>
+            <small>Rascunho guardado</small>
+            <strong id="draftSummaryLabel">Tem um registro local esperando você retomar.</strong>
+          </li>
         </ul>
       </aside>
     </section>
@@ -318,16 +543,109 @@
         </article>
       </div>
     </section>
+
+    <section class="card delight" aria-label="Um respiro rápido enquanto a internet volta">
+      <article class="delight__panel">
+        <span class="delight__eyebrow">Respiro opcional</span>
+        <h2>Um toque leve, sem tirar seu caminho de vista.</h2>
+        <p>
+          A prioridade continua sendo te devolver contexto e atalhos seguros. Mas, já que a internet resolveu sair para respirar, a gente deixou um cantinho mais leve para esse intervalo.
+        </p>
+        <p id="delightMessage" class="delight__message" aria-live="polite">
+          Seu último resumo continua por perto. A internet é que foi tomar um café.
+        </p>
+        <p class="delight__hint">
+          É só um extra simpático. O que importa mesmo continua logo acima: seus atalhos, sua última visita e o que ficou guardado com segurança.
+        </p>
+      </article>
+
+      <aside class="delight__stage" aria-label="Microinteração do cofrinho offline">
+        <div class="delight__stage-copy">
+          <h3>Cofrinho da paciência</h3>
+          <p>Se quiser, guarda uma moedinha simbólica enquanto espera. Sem jogo infinito, sem tirar o foco do que interessa.</p>
+        </div>
+
+        <div class="piggy-scene" id="piggyScene" aria-hidden="true">
+          <div class="coin-drop" id="coinDrop">
+            <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="32" cy="32" r="24" fill="#FBBF24"/>
+              <circle cx="32" cy="32" r="16" fill="#FDE68A" opacity="0.65"/>
+              <path d="M32 20V44" stroke="#92400E" stroke-width="4" stroke-linecap="round"/>
+              <path d="M24 26C26.667 23.667 29.333 22.5 32 22.5C34.667 22.5 37.333 23.667 40 26" stroke="#92400E" stroke-width="4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <span class="sparkle sparkle--one"></span>
+          <span class="sparkle sparkle--two"></span>
+          <span class="sparkle sparkle--three"></span>
+          <svg viewBox="0 0 320 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Ilustração de um cofrinho">
+            <defs>
+              <linearGradient id="piggyBody" x1="42" y1="58" x2="252" y2="176" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#38BDF8"/>
+                <stop offset="1" stop-color="#2563EB"/>
+              </linearGradient>
+            </defs>
+            <ellipse cx="160" cy="192" rx="98" ry="16" fill="#0F172A" opacity="0.38"/>
+            <ellipse cx="160" cy="188" rx="88" ry="11" fill="#38BDF8" opacity="0.12"/>
+            <path d="M104 100C92.2 100 82 90.2 82 78.2C82 66.2 91.8 56 104 56C116.2 56 126 65.8 126 78.2C126 90.6 116.2 100 104 100Z" fill="#60A5FA" opacity="0.45"/>
+            <g class="piggy-belly">
+              <path d="M84 117C84 81.5 116.3 58 163.5 58C190.8 58 212 65.3 225.6 80.4C235.4 78.7 244.3 79.1 252 82.1C244.7 91 240.5 102.1 240.5 115.2C240.5 119.1 240.9 122.8 241.8 126.4C251.8 132 258 142.1 258 154.1C258 171.3 245.2 184.1 227.8 184.1H219.5L214.6 193.5C211.9 198.7 206.5 202 200.6 202H191.3C183.6 202 177.4 195.8 177.4 188.1V184.1H139.6V193.2C139.6 198.1 135.6 202 130.8 202H119.2C112.8 202 107.1 198.2 104.5 192.4L100.8 184.1H95.4C68.3 184.1 47 164.5 47 138.4C47 116.6 61.2 99.7 84 96.2V117Z" fill="url(#piggyBody)"/>
+              <path d="M201 76C206.1 85.1 215.6 91.3 227.1 93.4" stroke="#DBEAFE" stroke-width="10" stroke-linecap="round" opacity="0.68"/>
+              <path d="M118 94L182 94" stroke="#DBEAFE" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+              <circle cx="192" cy="112" r="8" fill="#E0F2FE"/>
+              <circle cx="194.5" cy="109.5" r="2.5" fill="#0F172A" opacity="0.66"/>
+              <circle cx="223" cy="127" r="8" fill="#0EA5E9" opacity="0.86"/>
+              <path d="M219 149C206.5 161.6 187.2 169.4 164.8 169.4C126.8 169.4 95.1 147.9 86.6 119.2" stroke="#BAE6FD" stroke-width="10" stroke-linecap="round" opacity="0.55"/>
+            </g>
+          </svg>
+        </div>
+
+        <div class="coin-bar">
+          <button type="button" class="btn btn--coin" id="coinButton">Guardar moedinha</button>
+          <span class="coin-counter" id="coinCounter" aria-live="polite">0 moedinhas guardadas nesta pausa.</span>
+        </div>
+        <p class="coin-reward" id="coinReward" aria-live="polite">Valeu por segurar as pontas com a gente.</p>
+      </aside>
+    </section>
   </main>
 
   <script>
     (function () {
       const STORAGE_KEY = 'acerttapay:last-visit';
+      const DRAFT_SUMMARY_KEY = 'acerttapay:offline-draft-summary';
+      const DRAFT_PURGE_KEY = 'acerttapay:purge-local-drafts';
+      const DELIGHT_COUNT_KEY = 'acerttapay:offline-delight-count';
       const retryButton = document.getElementById('retryButton');
       const lastPageButton = document.getElementById('lastPageButton');
       const networkStatus = document.getElementById('networkStatus');
       const lastPageLabel = document.getElementById('lastPageLabel');
       const lastVisitLabel = document.getElementById('lastVisitLabel');
+      const draftSummaryItem = document.getElementById('draftSummaryItem');
+      const draftSummaryLabel = document.getElementById('draftSummaryLabel');
+      const delightMessage = document.getElementById('delightMessage');
+      const piggyScene = document.getElementById('piggyScene');
+      const coinButton = document.getElementById('coinButton');
+      const coinCounter = document.getElementById('coinCounter');
+      const coinReward = document.getElementById('coinReward');
+
+      const rotatingMessages = [
+        'Seu último resumo continua por perto. A internet é que foi tomar um café.',
+        'Respira: quando a conexão voltar, você retoma daqui sem caça ao tesouro.',
+        'A rede sumiu um pouco, mas o contexto não foi junto. Ele está guardado logo acima.',
+        'Pausa rápida. Seus atalhos seguem por perto para o recomeço ser sem drama.',
+        'Enquanto a internet pega fôlego, o AcerttaPay continua aqui fazendo companhia.'
+      ];
+
+      const rewardMessages = [
+        'Valeu por segurar as pontas com a gente.',
+        'Mais uma moedinha e o cofrinho já ficou menos solitário.',
+        'Paciência de ouro, literalmente.',
+        'A conexão ainda não voltou, mas o humor já deu uma melhorada.',
+        'Quando a rede colaborar, você retoma com estilo.',
+        'Esse cofrinho offline está levando a pausa com elegância.'
+      ];
+
+      let rotatingIndex = 0;
+      let delightCount = 0;
 
       function formatVisit(isoDate) {
         if (!isoDate) return 'Sem registro salvo por enquanto.';
@@ -343,6 +661,61 @@
         if (!path) return 'Ainda não deu tempo de guardar esse mimo.';
         if (path === '/') return 'Página inicial';
         return path;
+      }
+
+      function safeStorageGet(storage, key) {
+        try {
+          return storage.getItem(key);
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function safeStorageSet(storage, key, value) {
+        try {
+          storage.setItem(key, value);
+        } catch (error) {
+          // noop
+        }
+      }
+
+      function hydrateDraftSummary() {
+        if (!(draftSummaryItem instanceof HTMLElement) || !(draftSummaryLabel instanceof HTMLElement)) return;
+
+        try {
+          if (localStorage.getItem(DRAFT_PURGE_KEY) === '1') {
+            localStorage.removeItem(DRAFT_SUMMARY_KEY);
+          }
+        } catch (error) {
+          // noop
+        }
+
+        let raw = null;
+        try {
+          raw = localStorage.getItem(DRAFT_SUMMARY_KEY);
+        } catch (error) {
+          raw = null;
+        }
+
+        if (!raw) {
+          draftSummaryItem.hidden = true;
+          return;
+        }
+
+        try {
+          const data = JSON.parse(raw);
+          const when = formatVisit(data.updatedAt);
+          const parts = [];
+          if (data.description) parts.push(data.description);
+          if (data.amount) parts.push(data.amount);
+          const headline = parts.length ? parts.join(' · ') : 'Tem uma compra guardada só neste aparelho.';
+          draftSummaryLabel.textContent = when && when !== 'Sem registro salvo por enquanto.'
+            ? `${headline} Revisão pronta desde ${when}.`
+            : headline;
+          draftSummaryItem.hidden = false;
+        } catch (error) {
+          draftSummaryItem.hidden = true;
+        }
       }
 
       function updateConnectionStatus() {
@@ -380,6 +753,58 @@
         updateConnectionStatus();
       }
 
+      function renderRotatingMessage(index) {
+        if (!(delightMessage instanceof HTMLElement) || !rotatingMessages.length) return;
+        const safeIndex = ((index % rotatingMessages.length) + rotatingMessages.length) % rotatingMessages.length;
+        delightMessage.style.opacity = '0.28';
+        window.setTimeout(function () {
+          delightMessage.textContent = rotatingMessages[safeIndex];
+          delightMessage.style.opacity = '1';
+        }, 120);
+      }
+
+      function startRotatingMessages() {
+        if (!(delightMessage instanceof HTMLElement) || rotatingMessages.length < 2) return;
+        renderRotatingMessage(rotatingIndex);
+        window.setInterval(function () {
+          rotatingIndex = (rotatingIndex + 1) % rotatingMessages.length;
+          renderRotatingMessage(rotatingIndex);
+        }, 4800);
+      }
+
+      function readDelightCount() {
+        const raw = safeStorageGet(window.sessionStorage, DELIGHT_COUNT_KEY);
+        const value = Number.parseInt(raw || '0', 10);
+        delightCount = Number.isFinite(value) && value > 0 ? value : 0;
+      }
+
+      function writeDelightCount() {
+        safeStorageSet(window.sessionStorage, DELIGHT_COUNT_KEY, String(delightCount));
+      }
+
+      function updateDelightCounter() {
+        if (coinCounter instanceof HTMLElement) {
+          coinCounter.textContent = delightCount === 1
+            ? '1 moedinha guardada nesta pausa.'
+            : `${delightCount} moedinhas guardadas nesta pausa.`;
+        }
+        if (coinReward instanceof HTMLElement) {
+          const index = delightCount > 0 ? delightCount % rewardMessages.length : 0;
+          coinReward.textContent = rewardMessages[index];
+        }
+      }
+
+      function playCoinDrop() {
+        if (!(piggyScene instanceof HTMLElement)) return;
+        piggyScene.classList.remove('is-dropping');
+        window.requestAnimationFrame(function () {
+          piggyScene.classList.add('is-dropping');
+          window.setTimeout(function () {
+            piggyScene.classList.remove('is-dropping');
+          }, 940);
+        });
+      }
+
       retryButton.addEventListener('click', function () {
         window.location.reload();
       });
@@ -390,9 +815,22 @@
         }
       });
 
+      if (coinButton instanceof HTMLButtonElement) {
+        coinButton.addEventListener('click', function () {
+          delightCount += 1;
+          writeDelightCount();
+          updateDelightCounter();
+          playCoinDrop();
+        });
+      }
+
       window.addEventListener('online', updateConnectionStatus);
       window.addEventListener('offline', updateConnectionStatus);
       hydrateLastVisit();
+      hydrateDraftSummary();
+      readDelightCount();
+      updateDelightCounter();
+      startRotatingMessages();
     })();
   </script>
 </body>

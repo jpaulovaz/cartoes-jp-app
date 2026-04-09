@@ -45,23 +45,17 @@
       </div>
     </div>
     <div class="op-page-hero__actions op-page-hero__actions--compact">
-      <a href="/month/<%= year %>/<%= month %>" class="op-btn op-btn-success op-btn--compact whitespace-nowrap">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
-        </svg>
-        Ver compras
+      <a href="/month/<%= year %>/<%= month %>" class="op-btn op-btn--compact op-hero-link op-hero-link--month whitespace-nowrap">
+        Ver mês
       </a>
-      <a href="/summary/<%= year %>/<%= month %>" class="op-btn op-btn-info op-btn--compact whitespace-nowrap">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v8m4-4H8"></path>
-        </svg>
+      <a href="/summary/<%= year %>/<%= month %>" class="op-btn op-btn--compact op-hero-link op-hero-link--summary whitespace-nowrap">
         Fechamento
       </a>
-      <a href="/detalhamento/<%= year %>/<%= month %>" class="op-btn op-btn-export op-btn--compact whitespace-nowrap">
+      <a href="/detalhamento/<%= year %>/<%= month %>" class="op-btn op-btn--compact op-hero-link op-hero-link--radar whitespace-nowrap">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6m4 6V7m4 10v-3M5 19h14"></path>
         </svg>
-        Entradas e saídas
+        Meu Radar
       </a>
     </div>
   </section>
@@ -80,8 +74,8 @@
     </div>
 
     <div class="mt-5 op-tab-strip" role="tablist" aria-label="Blocos das análises">
-      <button type="button" class="op-tab-btn is-active" role="tab" aria-selected="true" data-op-tab-target="overview"><span class="sm:hidden">Resumão</span><span class="hidden sm:inline">Visão geral</span></button>
-      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="flow"><span class="sm:hidden">Entra e sai</span><span class="hidden sm:inline">Entradas e saídas</span></button>
+      <button type="button" class="op-tab-btn is-active" role="tab" aria-selected="true" data-op-tab-target="overview"><span class="sm:hidden">Fechamento</span><span class="hidden sm:inline">Fechamento</span></button>
+      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="flow"><span class="sm:hidden">Entra e sai</span><span class="hidden sm:inline">Meu Radar</span></button>
       <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="split"><span class="sm:hidden">Turma e cartões</span><span class="hidden sm:inline">Pessoas e cartões</span></button>
       <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="places">Lugares</button>
     </div>
@@ -228,7 +222,7 @@
             <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Quer ajeitar alguma peça?</div>
             <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Salário, contas da casa, extras e outras saídas por fora continuam no mesmo cantinho de sempre.</p>
           </div>
-          <a href="/detalhamento/<%= year %>/<%= month %>" class="op-btn op-btn-export op-btn--compact whitespace-nowrap">Abrir entradas e saídas</a>
+          <a href="/detalhamento/<%= year %>/<%= month %>" class="op-btn op-btn-export op-btn--compact whitespace-nowrap">Abrir entra e sai</a>
         </div>
 
         <% if (hasFinanceFlow) { %>
@@ -334,7 +328,7 @@
           <div class="mt-6 rounded-[26px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center dark:border-slate-700 dark:bg-slate-800/60">
             <div class="text-xl font-black text-slate-900 dark:text-white">Essa parte ainda está quietinha</div>
             <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-300">Assim que você tiver entradas, saídas por fora ou valor dividido no cartão, essa leitura ganha vida.</p>
-            <a href="/detalhamento/<%= year %>/<%= month %>" class="op-btn op-btn-export op-btn--compact whitespace-nowrap mt-5">Abrir entradas e saídas</a>
+            <a href="/detalhamento/<%= year %>/<%= month %>" class="op-btn op-btn-export op-btn--compact whitespace-nowrap mt-5">Abrir entra e sai</a>
           </div>
         <% } %>
       </div>

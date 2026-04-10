@@ -5,6 +5,8 @@ const { createAdminMessagesRouter } = require('./adminMessages.routes');
 const { createAdminCoreRouter } = require('./adminCore.routes');
 const { createCardsRouter } = require('./cards.routes');
 const { createFinancesRouter } = require('./finances.routes');
+const { createImportRouter } = require('./import.routes');
+const { createSummaryRouter } = require('./summary.routes');
 
 function registerAuthRoutes(app, deps = {}) {
   app.use(createAuthRouter(deps));
@@ -34,6 +36,14 @@ function registerFinancesRoutes(app, deps = {}) {
   app.use(createFinancesRouter(deps));
 }
 
+function registerImportRoutes(app, deps = {}) {
+  app.use(createImportRouter(deps));
+}
+
+function registerSummaryRoutes(app, deps = {}) {
+  app.use(createSummaryRouter(deps));
+}
+
 module.exports = {
   registerAuthRoutes,
   registerSecurityRoutes,
@@ -42,11 +52,15 @@ module.exports = {
   registerAdminMessagesRoutes,
   registerCardsRoutes,
   registerFinancesRoutes,
+  registerImportRoutes,
+  registerSummaryRoutes,
   createAuthRouter,
   createSecurityRouter,
   createNotificationsRouter,
   createAdminCoreRouter,
   createAdminMessagesRouter,
   createCardsRouter,
-  createFinancesRouter
+  createFinancesRouter,
+  createImportRouter,
+  createSummaryRouter
 };

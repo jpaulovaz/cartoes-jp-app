@@ -141,7 +141,7 @@ const {
   buildImportPreviewFromBuffer,
   applyImportPreview
 } = require('./src/messageCsvService');
-const { registerAuthRoutes, registerSecurityRoutes, registerNotificationsRoutes, registerAdminCoreRoutes, registerAdminMessagesRoutes, registerCardsRoutes, registerFinancesRoutes } = require('./src/routes');
+const { registerAuthRoutes, registerSecurityRoutes, registerNotificationsRoutes, registerAdminCoreRoutes, registerAdminMessagesRoutes, registerCardsRoutes, registerFinancesRoutes, registerImportRoutes, registerSummaryRoutes } = require('./src/routes');
 
 // Migração oficial executada explicitamente pelo bootstrap do runtime.
 // Seed opcional permanece fora do bootstrap automático.
@@ -16518,313 +16518,33 @@ function buildImportConfirmationMessage(preview, importedCount, overwrittenCount
 }
 
 // Import
-app.get("/import", ensureAuthenticated, ensureCanImport, (req, res) => {
-  const userId = req.user.id;
-  const preview = req.session?.importPreview || null;
-  const formSeed = preview?.formSeed || res.locals.importFormSeed || null;
-
-  return safeRenderView(res, "import", {
-    cards: getActiveCards(userId),
-    error: null,
-    formSeed,
-    importReport: res.locals.importReport || null,
-    importPreview: preview,
-    formatBRLFromCents
-  });
-});
-
-app.post("/import", ensureAuthenticated, ensureCanImport, upload.single("csvfile"), (req, res) => {
-  const userId = req.user.id;
-  const cards = getActiveCards(userId);
-
-  try {
-    clearImportPreview(req);
-
-    const cardId = Number(req.body.card_id);
-    const month = Number(req.body.month);
-    const year = Number(req.body.year);
-    const formSeed = { cardId, month, year };
-
-    if (!req.file) throw new Error("Envie um arquivo CSV.");
-    if (!cardId) throw new Error("Selecione o cartao.");
-    if (!month || month < 1 || month > 12) throw new Error("Mes invalido.");
-    if (!year || year < 2000 || year > 2100) throw new Error("Ano invalido.");
-
-    const card = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(cardId, userId);
-    if (!card) throw new Error("Cartao invalido ou desativado.");
-
-    const txns = parseCsvByCardName(card.name, req.file.buffer);
-    const preview = buildImportPreviewData({
-      userId,
-      cardId,
-      cardName: card.name,
-      month,
-      year,
-      originalFilename: req.file.originalname,
-      txns
-    });
-
-    setImportPreview(req, preview);
-    setImportFormSeed(req, formSeed);
-    setFlash(req, 'info', `Analisei ${formatCountLabel(preview.summary.parsedCount, 'compra', 'compras')} de ${preview.periodLabel}. Agora e so revisar e confirmar.`);
-    return res.redirect('/import');
-  } catch (e) {
-    clearImportPreview(req);
-    res.status(400).render("import", {
-      cards,
-      error: e.message || String(e),
-      formSeed: {
-        cardId: Number(req.body.card_id) || null,
-        month: Number(req.body.month) || null,
-        year: Number(req.body.year) || null
-      },
-      importReport: null,
-      importPreview: null,
-      formatBRLFromCents
-    });
-  }
-});
-
-app.post('/import/confirm', ensureAuthenticated, ensureCanImport, (req, res) => {
-  const userId = req.user.id;
-  const preview = req.session?.importPreview || null;
-  const previewId = String(req.body.preview_id || '').trim();
-
-  if (!preview || !previewId || preview.id !== previewId) {
-    clearImportPreview(req);
-    setFlash(req, 'error', 'A revisao dessa fatura nao esta mais disponivel. Manda o CSV de novo e a gente refaz o pente-fino.');
-    return res.redirect('/import');
-  }
-
-  try {
-    const card = db.prepare("SELECT id, name FROM cards WHERE id = ? AND user_id = ? AND COALESCE(active, 1) = 1").get(preview.cardId, userId);
-    if (!card) throw new Error('Esse cartao nao esta mais disponivel para receber a importacao.');
-
-    const selection = resolveImportPreviewSelection(preview, req.body);
-    const importedItems = Array.isArray(selection?.importedItems) ? selection.importedItems : [];
-    const overwriteActions = Array.isArray(selection?.overwriteActions) ? selection.overwriteActions : [];
-    if (!importedItems.length && !overwriteActions.length) {
-      setFlash(req, 'info', 'Nenhuma compra ficou marcada para entrar ou sobrescrever. Ajuste a revisao e confirme de novo.');
-      return res.redirect('/import');
-    }
-
-    const itemMap = new Map((preview.items || []).map((item) => [item.id, item]));
-    const candidateMap = new Map((preview.appDuplicateCandidates || []).map((candidate) => [candidate.id, candidate]));
-    const preparedOverwriteActions = overwriteActions.map((action) => {
-      const candidate = candidateMap.get(action.candidateId);
-      if (!candidate) {
-        throw new Error('Uma das suspeitas revisadas nao existe mais. Refaz a analise do CSV para seguir.');
-      }
-      const item = itemMap.get(action.itemId);
-      if (!item) {
-        throw new Error('Nao consegui localizar uma das linhas do CSV que voce revisou. Refaz a analise para seguir.');
-      }
-
-      const eligibleMatches = (candidate.existingMatches || []).filter((match) => Number(match.overwriteEligible || 0) || match.overwriteEligible === true);
-      if (!eligibleMatches.length) {
-        throw new Error('Essa suspeita nao tem mais um lancamento manual elegivel para sobrescrita.');
-      }
-
-      let targetTransactionId = Number(action.targetTransactionId || 0);
-      if (!targetTransactionId && eligibleMatches.length === 1) {
-        targetTransactionId = Number(eligibleMatches[0].id || 0);
-      }
-      if (!targetTransactionId) {
-        throw new Error('Escolha qual lancamento manual voce quer sobrescrever antes de confirmar.');
-      }
-
-      const previewTargetMatch = eligibleMatches.find((match) => Number(match.id || 0) === targetTransactionId);
-      if (!previewTargetMatch) {
-        throw new Error('O alvo escolhido para sobrescrita nao bate mais com a revisao. Refaz a analise para seguir.');
-      }
-
-      return {
-        candidate,
-        item,
-        targetTransactionId,
-        previewTargetMatch
-      };
-    });
-
-    const targetIds = preparedOverwriteActions.map((action) => Number(action.targetTransactionId || 0)).filter(Boolean);
-    if (new Set(targetIds).size !== targetIds.length) {
-      throw new Error('O mesmo lancamento manual foi escolhido mais de uma vez. Cada sobrescrita precisa de um alvo proprio.');
-    }
-
-    const persistImportConfirmation = db.transaction((payload) => {
-      const now = nowIso();
-      let importId = null;
-
-      if (payload.importedItems.length) {
-        const info = db.prepare(`
-          INSERT INTO imports(user_id, card_id, month, year, created_at, original_filename)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).run(userId, preview.cardId, preview.month, preview.year, now, preview.originalFilename || 'fatura.csv');
-        importId = Number(info.lastInsertRowid || 0) || null;
-
-        const insertTransaction = db.prepare(`
-          INSERT INTO transactions(user_id, import_id, card_id, txn_date, description, amount_cents, card_number, raw_json, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        payload.importedItems.forEach((item) => {
-          insertTransaction.run(
-            userId,
-            importId,
-            preview.cardId,
-            item.isoDate || null,
-            item.description,
-            item.amountCents,
-            item.cardNumber || null,
-            JSON.stringify(item.raw || {}),
-            now
-          );
-        });
-      }
-
-      const updateTransaction = db.prepare(`
-        UPDATE transactions
-        SET txn_date = ?, description = ?, amount_cents = ?, card_number = ?, raw_json = ?
-        WHERE id = ? AND user_id = ?
-      `);
-      const insertOverwriteEvent = db.prepare(`
-        INSERT INTO import_overwrite_events (
-          user_id, transaction_id, import_id, card_id, month, year,
-          original_filename, preview_item_id, before_snapshot_json, after_snapshot_json, created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      const overwrittenIds = [];
-      payload.overwriteActions.forEach((action) => {
-        const currentTarget = getImportOverwriteTargetRow(userId, action.targetTransactionId);
-        if (!currentTarget) {
-          throw new Error('Um dos lancamentos escolhidos para sobrescrita nao existe mais. Refaz a revisao para seguir.');
-        }
-        if (Number(currentTarget.import_id || 0) > 0) {
-          throw new Error('Um dos lancamentos escolhidos deixou de ser manual. Refaz a revisao antes de confirmar.');
-        }
-
-        const currentMonth = Number(currentTarget.month || 0);
-        const currentYear = Number(currentTarget.year || 0);
-        if (Number(currentTarget.card_id || 0) !== Number(preview.cardId || 0)
-          || currentMonth !== Number(preview.month || 0)
-          || currentYear !== Number(preview.year || 0)) {
-          throw new Error('Uma das coincidencias mudou de contexto depois da revisao. Refaça a analise do CSV para continuar.');
-        }
-        if (isMonthClosed(userId, currentMonth, currentYear)) {
-          throw new Error(getMonthLockMessage(currentMonth, currentYear));
-        }
-
-        const currentVersion = buildImportExistingMatchVersion({
-          id: currentTarget.id,
-          import_id: currentTarget.import_id,
-          card_id: currentTarget.card_id,
-          month: currentTarget.month,
-          year: currentTarget.year,
-          txn_date: currentTarget.txn_date,
-          description: currentTarget.description,
-          amount_cents: currentTarget.amount_cents,
-          card_number: currentTarget.card_number,
-          parent_txn_id: currentTarget.parent_txn_id,
-          recurring_rule_id: currentTarget.recurring_rule_id
-        });
-        if (currentVersion !== action.previewTargetMatch.version) {
-          throw new Error('Uma das coincidencias mudou depois da revisao. Refaz a analise do CSV para evitar sobrescrever o item errado.');
-        }
-        if (Number(currentTarget.amount_cents || 0) !== Number(action.item.amountCents || 0)) {
-          throw new Error('O valor do alvo mudou depois da revisao. Refaz a analise do CSV antes de sobrescrever.');
-        }
-
-        const previewItemSnapshot = {
-          id: action.item.id,
-          txn_date: action.item.isoDate || null,
-          description: action.item.description,
-          amount_cents: Number(action.item.amountCents || 0),
-          card_number: action.item.cardNumber || null,
-          raw: action.item.raw || {}
-        };
-        const beforeSnapshot = buildImportOverwriteAuditSnapshot(userId, currentTarget, {
-          preview_item: previewItemSnapshot,
-          preview_id: preview.id,
-          original_filename: preview.originalFilename || 'fatura.csv'
-        });
-
-        const nextDescription = buildImportOverwriteDescription(userId, currentTarget, action.item.description);
-        updateTransaction.run(
-          action.item.isoDate || null,
-          nextDescription,
-          action.item.amountCents,
-          action.item.cardNumber || null,
-          JSON.stringify(action.item.raw || {}),
-          action.targetTransactionId,
-          userId
-        );
-
-        const refreshedTarget = getImportOverwriteTargetRow(userId, action.targetTransactionId);
-        const afterSnapshot = buildImportOverwriteAuditSnapshot(userId, refreshedTarget, {
-          preview_item: previewItemSnapshot,
-          preview_id: preview.id,
-          original_filename: preview.originalFilename || 'fatura.csv',
-          import_id: importId
-        });
-
-        insertOverwriteEvent.run(
-          userId,
-          action.targetTransactionId,
-          importId,
-          preview.cardId,
-          preview.month,
-          preview.year,
-          preview.originalFilename || 'fatura.csv',
-          action.item.id,
-          JSON.stringify(beforeSnapshot),
-          JSON.stringify(afterSnapshot),
-          now
-        );
-        overwrittenIds.push(action.targetTransactionId);
-      });
-
-      return {
-        importId,
-        overwrittenIds: Array.from(new Set(overwrittenIds))
-      };
-    });
-
-    const persistResult = persistImportConfirmation({ importedItems, overwriteActions: preparedOverwriteActions });
-    const overwrittenRows = persistResult.overwrittenIds.length
-      ? getTransactionScopeRowsByIds(userId, persistResult.overwrittenIds)
-      : [];
-
-    if (overwrittenRows.length) {
-      syncEqualAllocationsForEditedTransactions(userId, overwrittenRows);
-      queueSharedDebtDraftsForTransactions(userId, overwrittenRows);
-    }
-
-    const feedback = buildImportConfirmationMessage(preview, importedItems.length, persistResult.overwrittenIds.length);
-    clearImportPreview(req);
-    setImportFormSeed(req, preview.formSeed || null);
-    setFlash(req, feedback.type, feedback.message);
-    return res.redirect(`/month/${preview.year}/${preview.month}`);
-  } catch (error) {
-    setFlash(req, 'error', error.message || 'Nao consegui confirmar essa importacao agora.');
-    return res.redirect('/import');
-  }
-});
-
-app.post('/import/preview/cancel', ensureAuthenticated, ensureCanImport, (req, res) => {
-  const preview = req.session?.importPreview || null;
-  const previewId = String(req.body.preview_id || '').trim();
-
-  if (!preview || !previewId || preview.id !== previewId) {
-    clearImportPreview(req);
-    return res.redirect('/import');
-  }
-
-  setImportFormSeed(req, preview.formSeed || null);
-  clearImportPreview(req);
-  setFlash(req, 'info', 'Fechei essa previa. O formulario continua preenchido para você ajustar o que quiser.');
-  return res.redirect('/import');
+registerImportRoutes(app, {
+  ensureAuthenticated,
+  ensureCanImport,
+  upload,
+  safeRenderView,
+  formatBRLFromCents,
+  getActiveCards,
+  db,
+  clearImportPreview,
+  setImportPreview,
+  setImportFormSeed,
+  parseCsvByCardName,
+  buildImportPreviewData,
+  formatCountLabel,
+  resolveImportPreviewSelection,
+  nowIso,
+  getImportOverwriteTargetRow,
+  buildImportExistingMatchVersion,
+  buildImportOverwriteAuditSnapshot,
+  buildImportOverwriteDescription,
+  isMonthClosed,
+  getMonthLockMessage,
+  getTransactionScopeRowsByIds,
+  syncEqualAllocationsForEditedTransactions,
+  queueSharedDebtDraftsForTransactions,
+  buildImportConfirmationMessage,
+  setFlash
 });
 
 function buildOrder(sort, dir) {
@@ -20478,227 +20198,22 @@ function buildMonthlyReviewViewModel(userId, month, year) {
   };
 }
 
-app.get("/analytics/:year/:month", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
-  const { month, year } = parsed;
-
-  const viewModel = buildMonthlyReviewViewModel(userId, month, year);
-  return safeRenderView(res, "analytics", {
-    ...viewModel,
-    formatBRLFromCents
-  });
-});
-
-app.get("/summary/:year/:month", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
-  const { month, year } = parsed;
-
-  const viewModel = buildMonthlyReviewViewModel(userId, month, year);
-  return safeRenderView(res, "summary", {
-    ...viewModel,
-    formatBRLFromCents
-  });
-});
-
-app.post(["/summary/:year/:month/merchant-suggestions/confirm", "/analytics/:year/:month/merchant-suggestions/confirm"], ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
-  const { month, year } = parsed;
-  const normalizedPattern = buildMerchantPatternFromDescription(req.body.pattern || req.body.sample_description || '');
-  const merchantLabel = humanizeMerchantLabel(req.body.label || req.body.preview_label || '');
-  const searchTerm = normalizeMerchantText(req.body.search_term || normalizedPattern).split(' ').slice(0, 3).join(' ');
-  const sourceSample = String(req.body.sample_description || '').trim();
-
-  if (!normalizedPattern || !merchantLabel) {
-    setFlash(req, 'error', 'A sugestão veio meio sem molho. Tenta de novo que a gente organiza.');
-    return res.redirect(`/analytics/${year}/${month}`);
-  }
-
-  try {
-    upsertMerchantLearningFeedback(userId, {
-      normalizedPattern,
-      merchantLabel,
-      searchTerm,
-      sourceSample,
-      status: 'confirmed'
-    });
-    setFlash(req, 'success', `Fechou! Agora "${merchantLabel}" entra no radar desse jeitinho.`);
-  } catch (error) {
-    setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui salvar essa confirmação agora.' }).message);
-  }
-
-  return res.redirect(`/analytics/${year}/${month}`);
-});
-
-app.post(["/summary/:year/:month/merchant-suggestions/dismiss", "/analytics/:year/:month/merchant-suggestions/dismiss"], ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
-  const { month, year } = parsed;
-  const normalizedPattern = buildMerchantPatternFromDescription(req.body.pattern || req.body.sample_description || '');
-  const merchantLabel = humanizeMerchantLabel(req.body.label || req.body.preview_label || 'Agrupamento adiado');
-  const searchTerm = normalizeMerchantText(req.body.search_term || normalizedPattern).split(' ').slice(0, 3).join(' ');
-  const sourceSample = String(req.body.sample_description || '').trim();
-
-  if (!normalizedPattern) {
-    setFlash(req, 'error', 'Essa sugestão escapou sem pista suficiente para ser adiada.');
-    return res.redirect(`/analytics/${year}/${month}`);
-  }
-
-  try {
-    upsertMerchantLearningFeedback(userId, {
-      normalizedPattern,
-      merchantLabel,
-      searchTerm,
-      sourceSample,
-      status: 'dismissed'
-    });
-    setFlash(req, 'success', 'Sugestão guardada na geladeira. A gente não insiste nela por enquanto.');
-  } catch (error) {
-    setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui guardar essa decisão agora.' }).message);
-  }
-
-  return res.redirect(`/analytics/${year}/${month}`);
-});
-
-
-app.post(["/summary/:year/:month/merchant-learning/pause", "/analytics/:year/:month/merchant-learning/pause"], ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
-  const { month, year } = parsed;
-  const normalizedPattern = normalizeMerchantText(req.body.pattern || '');
-  const merchantLabel = humanizeMerchantLabel(req.body.label || 'Agrupamento pausado');
-  const searchTerm = normalizeMerchantText(req.body.search_term || normalizedPattern).split(' ').slice(0, 3).join(' ');
-  const sourceSample = String(req.body.source_sample || '').trim();
-
-  if (!normalizedPattern) {
-    setFlash(req, 'error', 'Faltou a pista principal desse agrupamento para pausar com segurança.');
-    return res.redirect(`/analytics/${year}/${month}`);
-  }
-
-  try {
-    upsertMerchantLearningFeedback(userId, {
-      normalizedPattern,
-      merchantLabel,
-      searchTerm,
-      sourceSample,
-      status: 'dismissed'
-    });
-    setFlash(req, 'success', `Beleza! Dei uma pausa no agrupamento de "${merchantLabel}".`);
-  } catch (error) {
-    setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui pausar esse agrupamento agora.' }).message);
-  }
-
-  return res.redirect(`/analytics/${year}/${month}`);
-});
-
-app.post(["/summary/:year/:month/merchant-learning/resume", "/analytics/:year/:month/merchant-learning/resume"], ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
-  const { month, year } = parsed;
-  const normalizedPattern = normalizeMerchantText(req.body.pattern || '');
-  const merchantLabel = humanizeMerchantLabel(req.body.label || req.body.preview_label || 'Agrupamento retomado');
-  const searchTerm = normalizeMerchantText(req.body.search_term || normalizedPattern).split(' ').slice(0, 3).join(' ');
-  const sourceSample = String(req.body.source_sample || '').trim();
-
-  if (!normalizedPattern) {
-    setFlash(req, 'error', 'Esse agrupamento veio sem rastro suficiente para voltar ao jogo.');
-    return res.redirect(`/analytics/${year}/${month}`);
-  }
-
-  try {
-    upsertMerchantLearningFeedback(userId, {
-      normalizedPattern,
-      merchantLabel,
-      searchTerm,
-      sourceSample,
-      status: 'confirmed'
-    });
-    setFlash(req, 'success', `Pronto! "${merchantLabel}" voltou para a memória ativa.`);
-  } catch (error) {
-    setFlash(req, 'error', getFriendlyErrorDetails(error, { defaultMessage: 'Não consegui reativar esse agrupamento agora.' }).message);
-  }
-
-  return res.redirect(`/analytics/${year}/${month}`);
-});
-
-app.post("/summary/:year/:month/cards", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
-  const { month, year } = parsed;
-  if (isMonthClosed(userId, month, year)) {
-    setFlash(req, "error", getMonthLockMessage(month, year));
-    return res.redirect(`/summary/${year}/${month}`);
-  }
-
-  const cardIds = Array.isArray(req.body.card_id) ? req.body.card_id : [req.body.card_id];
-  const paid = Array.isArray(req.body.paid) ? req.body.paid : [req.body.paid];
-  const overrideDue = Array.isArray(req.body.override_due) ? req.body.override_due : [req.body.override_due];
-  const entries = cardIds.map((card_id, index) => ({
-    card_id,
-    paid: paid[index],
-    override_due: overrideDue[index]
-  }));
-
-  upsertCardStatementsForMonth(userId, month, year, entries);
-  res.redirect(`/summary/${year}/${month}`);
-});
-
-app.post("/summary/:year/:month/cards/async", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).json({ ok: false, error: "Esse mês/ano veio estranho por aqui." });
-  const { month, year } = parsed;
-  if (isMonthClosed(userId, month, year)) {
-    return res.status(423).json({ ok: false, error: getMonthLockMessage(month, year) });
-  }
-
-  upsertCardStatementsForMonth(userId, month, year, [{
-    card_id: req.body.card_id,
-    paid: req.body.paid,
-    override_due: req.body.override_due
-  }]);
-
-  return res.json({ ok: true });
-});
-
-app.post("/summary/:year/:month/people", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
-  const { month, year } = parsed;
-  if (isMonthClosed(userId, month, year)) {
-    setFlash(req, "error", getMonthLockMessage(month, year));
-    return res.redirect(`/summary/${year}/${month}`);
-  }
-
-  const personIds = Array.isArray(req.body.person_id) ? req.body.person_id : [req.body.person_id];
-  const paid = Array.isArray(req.body.paid) ? req.body.paid : [req.body.paid];
-  const entries = personIds.map((person_id, index) => ({ person_id, paid: paid[index] }));
-
-  upsertPersonPaymentsForMonth(userId, month, year, entries);
-  res.redirect(`/summary/${year}/${month}`);
-});
-
-app.post("/summary/:year/:month/people/async", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const parsed = parseMonthYear(req.params.month, req.params.year);
-  if (!parsed) return res.status(400).json({ ok: false, error: "Esse mês/ano veio estranho por aqui." });
-  const { month, year } = parsed;
-  if (isMonthClosed(userId, month, year)) {
-    return res.status(423).json({ ok: false, error: getMonthLockMessage(month, year) });
-  }
-
-  upsertPersonPaymentsForMonth(userId, month, year, [{ person_id: req.body.person_id, paid: req.body.paid }]);
-  return res.json({ ok: true });
+registerSummaryRoutes(app, {
+  ensureAuthenticated,
+  safeRenderView,
+  formatBRLFromCents,
+  parseMonthYear,
+  buildMonthlyReviewViewModel,
+  buildMerchantPatternFromDescription,
+  humanizeMerchantLabel,
+  normalizeMerchantText,
+  upsertMerchantLearningFeedback,
+  getFriendlyErrorDetails,
+  setFlash,
+  isMonthClosed,
+  getMonthLockMessage,
+  upsertCardStatementsForMonth,
+  upsertPersonPaymentsForMonth
 });
 
 function getPersonStatementExportData(userId, month, year, personId, itemOrder = "oldest") {

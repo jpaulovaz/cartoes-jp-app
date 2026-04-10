@@ -7,6 +7,7 @@ const { createCardsRouter } = require('./cards.routes');
 const { createFinancesRouter } = require('./finances.routes');
 const { createImportRouter } = require('./import.routes');
 const { createSummaryRouter } = require('./summary.routes');
+const { createSharedDebtsRouter } = require('./sharedDebts.routes');
 
 function registerAuthRoutes(app, deps = {}) {
   app.use(createAuthRouter(deps));
@@ -44,6 +45,10 @@ function registerSummaryRoutes(app, deps = {}) {
   app.use(createSummaryRouter(deps));
 }
 
+function registerSharedDebtsRoutes(app, deps = {}) {
+  app.use(createSharedDebtsRouter(deps));
+}
+
 module.exports = {
   registerAuthRoutes,
   registerSecurityRoutes,
@@ -54,6 +59,7 @@ module.exports = {
   registerFinancesRoutes,
   registerImportRoutes,
   registerSummaryRoutes,
+  registerSharedDebtsRoutes,
   createAuthRouter,
   createSecurityRouter,
   createNotificationsRouter,
@@ -62,5 +68,6 @@ module.exports = {
   createCardsRouter,
   createFinancesRouter,
   createImportRouter,
-  createSummaryRouter
+  createSummaryRouter,
+  createSharedDebtsRouter
 };

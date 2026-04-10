@@ -17,6 +17,20 @@ function runMigrations() {
     return !!row;
   }
 
+  function indexExists(indexName) {
+    const row = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ? LIMIT 1")
+      .get(indexName);
+    return !!row;
+  }
+
+  function ensureIndexWithAliases(sql, indexNames = []) {
+    if ((indexNames || []).some((indexName) => indexExists(indexName))) {
+      return;
+    }
+    db.exec(sql);
+  }
+
   // ===== TABELA DE USUÁRIOS (NOVA) =====
   db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -67,6 +81,18 @@ function runMigrations() {
 
   if (!columnExists("users", "last_seen_at")) {
     db.exec("ALTER TABLE users ADD COLUMN last_seen_at TEXT;");
+  }
+
+  if (!columnExists("users", "profile_signature_text")) {
+    db.exec("ALTER TABLE users ADD COLUMN profile_signature_text TEXT;");
+  }
+
+  if (!columnExists("users", "profile_signature_vibe")) {
+    db.exec("ALTER TABLE users ADD COLUMN profile_signature_vibe TEXT;");
+  }
+
+  if (!columnExists("users", "profile_signature_updated_at")) {
+    db.exec("ALTER TABLE users ADD COLUMN profile_signature_updated_at TEXT;");
   }
 
   // ===== SEGURANCA DO APP =====
@@ -885,6 +911,59 @@ function runMigrations() {
   );
   `);
 
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS backup_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    backup_name TEXT NOT NULL,
+    trigger_kind TEXT NOT NULL DEFAULT 'manual',
+    status TEXT NOT NULL DEFAULT 'success',
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    local_primary_path TEXT,
+    local_secondary_path TEXT,
+    google_file_id TEXT,
+    google_view_link TEXT,
+    google_folder_id TEXT,
+    manifest_json TEXT,
+    message TEXT,
+    created_by_user_id INTEGER,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS backup_restores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    backup_name TEXT,
+    uploaded_filename TEXT,
+    status TEXT NOT NULL DEFAULT 'success',
+    message TEXT,
+    safety_backup_run_id INTEGER,
+    restored_by_user_id INTEGER,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    FOREIGN KEY (safety_backup_run_id) REFERENCES backup_runs(id),
+    FOREIGN KEY (restored_by_user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS merchant_learning_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    normalized_pattern TEXT NOT NULL,
+    merchant_label TEXT NOT NULL,
+    search_term TEXT,
+    source_sample TEXT,
+    status TEXT NOT NULL DEFAULT 'confirmed',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(user_id, normalized_pattern),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+  `);
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_backup_runs_started_at ON backup_runs(started_at DESC);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_backup_restores_started_at ON backup_restores(started_at DESC);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_merchant_learning_feedback_user_status ON merchant_learning_feedback(user_id, status, updated_at DESC);`);
+
   db.exec(`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_scheduled_push_logs_event_date ON scheduled_push_logs(event_type, date_key, user_id, sequence_no);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_email_delivery_events_target_kind ON email_delivery_events(target_user_id, kind, created_at DESC);`);
@@ -927,6 +1006,10 @@ function runMigrations() {
     db.exec("ALTER TABLE cards ADD COLUMN brand TEXT;");
   }
 
+  if (!columnExists("people", "phone")) {
+    db.exec("ALTER TABLE people ADD COLUMN phone TEXT;");
+  }
+
   if (!columnExists("people", "email")) {
     db.exec("ALTER TABLE people ADD COLUMN email TEXT;");
   }
@@ -953,6 +1036,18 @@ function runMigrations() {
 
   if (!columnExists("people", "pix_updated_at")) {
     db.exec("ALTER TABLE people ADD COLUMN pix_updated_at TEXT;");
+  }
+
+  if (!columnExists("transactions", "due_month")) {
+    db.exec("ALTER TABLE transactions ADD COLUMN due_month INTEGER;");
+  }
+
+  if (!columnExists("transactions", "due_year")) {
+    db.exec("ALTER TABLE transactions ADD COLUMN due_year INTEGER;");
+  }
+
+  if (!columnExists("transactions", "parent_txn_id")) {
+    db.exec("ALTER TABLE transactions ADD COLUMN parent_txn_id INTEGER;");
   }
 
   if (!columnExists("transactions", "recurring_rule_id")) {
@@ -1075,6 +1170,12 @@ function runMigrations() {
   SET action_kind = COALESCE(NULLIF(trim(action_kind), ''), 'create')
   WHERE action_kind IS NULL OR trim(action_kind) = '';
   `);
+
+  if (!columnExists("closed_months", "user_id")) {
+    db.exec("ALTER TABLE closed_months ADD COLUMN user_id INTEGER;");
+  }
+
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_closed_months_user_month_year ON closed_months(user_id, month, year);");
 
 
   function normalizeEmail(value) {
@@ -1238,11 +1339,9 @@ function runMigrations() {
   CREATE INDEX IF NOT EXISTS idx_payments_user ON person_payments(user_id);
   CREATE INDEX IF NOT EXISTS idx_txn_recurring_rule ON transactions(recurring_rule_id);
   CREATE INDEX IF NOT EXISTS idx_recurring_rules_user_status ON recurring_rules(user_id, status);
-  CREATE INDEX IF NOT EXISTS idx_recurring_exceptions_rule_month ON recurring_exceptions(user_id, rule_id, year, month);
   CREATE INDEX IF NOT EXISTS idx_people_email ON people(user_id, email);
   CREATE INDEX IF NOT EXISTS idx_shared_debts_receiver_status ON shared_debt_requests(receiver_user_id, status, created_at);
   CREATE INDEX IF NOT EXISTS idx_shared_debts_requester_status ON shared_debt_requests(requester_user_id, status, created_at);
-  CREATE INDEX IF NOT EXISTS idx_shared_debts_batch_id ON shared_debt_requests(batch_id);
   CREATE INDEX IF NOT EXISTS idx_shared_debts_source_allocation ON shared_debt_requests(source_allocation_id);
   CREATE INDEX IF NOT EXISTS idx_shared_debts_source_person ON shared_debt_requests(requester_user_id, source_transaction_id, source_person_id);
   CREATE INDEX IF NOT EXISTS idx_shared_debts_receiver_promised ON shared_debt_requests(receiver_user_id, promised_payment_date, status, request_kind);
@@ -1279,6 +1378,16 @@ function runMigrations() {
   CREATE INDEX IF NOT EXISTS idx_user_passkeys_user_created ON user_passkeys(user_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_user_passkeys_user_last_used ON user_passkeys(user_id, last_used_at DESC);
   `);
+
+  ensureIndexWithAliases(
+    "CREATE INDEX IF NOT EXISTS idx_recurring_exceptions_rule_month ON recurring_exceptions(user_id, rule_id, year, month);",
+    ['idx_recurring_exceptions_rule_month', 'idx_recurring_exceptions_user_rule_month']
+  );
+
+  ensureIndexWithAliases(
+    "CREATE INDEX IF NOT EXISTS idx_shared_debts_batch_id ON shared_debt_requests(batch_id);",
+    ['idx_shared_debts_batch_id', 'idx_shared_debt_requests_batch_id']
+  );
 
   if (!columnExists("monthly_finances", "amount_mode")) {
     db.exec("ALTER TABLE monthly_finances ADD COLUMN amount_mode TEXT NOT NULL DEFAULT 'fixed';");

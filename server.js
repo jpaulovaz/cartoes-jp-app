@@ -33,7 +33,7 @@ dayjs.extend(timezone);
 const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const SQLiteStore = require('connect-sqlite3')(session);
+const { createSessionStore } = require('./src/app/sessionStore');
 const db = require("./src/db");
 const { version: APP_VERSION } = require('./package.json');
 const {
@@ -4793,7 +4793,7 @@ app.use((req, res, next) => {
 
 // --- CONFIGURAÇÃO DE SESSÃO E AUTH ---
 app.use(session({
-  store: new SQLiteStore({ db: 'sessions.sqlite', dir: './' }),
+  store: createSessionStore(),
   secret: BOOTSTRAP_SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
@@ -24159,11 +24159,70 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = BOOTSTRAP_PORT || 3001;
+const DEFAULT_PORT = BOOTSTRAP_PORT || 3001;
 
-app.listen(PORT, () => {
-  console.log(`✅ Rodando em http://localhost:${PORT}`);
+function createApp() {
+  return app;
+}
+
+function startSchedulers() {
   startCardDueTodayPushScheduler();
   startManualDebtDueScheduler();
   restartBackupScheduler();
-});
+}
+
+function stopSchedulers() {
+  clearCardDueTodayPushScheduler();
+  clearManualDebtDueScheduler();
+  clearBackupScheduler();
+}
+
+function resolveListeningPort(server, fallbackPort) {
+  if (server && typeof server.address === 'function') {
+    const address = server.address();
+    if (address && typeof address === 'object' && address.port) {
+      return address.port;
+    }
+  }
+  return fallbackPort;
+}
+
+function startServer(options = {}) {
+  const hasCustomPort = Object.prototype.hasOwnProperty.call(options, 'port');
+  const port = hasCustomPort ? options.port : DEFAULT_PORT;
+  const host = typeof options.host === 'string' && options.host.trim() ? options.host.trim() : null;
+
+  let server = null;
+  const handleListen = () => {
+    const activePort = resolveListeningPort(server, port);
+    console.log(`✅ Rodando em http://localhost:${activePort}`);
+
+    if (options.startSchedulers !== false) {
+      startSchedulers();
+    }
+
+    if (typeof options.onListen === 'function') {
+      options.onListen(server);
+    }
+  };
+
+  if (host) {
+    server = app.listen(port, host, handleListen);
+  } else {
+    server = app.listen(port, handleListen);
+  }
+
+  return server;
+}
+
+module.exports = {
+  app,
+  createApp,
+  startServer,
+  startSchedulers,
+  stopSchedulers
+};
+
+if (require.main === module) {
+  startServer();
+}

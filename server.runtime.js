@@ -141,7 +141,7 @@ const {
   buildImportPreviewFromBuffer,
   applyImportPreview
 } = require('./src/messageCsvService');
-const { registerNotificationsRoutes, registerAdminMessagesRoutes } = require('./src/routes');
+const { registerAuthRoutes, registerSecurityRoutes, registerNotificationsRoutes, registerAdminMessagesRoutes } = require('./src/routes');
 
 // Migração oficial executada explicitamente pelo bootstrap do runtime.
 // Seed opcional permanece fora do bootstrap automático.
@@ -4313,200 +4313,29 @@ function ensureCanImport(req, res, next) {
 }
 
 // ===== ROTAS DE AUTH E BOOTSTRAP =====
-app.get('/setup', (req, res) => {
-  if (!isInitialSetupRequired()) {
-    return res.redirect(req.isAuthenticated?.() ? '/' : '/login');
-  }
-
-  return renderSetup(res);
-});
-
-app.post('/setup', (req, res) => {
-  if (!isInitialSetupRequired()) {
-    return res.redirect('/login');
-  }
-
-  const rawForm = {
-    admin_name: String(req.body.admin_name || '').trim(),
-    admin_email: String(req.body.admin_email || '').trim(),
-    GOOGLE_CLIENT_ID: req.body.GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET: req.body.GOOGLE_CLIENT_SECRET,
-    GOOGLE_CALLBACK_URL: req.body.GOOGLE_CALLBACK_URL
-  };
-
-  const safeAdminEmail = normalizeEmail(rawForm.admin_email);
-  const safeAdminName = String(rawForm.admin_name || '').trim();
-
-  if (!safeAdminEmail || !safeAdminEmail.includes('@')) {
-    return renderSetup(res, {
-      error: 'Me passa um e-mail válido para o admin inaugural. É ele que vai ganhar a chave mestra do app.',
-      form: rawForm
-    });
-  }
-
-  try {
-    const nextSettings = {};
-
-    GOOGLE_SETUP_KEYS.forEach((key) => {
-      const definition = getSettingDefinition(key);
-      const sanitized = sanitizeSettingValue(definition, rawForm[key]);
-      nextSettings[key] = key === 'GOOGLE_CALLBACK_URL' && !String(sanitized || '').trim()
-        ? buildSeedValue(definition)
-        : sanitized;
-    });
-
-    if (!String(nextSettings.GOOGLE_CLIENT_ID || '').trim() || !String(nextSettings.GOOGLE_CLIENT_SECRET || '').trim()) {
-      throw new Error('Para o Google acordar bonito, preciso de Client ID e Client secret completos.');
-    }
-
-    const now = currentConfigTimestamp();
-
-    db.transaction(() => {
-      Object.entries(nextSettings).forEach(([key, value]) => {
-        appSettingsUpsert.run(key, String(value ?? ''), now, null);
-      });
-
-      const existingUser = db.prepare('SELECT id, email, name, role, can_import FROM users WHERE email = ?').get(safeAdminEmail);
-      let adminId = null;
-
-      if (existingUser) {
-        db.prepare(`
-          UPDATE users
-             SET name = ?,
-                 role = 'admin',
-                 can_import = 1
-           WHERE id = ?
-        `).run(safeAdminName || existingUser.name || safeAdminEmail.split('@')[0], existingUser.id);
-        adminId = existingUser.id;
-      } else {
-        const result = db.prepare(`
-          INSERT INTO users (email, name, role, can_import, created_at, last_login)
-          VALUES (?, ?, 'admin', 1, ?, NULL)
-        `).run(safeAdminEmail, safeAdminName || safeAdminEmail.split('@')[0], now);
-        adminId = Number(result.lastInsertRowid);
-      }
-
-      if (!adminId) {
-        throw new Error('Não consegui preparar o admin inicial agora.');
-      }
-
-      const insertCat = db.prepare('INSERT OR IGNORE INTO finance_categories (user_id, name) VALUES (?, ?)');
-      DEFAULT_FINANCE_CATEGORIES.forEach((category) => insertCat.run(adminId, category));
-      ensurePurchaseCategoriesForUser(adminId);
-
-      markAppSetupCompleted(true, adminId);
-    })();
-
-    refreshRuntimeSettings();
-    return res.redirect('/login?setup=done');
-  } catch (err) {
-    return renderSetup(res, {
-      error: getFriendlyErrorMessage(err, { defaultMessage: 'A primeira configuração tropeçou aqui. Tenta de novo que eu arrumo a passarela.' }),
-      form: rawForm
-    });
-  }
-});
-
-app.get('/login', (req, res) => {
-  if (isInitialSetupRequired()) {
-    return res.redirect('/setup');
-  }
-
-  let error = null;
-  let notice = null;
-
-  if (String(req.query.reason || '').trim().toLowerCase() === 'idle') {
-    error = 'Fiquei um tempinho sem te ver por aqui, então fechei a porta por segurança. Entra de novo e seguimos.';
-  } else if (String(req.query.error || '').trim().toLowerCase() === 'auth_failed') {
-    error = 'Não consegui te trazer com o Google agora. Tenta mais uma vez que eu ajeito daqui.';
-  } else if (String(req.query.error || '').trim().toLowerCase() === 'google_not_configured') {
-    error = 'O botão de entrar com Google ainda não foi ligado por aqui. Vale ajustar isso primeiro em Administração.';
-  }
-
-  if (String(req.query.setup || '').trim().toLowerCase() === 'done') {
-    notice = 'Tudo pronto por aqui. Agora é só entrar com a conta principal do Google e começar.';
-  }
-
-  return safeRenderView(res, 'login_oauth', { error, notice });
-});
-
-app.get(['/privacy-policy', '/politica-de-privacidade'], (req, res) => {
-  return safeRenderView(res, 'privacy-policy', {
-    updatedAt: '14/03/2026'
-  });
-});
-
-app.get('/auth/google', (req, res, next) => {
-  if (isInitialSetupRequired()) {
-    return res.redirect('/setup');
-  }
-
-  if (!isGoogleAuthConfigured()) {
-    return res.redirect('/login?error=google_not_configured');
-  }
-
-  return passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
-});
-
-const handleGoogleCallback = (req, res, next) => {
-  if (isInitialSetupRequired()) {
-    return res.redirect('/setup');
-  }
-
-  if (!isGoogleAuthConfigured()) {
-    return res.redirect('/login?error=google_not_configured');
-  }
-
-  return passport.authenticate('google', (error, user) => {
-    if (error || !user) {
-      return res.redirect('/login?error=auth_failed');
-    }
-
-    const reauthFlow = req.session?.appPinReauthFlow || null;
-    if (reauthFlow && Number(reauthFlow.userId || 0) > 0 && Number(user.id || 0) !== Number(reauthFlow.userId || 0)) {
-      clearPinReauthSession(req);
-      setFlash(req, 'error', 'Para redefinir o PIN, confirme com a mesma conta Google que está usando aqui no app.');
-      return res.redirect('/lock?reason=reauth-mismatch');
-    }
-
-    return req.logIn(user, (loginError) => {
-      if (loginError) {
-        return next(loginError);
-      }
-
-      if (reauthFlow && Number(reauthFlow.userId || 0) > 0) {
-        const returnTo = sanitizeInternalRedirectTarget(reauthFlow.returnTo, '/lock?mode=recover');
-        grantPinReauthSession(req, user.id, { returnTo });
-        setFlash(req, 'success', 'Conta confirmada com o Google. Agora você pode redefinir ou desligar o PIN por alguns minutinhos.');
-        return res.redirect(returnTo || '/lock?mode=recover');
-      }
-
-      return res.redirect('/');
-    });
-  })(req, res, next);
-};
-
-app.get('/auth/google/callback', handleGoogleCallback);
-
-// Compatibilidade com a rota antiga de callback.
-app.get('/auth/callback', handleGoogleCallback);
-
-// Compatibilidade com a rota antiga de login por POST.
-app.post('/login', (req, res) => {
-  if (isInitialSetupRequired()) {
-    return res.redirect('/setup');
-  }
-
-  return res.redirect('/auth/google');
-});
-
-app.get('/logout', (req, res) => {
-  req.logout((err) => {
-    if (err) return res.status(500).send('Erro ao fazer logout');
-    req.session.destroy(() => {
-      res.redirect(isInitialSetupRequired() ? '/setup' : '/login');
-    });
-  });
+registerAuthRoutes(app, {
+  db,
+  appSettingsUpsert,
+  ensurePurchaseCategoriesForUser,
+  markAppSetupCompleted,
+  renderSetup,
+  safeRenderView,
+  passport,
+  setFlash,
+  isInitialSetupRequired,
+  normalizeEmail,
+  GOOGLE_SETUP_KEYS,
+  getSettingDefinition,
+  sanitizeSettingValue,
+  buildSeedValue,
+  currentConfigTimestamp,
+  DEFAULT_FINANCE_CATEGORIES,
+  refreshRuntimeSettings,
+  getFriendlyErrorMessage,
+  isGoogleAuthConfigured,
+  clearPinReauthSession,
+  sanitizeInternalRedirectTarget,
+  grantPinReauthSession
 });
 
 app.set("view engine", "ejs");
@@ -15551,542 +15380,73 @@ app.post("/people", ensureAuthenticated, (req, res) => {
   setFlash(req, 'success', successMessage);
   return res.redirect(redirectTarget);
 });
-app.post('/people/security/pin/setup', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const currentSettings = getUserSecuritySettings(userId);
-  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#security');
-
-  try {
-    saveUserAppPinFromRequest(userId, req, { allowReauthOverride: false });
-    setFlash(req, 'success', currentSettings.pin_enabled
-      ? 'PIN atualizado e app protegido do jeitinho novo.'
-      : 'PIN ligado com sucesso. Agora seu app já sabe a hora de pedir proteção.');
-  } catch (error) {
-    setFlash(req, 'error', error.message || 'Não consegui salvar seu PIN agora.');
-  }
-
-  return res.redirect(redirectTarget);
-});
-
-
-app.post('/people/security/pin/idle', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#security');
-
-  try {
-    const updated = updateUserAppPinIdleSecondsFromRequest(userId, req, { allowReauthOverride: false });
-    setFlash(req, 'success', `Tempo de bloqueio atualizado. Agora o app volta a pedir PIN em ${getPinIdleOptionLabel(updated.pin_idle_seconds)}.`);
-  } catch (error) {
-    setFlash(req, 'error', error.message || 'Não consegui atualizar o tempo de bloqueio agora.');
-  }
-
-  return res.redirect(redirectTarget);
-});
-
-app.post('/people/security/pin/disable', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#security');
-
-  try {
-    disableUserAppPinFromRequest(userId, req, { allowReauthOverride: false });
-    setFlash(req, 'success', 'PIN desligado por aqui. O app volta a abrir sem essa trava extra.');
-  } catch (error) {
-    setFlash(req, 'error', error.message || 'Não consegui desligar o PIN agora.');
-  }
-
-  return res.redirect(redirectTarget);
-});
-
-
-app.post('/people/security/passkeys/register/options', ensureAuthenticated, async (req, res) => {
-  setNoStoreHeaders(res);
-  const userId = req.user.id;
-  const settings = getUserSecuritySettings(userId);
-  const context = buildPasskeyContext(req);
-  const logContext = buildPasskeyRequestLogContext(req, context);
-
-  if (!settings.pin_enabled) {
-    logPasskeyEvent('warn', 'register-options-blocked-pin-disabled', {
-      ...logContext,
-      pinEnabled: false
-    });
-    return res.status(422).json({ ok: false, message: 'Primeiro liga o PIN. Aí eu consigo preparar o desbloqueio pelo aparelho.' });
-  }
-
-  if (!context.available) {
-    logPasskeyEvent('warn', 'register-options-context-unavailable', {
-      ...logContext,
-      disabledMessage: context.disabledMessage || null
-    });
-    return res.status(422).json({ ok: false, message: context.disabledMessage || 'Esse desbloqueio ainda não ficou disponível neste ambiente.' });
-  }
-
-  const currentPasskeys = listUserPasskeys(userId);
-  if (currentPasskeys.length >= PASSKEY_MAX_CREDENTIALS_PER_USER) {
-    logPasskeyEvent('warn', 'register-options-limit-reached', {
-      ...logContext,
-      existingCount: currentPasskeys.length,
-      maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER
-    });
-    return res.status(409).json({ ok: false, message: `Você já preparou ${PASSKEY_MAX_CREDENTIALS_PER_USER} aparelhos por aqui. Se quiser abrir espaço, é só remover um deles.` });
-  }
-
-  try {
-    const friendlyLabel = normalizePasskeyLabel(req.body?.label || '', 'Este aparelho');
-    const options = await generatePasskeyRegistrationOptions({
-      rpName: context.rpName,
-      rpID: context.rpID,
-      userID: buildPasskeyUserHandle(userId, getPinPepper()),
-      userName: String(req.user.email || `user-${userId}@acerttapay.local`).trim(),
-      userDisplayName: String(req.user.name || req.user.email || 'Você').trim(),
-      excludeCredentials: currentPasskeys
-    });
-
-    setPasskeySessionFlow(req, 'register', {
-      userId: Number(userId || 0),
-      challenge: options.challenge,
-      origin: context.origin,
-      rpID: context.rpID,
-      label: friendlyLabel
-    });
-
-    return res.json({
-      ok: true,
-      options,
-      label: friendlyLabel,
-      count: currentPasskeys.length,
-      maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER
-    });
-  } catch (error) {
-    const status = normalizeErrorStatus(error, 500);
-    logPasskeyEvent(status >= 500 ? 'error' : 'warn', 'register-options-error', {
-      ...logContext,
-      label: normalizePasskeyLabel(req.body?.label || '', 'Este aparelho'),
-      existingCount: currentPasskeys.length,
-      maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER,
-      error: summarizePasskeyErrorForLog(error)
-    });
-    return res.status(status).json({
-      ok: false,
-      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui preparar esse aparelho agora.' })
-    });
-  }
-});
-
-app.post('/people/security/passkeys/register/verify', ensureAuthenticated, async (req, res) => {
-  setNoStoreHeaders(res);
-  const userId = req.user.id;
-  const flow = consumePasskeySessionFlow(req, 'register');
-  const logContext = buildPasskeyRequestLogContext(req);
-
-  if (!flow || Number(flow.userId || 0) !== Number(userId || 0)) {
-    logPasskeyEvent('warn', 'register-verify-flow-missing', {
-      ...logContext,
-      flow: summarizePasskeyFlowForLog(flow)
-    });
-    return res.status(410).json({ ok: false, message: 'Esse preparo perdeu a validade. Começa de novo que eu acompanho daqui.' });
-  }
-
-  try {
-    const verification = await verifyPasskeyRegistrationResponse({
-      response: req.body,
-      expectedChallenge: flow.challenge,
-      expectedOrigin: String(flow.origin || '').trim(),
-      expectedRPID: String(flow.rpID || '').trim()
-    });
-
-    if (!verification.verified || !verification.credential) {
-      logPasskeyEvent('warn', 'register-verify-unverified', {
-        ...logContext,
-        flow: summarizePasskeyFlowForLog(flow),
-        response: summarizePasskeyRegistrationPayload(req.body)
-      });
-      return res.status(422).json({ ok: false, message: 'Não consegui confirmar esse aparelho agora. Vamos tentar de novo?' });
-    }
-
-    const currentPasskeys = listUserPasskeys(userId);
-    if (currentPasskeys.length >= PASSKEY_MAX_CREDENTIALS_PER_USER) {
-      logPasskeyEvent('warn', 'register-verify-limit-reached', {
-        ...logContext,
-        flow: summarizePasskeyFlowForLog(flow),
-        response: summarizePasskeyRegistrationPayload(req.body),
-        existingCount: currentPasskeys.length,
-        maxCount: PASSKEY_MAX_CREDENTIALS_PER_USER
-      });
-      return res.status(409).json({ ok: false, message: `Você já preparou ${PASSKEY_MAX_CREDENTIALS_PER_USER} aparelhos por aqui. Se quiser abrir espaço, é só remover um deles.` });
-    }
-
-    const saved = saveUserPasskey(userId, {
-      ...verification.credential,
-      label: normalizePasskeyLabel(req.body?.label || flow.label || '', 'Este aparelho')
-    });
-
-    return res.json({
-      ok: true,
-      message: `Pronto, ${saved?.label || 'este aparelho'} já pode entrar em cena no desbloqueio.`,
-      count: listUserPasskeys(userId).length
-    });
-  } catch (error) {
-    const status = normalizeErrorStatus(error, 500);
-    logPasskeyEvent(status >= 500 ? 'error' : 'warn', 'register-verify-error', {
-      ...logContext,
-      flow: summarizePasskeyFlowForLog(flow),
-      response: summarizePasskeyRegistrationPayload(req.body),
-      error: summarizePasskeyErrorForLog(error)
-    });
-    return res.status(status).json({
-      ok: false,
-      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui confirmar esse aparelho agora.' })
-    });
-  }
-});
-
-app.post('/people/security/passkeys/:id/delete', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const passkey = getUserPasskey(userId, req.params.id);
-
-  const redirectTarget = resolvePeopleSettingsRedirectTarget(req, '/settings#security');
-
-  if (!passkey) {
-    setFlash(req, 'error', 'Esse aparelho já tinha saído da lista por aqui.');
-    return res.redirect(redirectTarget);
-  }
-
-  deleteUserPasskey(userId, req.params.id);
-  setFlash(req, 'success', `${passkey.label || 'Esse aparelho'} saiu da lista de desbloqueio.`);
-  return res.redirect(redirectTarget);
-});
-
-app.post('/lock/passkey/options', ensureAuthenticatedIgnoringPin, async (req, res) => {
-  setNoStoreHeaders(res);
-  const userId = req.user.id;
-  const settings = getUserSecuritySettings(userId);
-
-  if (!settings.pin_enabled) {
-    return res.status(422).json({ ok: false, message: 'O desbloqueio pelo aparelho entra em cena junto com o PIN.' });
-  }
-
-  const context = buildPasskeyContext(req);
-  if (!context.available) {
-    return res.status(422).json({ ok: false, message: context.disabledMessage || 'Hoje esse desbloqueio não ficou disponível neste endereço.' });
-  }
-
-  const passkeys = listUserPasskeys(userId);
-  if (!passkeys.length) {
-    return res.status(404).json({ ok: false, message: 'Ainda não há nenhum aparelho preparado para esse atalho.' });
-  }
-
-  try {
-    const options = await generatePasskeyAuthenticationOptions({
-      rpID: context.rpID,
-      allowCredentials: passkeys
-    });
-
-    setPasskeySessionFlow(req, 'unlock', {
-      userId: Number(userId || 0),
-      challenge: options.challenge,
-      origin: context.origin,
-      rpID: context.rpID
-    });
-
-    return res.json({ ok: true, options });
-  } catch (error) {
-    return res.status(normalizeErrorStatus(error, 500)).json({
-      ok: false,
-      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui preparar o desbloqueio pelo aparelho agora.' })
-    });
-  }
-});
-
-app.post('/lock/passkey/verify', ensureAuthenticatedIgnoringPin, async (req, res) => {
-  setNoStoreHeaders(res);
-  const userId = req.user.id;
-  const settings = getUserSecuritySettings(userId);
-
-  if (!settings.pin_enabled) {
-    clearAppLockSession(req);
-    return res.status(200).json({ ok: true, redirect: sanitizeInternalRedirectTarget(req.body?.next || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/') });
-  }
-
-  const state = getAppSessionState(req);
-  const redirectTarget = sanitizeInternalRedirectTarget(req.body?.next || state.returnTo || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
-  const flow = consumePasskeySessionFlow(req, 'unlock');
-
-  if (!flow || Number(flow.userId || 0) !== Number(userId || 0)) {
-    return res.status(410).json({ ok: false, message: 'Esse desbloqueio perdeu a validade. Tenta mais uma vez que eu preparo de novo.' });
-  }
-
-  const credentialId = String(req.body?.id || '').trim();
-  const passkey = getUserPasskey(userId, credentialId);
-  if (!credentialId || !passkey) {
-    return res.status(404).json({ ok: false, message: 'Não encontrei esse aparelho na sua lista de desbloqueio.' });
-  }
-
-  try {
-    const verification = await verifyPasskeyAuthenticationResponse({
-      response: req.body,
-      expectedChallenge: flow.challenge,
-      expectedOrigin: String(flow.origin || '').trim(),
-      expectedRPID: String(flow.rpID || '').trim(),
-      passkey
-    });
-
-    if (!verification.verified) {
-      return res.status(422).json({ ok: false, message: 'Esse desbloqueio não foi confirmado agora. Pode tentar de novo ou seguir pelo PIN.' });
-    }
-
-    touchUserPasskeyUsage(userId, passkey.id, {
-      counter: verification.newCounter,
-      origin: String(flow.origin || '').trim()
-    });
-    resetUserAppPinFailures(userId);
-    unlockAppSession(req, { clearReturnTo: true });
-    await persistSessionState(req);
-
-    return res.json({ ok: true, redirect: redirectTarget });
-  } catch (error) {
-    return res.status(normalizeErrorStatus(error, 500)).json({
-      ok: false,
-      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui confirmar esse desbloqueio agora. Você também pode seguir pelo PIN.' })
-    });
-  }
-});
-
-app.get('/lock', ensureAuthenticatedIgnoringPin, (req, res) => {
-  const userId = req.user.id;
-  const settings = getUserSecuritySettings(userId);
-
-  if (!settings.pin_enabled) {
-    clearAppLockSession(req);
-    clearPinReauthSession(req);
-    return res.redirect(res.locals.dashboardHref || '/');
-  }
-
-  setNoStoreHeaders(res);
-  clearExpiredPinReauthSession(req, userId);
-  const reauthFresh = hasFreshPinReauthSession(req, userId);
-  const state = getAppSessionState(req);
-  const nextTarget = sanitizeInternalRedirectTarget(req.query.next || state.returnTo || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
-  const sessionState = ensureAppLockSession(req);
-  if (sessionState && nextTarget) {
-    sessionState.returnTo = nextTarget;
-  }
-
-  if (state.unlocked && !reauthFresh) {
-    return res.redirect(nextTarget || res.locals.dashboardHref || '/');
-  }
-
-  const currentUser = getUserRecord(userId, { includeDeleted: false }) || req.user || {};
-  const guardView = buildAppPinGuardViewModel(userId);
-  const lockMode = String(req.query.mode || '').trim().toLowerCase() === 'recover' && reauthFresh ? 'recover' : 'unlock';
-  const baseLockMessage = pinLockMessageForReason(req.query.reason || state.reason || '');
-  const lockMessage = guardView.requiresReauth || guardView.cooldownActive
-    ? guardView.noticeMessage || baseLockMessage
-    : baseLockMessage;
-
-  return safeRenderView(res, 'lock', {
-    title: 'AcerttaPay | Desbloquear',
-    lockUser: {
-      name: currentUser.name || req.user.name || req.user.email || 'Você',
-      email: currentUser.email || req.user.email || '',
-      photo_url: getEffectiveProfilePhoto(currentUser)
-    },
-    appPinSecurity: buildAppPinViewModel(settings, { reauthFresh }),
-    appPinGuard: guardView,
-    appPasskeyLock: buildPasskeyLockViewModel(req, userId, settings),
-    lockReason: String(req.query.reason || state.reason || '').trim().toLowerCase(),
-    lockMessage,
-    nextTarget,
-    lockMode,
-    reauthFresh
-  });
-});
-
-app.post('/lock/unlock', ensureAuthenticatedIgnoringPin, (req, res) => {
-  const userId = req.user.id;
-  const settings = getUserSecuritySettings(userId);
-
-  if (!settings.pin_enabled) {
-    clearAppLockSession(req);
-    const redirectTarget = sanitizeInternalRedirectTarget(req.body.next || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
-    if (isAjaxLikeRequest(req)) {
-      return res.json({ ok: true, redirect: redirectTarget });
-    }
-    return res.redirect(redirectTarget);
-  }
-
-  const redirectTarget = sanitizeInternalRedirectTarget(req.body.next || getAppSessionState(req).returnTo || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
-  const recoveryRedirectTarget = buildAppLockRecoveryUrl(req, { reason: 'locked', returnTo: redirectTarget });
-  const preGuardState = getUserAppPinGuardState(userId);
-
-  if (preGuardState.requiresReauth) {
-    const message = 'Por segurança, esse PIN entrou em pausa. Confirma sua conta Google para trocar ou desligar a proteção.';
-    if (isAjaxLikeRequest(req)) {
-      return res.status(423).json({ ok: false, message, requiresReauth: true, redirect: recoveryRedirectTarget });
-    }
-    setFlash(req, 'error', message);
-    return res.redirect(recoveryRedirectTarget);
-  }
-
-  if (preGuardState.cooldownActive) {
-    const message = `Segura ${preGuardState.cooldownLabel} que eu volto a liberar novas tentativas.`;
-    if (isAjaxLikeRequest(req)) {
-      return res.status(429).json({ ok: false, message, retryAfter: preGuardState.cooldownSeconds, redirect: buildAppLockRedirectUrl(req, { reason: 'locked', returnTo: redirectTarget }) });
-    }
-    setFlash(req, 'error', message);
-    return res.redirect(buildAppLockRedirectUrl(req, { reason: 'locked', returnTo: redirectTarget }));
-  }
-
-  const pinCheck = validatePinInput(req.body.pin);
-
-  if (!pinCheck.ok || !verifyUserAppPin(userId, pinCheck.value)) {
-    const postGuardState = registerUserAppPinFailure(userId);
-    const message = buildUserAppPinFailureMessage(postGuardState);
-    if (isAjaxLikeRequest(req)) {
-      return res.status(postGuardState.requiresReauth ? 423 : postGuardState.cooldownActive ? 429 : 422).json({
-        ok: false,
-        message,
-        requiresReauth: postGuardState.requiresReauth,
-        retryAfter: postGuardState.cooldownActive ? postGuardState.cooldownSeconds : 0,
-        redirect: postGuardState.requiresReauth
-          ? recoveryRedirectTarget
-          : buildAppLockRedirectUrl(req, { reason: 'locked', returnTo: redirectTarget })
-      });
-    }
-    setFlash(req, 'error', message);
-    return res.redirect(postGuardState.requiresReauth
-      ? recoveryRedirectTarget
-      : buildAppLockRedirectUrl(req, { reason: 'locked', returnTo: redirectTarget }));
-  }
-
-  resetUserAppPinFailures(userId);
-  unlockAppSession(req);
-  const sessionState = ensureAppLockSession(req);
-  if (sessionState) sessionState.returnTo = '';
-
-  if (isAjaxLikeRequest(req)) {
-    return res.json({ ok: true, redirect: redirectTarget });
-  }
-
-  return res.redirect(redirectTarget);
-});
-
-app.post('/lock/engage', ensureAuthenticatedIgnoringPin, (req, res) => {
-  const reason = String(req.body.reason || req.query.reason || 'manual').trim().toLowerCase() || 'manual';
-  const returnTo = sanitizeInternalRedirectTarget(req.body.return_to || req.query.return_to || req.get('referer') || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
-  lockAppSession(req, { reason, returnTo });
-  const redirectTarget = buildAppLockRedirectUrl(req, { reason, returnTo });
-  setNoStoreHeaders(res);
-
-  if (isAjaxLikeRequest(req)) {
-    return res.json({ ok: true, redirect: redirectTarget });
-  }
-
-  return res.redirect(redirectTarget);
-});
-
-app.post('/lock/touch', ensureAuthenticatedIgnoringPin, (req, res) => {
-  const userId = req.user.id;
-  const settings = getUserSecuritySettings(userId);
-
-  setNoStoreHeaders(res);
-
-  if (!settings.pin_enabled) {
-    clearAppLockSession(req);
-    syncRequestUserPresence(req, { force: true });
-    return res.status(204).end();
-  }
-
-  const guardState = getUserAppPinGuardState(userId);
-  if (guardState.requiresReauth) {
-    res.set('X-App-Locked', '1');
-    res.set('X-App-Lock-Redirect', buildAppLockRecoveryUrl(req, { reason: 'locked', returnTo: getAppSessionState(req).returnTo || res.locals.dashboardHref || '/' }));
-    return res.status(423).json({ ok: false, appLocked: true, requiresReauth: true, redirect: buildAppLockRecoveryUrl(req, { reason: 'locked', returnTo: getAppSessionState(req).returnTo || res.locals.dashboardHref || '/' }) });
-  }
-
-  const state = getAppSessionState(req);
-  const idleSeconds = normalizePinIdleSeconds(settings.pin_idle_seconds);
-  const idleMs = idleSeconds > 0 ? idleSeconds * 1000 : 0;
-  const lastActiveAt = Number(state.lastActiveAt || 0);
-
-  if (state.unlocked && idleMs > 0 && lastActiveAt && (Date.now() - lastActiveAt) >= idleMs) {
-    return respondWithAppLock(req, res, { reason: 'idle', returnTo: state.returnTo || res.locals.dashboardHref || '/' });
-  }
-
-  if (!state.unlocked) {
-    res.set('X-App-Locked', '1');
-    res.set('X-App-Lock-Redirect', buildAppLockRedirectUrl(req, { reason: state.reason || 'locked', returnTo: state.returnTo || res.locals.dashboardHref || '/' }));
-    return res.status(423).json({ ok: false, appLocked: true, redirect: buildAppLockRedirectUrl(req, { reason: state.reason || 'locked', returnTo: state.returnTo || res.locals.dashboardHref || '/' }) });
-  }
-
-  touchAppSession(req);
-  syncRequestUserPresence(req, { force: true });
-  return res.status(204).end();
-});
-
-app.post('/presence/touch', ensureAuthenticatedIgnoringPin, (req, res) => {
-  setNoStoreHeaders(res);
-  syncRequestUserPresence(req, { force: true });
-  return res.status(204).end();
-});
-
-app.get('/lock/reauth/google', ensureAuthenticatedIgnoringPin, (req, res, next) => {
-  const settings = getUserSecuritySettings(req.user.id);
-  if (!settings.pin_enabled) {
-    return res.redirect(res.locals.dashboardHref || '/');
-  }
-
-  if (!isGoogleAuthConfigured()) {
-    setFlash(req, 'error', 'O login com Google não está pronto por aqui para confirmar essa redefinição agora.');
-    return res.redirect('/lock');
-  }
-
-  startPinReauthSession(req, { returnTo: '/lock?mode=recover' });
-  return passport.authenticate('google', {
-    scope: ['profile', 'email'],
-    prompt: 'select_account',
-    loginHint: req.user.email
-  })(req, res, next);
-});
-
-app.post('/lock/recovery/setup', ensureAuthenticatedIgnoringPin, (req, res) => {
-  const userId = req.user.id;
-  const redirectTarget = sanitizeInternalRedirectTarget(req.body.next || getAppSessionState(req).returnTo || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
-
-  if (!hasFreshPinReauthSession(req, userId)) {
-    setFlash(req, 'error', 'Antes de redefinir o PIN, preciso que você confirme sua conta Google de novo.');
-    return res.redirect('/lock');
-  }
-
-  try {
-    saveUserAppPinFromRequest(userId, req, { allowReauthOverride: true });
-    const sessionState = ensureAppLockSession(req);
-    if (sessionState) sessionState.returnTo = '';
-    setFlash(req, 'success', 'Novo PIN salvo com sucesso. Agora o app já pode destravar com ele.');
-    return res.redirect(redirectTarget);
-  } catch (error) {
-    setFlash(req, 'error', error.message || 'Não consegui redefinir o PIN agora.');
-    return res.redirect('/lock?mode=recover');
-  }
-});
-
-app.post('/lock/recovery/disable', ensureAuthenticatedIgnoringPin, (req, res) => {
-  const userId = req.user.id;
-  const redirectTarget = sanitizeInternalRedirectTarget(req.body.next || res.locals.dashboardHref || '/', res.locals.dashboardHref || '/');
-
-  if (!hasFreshPinReauthSession(req, userId)) {
-    setFlash(req, 'error', 'Antes de desligar o PIN, preciso que você confirme sua conta Google de novo.');
-    return res.redirect('/lock');
-  }
-
-  try {
-    disableUserAppPinFromRequest(userId, req, { allowReauthOverride: true });
-    setFlash(req, 'success', 'PIN desligado depois da confirmação com Google.');
-    return res.redirect(redirectTarget);
-  } catch (error) {
-    setFlash(req, 'error', error.message || 'Não consegui desligar o PIN agora.');
-    return res.redirect('/lock?mode=recover');
-  }
+registerSecurityRoutes(app, {
+  ensureAuthenticated,
+  ensureAuthenticatedIgnoringPin,
+  setFlash,
+  setNoStoreHeaders,
+  resolvePeopleSettingsRedirectTarget,
+  getPinIdleOptionLabel,
+  getUserSecuritySettings,
+  saveUserAppPinFromRequest,
+  updateUserAppPinIdleSecondsFromRequest,
+  disableUserAppPinFromRequest,
+  buildPasskeyContext,
+  buildPasskeyRequestLogContext,
+  logPasskeyEvent,
+  PASSKEY_MAX_CREDENTIALS_PER_USER,
+  normalizePasskeyLabel,
+  generatePasskeyRegistrationOptions,
+  buildPasskeyUserHandle,
+  getPinPepper,
+  normalizeErrorStatus,
+  summarizePasskeyErrorForLog,
+  getFriendlyErrorMessage,
+  verifyPasskeyRegistrationResponse,
+  summarizePasskeyFlowForLog,
+  summarizePasskeyRegistrationPayload,
+  listUserPasskeys,
+  saveUserPasskey,
+  setPasskeySessionFlow,
+  consumePasskeySessionFlow,
+  getUserPasskey,
+  deleteUserPasskey,
+  generatePasskeyAuthenticationOptions,
+  verifyPasskeyAuthenticationResponse,
+  touchUserPasskeyUsage,
+  sanitizeInternalRedirectTarget,
+  clearAppLockSession,
+  clearPinReauthSession,
+  clearExpiredPinReauthSession,
+  hasFreshPinReauthSession,
+  getAppSessionState,
+  ensureAppLockSession,
+  getUserRecord,
+  buildAppPinGuardViewModel,
+  pinLockMessageForReason,
+  safeRenderView,
+  buildAppPinViewModel,
+  buildPasskeyLockViewModel,
+  getEffectiveProfilePhoto,
+  verifyUserAppPin,
+  getUserAppPinGuardState,
+  registerUserAppPinFailure,
+  buildUserAppPinFailureMessage,
+  buildAppLockRecoveryUrl,
+  buildAppLockRedirectUrl,
+  isAjaxLikeRequest,
+  resetUserAppPinFailures,
+  unlockAppSession,
+  lockAppSession,
+  touchAppSession,
+  persistSessionState,
+  respondWithAppLock,
+  syncRequestUserPresence,
+  normalizePinIdleSeconds,
+  isGoogleAuthConfigured,
+  passport,
+  startPinReauthSession,
+  validatePinInput
 });
 
 app.post('/people/:id/send-friend-request', ensureAuthenticated, (req, res) => {

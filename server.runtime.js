@@ -141,7 +141,7 @@ const {
   buildImportPreviewFromBuffer,
   applyImportPreview
 } = require('./src/messageCsvService');
-const { registerAuthRoutes, registerSecurityRoutes, registerNotificationsRoutes, registerAdminMessagesRoutes } = require('./src/routes');
+const { registerAuthRoutes, registerSecurityRoutes, registerNotificationsRoutes, registerAdminCoreRoutes, registerAdminMessagesRoutes } = require('./src/routes');
 
 // Migração oficial executada explicitamente pelo bootstrap do runtime.
 // Seed opcional permanece fora do bootstrap automático.
@@ -21899,14 +21899,53 @@ app.post("/finances/toggle-close", ensureAuthenticated, express.json(), (req, re
 });
 
 // ===== PÁGINA DE ADMIN (GERENCIAR USUÁRIOS) =====
-app.get("/admin", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado. Apenas administradores podem acessar esta página.');
-  }
-
-  return renderAdmin(res);
+registerAdminCoreRoutes(app, {
+  ensureAuthenticated,
+  backupRestoreUpload,
+  renderAdmin,
+  isAdminUser,
+  getSettingSection,
+  getSettingDefinitionsBySection,
+  getSettingValue,
+  sanitizeSettingValue,
+  resolveConfiguredDirectory,
+  DEFAULT_PRIMARY_BACKUP_DIR,
+  DEFAULT_SECONDARY_BACKUP_DIR,
+  updateAppSettings,
+  isGoogleAuthConfigured,
+  buildPushAdminState,
+  getBackupRuntimeConfig,
+  getEmailRuntimeConfig,
+  isEmailConfigured,
+  verifyEmailTransport,
+  logEmailRuntimeIssue,
+  logEmailFlowError,
+  buildEmailTransportLogContext,
+  getUserRecord,
+  sendAdminTestEmail,
+  getFriendlyErrorMessage,
+  buildGoogleBackupAuthUrl,
+  exchangeGoogleBackupCodeForTokens,
+  getInternalSettingValue,
+  fetchGoogleBackupProfile,
+  ensureGoogleBackupFolder,
+  setInternalSettings,
+  currentConfigTimestamp,
+  BACKUP_GOOGLE_REFRESH_TOKEN_KEY,
+  BACKUP_GOOGLE_CONNECTED_EMAIL_KEY,
+  BACKUP_GOOGLE_CONNECTED_AT_KEY,
+  BACKUP_GOOGLE_SCOPE_KEY,
+  BACKUP_GOOGLE_FOLDER_ID_KEY,
+  BACKUP_GOOGLE_FOLDER_NAME_META_KEY,
+  clearInternalSettings,
+  createServerBackup,
+  formatBytes,
+  restoreServerBackupFromZip,
+  backupRunsSelectById,
+  fs,
+  fsp,
+  path,
+  appRoot: __dirname
 });
 
 registerAdminMessagesRoutes(app, {
@@ -21935,346 +21974,6 @@ registerAdminMessagesRoutes(app, {
   upsertPushSubscription,
   removePushSubscriptionForUser
 });
-
-app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  const sectionKey = String(req.params.section || '').trim();
-  const section = getSettingSection(sectionKey);
-
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  if (!section) {
-    return renderAdmin(res, { error: 'Seção de configuração não encontrada.', activeSection: 'access' });
-  }
-
-  const definitions = getSettingDefinitionsBySection(sectionKey);
-  const previousValues = Object.fromEntries(definitions.map((definition) => [definition.key, getSettingValue(definition.key)]));
-
-  try {
-    const nextValues = {};
-
-    definitions.forEach((definition) => {
-      const rawValue = definition.input === 'switch'
-        ? (req.body[definition.key] ? '1' : '0')
-        : req.body[definition.key];
-      nextValues[definition.key] = sanitizeSettingValue(definition, rawValue);
-    });
-
-    if (sectionKey === 'backup') {
-      const primaryDir = resolveConfiguredDirectory(__dirname, nextValues.BACKUP_LOCAL_PRIMARY_DIR, DEFAULT_PRIMARY_BACKUP_DIR);
-      const secondaryDir = resolveConfiguredDirectory(__dirname, nextValues.BACKUP_LOCAL_SECONDARY_DIR, DEFAULT_SECONDARY_BACKUP_DIR);
-      if (path.resolve(primaryDir) === path.resolve(secondaryDir)) {
-        throw new Error('As duas pastas locais do backup precisam ser diferentes. Espelho no mesmo lugar vira só déjà vu.');
-      }
-    }
-
-    updateAppSettings(nextValues, userId);
-
-    const changedDefinitions = definitions.filter((definition) => String(previousValues[definition.key] ?? '') !== String(nextValues[definition.key] ?? ''));
-    const liveChanges = changedDefinitions.filter((definition) => !definition.restartRequired);
-    const restartChanges = changedDefinitions.filter((definition) => definition.restartRequired);
-
-    let success = changedDefinitions.length
-      ? `${section.title} guardada com sucesso.`
-      : `${section.title} conferida. Não achei nada novo para salvar.`;
-
-    if (liveChanges.length) {
-      success += ' O que dava para recarregar na hora já entrou em campo.';
-    }
-
-    if (restartChanges.length) {
-      success += ` Para ${restartChanges.map((definition) => definition.label).join(', ')} valerem, reinicie o servidor.`;
-    }
-
-    if (sectionKey === 'google' && !isGoogleAuthConfigured()) {
-      success += ' Enquanto Client ID e secret não estiverem completos, o login com Google segue de folga.';
-    }
-
-    if (sectionKey === 'push') {
-      const pushPanel = buildPushAdminState();
-      success += ` Agenda automática em ${pushPanel.schedule.label}. ${pushPanel.activeCount} de ${pushPanel.totalCount} rotinas estão ligadas.`;
-      if (!pushPanel.infrastructure.configured) {
-        success += pushPanel.hasInAppFallback
-          ? ' O push web ainda depende do trio VAPID, mas os alertas que também viram aviso interno continuam no jogo.'
-          : ' Sem o trio VAPID completo, o sininho ainda não acorda.';
-      }
-    }
-
-    if (sectionKey === 'backup') {
-      const backupConfig = getBackupRuntimeConfig();
-      if (backupConfig.googleEnabled && !backupConfig.googleRefreshToken) {
-        success += ' O Google Drive ficou habilitado, mas ainda falta conectar uma conta ali no bloco da seção.';
-      }
-    }
-
-    if (sectionKey === 'email') {
-      const emailConfig = getEmailRuntimeConfig();
-      if (emailConfig.enabled && !isEmailConfigured(emailConfig)) {
-        success += ' O bloco já salvou, mas ainda faltam host, porta, usuário, senha ou remetente para o e-mail entrar em campo.';
-      }
-    }
-
-    return renderAdmin(res, { success, activeSection: sectionKey });
-  } catch (err) {
-    return renderAdmin(res, { error: getFriendlyErrorMessage(err, { defaultMessage: 'Não consegui salvar essa seção agora.' }), activeSection: sectionKey });
-  }
-});
-
-app.post('/admin/email/test-connection', ensureAuthenticated, async (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  try {
-    const emailConfig = getEmailRuntimeConfig();
-    if (!isEmailConfigured(emailConfig)) {
-      throw new Error('Antes do teste, complete host, porta, usuário, senha e remetente do SMTP.');
-    }
-    await verifyEmailTransport(emailConfig);
-    return renderAdmin(res, {
-      success: `Conexão SMTP validada com sucesso em ${emailConfig.host}:${emailConfig.port}. O correio está com a chuteira amarrada.`,
-      activeSection: 'email'
-    });
-  } catch (error) {
-    if (error?.code === 'EMAIL_RUNTIME_MISSING') {
-      logEmailRuntimeIssue('admin-test-connection');
-    }
-    logEmailFlowError('test-connection', error, {
-      adminUserId: userId,
-      ...buildEmailTransportLogContext(getEmailRuntimeConfig())
-    });
-    return renderAdmin(res, {
-      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui validar a conexão SMTP agora.' }),
-      activeSection: 'email'
-    });
-  }
-});
-
-app.post('/admin/email/send-test', ensureAuthenticated, async (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  try {
-    const currentAdmin = getUserRecord(userId, { includeDeleted: false }) || req.user;
-    const result = await sendAdminTestEmail({
-      recipientEmail: req.body.test_recipient_email,
-      createdByUser: currentAdmin,
-      req
-    });
-    return renderAdmin(res, {
-      success: `E-mail de teste enviado direitinho${result.messageId ? ` (messageId ${result.messageId})` : ''}. Agora o SMTP já mostrou que sabe o caminho.`,
-      activeSection: 'email'
-    });
-  } catch (error) {
-    if (error?.code === 'EMAIL_RUNTIME_MISSING') {
-      logEmailRuntimeIssue('admin-send-test');
-    }
-    logEmailFlowError('admin-send-test', error, {
-      adminUserId: userId,
-      recipientEmail: String(req.body.test_recipient_email || '').trim() || null,
-      ...buildEmailTransportLogContext(getEmailRuntimeConfig())
-    });
-    return renderAdmin(res, {
-      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui mandar o e-mail de teste agora.' }),
-      activeSection: 'email'
-    });
-  }
-});
-
-app.get('/admin/backup/guide', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  const guidePath = path.join(__dirname, 'public', 'docs', 'guia-backup-acerttapay.pdf');
-  if (!fs.existsSync(guidePath)) {
-    return renderAdmin(res, { error: 'O guia em PDF ainda não está disponível neste servidor.', activeSection: 'backup' });
-  }
-
-  return res.download(guidePath, 'guia-backup-acerttapay.pdf');
-});
-
-app.get('/admin/backup/google/connect', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  try {
-    const authUrl = buildGoogleBackupAuthUrl(req);
-    return res.redirect(authUrl);
-  } catch (error) {
-    return renderAdmin(res, { error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui preparar a conexão com o Google Drive agora.' }), activeSection: 'backup' });
-  }
-});
-
-app.get('/admin/backup/google/callback', ensureAuthenticated, async (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  const returnedState = String(req.query.state || '').trim();
-  const expectedState = String(req.session?.backupGoogleAuthState || '').trim();
-  delete req.session.backupGoogleAuthState;
-  delete req.session.backupGoogleAuthCreatedAt;
-
-  if (req.query.error) {
-    return renderAdmin(res, {
-      error: `O Google devolveu um não agora: ${String(req.query.error_description || req.query.error)}`,
-      activeSection: 'backup'
-    });
-  }
-
-  if (!returnedState || !expectedState || returnedState !== expectedState) {
-    return renderAdmin(res, { error: 'A validação da conexão com o Google Drive não bateu. Tenta conectar de novo.', activeSection: 'backup' });
-  }
-
-  const code = String(req.query.code || '').trim();
-  if (!code) {
-    return renderAdmin(res, { error: 'O Google não devolveu o código de autorização do backup.', activeSection: 'backup' });
-  }
-
-  try {
-    const tokens = await exchangeGoogleBackupCodeForTokens(code);
-    const refreshToken = String(tokens.refresh_token || '').trim() || getInternalSettingValue(BACKUP_GOOGLE_REFRESH_TOKEN_KEY);
-    if (!refreshToken) {
-      throw new Error('O Google não devolveu refresh token. Revogue o acesso anterior e conecte novamente para liberar o modo automático.');
-    }
-
-    const accessToken = String(tokens.access_token || '').trim();
-    const profile = accessToken ? await fetchGoogleBackupProfile(accessToken).catch(() => ({})) : {};
-    const config = getBackupRuntimeConfig();
-    const folder = accessToken ? await ensureGoogleBackupFolder(accessToken, { ...config, googleRefreshToken: refreshToken }, userId).catch(() => null) : null;
-
-    setInternalSettings({
-      [BACKUP_GOOGLE_REFRESH_TOKEN_KEY]: refreshToken,
-      [BACKUP_GOOGLE_CONNECTED_EMAIL_KEY]: String(profile.email || config.googleConnectedEmail || '').trim(),
-      [BACKUP_GOOGLE_CONNECTED_AT_KEY]: currentConfigTimestamp(),
-      [BACKUP_GOOGLE_SCOPE_KEY]: String(tokens.scope || '').trim(),
-      [BACKUP_GOOGLE_FOLDER_ID_KEY]: folder?.id || config.googleFolderId || '',
-      [BACKUP_GOOGLE_FOLDER_NAME_META_KEY]: folder?.name || config.googleFolderName
-    }, userId);
-
-    return renderAdmin(res, {
-      success: `Google Drive conectado com sucesso${profile.email ? ` na conta ${profile.email}` : ''}. Agora o backup pode subir pra nuvem também.`,
-      activeSection: 'backup'
-    });
-  } catch (error) {
-    return renderAdmin(res, {
-      error: error?.response?.data?.error?.message || error.message || 'Não consegui concluir a conexão com o Google Drive agora.',
-      activeSection: 'backup'
-    });
-  }
-});
-
-app.post('/admin/backup/google/disconnect', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  clearInternalSettings([
-    BACKUP_GOOGLE_REFRESH_TOKEN_KEY,
-    BACKUP_GOOGLE_CONNECTED_EMAIL_KEY,
-    BACKUP_GOOGLE_CONNECTED_AT_KEY,
-    BACKUP_GOOGLE_FOLDER_ID_KEY,
-    BACKUP_GOOGLE_SCOPE_KEY,
-    BACKUP_GOOGLE_FOLDER_NAME_META_KEY
-  ], userId);
-
-  return renderAdmin(res, {
-    success: 'Conta do Google Drive desconectada. As cópias locais continuam valendo e a nuvem ficou de folga.',
-    activeSection: 'backup'
-  });
-});
-
-app.post('/admin/backup/run', ensureAuthenticated, async (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  try {
-    const result = await createServerBackup({ triggerKind: 'manual', createdByUserId: userId });
-    return renderAdmin(res, {
-      success: `${result.message} Pacote ${result.backupName} salvo com ${result.sizeBytes ? formatBytes(result.sizeBytes) : 'tamanho ainda tímido'} de puro carinho preventivo.`,
-      activeSection: 'backup'
-    });
-  } catch (error) {
-    return renderAdmin(res, {
-      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui criar o backup manual agora.' }),
-      activeSection: 'backup'
-    });
-  }
-});
-
-app.post('/admin/backup/restore', ensureAuthenticated, backupRestoreUpload.single('backup_zip'), async (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  const uploadedPath = req.file?.path;
-  const uploadedName = req.file?.originalname || 'backup.zip';
-  if (!uploadedPath) {
-    return renderAdmin(res, { error: 'Escolha um .zip de backup antes de mandar restaurar.', activeSection: 'backup' });
-  }
-
-  try {
-    const result = await restoreServerBackupFromZip({
-      zipPath: uploadedPath,
-      uploadedFilename: uploadedName,
-      restoredByUserId: userId
-    });
-
-    const extra = result.safetyBackupRunId
-      ? ` Antes da restauração eu ainda gerei um backup de segurança (ID ${result.safetyBackupRunId}) para ninguém passar aperto.`
-      : '';
-
-    return renderAdmin(res, {
-      success: `${result.message}${extra}`,
-      activeSection: 'backup'
-    });
-  } catch (error) {
-    return renderAdmin(res, {
-      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui restaurar o backup agora.' }),
-      activeSection: 'backup'
-    });
-  } finally {
-    if (uploadedPath) {
-      await fsp.rm(uploadedPath, { force: true }).catch(() => { });
-    }
-  }
-});
-
-app.get('/admin/backup/download/:backupId/:slot', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  const backupId = Number(req.params.backupId);
-  const slot = String(req.params.slot || '').trim().toLowerCase();
-  const row = Number.isInteger(backupId) && backupId > 0 ? backupRunsSelectById.get(backupId) : null;
-  if (!row) {
-    return renderAdmin(res, { error: 'Não achei esse backup para download.', activeSection: 'backup' });
-  }
-
-  const targetPath = slot === 'secondary' ? row.local_secondary_path : row.local_primary_path;
-  if (!targetPath || !fs.existsSync(targetPath)) {
-    return renderAdmin(res, { error: 'Esse arquivo local não está mais disponível neste servidor.', activeSection: 'backup' });
-  }
-
-  return res.download(targetPath, path.basename(targetPath));
-});
-
 
 app.post("/admin/add-user", ensureAuthenticated, async (req, res) => {
   const userId = req.user.id;

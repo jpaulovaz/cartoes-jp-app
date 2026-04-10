@@ -141,6 +141,7 @@ const {
   buildImportPreviewFromBuffer,
   applyImportPreview
 } = require('./src/messageCsvService');
+const { registerNotificationsRoutes, registerAdminMessagesRoutes } = require('./src/routes');
 
 // Migração oficial executada explicitamente pelo bootstrap do runtime.
 // Seed opcional permanece fora do bootstrap automático.
@@ -14832,106 +14833,18 @@ app.post('/shared-debts/bulk/confirm-receipt', ensureAuthenticated, (req, res) =
 });
 
 
-app.post('/push/subscribe', ensureAuthenticated, (req, res) => {
-  if (!isPushConfigured()) {
-    return res.status(503).json({ ok: false, error: 'push_unavailable' });
-  }
-
-  const subscription = req.body?.subscription;
-  const endpoint = String(subscription?.endpoint || '').trim();
-
-  if (!endpoint) {
-    return res.status(400).json({ ok: false, error: 'invalid_subscription' });
-  }
-
-  try {
-    upsertPushSubscription(req.user.id, subscription);
-    return res.json({ ok: true });
-  } catch (err) {
-    console.error('Erro ao salvar subscription de push:', err);
-    return res.status(500).json({ ok: false, error: 'subscription_save_failed' });
-  }
-});
-
-app.post('/push/unsubscribe', ensureAuthenticated, (req, res) => {
-  const endpoint = String(req.body?.endpoint || '').trim();
-
-  if (!endpoint) {
-    return res.status(400).json({ ok: false, error: 'invalid_endpoint' });
-  }
-
-  try {
-    removePushSubscriptionForUser(req.user.id, endpoint);
-    return res.json({ ok: true });
-  } catch (err) {
-    console.error('Erro ao remover subscription de push:', err);
-    return res.status(500).json({ ok: false, error: 'subscription_remove_failed' });
-  }
-});
-
-app.get("/notifications", ensureAuthenticated, (req, res) => {
-  return res.redirect('/geral');
-});
-
-app.post("/notifications/read-all", ensureAuthenticated, (req, res) => {
-  markAllNotificationsAsRead(req.user.id);
-  setFlash(req, 'success', 'Pronto! Seus avisos já foram marcados como lidos.');
-  return res.redirect(redirectBackOr(req, '/geral'));
-});
-
-app.post('/notifications/clear-read', ensureAuthenticated, (req, res) => {
-  const result = clearReadNotifications(req.user.id);
-  const removedCount = Number(result?.changes || 0);
-
-  if (removedCount > 0) {
-    setFlash(req, 'success', `Tudo certo! ${formatCountLabel(removedCount, 'aviso antigo saiu da lista', 'avisos antigos saíram da lista')}.`);
-  } else {
-    setFlash(req, 'info', 'Por enquanto não há aviso antigo para limpar.');
-  }
-
-  return res.redirect(redirectBackOr(req, '/geral'));
-});
-
-app.post("/notifications/:id/read", ensureAuthenticated, (req, res) => {
-  const notificationId = Number(req.params.id);
-
-  if (!notificationId) {
-    setFlash(req, 'error', 'Ops, esse aviso não é válido.');
-    return res.redirect('/geral');
-  }
-
-  const notification = getNotificationForUser(notificationId, req.user.id);
-  if (!notification) {
-    setFlash(req, 'error', 'Ops, não encontrei esse aviso.');
-    return res.redirect('/geral');
-  }
-
-  markNotificationAsRead(notificationId, req.user.id);
-  return res.redirect(notification.href || '/geral');
-});
-
-app.get("/notifications/:id/open", ensureAuthenticated, (req, res) => {
-  const notificationId = Number(req.params.id);
-
-  if (!notificationId) {
-    setFlash(req, 'error', 'Ops, esse aviso não é válido.');
-    return res.redirect('/geral');
-  }
-
-  const notification = getNotificationForUser(notificationId, req.user.id);
-  if (!notification) {
-    setFlash(req, 'error', 'Ops, não encontrei esse aviso.');
-    return res.redirect('/geral');
-  }
-
-  markNotificationAsRead(notificationId, req.user.id);
-
-  const targetHref = String(notification.href || '').trim();
-  if (targetHref && targetHref.startsWith('/')) {
-    return res.redirect(targetHref);
-  }
-
-  return res.redirect('/geral');
+registerNotificationsRoutes(app, {
+  ensureAuthenticated,
+  isPushConfigured,
+  upsertPushSubscription,
+  removePushSubscriptionForUser,
+  markAllNotificationsAsRead,
+  setFlash,
+  redirectBackOr,
+  clearReadNotifications,
+  formatCountLabel,
+  getNotificationForUser,
+  markNotificationAsRead
 });
 
 function getOpenBalanceMonthsForPerson(userId, personId) {
@@ -22636,318 +22549,31 @@ app.get("/admin", ensureAuthenticated, (req, res) => {
   return renderAdmin(res);
 });
 
-app.get('/admin/messages', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado. Apenas administradores podem acessar esta página.');
-  }
-
-  return renderAdminMessages(res, {
-    filters: normalizeAdminMessageActionFilters(req.query),
-    openMessageKey: req.query.open,
-    importPreview: getAdminMessageImportPreview(req)
-  });
-});
-
-app.get('/admin/messages/export.csv', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  try {
-    const exportFile = buildMessageCsvExport();
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${exportFile.filename}"`);
-    return res.send(exportFile.content);
-  } catch (error) {
-    return renderAdminMessages(res, {
-      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui montar o CSV do catálogo agora.' }),
-      filters: normalizeAdminMessageActionFilters(req.query),
-      importPreview: getAdminMessageImportPreview(req)
-    });
-  }
-});
-
-app.post('/admin/messages/import', ensureAuthenticated, upload.single('catalog_csv'), (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  const filters = normalizeAdminMessageActionFilters(req.body);
-  const uploadedFile = req.file;
-  if (!uploadedFile || !uploadedFile.buffer) {
-    clearAdminMessageImportPreview(req);
-    return renderAdminMessages(res, {
-      error: 'Escolha um CSV do catálogo antes de pedir a prévia do lote.',
-      filters,
-      importPreview: null
-    });
-  }
-
-  try {
-    const importPreview = buildImportPreviewFromBuffer({
-      fileBuffer: uploadedFile.buffer,
-      fileName: uploadedFile.originalname
-    });
-
-    setAdminMessageImportPreview(req, importPreview);
-    const infoMessage = importPreview.errorRows > 0
-      ? 'A prévia encontrou algumas linhas pedindo ajuste antes de importar.'
-      : (importPreview.changedRows > 0
-        ? 'Prévia do lote pronta. Confere os impactos antes de aplicar.'
-        : 'Prévia pronta. Esse arquivo não trouxe mudança nova para aplicar.');
-
-    return renderAdminMessages(res, {
-      success: infoMessage,
-      filters,
-      importPreview
-    });
-  } catch (error) {
-    clearAdminMessageImportPreview(req);
-    return renderAdminMessages(res, {
-      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui ler esse CSV agora.' }),
-      filters,
-      importPreview: null
-    });
-  }
-});
-
-app.post('/admin/messages/import/confirm', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  const filters = normalizeAdminMessageActionFilters(req.body);
-  const preview = getAdminMessageImportPreview(req);
-  if (!preview) {
-    setFlash(req, 'error', 'A prévia do lote expirou por aqui. Reimporte o CSV para seguir.');
-    return res.redirect(buildAdminMessagesPath(filters));
-  }
-
-  try {
-    const result = applyImportPreview({ preview, changedByUserId: userId });
-    clearAdminMessageImportPreview(req);
-    const success = result.appliedCount > 0
-      ? `Lote aplicado. ${result.appliedCount} mensagem(ns) já saíram atualizadas sem precisar de deploy.`
-      : 'Esse lote não tinha mudança nova para aplicar.';
-    setFlash(req, 'success', success);
-    return res.redirect(buildAdminMessagesPath(filters));
-  } catch (error) {
-    return renderAdminMessages(res, {
-      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui aplicar esse lote agora.' }),
-      filters,
-      importPreview: preview
-    });
-  }
-});
-
-app.post('/admin/messages/import/cancel', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  clearAdminMessageImportPreview(req);
-  setFlash(req, 'info', 'Prévia do lote descartada. Nada foi aplicado no catálogo.');
-  return res.redirect(buildAdminMessagesPath(normalizeAdminMessageActionFilters(req.body)));
-});
-
-app.post('/admin/messages/:messageKey', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  const messageKey = String(req.params.messageKey || '').trim();
-  const filters = normalizeAdminMessageActionFilters(req.body);
-
-  try {
-    const result = saveMessageTemplateCustomization({
-      messageKey,
-      customTitle: req.body.custom_title,
-      customBody: req.body.custom_body,
-      changedByUserId: userId,
-      source: 'admin_panel'
-    });
-
-    const success = result.changed
-      ? 'Mensagem guardada por aqui. Agora o catálogo já fala esse texto sem depender de deploy.'
-      : 'Mensagem conferida. Não achei mudança nova para guardar aqui.';
-
-    clearAdminMessageImportPreview(req);
-    setFlash(req, 'success', success);
-    return res.redirect(buildAdminMessagesPath(filters, { open: messageKey }));
-  } catch (error) {
-    const validationMessage = Array.isArray(error?.validationErrors) && error.validationErrors.length
-      ? error.validationErrors.map((item) => item.message).join(' ')
-      : getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui salvar essa mensagem agora.' });
-
-    return renderAdminMessages(res, {
-      error: validationMessage,
-      filters,
-      openMessageKey: messageKey,
-      importPreview: getAdminMessageImportPreview(req),
-      draftByMessageKey: {
-        [messageKey]: {
-          custom_title: req.body.custom_title,
-          custom_body: req.body.custom_body
-        }
-      }
-    });
-  }
-});
-
-app.post('/admin/messages/:messageKey/reset', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).send('Acesso negado.');
-  }
-
-  const messageKey = String(req.params.messageKey || '').trim();
-  const filters = normalizeAdminMessageActionFilters(req.body);
-
-  try {
-    const result = resetMessageTemplateCustomization({
-      messageKey,
-      changedByUserId: userId,
-      source: 'admin_reset'
-    });
-
-    const success = result.changed
-      ? 'Mensagem restaurada para o padrão do app. Voltou para a versão nativa sem drama.'
-      : 'Essa mensagem já estava usando o padrão do app. Nada precisou ser desfeito.';
-
-    clearAdminMessageImportPreview(req);
-    setFlash(req, 'success', success);
-    return res.redirect(buildAdminMessagesPath(filters, { open: messageKey }));
-  } catch (error) {
-    return renderAdminMessages(res, {
-      error: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui restaurar essa mensagem agora.' }),
-      filters,
-      openMessageKey: messageKey,
-      importPreview: getAdminMessageImportPreview(req)
-    });
-  }
-});
-
-app.post('/admin/messages/:messageKey/preview', ensureAuthenticated, (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).json({ ok: false, message: 'Acesso negado.' });
-  }
-
-  const messageKey = String(req.params.messageKey || '').trim();
-
-  try {
-    const preview = buildMessagePreview(messageKey, {
-      templateOverrides: {
-        titleTemplate: req.body.custom_title,
-        bodyTemplate: req.body.custom_body
-      }
-    });
-
-    if (Array.isArray(preview.validationErrors) && preview.validationErrors.length) {
-      return res.status(422).json({
-        ok: false,
-        message: 'A prévia encontrou placeholder pedindo atenção antes de seguir.',
-        validationErrors: preview.validationErrors
-      });
-    }
-
-    return res.json({ ok: true, preview });
-  } catch (error) {
-    return res.status(error?.status || 500).json({
-      ok: false,
-      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui montar a prévia agora.' })
-    });
-  }
-});
-
-app.post('/admin/messages/:messageKey/push-test', ensureAuthenticated, async (req, res) => {
-  const userId = req.user.id;
-  if (!isAdminUser(userId)) {
-    return res.status(403).json({ ok: false, message: 'Acesso negado.' });
-  }
-
-  if (!isPushConfigured() || !webPush) {
-    return res.status(503).json({ ok: false, message: 'O push ainda não está configurado neste servidor.' });
-  }
-
-  const messageKey = String(req.params.messageKey || '').trim();
-  const rateKey = `${userId}:${messageKey}`;
-  const lastSentAt = adminMessagePushTestRateLimit.get(rateKey) || 0;
-  const elapsed = Date.now() - lastSentAt;
-
-  if (elapsed < ADMIN_MESSAGE_PUSH_TEST_RATE_LIMIT_MS) {
-    const secondsLeft = Math.max(1, Math.ceil((ADMIN_MESSAGE_PUSH_TEST_RATE_LIMIT_MS - elapsed) / 1000));
-    return res.status(429).json({
-      ok: false,
-      message: `Segura só ${secondsLeft}s para repetir esse push de teste neste aparelho.`
-    });
-  }
-
-  const subscription = req.body?.subscription;
-  const endpoint = String(subscription?.endpoint || '').trim();
-  if (!endpoint) {
-    return res.status(409).json({ ok: false, message: 'Antes do teste, ative os alertas neste aparelho para a gente saber onde bater.' });
-  }
-
-  try {
-    const preview = buildMessagePreview(messageKey, {
-      templateOverrides: {
-        titleTemplate: req.body.custom_title,
-        bodyTemplate: req.body.custom_body
-      }
-    });
-
-    if (preview.preview?.kind !== 'push') {
-      return res.status(400).json({ ok: false, message: 'Esse item usa prévia visual na tela. O push de teste só entra em campo quando o canal é push.' });
-    }
-
-    if (Array.isArray(preview.validationErrors) && preview.validationErrors.length) {
-      return res.status(422).json({
-        ok: false,
-        message: 'O push de teste encontrou placeholder pedindo atenção antes de seguir.',
-        validationErrors: preview.validationErrors
-      });
-    }
-
-    const payload = buildPushTestPayload(messageKey, {
-      templateOverrides: {
-        titleTemplate: req.body.custom_title,
-        bodyTemplate: req.body.custom_body
-      }
-    });
-
-    payload.href = '/admin/messages';
-    payload.tag = `preview:${messageKey}:${userId}`;
-    upsertPushSubscription(userId, subscription);
-
-    await webPush.sendNotification(subscription, JSON.stringify({
-      title: payload.title,
-      body: payload.body,
-      href: payload.href,
-      tag: payload.tag,
-      isTest: true,
-      previewMessageKey: payload.previewMessageKey
-    }));
-
-    adminMessagePushTestRateLimit.set(rateKey, Date.now());
-    return res.json({ ok: true, message: 'Push de teste enviado para este aparelho. Dá uma olhadinha se ele apareceu redondinho por aí.' });
-  } catch (error) {
-    if (error?.statusCode === 404 || error?.statusCode === 410) {
-      removePushSubscriptionForUser(userId, endpoint);
-      return res.status(410).json({ ok: false, message: 'A inscrição deste aparelho expirou. Liga os alertas de novo e a gente tenta mais uma.' });
-    }
-
-    return res.status(500).json({
-      ok: false,
-      message: getFriendlyErrorMessage(error, { defaultMessage: 'Não consegui mandar o push de teste agora.' })
-    });
-  }
+registerAdminMessagesRoutes(app, {
+  ensureAuthenticated,
+  upload,
+  isAdminUser,
+  renderAdminMessages,
+  normalizeAdminMessageActionFilters,
+  getAdminMessageImportPreview,
+  buildMessageCsvExport,
+  getFriendlyErrorMessage,
+  clearAdminMessageImportPreview,
+  buildImportPreviewFromBuffer,
+  setAdminMessageImportPreview,
+  applyImportPreview,
+  setFlash,
+  buildAdminMessagesPath,
+  saveMessageTemplateCustomization,
+  resetMessageTemplateCustomization,
+  buildMessagePreview,
+  buildPushTestPayload,
+  isPushConfigured,
+  webPush,
+  ADMIN_MESSAGE_PUSH_TEST_RATE_LIMIT_MS,
+  adminMessagePushTestRateLimit,
+  upsertPushSubscription,
+  removePushSubscriptionForUser
 });
 
 app.post("/admin/settings/:section", ensureAuthenticated, (req, res) => {

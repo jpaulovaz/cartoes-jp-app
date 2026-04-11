@@ -44,8 +44,8 @@
   }
 %>
 
-  <div class="op-screen op-screen--month max-w-7xl mx-auto space-y-6 pb-24">
-    <section class="op-page-hero op-fade-up">
+  <div class="op-screen op-screen--month op-month-screen-v4 max-w-7xl mx-auto space-y-5 pb-24">
+    <section class="op-page-hero op-month-hero-v4 op-fade-up">
       <div>
         <span class="op-page-hero__eyebrow">Gestão do mês</span>
         <h1 class="op-page-hero__title mt-4">Compras do mês — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
@@ -106,7 +106,7 @@
     </section>
 
     <% if (isClosed) { %>
-      <div class="op-inline-alert op-inline-alert--warning">
+      <div class="op-inline-alert op-inline-alert--warning op-month-alert">
         <div class="op-inline-alert__icon">🔒</div>
         <div>
           <div class="op-inline-alert__title">Mês fechado por aqui</div>
@@ -117,7 +117,7 @@
 
     <% const monthDraftQueueSummary = draftQueueSummaryForMonth || { queueCount: 0, itemCount: 0, totalCents: 0 }; %>
     <% if (monthDraftQueueSummary.queueCount > 0) { %>
-      <div class="op-inline-alert op-inline-alert--info">
+      <div class="op-inline-alert op-inline-alert--info op-month-alert">
         <div class="op-inline-alert__icon">📤</div>
         <div>
           <div class="op-inline-alert__title">Caixa de saída aquecendo para <%= String(month).padStart(2,'0') %>/<%= year %></div>
@@ -126,8 +126,8 @@
       </div>
     <% } %>
 
-    <div class="mb-6 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
-      <details class="group">
+    <div class="mb-6 op-surface-card op-month-recurring-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
+      <details class="group op-month-recurring-toggle">
         <summary class="flex cursor-pointer list-none items-start justify-between gap-3">
           <div>
             <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Compras que se repetem</h2>
@@ -138,7 +138,7 @@
 
         <div class="mt-4">
       <% if (recurringRules && recurringRules.length) { %>
-        <div class="grid gap-4 lg:grid-cols-2">
+        <div class="op-month-recurring-grid grid gap-4 lg:grid-cols-2">
           <% recurringRules.forEach(rule => { %>
             <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/70 p-4">
               <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -312,7 +312,7 @@
   </div>
 
 
-    <details class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6 group">
+    <details class="op-surface-card op-month-categories-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6 group">
       <summary class="flex cursor-pointer list-none items-start justify-between gap-3">
         <div>
           <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Categorias de compra</h2>
@@ -357,8 +357,8 @@
       </div>
     </details>
 
-    <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6">
-      <form method="get" action="/month/<%= year %>/<%= month %>" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+    <div class="op-surface-card op-month-filter-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6">
+      <form method="get" action="/month/<%= year %>/<%= month %>" class="op-month-filter-grid grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         <input type="hidden" name="sort" value="<%= sort %>" />
         <input type="hidden" name="dir" value="<%= dir %>" />
 
@@ -444,8 +444,8 @@
       </form>
     </div>
 
-    <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-      <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+    <div class="op-surface-card op-month-ledger-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div class="op-month-ledger-head border-b border-slate-200 dark:border-slate-700 px-5 py-4">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Lista de compras</h2>
@@ -472,8 +472,8 @@
         </div>
       </div>
 
-      <div class="overflow-x-auto md:overflow-visible">
-        <table class="block md:table w-full text-sm text-left">
+      <div class="op-table-shell op-month-table-shell overflow-x-auto md:overflow-visible">
+        <table class="op-month-ledger-table block md:table w-full text-sm text-left">
           <thead
             class="hidden md:table-header-group bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-[11px] tracking-wider">
             <tr>
@@ -499,7 +499,7 @@
                  const participantPeople = (t.selected_ids || []).map(pid => people.find(p => Number(p.id) === Number(pid))).filter(Boolean);
                  const shortParticipantNames = participantPeople.map(person => getParticipantChipLabel(person, participantPeople.length)).filter(Boolean);
             %>
-              <tr class="op-month-row block md:table-row mb-3 rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-800/60 md:mb-0 md:rounded-none md:border-b md:border-x-0 md:border-t-0 md:border-slate-100 md:bg-transparent md:p-0 md:shadow-none dark:md:border-slate-700 hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors align-middle space-y-1 md:space-y-0 cursor-pointer"
+              <tr class="op-month-row op-month-ledger-row block md:table-row mb-3 rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-800/60 md:mb-0 md:rounded-none md:border-b md:border-x-0 md:border-t-0 md:border-slate-100 md:bg-transparent md:p-0 md:shadow-none dark:md:border-slate-700 hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors align-middle space-y-1 md:space-y-0 cursor-pointer"
                 data-month-row data-txn-id="<%= t.id %>" tabindex="0" role="button" aria-label="Abrir ações para <%= t.description %>">
                 <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
                   <div class="flex items-center justify-between gap-3 md:block">

@@ -71,6 +71,9 @@ test("post-release visual hotfixes keep key mobile/desktop CTAs readable", () =>
   assert.match(month, /op-month-export-btn/);
   assert.match(month, /document\.body\.appendChild\(toolbar\)/);
   assert.match(month, /op-month-row__hint/);
+  assert.match(month, /op-month-table-shell overflow-x-auto/);
+  assert.match(month, /md:min-w-\[88rem\]/);
+  assert.match(month, /Resumo e ações<\/th>/);
   assert.match(people, /op-chip-nav__item--add-person/);
   assert.match(people, /op-chip-nav-shell--people-grid/);
   assert.doesNotMatch(people, /peopleHeroActionsHtml/);

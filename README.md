@@ -164,23 +164,42 @@ A rota `/admin` concentra as configurações do sistema em uma central organizad
 ```text
 .
 ├── public/                     # CSS, JS do cliente, ícones, manifest, service worker e docs públicos
-│   ├── docs/                   # guias em PDF da central administrativa
-│   └── offline.html            # fallback amigável para modo offline
-├── scripts/                    # migrações e seed
+├── scripts/                    # migrações, seed e verificações leves da refatoração
 ├── src/
-│   ├── appConfig.js            # definições da central de configuração
-│   ├── backupEngine.js         # rotinas de backup e restauração
-│   ├── db.js                   # conexão SQLite
-│   ├── dueDate.js              # cálculo de vencimento útil
-│   └── utils.js                # utilitários gerais
+│   ├── app/                    # createApp, startServer, schedulers e store de sessão
+│   ├── bootstrap/              # runtime config e bootstrap explícito do banco
+│   ├── controllers/            # handlers HTTP finos por domínio
+│   ├── repositories/           # acesso a SQLite por domínio
+│   ├── routes/                 # composição express.Router() por área
+│   ├── services/               # orquestração de regra de negócio por domínio
+│   ├── importers/              # importadores CSV e integrações auxiliares
+│   └── *.js                    # módulos de suporte (Pix, backup, segurança, utilitários)
+├── tests/characterization/     # testes de caracterização por fase da refatoração
 ├── views/                      # páginas EJS
+│   └── partials/               # partials reutilizáveis e componentes de tela
+├── docs/refactor/              # smokes e documentação operacional da trilha
 ├── data/                       # banco SQLite local e arquivos auxiliares
-├── server.js                   # aplicação principal
+├── server.js                   # bootstrap fino: config, migração oficial e start
+├── server.runtime.js           # runtime legado já modularizado por routers
 ├── .env.example                # bootstrap inicial de variáveis
 ├── ecosystem.config.js         # deploy com PM2
 ├── generate-vapid.js           # geração de chaves push
-└── README.md                   # este arquivo bonitão aqui
+└── README.md                   # visão funcional + guia técnico de manutenção
 ```
+
+### Arquitetura atual da aplicação
+
+A base termina a trilha de refatoração como um **monólito modular enxuto**:
+
+- `server.js` ficou responsável por **bootstrap**, **configuração de runtime** e **start explícito**;
+- `server.runtime.js` virou o lugar de **composição do runtime**, sem evoluir esquema no boot;
+- `src/routes/` concentra o **registro de rotas por domínio**;
+- `src/controllers/` segura o contrato HTTP;
+- `src/services/` concentra a orquestração;
+- `src/repositories/` encapsula o acesso ao SQLite;
+- `scripts/migrate.js` é a **trilha oficial** de migração.
+
+Esse desenho preserva a stack atual, mas deixa a manutenção previsível sem depender de memória oral do `server.js` antigo.
 
 ---
 
@@ -198,6 +217,8 @@ A rota `/admin` concentra as configurações do sistema em uma central organizad
 npm install
 cp .env.example .env
 npm run migrate
+npm test
+npm run verify:refactor
 npm start
 ```
 
@@ -212,9 +233,27 @@ Em uma instalação nova, o fluxo mais seguro é:
 
 1. preparar o `.env` com o básico;
 2. rodar as migrações;
-3. subir o servidor;
-4. acessar `/setup` ou preparar o primeiro usuário administrador no banco;
-5. finalizar o restante das configurações pela rota `/admin`.
+3. executar `npm test` e `npm run verify:refactor` para validar a casca estrutural;
+4. subir o servidor;
+5. acessar `/setup` ou preparar o primeiro usuário administrador no banco;
+6. finalizar o restante das configurações pela rota `/admin`.
+
+### Comandos úteis de manutenção
+
+```bash
+npm start                 # sobe o app normalmente
+npm run migrate           # executa a trilha oficial de migração
+npm test                  # roda a suíte de caracterização da refatoração
+npm run verify:refactor   # confere wiring estrutural e partials críticos
+```
+
+### Como manter sem reabrir o caos do entrypoint
+
+- novas rotas entram por `src/routes/<dominio>.routes.js`;
+- handlers HTTP novos entram por `src/controllers/`;
+- regra de negócio nova ou extraída entra por `src/services/`;
+- SQL novo entra por `src/repositories/` ou `scripts/migrate.js`, nunca no bootstrap do runtime;
+- views grandes devem preferir `views/partials/**` quando o trecho já tiver vida própria de manutenção.
 
 ---
 

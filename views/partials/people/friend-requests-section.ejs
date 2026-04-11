@@ -1,0 +1,56 @@
+    <section id="friend-requests" class="scroll-mt-28 mb-8 rounded-[32px] border border-emerald-200 bg-white p-6 shadow-sm dark:border-emerald-900/50 dark:bg-slate-800 sm:p-7">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Quem está batendo na sua rede</div>
+          <h2 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Tem gente batendo na porta da sua rede</h2>
+          <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Aceitando, vocês podem usar cobranças entre si com mais facilidade. Se não quiser, é só recusar.</p>
+        </div>
+        <div class="rounded-2xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-sm font-semibold text-emerald-700 shadow-sm dark:border-emerald-900/70 dark:bg-emerald-900/20 dark:text-emerald-200">
+          <%= pendingRequests.length === 1 ? '1 convite esperando você' : `${pendingRequests.length} convites esperando você` %>
+        </div>
+      </div>
+
+      <div class="mt-6 grid gap-4">
+        <% pendingRequests.forEach((request) => {
+             const isHighlighted = highlightedFriendRequestId && Number(highlightedFriendRequestId) === Number(request.id);
+        %>
+          <article id="friend-request-<%= request.id %>" class="overflow-hidden rounded-[28px] border bg-slate-50/70 shadow-sm transition-all dark:bg-slate-900/60 <%= isHighlighted ? 'border-emerald-400 ring-2 ring-emerald-200 dark:border-emerald-500 dark:ring-emerald-900/70' : 'border-emerald-200 dark:border-slate-700' %>">
+            <div class="h-1.5 bg-gradient-to-r from-emerald-400 via-sky-400 to-violet-400"></div>
+            <div class="p-5 sm:p-6">
+              <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-3">
+                    <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-lg font-black text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
+                      <%= (request.requester_name || 'A').charAt(0).toUpperCase() %>
+                    </span>
+                    <div class="min-w-0">
+                      <div class="text-lg font-black text-slate-900 dark:text-white"><%= request.requester_name || 'Usuário AcerttaPay' %></div>
+                      <div class="text-sm font-medium text-slate-500 dark:text-slate-400">Quer entrar na sua rede por aqui.</div>
+                    </div>
+                  </div>
+
+                  <div class="mt-4 flex flex-wrap gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                    <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200">Também usa o app</span>
+                    <% if (request.linked_person_name) { %>
+                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">Já apareceu como <%= request.linked_person_name %></span>
+                    <% } %>
+                    <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pedido pendente</span>
+                  </div>
+                </div>
+
+                <div class="grid gap-2 sm:min-w-[18rem] sm:grid-cols-2 xl:w-auto">
+                  <form method="post" action="/friend-requests/<%= request.id %>/respond">
+                    <input type="hidden" name="action" value="accept">
+                    <button type="submit" class="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">Aceitar</button>
+                  </form>
+                  <form method="post" action="/friend-requests/<%= request.id %>/respond">
+                    <input type="hidden" name="action" value="reject">
+                    <button type="submit" class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Recusar</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </article>
+        <% }) %>
+      </div>
+    </section>

@@ -1,0 +1,12 @@
+<section class="op-page-hero op-fade-up mb-8">
+  <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+    <div>
+      <% if (eyebrow) { %><span class="op-page-hero__eyebrow"><%= eyebrow %></span><% } %>
+      <h1 class="op-page-hero__title mt-4"><%= title %></h1>
+      <% if (subtitle) { %><p class="op-page-hero__subtitle mt-3"><%= subtitle %></p><% } %>
+    </div>
+    <% if (typeof actionsHtml === 'string' && actionsHtml.trim()) { %>
+      <div class="shrink-0"><%- actionsHtml %></div>
+    <% } %>
+  </div>
+</section>

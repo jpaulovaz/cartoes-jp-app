@@ -874,8 +874,8 @@
   data-snapshot-cta-label="<%= isArchiveMode ? 'Voltar para o arquivo' : 'Voltar para os acertos' %>"
   data-snapshot-cta-href="<%= isArchiveMode ? otherPath : '/shared-debts' %>"></div>
 
-<div class="op-screen op-screen--shared-debts max-w-7xl mx-auto space-y-8">
-  <section class="op-page-hero op-fade-up">
+<div class="op-screen op-screen--shared-debts op-debts-screen-v4 max-w-7xl mx-auto space-y-8">
+  <section class="op-page-hero op-fade-up op-debts-hero-v4">
     <div>
       <span class="op-page-hero__eyebrow"><%= isArchiveMode ? 'Histórico guardado' : 'Tudo o que você combinou' %></span>
       <h1 class="op-page-hero__title mt-4"><%= isArchiveMode ? 'Arquivo de acertos' : 'Central de acertos' %></h1>
@@ -911,7 +911,7 @@
       </div>
     </div>
 
-    <div class="op-kpi-strip xl:max-w-[30rem]">
+    <div class="op-kpi-strip op-debts-kpi-strip xl:max-w-[30rem]">
       <div class="op-kpi-card text-center">
         <div class="op-kpi-card__label">Chegou pra você</div>
         <div class="op-kpi-card__value"><%= received.length %></div>
@@ -943,9 +943,9 @@
   </section>
 
   <% if (!isArchiveMode) { %>
-  <section class="op-fade-up">
+  <section class="op-fade-up op-debts-insight-section">
     <div class="grid gap-4 xl:grid-cols-[1.25fr,0.95fr]">
-      <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
+      <article class="op-debts-overview-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div class="max-w-2xl">
             <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-500 dark:text-emerald-300">Acertos do cartão por mês</div>
@@ -983,7 +983,7 @@
         </div>
       </article>
 
-      <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
+      <article class="op-debts-guide-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
         <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Como usar sem se perder</div>
         <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Hoje funciona assim</h2>
         <div class="mt-4 space-y-3">
@@ -1006,7 +1006,7 @@
   </section>
 
   <section class="op-fade-up">
-    <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
+    <div class="op-debts-outbox-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div class="max-w-2xl">
           <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Fora do cartão</div>
@@ -1045,7 +1045,7 @@
     </div>
   </section>
 
-  <section id="draft-queues" class="op-fade-up scroll-mt-24">
+  <section id="draft-queues" class="op-fade-up op-debts-outbox-section scroll-mt-24">
     <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
       <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div class="max-w-3xl">

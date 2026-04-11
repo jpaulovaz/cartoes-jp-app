@@ -267,11 +267,27 @@
   ];
 %>
 
-<div class="mx-auto max-w-7xl">
+<%
+  const peopleHeroMetaHtml = [
+    `<span class="badge">${activeFriendCount} na sua rede</span>`,
+    `<span class="badge">${pendingContactCount} convite(s)</span>`,
+    `<span class="badge">${readyPixNetworkCount} com Pix pronto</span>`
+  ].join('');
+  const peopleHeroActionsHtml = [
+    `<button type="button" onclick="openContactComposeModal(this)" class="op-btn op-btn-primary">Adicionar alguém</button>`,
+    `<a href="/settings" class="op-btn op-hero-link op-hero-link--summary">Seus ajustes</a>`
+  ].join('');
+%>
+
+<div class="op-page-shell op-network-screen-v4 mx-auto max-w-7xl">
   <%- include('partials/page-hero', {
     eyebrow: 'Seu perfil social + sua rede',
     title: 'Minha Rede',
-    subtitle: 'Aqui fica a parte mais social do OrganizaPay: seu perfil público, seus convites e a galera que já faz parte da sua rede.'
+    subtitle: 'Seu perfil, seus convites e toda a rede que já conversa com você dentro do app.',
+    metaHtml: peopleHeroMetaHtml,
+    actionsHtml: peopleHeroActionsHtml,
+    heroClass: 'op-network-hero-v4',
+    actionsWrapperClass: 'op-network-hero-actions'
   }) %>
 
   <%- include('partials/page-chip-nav', { items: peopleNavItems }) %>

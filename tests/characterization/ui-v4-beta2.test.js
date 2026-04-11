@@ -20,6 +20,7 @@ test('package version and shared partials reflect UI v4 shell beta 2', () => {
   assert.match(pkg.scripts.test, /ui-v4-beta1\.test\.js/);
   assert.match(pkg.scripts.test, /ui-v4-beta2\.test\.js/);
   assert.match(pkg.scripts.test, /ui-v4-beta3\.test\.js/);
+  assert.match(pkg.scripts.test, /ui-v4-beta4\.test\.js/);
   assert.match(header, /op-brand-card/);
   assert.match(header, /op-topbar-actions/);
   assert.match(footer, /op-bottom-nav__surface/);

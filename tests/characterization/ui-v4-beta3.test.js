@@ -11,7 +11,7 @@ function read(relPath) {
 
 test("package version and views reflect UI v4 beta 3 monthly reading redesign", () => {
   const pkg = JSON.parse(read("package.json"));
-  assert.equal(pkg.version, "4.0.0-beta.3");
+  assert.match(pkg.version, /^4\.0\.0-beta\.[3-9]\d*$/);
 
   const home = read("views/home.ejs");
   assert.match(home, /op-radar-screen/);
@@ -23,6 +23,7 @@ test("package version and views reflect UI v4 beta 3 monthly reading redesign", 
   assert.match(month, /op-month-filter-card/);
   assert.match(month, /op-month-ledger-card/);
   assert.match(month, /op-month-table-shell/);
+  assert.match(pkg.scripts.test, /ui-v4-beta4\.test\.js/);
 });
 
 test("css includes beta 3 radar and monthly reading system", () => {

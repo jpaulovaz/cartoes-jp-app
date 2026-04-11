@@ -32,7 +32,7 @@ const requiredFiles = [
   'views/partials/people/friend-requests-section.ejs',
   'views/partials/people/contact-modal.ejs',
   'views/partials/people/network-list-section.ejs',
-  'tests/characterization/phase6.test.js',
+  'scripts/run-tests-or-verify.js',
   'README.md'
 ];
 
@@ -40,7 +40,8 @@ requiredFiles.forEach((rel) => ensure(exists(rel), `Arquivo obrigatório ausente
 
 const packageJson = JSON.parse(read('package.json'));
 ensure(/^3\.20\.12$|^4\.0\.(?:0(?:-beta\.\d+)?|[1-9]\d*)$/.test(packageJson.version), `Versão incompatível com o gate estrutural: ${packageJson.version}`);
-ensure(typeof packageJson.scripts?.test === 'string' && packageJson.scripts.test.includes('phase6.test.js'), 'package.json precisa incluir phase6.test.js no script test');
+ensure(typeof packageJson.scripts?.test === 'string' && packageJson.scripts.test.includes('scripts/run-tests-or-verify.js'), 'package.json precisa usar scripts/run-tests-or-verify.js no script test');
+ensure(packageJson.scripts.test.includes('phase6.test.js'), 'package.json precisa manter referência a phase6.test.js para fallback quando a suíte existir');
 ensure(packageJson.scripts.test.includes('ui-v4-release.test.js'), 'package.json precisa incluir ui-v4-release.test.js no script test');
 ensure(packageJson.scripts?.['verify:refactor'] === 'node scripts/verify-refactor.js', 'package.json precisa expor npm run verify:refactor');
 

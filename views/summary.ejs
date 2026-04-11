@@ -220,25 +220,25 @@
                 <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Entrou das parcerias menos o que já saiu nas faturas.</p>
               </div>
               <div class="p-5">
-                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <article class="rounded-2xl border border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70">
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 op-summary-cash-grid">
+                  <article class="rounded-2xl border border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70 op-summary-cash-card">
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Faturas do mês</div>
-                    <div data-summary-cash-total-bills class="op-summary-kpi-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotals.total_cents) %></div>
+                    <div data-summary-cash-total-bills class="op-summary-kpi-value op-summary-cash-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotals.total_cents) %></div>
                     <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400">Total dos cartões.</p>
                   </article>
-                  <article class="rounded-2xl border border-cyan-200 bg-cyan-50/70 px-4 py-4 dark:border-cyan-800 dark:bg-cyan-950/20">
+                  <article class="rounded-2xl border border-cyan-200 bg-cyan-50/70 px-4 py-4 dark:border-cyan-800 dark:bg-cyan-950/20 op-summary-cash-card">
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-200">Já reunido</div>
-                    <div data-summary-cash-inflow class="op-summary-kpi-value mt-2 text-cyan-700 dark:text-cyan-200"><%= formatBRLFromCents(personPanelTotals.paid_cents) %></div>
+                    <div data-summary-cash-inflow class="op-summary-kpi-value op-summary-cash-value mt-2 text-cyan-700 dark:text-cyan-200"><%= formatBRLFromCents(personPanelTotals.paid_cents) %></div>
                     <p class="op-summary-kpi-note mt-2 text-cyan-900/80 dark:text-cyan-100/80">Já entrou.</p>
                   </article>
-                  <article class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/80">
+                  <article class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/80 op-summary-cash-card">
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Já saiu nas faturas</div>
-                    <div data-summary-cash-outflow class="op-summary-kpi-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotals.paid_cents) %></div>
+                    <div data-summary-cash-outflow class="op-summary-kpi-value op-summary-cash-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotals.paid_cents) %></div>
                     <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400">Já foi pago.</p>
                   </article>
-                  <article class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 dark:border-emerald-800 dark:bg-emerald-950/20">
+                  <article class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 dark:border-emerald-800 dark:bg-emerald-950/20 op-summary-cash-card">
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Saldo em caixa</div>
-                    <div data-summary-cash-balance-value class="op-summary-kpi-value mt-2 <%= cashReserveToneClass %>"><%= formatBRLFromCents(cashReserveCents) %></div>
+                    <div data-summary-cash-balance-value class="op-summary-kpi-value op-summary-cash-value mt-2 <%= cashReserveToneClass %>"><%= formatBRLFromCents(cashReserveCents) %></div>
                     <p data-summary-cash-balance-caption class="op-summary-kpi-note mt-2 text-slate-600 dark:text-slate-300"><%= cashReserveHint %></p>
                   </article>
                 </div>

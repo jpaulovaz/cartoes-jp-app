@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" class="light">
+<html lang="pt-BR" class="light" data-op-ui="v4">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -69,7 +69,9 @@
       const themeColorMeta = document.querySelector('meta[name="theme-color"]');
       if (themeColorMeta) {
         let themeColor;
-        if (root.dataset.themeStyle === 'confete') {
+        if (root.dataset.opUi === 'v4') {
+          themeColor = nextTheme === 'dark' ? '#08111e' : '#f4f7fb';
+        } else if (root.dataset.themeStyle === 'confete') {
           themeColor = nextTheme === 'dark' ? '#1f1633' : '#fff3f7';
         } else if (root.dataset.themeStyle === 'orgulho') {
           themeColor = nextTheme === 'dark' ? '#34173a' : '#f75f70';
@@ -141,7 +143,7 @@
   const appPinContext = (typeof appPin !== 'undefined' && appPin) ? appPin : {};
   const appPinScreen = (typeof currentPath !== 'undefined' && currentPath === '/lock') ? 'lock' : 'app';
 %>
-<body class="op-shell text-slate-800 dark:text-slate-200 antialiased selection:bg-blue-300 selection:text-blue-900 flex min-h-screen flex-col font-sans"
+<body class="op-shell op-shell-v4 text-slate-800 dark:text-slate-200 antialiased selection:bg-blue-300 selection:text-blue-900 flex min-h-screen flex-col font-sans"
       data-push-public-key="<%= typeof pushPublicKey !== 'undefined' ? pushPublicKey : '' %>"
       data-push-configured="<%= pushNotificationsEnabled ? '1' : '0' %>"
       data-app-pin-enabled="<%= appPinContext.enabled ? '1' : '0' %>"

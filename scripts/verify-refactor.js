@@ -40,25 +40,27 @@ const requiredFiles = [
 requiredFiles.forEach((rel) => ensure(exists(rel), `Arquivo obrigatório ausente: ${rel}`));
 
 const packageJson = JSON.parse(read('package.json'));
-ensure(packageJson.version === '3.20.11', `Versão esperada 3.20.11, encontrada ${packageJson.version}`);
+ensure(packageJson.version === '3.20.12', `Versão esperada 3.20.12, encontrada ${packageJson.version}`);
 ensure(typeof packageJson.scripts?.test === 'string' && packageJson.scripts.test.includes('phase6.test.js'), 'package.json precisa incluir phase6.test.js no script test');
 ensure(packageJson.scripts?.['verify:refactor'] === 'node scripts/verify-refactor.js', 'package.json precisa expor npm run verify:refactor');
 
 const settingsView = read('views/settings.ejs');
 ensure(settingsView.includes("include('partials/page-hero'"), 'settings.ejs deve usar partial page-hero');
 ensure(settingsView.includes("include('partials/page-chip-nav'"), 'settings.ejs deve usar partial page-chip-nav');
-ensure(settingsView.includes("include('partials/settings/profile-section'"), 'settings.ejs deve usar partial de perfil');
-ensure(settingsView.includes("include('partials/settings/alerts-section'"), 'settings.ejs deve usar partial de alertas');
-ensure(settingsView.includes("include('partials/settings/pix-section'"), 'settings.ejs deve usar partial de Pix');
-ensure(settingsView.includes("include('partials/settings/security-section'"), 'settings.ejs deve usar partial de segurança');
+ensure(settingsView.includes("include('partials/settings/profile-section', settingsPartialLocals)"), 'settings.ejs deve passar locals ao partial de perfil');
+ensure(settingsView.includes("include('partials/settings/alerts-section', settingsPartialLocals)"), 'settings.ejs deve passar locals ao partial de alertas');
+ensure(settingsView.includes("include('partials/settings/pix-section', settingsPartialLocals)"), 'settings.ejs deve passar locals ao partial de Pix');
+ensure(settingsView.includes("include('partials/settings/security-section', settingsPartialLocals)"), 'settings.ejs deve passar locals ao partial de segurança');
+ensure(settingsView.includes('getAvatarUrl') && settingsView.includes('settingsPartialLocals'), 'settings.ejs precisa compartilhar helpers com seus partials');
 
 const peopleView = read('views/people.ejs');
 ensure(peopleView.includes("include('partials/page-hero'"), 'people.ejs deve usar partial page-hero');
 ensure(peopleView.includes("include('partials/page-chip-nav'"), 'people.ejs deve usar partial page-chip-nav');
-ensure(peopleView.includes("include('partials/people/my-profile-section'"), 'people.ejs deve usar partial do perfil social');
-ensure(peopleView.includes("include('partials/people/friend-requests-section'"), 'people.ejs deve usar partial de convites');
-ensure(peopleView.includes("include('partials/people/contact-modal'"), 'people.ejs deve usar partial do modal de contato');
-ensure(peopleView.includes("include('partials/people/network-list-section'"), 'people.ejs deve usar partial da lista de rede');
+ensure(peopleView.includes("include('partials/people/my-profile-section', peoplePartialLocals)"), 'people.ejs deve passar locals ao partial do perfil social');
+ensure(peopleView.includes("include('partials/people/friend-requests-section', peoplePartialLocals)"), 'people.ejs deve passar locals ao partial de convites');
+ensure(peopleView.includes("include('partials/people/contact-modal', peoplePartialLocals)"), 'people.ejs deve passar locals ao partial do modal de contato');
+ensure(peopleView.includes("include('partials/people/network-list-section', peoplePartialLocals)"), 'people.ejs deve passar locals ao partial da lista de rede');
+ensure(peopleView.includes('getAvatarUrl') && peopleView.includes('peoplePartialLocals'), 'people.ejs precisa compartilhar helpers com seus partials');
 
 const settingsLineCount = settingsView.split('\n').length;
 const peopleLineCount = peopleView.split('\n').length;

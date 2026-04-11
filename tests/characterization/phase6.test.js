@@ -24,10 +24,12 @@ test('critical views became smaller and reusable through partials', () => {
   const settingsView = read('views/settings.ejs');
   const peopleView = read('views/people.ejs');
 
-  assert.ok(settingsView.includes("include('partials/settings/profile-section')"));
-  assert.ok(settingsView.includes("include('partials/settings/security-section')"));
-  assert.ok(peopleView.includes("include('partials/people/my-profile-section')"));
-  assert.ok(peopleView.includes("include('partials/people/network-list-section')"));
+  assert.ok(settingsView.includes("include('partials/settings/profile-section', settingsPartialLocals)"));
+  assert.ok(settingsView.includes("include('partials/settings/security-section', settingsPartialLocals)"));
+  assert.ok(peopleView.includes("include('partials/people/my-profile-section', peoplePartialLocals)"));
+  assert.ok(peopleView.includes("include('partials/people/network-list-section', peoplePartialLocals)"));
+  assert.ok(settingsView.includes('getAvatarUrl') && settingsView.includes('settingsPartialLocals'));
+  assert.ok(peopleView.includes('getAvatarUrl') && peopleView.includes('peoplePartialLocals'));
 
   assert.ok(settingsView.split('\n').length < 1700);
   assert.ok(peopleView.split('\n').length < 1750);

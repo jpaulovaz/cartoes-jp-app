@@ -243,6 +243,17 @@
 %>
 
 <%
+  const settingsPartialLocals = {
+    pendingRequests, selfProfile, contactList, activeFriendCount, discoverableCount, pendingContactCount, localOnlyCount, readyPixNetworkCount,
+    preferredPhoneCountryOptions, otherPhoneCountryOptions, phoneDefaultCountryCode, selfName, selfPhoneCountry, selfPhone, selfPhoneDisplay, selfPhoneStored, selfEmail,
+    appPinEnabled, appPinIdleLabel, appPinIdleOptions, appPinMinLength, appPinMaxLength, appPasskeyState, appPasskeyItems, appPasskeyCount, appPasskeyMaxCount,
+    selfPixEnabled, selfPixKeyType, selfPixKeyValueInput, selfPixState, selfPixCity, selfPixLabel, signatureMaxLength, notificationPreferenceCopy,
+    notificationPreferenceEnabledCount, notificationPreferenceGroups, notificationPreferenceTotalCount, signatureVibeOptions, selfSignatureText, selfSignatureVibe, selfSignatureMeta,
+    getAvatarUrl, getAvatarInitials, renderPersonStatusChips, getNetworkState, getPixStateMeta, getPixStateCode, getPixStateLabel
+  };
+%>
+
+<%
   const settingsNavItems = [
     { href: '#profile', icon: '👤', label: 'Perfil', classes: 'inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-amber-100/80 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35' },
     { href: '#alerts', icon: '🔔', label: 'Alertas', classes: 'inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-bold text-sky-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-100/80 dark:border-sky-900 dark:bg-sky-900/20 dark:text-sky-200 dark:hover:bg-sky-900/35' },
@@ -262,10 +273,10 @@
   <%- include('partials/page-chip-nav', { items: settingsNavItems }) %>
 
   <% if (selfProfile) { %>
-    <%- include('partials/settings/profile-section') %>
-    <%- include('partials/settings/alerts-section') %>
-    <%- include('partials/settings/pix-section') %>
-    <%- include('partials/settings/security-section') %>
+    <%- include('partials/settings/profile-section', settingsPartialLocals) %>
+    <%- include('partials/settings/alerts-section', settingsPartialLocals) %>
+    <%- include('partials/settings/pix-section', settingsPartialLocals) %>
+    <%- include('partials/settings/security-section', settingsPartialLocals) %>
   <% } %>
 </div>
 <script>

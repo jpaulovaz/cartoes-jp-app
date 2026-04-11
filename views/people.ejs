@@ -246,6 +246,18 @@
 %>
 
 <%
+  const peoplePartialLocals = {
+    pendingRequests, selfProfile, contactList, activeFriendCount, discoverableCount, pendingContactCount, localOnlyCount, readyPixNetworkCount,
+    preferredPhoneCountryOptions, otherPhoneCountryOptions, phoneDefaultCountryCode, selfName, selfPhoneCountry, selfPhone, selfPhoneDisplay, selfPhoneStored, selfEmail,
+    appPinEnabled, appPinIdleLabel, appPinIdleOptions, appPinMinLength, appPinMaxLength, appPasskeyState, appPasskeyItems, appPasskeyCount, appPasskeyMaxCount,
+    selfPixEnabled, selfPixKeyType, selfPixKeyValueInput, selfPixState, selfPixCity, selfPixLabel, signatureMaxLength, notificationPreferenceCopy,
+    notificationPreferenceEnabledCount, notificationPreferenceGroups, notificationPreferenceTotalCount, signatureVibeOptions, selfSignatureText, selfSignatureVibe,
+    selfSignatureMeta, selfSignatureVisible, getAvatarUrl, getAvatarInitials, renderPersonStatusChips, personActionMatchComprasClass, personActionMatchComprasLabelClass,
+    getNetworkState, getPixStateMeta, getSignatureVibeMeta
+  };
+%>
+
+<%
   const peopleNavItems = [
     { href: '#my-profile', icon: '👑', label: 'Seu perfil' },
     ...(pendingRequests.length ? [{ href: '#friend-requests', icon: '💌', label: 'Convites recebidos', classes: 'inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-100/80 dark:border-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:bg-emerald-900/35' }] : []),
@@ -265,12 +277,12 @@
   <%- include('partials/page-chip-nav', { items: peopleNavItems }) %>
 
   <% if (selfProfile) { %>
-    <%- include('partials/people/my-profile-section') %>
-    <%- include('partials/people/friend-requests-section') %>
+    <%- include('partials/people/my-profile-section', peoplePartialLocals) %>
+    <%- include('partials/people/friend-requests-section', peoplePartialLocals) %>
   <% } %>
 
-  <%- include('partials/people/contact-modal') %>
-  <%- include('partials/people/network-list-section') %>
+  <%- include('partials/people/contact-modal', peoplePartialLocals) %>
+  <%- include('partials/people/network-list-section', peoplePartialLocals) %>
 </div>
 
 <script>

@@ -8,8 +8,8 @@
      const bottomIsAdmin = !!(user && user.role === 'admin');
   %>
 
-  <nav class="op-bottom-nav md:hidden" aria-label="Navegação principal">
-    <div class="op-bottom-nav__inner op-bottom-nav__surface">
+  <nav class="op-bottom-nav md:hidden" aria-label="Navegação principal" data-op-bottom-nav>
+    <div class="op-bottom-nav__inner op-bottom-nav__surface" data-op-bottom-nav-surface>
       <a href="<%= bottomDashboardHref %>" data-nav-key="painel" class="op-bottom-nav__link">
         <span class="op-bottom-nav__icon">
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h4a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h4a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2"></path></svg>

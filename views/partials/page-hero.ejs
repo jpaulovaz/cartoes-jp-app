@@ -4,7 +4,7 @@
   const heroClassName = ['op-page-hero', 'op-page-hero--compact', 'op-fade-up', 'mb-5', heroClass || ''].filter(Boolean).join(' ');
   const actionsClassName = ['op-page-hero__actions', 'op-page-hero__actions--compact', 'shrink-0', actionsWrapperClass || ''].filter(Boolean).join(' ');
 %>
-<section class="<%= heroClassName %>">
+<section class="<%= heroClassName %>" data-op-hero-shell>
   <div class="op-page-hero__frame flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
     <div class="op-page-hero__body">
       <div class="op-page-hero__lead">
@@ -17,7 +17,7 @@
       <% } %>
     </div>
     <% if (hasActions) { %>
-      <div class="<%= actionsClassName %>"><%- actionsHtml %></div>
+      <div class="<%= actionsClassName %>" data-op-hero-actions><%- actionsHtml %></div>
     <% } %>
   </div>
 </section>

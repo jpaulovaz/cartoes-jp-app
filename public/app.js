@@ -124,6 +124,87 @@
 })();
 
 (function () {
+  function hasCoarseTouch() {
+    return (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || Number(navigator.maxTouchPoints || 0) > 0;
+  }
+
+  function isFormField(target) {
+    return !!(target && target.matches && target.matches('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=button]):not([type=submit]):not([type=reset]), textarea, select, [contenteditable="true"]'));
+  }
+
+  let queuedFrame = 0;
+
+  function syncMobileChromeMetrics() {
+    const root = document.documentElement;
+    const body = document.body;
+    if (!root || !body) return;
+
+    const topbar = document.querySelector('[data-op-topbar]');
+    const bottomNav = document.querySelector('[data-op-bottom-nav]');
+    const visualViewport = window.visualViewport;
+    const viewportHeight = Math.round((visualViewport && visualViewport.height) || window.innerHeight || document.documentElement.clientHeight || 0);
+    const offsetTop = Math.round((visualViewport && visualViewport.offsetTop) || 0);
+    const keyboardInset = Math.max(0, Math.round((window.innerHeight || viewportHeight) - viewportHeight - offsetTop));
+    const coarseTouch = hasCoarseTouch();
+    const keyboardOpen = coarseTouch && keyboardInset > 120;
+    const topbarHeight = topbar ? Math.round(topbar.getBoundingClientRect().height) : 0;
+    const bottomNavHeight = bottomNav ? Math.round(bottomNav.getBoundingClientRect().height) : 0;
+    const fallbackBottomNav = coarseTouch ? 82 : 0;
+    const effectiveBottomNav = Math.max(bottomNavHeight, fallbackBottomNav);
+
+    root.style.setProperty('--op-topbar-height', `${Math.max(topbarHeight, 0)}px`);
+    root.style.setProperty('--op-bottom-nav-height', `${Math.max(bottomNavHeight, 0)}px`);
+    root.style.setProperty('--op-mobile-bottom-clearance', `calc(${Math.max(effectiveBottomNav, 0)}px + var(--op-bottom-safe) + 0.75rem)`);
+
+    body.classList.toggle('op-touch-ui', coarseTouch);
+    body.classList.toggle('op-virtual-keyboard-open', keyboardOpen);
+    body.classList.toggle('op-keyboard-avoidance', keyboardOpen);
+  }
+
+  function queueMobileChromeSync() {
+    if (queuedFrame) window.cancelAnimationFrame(queuedFrame);
+    queuedFrame = window.requestAnimationFrame(syncMobileChromeMetrics);
+  }
+
+  function revealFocusedField(target) {
+    if (!isFormField(target) || !hasCoarseTouch()) return;
+    window.setTimeout(() => {
+      if (document.activeElement !== target || typeof target.scrollIntoView !== 'function') return;
+      target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+      queueMobileChromeSync();
+    }, 180);
+  }
+
+  document.addEventListener('focusin', (event) => {
+    if (!isFormField(event.target)) return;
+    document.body && document.body.classList.add('op-has-focused-field');
+    revealFocusedField(event.target);
+  });
+
+  document.addEventListener('focusout', () => {
+    window.setTimeout(() => {
+      const activeElement = document.activeElement;
+      if (isFormField(activeElement)) return;
+      document.body && document.body.classList.remove('op-has-focused-field');
+      queueMobileChromeSync();
+    }, 80);
+  });
+
+  document.addEventListener('DOMContentLoaded', queueMobileChromeSync);
+  window.addEventListener('load', queueMobileChromeSync);
+  window.addEventListener('pageshow', queueMobileChromeSync);
+  window.addEventListener('resize', queueMobileChromeSync, { passive: true });
+  window.addEventListener('orientationchange', () => window.setTimeout(queueMobileChromeSync, 120), { passive: true });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', queueMobileChromeSync, { passive: true });
+    window.visualViewport.addEventListener('scroll', queueMobileChromeSync, { passive: true });
+  }
+
+  queueMobileChromeSync();
+})();
+
+(function () {
   function copyAlloc(btn) {
     // Encontra o widget cinza (o container da distribuição rápida)
     const container = btn.closest('.bg-slate-50\\/50');

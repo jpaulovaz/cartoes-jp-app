@@ -1,12 +1,12 @@
 {
   "name": "acerttapay-app",
-  "version": "4.0.0-beta.5",
+  "version": "4.0.0-beta.6",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
-    "test": "node --test tests/characterization/phase0b.test.js tests/characterization/phase1a.test.js tests/characterization/phase1b.test.js tests/characterization/phase2.test.js tests/characterization/phase3a.test.js tests/characterization/phase3b.test.js tests/characterization/phase4a.test.js tests/characterization/phase4b.test.js tests/characterization/phase5a.test.js tests/characterization/phase5b.test.js tests/characterization/phase6.test.js tests/characterization/ui-v4-beta1.test.js tests/characterization/ui-v4-beta2.test.js tests/characterization/ui-v4-beta3.test.js tests/characterization/ui-v4-beta4.test.js tests/characterization/ui-v4-beta5.test.js",
+    "test": "node --test tests/characterization/phase0b.test.js tests/characterization/phase1a.test.js tests/characterization/phase1b.test.js tests/characterization/phase2.test.js tests/characterization/phase3a.test.js tests/characterization/phase3b.test.js tests/characterization/phase4a.test.js tests/characterization/phase4b.test.js tests/characterization/phase5a.test.js tests/characterization/phase5b.test.js tests/characterization/phase6.test.js tests/characterization/ui-v4-beta1.test.js tests/characterization/ui-v4-beta2.test.js tests/characterization/ui-v4-beta3.test.js tests/characterization/ui-v4-beta4.test.js tests/characterization/ui-v4-beta5.test.js tests/characterization/ui-v4-beta6.test.js",
     "verify:refactor": "node scripts/verify-refactor.js"
   },
   "dependencies": {

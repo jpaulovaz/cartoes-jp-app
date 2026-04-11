@@ -9287,3 +9287,262 @@ html[data-op-ui="v4"] .op-lock-screen-v4 .op-pin-key {
     gap: 0.82rem;
   }
 }
+
+
+/* UI v4 beta 6 - Mobile, PWA e iOS polish */
+html[data-op-ui="v4"] {
+  --op-topbar-height: 96px;
+  --op-bottom-nav-height: 88px;
+  --op-mobile-bottom-clearance: calc(var(--op-bottom-nav-height) + var(--op-bottom-safe) + 0.75rem);
+}
+
+html[data-op-ui="v4"] body.op-ui-v4-beta6 {
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: rgba(37, 99, 235, 0.18);
+}
+
+html[data-op-ui="v4"] body.op-ui-v4-beta6.op-touch-ui {
+  touch-action: manipulation;
+}
+
+html[data-op-ui="v4"] [data-op-topbar] {
+  scroll-margin-top: calc(var(--op-top-safe) + 0.5rem);
+}
+
+html[data-op-ui="v4"] [data-op-main-shell] {
+  scroll-padding-top: calc(var(--op-topbar-height) + 0.75rem);
+  scroll-padding-bottom: calc(var(--op-bottom-nav-height) + var(--op-bottom-safe) + 0.9rem);
+}
+
+html[data-op-ui="v4"] [data-op-mobile-safe-area="bottom-nav"] {
+  padding-bottom: calc(var(--op-bottom-nav-height) + var(--op-bottom-safe) + 1rem);
+}
+
+html[data-op-ui="v4"] [data-op-hero-shell] {
+  scroll-margin-top: calc(var(--op-topbar-height) + 0.75rem);
+}
+
+html[data-op-ui="v4"] [data-op-hero-actions],
+html[data-op-ui="v4"] .op-page-hero__actions {
+  -webkit-overflow-scrolling: touch;
+}
+
+html[data-op-ui="v4"] :is(input, select, textarea, [contenteditable="true"]) {
+  scroll-margin-top: calc(var(--op-topbar-height) + 1rem);
+  scroll-margin-bottom: calc(var(--op-bottom-nav-height) + var(--op-bottom-safe) + 1rem);
+}
+
+html[data-op-ui="v4"] [data-dialog-surface],
+html[data-op-ui="v4"] .op-import-review-modal,
+html[data-op-ui="v4"] .op-manual-modal__scroll {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+html[data-op-ui="v4"] body.op-has-focused-field [data-op-bottom-nav] {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(calc(100% + var(--op-bottom-safe) + 1rem));
+}
+
+html[data-op-ui="v4"] body.op-has-focused-field [data-op-main-shell] {
+  scroll-padding-bottom: 1.25rem;
+}
+
+html[data-op-ui="v4"].op-standalone .op-topbar-shell {
+  margin-top: max(0.12rem, calc(var(--op-top-safe) * 0.18));
+}
+
+html[data-op-ui="v4"].op-standalone .op-bottom-nav {
+  padding-bottom: max(0.1rem, calc(var(--op-bottom-safe) * 0.2));
+}
+
+html[data-op-ui="v4"].op-ios-standalone .op-bottom-nav__surface {
+  backdrop-filter: blur(24px) saturate(1.25);
+  box-shadow: 0 24px 50px rgba(15, 23, 42, 0.18);
+}
+
+html.dark[data-op-ui="v4"].op-ios-standalone .op-bottom-nav__surface {
+  box-shadow: 0 28px 64px rgba(2, 6, 23, 0.46);
+}
+
+html[data-op-ui="v4"].op-ios-standalone .mobile-top-chrome-fix {
+  opacity: 0.98;
+}
+
+@media (max-width: 767px) {
+  html[data-op-ui="v4"] [data-op-topbar] {
+    padding-left: max(0.75rem, calc(0.75rem + var(--op-left-safe)));
+    padding-right: max(0.75rem, calc(0.75rem + var(--op-right-safe)));
+  }
+
+  html[data-op-ui="v4"] [data-op-main-shell] {
+    padding-top: 0.95rem;
+    padding-left: max(0.9rem, calc(0.9rem + var(--op-left-safe) * 0.35));
+    padding-right: max(0.9rem, calc(0.9rem + var(--op-right-safe) * 0.35));
+    padding-bottom: calc(var(--op-bottom-nav-height) + var(--op-bottom-safe) + 1rem);
+  }
+
+  html[data-op-ui="v4"] .op-topbar-shell {
+    border-radius: 24px;
+    padding: 0.72rem 0.84rem;
+    box-shadow: 0 18px 34px rgba(15, 23, 42, 0.14);
+  }
+
+  html[data-op-ui="v4"] .op-mobile-topbar-row {
+    gap: 0.72rem;
+  }
+
+  html[data-op-ui="v4"] .op-mobile-brand-card {
+    min-height: 3.55rem;
+    border-radius: 1.35rem;
+    padding: 0.72rem 0.82rem;
+  }
+
+  html[data-op-ui="v4"] .op-mobile-brand-card > img,
+  html[data-op-ui="v4"] .op-mobile-brand-card .h-12.w-12 {
+    width: 2.7rem;
+    height: 2.7rem;
+  }
+
+  html[data-op-ui="v4"] .op-utility-btn,
+  html[data-op-ui="v4"] .op-btn,
+  html[data-op-ui="v4"] .op-nav-link,
+  html[data-op-ui="v4"] .op-chip-nav__item {
+    min-height: 2.9rem;
+  }
+
+  html[data-op-ui="v4"] .op-screen--summary .op-page-hero,
+  html[data-op-ui="v4"] .op-screen--analytics .op-page-hero,
+  html[data-op-ui="v4"] .op-screen--txn .op-page-hero,
+  html[data-op-ui="v4"] .op-screen--detalhamento .op-page-hero {
+    border-radius: 24px;
+    padding: 1rem 0.95rem;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 250, 252, 0.94));
+    box-shadow: 0 20px 42px rgba(15, 23, 42, 0.08);
+  }
+
+  html.dark[data-op-ui="v4"] .op-screen--summary .op-page-hero,
+  html.dark[data-op-ui="v4"] .op-screen--analytics .op-page-hero,
+  html.dark[data-op-ui="v4"] .op-screen--txn .op-page-hero,
+  html.dark[data-op-ui="v4"] .op-screen--detalhamento .op-page-hero {
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.92));
+    box-shadow: 0 24px 54px rgba(2, 6, 23, 0.4);
+  }
+
+  html[data-op-ui="v4"] [data-op-hero-actions],
+  html[data-op-ui="v4"] .op-page-hero__actions,
+  html[data-op-ui="v4"] .op-page-hero__actions--compact {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: visible;
+    gap: 0.65rem;
+    margin-inline: -0.1rem;
+    padding-inline: 0.1rem;
+    padding-bottom: 0.25rem;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  html[data-op-ui="v4"] [data-op-hero-actions]::-webkit-scrollbar,
+  html[data-op-ui="v4"] .op-page-hero__actions::-webkit-scrollbar,
+  html[data-op-ui="v4"] .op-page-hero__actions--compact::-webkit-scrollbar {
+    display: none;
+  }
+
+  html[data-op-ui="v4"] [data-op-hero-actions] > *,
+  html[data-op-ui="v4"] .op-page-hero__actions > *,
+  html[data-op-ui="v4"] .op-page-hero__actions--compact > * {
+    flex: 0 0 auto;
+    min-width: max-content;
+    scroll-snap-align: start;
+  }
+
+  html[data-op-ui="v4"] .op-chip-nav {
+    scroll-snap-type: x proximity;
+  }
+
+  html[data-op-ui="v4"] .op-chip-nav__item {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  html[data-op-ui="v4"] .op-bottom-nav {
+    left: max(0.45rem, var(--op-left-safe));
+    right: max(0.45rem, var(--op-right-safe));
+    bottom: max(0.35rem, var(--op-bottom-safe));
+  }
+
+  html[data-op-ui="v4"] .op-bottom-nav__inner {
+    min-height: calc(4.7rem + var(--op-bottom-safe));
+    padding: 0.42rem 0.32rem calc(0.58rem + var(--op-bottom-safe));
+    gap: 0.12rem;
+    border-radius: 1.6rem;
+  }
+
+  html[data-op-ui="v4"] .op-bottom-nav__link {
+    min-height: 3.35rem;
+    border-radius: 1.15rem;
+    padding: 0.48rem 0.35rem;
+  }
+
+  html[data-op-ui="v4"] .op-bottom-nav__icon {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  html[data-op-ui="v4"] .op-bottom-nav__label {
+    font-size: 0.69rem;
+    letter-spacing: 0.01em;
+  }
+
+  html[data-op-ui="v4"] .op-surface-card,
+  html[data-op-ui="v4"] .op-form-card,
+  html[data-op-ui="v4"] .op-auth-card,
+  html[data-op-ui="v4"] .op-doc-card,
+  html[data-op-ui="v4"] .op-table-shell,
+  html[data-op-ui="v4"] .op-wallet-card,
+  html[data-op-ui="v4"] .op-admin-sidebar-card,
+  html[data-op-ui="v4"] .op-import-review-modal,
+  html[data-op-ui="v4"] [data-dialog-surface] {
+    border-radius: 20px;
+  }
+
+  html[data-op-ui="v4"] [data-dialog-surface],
+  html[data-op-ui="v4"] .op-import-review-modal {
+    max-height: calc(var(--op-visual-viewport-height) - max(1rem, calc(var(--op-top-safe) + 0.55rem)) - calc(var(--op-bottom-safe) + 0.8rem));
+  }
+
+  html[data-op-ui="v4"] .op-manual-modal__scroll {
+    padding-bottom: calc(1rem + var(--op-bottom-safe));
+  }
+}
+
+@media (max-width: 767px) and (orientation: landscape) {
+  html[data-op-ui="v4"] .op-bottom-nav__label {
+    display: none;
+  }
+
+  html[data-op-ui="v4"] .op-bottom-nav__inner {
+    min-height: calc(3.95rem + var(--op-bottom-safe));
+  }
+
+  html[data-op-ui="v4"] .op-bottom-nav__link {
+    min-height: 3rem;
+  }
+}
+
+@media (max-width: 390px) {
+  html[data-op-ui="v4"] .op-topbar-shell {
+    padding: 0.66rem 0.72rem;
+  }
+
+  html[data-op-ui="v4"] [data-op-main-shell] {
+    padding-left: max(0.78rem, calc(0.78rem + var(--op-left-safe) * 0.25));
+    padding-right: max(0.78rem, calc(0.78rem + var(--op-right-safe) * 0.25));
+  }
+
+  html[data-op-ui="v4"] .op-page-hero__title {
+    line-height: 1.05;
+  }
+}

@@ -17,7 +17,7 @@ test("package and shell mark the final 4.0 release", () => {
   assert.match(pkg.version, /^4\.0\.\d+$/);
   assert.match(pkg.scripts.test, /ui-v4-release\.test\.js/);
   assert.match(header, /op-ui-v4-release/);
-  assert.match(header, /data-op-ui=\"v4\"/);
+  assert.match(header, /data-op-ui="v4"/);
   assert.ok(verify.includes("4\\.0\\.(?:0(?:-beta\\.\\d+)?|[1-9]\\d*)$"));
 });
 
@@ -41,7 +41,7 @@ test("final release marks summary, analytics, txn and dashboard with the closing
   assert.match(txn, /op-txn-hero-v4/);
   assert.match(dashboard, /op-dashboard-screen-v4/);
   assert.match(dashboard, /op-dashboard-hero-v4/);
-  assert.match(dashboard, /pt-4 sm:pt-5 lg:pt-6 pb-8/);
+  assert.match(dashboard, /op-screen--detalhamento op-dashboard-screen-v4 max-w-7xl mx-auto/);
 });
 
 
@@ -61,9 +61,10 @@ test("shared partials and lock screen tolerate optional locals after release hot
 });
 
 
-test("post-release visual hotfixes keep key mobile/desktop CTAs readable", () => {
+test("post-release visual hotfixes keep key mobile and desktop CTAs readable", () => {
   const css = read("public/app.css");
   const month = read("views/month.ejs");
+  const summary = read("views/summary.ejs");
   const people = read("views/people.ejs");
   const settings = read("views/settings.ejs");
   const admin = read("views/admin.ejs");
@@ -74,6 +75,7 @@ test("post-release visual hotfixes keep key mobile/desktop CTAs readable", () =>
   assert.match(month, /op-month-row__hint/);
   assert.match(month, /op-month-table-shell overflow-x-auto/);
   assert.match(month, /max-w-\[104rem\]/);
+  assert.match(summary, /max-w-\[104rem\]/);
   assert.match(month, /md:min-w-\[94rem\]/);
   assert.match(month, /min-w-\[20rem\] xl:min-w-\[21rem\]/);
   assert.match(month, /Resumo e ações<\/th>/);

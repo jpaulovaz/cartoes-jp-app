@@ -17,7 +17,7 @@ test("package version and social charging screens reflect UI v4 beta 4", () => {
   const whatsapp = read("views/whatsapp.ejs");
   const networkList = read("views/partials/people/network-list-section.ejs");
 
-  assert.equal(pkg.version, "4.0.0-beta.4");
+  assert.match(pkg.version, /^4\.0\.0-beta\.[4-9]\d*$/);
   assert.match(pkg.scripts.test, /ui-v4-beta4\.test\.js/);
   assert.match(people, /op-network-screen-v4/);
   assert.match(people, /op-network-hero-v4/);

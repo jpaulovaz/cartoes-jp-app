@@ -9027,3 +9027,263 @@ html[data-op-ui="v4"] .share-summary-card--v4 .share-summary-card__item {
     padding-inline: 0.72rem;
   }
 }
+
+
+/* UI v4 beta 5 - Cadastros, importacao e backoffice */
+html[data-op-ui="v4"] .op-cards-screen-v4,
+html[data-op-ui="v4"] .op-import-screen-v4,
+html[data-op-ui="v4"] .op-settings-screen-v4,
+html[data-op-ui="v4"] .op-admin-screen-v4,
+html[data-op-ui="v4"] .op-admin-messages-screen-v4 {
+  gap: 1rem;
+}
+
+html[data-op-ui="v4"] .op-cards-hero-v4,
+html[data-op-ui="v4"] .op-import-hero-v4,
+html[data-op-ui="v4"] .op-settings-hero-v4,
+html[data-op-ui="v4"] .op-admin-hero-v4,
+html[data-op-ui="v4"] .op-admin-messages-hero-v4 {
+  border-radius: 26px;
+  padding: 1rem 1.06rem;
+  background:
+    radial-gradient(circle at top right, rgba(99, 102, 241, 0.16), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95));
+  box-shadow: 0 24px 54px rgba(15, 23, 42, 0.08);
+}
+
+html[data-op-ui="v4"] .op-cards-hero-v4 {
+  background:
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.15), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95));
+}
+
+html[data-op-ui="v4"] .op-import-hero-v4,
+html[data-op-ui="v4"] .op-admin-messages-hero-v4 {
+  background:
+    radial-gradient(circle at top right, rgba(139, 92, 246, 0.16), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95));
+}
+
+html[data-op-ui="v4"] .op-settings-hero-v4 {
+  background:
+    radial-gradient(circle at top right, rgba(245, 158, 11, 0.15), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95));
+}
+
+html[data-op-ui="v4"] .op-admin-hero-v4 {
+  background:
+    radial-gradient(circle at top right, rgba(15, 23, 42, 0.14), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95));
+}
+
+html.dark[data-op-ui="v4"] .op-cards-hero-v4,
+html.dark[data-op-ui="v4"] .op-import-hero-v4,
+html.dark[data-op-ui="v4"] .op-settings-hero-v4,
+html.dark[data-op-ui="v4"] .op-admin-hero-v4,
+html.dark[data-op-ui="v4"] .op-admin-messages-hero-v4 {
+  background:
+    radial-gradient(circle at top right, rgba(99, 102, 241, 0.22), transparent 30%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.91));
+  box-shadow: 0 26px 58px rgba(2, 6, 23, 0.42);
+}
+
+html.dark[data-op-ui="v4"] .op-cards-hero-v4 {
+  background:
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.24), transparent 30%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.91));
+}
+
+html.dark[data-op-ui="v4"] .op-import-hero-v4,
+html.dark[data-op-ui="v4"] .op-admin-messages-hero-v4 {
+  background:
+    radial-gradient(circle at top right, rgba(139, 92, 246, 0.24), transparent 30%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.91));
+}
+
+html.dark[data-op-ui="v4"] .op-settings-hero-v4 {
+  background:
+    radial-gradient(circle at top right, rgba(245, 158, 11, 0.22), transparent 30%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.91));
+}
+
+html.dark[data-op-ui="v4"] .op-admin-hero-v4 {
+  background:
+    radial-gradient(circle at top right, rgba(148, 163, 184, 0.18), transparent 30%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.91));
+}
+
+html[data-op-ui="v4"] .op-cards-shell,
+html[data-op-ui="v4"] .op-import-upload-card,
+html[data-op-ui="v4"] .op-import-side-card,
+html[data-op-ui="v4"] .op-import-review-banner,
+html[data-op-ui="v4"] .op-settings-profile-card,
+html[data-op-ui="v4"] .op-settings-photo-card,
+html[data-op-ui="v4"] .op-settings-alerts-card,
+html[data-op-ui="v4"] .op-settings-pix-card,
+html[data-op-ui="v4"] .op-settings-security-card,
+html[data-op-ui="v4"] .op-admin-sidebar-card,
+html[data-op-ui="v4"] .op-admin-section-card,
+html[data-op-ui="v4"] .op-admin-messages-screen-v4 > section,
+html[data-op-ui="v4"] .op-admin-messages-section-card,
+html[data-op-ui="v4"] .op-admin-messages-preview-card,
+html[data-op-ui="v4"] .op-import-review-modal,
+html[data-op-ui="v4"] .op-lock-screen-v4 .op-auth-card {
+  border-radius: 26px;
+  border-color: rgba(203, 213, 225, 0.9);
+  box-shadow: 0 20px 46px rgba(15, 23, 42, 0.08);
+}
+
+html.dark[data-op-ui="v4"] .op-cards-shell,
+html.dark[data-op-ui="v4"] .op-import-upload-card,
+html.dark[data-op-ui="v4"] .op-import-side-card,
+html.dark[data-op-ui="v4"] .op-import-review-banner,
+html.dark[data-op-ui="v4"] .op-settings-profile-card,
+html.dark[data-op-ui="v4"] .op-settings-photo-card,
+html.dark[data-op-ui="v4"] .op-settings-alerts-card,
+html.dark[data-op-ui="v4"] .op-settings-pix-card,
+html.dark[data-op-ui="v4"] .op-settings-security-card,
+html.dark[data-op-ui="v4"] .op-admin-sidebar-card,
+html.dark[data-op-ui="v4"] .op-admin-section-card,
+html.dark[data-op-ui="v4"] .op-admin-messages-screen-v4 > section,
+html.dark[data-op-ui="v4"] .op-admin-messages-section-card,
+html.dark[data-op-ui="v4"] .op-admin-messages-preview-card,
+html.dark[data-op-ui="v4"] .op-import-review-modal,
+html.dark[data-op-ui="v4"] .op-lock-screen-v4 .op-auth-card {
+  border-color: rgba(51, 65, 85, 0.92);
+  box-shadow: 0 24px 54px rgba(2, 6, 23, 0.36);
+}
+
+html[data-op-ui="v4"] .op-wallet-grid {
+  gap: 0.9rem;
+}
+
+html[data-op-ui="v4"] .op-wallet-card {
+  border-radius: 24px;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.06);
+}
+
+html[data-op-ui="v4"] .op-wallet-card:hover {
+  transform: translateY(-2px);
+}
+
+html[data-op-ui="v4"] .op-cards-form-shell,
+html[data-op-ui="v4"] .op-import-upload-card form,
+html[data-op-ui="v4"] .op-settings-screen-v4 form,
+html[data-op-ui="v4"] .op-admin-screen-v4 form,
+html[data-op-ui="v4"] .op-admin-messages-screen-v4 form {
+  gap: 0.95rem;
+}
+
+html[data-op-ui="v4"] .op-cards-screen-v4 input,
+html[data-op-ui="v4"] .op-cards-screen-v4 select,
+html[data-op-ui="v4"] .op-import-screen-v4 input,
+html[data-op-ui="v4"] .op-import-screen-v4 select,
+html[data-op-ui="v4"] .op-settings-screen-v4 input,
+html[data-op-ui="v4"] .op-settings-screen-v4 select,
+html[data-op-ui="v4"] .op-settings-screen-v4 textarea,
+html[data-op-ui="v4"] .op-admin-screen-v4 input,
+html[data-op-ui="v4"] .op-admin-screen-v4 select,
+html[data-op-ui="v4"] .op-admin-screen-v4 textarea,
+html[data-op-ui="v4"] .op-admin-messages-screen-v4 input,
+html[data-op-ui="v4"] .op-admin-messages-screen-v4 select,
+html[data-op-ui="v4"] .op-admin-messages-screen-v4 textarea {
+  min-height: 2.85rem;
+  border-radius: 18px;
+}
+
+html[data-op-ui="v4"] .op-import-review-banner,
+html[data-op-ui="v4"] .op-import-note-card,
+html[data-op-ui="v4"] .op-admin-messages-preview-card {
+  backdrop-filter: blur(14px);
+}
+
+html[data-op-ui="v4"] .op-settings-chip-nav .op-chip-nav__item {
+  min-height: 2.7rem;
+  border-radius: 999px;
+}
+
+html[data-op-ui="v4"] .op-settings-profile-shell,
+html[data-op-ui="v4"] .op-settings-security-shell,
+html[data-op-ui="v4"] .op-admin-layout {
+  gap: 1rem;
+}
+
+html[data-op-ui="v4"] .op-admin-sidebar-card {
+  border-radius: 24px;
+}
+
+html[data-op-ui="v4"] .op-admin-screen-v4 [data-admin-nav-link] {
+  border-radius: 18px;
+}
+
+html[data-op-ui="v4"] .op-admin-screen-v4 .badge,
+html[data-op-ui="v4"] .op-admin-messages-screen-v4 .badge,
+html[data-op-ui="v4"] .op-import-screen-v4 .badge,
+html[data-op-ui="v4"] .op-cards-screen-v4 .badge {
+  border-radius: 999px;
+  padding: 0.4rem 0.75rem;
+}
+
+html[data-op-ui="v4"] .op-admin-messages-screen-v4 .op-inline-alert,
+html[data-op-ui="v4"] .op-admin-screen-v4 .op-inline-alert,
+html[data-op-ui="v4"] .op-import-screen-v4 .op-inline-alert {
+  border-radius: 22px;
+}
+
+html[data-op-ui="v4"] .op-import-review-modal {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94));
+}
+
+html.dark[data-op-ui="v4"] .op-import-review-modal {
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.92));
+}
+
+html[data-op-ui="v4"] .op-lock-screen-v4 .op-lock-profile,
+html[data-op-ui="v4"] .op-lock-screen-v4 .op-lock-intro,
+html[data-op-ui="v4"] .op-lock-screen-v4 #lockGuardNotice {
+  border-radius: 22px;
+}
+
+html[data-op-ui="v4"] .op-lock-screen-v4 .op-lock-pin-input,
+html[data-op-ui="v4"] .op-lock-screen-v4 .op-pin-key,
+html[data-op-ui="v4"] .op-lock-screen-v4 #unlockSubmit {
+  border-radius: 20px;
+}
+
+html[data-op-ui="v4"] .op-lock-screen-v4 .op-pin-key {
+  min-height: 3.2rem;
+}
+
+@media (max-width: 767px) {
+  html[data-op-ui="v4"] .op-cards-hero-v4,
+  html[data-op-ui="v4"] .op-import-hero-v4,
+  html[data-op-ui="v4"] .op-settings-hero-v4,
+  html[data-op-ui="v4"] .op-admin-hero-v4,
+  html[data-op-ui="v4"] .op-admin-messages-hero-v4,
+  html[data-op-ui="v4"] .op-cards-shell,
+  html[data-op-ui="v4"] .op-import-upload-card,
+  html[data-op-ui="v4"] .op-import-side-card,
+  html[data-op-ui="v4"] .op-import-review-banner,
+  html[data-op-ui="v4"] .op-settings-profile-card,
+  html[data-op-ui="v4"] .op-settings-photo-card,
+  html[data-op-ui="v4"] .op-settings-alerts-card,
+  html[data-op-ui="v4"] .op-settings-pix-card,
+  html[data-op-ui="v4"] .op-settings-security-card,
+  html[data-op-ui="v4"] .op-admin-sidebar-card,
+  html[data-op-ui="v4"] .op-admin-section-card,
+  html[data-op-ui="v4"] .op-admin-messages-section-card,
+  html[data-op-ui="v4"] .op-admin-messages-preview-card,
+  html[data-op-ui="v4"] .op-import-review-modal,
+  html[data-op-ui="v4"] .op-lock-screen-v4 .op-auth-card {
+    border-radius: 20px;
+  }
+
+  html[data-op-ui="v4"] .op-wallet-grid,
+  html[data-op-ui="v4"] .op-admin-layout,
+  html[data-op-ui="v4"] .op-settings-profile-shell,
+  html[data-op-ui="v4"] .op-settings-security-shell {
+    gap: 0.82rem;
+  }
+}

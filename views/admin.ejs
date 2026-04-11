@@ -165,8 +165,8 @@
   }
 %>
 
-<div class="max-w-[1500px] mx-auto space-y-6">
-  <section class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+<div class="op-page-shell op-admin-screen-v4 max-w-[1500px] mx-auto space-y-5 pb-24">
+  <section class="op-admin-hero-v4 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
     <div class="px-6 py-6 sm:px-8 flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
       <div class="min-w-0 max-w-4xl">
         <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Administração</span>
@@ -236,7 +236,7 @@
     </div>
   <% } %>
 
-  <div class="grid gap-6 xl:grid-cols-[290px,minmax(0,1fr)] xl:items-start">
+  <div class="op-admin-layout grid gap-6 xl:grid-cols-[290px,minmax(0,1fr)] xl:items-start">
     <aside class="self-start xl:sticky xl:top-32 xl:max-h-[calc(100vh-9rem)]">
       <%- include('partials/admin/sidebar', { navGroups, activeSectionKey, adminGuideUrl }) %>
     </aside>
@@ -245,7 +245,7 @@
       <section id="admin-section-overview"
                data-admin-search-target
                data-admin-search="visao geral servicos email backup push google seguranca acessos resumo rapido"
-               class="op-surface-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
+               class="op-surface-card op-admin-section-card op-admin-overview-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
         <div class="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-700 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div class="max-w-3xl">
             <span class="text-xs font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Resumo da ópera</span>
@@ -351,7 +351,7 @@
             <section id="admin-section-<%= section.key %>"
                      data-admin-search-target
                      data-admin-search="<%= fullText %>"
-                     class="op-surface-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
+                     class="op-surface-card op-admin-section-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
               <div class="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-700 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="min-w-0 max-w-3xl">
                   <div class="flex flex-wrap items-center gap-2">

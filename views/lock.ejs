@@ -131,27 +131,30 @@
   </style>
 </head>
 <%
-  const pinState = appPinSecurity || {};
-  const pinGuard = appPinGuard || {};
+  const pinState = (typeof appPinSecurity !== 'undefined' && appPinSecurity) ? appPinSecurity : {};
+  const pinGuard = (typeof appPinGuard !== 'undefined' && appPinGuard) ? appPinGuard : {};
   const pinMinLength = Number(pinState.minLength || 4) || 4;
   const pinMaxLength = Number(pinState.maxLength || 6) || 6;
   const pinIdleLabel = pinState.idleLabel || '1 minuto';
   const pinIdleOptions = Array.isArray(pinState.idleOptions) ? pinState.idleOptions : [];
-  const showRecoveryPanel = !!reauthFresh;
+  const showRecoveryPanel = !!(typeof reauthFresh !== 'undefined' && reauthFresh);
   const guardRequiresReauth = !!pinGuard.requiresReauth;
   const guardCooldownActive = !!pinGuard.cooldownActive;
   const unlockTemporarilyDisabled = guardRequiresReauth || guardCooldownActive;
-  const recoveryMode = lockMode === 'recover' && showRecoveryPanel;
-  const safeNext = nextTarget || '/';
-  const displayName = (lockUser && lockUser.name) ? lockUser.name : 'Você';
-  const displayEmail = (lockUser && lockUser.email) ? lockUser.email : '';
-  const displayPhoto = (lockUser && lockUser.photo_url) ? lockUser.photo_url : '';
-  const flashType = flash && flash.type ? String(flash.type) : '';
-  const flashMessage = flash && flash.message ? String(flash.message) : '';
+  const currentLockMode = typeof lockMode !== 'undefined' ? lockMode : '';
+  const recoveryMode = currentLockMode === 'recover' && showRecoveryPanel;
+  const safeNext = (typeof nextTarget !== 'undefined' && nextTarget) ? nextTarget : '/';
+  const currentLockUser = (typeof lockUser !== 'undefined' && lockUser) ? lockUser : null;
+  const displayName = (currentLockUser && currentLockUser.name) ? currentLockUser.name : 'Você';
+  const displayEmail = (currentLockUser && currentLockUser.email) ? currentLockUser.email : '';
+  const displayPhoto = (currentLockUser && currentLockUser.photo_url) ? currentLockUser.photo_url : '';
+  const currentFlash = (typeof flash !== 'undefined' && flash) ? flash : null;
+  const flashType = currentFlash && currentFlash.type ? String(currentFlash.type) : '';
+  const flashMessage = currentFlash && currentFlash.message ? String(currentFlash.message) : '';
   const guardNoticeTone = pinGuard.noticeTone || 'neutral';
   const guardNoticeTitle = pinGuard.noticeTitle || '';
   const guardNoticeMessage = pinGuard.noticeMessage || '';
-  const passkeyLock = appPasskeyLock || {};
+  const passkeyLock = (typeof appPasskeyLock !== 'undefined' && appPasskeyLock) ? appPasskeyLock : {};
   const passkeyUnlockEnabled = !!passkeyLock.enabled;
 %>
 <body class="op-auth-page op-lock-screen-v4 min-h-screen font-sans">

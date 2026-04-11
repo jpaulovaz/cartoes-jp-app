@@ -1,9 +1,14 @@
 <!doctype html>
+<%
+  const safePageTitle = (typeof title !== 'undefined' && title)
+    ? title
+    : ((typeof nomeTitular !== 'undefined' && nomeTitular) ? String(nomeTitular).toUpperCase() : 'AcerttaPay');
+%>
 <html lang="pt-BR" class="light" data-op-ui="v4">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title><%= typeof title !== 'undefined' ? title : nomeTitular.toUpperCase() %></title>
+  <title><%= safePageTitle %></title>
 
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#020617">
@@ -142,16 +147,25 @@
 <%
   const appPinContext = (typeof appPin !== 'undefined' && appPin) ? appPin : {};
   const appPinScreen = (typeof currentPath !== 'undefined' && currentPath === '/lock') ? 'lock' : 'app';
+  const safeUser = (typeof user !== 'undefined' && user) ? user : null;
+  const safePushNotificationsEnabled = typeof pushNotificationsEnabled !== 'undefined' ? !!pushNotificationsEnabled : false;
+  const safeCanImport = typeof canImport !== 'undefined' ? canImport : 1;
+  const safeNomeTitular = typeof nomeTitular === 'string' ? nomeTitular : '';
+  const safeUnreadNotificationCount = typeof unreadNotificationCount !== 'undefined' ? unreadNotificationCount : 0;
+  const safeReadNotificationCount = typeof readNotificationCount !== 'undefined' ? readNotificationCount : 0;
+  const safeRecentNotifications = (typeof recentNotifications !== 'undefined' && Array.isArray(recentNotifications)) ? recentNotifications : [];
+  const safeUserAvatar = (typeof userAvatar !== 'undefined' && userAvatar) ? userAvatar : null;
+  const safeFlash = (typeof flash !== 'undefined' && flash) ? flash : null;
 %>
 <body class="op-shell op-shell-v4 op-ui-v4-beta6 op-ui-v4-release text-slate-800 dark:text-slate-200 antialiased selection:bg-blue-300 selection:text-blue-900 flex min-h-screen flex-col font-sans"
       data-push-public-key="<%= typeof pushPublicKey !== 'undefined' ? pushPublicKey : '' %>"
-      data-push-configured="<%= pushNotificationsEnabled ? '1' : '0' %>"
+      data-push-configured="<%= safePushNotificationsEnabled ? '1' : '0' %>"
       data-app-pin-enabled="<%= appPinContext.enabled ? '1' : '0' %>"
       data-app-pin-idle-seconds="<%= Number(appPinContext.idleSeconds || 0) %>"
       data-app-pin-lock-url="/lock/engage"
       data-app-pin-touch-url="/lock/touch"
       data-app-pin-screen="<%= appPinScreen %>"
-      data-presence-enabled="<%= user ? '1' : '0' %>"
+      data-presence-enabled="<%= safeUser ? '1' : '0' %>"
       data-presence-touch-url="/presence/touch">
   <div class="mobile-top-chrome-fix" aria-hidden="true"></div>
 
@@ -159,16 +173,16 @@
      const mNav = dNav.getMonth() + 1;
      const yNav = dNav.getFullYear();
      const defaultDashboardHref = (typeof dashboardHref !== 'undefined' && dashboardHref) ? dashboardHref : `/detalhamento/${yNav}/${mNav}`;
-     const isUserAdmin = !!(user && user.role === 'admin');
-     const canImportData = Number((user && user.can_import) ?? (typeof canImport !== 'undefined' ? canImport : 1)) !== 0;
-     const ownerDisplayNameRaw = ((nomeTitular || '').replace(/^Detalhamento\s+/i, '').trim());
-     const ownerDisplayName = ownerDisplayNameRaw && ownerDisplayNameRaw.toLowerCase() !== 'contas' ? ownerDisplayNameRaw : ((user && user.name) ? user.name : 'Você');
+     const isUserAdmin = !!(safeUser && safeUser.role === 'admin');
+     const canImportData = Number((safeUser && safeUser.can_import) ?? safeCanImport) !== 0;
+     const ownerDisplayNameRaw = (safeNomeTitular.replace(/^Detalhamento\s+/i, '').trim());
+     const ownerDisplayName = ownerDisplayNameRaw && ownerDisplayNameRaw.toLowerCase() !== 'contas' ? ownerDisplayNameRaw : ((safeUser && safeUser.name) ? safeUser.name : 'Você');
      const ownerNameParts = ownerDisplayName.split(/\s+/).filter(Boolean);
      const ownerShortName = ownerNameParts.slice(0, 2).join(' ') || 'Você';
-     const unreadNotifications = Number(typeof unreadNotificationCount !== 'undefined' ? unreadNotificationCount : 0) || 0;
-     const readNotifications = Number(typeof readNotificationCount !== 'undefined' ? readNotificationCount : 0) || 0;
-     const recentNotificationItems = Array.isArray(recentNotifications) ? recentNotifications : [];
-     const userPhotoUrl = (typeof userAvatar !== 'undefined' && userAvatar && userAvatar.photo_url) ? String(userAvatar.photo_url) : '';
+     const unreadNotifications = Number(safeUnreadNotificationCount) || 0;
+     const readNotifications = Number(safeReadNotificationCount) || 0;
+     const recentNotificationItems = safeRecentNotifications;
+     const userPhotoUrl = (safeUserAvatar && safeUserAvatar.photo_url) ? String(safeUserAvatar.photo_url) : '';
      const hasUserPhoto = !!userPhotoUrl;
   %>
 
@@ -235,7 +249,7 @@
             <svg class="h-5 w-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
             <svg class="h-5 w-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
           </button>
-          <% if (user) { %>
+          <% if (safeUser) { %>
             <a href="/logout" class="op-utility-btn" title="Sair" aria-label="Sair do app">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
             </a>
@@ -264,7 +278,7 @@
           <button type="button" class="op-utility-btn shrink-0" data-mobile-appearance-open title="Ajustes visuais" aria-label="Abrir ajustes visuais">
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.983 5.5c.345-1.414 2.362-1.414 2.707 0a1.392 1.392 0 001.98.937c1.277-.711 2.705.717 1.994 1.994a1.392 1.392 0 00.937 1.98c1.414.345 1.414 2.362 0 2.707a1.392 1.392 0 00-.937 1.98c.711 1.277-.717 2.705-1.994 1.994a1.392 1.392 0 00-1.98.937c-.345 1.414-2.362 1.414-2.707 0a1.392 1.392 0 00-1.98-.937c-1.277.711-2.705-.717-1.994-1.994a1.392 1.392 0 00-.937-1.98c-1.414-.345-1.414-2.362 0-2.707a1.392 1.392 0 00.937-1.98c-.711-1.277.717-2.705 1.994-1.994.861.479 1.92-.01 1.98-.937z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
           </button>
-          <% if (user) { %>
+          <% if (safeUser) { %>
             <a href="/logout" class="op-utility-btn shrink-0" title="Sair" aria-label="Sair do app">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
             </a>
@@ -460,16 +474,16 @@
   </div>
 
   <main class="op-app-main mx-auto w-full max-w-[1640px] flex-grow px-3 py-5 md:px-4 md:py-8 lg:px-6" data-op-main-shell style="padding-bottom: var(--op-mobile-bottom-clearance); scroll-padding-bottom: var(--op-mobile-bottom-clearance);">
-    <% if (flash && flash.message) {
-         const flashClasses = flash.type === 'success'
+    <% if (safeFlash && safeFlash.message) {
+         const flashClasses = safeFlash.type === 'success'
            ? 'border-emerald-200 bg-emerald-50/90 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-200'
-           : flash.type === 'error'
+           : safeFlash.type === 'error'
              ? 'border-red-200 bg-red-50/90 text-red-800 dark:border-red-800 dark:bg-red-900/25 dark:text-red-200'
              : 'border-blue-200 bg-blue-50/90 text-blue-800 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-200';
     %>
       <div class="mb-5 op-fade-up">
         <div class="rounded-[22px] border px-4 py-3 text-sm font-semibold shadow-soft backdrop-blur-sm <%= flashClasses %>">
-          <%= flash.message %>
+          <%= safeFlash.message %>
         </div>
       </div>
     <% } %>

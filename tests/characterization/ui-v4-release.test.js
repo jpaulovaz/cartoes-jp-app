@@ -42,3 +42,19 @@ test("final release marks summary, analytics, txn and dashboard with the closing
   assert.match(dashboard, /op-dashboard-screen-v4/);
   assert.match(dashboard, /op-dashboard-hero-v4/);
 });
+
+
+test("shared partials and lock screen tolerate optional locals after release hotfixes", () => {
+  const header = read("views/partials/header.ejs");
+  const footer = read("views/partials/footer.ejs");
+  const lock = read("views/lock.ejs");
+  const verify = read("scripts/verify-refactor.js");
+
+  assert.match(header, /safePushNotificationsEnabled/);
+  assert.match(header, /safeUser/);
+  assert.match(header, /safeFlash/);
+  assert.match(footer, /safeFooterUser/);
+  assert.match(lock, /currentFlash/);
+  assert.match(lock, /typeof appPinSecurity !== 'undefined'/);
+  assert.match(verify, /header\.ejs precisa blindar pushNotificationsEnabled ausente/);
+});

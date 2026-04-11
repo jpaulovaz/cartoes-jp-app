@@ -86,6 +86,15 @@ ensure(summaryView.includes('op-summary-screen-v4'), 'summary.ejs precisa marcar
 ensure(analyticsView.includes('op-analytics-screen-v4'), 'analytics.ejs precisa marcar a tela final v4');
 ensure(txnView.includes('op-txn-screen-v4'), 'txn.ejs precisa marcar a tela final v4');
 ensure(dashboardView.includes('op-dashboard-screen-v4'), 'detalhamento.ejs precisa marcar a tela final v4');
+const headerPartial = read('views/partials/header.ejs');
+const footerPartial = read('views/partials/footer.ejs');
+const lockView = read('views/lock.ejs');
+ensure(headerPartial.includes('safePushNotificationsEnabled'), 'header.ejs precisa blindar pushNotificationsEnabled ausente');
+ensure(headerPartial.includes('safeUser'), 'header.ejs precisa blindar user ausente');
+ensure(headerPartial.includes('safeFlash'), 'header.ejs precisa blindar flash ausente');
+ensure(footerPartial.includes('safeFooterUser'), 'footer.ejs precisa blindar user ausente');
+ensure(lockView.includes('currentFlash') && lockView.includes('typeof appPinSecurity'), 'lock.ejs precisa blindar locals opcionais do PIN lock');
+
 ['registerAuthRoutes', 'registerSecurityRoutes', 'registerCardsRoutes', 'registerFinancesRoutes', 'registerImportRoutes', 'registerSummaryRoutes', 'registerSharedDebtsRoutes', 'registerPeopleRoutes', 'registerSocialShareRoutes'].forEach((token) => {
   ensure(runtime.includes(token), `server.runtime.js precisa registrar ${token}`);
 });

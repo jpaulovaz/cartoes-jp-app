@@ -3,9 +3,11 @@
   <% const dFoot = new Date();
      const mFoot = dFoot.getMonth() + 1;
      const yFoot = dFoot.getFullYear();
+     const safeFooterUser = (typeof user !== 'undefined' && user) ? user : null;
+     const safeFooterCanImport = typeof canImport !== 'undefined' ? canImport : 1;
      const bottomDashboardHref = (typeof dashboardHref !== 'undefined' && dashboardHref) ? dashboardHref : `/detalhamento/${yFoot}/${mFoot}`;
-     const bottomCanImportData = Number((user && user.can_import) ?? (typeof canImport !== 'undefined' ? canImport : 1)) !== 0;
-     const bottomIsAdmin = !!(user && user.role === 'admin');
+     const bottomCanImportData = Number((safeFooterUser && safeFooterUser.can_import) ?? safeFooterCanImport) !== 0;
+     const bottomIsAdmin = !!(safeFooterUser && safeFooterUser.role === 'admin');
   %>
 
   <nav class="op-bottom-nav md:hidden" aria-label="Navegação principal" data-op-bottom-nav>

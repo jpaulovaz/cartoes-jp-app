@@ -94,6 +94,9 @@ ensure(headerPartial.includes('safeUser'), 'header.ejs precisa blindar user ause
 ensure(headerPartial.includes('safeFlash'), 'header.ejs precisa blindar flash ausente');
 ensure(footerPartial.includes('safeFooterUser'), 'footer.ejs precisa blindar user ausente');
 ensure(lockView.includes('currentFlash') && lockView.includes('typeof appPinSecurity'), 'lock.ejs precisa blindar locals opcionais do PIN lock');
+ensure(peopleView.includes('op-chip-nav__item--add-person'), 'people.ejs precisa marcar o CTA de adicionar alguém para o ajuste visual pós-release');
+ensure(read('views/month.ejs').includes('op-month-import-btn') && read('views/month.ejs').includes('op-month-export-btn'), 'month.ejs precisa marcar Importar/Exportar para o ajuste visual pós-release');
+ensure(read('public/app.css').includes('.op-chip-nav__item--add-person') && read('public/app.css').includes('.op-month-import-btn') && read('public/app.css').includes('.op-detalhamento-hero__action-row--month'), 'app.css precisa conter os ajustes visuais pós-release de people, month e detalhamento');
 
 ['registerAuthRoutes', 'registerSecurityRoutes', 'registerCardsRoutes', 'registerFinancesRoutes', 'registerImportRoutes', 'registerSummaryRoutes', 'registerSharedDebtsRoutes', 'registerPeopleRoutes', 'registerSocialShareRoutes'].forEach((token) => {
   ensure(runtime.includes(token), `server.runtime.js precisa registrar ${token}`);

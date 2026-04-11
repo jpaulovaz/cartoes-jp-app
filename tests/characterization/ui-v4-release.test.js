@@ -58,3 +58,17 @@ test("shared partials and lock screen tolerate optional locals after release hot
   assert.match(lock, /typeof appPinSecurity !== 'undefined'/);
   assert.match(verify, /header\.ejs precisa blindar pushNotificationsEnabled ausente/);
 });
+
+
+test("post-release visual hotfixes keep key mobile/desktop CTAs readable", () => {
+  const css = read("public/app.css");
+  const month = read("views/month.ejs");
+  const people = read("views/people.ejs");
+
+  assert.match(month, /op-month-import-btn/);
+  assert.match(month, /op-month-export-btn/);
+  assert.match(people, /op-chip-nav__item--add-person/);
+  assert.match(css, /op-month-import-btn/);
+  assert.match(css, /op-chip-nav__item--add-person/);
+  assert.match(css, /op-dashboard-screen-v4 \.op-detalhamento-hero__action-row--month/);
+});

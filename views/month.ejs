@@ -88,7 +88,7 @@
 
           <% if (canImport) { %>
             <a href="/import"
-              class="op-btn op-btn-primary op-btn--compact whitespace-nowrap">
+              class="op-btn op-btn-primary op-btn--compact op-month-import-btn whitespace-nowrap">
               <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
               </svg>
@@ -96,7 +96,7 @@
           <% } %>
 
           <a href="/month/<%= year %>/<%= month %>/export.csv"
-            class="op-btn op-btn-export op-btn--compact whitespace-nowrap">
+            class="op-btn op-btn-export op-btn--compact op-month-export-btn whitespace-nowrap">
             <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v10m0 0l-4-4m4 4l4-4M5 19h14"></path>
             </svg>

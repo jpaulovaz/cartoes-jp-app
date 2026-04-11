@@ -9946,31 +9946,35 @@ html[data-op-ui="v4"] .op-summary-cash-card .op-summary-kpi-note {
 }
 
 html[data-op-ui="v4"] .op-debts-kpi-strip--hero {
-  width: min(100%, 37rem);
+  width: min(100%, 31.5rem);
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-self: stretch;
+  align-self: flex-end;
+  margin-top: auto;
 }
 
 html[data-op-ui="v4"] .op-debts-kpi-strip--hero .op-kpi-card {
-  min-height: 100%;
-  padding: 0.82rem 0.74rem 0.86rem;
+  display: flex;
+  min-height: 8.35rem;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.78rem 0.72rem 0.8rem;
 }
 
 html[data-op-ui="v4"] .op-debts-kpi-strip--hero .op-kpi-card__label {
-  font-size: 0.64rem;
-  letter-spacing: 0.05em;
+  font-size: 0.61rem;
+  letter-spacing: 0.045em;
 }
 
 html[data-op-ui="v4"] .op-debts-kpi-strip--hero .op-kpi-card__value {
-  margin-top: 0.38rem;
-  font-size: clamp(1.16rem, 0.72rem + 0.9vw, 1.64rem);
+  margin-top: 0.26rem;
+  font-size: clamp(1.08rem, 0.78rem + 0.52vw, 1.46rem);
   line-height: 1.02;
 }
 
 html[data-op-ui="v4"] .op-debts-kpi-strip--hero .op-kpi-card__hint {
-  margin-top: 0.28rem;
-  font-size: 0.7rem;
-  line-height: 1.28;
+  margin-top: 0.2rem;
+  font-size: 0.66rem;
+  line-height: 1.22;
 }
 
 @media (max-width: 767px) {
@@ -9983,5 +9987,17 @@ html[data-op-ui="v4"] .op-debts-kpi-strip--hero .op-kpi-card__hint {
   html[data-op-ui="v4"] .op-debts-kpi-strip--hero {
     width: 100%;
     grid-template-columns: 1fr;
+    margin-top: 0.5rem;
+  }
+
+  html[data-op-ui="v4"] .op-debts-kpi-strip--hero .op-kpi-card {
+    min-height: 0;
+  }
+}
+
+/* UI v4 4.0.9 - shared-debts hero KPI compact desktop alignment */
+@media (min-width: 1024px) {
+  html[data-op-ui="v4"] .op-debts-kpi-strip--hero {
+    max-width: 31.5rem;
   }
 }

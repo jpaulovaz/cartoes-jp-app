@@ -1,7 +1,9 @@
 <%
-  const navItems = Array.isArray(items) ? items : [];
-  const navShellClasses = ['op-chip-nav-shell', 'mb-5', shellClass || ''].filter(Boolean).join(' ');
+  const rawItems = typeof items === 'undefined' ? [] : items;
+  const navItems = Array.isArray(rawItems) ? rawItems : [];
+  const navShellClass = typeof shellClass === 'string' ? shellClass : '';
   const navLabel = typeof ariaLabel === 'string' && ariaLabel.trim() ? ariaLabel.trim() : 'Atalhos da página';
+  const navShellClasses = ['op-chip-nav-shell', 'mb-5', navShellClass].filter(Boolean).join(' ');
   function buildItemClasses(item) {
     const base = 'op-chip-nav__item';
     const custom = item && item.classes ? String(item.classes).trim() : '';

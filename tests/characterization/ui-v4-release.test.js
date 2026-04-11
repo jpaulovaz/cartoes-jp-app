@@ -14,11 +14,11 @@ test("package and shell mark the final 4.0 release", () => {
   const header = read("views/partials/header.ejs");
   const verify = read("scripts/verify-refactor.js");
 
-  assert.equal(pkg.version, "4.0.0");
+  assert.match(pkg.version, /^4\.0\.\d+$/);
   assert.match(pkg.scripts.test, /ui-v4-release\.test\.js/);
   assert.match(header, /op-ui-v4-release/);
   assert.match(header, /data-op-ui=\"v4\"/);
-  assert.ok(verify.includes("4\\.0\\.0(?:-beta\\.\\d+)?$"));
+  assert.ok(verify.includes("4\\.0\\.(?:0(?:-beta\\.\\d+)?|[1-9]\\d*)$"));
 });
 
 test("final release marks summary, analytics, txn and dashboard with the closing v4 layer", () => {

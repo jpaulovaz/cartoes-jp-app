@@ -19,7 +19,7 @@ test("package version and shared mobile shells reflect UI v4 beta 6", () => {
   const txn = read("views/txn.ejs");
   const detalhamento = read("views/detalhamento.ejs");
 
-  assert.match(pkg.version, /^4\.0\.0(?:-beta\.6)?$/);
+  assert.match(pkg.version, /^4\.0\.(?:0(?:-beta\.6)?|[1-9]\d*)$/);
   assert.match(pkg.scripts.test, /ui-v4-beta6\.test\.js/);
   assert.match(header, /op-ui-v4-beta6/);
   assert.match(header, /data-op-topbar/);

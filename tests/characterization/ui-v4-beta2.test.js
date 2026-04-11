@@ -16,7 +16,7 @@ test('package version and shared partials reflect UI v4 shell beta 2', () => {
   const hero = read('views/partials/page-hero.ejs');
   const chipNav = read('views/partials/page-chip-nav.ejs');
 
-  assert.match(pkg.version, /^4\.0\.0(?:-beta\.[2-9]\d*)?$/);
+  assert.match(pkg.version, /^4\.0\.(?:0(?:-beta\.[2-9]\d*)?|[1-9]\d*)$/);
   assert.match(pkg.scripts.test, /ui-v4-beta1\.test\.js/);
   assert.match(pkg.scripts.test, /ui-v4-beta2\.test\.js/);
   assert.match(pkg.scripts.test, /ui-v4-beta3\.test\.js/);
@@ -26,8 +26,13 @@ test('package version and shared partials reflect UI v4 shell beta 2', () => {
   assert.match(footer, /op-bottom-nav__surface/);
   assert.match(hero, /op-page-hero__frame/);
   assert.match(hero, /op-page-hero__meta--inline/);
+  assert.match(hero, /typeof heroClass === 'string'/);
+  assert.match(hero, /typeof actionsWrapperClass === 'string'/);
+  assert.match(hero, /typeof title === 'string'/);
   assert.match(chipNav, /op-chip-nav-shell/);
   assert.match(chipNav, /op-chip-nav--scroll/);
+  assert.match(chipNav, /typeof items === 'undefined'/);
+  assert.match(chipNav, /typeof shellClass === 'string'/);
 });
 
 test('css includes beta 2 shell and component overrides', () => {

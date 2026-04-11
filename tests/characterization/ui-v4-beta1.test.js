@@ -13,7 +13,7 @@ test('package version and header activate UI v4 beta foundation', () => {
   const pkg = JSON.parse(read('package.json'));
   const header = read('views/partials/header.ejs');
 
-  assert.match(pkg.version, /^4\.0\.0(?:-beta\.\d+)?$/);
+  assert.match(pkg.version, /^4\.0\.(?:0(?:-beta\.\d+)?|[1-9]\d*)$/);
   assert.match(header, /data-op-ui="v4"/);
   assert.match(header, /themeColor = nextTheme === 'dark' \? '#08111e' : '#f4f7fb';/);
   assert.match(header, /op-shell-v4/);

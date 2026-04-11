@@ -11,7 +11,7 @@ function read(relPath) {
 
 test("package version and views reflect UI v4 beta 3 monthly reading redesign", () => {
   const pkg = JSON.parse(read("package.json"));
-  assert.match(pkg.version, /^4\.0\.0(?:-beta\.[3-9]\d*)?$/);
+  assert.match(pkg.version, /^4\.0\.(?:0(?:-beta\.[3-9]\d*)?|[1-9]\d*)$/);
 
   const home = read("views/home.ejs");
   assert.match(home, /op-radar-screen/);

@@ -97,6 +97,12 @@ ensure(lockView.includes('currentFlash') && lockView.includes('typeof appPinSecu
 ensure(peopleView.includes('op-chip-nav__item--add-person'), 'people.ejs precisa marcar o CTA de adicionar alguém para o ajuste visual pós-release');
 ensure(read('views/month.ejs').includes('op-month-import-btn') && read('views/month.ejs').includes('op-month-export-btn'), 'month.ejs precisa marcar Importar/Exportar para o ajuste visual pós-release');
 ensure(read('public/app.css').includes('.op-chip-nav__item--add-person') && read('public/app.css').includes('.op-month-import-btn') && read('public/app.css').includes('.op-detalhamento-hero__action-row--month'), 'app.css precisa conter os ajustes visuais pós-release de people, month e detalhamento');
+ensure(peopleView.includes("shellClass: 'op-chip-nav-shell--people-grid'"), 'people.ejs precisa aplicar o grid móvel da navegação da rede');
+ensure(!peopleView.includes('peopleHeroActionsHtml'), 'people.ejs deve remover os CTAs duplicados do hero da rede');
+ensure(settingsView.includes('pixStateList'), 'settings.ejs precisa compartilhar pixStateList com o partial de Pix');
+ensure(read('views/admin.ejs').includes('op-admin-access-modal__panel'), 'admin.ejs precisa marcar o modal de novo acesso para scroll seguro');
+ensure(read('views/month.ejs').includes('document.body.appendChild(toolbar)'), 'month.ejs precisa montar a toolbar de seleção no body para ficar visível');
+ensure(read('public/app.css').includes('.op-chip-nav-shell--people-grid') && read('public/app.css').includes('.op-admin-access-modal__panel') && read('public/app.css').includes('data-theme-style="confete"') && read('public/app.css').includes('data-theme-style="orgulho"'), 'app.css precisa conter os hotfixes visuais 4.0.4 de people, admin e temas claros');
 
 ['registerAuthRoutes', 'registerSecurityRoutes', 'registerCardsRoutes', 'registerFinancesRoutes', 'registerImportRoutes', 'registerSummaryRoutes', 'registerSharedDebtsRoutes', 'registerPeopleRoutes', 'registerSocialShareRoutes'].forEach((token) => {
   ensure(runtime.includes(token), `server.runtime.js precisa registrar ${token}`);

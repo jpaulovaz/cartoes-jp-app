@@ -64,11 +64,23 @@ test("post-release visual hotfixes keep key mobile/desktop CTAs readable", () =>
   const css = read("public/app.css");
   const month = read("views/month.ejs");
   const people = read("views/people.ejs");
+  const settings = read("views/settings.ejs");
+  const admin = read("views/admin.ejs");
 
   assert.match(month, /op-month-import-btn/);
   assert.match(month, /op-month-export-btn/);
+  assert.match(month, /document\.body\.appendChild\(toolbar\)/);
+  assert.match(month, /op-month-row__hint/);
   assert.match(people, /op-chip-nav__item--add-person/);
+  assert.match(people, /op-chip-nav-shell--people-grid/);
+  assert.doesNotMatch(people, /peopleHeroActionsHtml/);
+  assert.match(settings, /pixStateList/);
+  assert.match(admin, /op-admin-access-modal__panel/);
   assert.match(css, /op-month-import-btn/);
   assert.match(css, /op-chip-nav__item--add-person/);
-  assert.match(css, /op-dashboard-screen-v4 \.op-detalhamento-hero__action-row--month/);
+  assert.match(css, /op-dashboard-screen-v4::before/);
+  assert.match(css, /op-chip-nav-shell--people-grid/);
+  assert.match(css, /op-admin-access-modal__panel/);
+  assert.match(css, /data-theme-style="confete"/);
+  assert.match(css, /data-theme-style="orgulho"/);
 });

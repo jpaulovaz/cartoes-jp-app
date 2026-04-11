@@ -272,12 +272,7 @@
     `<span class="badge">${activeFriendCount} na sua rede</span>`,
     `<span class="badge">${pendingContactCount} convite(s)</span>`,
     `<span class="badge">${readyPixNetworkCount} com Pix pronto</span>`
-  ].join('');
-  const peopleHeroActionsHtml = [
-    `<button type="button" onclick="openContactComposeModal(this)" class="op-btn op-btn-primary">Adicionar alguém</button>`,
-    `<a href="/settings" class="op-btn op-hero-link op-hero-link--summary">Seus ajustes</a>`
-  ].join('');
-%>
+  ].join('');%>
 
 <div class="op-page-shell op-network-screen-v4 mx-auto max-w-7xl">
   <%- include('partials/page-hero', {
@@ -285,12 +280,10 @@
     title: 'Minha Rede',
     subtitle: 'Seu perfil, seus convites e toda a rede que já conversa com você dentro do app.',
     metaHtml: peopleHeroMetaHtml,
-    actionsHtml: peopleHeroActionsHtml,
-    heroClass: 'op-network-hero-v4',
-    actionsWrapperClass: 'op-network-hero-actions'
+    heroClass: 'op-network-hero-v4'
   }) %>
 
-  <%- include('partials/page-chip-nav', { items: peopleNavItems }) %>
+  <%- include('partials/page-chip-nav', { items: peopleNavItems, shellClass: 'op-chip-nav-shell--people-grid' }) %>
 
   <% if (selfProfile) { %>
     <%- include('partials/people/my-profile-section', peoplePartialLocals) %>

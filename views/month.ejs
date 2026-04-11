@@ -604,8 +604,8 @@
                         <% if (isClosed) { %>
                           Abra a compra para consultar a divisão dela.
                         <% } else { %>
-                          <span class="md:hidden">Toque para ações · Segure para selecionar</span>
-                          <span class="hidden md:inline">Clique para ações · Ctrl/Cmd+clique para selecionar</span>
+                          <span class="op-month-row__hint md:hidden">Toque para ações · Segure para selecionar</span>
+                          <span class="op-month-row__hint hidden md:inline">Clique para ações · Ctrl/Cmd+clique para selecionar</span>
                         <% } %>
                       </div>
                     </div>
@@ -891,6 +891,9 @@
       const enterSelectionBtn = document.getElementById('monthEnterSelectionBtn');
       const exitSelectionBtn = document.getElementById('monthExitSelectionBtn');
       const toolbar = document.getElementById('monthSelectionToolbar');
+      if (toolbar && toolbar.parentElement !== document.body) {
+        document.body.appendChild(toolbar);
+      }
       const selectionCountEl = document.getElementById('monthSelectionCount');
       const toolbarSummaryEl = document.getElementById('monthSelectionSummary');
       const bulkPeopleBtn = document.getElementById('monthBulkPeopleBtn');

@@ -44,7 +44,7 @@
   }
 %>
 
-  <div class="op-screen op-screen--month op-month-screen-v4 max-w-7xl mx-auto space-y-5 pb-24">
+  <div class="op-screen op-screen--month op-month-screen-v4 w-full max-w-[104rem] mx-auto space-y-5 pb-24">
     <section class="op-page-hero op-month-hero-v4 op-fade-up">
       <div>
         <span class="op-page-hero__eyebrow">Gestão do mês</span>
@@ -472,8 +472,8 @@
         </div>
       </div>
 
-      <div class="op-table-shell op-month-table-shell overflow-x-auto">
-        <table class="op-month-ledger-table block md:table min-w-full md:min-w-[88rem] w-full text-sm text-left">
+      <div class="op-table-shell op-month-table-shell overflow-x-auto xl:overflow-x-visible">
+        <table class="op-month-ledger-table block md:table min-w-full md:min-w-[94rem] xl:min-w-0 xl:w-full text-sm text-left">
           <thead
             class="hidden md:table-header-group bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-[11px] tracking-wider">
             <tr>
@@ -484,14 +484,14 @@
               <th class="hidden md:table-cell px-4 py-4 text-center min-w-[13rem]">Categoria</th>
               <th class="px-4 py-4 text-center min-w-[13rem]"><a class="hover:text-blue-600 transition-colors inline-flex items-center justify-center"
                   href="<%= sortLink('card') %>">Cartão</a></th>
-              <th class="px-4 py-4 min-w-[11rem]"><a class="hover:text-blue-600 transition-colors flex items-center"
+              <th class="px-4 py-4 min-w-[9rem] xl:min-w-[8rem]"><a class="hover:text-blue-600 transition-colors flex items-center"
                   href="<%= sortLink('number') %>">Nº</a></th>
               <th class="px-4 py-4 text-right"><a class="hover:text-blue-600 transition-colors inline-flex items-center"
                   href="<%= sortLink('amount') %>">Valor</a></th>
               <th class="px-4 py-4 text-center"><a
                   class="hover:text-blue-600 transition-colors inline-flex items-center"
                   href="<%= sortLink('allocated') %>">Status</a></th>
-              <th class="px-4 py-4 text-left min-w-[15rem]">Resumo e ações</th>
+              <th class="px-4 py-4 pr-8 text-left min-w-[20rem] xl:min-w-[21rem]">Resumo e ações</th>
             </tr>
           </thead>
           <tbody class="block md:table-row-group">
@@ -528,7 +528,7 @@
                     </span>
                   </div>
                 </td>
-                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-mono text-xs text-slate-500 dark:text-slate-400 md:max-w-[12rem] whitespace-normal break-words">
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-mono text-xs text-slate-500 dark:text-slate-400 md:max-w-[9rem] xl:max-w-[8rem] whitespace-normal break-words">
                   <div class="flex items-center justify-between gap-3 md:block">
                     <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 not-italic font-sans">Nº</span>
                     <span><%= t.card_number || '-' %></span>
@@ -564,17 +564,17 @@
                     </div>
                   <% } %>
                 </td>
-                <td class="op-month-row__meta block md:table-cell px-3 md:px-4 py-3 md:py-3 mt-3 md:mt-0 rounded-2xl border border-slate-200/90 bg-slate-50/90 dark:border-slate-700 dark:bg-slate-900/35 md:min-w-[15rem] md:rounded-none md:border-0 md:bg-transparent md:px-0 md:py-3">
-                  <div class="flex items-start gap-3">
+                <td class="op-month-row__meta block md:table-cell px-3 md:px-4 pr-5 md:pr-8 py-3 md:py-3 mt-3 md:mt-0 rounded-2xl border border-slate-200/90 bg-slate-50/90 dark:border-slate-700 dark:bg-slate-900/35 md:min-w-[20rem] xl:min-w-[21rem] md:rounded-none md:border-0 md:bg-transparent md:py-3">
+                  <div class="flex items-start gap-3 md:relative">
                     <% if (!isClosed) { %>
                       <span data-selection-indicator
-                        class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-300 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-600">
+                        class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-300 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-600 md:absolute md:right-4 md:top-4 md:z-10">
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
                         </svg>
                       </span>
                     <% } %>
-                    <div class="min-w-0 flex-1">
+                    <div class="min-w-0 flex-1 md:pr-12">
                       <div class="flex flex-wrap gap-2">
                         <% if (shortParticipantNames.length) { %>
                           <% shortParticipantNames.slice(0, 3).forEach(name => { %>

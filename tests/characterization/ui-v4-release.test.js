@@ -41,6 +41,7 @@ test("final release marks summary, analytics, txn and dashboard with the closing
   assert.match(txn, /op-txn-hero-v4/);
   assert.match(dashboard, /op-dashboard-screen-v4/);
   assert.match(dashboard, /op-dashboard-hero-v4/);
+  assert.match(dashboard, /pt-4 sm:pt-5 lg:pt-6 pb-8/);
 });
 
 
@@ -72,7 +73,9 @@ test("post-release visual hotfixes keep key mobile/desktop CTAs readable", () =>
   assert.match(month, /document\.body\.appendChild\(toolbar\)/);
   assert.match(month, /op-month-row__hint/);
   assert.match(month, /op-month-table-shell overflow-x-auto/);
-  assert.match(month, /md:min-w-\[88rem\]/);
+  assert.match(month, /max-w-\[104rem\]/);
+  assert.match(month, /md:min-w-\[94rem\]/);
+  assert.match(month, /min-w-\[20rem\] xl:min-w-\[21rem\]/);
   assert.match(month, /Resumo e ações<\/th>/);
   assert.match(people, /op-chip-nav__item--add-person/);
   assert.match(people, /op-chip-nav-shell--people-grid/);

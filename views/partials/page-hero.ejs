@@ -1,12 +1,23 @@
-<section class="op-page-hero op-page-hero--compact op-fade-up mb-6">
-  <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-    <div>
-      <% if (eyebrow) { %><span class="op-page-hero__eyebrow"><%= eyebrow %></span><% } %>
-      <h1 class="op-page-hero__title mt-3"><%= title %></h1>
-      <% if (subtitle) { %><p class="op-page-hero__subtitle mt-2.5"><%= subtitle %></p><% } %>
+<%
+  const hasActions = typeof actionsHtml === 'string' && actionsHtml.trim();
+  const hasMeta = typeof metaHtml === 'string' && metaHtml.trim();
+  const heroClassName = ['op-page-hero', 'op-page-hero--compact', 'op-fade-up', 'mb-5', heroClass || ''].filter(Boolean).join(' ');
+  const actionsClassName = ['op-page-hero__actions', 'op-page-hero__actions--compact', 'shrink-0', actionsWrapperClass || ''].filter(Boolean).join(' ');
+%>
+<section class="<%= heroClassName %>">
+  <div class="op-page-hero__frame flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div class="op-page-hero__body">
+      <div class="op-page-hero__lead">
+        <% if (eyebrow) { %><span class="op-page-hero__eyebrow"><%= eyebrow %></span><% } %>
+        <h1 class="op-page-hero__title mt-3"><%= title %></h1>
+        <% if (subtitle) { %><p class="op-page-hero__subtitle mt-2.5"><%= subtitle %></p><% } %>
+      </div>
+      <% if (hasMeta) { %>
+        <div class="op-page-hero__meta op-page-hero__meta--inline mt-3"><%- metaHtml %></div>
+      <% } %>
     </div>
-    <% if (typeof actionsHtml === 'string' && actionsHtml.trim()) { %>
-      <div class="op-page-hero__actions op-page-hero__actions--compact shrink-0"><%- actionsHtml %></div>
+    <% if (hasActions) { %>
+      <div class="<%= actionsClassName %>"><%- actionsHtml %></div>
     <% } %>
   </div>
 </section>

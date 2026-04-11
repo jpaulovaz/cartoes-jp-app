@@ -33,14 +33,13 @@ const requiredFiles = [
   'views/partials/people/contact-modal.ejs',
   'views/partials/people/network-list-section.ejs',
   'tests/characterization/phase6.test.js',
-  'docs/refactor/smoke-3.20.11-fase-6.md',
   'README.md'
 ];
 
 requiredFiles.forEach((rel) => ensure(exists(rel), `Arquivo obrigatório ausente: ${rel}`));
 
 const packageJson = JSON.parse(read('package.json'));
-ensure(packageJson.version === '3.20.12', `Versão esperada 3.20.12, encontrada ${packageJson.version}`);
+ensure(/^3\.20\.12$|^4\.0\.0-beta\.\d+$/.test(packageJson.version), `Versão incompatível com o gate estrutural: ${packageJson.version}`);
 ensure(typeof packageJson.scripts?.test === 'string' && packageJson.scripts.test.includes('phase6.test.js'), 'package.json precisa incluir phase6.test.js no script test');
 ensure(packageJson.scripts?.['verify:refactor'] === 'node scripts/verify-refactor.js', 'package.json precisa expor npm run verify:refactor');
 

@@ -17,7 +17,7 @@ test('phase 6 wires partials, docs and maintenance script', () => {
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout || 'verify-refactor falhou');
-  assert.match(result.stdout, /verificação estrutural da fase 6 concluída/i);
+  assert.match(result.stdout, /verificação estrutural .* concluída/i);
 });
 
 test('critical views became smaller and reusable through partials', () => {

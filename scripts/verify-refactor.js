@@ -39,8 +39,9 @@ const requiredFiles = [
 requiredFiles.forEach((rel) => ensure(exists(rel), `Arquivo obrigatório ausente: ${rel}`));
 
 const packageJson = JSON.parse(read('package.json'));
-ensure(/^3\.20\.12$|^4\.0\.0-beta\.\d+$/.test(packageJson.version), `Versão incompatível com o gate estrutural: ${packageJson.version}`);
+ensure(/^3\.20\.12$|^4\.0\.0(?:-beta\.\d+)?$/.test(packageJson.version), `Versão incompatível com o gate estrutural: ${packageJson.version}`);
 ensure(typeof packageJson.scripts?.test === 'string' && packageJson.scripts.test.includes('phase6.test.js'), 'package.json precisa incluir phase6.test.js no script test');
+ensure(packageJson.scripts.test.includes('ui-v4-release.test.js'), 'package.json precisa incluir ui-v4-release.test.js no script test');
 ensure(packageJson.scripts?.['verify:refactor'] === 'node scripts/verify-refactor.js', 'package.json precisa expor npm run verify:refactor');
 
 const settingsView = read('views/settings.ejs');
@@ -77,6 +78,14 @@ ensure(serverEntry.includes('bootstrapDatabase'), 'server.js precisa continuar c
 ensure(serverEntry.includes("require('./server.runtime')"), 'server.js precisa continuar delegando para server.runtime.js');
 
 const runtime = read('server.runtime.js');
+const summaryView = read('views/summary.ejs');
+const analyticsView = read('views/analytics.ejs');
+const txnView = read('views/txn.ejs');
+const dashboardView = read('views/detalhamento.ejs');
+ensure(summaryView.includes('op-summary-screen-v4'), 'summary.ejs precisa marcar a tela final v4');
+ensure(analyticsView.includes('op-analytics-screen-v4'), 'analytics.ejs precisa marcar a tela final v4');
+ensure(txnView.includes('op-txn-screen-v4'), 'txn.ejs precisa marcar a tela final v4');
+ensure(dashboardView.includes('op-dashboard-screen-v4'), 'detalhamento.ejs precisa marcar a tela final v4');
 ['registerAuthRoutes', 'registerSecurityRoutes', 'registerCardsRoutes', 'registerFinancesRoutes', 'registerImportRoutes', 'registerSummaryRoutes', 'registerSharedDebtsRoutes', 'registerPeopleRoutes', 'registerSocialShareRoutes'].forEach((token) => {
   ensure(runtime.includes(token), `server.runtime.js precisa registrar ${token}`);
 });
@@ -87,4 +96,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log('OK - verificação estrutural da fase 6 concluída.');
+console.log('OK - verificação estrutural da trilha refatorada e da UI 4.0 concluída.');

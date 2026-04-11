@@ -20,7 +20,7 @@ test("package version and operational screens reflect UI v4 beta 5", () => {
   const adminSidebar = read("views/partials/admin/sidebar.ejs");
   const settingsProfile = read("views/partials/settings/profile-section.ejs");
 
-  assert.match(pkg.version, /^4\.0\.0-beta\.[5-9]\d*$/);
+  assert.match(pkg.version, /^4\.0\.0(?:-beta\.[5-9]\d*)?$/);
   assert.match(pkg.scripts.test, /ui-v4-beta5\.test\.js/);
   assert.match(cards, /op-cards-screen-v4/);
   assert.match(cards, /op-cards-hero-v4/);

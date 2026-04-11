@@ -1,8 +1,8 @@
 <%- include("partials/header", { title: `AcerttaPay | Resumo da ópera ${String(month).padStart(2,'0')}/${year}` }) %>
 
-  <div class="op-screen op-screen--summary w-full" data-op-mobile-safe-area="bottom-nav" data-summary-autosave-root data-year="<%= year %>" data-month="<%= month %>">
+  <div class="op-screen op-screen--summary op-summary-screen-v4 w-full max-w-7xl mx-auto space-y-5 pb-24" data-op-mobile-safe-area="bottom-nav" data-summary-autosave-root data-year="<%= year %>" data-month="<%= month %>">
 
-    <section class="op-page-hero op-fade-up mb-8">
+    <section class="op-page-hero op-summary-hero-v4 op-fade-up mb-6">
       <div>
         <span class="op-page-hero__eyebrow">Resumo da rodada</span>
         <h1 class="op-page-hero__title mt-4">Resumo da ópera — <%= String(month).padStart(2,'0') %>/<%= year %></h1>

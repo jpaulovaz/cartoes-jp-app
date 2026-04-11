@@ -16,7 +16,7 @@ test('package version and shared partials reflect UI v4 shell beta 2', () => {
   const hero = read('views/partials/page-hero.ejs');
   const chipNav = read('views/partials/page-chip-nav.ejs');
 
-  assert.match(pkg.version, /^4\.0\.0-beta\.[2-9]\d*$/);
+  assert.match(pkg.version, /^4\.0\.0(?:-beta\.[2-9]\d*)?$/);
   assert.match(pkg.scripts.test, /ui-v4-beta1\.test\.js/);
   assert.match(pkg.scripts.test, /ui-v4-beta2\.test\.js/);
   assert.match(pkg.scripts.test, /ui-v4-beta3\.test\.js/);

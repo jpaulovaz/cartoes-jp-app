@@ -31,8 +31,8 @@
   const hasFinanceFlow = financeTrend.some((point) => Number(point.income_cents || 0) > 0 || Number(point.expense_cents || 0) > 0 || Number(point.card_cents || 0) > 0);
 %>
 
-<div class="op-screen op-screen--summary op-screen--analytics w-full" data-op-mobile-safe-area="bottom-nav">
-  <section class="op-page-hero op-fade-up mb-8">
+<div class="op-screen op-screen--summary op-screen--analytics op-analytics-screen-v4 w-full max-w-7xl mx-auto space-y-5 pb-24" data-op-mobile-safe-area="bottom-nav">
+  <section class="op-page-hero op-analytics-hero-v4 op-fade-up mb-6">
     <div>
       <span class="op-page-hero__eyebrow">Raio-x do mês</span>
       <h1 class="op-page-hero__title mt-4">Análises do mês — <%= String(month).padStart(2,'0') %>/<%= year %></h1>

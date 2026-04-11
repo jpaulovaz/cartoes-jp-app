@@ -143,7 +143,7 @@
   const appPinContext = (typeof appPin !== 'undefined' && appPin) ? appPin : {};
   const appPinScreen = (typeof currentPath !== 'undefined' && currentPath === '/lock') ? 'lock' : 'app';
 %>
-<body class="op-shell op-shell-v4 op-ui-v4-beta6 text-slate-800 dark:text-slate-200 antialiased selection:bg-blue-300 selection:text-blue-900 flex min-h-screen flex-col font-sans"
+<body class="op-shell op-shell-v4 op-ui-v4-beta6 op-ui-v4-release text-slate-800 dark:text-slate-200 antialiased selection:bg-blue-300 selection:text-blue-900 flex min-h-screen flex-col font-sans"
       data-push-public-key="<%= typeof pushPublicKey !== 'undefined' ? pushPublicKey : '' %>"
       data-push-configured="<%= pushNotificationsEnabled ? '1' : '0' %>"
       data-app-pin-enabled="<%= appPinContext.enabled ? '1' : '0' %>"

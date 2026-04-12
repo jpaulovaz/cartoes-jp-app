@@ -960,6 +960,20 @@
   const defaultLoginUrl = <%- JSON.stringify(emailState && emailState.loginUrl ? emailState.loginUrl : '/login') %>;
   const activeAdminSection = <%- JSON.stringify(activeSectionKey) %>;
 
+  function setUserModalOpenState(isOpen) {
+    document.documentElement.classList.toggle('op-admin-access-modal-open', isOpen);
+    document.body?.classList.toggle('op-admin-access-modal-open', isOpen);
+  }
+
+  function setWelcomeControlsVisible(isVisible) {
+    if (welcomeEmailControls) {
+      welcomeEmailControls.classList.toggle('hidden', !isVisible);
+    }
+    if (userForm) {
+      userForm.classList.toggle('op-admin-access-form--welcome-hidden', !isVisible);
+    }
+  }
+
   function normalizeAdminText(value) {
     return String(value || '')
       .normalize('NFD')
@@ -978,7 +992,7 @@
     nameField.value = '';
     roleField.value = 'user';
     canImportField.checked = true;
-    if (welcomeEmailControls) welcomeEmailControls.classList.remove('hidden');
+    setWelcomeControlsVisible(true);
     if (sendWelcomeEmailField) {
       sendWelcomeEmailField.checked = !!emailWelcomeAvailable;
       sendWelcomeEmailField.disabled = !emailWelcomeAvailable;
@@ -992,6 +1006,7 @@
   function openAddUserModal() {
     configureUserModalForAdd();
     addUserModal.classList.remove('hidden');
+    setUserModalOpenState(true);
   }
 
   function openEditUserModal(button) {
@@ -1004,7 +1019,7 @@
     nameField.value = button.dataset.userName || '';
     roleField.value = button.dataset.userRole || 'user';
     canImportField.checked = button.dataset.userCanImport === '1';
-    if (welcomeEmailControls) welcomeEmailControls.classList.add('hidden');
+    setWelcomeControlsVisible(false);
     if (sendWelcomeEmailField) {
       sendWelcomeEmailField.checked = false;
     }
@@ -1012,10 +1027,12 @@
       welcomeAdminMessageField.value = '';
     }
     addUserModal.classList.remove('hidden');
+    setUserModalOpenState(true);
   }
 
   function closeAddUserModal() {
     addUserModal.classList.add('hidden');
+    setUserModalOpenState(false);
     configureUserModalForAdd();
   }
 

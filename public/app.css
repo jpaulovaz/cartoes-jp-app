@@ -10562,6 +10562,10 @@ html[data-op-ui="v4"] .op-admin-access-stack {
   gap: 1rem;
 }
 
+html[data-op-ui="v4"] .op-admin-access-stack.hidden {
+  display: none !important;
+}
+
 html[data-op-ui="v4"] .op-admin-access-actions {
   display: flex;
   flex-direction: column;
@@ -10614,5 +10618,64 @@ html[data-op-ui="v4"] .op-admin-access-actions {
 
   html[data-op-ui="v4"] .op-admin-access-actions > * {
     flex: 0 1 13rem;
+  }
+}
+
+
+body.op-admin-access-modal-open {
+  overflow: hidden;
+}
+
+body.op-admin-access-modal-open [data-op-main-shell] {
+  position: relative;
+  z-index: 10030;
+}
+
+body.op-admin-access-modal-open header.sticky,
+body.op-admin-access-modal-open .mobile-top-chrome-fix,
+body.op-admin-access-modal-open .op-bottom-nav {
+  z-index: 10010;
+}
+
+html[data-op-ui="v4"] .op-admin-access-modal {
+  z-index: 10040;
+}
+
+@media (min-width: 900px) {
+  html[data-op-ui="v4"] .op-admin-access-card--import,
+  html[data-op-ui="v4"] .op-admin-access-card--welcome {
+    min-height: 100%;
+  }
+
+  html[data-op-ui="v4"] .op-admin-access-card--import {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  html[data-op-ui="v4"] .op-admin-access-stack:not(.hidden) {
+    display: contents;
+  }
+
+  html[data-op-ui="v4"] .op-admin-access-card--welcome {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  html[data-op-ui="v4"] .op-admin-access-field--message {
+    grid-column: 1 / -1;
+    grid-row: 4;
+  }
+
+  html[data-op-ui="v4"] .op-admin-access-actions {
+    grid-row: 5;
+  }
+
+  html[data-op-ui="v4"] .op-admin-access-form.op-admin-access-form--welcome-hidden .op-admin-access-card--import {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  html[data-op-ui="v4"] .op-admin-access-form.op-admin-access-form--welcome-hidden .op-admin-access-actions {
+    grid-row: 4;
   }
 }

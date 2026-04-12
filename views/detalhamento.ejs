@@ -228,14 +228,15 @@
         }
     %>
 
-            <div class="op-screen op-screen--detalhamento max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+            <div class="op-screen op-screen--detalhamento op-dashboard-screen-v4 max-w-6xl mx-auto"
+                data-op-mobile-safe-area="bottom-nav"
                 data-sensitive-scope="detalhamento"
                 data-month-swipe-area
                 data-month-swipe-prev="/detalhamento/<%= prevY %>/<%= prevM %>"
                 data-month-swipe-next="/detalhamento/<%= nextY %>/<%= nextM %>"
                 style="touch-action: pan-y pinch-zoom;">
 
-                <section class="op-page-hero op-fade-up mb-8">
+                <section class="op-page-hero op-dashboard-hero-v4 op-fade-up mb-6">
                     <div class="op-detalhamento-hero__content">
                         <div class="op-detalhamento-hero__copy min-w-0">
                             <span class="op-page-hero__eyebrow">Seu QG financeiro</span>
@@ -261,7 +262,7 @@
                         </button>
                     </div>
 
-                    <div class="op-detalhamento-hero__actions-shell w-full lg:max-w-[32rem]">
+                    <div class="op-detalhamento-hero__actions-shell w-full lg:max-w-[29rem]">
                         <div class="op-detalhamento-hero__actions-head">
                             <button type="button"
                                 class="op-icon-btn op-sensitive-toggle op-sensitive-toggle--desktop"

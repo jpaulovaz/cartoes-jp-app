@@ -262,19 +262,28 @@
     { href: '#my-profile', icon: '👑', label: 'Seu perfil' },
     ...(pendingRequests.length ? [{ href: '#friend-requests', icon: '💌', label: 'Convites recebidos', classes: 'inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-100/80 dark:border-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:bg-emerald-900/35' }] : []),
     { href: '/settings', icon: '🔔', label: 'Seus ajustes', classes: 'inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-amber-100/80 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35' },
-    { type: 'button', onclick: 'openContactComposeModal(this)', icon: '➕', label: 'Adicionar alguém', classes: 'inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-bold text-sky-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-100/80 dark:border-sky-900 dark:bg-sky-900/20 dark:text-sky-200 dark:hover:bg-sky-900/35' },
+    { type: 'button', onclick: 'openContactComposeModal(this)', icon: '➕', label: 'Adicionar alguém', classes: 'op-chip-nav__item op-chip-nav__item--add-person inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-bold text-sky-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-100/80 dark:border-sky-400/40 dark:bg-sky-950/80 dark:text-sky-100 dark:hover:bg-sky-900/95' },
     { href: '#network-list', icon: '🫶', label: 'Explorar sua rede', classes: 'inline-flex items-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-bold text-violet-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-violet-100/80 dark:border-violet-900 dark:bg-violet-900/20 dark:text-violet-200 dark:hover:bg-violet-900/35' }
   ];
 %>
 
-<div class="mx-auto max-w-7xl">
+<%
+  const peopleHeroMetaHtml = [
+    `<span class="badge">${activeFriendCount} na sua rede</span>`,
+    `<span class="badge">${pendingContactCount} convite(s)</span>`,
+    `<span class="badge">${readyPixNetworkCount} com Pix pronto</span>`
+  ].join('');%>
+
+<div class="op-page-shell op-network-screen-v4 mx-auto max-w-7xl">
   <%- include('partials/page-hero', {
     eyebrow: 'Seu perfil social + sua rede',
     title: 'Minha Rede',
-    subtitle: 'Aqui fica a parte mais social do OrganizaPay: seu perfil público, seus convites e a galera que já faz parte da sua rede.'
+    subtitle: 'Seu perfil, seus convites e toda a rede que já conversa com você dentro do app.',
+    metaHtml: peopleHeroMetaHtml,
+    heroClass: 'op-network-hero-v4'
   }) %>
 
-  <%- include('partials/page-chip-nav', { items: peopleNavItems }) %>
+  <%- include('partials/page-chip-nav', { items: peopleNavItems, shellClass: 'op-chip-nav-shell--people-grid' }) %>
 
   <% if (selfProfile) { %>
     <%- include('partials/people/my-profile-section', peoplePartialLocals) %>

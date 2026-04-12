@@ -58,6 +58,11 @@ const {
   validateZipEntries
 } = require("./src/backupEngine");
 const {
+  getStatementAiStorageRoot,
+  getStatementAiTempPdfDir,
+  ensureStatementAiStorageRoot
+} = require('./src/statementAi/storage');
+const {
   SETTING_SECTIONS,
   SETTING_DEFINITIONS,
   getSettingDefinition,
@@ -2011,6 +2016,13 @@ function refreshRuntimeSettings({ restartScheduler = true } = {}) {
   appSetupCompleted = readSetupCompletedFlagFromDb();
   applyPushRuntimeConfig();
   configureGoogleStrategy();
+  const statementAiConfig = getStatementAiRuntimeConfig();
+  if (statementAiConfig.enabled) {
+    const storageState = ensureStatementAiRuntimeStorage();
+    if (storageState.error) {
+      console.error('[statement-ai-storage]', storageState.error);
+    }
+  }
   if (restartScheduler) {
     restartCardDueTodayPushScheduler();
     restartManualDebtDueScheduler();
@@ -2160,12 +2172,95 @@ function buildPushAdminState() {
   };
 }
 
+function getStatementAiRuntimeConfig() {
+  return {
+    enabled: getSettingBoolean('STATEMENT_AI_ENABLED', false),
+    provider: getSettingText('STATEMENT_AI_PROVIDER', 'gemini') || 'gemini',
+    apiKeyPresent: !!getSettingText('STATEMENT_AI_API_KEY'),
+    model: getSettingText('STATEMENT_AI_MODEL'),
+    maxPdfMb: getSettingInt('STATEMENT_AI_MAX_PDF_MB', 15),
+    maxPages: getSettingInt('STATEMENT_AI_MAX_PAGES', 20),
+    workerIntervalSec: getSettingInt('STATEMENT_AI_WORKER_INTERVAL_SEC', 20),
+    allowSecondPass: getSettingBoolean('STATEMENT_AI_ALLOW_SECOND_PASS', false),
+    notifyUserWhenReady: getSettingBoolean('STATEMENT_AI_NOTIFY_USER_WHEN_READY', true),
+    storeArtifacts: getSettingBoolean('STATEMENT_AI_STORE_ARTIFACTS', false),
+    storageRoot: getStatementAiStorageRoot(__dirname),
+    tempPdfDir: getStatementAiTempPdfDir(__dirname)
+  };
+}
+
+function ensureStatementAiRuntimeStorage() {
+  const config = getStatementAiRuntimeConfig();
+  if (!config.enabled) {
+    return {
+      ready: false,
+      root: config.storageRoot,
+      tempPdfDir: config.tempPdfDir,
+      error: null
+    };
+  }
+
+  try {
+    const dirs = ensureStatementAiStorageRoot(__dirname);
+    return {
+      ready: true,
+      root: dirs.root,
+      tempPdfDir: dirs.tempPdfDir,
+      error: null
+    };
+  } catch (error) {
+    return {
+      ready: false,
+      root: config.storageRoot,
+      tempPdfDir: config.tempPdfDir,
+      error: error?.message || 'Nao consegui preparar a pasta temporaria da IA de faturas.'
+    };
+  }
+}
+
+function buildStatementAiAdminState() {
+  const config = getStatementAiRuntimeConfig();
+  const storage = ensureStatementAiRuntimeStorage();
+
+  let tone = 'muted';
+  let status = 'Pausada';
+  let text = 'A base da esteira em PDF ja foi preparada, mas continua desligada nesta rodada.';
+
+  if (!config.enabled && config.apiKeyPresent) {
+    status = 'Base pronta';
+    text = 'A chave ja esta guardada e a fundacao ficou pronta. Falta so ligar a funcionalidade quando voce quiser chamar a IA para o jogo.';
+  } else if (config.enabled && !config.apiKeyPresent) {
+    tone = 'warning';
+    status = 'Falta chave';
+    text = 'A funcionalidade foi ligada, mas ainda precisa da API key do Gemini para sair do aquecimento.';
+  } else if (config.enabled && !storage.ready) {
+    tone = 'warning';
+    status = 'Storage com aviso';
+    text = `A configuracao principal esta salva, mas nao consegui preparar a pasta temporaria das faturas: ${storage.error}`;
+  } else if (config.enabled) {
+    tone = 'success';
+    status = 'Base armada';
+    text = 'Chave, limites e storage temporario ficaram prontos para as proximas fases da leitura de PDF com revisao segura.';
+  }
+
+  return {
+    ...config,
+    ...storage,
+    tone,
+    status,
+    text,
+    providerLabel: config.provider === 'gemini' ? 'Gemini' : (config.provider || 'IA'),
+    stageLabel: 'Fase 0 de 6'
+  };
+}
+
 function buildAdminStatusCards(pushPanelState = null) {
   const googleReady = isGoogleAuthConfigured();
   const whatsappReady = !!(getSettingText('EVOLUTION_API_URL') && getSettingText('EVOLUTION_API_KEY') && getSettingText('EVOLUTION_INSTANCE_NAME'));
   const emailConfig = getEmailRuntimeConfig();
   const emailConfigured = isEmailConfigured(emailConfig);
   const pushPanel = pushPanelState || buildPushAdminState();
+  const statementAiPanel = buildStatementAiAdminState();
   const timeoutMinutes = getSettingInt('INACTIVITY_TIMEOUT_MINUTES', 0);
   const backupConfig = getBackupRuntimeConfig();
   const lastBackup = backupRunsSelectRecent.all(1).map((row) => mapBackupRunForAdmin(row, backupConfig.timeZone))[0] || null;
@@ -2238,6 +2333,13 @@ function buildAdminStatusCards(pushPanelState = null) {
       tone: pushTone,
       status: pushStatus,
       text: pushText
+    },
+    {
+      key: 'statementAi',
+      title: 'IA de faturas',
+      tone: statementAiPanel.tone,
+      status: statementAiPanel.status,
+      text: statementAiPanel.text
     },
     {
       key: 'backup',
@@ -2698,6 +2800,7 @@ function ensureDefaultOwnerPerson(userId, preferredName, preferredEmail = null) 
 
 function renderAdmin(res, { error = null, success = null, activeSection = 'access' } = {}) {
   const pushPanel = buildPushAdminState();
+  const statementAiPanel = buildStatementAiAdminState();
 
   return safeRenderView(res, 'admin', {
     title: 'AcerttaPay | Administração',
@@ -2710,6 +2813,7 @@ function renderAdmin(res, { error = null, success = null, activeSection = 'acces
     backupPanel: buildBackupAdminState(),
     emailPanel: buildEmailAdminState(res?.req, { timeZone: getBackupRuntimeConfig().timeZone }),
     pushPanel,
+    statementAiPanel,
     totalConfigItems: SETTING_DEFINITIONS.length,
     autoReloadCount: SETTING_DEFINITIONS.filter((item) => !item.restartRequired).length,
     restartRequiredCount: SETTING_DEFINITIONS.filter((item) => item.restartRequired).length,

@@ -174,7 +174,7 @@ A rota `/admin` concentra as configurações do sistema em uma central organizad
 │   ├── services/               # orquestração de regra de negócio por domínio
 │   ├── importers/              # importadores CSV e integrações auxiliares
 │   └── *.js                    # módulos de suporte (Pix, backup, segurança, utilitários)
-├── tests/characterization/     # testes de caracterização por fase da refatoração
+├── tests/characterization/     # opcional: suíte de caracterização usada durante implantação e homologação
 ├── views/                      # páginas EJS
 │   └── partials/               # partials reutilizáveis e componentes de tela
 ├── docs/refactor/              # smokes e documentação operacional da trilha
@@ -243,9 +243,15 @@ Em uma instalação nova, o fluxo mais seguro é:
 ```bash
 npm start                 # sobe o app normalmente
 npm run migrate           # executa a trilha oficial de migração
-npm test                  # roda a suíte de caracterização da refatoração
+npm test                  # roda a suíte de caracterização se ela existir; sem tests/, cai para verify-refactor
 npm run verify:refactor   # confere wiring estrutural e partials críticos
 ```
+
+### Quando a pasta `tests/` não for mais necessária
+
+A aplicação não depende da pasta `tests/` para funcionar em produção. Depois do fechamento da implantação, você pode removê-la do pacote operacional.
+
+Com o patch de limpeza, `npm test` passa a usar a suíte de caracterização **quando ela existir** e faz fallback automático para `npm run verify:refactor` quando a pasta `tests/` já tiver sido removida.
 
 ### Como manter sem reabrir o caos do entrypoint
 

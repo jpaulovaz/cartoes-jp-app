@@ -48,7 +48,7 @@
 
 <div
   id="<%= cardId %>"
-  class="share-summary-card <%= exportMode ? 'share-summary-card--export' : '' %> mx-auto w-full max-w-[54rem] overflow-hidden rounded-[30px] border border-white/80 bg-white text-slate-900 shadow-[0_28px_64px_rgba(15,23,42,0.14)]"
+  class="share-summary-card share-summary-card--v4 <%= exportMode ? 'share-summary-card--export' : '' %> mx-auto w-full max-w-[54rem] overflow-hidden rounded-[30px] border border-white/80 bg-white text-slate-900 shadow-[0_28px_64px_rgba(15,23,42,0.14)]"
   data-capture-width="860"
   data-export-mode="<%= exportMode ? '1' : '0' %>"
   <%= exportMode ? `data-capture-scale="${safeCaptureScale}"` : '' %>

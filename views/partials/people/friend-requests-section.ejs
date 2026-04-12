@@ -1,4 +1,4 @@
-    <section id="friend-requests" class="scroll-mt-28 mb-8 rounded-[32px] border border-emerald-200 bg-white p-6 shadow-sm dark:border-emerald-900/50 dark:bg-slate-800 sm:p-7">
+    <section id="friend-requests" class="op-people-requests-section scroll-mt-28 mb-8 rounded-[32px] border border-emerald-200 bg-white p-6 shadow-sm dark:border-emerald-900/50 dark:bg-slate-800 sm:p-7">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Quem está batendo na sua rede</div>
@@ -14,7 +14,7 @@
         <% pendingRequests.forEach((request) => {
              const isHighlighted = highlightedFriendRequestId && Number(highlightedFriendRequestId) === Number(request.id);
         %>
-          <article id="friend-request-<%= request.id %>" class="overflow-hidden rounded-[28px] border bg-slate-50/70 shadow-sm transition-all dark:bg-slate-900/60 <%= isHighlighted ? 'border-emerald-400 ring-2 ring-emerald-200 dark:border-emerald-500 dark:ring-emerald-900/70' : 'border-emerald-200 dark:border-slate-700' %>">
+          <article id="friend-request-<%= request.id %>" class="op-people-request-card overflow-hidden rounded-[28px] border bg-slate-50/70 shadow-sm transition-all dark:bg-slate-900/60 <%= isHighlighted ? 'border-emerald-400 ring-2 ring-emerald-200 dark:border-emerald-500 dark:ring-emerald-900/70' : 'border-emerald-200 dark:border-slate-700' %>">
             <div class="h-1.5 bg-gradient-to-r from-emerald-400 via-sky-400 to-violet-400"></div>
             <div class="p-5 sm:p-6">
               <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">

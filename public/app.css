@@ -9645,10 +9645,10 @@ html[data-op-ui="v4"] .op-txn-screen-v4 [data-txn-people-grid] {
 
 html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-hero__actions-shell {
   border: 1px solid var(--op-release-border);
-  border-radius: 1.55rem;
+  border-radius: 1.45rem;
   background: rgba(255, 255, 255, 0.7);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
-  padding: 0.85rem;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.045);
+  padding: 0.75rem;
   backdrop-filter: blur(12px);
 }
 
@@ -9696,9 +9696,9 @@ html.dark[data-op-ui="v4"] .op-month-import-btn:hover {
 
   html[data-op-ui="v4"] .op-dashboard-hero-v4 {
     display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(19rem, 0.95fr);
+    grid-template-columns: minmax(0, 1.22fr) minmax(18rem, 0.82fr);
     align-items: start;
-    gap: 1.2rem;
+    gap: 1rem;
   }
 
   html[data-op-ui="v4"] .op-dashboard-hero-v4 .op-detalhamento-hero__actions-shell {
@@ -10398,4 +10398,94 @@ html[data-op-ui="v4"] .op-debts-kpi-strip--hero .op-kpi-card__hint {
   .op-lock-screen-v4 .op-lock-recovery-form {
     gap: 0.68rem;
   }
+}
+
+
+/* UI v4 hotfix 4.0.11 - detalhamento scale + themed CTAs */
+html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-page-hero {
+  padding: 1.35rem 1.45rem;
+}
+
+html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-page-hero__title {
+  font-size: clamp(2.15rem, 3.2vw, 3.05rem);
+  letter-spacing: -0.04em;
+}
+
+html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-page-hero__subtitle {
+  max-width: 34rem;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-hero__content {
+  gap: 0.85rem;
+}
+
+html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-hero__actions {
+  gap: 0.7rem;
+}
+
+html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-hero__action-row--primary > .op-btn {
+  min-height: 3.15rem;
+  font-size: 1rem;
+}
+
+html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-hero__action-row--month .op-btn,
+html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-hero__action-row--month .op-hero-link--month {
+  min-height: 3rem;
+  font-size: 0.98rem;
+}
+
+@media (min-width: 1024px) {
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 {
+    max-width: 76rem;
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-page-hero {
+    margin-bottom: 1rem;
+  }
+}
+
+html[data-op-ui="v4"][data-theme-style="confete"] .op-btn-primary {
+  color: #fff;
+  background: linear-gradient(135deg, #fb7185, #f43f5e 45%, #a855f7);
+  border-color: rgba(244, 63, 94, 0.3);
+  box-shadow: 0 18px 34px rgba(244, 63, 94, 0.22);
+}
+
+html[data-op-ui="v4"][data-theme-style="confete"] .op-btn-primary:hover {
+  background: linear-gradient(135deg, #f43f5e, #db2777 45%, #9333ea);
+}
+
+html[data-op-ui="v4"][data-theme-style="confete"] .op-btn-success {
+  color: #fff;
+  background: linear-gradient(135deg, #fb7185, #f97316);
+  border-color: rgba(251, 113, 133, 0.32);
+  box-shadow: 0 18px 34px rgba(251, 113, 133, 0.22);
+}
+
+html[data-op-ui="v4"][data-theme-style="confete"] .op-btn-success:hover {
+  background: linear-gradient(135deg, #f43f5e, #ea580c);
+}
+
+html[data-op-ui="v4"][data-theme-style="orgulho"] .op-btn-primary {
+  color: #fff;
+  background: linear-gradient(135deg, #ef4444 0%, #f97316 18%, #f59e0b 34%, #22c55e 50%, #06b6d4 68%, #3b82f6 84%, #a855f7 100%);
+  border-color: rgba(244, 63, 94, 0.32);
+  box-shadow: 0 20px 38px rgba(225, 29, 72, 0.22), 0 10px 24px rgba(6, 182, 212, 0.14);
+}
+
+html[data-op-ui="v4"][data-theme-style="orgulho"] .op-btn-primary:hover {
+  background: linear-gradient(135deg, #dc2626 0%, #ea580c 18%, #d97706 34%, #16a34a 50%, #0891b2 68%, #2563eb 84%, #9333ea 100%);
+}
+
+html[data-op-ui="v4"][data-theme-style="orgulho"] .op-btn-success {
+  color: #fff;
+  background: linear-gradient(135deg, #22c55e 0%, #14b8a6 38%, #06b6d4 68%, #3b82f6 100%);
+  border-color: rgba(34, 197, 94, 0.28);
+  box-shadow: 0 20px 36px rgba(34, 197, 94, 0.22), 0 10px 22px rgba(6, 182, 212, 0.14);
+}
+
+html[data-op-ui="v4"][data-theme-style="orgulho"] .op-btn-success:hover {
+  background: linear-gradient(135deg, #16a34a 0%, #0d9488 38%, #0891b2 68%, #2563eb 100%);
 }

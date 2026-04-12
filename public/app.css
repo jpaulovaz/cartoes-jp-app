@@ -10489,3 +10489,130 @@ html[data-op-ui="v4"][data-theme-style="orgulho"] .op-btn-success {
 html[data-op-ui="v4"][data-theme-style="orgulho"] .op-btn-success:hover {
   background: linear-gradient(135deg, #16a34a 0%, #0d9488 38%, #0891b2 68%, #2563eb 100%);
 }
+
+
+/* UI v4 hotfix 4.0.12 - compartilhamento mobile e modal de acessos */
+html[data-op-ui="v4"] .op-social-share-hero__actions {
+  width: 100%;
+}
+
+@media (max-width: 767px) {
+  html[data-op-ui="v4"] .op-share-screen-v4 .op-social-share-hero__actions,
+  html[data-op-ui="v4"] .op-whatsapp-screen-v4 .op-social-share-hero__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+    width: 100%;
+    overflow: visible;
+    margin-inline: 0;
+    padding-inline: 0;
+    padding-bottom: 0;
+    scroll-snap-type: none;
+  }
+
+  html[data-op-ui="v4"] .op-share-screen-v4 .op-social-share-hero__actions > *,
+  html[data-op-ui="v4"] .op-whatsapp-screen-v4 .op-social-share-hero__actions > * {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.2;
+  }
+
+  html[data-op-ui="v4"] .op-share-screen-v4 .op-social-share-hero__actions--triple > :last-child,
+  html[data-op-ui="v4"] .op-whatsapp-screen-v4 .op-social-share-hero__actions--triple > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 389px) {
+  html[data-op-ui="v4"] .op-share-screen-v4 .op-social-share-hero__actions,
+  html[data-op-ui="v4"] .op-whatsapp-screen-v4 .op-social-share-hero__actions {
+    grid-template-columns: 1fr;
+  }
+
+  html[data-op-ui="v4"] .op-share-screen-v4 .op-social-share-hero__actions--triple > :last-child,
+  html[data-op-ui="v4"] .op-whatsapp-screen-v4 .op-social-share-hero__actions--triple > :last-child {
+    grid-column: auto;
+  }
+}
+
+html[data-op-ui="v4"] .op-admin-access-modal {
+  z-index: 72;
+}
+
+.op-admin-access-modal:not(.hidden) {
+  padding-top: max(env(safe-area-inset-top, 0px) + 0.85rem, 0.85rem);
+}
+
+html[data-op-ui="v4"] .op-admin-access-modal__panel {
+  width: min(100%, 60rem);
+  max-width: 60rem;
+  max-height: min(calc(100dvh - 1.7rem), 56rem);
+}
+
+html[data-op-ui="v4"] .op-admin-access-form {
+  display: grid;
+  gap: 1rem;
+}
+
+html[data-op-ui="v4"] .op-admin-access-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+html[data-op-ui="v4"] .op-admin-access-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (max-width: 767px) {
+  .op-admin-access-modal:not(.hidden) {
+    align-items: flex-start;
+    padding-top: max(calc(var(--op-topbar-height) + var(--op-top-safe) + 0.4rem), 6.25rem);
+    padding-bottom: max(calc(var(--op-bottom-safe) + 0.75rem), 0.75rem);
+  }
+
+  html[data-op-ui="v4"] .op-admin-access-modal__panel {
+    max-height: calc(100dvh - var(--op-topbar-height) - var(--op-top-safe) - 1rem);
+  }
+}
+
+@media (min-width: 900px) {
+  html[data-op-ui="v4"] .op-admin-access-form {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    align-items: start;
+  }
+
+  html[data-op-ui="v4"] .op-admin-access-field--email,
+  html[data-op-ui="v4"] .op-admin-access-field--name {
+    grid-column: 1;
+  }
+
+  html[data-op-ui="v4"] .op-admin-access-field--role,
+  html[data-op-ui="v4"] .op-admin-access-card--import {
+    grid-column: 2;
+  }
+
+  html[data-op-ui="v4"] .op-admin-access-card--import {
+    align-self: stretch;
+  }
+
+  html[data-op-ui="v4"] .op-admin-access-stack {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  html[data-op-ui="v4"] .op-admin-access-actions {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  html[data-op-ui="v4"] .op-admin-access-actions > * {
+    flex: 0 1 13rem;
+  }
+}

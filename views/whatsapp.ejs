@@ -50,7 +50,7 @@
         <span class="badge"><%= items.length %> <%= items.length === 1 ? "item" : "itens" %></span>
       </div>
     </div>
-    <div class="op-page-hero__actions">
+    <div class="op-page-hero__actions op-social-share-hero__actions <%= person.phone ? 'op-social-share-hero__actions--triple' : '' %>">
       <a href="/summary/<%= year %>/<%= month %>" class="op-btn op-hero-link op-hero-link--summary">
         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
         Voltar

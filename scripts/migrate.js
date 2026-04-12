@@ -909,6 +909,42 @@ function runMigrations() {
     updated_by_user_id INTEGER,
     FOREIGN KEY (updated_by_user_id) REFERENCES users(id)
   );
+
+  CREATE TABLE IF NOT EXISTS statement_ai_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    card_id INTEGER,
+    target_month INTEGER,
+    target_year INTEGER,
+    status TEXT NOT NULL DEFAULT 'uploaded',
+    provider TEXT NOT NULL DEFAULT 'gemini',
+    model_name TEXT,
+    source_filename TEXT NOT NULL DEFAULT '',
+    source_sha256 TEXT NOT NULL DEFAULT '',
+    source_size_bytes INTEGER NOT NULL DEFAULT 0,
+    local_file_path TEXT NOT NULL DEFAULT '',
+    gemini_file_uri TEXT,
+    raw_extraction_json TEXT,
+    normalized_json TEXT,
+    preview_json TEXT,
+    reconciliation_json TEXT,
+    error_code TEXT,
+    error_message TEXT,
+    created_at TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT '',
+    ready_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (card_id) REFERENCES cards(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS statement_ai_job_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    payload_json TEXT,
+    created_at TEXT NOT NULL DEFAULT '',
+    FOREIGN KEY (job_id) REFERENCES statement_ai_jobs(id)
+  );
   `);
 
   db.exec(`
@@ -968,6 +1004,89 @@ function runMigrations() {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_scheduled_push_logs_event_date ON scheduled_push_logs(event_type, date_key, user_id, sequence_no);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_email_delivery_events_target_kind ON email_delivery_events(target_user_id, kind, created_at DESC);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_email_delivery_events_status_created ON email_delivery_events(status, created_at DESC);`);
+
+  if (!columnExists('statement_ai_jobs', 'user_id')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN user_id INTEGER REFERENCES users(id);");
+  }
+  if (!columnExists('statement_ai_jobs', 'card_id')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN card_id INTEGER REFERENCES cards(id);");
+  }
+  if (!columnExists('statement_ai_jobs', 'target_month')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN target_month INTEGER;");
+  }
+  if (!columnExists('statement_ai_jobs', 'target_year')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN target_year INTEGER;");
+  }
+  if (!columnExists('statement_ai_jobs', 'status')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN status TEXT NOT NULL DEFAULT 'uploaded';");
+  }
+  if (!columnExists('statement_ai_jobs', 'provider')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN provider TEXT NOT NULL DEFAULT 'gemini';");
+  }
+  if (!columnExists('statement_ai_jobs', 'model_name')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN model_name TEXT;");
+  }
+  if (!columnExists('statement_ai_jobs', 'source_filename')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN source_filename TEXT NOT NULL DEFAULT '';");
+  }
+  if (!columnExists('statement_ai_jobs', 'source_sha256')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN source_sha256 TEXT NOT NULL DEFAULT '';");
+  }
+  if (!columnExists('statement_ai_jobs', 'source_size_bytes')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN source_size_bytes INTEGER NOT NULL DEFAULT 0;");
+  }
+  if (!columnExists('statement_ai_jobs', 'local_file_path')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN local_file_path TEXT NOT NULL DEFAULT '';");
+  }
+  if (!columnExists('statement_ai_jobs', 'gemini_file_uri')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN gemini_file_uri TEXT;");
+  }
+  if (!columnExists('statement_ai_jobs', 'raw_extraction_json')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN raw_extraction_json TEXT;");
+  }
+  if (!columnExists('statement_ai_jobs', 'normalized_json')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN normalized_json TEXT;");
+  }
+  if (!columnExists('statement_ai_jobs', 'preview_json')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN preview_json TEXT;");
+  }
+  if (!columnExists('statement_ai_jobs', 'reconciliation_json')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN reconciliation_json TEXT;");
+  }
+  if (!columnExists('statement_ai_jobs', 'error_code')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN error_code TEXT;");
+  }
+  if (!columnExists('statement_ai_jobs', 'error_message')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN error_message TEXT;");
+  }
+  if (!columnExists('statement_ai_jobs', 'created_at')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN created_at TEXT NOT NULL DEFAULT '';");
+  }
+  if (!columnExists('statement_ai_jobs', 'updated_at')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN updated_at TEXT NOT NULL DEFAULT '';");
+  }
+  if (!columnExists('statement_ai_jobs', 'ready_at')) {
+    db.exec("ALTER TABLE statement_ai_jobs ADD COLUMN ready_at TEXT;");
+  }
+
+  if (!columnExists('statement_ai_job_events', 'job_id')) {
+    db.exec("ALTER TABLE statement_ai_job_events ADD COLUMN job_id INTEGER REFERENCES statement_ai_jobs(id);");
+  }
+  if (!columnExists('statement_ai_job_events', 'event_type')) {
+    db.exec("ALTER TABLE statement_ai_job_events ADD COLUMN event_type TEXT NOT NULL DEFAULT 'note';");
+  }
+  if (!columnExists('statement_ai_job_events', 'payload_json')) {
+    db.exec("ALTER TABLE statement_ai_job_events ADD COLUMN payload_json TEXT;");
+  }
+  if (!columnExists('statement_ai_job_events', 'created_at')) {
+    db.exec("ALTER TABLE statement_ai_job_events ADD COLUMN created_at TEXT NOT NULL DEFAULT '';");
+  }
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_statement_ai_jobs_user_created ON statement_ai_jobs(user_id, created_at DESC);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_statement_ai_jobs_status_updated ON statement_ai_jobs(status, updated_at DESC);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_statement_ai_jobs_card_target ON statement_ai_jobs(card_id, target_year, target_month, created_at DESC);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_statement_ai_jobs_sha ON statement_ai_jobs(source_sha256);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_statement_ai_job_events_job_created ON statement_ai_job_events(job_id, created_at ASC);`);
 
   db.exec("UPDATE users SET status = CASE WHEN trim(COALESCE(status, '')) = '' THEN 'active' ELSE lower(trim(status)) END;");
   db.exec("UPDATE people SET status = CASE WHEN trim(COALESCE(status, '')) = '' THEN CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END ELSE lower(trim(status)) END;");

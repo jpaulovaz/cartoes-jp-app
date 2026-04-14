@@ -11221,3 +11221,203 @@ html[data-theme-style="orgulho"] .op-utility-btn--notify[data-push-visual-state=
   background: linear-gradient(135deg, rgba(82, 37, 97, 0.94), rgba(34, 22, 56, 0.92));
   border-color: rgba(196, 181, 253, 0.22);
 }
+
+/* Responsive safety pass - dashboard KPIs, topbar and mobile chrome */
+.op-dashboard-kpi-grid {
+  align-items: stretch;
+}
+
+.op-dashboard-kpi-card {
+  min-width: 0;
+  min-height: 7.85rem;
+}
+
+.op-dashboard-kpi-card__label,
+.op-dashboard-kpi-card__value,
+.op-dashboard-kpi-grid .op-paid-progress-card__meta {
+  display: block;
+  max-width: 100%;
+}
+
+.op-dashboard-kpi-card__label {
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+
+.op-dashboard-kpi-card__value {
+  font-size: clamp(1.35rem, 3vw, 1.9rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+}
+
+.op-dashboard-kpi-grid .op-paid-progress-card__content {
+  min-width: 0;
+}
+
+.op-dashboard-kpi-grid .op-paid-progress-card__meta {
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+@media (min-width: 1024px) and (max-width: 1339px) {
+  html[data-op-ui="v4"] .op-dashboard-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-kpi-grid > .op-dashboard-kpi-card--balance {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (max-width: 767px) {
+  html[data-op-ui="v4"] .op-screen--detalhamento {
+    overflow-x: clip;
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-kpi-grid {
+    overflow-x: clip;
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card {
+    overflow: hidden;
+    padding-top: 1.65rem;
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card__check {
+    top: 0.72rem;
+    left: 0.72rem;
+    transform: none;
+    width: 2rem;
+    height: 2rem;
+    border-width: 2px;
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card__check svg {
+    width: 1rem;
+    height: 1rem;
+  }
+}
+
+html.op-vp-cozy[data-op-ui="v4"] .op-topbar-mobile .op-mobile-topbar-row,
+html.op-vp-compact[data-op-ui="v4"] .op-topbar-mobile .op-mobile-topbar-row,
+html.op-vp-tight[data-op-ui="v4"] .op-topbar-mobile .op-mobile-topbar-row {
+  gap: 0.5rem;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-topbar-mobile .op-mobile-brand-card,
+html.op-vp-tight[data-op-ui="v4"] .op-topbar-mobile .op-mobile-brand-card {
+  min-height: 3.3rem;
+  padding: 0.66rem 0.72rem !important;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-topbar-mobile .op-mobile-brand-card > img,
+html.op-vp-compact[data-op-ui="v4"] .op-topbar-mobile .op-mobile-brand-card .h-12.w-12,
+html.op-vp-tight[data-op-ui="v4"] .op-topbar-mobile .op-mobile-brand-card > img,
+html.op-vp-tight[data-op-ui="v4"] .op-topbar-mobile .op-mobile-brand-card .h-12.w-12 {
+  width: 2.45rem;
+  height: 2.45rem;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-topbar-mobile .op-brand-title,
+html.op-vp-tight[data-op-ui="v4"] .op-topbar-mobile .op-brand-title {
+  font-size: 0.92rem !important;
+  line-height: 1.05 !important;
+}
+
+html.op-vp-tight[data-op-ui="v4"] .op-topbar-mobile .op-brand-title {
+  font-size: 0.88rem !important;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-topbar-mobile .op-brand-subtitle,
+html.op-vp-tight[data-op-ui="v4"] .op-topbar-mobile .op-brand-subtitle {
+  font-size: 0.68rem !important;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-topbar-mobile .op-utility-btn,
+html.op-vp-tight[data-op-ui="v4"] .op-topbar-mobile .op-utility-btn {
+  min-width: 2.7rem;
+  min-height: 2.7rem;
+  border-radius: 1rem;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-topbar-mobile .op-utility-btn svg,
+html.op-vp-tight[data-op-ui="v4"] .op-topbar-mobile .op-utility-btn svg {
+  width: 1.08rem;
+  height: 1.08rem;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-bottom-nav__inner,
+html.op-vp-tight[data-op-ui="v4"] .op-bottom-nav__inner {
+  gap: 0.18rem;
+  padding-inline: 0.28rem;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-bottom-nav__link,
+html.op-vp-tight[data-op-ui="v4"] .op-bottom-nav__link {
+  min-width: 3.6rem;
+  padding-inline: 0.22rem;
+}
+
+html.op-vp-tight[data-op-ui="v4"] .op-bottom-nav__link {
+  min-width: 3.35rem;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-bottom-nav__icon,
+html.op-vp-tight[data-op-ui="v4"] .op-bottom-nav__icon {
+  width: 1.82rem;
+  height: 1.82rem;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-bottom-nav__label,
+html.op-vp-tight[data-op-ui="v4"] .op-bottom-nav__label {
+  max-width: 3.7rem;
+  font-size: 0.61rem;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+html.op-vp-tight[data-op-ui="v4"] .op-bottom-nav__label {
+  font-size: 0.57rem;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-dashboard-kpi-grid,
+html.op-vp-tight[data-op-ui="v4"] .op-dashboard-kpi-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-dashboard-kpi-grid > .op-dashboard-kpi-card,
+html.op-vp-tight[data-op-ui="v4"] .op-dashboard-kpi-grid > .op-dashboard-kpi-card {
+  grid-column: auto !important;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-dashboard-kpi-grid > .op-dashboard-kpi-card--balance,
+html.op-vp-tight[data-op-ui="v4"] .op-dashboard-kpi-grid > .op-dashboard-kpi-card--balance {
+  grid-column: 1 / -1 !important;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-dashboard-kpi-card,
+html.op-vp-tight[data-op-ui="v4"] .op-dashboard-kpi-card {
+  min-height: auto;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-dashboard-kpi-card__value,
+html.op-vp-tight[data-op-ui="v4"] .op-dashboard-kpi-card__value {
+  font-size: clamp(1.28rem, 5.2vw, 1.75rem);
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card,
+html.op-vp-tight[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card {
+  overflow: hidden;
+  padding-top: 1.7rem;
+}
+
+html.op-vp-compact[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card__check,
+html.op-vp-tight[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card__check {
+  top: 0.7rem;
+  left: 0.7rem;
+  transform: none;
+  width: 1.95rem;
+  height: 1.95rem;
+  border-width: 2px;
+}

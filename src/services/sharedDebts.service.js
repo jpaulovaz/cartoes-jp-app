@@ -1438,6 +1438,100 @@ function createSharedDebtsService(deps = {}) {
     return { redirectTo, flash: { type: 'success', message: 'Pronto! Recebimento confirmado e acerto encerrado.' } };
   }
 
+  function bulkSenderAction({ userId, requestIds, action, note, redirectTo }) {
+    if (!requestIds.length) {
+      return { redirectTo, flash: { type: 'error', message: 'Nenhum acerto válido foi escolhido para essa decisão em lote.' } };
+    }
+
+    if (!['accept_rejection', 'contest_rejection'].includes(action)) {
+      return { redirectTo, flash: { type: 'error', message: 'Essa ação em lote não combinou com os itens escolhidos.' } };
+    }
+
+    const rows = repository.getRejectedRequestsForRequester(requestIds, userId);
+    if (!rows.length) {
+      return { redirectTo, flash: { type: 'info', message: 'Não achei recusas desse grupo esperando sua decisão.' } };
+    }
+
+    const actor = deps.getUserRecord(userId);
+    const actorName = actor?.name || actor?.email || 'O remetente';
+    const now = deps.nowIso();
+    const acceptingRejection = action === 'accept_rejection';
+    const nextStatus = acceptingRejection ? 'rejection_accepted_by_sender' : 'rejection_contested_by_sender';
+    const skippedCount = Math.max(0, requestIds.length - rows.length);
+
+    repository.withTransaction(() => {
+      rows.forEach((row) => {
+        if (acceptingRejection) {
+          repository.db.prepare(`
+            UPDATE shared_debt_requests
+            SET status = ?, updated_at = ?, resolved_at = ?
+            WHERE id = ? AND requester_user_id = ? AND status = 'rejected_by_receiver'
+          `).run(nextStatus, now, now, row.id, userId);
+        } else {
+          repository.db.prepare(`
+            UPDATE shared_debt_requests
+            SET status = ?, updated_at = ?, resolved_at = NULL
+            WHERE id = ? AND requester_user_id = ? AND status = 'rejected_by_receiver'
+          `).run(nextStatus, now, row.id, userId);
+        }
+
+        deps.addSharedDebtEvent({ requestId: row.id, actorUserId: userId, eventType: nextStatus, note });
+      });
+
+      groupSharedDebtRowsByBatch(rows).forEach((group) => {
+        const periodLabel = deps.buildSharedDebtBulkPeriodLabel(group.rows);
+        if (group.batchId) deps.touchSharedDebtBatch(group.batchId, now);
+
+        const chargeCountLabel = deps.formatCountLabel(group.rows.length, 'cobrança', 'cobranças');
+        const resolvedMessage = deps.resolveCatalogText(
+          acceptingRejection
+            ? 'notification.shared_debt.sender_action.bulk.accept_rejection'
+            : 'notification.shared_debt.sender_action.bulk.contest_rejection',
+          {
+            remetente: actorName,
+            n_cobrancas: chargeCountLabel,
+            periodo: periodLabel || '',
+            valor_total: deps.formatBRLFromCents(group.totalCents),
+            nota: note || ''
+          },
+          {
+            fallbackTitle: acceptingRejection
+              ? (group.rows.length > 1 ? 'Recusas aceitas' : 'Recusa aceita')
+              : (group.rows.length > 1 ? 'Recusas contestadas' : 'Recusa contestada'),
+            fallbackBody: acceptingRejection
+              ? `${actorName} aceitou a recusa de ${chargeCountLabel}${periodLabel ? ` no período ${periodLabel}` : ''}, somando ${deps.formatBRLFromCents(group.totalCents)}.${deps.buildNoteSuffix(note)}`
+              : `${actorName} contestou a recusa de ${chargeCountLabel}${periodLabel ? ` no período ${periodLabel}` : ''}, somando ${deps.formatBRLFromCents(group.totalCents)}.${deps.buildNoteSuffix(note)}`
+          }
+        );
+        const firstRow = group.rows[0];
+
+        deps.createNotification({
+          userId: firstRow.receiver_user_id,
+          type: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
+          title: resolvedMessage.title,
+          body: resolvedMessage.body,
+          href: group.batchId ? `/shared-debts?batch=${group.batchId}` : `/shared-debts?request=${firstRow.id}`,
+          relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
+          relatedId: group.batchId || firstRow.id,
+          groupKey: 'shared_debt_updates'
+        });
+      });
+    });
+
+    let message = acceptingRejection
+      ? `Pronto! ${deps.formatCountLabel(rows.length, 'recusa foi aceita', 'recusas foram aceitas')} de uma vez.`
+      : `Pronto! ${deps.formatCountLabel(rows.length, 'recusa foi contestada', 'recusas foram contestadas')} de uma vez.`;
+
+    if (skippedCount > 0) {
+      message += ` ${deps.formatCountLabel(skippedCount, 'item já tinha saído desse ponto', 'itens já tinham saído desse ponto')}.`;
+    }
+
+    return {
+      redirectTo,
+      flash: { type: 'success', message }
+    };
+  }
+
   function bulkMarkPaid({ userId, requestIds, note, redirectTo }) {
     if (!requestIds.length) {
       return { redirectTo, flash: { type: 'error', message: 'Nenhum acerto válido foi escolhido para marcar como pago.' } };
@@ -1580,6 +1674,7 @@ function createSharedDebtsService(deps = {}) {
     getRequestPix,
     markPaid,
     confirmReceipt,
+    bulkSenderAction,
     bulkMarkPaid,
     bulkConfirmReceipt
   };

@@ -223,6 +223,19 @@ function createSharedDebtsRepository(deps = {}) {
     `).all(...requestIds, userId);
   }
 
+  function getRejectedRequestsForRequester(requestIds, userId) {
+    const placeholders = requestIds.map(() => '?').join(', ');
+    return db.prepare(`
+      SELECT r.*, u.name AS receiver_name, u.email AS receiver_email
+      FROM shared_debt_requests r
+      JOIN users u ON u.id = r.receiver_user_id
+      WHERE r.id IN (${placeholders})
+        AND r.requester_user_id = ?
+        AND r.status = 'rejected_by_receiver'
+      ORDER BY COALESCE(r.source_due_year, 0) DESC, COALESCE(r.source_due_month, 0) DESC, r.id ASC
+    `).all(...requestIds, userId);
+  }
+
   return {
     db,
     withTransaction,
@@ -242,7 +255,8 @@ function createSharedDebtsRepository(deps = {}) {
     getManualSharedDebtRequestForParticipant,
     updateManualSharedDebtLastPix,
     getAcceptedRequestsForReceiver,
-    getAcceptedMarkedRequestsForRequester
+    getAcceptedMarkedRequestsForRequester,
+    getRejectedRequestsForRequester
   };
 }
 

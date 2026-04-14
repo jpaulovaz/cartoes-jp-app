@@ -257,7 +257,18 @@ function createSharedDebtsController(deps = {}) {
         userId: req.user.id,
         requestIds: deps.parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id),
         note: String(req.body.note || '').trim() || null,
-        redirectTo: redirectBackOr(req, '/shared-debts')
+        redirectTo: redirectBackOr(req, req.body.return_to || '/shared-debts')
+      });
+      return redirectWithResult(req, res, result);
+    },
+
+    bulkSenderAction(req, res) {
+      const result = service.bulkSenderAction({
+        userId: req.user.id,
+        requestIds: deps.parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id),
+        action: String(req.body.action || '').trim().toLowerCase(),
+        note: String(req.body.note || '').trim() || null,
+        redirectTo: redirectBackOr(req, req.body.return_to || '/shared-debts')
       });
       return redirectWithResult(req, res, result);
     },
@@ -267,7 +278,7 @@ function createSharedDebtsController(deps = {}) {
         userId: req.user.id,
         requestIds: deps.parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id),
         note: String(req.body.note || '').trim() || null,
-        redirectTo: redirectBackOr(req, '/shared-debts')
+        redirectTo: redirectBackOr(req, req.body.return_to || '/shared-debts')
       });
       return redirectWithResult(req, res, result);
     }

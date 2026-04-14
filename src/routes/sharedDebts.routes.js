@@ -29,6 +29,7 @@ function createSharedDebtsRouter(deps = {}) {
   router.post('/shared-debts/:id/mark-paid', deps.ensureAuthenticated, controller.markPaid);
   router.post('/shared-debts/:id/confirm-receipt', deps.ensureAuthenticated, controller.confirmReceipt);
   router.post('/shared-debts/bulk/mark-paid', deps.ensureAuthenticated, controller.bulkMarkPaid);
+  router.post('/shared-debts/bulk/sender-action', deps.ensureAuthenticated, controller.bulkSenderAction);
   router.post('/shared-debts/bulk/confirm-receipt', deps.ensureAuthenticated, controller.bulkConfirmReceipt);
 
   return router;

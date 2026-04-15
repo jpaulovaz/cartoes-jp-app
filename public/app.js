@@ -791,22 +791,35 @@
     return false;
   }
 
-  async function persistManualPurchaseDraftFromForm(form) {
+  function isManualPurchaseDraftPersistenceEnabled(form) {
+    if (!(form instanceof HTMLFormElement)) return false;
+    return !navigator.onLine || form.dataset.manualDraftMode === 'persisted';
+  }
+
+  async function persistManualPurchaseDraftFromForm(form, options = {}) {
     if (!(form instanceof HTMLFormElement)) return;
+    const force = !!options.force;
+    if (!force && !isManualPurchaseDraftPersistenceEnabled(form)) return;
+
     const payload = buildManualPurchaseDraftPayload(form);
 
     if (!hasMeaningfulManualPurchaseDraft(payload)) {
       await clearManualPurchaseDraftRecord();
+      delete form.dataset.manualDraftMode;
       return;
     }
 
-    await saveManualPurchaseDraftRecord({
+    const saved = await saveManualPurchaseDraftRecord({
       key: MANUAL_PURCHASE_DRAFT_KEY,
       flow: 'manual_purchase',
       version: 1,
       updatedAt: new Date().toISOString(),
       payload
     });
+
+    if (saved) {
+      form.dataset.manualDraftMode = 'persisted';
+    }
   }
 
   function restoreSubmitButtonsAfterCanceledSubmit(form) {
@@ -948,8 +961,10 @@
 
     if (choice === 'resume') {
       applyManualPurchaseDraftToForm(form, draftRecord.payload);
+      form.dataset.manualDraftMode = 'persisted';
     } else if (choice === 'discard') {
       await clearManualPurchaseDraftRecord();
+      delete form.dataset.manualDraftMode;
       resetManualPurchaseForm(modal, form);
     }
   }
@@ -969,7 +984,9 @@
     form.addEventListener('input', schedulePersist, true);
     form.addEventListener('change', schedulePersist, true);
     window.addEventListener('pagehide', () => {
-      persistManualPurchaseDraftFromForm(form);
+      if (isManualPurchaseDraftPersistenceEnabled(form)) {
+        persistManualPurchaseDraftFromForm(form, { force: true });
+      }
     });
 
     form.addEventListener('submit', async (event) => {
@@ -978,13 +995,13 @@
         writeLastManualCardId(cardSelect.value);
       }
 
-      await persistManualPurchaseDraftFromForm(form);
-
       if (navigator.onLine) {
+        delete form.dataset.manualDraftPromptOpen;
         return;
       }
 
       event.preventDefault();
+      await persistManualPurchaseDraftFromForm(form, { force: true });
       restoreSubmitButtonsAfterCanceledSubmit(form);
       await window.showActionDialog({
         title: 'Sem internet agora',
@@ -1028,11 +1045,16 @@
     };
 
     const closeModal = () => {
+      if (form instanceof HTMLFormElement && isManualPurchaseDraftPersistenceEnabled(form)) {
+        persistManualPurchaseDraftFromForm(form, { force: true });
+      }
+
       modal.classList.add('hidden');
       modal.setAttribute('aria-hidden', 'true');
       document.body.classList.remove('op-manual-modal-open');
       if (form instanceof HTMLFormElement) {
         delete form.dataset.manualDraftPromptOpen;
+        resetManualPurchaseForm(modal, form);
       }
     };
 
@@ -1070,6 +1092,9 @@
 
   document.addEventListener('DOMContentLoaded', async () => {
     await consumeLocalDraftPurgeRequest();
+    if (window.__OP_MANUAL_PURCHASE_CLEAR_LOCAL_DRAFT) {
+      await clearManualPurchaseDraftRecord();
+    }
     bindManualPurchaseDraftCleanup();
     setupManualPurchaseModal();
   });

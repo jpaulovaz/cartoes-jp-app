@@ -4435,6 +4435,7 @@ app.use((req, res, next) => {
   res.locals.flash = req.session?.flash || null;
   res.locals.importReport = req.session?.importReport || null;
   res.locals.importFormSeed = req.session?.importFormSeed || null;
+  res.locals.manualPurchaseDraftClearRequested = req.session?.manualPurchaseDraftClearRequested === '1';
   res.locals.unreadNotificationCount = 0;
   res.locals.readNotificationCount = 0;
   res.locals.recentNotifications = [];
@@ -4456,6 +4457,9 @@ app.use((req, res, next) => {
   }
   if (req.session?.importFormSeed) {
     delete req.session.importFormSeed;
+  }
+  if (req.session?.manualPurchaseDraftClearRequested) {
+    delete req.session.manualPurchaseDraftClearRequested;
   }
 
   if (req.isAuthenticated() && req.user?.id) {
@@ -15398,6 +15402,8 @@ app.post("/txn/manual", ensureAuthenticated, (req, res) => {
     if (createdTxnIds.length) {
       queueSharedDebtDraftsForTransactions(userId, getTransactionScopeRowsByIds(userId, createdTxnIds));
     }
+
+    req.session.manualPurchaseDraftClearRequested = '1';
 
     if (isRecurring) {
       setFlash(req, "success", "Lançamento recorrente mensal criado com sucesso.");

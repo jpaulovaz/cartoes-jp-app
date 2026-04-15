@@ -36,7 +36,10 @@ const STATEMENT_JSON_SCHEMA = {
         additionalProperties: false,
         required: ['date', 'description', 'amount'],
         properties: {
-          date: { type: 'string' },
+          date: {
+            type: 'string',
+            pattern: '^\\d{2}\\/\\d{2}\\/\\d{4}$'
+          },
           description: { type: 'string' },
           amount: { type: ['number', 'string'] },
           card_last4: { type: ['string', 'null'] }
@@ -44,6 +47,21 @@ const STATEMENT_JSON_SCHEMA = {
       }
     }
   }
+};
+
+const MONTH_TOKEN_TO_NUMBER = {
+  jan: '01', janeiro: '01', january: '01',
+  fev: '02', fevereiro: '02', feb: '02', february: '02',
+  mar: '03', marco: '03', março: '03', march: '03',
+  abr: '04', abril: '04', apr: '04', april: '04',
+  mai: '05', maio: '05', may: '05',
+  jun: '06', junho: '06', june: '06',
+  jul: '07', julho: '07', july: '07',
+  ago: '08', agosto: '08', aug: '08', august: '08',
+  set: '09', setembro: '09', sep: '09', sept: '09', september: '09',
+  out: '10', outubro: '10', oct: '10', october: '10',
+  nov: '11', novembro: '11', november: '11',
+  dez: '12', dezembro: '12', dec: '12', december: '12'
 };
 
 function nowIso() {
@@ -74,10 +92,15 @@ function normalizeDigits(value) {
 }
 
 function normalizeBrDate(value) {
-  const text = String(value || '').trim();
-  if (!text) return null;
+  const rawText = String(value || '').trim();
+  if (!rawText) return null;
 
-  const brMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  const text = rawText
+    .replace(/[–—−]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const brMatch = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
   if (brMatch) {
     const day = brMatch[1].padStart(2, '0');
     const month = brMatch[2].padStart(2, '0');
@@ -91,6 +114,22 @@ function normalizeBrDate(value) {
     const month = isoMatch[2].padStart(2, '0');
     const day = isoMatch[3].padStart(2, '0');
     return `${day}/${month}/${year}`;
+  }
+
+  const compactMonthText = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\./g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  const namedMonthMatch = compactMonthText.match(/^(\d{1,2})(?:\s+de)?\s+([a-z]+)(?:\s+de)?\s+(\d{4})$/i);
+  if (namedMonthMatch) {
+    const day = namedMonthMatch[1].padStart(2, '0');
+    const month = MONTH_TOKEN_TO_NUMBER[namedMonthMatch[2]] || null;
+    const year = namedMonthMatch[3];
+    if (month) return `${day}/${month}/${year}`;
   }
 
   return null;
@@ -116,6 +155,12 @@ function parseAmountToCents(value) {
   const amount = Number(normalized);
   if (!Number.isFinite(amount)) return null;
   return Math.round(amount * 100);
+}
+
+function hasExplicitPlusSign(value) {
+  const text = String(value || '').trim();
+  if (!text) return false;
+  return /^\+\s*(?:R\$)?/i.test(text);
 }
 
 function isOwnStatementPayment(description) {
@@ -239,14 +284,15 @@ function buildExtractionPrompt({ issuerHint, cardName, month, year, text }) {
     'Regras obrigatórias:',
     rules,
     '8. Só inclua linhas que tenham data explícita.',
-    '9. Preserve a data original que aparece na fatura, inclusive em parcelas antigas.',
-    '10. A descrição deve ser fiel ao lançamento, sem floreio. Pode limpar só espaços duplicados.',
-    '11. card_last4 deve trazer apenas os 4 dígitos finais do cartão adicional/virtual quando essa informação estiver disponível. Caso contrário, null.',
-    '12. amount deve ser numérico em reais, sem símbolo, com créditos/estornos negativos.',
-    '13. Use confidence high quando estiver confiante, medium quando houver ruído e low quando houver muita incerteza.',
-    '14. Use warnings para registrar qualquer incerteza importante; caso contrário, devolva um array vazio.',
-    '15. Não invente linhas para bater com o total da fatura.',
-    '16. Se existir subtotal de despesas do mês ou lançamentos atuais, use isso como prova dos nove silenciosa, mas sem inventar itens.',
+    '9. A data deve vir obrigatoriamente no formato DD/MM/AAAA. Nunca devolva data textual como "12 de mar. 2026".',
+    '10. Preserve a data original que aparece na fatura, inclusive em parcelas antigas.',
+    '11. A descrição deve ser fiel ao lançamento, sem floreio. Pode limpar só espaços duplicados.',
+    '12. card_last4 deve trazer apenas os 4 dígitos finais do cartão adicional/virtual quando essa informação estiver disponível. Caso contrário, null.',
+    '13. amount deve ser numérico em reais, sem símbolo, com créditos/estornos negativos.',
+    '14. Use confidence high quando estiver confiante, medium quando houver ruído e low quando houver muita incerteza.',
+    '15. Use warnings para registrar qualquer incerteza importante; caso contrário, devolva um array vazio.',
+    '16. Não invente linhas para bater com o total da fatura.',
+    '17. Se existir subtotal de despesas do mês ou lançamentos atuais, use isso como prova dos nove silenciosa, mas sem inventar itens.',
     '',
     'Texto extraído da fatura:',
     text
@@ -375,18 +421,28 @@ function validateStructuredRows(payload, { providerKey, issuerHint }) {
   let droppedZero = 0;
   let droppedPayments = 0;
   let adjustedCreditSigns = 0;
+  const droppedDateExamples = [];
+  const invalidAmountExamples = [];
 
   normalized.import_rows.forEach((row, index) => {
-    const date = normalizeBrDate(row?.date);
+    const rawDate = normalizeWhitespace(row?.date || '');
+    const date = normalizeBrDate(rawDate);
     if (!date) {
       droppedWithoutDate += 1;
+      if (rawDate && droppedDateExamples.length < 5 && !droppedDateExamples.includes(rawDate)) {
+        droppedDateExamples.push(rawDate);
+      }
       return;
     }
 
     const description = normalizeWhitespace(row?.description || '(sem descricao)');
+    const rawAmount = normalizeWhitespace(row?.amount || '');
     let amountCents = parseAmountToCents(row?.amount);
     if (amountCents == null) {
       droppedInvalidAmount += 1;
+      if (rawAmount && invalidAmountExamples.length < 5 && !invalidAmountExamples.includes(rawAmount)) {
+        invalidAmountExamples.push(rawAmount);
+      }
       return;
     }
 
@@ -398,6 +454,11 @@ function validateStructuredRows(payload, { providerKey, issuerHint }) {
     if (isOwnStatementPayment(description)) {
       droppedPayments += 1;
       return;
+    }
+
+    if (amountCents > 0 && hasExplicitPlusSign(rawAmount)) {
+      amountCents *= -1;
+      adjustedCreditSigns += 1;
     }
 
     if (amountCents > 0 && isCreditLikeDescription(description)) {
@@ -434,8 +495,14 @@ function validateStructuredRows(payload, { providerKey, issuerHint }) {
 
   const details = [];
   if (normalized.warnings.length) details.push(...normalized.warnings);
-  if (droppedWithoutDate > 0) details.push(`${droppedWithoutDate} linha(s) vieram sem data e ficaram de fora.`);
-  if (droppedInvalidAmount > 0) details.push(`${droppedInvalidAmount} linha(s) vieram com valor ruim.`);
+  if (droppedWithoutDate > 0) {
+    const examples = droppedDateExamples.length ? ` Ex.: ${droppedDateExamples.join(' | ')}.` : '';
+    details.push(`${droppedWithoutDate} linha(s) vieram sem data válida e ficaram de fora.${examples}`);
+  }
+  if (droppedInvalidAmount > 0) {
+    const examples = invalidAmountExamples.length ? ` Ex.: ${invalidAmountExamples.join(' | ')}.` : '';
+    details.push(`${droppedInvalidAmount} linha(s) vieram com valor ruim.${examples}`);
+  }
   if (droppedPayments > 0) details.push(`${droppedPayments} pagamento(s) da própria fatura ficaram de fora.`);
   if (adjustedCreditSigns > 0) details.push(`${adjustedCreditSigns} crédito(s) tiveram o sinal ajustado.`);
 
@@ -600,7 +667,9 @@ async function processQueuedJob(job) {
         throw new Error(`${repository.providerLabel(providerKey)} devolveu um JSON que não fechou.`);
       }
 
-      if (config.debugEnabled) {
+      const validation = validateStructuredRows(parsed, { providerKey, issuerHint });
+
+      if (config.debugEnabled || validation.needsRevalidation) {
         repository.saveArtifact({
           jobId: job.id,
           kind: 'provider_raw',
@@ -611,8 +680,6 @@ async function processQueuedJob(job) {
           encoding: 'utf8'
         });
       }
-
-      const validation = validateStructuredRows(parsed, { providerKey, issuerHint });
       repository.finishAttempt(attemptId, {
         status: validation.needsRevalidation ? 'warning' : 'success',
         latencyMs: Date.now() - startedAt,
@@ -622,7 +689,7 @@ async function processQueuedJob(job) {
       repository.appendJobEvent(
         job.id,
         validation.needsRevalidation ? 'warning' : 'info',
-        `${repository.providerLabel(providerKey)} trouxe ${validation.rowCount} linha(s) úteis${validation.needsRevalidation ? ' e pediu uma conferida extra.' : '.'}`
+        `${repository.providerLabel(providerKey)} trouxe ${validation.rowCount} linha(s) úteis${validation.needsRevalidation ? ` e pediu uma conferida extra. ${validation.detailsSummary || ''}` : '.'}`.trim()
       );
       results.push({ providerKey, providerResponse, validation });
 

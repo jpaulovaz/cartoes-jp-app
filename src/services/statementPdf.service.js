@@ -85,6 +85,20 @@ function normalizeWhitespace(value) {
     .trim();
 }
 
+function uniqueNormalizedTextList(values = []) {
+  const seen = new Set();
+  const result = [];
+  values.forEach((value) => {
+    const text = normalizeWhitespace(value);
+    if (!text) return;
+    const key = text.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    result.push(text);
+  });
+  return result;
+}
+
 function normalizeDigits(value) {
   const digits = String(value || '').replace(/\D+/g, '');
   if (!digits) return null;
@@ -163,9 +177,75 @@ function hasExplicitPlusSign(value) {
   return /^\+\s*(?:R\$)?/i.test(text);
 }
 
+function hasStrongMerchantMarker(description) {
+  const text = normalizeWhitespace(description)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  if (!text) return false;
+
+  const ignoredTokens = new Set([
+    'ajuste',
+    'antecipado',
+    'automatico',
+    'banco',
+    'caixa',
+    'cartao',
+    'cartoes',
+    'compra',
+    'compras',
+    'cred',
+    'credito',
+    'csf',
+    'da',
+    'de',
+    'debito',
+    'do',
+    'elo',
+    'estorno',
+    'fatura',
+    'inter',
+    'internet',
+    'itau',
+    'itaucard',
+    'lancamento',
+    'lancamentos',
+    'mastercard',
+    'na',
+    'no',
+    'obrigado',
+    'pag',
+    'pagamento',
+    'pagto',
+    'parcela',
+    'parcelado',
+    'parcelamento',
+    'pelo',
+    'pix',
+    'reembolso',
+    'rotativo',
+    'santander',
+    'servico',
+    'valor',
+    'via',
+    'visa'
+  ]);
+
+  const merchantTokens = text
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .filter((token) => /[a-z]/.test(token) && token.length >= 4 && !ignoredTokens.has(token));
+
+  if (!merchantTokens.length) return false;
+
+  return /[*@/]/.test(text) || /\bvalor\s+antecipado\b/.test(text);
+}
+
 function isOwnStatementPayment(description) {
   const text = normalizeWhitespace(description).toLowerCase();
   if (!text) return false;
+  if (hasStrongMerchantMarker(text)) return false;
   const patterns = [
     /^pag(?:to|amento)\s+de\s+fatura\b/,
     /^pag(?:to|amento)\s+fatura\b/,
@@ -231,6 +311,8 @@ function getIssuerSpecificInstructions(issuer) {
   const shared = [
     'Nunca deduza duplicidade dentro do mesmo PDF. Se a fatura repetir a mesma data, descrição e valor, preserve todas as ocorrências.',
     'Exclua apenas pagamento da própria fatura. Não exclua lojistas válidos só porque a descrição contém a palavra FATURA.',
+    'Se uma linha datada trouxer nome claro de lojista ou estabelecimento, ela entra mesmo quando vier junto de expressões como VALOR ANTECIPADO. Exemplos de lojista válido: AMAZONMKTPLC*WFCOMERCI, UBER, IFOOD, CLARO.',
+    'Quando houver conflito entre o rótulo de valor antecipado e uma descrição clara de lojista, preserve a linha do lojista. Só exclua o que for claramente pagamento da própria fatura.',
     'Compras normais costumam vir sem sinal. Crédito, estorno, reembolso e valor antecipado devem sair com amount negativo.',
     'Linhas com valor zero ficam fora.',
     'Microajustes datados, juros, IOF, anuidade, seguro, multa e tarifas datadas entram normalmente.'
@@ -240,6 +322,7 @@ function getIssuerSpecificInstructions(issuer) {
     inter: [
       'No Inter, pagamento da própria fatura pode aparecer como PAGTO DEBITO AUTOMATICO com + R$. Exclua isso da importação.',
       'No Inter, créditos válidos de lojista também podem aparecer com + R$. Esses entram como amount negativo.',
+      'No Inter, VALOR ANTECIPADO com nome de lojista é crédito válido do lojista e não deve ser excluído.',
       'PIX CRED PARCELADO é lançamento válido quando aparece datado no detalhamento.'
     ],
     itau: [
@@ -562,7 +645,8 @@ function buildReadyWarningMessage(bestResult, { revalidated = false } = {}) {
   if (revalidated) bits.push('Passei a fatura por uma segunda checagem antes de liberar a revisão.');
   if (bestResult.validation.warnings.length) bits.push(...bestResult.validation.warnings);
   if (bestResult.validation.detailsSummary) bits.push(bestResult.validation.detailsSummary);
-  return normalizeWhitespace(bits.join(' ')) || null;
+  const dedupedBits = uniqueNormalizedTextList(bits);
+  return normalizeWhitespace(dedupedBits.join(' ')) || null;
 }
 
 function formatTimeoutLabel(timeoutMs) {

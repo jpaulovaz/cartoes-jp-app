@@ -5,22 +5,20 @@ function createImportController(deps = {}) {
   const { safeRenderView, formatBRLFromCents, setFlash } = deps;
 
   function buildErrorViewModel(req, extra = {}) {
+    const pageState = service.getImportPage(req.user.id, {
+      preview: req.session?.importPreview || null,
+      formSeed: extra.formSeed || null,
+      importReport: null
+    });
+
     return {
-      cards: service.getCardsForUser(req.user.id),
+      cards: pageState.cards,
       error: extra.error || null,
       formSeed: extra.formSeed || null,
       importReport: null,
       importPreview: req.session?.importPreview || null,
-      importPdfFeature: service.getImportPage(req.user.id, {
-        preview: req.session?.importPreview || null,
-        formSeed: extra.formSeed || null,
-        importReport: null
-      }).importPdfFeature,
-      importPdfJobs: service.getImportPage(req.user.id, {
-        preview: req.session?.importPreview || null,
-        formSeed: extra.formSeed || null,
-        importReport: null
-      }).importPdfJobs,
+      importPdfFeature: pageState.importPdfFeature,
+      importPdfJobs: pageState.importPdfJobs,
       formatBRLFromCents
     };
   }
@@ -74,6 +72,12 @@ function createImportController(deps = {}) {
       }
     },
 
+    renderPdfJobsPanel(req, res) {
+      const panel = service.getPdfJobsPanel(req.user.id);
+      res.set('Cache-Control', 'no-store');
+      return res.render('partials/import-pdf-jobs', panel);
+    },
+
     openPdfImportReview(req, res) {
       const result = service.openPdfImportReview(req.user.id, Number(req.params.jobId || 0), req);
       if (result.flash) setFlash(req, result.flash.type, result.flash.message);
@@ -91,9 +95,25 @@ function createImportController(deps = {}) {
     },
 
     retryPdfImportJob(req, res) {
-      const result = service.retryPdfImportJob(req.user.id, Number(req.params.jobId || 0));
-      if (result.flash) setFlash(req, result.flash.type, result.flash.message);
-      return res.redirect(result.redirectTo || '/import');
+      try {
+        const result = service.retryPdfImportJob(req.user.id, Number(req.params.jobId || 0));
+        if (result.flash) setFlash(req, result.flash.type, result.flash.message);
+        return res.redirect(result.redirectTo || '/import');
+      } catch (error) {
+        setFlash(req, 'error', error.message || 'Nao consegui recolocar esse job na fila agora.');
+        return res.redirect('/import');
+      }
+    },
+
+    deletePdfImportJob(req, res) {
+      try {
+        const result = service.deletePdfImportJob(req.user.id, Number(req.params.jobId || 0));
+        if (result.flash) setFlash(req, result.flash.type, result.flash.message);
+        return res.redirect(result.redirectTo || '/import');
+      } catch (error) {
+        setFlash(req, 'error', error.message || 'Nao consegui excluir esse job agora.');
+        return res.redirect('/import');
+      }
     },
 
     confirmImportPreview(req, res) {

@@ -314,7 +314,7 @@ function extractPdfText(pdfPath) {
   }
 }
 
-async function callGemini({ apiKey, model, prompt }) {
+async function callGemini({ apiKey, model, prompt, timeoutMs }) {
   const response = await axios.post(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     {
@@ -330,7 +330,7 @@ async function callGemini({ apiKey, model, prompt }) {
         'Content-Type': 'application/json',
         'x-goog-api-key': apiKey
       },
-      timeout: 180000,
+      timeout: Math.max(30000, Number(timeoutMs || 180000)),
       validateStatus: () => true
     }
   );
@@ -353,7 +353,7 @@ async function callGemini({ apiKey, model, prompt }) {
   };
 }
 
-async function callOpenAI({ apiKey, model, prompt }) {
+async function callOpenAI({ apiKey, model, prompt, timeoutMs }) {
   const response = await axios.post(
     'https://api.openai.com/v1/chat/completions',
     {
@@ -383,7 +383,7 @@ async function callOpenAI({ apiKey, model, prompt }) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`
       },
-      timeout: 180000,
+      timeout: Math.max(30000, Number(timeoutMs || 180000)),
       validateStatus: () => true
     }
   );
@@ -565,19 +565,85 @@ function buildReadyWarningMessage(bestResult, { revalidated = false } = {}) {
   return normalizeWhitespace(bits.join(' ')) || null;
 }
 
+function formatTimeoutLabel(timeoutMs) {
+  const safeTimeoutMs = Math.max(1000, Number(timeoutMs || 0) || 0);
+  if (!safeTimeoutMs) return 'alguns minutos';
+  if (safeTimeoutMs < 60000) return `${Math.max(1, Math.round(safeTimeoutMs / 1000))}s`;
+  const minutes = safeTimeoutMs / 60000;
+  const rounded = Math.round(minutes * 10) / 10;
+  return `${String(rounded).replace(/\.0$/, '')} min`;
+}
+
+function normalizeProviderErrorMessage(error, providerKey, config = {}) {
+  const rawMessage = normalizeWhitespace(error?.message || String(error || ''));
+  if (!rawMessage) return `${repository.providerLabel(providerKey)} nao conseguiu concluir essa leitura.`;
+
+  if (error?.code === 'ECONNABORTED' || /timeout of \d+ms exceeded/i.test(rawMessage)) {
+    return `o limite de ${formatTimeoutLabel(config.providerTimeoutMs)} estourou antes de ${repository.providerLabel(providerKey)} terminar de ler a fatura.`;
+  }
+
+  return rawMessage;
+}
+
+function buildJobReadyStatusSummary(validation, warningMessage) {
+  const rowCount = Math.max(0, Number(validation?.rowCount || 0));
+  if (warningMessage) {
+    return rowCount === 1
+      ? '1 lancamento ficou pronto, com um alerta pedindo seu olho extra antes de importar.'
+      : `${rowCount} lancamentos ficaram prontos, com alguns alertas pedindo seu olho extra antes de importar.`;
+  }
+  return rowCount === 1
+    ? '1 lancamento ficou pronto para revisao.'
+    : `${rowCount} lancamentos ficaram prontos para revisao.`;
+}
+
+function emitJobReadyNotification(job, validation, warningMessage) {
+  const deps = WORKER_STATE.deps || {};
+  if (typeof deps.createNotification !== 'function' || !job?.id || !job?.userId) return;
+
+  const competencia = `${String(job.month).padStart(2, '0')}/${job.year}`;
+  const statusResumo = buildJobReadyStatusSummary(validation, warningMessage);
+
+  repository.clearJobNotifications(job.id);
+
+  try {
+    deps.createNotification({
+      userId: job.userId,
+      type: 'statement_import_job_ready',
+      title: 'Seu PDF ja ficou pronto para conferir',
+      body: `${job.originalFilename} no ${job.cardName} (${competencia}) ja virou revisao. ${statusResumo}`,
+      href: `/import/pdf/jobs/${job.id}/review`,
+      relatedType: 'statement_import_job',
+      relatedId: job.id,
+      groupKey: 'card_due_today',
+      messageKey: 'notification.statement_pdf.ready',
+      messageVariables: {
+        arquivo: job.originalFilename,
+        cartao: job.cardName,
+        competencia,
+        status_resumo: statusResumo
+      }
+    });
+  } catch (error) {
+    console.error('[statement-pdf-worker] falha ao criar notificacao do job pronto:', error?.message || error);
+  }
+}
+
 async function runProvider(providerKey, context) {
   if (providerKey === 'gemini') {
     return callGemini({
       apiKey: context.config.geminiApiKey,
       model: context.config.geminiModel,
-      prompt: context.prompt
+      prompt: context.prompt,
+      timeoutMs: context.config.providerTimeoutMs
     });
   }
   if (providerKey === 'openai') {
     return callOpenAI({
       apiKey: context.config.openaiApiKey,
       model: context.config.openaiModel,
-      prompt: context.prompt
+      prompt: context.prompt,
+      timeoutMs: context.config.providerTimeoutMs
     });
   }
   throw new Error('Provedor de IA desconhecido.');
@@ -695,14 +761,15 @@ async function processQueuedJob(job) {
 
       if (!validation.needsRevalidation) break;
     } catch (error) {
+      const providerErrorMessage = normalizeProviderErrorMessage(error, providerKey, config);
       repository.finishAttempt(attemptId, {
         status: 'error',
         latencyMs: Date.now() - startedAt,
-        errorMessage: error.message || String(error)
+        errorMessage: providerErrorMessage
       });
-      repository.appendJobEvent(job.id, 'warning', `${repository.providerLabel(providerKey)} tropeçou: ${error.message || String(error)}`);
+      repository.appendJobEvent(job.id, 'warning', `${repository.providerLabel(providerKey)} tropeçou: ${providerErrorMessage}`);
       if (index === enabledProviders.length - 1) {
-        results.push({ providerKey, error });
+        results.push({ providerKey, error: { message: providerErrorMessage } });
       }
     }
   }
@@ -779,6 +846,7 @@ async function processQueuedJob(job) {
     warningMessage,
     detailsSummary: bestResult.validation.detailsSummary || null
   });
+  emitJobReadyNotification(job, bestResult.validation, warningMessage);
   } catch (error) {
     repository.markJobFailed(job.id, {
       errorMessage: error && error.message ? error.message : 'A análise desse PDF tropeçou no meio do caminho.',
@@ -955,6 +1023,18 @@ function createStatementPdfService(deps = {}) {
     };
   }
 
+  function deleteJob(userId, jobId) {
+    const job = featureRepository.deleteJob(userId, jobId);
+    return {
+      job,
+      redirectTo: '/import',
+      flash: {
+        type: 'success',
+        message: `Pronto, apaguei ${job.originalFilename} e os arquivos gerados desse job.`
+      }
+    };
+  }
+
   return {
     buildFeatureState,
     enqueuePdfImports,
@@ -962,6 +1042,7 @@ function createStatementPdfService(deps = {}) {
     openReviewFromJob,
     getCsvDownload,
     retryJob,
+    deleteJob,
     ensureStatementPdfWorkerStarted
   };
 }

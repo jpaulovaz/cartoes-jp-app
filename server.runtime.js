@@ -14053,6 +14053,7 @@ registerImportRoutes(app, {
   syncEqualAllocationsForEditedTransactions,
   queueSharedDebtDraftsForTransactions,
   buildImportConfirmationMessage,
+  createNotification,
   setFlash
 });
 
@@ -14737,6 +14738,28 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
       title: resolvedUnreadFriendAlert.title,
       description: resolvedUnreadFriendAlert.body,
       href: newestFriendNotification.href || '/people'
+    });
+  }
+
+  const unreadStatementImportNotifications = db.prepare(`
+    SELECT id, title, body, href, created_at
+    FROM notifications
+    WHERE user_id = ? AND is_read = 0 AND (
+      related_type = 'statement_import_job' OR
+      type = 'statement_import_job_ready'
+    )
+    ORDER BY created_at DESC, id DESC
+    LIMIT 5
+  `).all(userId);
+
+  if (unreadStatementImportNotifications.length) {
+    const newestStatementImportNotification = unreadStatementImportNotifications[0];
+    alerts.push({
+      type: 'info',
+      icon: '📄',
+      title: newestStatementImportNotification.title || 'Seu PDF ficou pronto para revisao',
+      description: newestStatementImportNotification.body || 'A conversao da fatura terminou e a revisao ja esta te esperando.',
+      href: `/notifications/${newestStatementImportNotification.id}/open`
     });
   }
 

@@ -6,6 +6,7 @@ function createImportService(deps = {}) {
   const statementPdfService = deps.statementPdfService || createStatementPdfService(deps);
 
   function getImportPage(userId, context = {}) {
+    const importPdfJobs = statementPdfService.listRecentJobs(userId);
     return {
       cards: repository.getActiveCards(userId),
       error: null,
@@ -13,7 +14,15 @@ function createImportService(deps = {}) {
       importReport: context.importReport || null,
       importPreview: context.preview || null,
       importPdfFeature: statementPdfService.buildFeatureState(),
-      importPdfJobs: statementPdfService.listRecentJobs(userId)
+      importPdfJobs
+    };
+  }
+
+  function getPdfJobsPanel(userId) {
+    const pdfJobs = statementPdfService.listRecentJobs(userId);
+    return {
+      pdfJobs,
+      hasRunningPdfJobs: pdfJobs.some((job) => job.isRunning)
     };
   }
 
@@ -74,6 +83,10 @@ function createImportService(deps = {}) {
 
   function retryPdfImportJob(userId, jobId) {
     return statementPdfService.retryJob(userId, jobId);
+  }
+
+  function deletePdfImportJob(userId, jobId) {
+    return statementPdfService.deleteJob(userId, jobId);
   }
 
   function confirmImportPreview(userId, preview, body = {}, req) {
@@ -206,9 +219,11 @@ function createImportService(deps = {}) {
     getCardsForUser,
     createImportPreview,
     createPdfImportJob,
+    getPdfJobsPanel,
     openPdfImportReview,
     getPdfImportCsvDownload,
     retryPdfImportJob,
+    deletePdfImportJob,
     confirmImportPreview,
     cancelImportPreview
   };

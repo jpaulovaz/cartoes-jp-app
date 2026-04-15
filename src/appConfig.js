@@ -707,6 +707,19 @@ const SETTING_DEFINITIONS = [
     autoReload: true
   },
   {
+    key: 'STATEMENT_PDF_PROVIDER_TIMEOUT_MS',
+    section: 'statementPdf',
+    label: 'Timeout do provedor (ms)',
+    helper: 'Quanto tempo o app espera a IA antes de marcar timeout. Se a fatura vier maratonista, esse folego extra ajuda.',
+    input: 'number',
+    defaultValue: '360000',
+    min: 30000,
+    max: 900000,
+    step: 1000,
+    required: false,
+    autoReload: true
+  },
+  {
     key: 'STATEMENT_PDF_DEBUG_ENABLED',
     section: 'statementPdf',
     label: 'Guardar trilha técnica de debug',

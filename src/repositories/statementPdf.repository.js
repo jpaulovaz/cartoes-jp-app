@@ -55,6 +55,16 @@ function deleteFileSafe(targetPath) {
   }
 }
 
+function deleteDirSafe(targetPath) {
+  try {
+    if (targetPath && fs.existsSync(targetPath)) {
+      fs.rmSync(targetPath, { recursive: true, force: true });
+    }
+  } catch (error) {
+    // segue o baile
+  }
+}
+
 function getSettingValue(key, fallback = '') {
   const row = db.prepare('SELECT value FROM app_settings WHERE key = ? LIMIT 1').get(key);
   if (row && row.value != null && String(row.value).trim() !== '') {
@@ -74,6 +84,7 @@ function getPdfImportRuntimeConfig() {
     openaiApiKey: String(getSettingValue('STATEMENT_PDF_OPENAI_API_KEY', '') || '').trim(),
     geminiModel: String(getSettingValue('STATEMENT_PDF_GEMINI_MODEL', 'gemini-3.1-pro-preview') || '').trim() || 'gemini-3.1-pro-preview',
     openaiModel: String(getSettingValue('STATEMENT_PDF_OPENAI_MODEL', 'gpt-4.1') || '').trim() || 'gpt-4.1',
+    providerTimeoutMs: parseIntegerSetting(getSettingValue('STATEMENT_PDF_PROVIDER_TIMEOUT_MS', '360000'), 360000, { min: 30000, max: 900000 }),
     debugEnabled: parseBooleanSetting(getSettingValue('STATEMENT_PDF_DEBUG_ENABLED', '0'), false),
     retentionDays: parseIntegerSetting(getSettingValue('STATEMENT_PDF_RETENTION_DAYS', '7'), 7, { min: 1, max: 90 }),
     maxRetries: parseIntegerSetting(getSettingValue('STATEMENT_PDF_MAX_RETRIES', '2'), 2, { min: 0, max: 5 })
@@ -137,6 +148,7 @@ function mapJobRow(row) {
     canRetry: ['failed', 'review_warn'].includes(status) && retryCount < maxRetries,
     canReview: READY_STATUSES.has(status),
     canDownload: READY_STATUSES.has(status),
+    canDelete: !['processing', 'revalidating'].includes(status),
     detailsSummary: String(row.details_summary || '').trim() || null
   };
 }
@@ -200,6 +212,13 @@ function appendJobEvent(jobId, level, message) {
     INSERT INTO statement_import_events (job_id, level, message, created_at)
     VALUES (?, ?, ?, ?)
   `).run(jobId, level, String(message || '').trim() || 'Evento registrado.', nowIso());
+}
+
+function clearJobNotifications(jobId) {
+  db.prepare(`
+    DELETE FROM notifications
+    WHERE related_type = 'statement_import_job' AND related_id = ?
+  `).run(jobId);
 }
 
 function createPdfImportJob({ userId, cardId, month, year, file, preferredProvider = 'gemini' }) {
@@ -428,6 +447,7 @@ function requeueJob(userId, jobId) {
     `).all(jobId);
     artifacts.forEach((artifact) => deleteFileSafe(artifact.path));
     db.prepare(`DELETE FROM statement_import_artifacts WHERE job_id = ? AND kind <> 'source_pdf'`).run(jobId);
+    clearJobNotifications(jobId);
     db.prepare(`DELETE FROM statement_import_job_attempts WHERE job_id = ?`).run(jobId);
     db.prepare(`DELETE FROM statement_import_events WHERE job_id = ?`).run(jobId);
     db.prepare(`
@@ -441,6 +461,34 @@ function requeueJob(userId, jobId) {
   })();
 
   return findJobByIdForUser(userId, jobId);
+}
+
+
+function deleteJob(userId, jobId) {
+  const job = findJobByIdForUser(userId, jobId);
+  if (!job) throw new Error('Nao achei esse job por aqui.');
+  if (!job.canDelete) {
+    throw new Error('Esse job ainda esta rodando. Assim que terminar, o botao de excluir aparece para limpar tudo de uma vez.');
+  }
+
+  const artifactRows = db.prepare(`
+    SELECT path
+    FROM statement_import_artifacts
+    WHERE job_id = ?
+  `).all(jobId);
+  const storageDir = getStorageDirForJob(jobId);
+
+  db.transaction(() => {
+    clearJobNotifications(jobId);
+    db.prepare(`DELETE FROM statement_import_artifacts WHERE job_id = ?`).run(jobId);
+    db.prepare(`DELETE FROM statement_import_job_attempts WHERE job_id = ?`).run(jobId);
+    db.prepare(`DELETE FROM statement_import_events WHERE job_id = ?`).run(jobId);
+    db.prepare(`DELETE FROM statement_import_jobs WHERE id = ? AND user_id = ?`).run(jobId, userId);
+  })();
+
+  artifactRows.forEach((artifact) => deleteFileSafe(artifact.path));
+  deleteDirSafe(storageDir);
+  return job;
 }
 
 function incrementJobAttemptCount(jobId) {
@@ -489,6 +537,8 @@ module.exports = {
   getPreviewPayload,
   getGeneratedCsvPath,
   requeueJob,
+  deleteJob,
+  clearJobNotifications,
   incrementJobAttemptCount,
   cleanupExpiredArtifacts
 };

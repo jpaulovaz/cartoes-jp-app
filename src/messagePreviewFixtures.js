@@ -347,6 +347,12 @@ const ADDITIONAL_MESSAGE_PREVIEW_FIXTURES = {
   "notification.friendship.ended": {
     pessoa: "Mari",
   },
+  "notification.statement_pdf.ready": {
+    arquivo: "fatura-santander-marco.pdf",
+    cartao: "Santander Free",
+    competencia: "03/2026",
+    status_resumo: "42 lancamentos ficaram prontos para revisao.",
+  },
   "dashboard.friendship.pending.single": {
     pessoa: "Mari",
   },

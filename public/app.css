@@ -11280,14 +11280,14 @@ html[data-theme-style="orgulho"] .op-utility-btn--notify[data-push-visual-state=
   }
 
   html[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card {
-    overflow: hidden;
+    overflow: visible;
     padding-top: 1.65rem;
   }
 
   html[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card__check {
-    top: 0.72rem;
-    left: 0.72rem;
-    transform: none;
+    top: 0;
+    left: 0;
+    transform: translate(-50%, -50%);
     width: 2rem;
     height: 2rem;
     border-width: 2px;
@@ -11408,15 +11408,15 @@ html.op-vp-tight[data-op-ui="v4"] .op-dashboard-kpi-card__value {
 
 html.op-vp-compact[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card,
 html.op-vp-tight[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card {
-  overflow: hidden;
+  overflow: visible;
   padding-top: 1.7rem;
 }
 
 html.op-vp-compact[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card__check,
 html.op-vp-tight[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card__check {
-  top: 0.7rem;
-  left: 0.7rem;
-  transform: none;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
   width: 1.95rem;
   height: 1.95rem;
   border-width: 2px;

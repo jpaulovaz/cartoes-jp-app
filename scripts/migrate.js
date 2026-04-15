@@ -341,6 +341,72 @@ function runMigrations() {
     FOREIGN KEY (card_id) REFERENCES cards(id)
   );
 
+
+  CREATE TABLE IF NOT EXISTS statement_import_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    card_id INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    original_filename TEXT,
+    source_mime TEXT,
+    source_size_bytes INTEGER,
+    preferred_provider TEXT,
+    provider_used TEXT,
+    issuer_key TEXT,
+    row_count INTEGER,
+    total_cents INTEGER,
+    warning_message TEXT,
+    error_message TEXT,
+    details_summary TEXT,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    started_at TEXT,
+    finished_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (card_id) REFERENCES cards(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS statement_import_job_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL,
+    provider_key TEXT NOT NULL,
+    stage TEXT,
+    status TEXT NOT NULL DEFAULT 'running',
+    started_at TEXT,
+    finished_at TEXT,
+    latency_ms INTEGER,
+    error_message TEXT,
+    suspicion_codes_json TEXT,
+    response_meta_json TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (job_id) REFERENCES statement_import_jobs(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS statement_import_artifacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    provider_key TEXT,
+    path TEXT NOT NULL,
+    mime_type TEXT,
+    byte_size INTEGER,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (job_id) REFERENCES statement_import_jobs(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS statement_import_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL,
+    level TEXT NOT NULL DEFAULT 'info',
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (job_id) REFERENCES statement_import_jobs(id)
+  );
+
   CREATE TABLE IF NOT EXISTS transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -1327,6 +1393,11 @@ function runMigrations() {
   CREATE INDEX IF NOT EXISTS idx_imports_user ON imports(user_id);
   CREATE INDEX IF NOT EXISTS idx_import_overwrite_events_user_period ON import_overwrite_events(user_id, year, month, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_import_overwrite_events_txn ON import_overwrite_events(transaction_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_statement_import_jobs_user_created ON statement_import_jobs(user_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_statement_import_jobs_status_created ON statement_import_jobs(status, created_at ASC);
+  CREATE INDEX IF NOT EXISTS idx_statement_import_job_attempts_job ON statement_import_job_attempts(job_id, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_statement_import_artifacts_job_kind ON statement_import_artifacts(job_id, kind, provider_key);
+  CREATE INDEX IF NOT EXISTS idx_statement_import_events_job_created ON statement_import_events(job_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_purchase_categories_user_active ON purchase_categories(user_id, active, sort_order, name);
   CREATE INDEX IF NOT EXISTS idx_purchase_categories_user_kind ON purchase_categories(user_id, kind, active);
   CREATE INDEX IF NOT EXISTS idx_txn_user ON transactions(user_id);

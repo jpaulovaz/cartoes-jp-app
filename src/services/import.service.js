@@ -1,7 +1,9 @@
 const { createImportRepository } = require('../repositories/import.repository');
+const { createStatementPdfService } = require('./statementPdf.service');
 
 function createImportService(deps = {}) {
   const repository = deps.repository || createImportRepository(deps);
+  const statementPdfService = deps.statementPdfService || createStatementPdfService(deps);
 
   function getImportPage(userId, context = {}) {
     return {
@@ -9,7 +11,9 @@ function createImportService(deps = {}) {
       error: null,
       formSeed: context.formSeed || null,
       importReport: context.importReport || null,
-      importPreview: context.preview || null
+      importPreview: context.preview || null,
+      importPdfFeature: statementPdfService.buildFeatureState(),
+      importPdfJobs: statementPdfService.listRecentJobs(userId)
     };
   }
 
@@ -54,6 +58,22 @@ function createImportService(deps = {}) {
         message: `Analisei ${repository.formatCountLabel(preview.summary.parsedCount, 'compra', 'compras')} de ${preview.periodLabel}. Agora e so revisar e confirmar.`
       }
     };
+  }
+
+  function createPdfImportJob(userId, body = {}, files = []) {
+    return statementPdfService.enqueuePdfImports(userId, body, files);
+  }
+
+  function openPdfImportReview(userId, jobId, req) {
+    return statementPdfService.openReviewFromJob(userId, jobId, req);
+  }
+
+  function getPdfImportCsvDownload(userId, jobId) {
+    return statementPdfService.getCsvDownload(userId, jobId);
+  }
+
+  function retryPdfImportJob(userId, jobId) {
+    return statementPdfService.retryJob(userId, jobId);
   }
 
   function confirmImportPreview(userId, preview, body = {}, req) {
@@ -185,6 +205,10 @@ function createImportService(deps = {}) {
     getImportPage,
     getCardsForUser,
     createImportPreview,
+    createPdfImportJob,
+    openPdfImportReview,
+    getPdfImportCsvDownload,
+    retryPdfImportJob,
     confirmImportPreview,
     cancelImportPreview
   };

@@ -19,7 +19,7 @@ const STATEMENT_JSON_SCHEMA = {
   properties: {
     issuer: {
       type: 'string',
-      enum: ['inter', 'itau', 'sams_club', 'carrefour', 'santander', 'caixa', 'unknown']
+      enum: ['inter', 'itau', 'sams_club', 'carrefour', 'santander', 'caixa', 'nubank', 'unknown']
     },
     confidence: {
       type: 'string',
@@ -307,6 +307,7 @@ function detectIssuerHint(text, filename = '') {
   if (/ita[uú]|lançamentos atuais|pagamento efetuado em/.test(source)) return 'itau';
   if (/sam's club|sams club|cart[aã]o sam's club/.test(source)) return 'sams_club';
   if (/carrefour|banco csf|cartaocarrefour/.test(source)) return 'carrefour';
+  if (/\bnubank\b|\bnu pagamentos\b/.test(source)) return 'nubank';
   if (/\bbanco\s+inter\b|\binter\s+loop\b|\bcart[aã]o\s+inter\b|\binter\s+(visa|mastercard|elo|black|gold|platinum)\b/.test(source)) return 'inter';
   return 'unknown';
 }
@@ -344,6 +345,12 @@ function getIssuerSpecificInstructions(issuer) {
     carrefour: [
       'No Carrefour, pagamento de fatura via PIX deve ser excluído.',
       'Juros de rotativo e IOF datados entram normalmente.'
+    ],
+    nubank: [
+      'No Nubank, desconsidere tudo que estiver na seção PAGAMENTOS E FINANCIAMENTOS.',
+      'No Nubank, linhas como PAGAMENTO EM DD MON dentro de PAGAMENTOS E FINANCIAMENTOS representam pagamento da fatura anterior e devem ficar fora.',
+      'No Nubank, SALDO RESTANTE DA FATURA ANTERIOR não é compra e deve ficar fora, mesmo quando vier datado ou repetido.',
+      'No Nubank, foque nas linhas da seção TRANSAÇÕES DE ... A ... para montar import_rows.'
     ],
     caixa: [
       'Na Caixa, D significa débito normal e C significa crédito/estorno.',

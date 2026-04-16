@@ -303,11 +303,11 @@ function buildCsvFromRows(cardName, rows) {
 function detectIssuerHint(text, filename = '') {
   const source = `${filename}\n${text}`.toLowerCase();
   if (/cartoes?\s+caixa|cartões?\s+caixa|app cartões caixa|obrigado pelo pagamento/.test(source)) return 'caixa';
-  if (/banco inter|resumo da fatura|inter loop/.test(source)) return 'inter';
   if (/santander|detalhamento da fatura|pagamento e demais créditos/.test(source)) return 'santander';
   if (/ita[uú]|lançamentos atuais|pagamento efetuado em/.test(source)) return 'itau';
   if (/sam's club|sams club|cart[aã]o sam's club/.test(source)) return 'sams_club';
   if (/carrefour|banco csf|cartaocarrefour/.test(source)) return 'carrefour';
+  if (/\bbanco\s+inter\b|\binter\s+loop\b|\bcart[aã]o\s+inter\b|\binter\s+(visa|mastercard|elo|black|gold|platinum)\b/.test(source)) return 'inter';
   return 'unknown';
 }
 

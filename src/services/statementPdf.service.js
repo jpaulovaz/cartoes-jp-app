@@ -27,7 +27,11 @@ const STATEMENT_JSON_SCHEMA = {
     },
     warnings: {
       type: 'array',
-      items: { type: 'string' }
+      description: 'Liste incertezas importantes em portugues do Brasil. Se nao houver alerta, devolva um array vazio.',
+      items: {
+        type: 'string',
+        description: 'Frase curta em portugues do Brasil explicando a incerteza.'
+      }
     },
     import_rows: {
       type: 'array',
@@ -373,7 +377,7 @@ function buildExtractionPrompt({ issuerHint, cardName, month, year, text }) {
     '12. card_last4 deve trazer apenas os 4 dígitos finais do cartão adicional/virtual quando essa informação estiver disponível. Caso contrário, null.',
     '13. amount deve ser numérico em reais, sem símbolo, com créditos/estornos negativos.',
     '14. Use confidence high quando estiver confiante, medium quando houver ruído e low quando houver muita incerteza.',
-    '15. Use warnings para registrar qualquer incerteza importante; caso contrário, devolva um array vazio.',
+    '15. Use warnings para registrar qualquer incerteza importante; caso contrário, devolva um array vazio. Cada item desse array deve ser escrito em português do Brasil, com frase curta e clara.',
     '16. Não invente linhas para bater com o total da fatura.',
     '17. Se existir subtotal de despesas do mês ou lançamentos atuais, use isso como prova dos nove silenciosa, mas sem inventar itens.',
     '',

@@ -531,19 +531,8 @@ let backupJobRunning = false;
 let backupRestoreRunning = false;
 const RECURRING_SYNC_INITIAL_DELAY_MS = Math.max(1000, Number(process.env.RECURRING_SYNC_INITIAL_DELAY_MS || 10000) || 10000);
 const RECURRING_SYNC_INTERVAL_MINUTES = Math.max(1, Number(process.env.RECURRING_SYNC_INTERVAL_MINUTES || 5) || 5);
-const RECURRING_SYNC_DEBUG_ENABLED = parseBooleanSetting(process.env.RECURRING_SYNC_DEBUG, true);
 
-function recurringLog(message, details) {
-  if (!RECURRING_SYNC_DEBUG_ENABLED) return;
-
-  const prefix = `[recurring-scheduler] ${dayjs().format('YYYY-MM-DD HH:mm:ss')} ${message}`;
-  if (details === undefined) {
-    console.log(prefix);
-    return;
-  }
-
-  console.log(prefix, details);
-}
+function recurringLog() {}
 
 function seedAppSettingsFromBootstrap() {
   const now = currentConfigTimestamp();
@@ -2022,15 +2011,6 @@ async function runRecurringTransactionSweep(referenceDate = dayjs()) {
       return { skipped: 'invalid_reference_date' };
     }
 
-    const currentYear = currentDate.year();
-    const currentMonth = currentDate.month() + 1;
-    recurringLog('Sweep automático iniciado.', {
-      referenceDate: currentDate.format('YYYY-MM-DD'),
-      targetYear: currentYear,
-      targetMonth: currentMonth,
-      note: 'O job automático varre o mês real do servidor. Meses futuros só entram quando o calendário virar.'
-    });
-
     const users = db.prepare(`
       SELECT DISTINCT r.user_id
       FROM recurring_rules r
@@ -2039,39 +2019,25 @@ async function runRecurringTransactionSweep(referenceDate = dayjs()) {
       ORDER BY r.user_id
     `).all();
 
-    recurringLog('Usuários elegíveis encontrados para o sweep.', {
-      usersCount: users.length
-    });
-
     const summaries = [];
     users.forEach((row) => {
       const targetUserId = Number(row?.user_id || 0);
       if (!targetUserId) return;
       try {
-        recurringLog(`Iniciando sincronização automática do usuário ${targetUserId}.`, {
-          targetYear: currentYear,
-          targetMonth: currentMonth
-        });
-        const summary = syncRecurringTransactions(targetUserId, currentYear, currentMonth, {
+        const target = getRecurringTargetMonth(targetUserId, currentDate);
+        const summary = syncRecurringTransactions(targetUserId, target.year, target.month, {
           referenceDate: currentDate,
           includeCurrentMonthBeforeDate: true,
+          allowFutureTarget: true,
           scope: 'target_only'
         }) || {};
         summaries.push(summary);
-        recurringLog(`Sincronização automática concluída para o usuário ${targetUserId}.`, summary);
       } catch (error) {
         console.error(`[recurring-scheduler] Falha ao sincronizar o usuario ${targetUserId}:`, error?.stack || error?.message || error);
       }
     });
 
-    recurringLog('Sweep automático finalizado.', {
-      usersProcessed: summaries.length,
-      totalTransactionsCreated: summaries.reduce((acc, summary) => acc + Number(summary?.txnsCreated || 0), 0)
-    });
-
     return {
-      targetYear: currentYear,
-      targetMonth: currentMonth,
       usersProcessed: summaries.length,
       totalTransactionsCreated: summaries.reduce((acc, summary) => acc + Number(summary?.txnsCreated || 0), 0),
       summaries
@@ -2088,8 +2054,7 @@ function restartRecurringScheduler() {
   recurringLog('Agendador das recorrentes configurado.', {
     initialDelayMs: RECURRING_SYNC_INITIAL_DELAY_MS,
     intervalMinutes: RECURRING_SYNC_INTERVAL_MINUTES,
-    intervalMs,
-    debugEnabled: RECURRING_SYNC_DEBUG_ENABLED
+    intervalMs
   });
 
   recurringSchedulerInitialHandle = setTimeout(() => {
@@ -7380,6 +7345,12 @@ function getPreferredDashboardMonth(userId, startYear = dayjs().year(), startMon
   return { year: Number(startYear), month: Number(startMonth) };
 }
 
+function getRecurringTargetMonth(userId, referenceDate = dayjs()) {
+  const reference = dayjs(referenceDate);
+  const baseYear = reference.isValid() ? reference.year() : dayjs().year();
+  const baseMonth = reference.isValid() ? (reference.month() + 1) : (dayjs().month() + 1);
+  return getPreferredDashboardMonth(userId, baseYear, baseMonth);
+}
 
 function occurrenceDateFromStart(startTxnDate, offset) {
   const base = dayjs(startTxnDate);
@@ -7413,6 +7384,7 @@ function getRecurringRules(userId, { includeEnded = false } = {}) {
 function syncRecurringTransactions(userId, targetYear, targetMonth, {
   referenceDate = dayjs(),
   includeCurrentMonthBeforeDate = false,
+  allowFutureTarget = false,
   scope = 'up_to_target'
 } = {}) {
   const year = Number(targetYear);
@@ -7491,7 +7463,10 @@ function syncRecurringTransactions(userId, targetYear, targetMonth, {
     rules.forEach((rule) => {
       summary.rulesProcessed += 1;
       const ruleLabel = `regra ${rule.id} (${rule.description})`;
-      const syncLimit = getRecurringSyncLimitForRule(rule, year, month, reference, { includeCurrentMonthBeforeDate });
+      const syncLimit = getRecurringSyncLimitForRule(rule, year, month, reference, {
+        includeCurrentMonthBeforeDate,
+        allowFutureTarget
+      });
 
       recurringLog(`Analisando ${ruleLabel}.`, {
         requestedYear: year,
@@ -7619,7 +7594,10 @@ function syncRecurringTransactions(userId, targetYear, targetMonth, {
   return summary;
 }
 
-function getRecurringSyncLimitForRule(rule, targetYear, targetMonth, referenceDate = dayjs(), { includeCurrentMonthBeforeDate = false } = {}) {
+function getRecurringSyncLimitForRule(rule, targetYear, targetMonth, referenceDate = dayjs(), {
+  includeCurrentMonthBeforeDate = false,
+  allowFutureTarget = false
+} = {}) {
   const requestedYear = Number(targetYear || 0);
   const requestedMonth = Number(targetMonth || 0);
   if (!requestedYear || !requestedMonth) return null;
@@ -7631,7 +7609,7 @@ function getRecurringSyncLimitForRule(rule, targetYear, targetMonth, referenceDa
   const currentMonth = currentDate.month() + 1;
 
   let limit = { year: requestedYear, month: requestedMonth };
-  if (compareMonthYear(limit.year, limit.month, currentYear, currentMonth) > 0) {
+  if (!allowFutureTarget && compareMonthYear(limit.year, limit.month, currentYear, currentMonth) > 0) {
     limit = { year: currentYear, month: currentMonth };
   }
 
@@ -7650,8 +7628,11 @@ function getRecurringSyncLimitForRule(rule, targetYear, targetMonth, referenceDa
 
 function getRecurringPreview(rule) {
   const today = dayjs();
-  const currentYear = today.year();
-  const currentMonth = today.month() + 1;
+  const referenceYear = today.year();
+  const referenceMonth = today.month() + 1;
+  const target = getRecurringTargetMonth(Number(rule?.user_id || 0), today);
+  const currentYear = Number(target?.year || referenceYear);
+  const currentMonth = Number(target?.month || referenceMonth);
 
   let offset = 0;
   while (offset < 240) {
@@ -7670,7 +7651,8 @@ function getRecurringPreview(rule) {
     if (compareToCurrent === 0) {
       const occurrenceDate = getRecurringOccurrenceDateForMonth(rule, currentYear, currentMonth);
       const occurrence = occurrenceDate ? dayjs(occurrenceDate) : null;
-      if (!occurrence || !occurrence.isValid() || today.isBefore(occurrence, 'day')) {
+      const targetIsFuture = compareMonthYear(currentYear, currentMonth, referenceYear, referenceMonth) > 0;
+      if (!occurrence || !occurrence.isValid() || targetIsFuture || today.isBefore(occurrence, 'day')) {
         return due;
       }
       offset += 1;
@@ -7698,9 +7680,9 @@ function getRecurringOccurrenceDateForMonth(rule, targetYear, targetMonth) {
   return occurrenceDateFromStart(rule.start_txn_date, offset);
 }
 
-function shouldKeepCurrentRecurringMonth(rule, referenceDate = dayjs()) {
+function shouldKeepRecurringMonth(rule, targetYear, targetMonth, referenceDate = dayjs()) {
   const currentDate = dayjs(referenceDate);
-  const occurrenceDate = getRecurringOccurrenceDateForMonth(rule, currentDate.year(), currentDate.month() + 1);
+  const occurrenceDate = getRecurringOccurrenceDateForMonth(rule, targetYear, targetMonth);
   if (!occurrenceDate) return false;
 
   const occurrence = dayjs(occurrenceDate);
@@ -15718,35 +15700,38 @@ app.post("/recurring/:id/state", ensureAuthenticated, (req, res) => {
   }
 
   const today = dayjs();
-  const currentYear = today.year();
-  const currentMonth = today.month() + 1;
+  const target = getRecurringTargetMonth(userId, today);
+  const targetYear = Number(target.year || today.year());
+  const targetMonth = Number(target.month || (today.month() + 1));
+  const targetLabel = monthLabel(targetMonth, targetYear);
 
-  const keepCurrentMonth = shouldKeepCurrentRecurringMonth(rule, today);
+  const keepTargetMonth = shouldKeepRecurringMonth(rule, targetYear, targetMonth, today);
 
   if (action === 'pause') {
     db.prepare("UPDATE recurring_rules SET status = 'paused', updated_at = ? WHERE id = ? AND user_id = ?").run(nowIso(), ruleId, userId);
-    removeFutureRecurringTransactions(userId, ruleId, currentYear, currentMonth, { includeCurrentMonth: !keepCurrentMonth });
-    setFlash(req, "success", keepCurrentMonth
-      ? `${rule.description} foi pausado. O mês atual ficou no histórico e o restante da frente saiu de cena.`
-      : `${rule.description} foi pausado. Como a compra deste mês ainda não tinha acontecido, ela também saiu junto com o futuro.`);
+    removeFutureRecurringTransactions(userId, ruleId, targetYear, targetMonth, { includeCurrentMonth: !keepTargetMonth });
+    setFlash(req, "success", keepTargetMonth
+      ? `${rule.description} foi pausado. A competência ${targetLabel} ficou guardada no histórico e o restante da frente saiu de cena.`
+      : `${rule.description} foi pausado. Como a compra de ${targetLabel} ainda não tinha acontecido, ela também saiu junto com o futuro.`);
   } else if (action === 'resume') {
     db.prepare(`
       UPDATE recurring_rules
       SET status = 'active', active_from_month = ?, active_from_year = ?, ended_at = NULL, updated_at = ?
       WHERE id = ? AND user_id = ?
-    `).run(currentMonth, currentYear, nowIso(), ruleId, userId);
-    syncRecurringTransactions(userId, currentYear, currentMonth, {
+    `).run(targetMonth, targetYear, nowIso(), ruleId, userId);
+    syncRecurringTransactions(userId, targetYear, targetMonth, {
       referenceDate: today,
       includeCurrentMonthBeforeDate: true,
+      allowFutureTarget: true,
       scope: 'target_only'
     });
-    setFlash(req, "success", `${rule.description} foi reativado.`);
+    setFlash(req, "success", `${rule.description} foi reativado e já voltou a mirar ${targetLabel}.`);
   } else if (action === 'end') {
     db.prepare("UPDATE recurring_rules SET status = 'ended', ended_at = ?, updated_at = ? WHERE id = ? AND user_id = ?").run(nowIso(), nowIso(), ruleId, userId);
-    removeFutureRecurringTransactions(userId, ruleId, currentYear, currentMonth, { includeCurrentMonth: !keepCurrentMonth });
-    setFlash(req, "success", keepCurrentMonth
-      ? `${rule.description} foi encerrado. O que já caiu neste mês ficou guardado, e o restante da frente saiu de cena.`
-      : `${rule.description} foi encerrado. Como a compra deste mês ainda não tinha acontecido, ela também foi retirada junto com as próximas.`);
+    removeFutureRecurringTransactions(userId, ruleId, targetYear, targetMonth, { includeCurrentMonth: !keepTargetMonth });
+    setFlash(req, "success", keepTargetMonth
+      ? `${rule.description} foi encerrado. O que já caiu em ${targetLabel} ficou guardado, e o restante da frente saiu de cena.`
+      : `${rule.description} foi encerrado. Como a compra de ${targetLabel} ainda não tinha acontecido, ela também foi retirada junto com as próximas.`);
   } else {
     setFlash(req, "error", "Ação inválida para lançamento recorrente.");
   }

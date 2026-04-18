@@ -522,10 +522,15 @@ let scheduledManualDebtDueSweepRunning = false;
 let scheduledMonthlyFinanceAlertSweepRunning = false;
 let manualDebtDueSchedulerInitialHandle = null;
 let manualDebtDueSchedulerIntervalHandle = null;
+let recurringSweepRunning = false;
+let recurringSchedulerInitialHandle = null;
+let recurringSchedulerIntervalHandle = null;
 let backupSchedulerHandle = null;
 let backupSchedulerNextRunAt = null;
 let backupJobRunning = false;
 let backupRestoreRunning = false;
+const RECURRING_SYNC_INITIAL_DELAY_MS = Math.max(1000, Number(process.env.RECURRING_SYNC_INITIAL_DELAY_MS || 10000) || 10000);
+const RECURRING_SYNC_INTERVAL_MINUTES = Math.max(1, Number(process.env.RECURRING_SYNC_INTERVAL_MINUTES || 5) || 5);
 
 function seedAppSettingsFromBootstrap() {
   const now = currentConfigTimestamp();
@@ -1967,6 +1972,67 @@ function clearManualDebtDueScheduler() {
   }
 }
 
+function clearRecurringScheduler() {
+  if (recurringSchedulerInitialHandle) {
+    clearTimeout(recurringSchedulerInitialHandle);
+    recurringSchedulerInitialHandle = null;
+  }
+  if (recurringSchedulerIntervalHandle) {
+    clearInterval(recurringSchedulerIntervalHandle);
+    recurringSchedulerIntervalHandle = null;
+  }
+}
+
+async function runRecurringTransactionSweep(referenceDate = dayjs()) {
+  if (recurringSweepRunning) return;
+  recurringSweepRunning = true;
+
+  try {
+    const currentDate = dayjs(referenceDate);
+    if (!currentDate.isValid()) return;
+
+    const currentYear = currentDate.year();
+    const currentMonth = currentDate.month() + 1;
+    const users = db.prepare(`
+      SELECT DISTINCT r.user_id
+      FROM recurring_rules r
+      JOIN cards c ON c.id = r.card_id AND c.user_id = r.user_id
+      WHERE r.status = 'active' AND COALESCE(c.active, 1) = 1
+      ORDER BY r.user_id
+    `).all();
+
+    users.forEach((row) => {
+      const targetUserId = Number(row?.user_id || 0);
+      if (!targetUserId) return;
+      try {
+        syncRecurringTransactions(targetUserId, currentYear, currentMonth, {
+          referenceDate: currentDate,
+          includeCurrentMonthBeforeDate: true,
+          scope: 'target_only'
+        });
+      } catch (error) {
+        console.error(`[recurring-scheduler] Falha ao sincronizar o usuario ${targetUserId}:`, error?.message || error);
+      }
+    });
+  } finally {
+    recurringSweepRunning = false;
+  }
+}
+
+function restartRecurringScheduler() {
+  clearRecurringScheduler();
+
+  const intervalMs = RECURRING_SYNC_INTERVAL_MINUTES * 60 * 1000;
+
+  recurringSchedulerInitialHandle = setTimeout(() => {
+    runRecurringTransactionSweep().catch((err) => console.error('Falha no aquecimento das recorrentes do mês:', err?.message || err));
+  }, RECURRING_SYNC_INITIAL_DELAY_MS);
+
+  recurringSchedulerIntervalHandle = setInterval(() => {
+    runRecurringTransactionSweep().catch((err) => console.error('Falha no job automático das recorrentes do mês:', err?.message || err));
+  }, intervalMs);
+}
+
 function restartManualDebtDueScheduler() {
   clearManualDebtDueScheduler();
 
@@ -2014,6 +2080,7 @@ function refreshRuntimeSettings({ restartScheduler = true } = {}) {
   if (restartScheduler) {
     restartCardDueTodayPushScheduler();
     restartManualDebtDueScheduler();
+    restartRecurringScheduler();
     restartBackupScheduler();
   }
   return runtimeSettingsCache;
@@ -7273,10 +7340,18 @@ function getRecurringRules(userId, { includeEnded = false } = {}) {
   `).all(userId);
 }
 
-function syncRecurringTransactions(userId, targetYear, targetMonth, { referenceDate = dayjs() } = {}) {
+function syncRecurringTransactions(userId, targetYear, targetMonth, {
+  referenceDate = dayjs(),
+  includeCurrentMonthBeforeDate = false,
+  scope = 'up_to_target'
+} = {}) {
   const year = Number(targetYear);
   const month = Number(targetMonth);
   if (!year || !month) return;
+
+  const normalizedScope = String(scope || 'up_to_target').trim().toLowerCase() === 'target_only'
+    ? 'target_only'
+    : 'up_to_target';
 
   const rules = db.prepare(`
     SELECT r.*, c.name AS card_name, COALESCE(c.active, 1) AS card_active
@@ -7312,28 +7387,24 @@ function syncRecurringTransactions(userId, targetYear, targetMonth, { referenceD
 
   db.transaction(() => {
     rules.forEach(rule => {
-      const syncLimit = getRecurringSyncLimitForRule(rule, year, month, referenceDate);
+      const syncLimit = getRecurringSyncLimitForRule(rule, year, month, referenceDate, { includeCurrentMonthBeforeDate });
       if (!syncLimit) return;
       if (compareMonthYear(rule.start_due_year, rule.start_due_month, syncLimit.year, syncLimit.month) > 0) return;
 
-      let offset = 0;
-      while (true) {
+      const upsertForOffset = (offset) => {
         const due = shiftMonth(rule.start_due_year, rule.start_due_month, offset);
-        if (compareMonthYear(due.year, due.month, syncLimit.year, syncLimit.month) > 0) break;
+        if (compareMonthYear(due.year, due.month, syncLimit.year, syncLimit.month) > 0) return;
 
         if (compareMonthYear(due.year, due.month, rule.active_from_year, rule.active_from_month) < 0) {
-          offset += 1;
-          continue;
+          return;
         }
 
         if (hasException.get(userId, rule.id, due.month, due.year) || findTxn.get(userId, rule.id, due.month, due.year)) {
-          offset += 1;
-          continue;
+          return;
         }
 
         if (isMonthClosed(userId, due.month, due.year)) {
-          offset += 1;
-          continue;
+          return;
         }
 
         const txnDate = occurrenceDateFromStart(rule.start_txn_date, offset) || rule.start_txn_date;
@@ -7342,14 +7413,27 @@ function syncRecurringTransactions(userId, targetYear, targetMonth, { referenceD
         if (activePeople.length === 1) {
           insAlloc.run(userId, info.lastInsertRowid, activePeople[0].id, rule.amount_cents, nowIso());
         }
+      };
 
+      if (normalizedScope === 'target_only') {
+        const targetOffset = ((year - Number(rule.start_due_year || 0)) * 12) + (month - Number(rule.start_due_month || 0));
+        if (targetOffset < 0) return;
+        upsertForOffset(targetOffset);
+        return;
+      }
+
+      let offset = 0;
+      while (true) {
+        const due = shiftMonth(rule.start_due_year, rule.start_due_month, offset);
+        if (compareMonthYear(due.year, due.month, syncLimit.year, syncLimit.month) > 0) break;
+        upsertForOffset(offset);
         offset += 1;
       }
     });
   })();
 }
 
-function getRecurringSyncLimitForRule(rule, targetYear, targetMonth, referenceDate = dayjs()) {
+function getRecurringSyncLimitForRule(rule, targetYear, targetMonth, referenceDate = dayjs(), { includeCurrentMonthBeforeDate = false } = {}) {
   const requestedYear = Number(targetYear || 0);
   const requestedMonth = Number(targetMonth || 0);
   if (!requestedYear || !requestedMonth) return null;
@@ -7365,7 +7449,7 @@ function getRecurringSyncLimitForRule(rule, targetYear, targetMonth, referenceDa
     limit = { year: currentYear, month: currentMonth };
   }
 
-  if (compareMonthYear(limit.year, limit.month, currentYear, currentMonth) === 0) {
+  if (!includeCurrentMonthBeforeDate && compareMonthYear(limit.year, limit.month, currentYear, currentMonth) === 0) {
     const occurrenceDate = getRecurringOccurrenceDateForMonth(rule, currentYear, currentMonth);
     if (occurrenceDate) {
       const occurrence = dayjs(occurrenceDate);
@@ -11165,7 +11249,6 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
   const userId = req.user.id;
   const now = dayjs();
   const nextReference = shiftMonth(now.year(), now.month() + 1, 1);
-  syncRecurringTransactions(userId, nextReference.year, nextReference.month);
 
   // 1. Puxamos todas as importações e transações manuais do usuário logado
   const recent = db.prepare(`
@@ -11395,7 +11478,6 @@ app.post("/geral/:year/:month/card/:cardId/delete", ensureAuthenticated, (req, r
 });
 
 function sendMonthTransactionsCsv(res, userId, month, year) {
-  syncRecurringTransactions(userId, year, month);
 
   const rows = db.prepare(`
     SELECT
@@ -14601,7 +14683,6 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
   const currentMonth = parseInt(month);
   const currentYear = parseInt(year);
 
-  syncRecurringTransactions(userId, currentYear, currentMonth);
   ensureMonthlyFinanceScaffold(userId, currentMonth, currentYear);
   syncMonthlyFinanceCarryForward(userId, currentMonth, currentYear);
 
@@ -15146,8 +15227,6 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   if (!parsed) return res.status(400).send("Esse mês/ano veio estranho por aqui.");
   const { month, year } = parsed;
 
-  syncRecurringTransactions(userId, year, month);
-
   const requestedChronologicalOrder = parseChronologicalOrder(req.query.order);
   let sort = (req.query.sort || "date").toString();
   let dir = (req.query.dir || (sort === "date" ? "desc" : "asc")).toString();
@@ -15470,7 +15549,11 @@ app.post("/recurring/:id/state", ensureAuthenticated, (req, res) => {
       SET status = 'active', active_from_month = ?, active_from_year = ?, ended_at = NULL, updated_at = ?
       WHERE id = ? AND user_id = ?
     `).run(currentMonth, currentYear, nowIso(), ruleId, userId);
-    syncRecurringTransactions(userId, currentYear, currentMonth);
+    syncRecurringTransactions(userId, currentYear, currentMonth, {
+      referenceDate: today,
+      includeCurrentMonthBeforeDate: true,
+      scope: 'target_only'
+    });
     setFlash(req, "success", `${rule.description} foi reativado.`);
   } else if (action === 'end') {
     db.prepare("UPDATE recurring_rules SET status = 'ended', ended_at = ?, updated_at = ? WHERE id = ? AND user_id = ?").run(nowIso(), nowIso(), ruleId, userId);
@@ -17478,7 +17561,6 @@ function getMonthlyFinanceAnalytics(userId, month, year, span = 6) {
 }
 
 function buildMonthlyReviewViewModel(userId, month, year) {
-  syncRecurringTransactions(userId, year, month);
   const isClosed = isMonthClosed(userId, month, year);
 
   const people = getVisiblePeopleForMonth(userId, month, year, { includePayments: true });
@@ -17747,8 +17829,6 @@ registerSummaryRoutes(app, {
 });
 
 function getPersonStatementExportData(userId, month, year, personId, itemOrder = "oldest") {
-  syncRecurringTransactions(userId, year, month);
-
   const person = db.prepare("SELECT * FROM people WHERE id = ? AND user_id = ?").get(personId, userId);
   if (!person) return null;
 
@@ -18461,12 +18541,14 @@ function createApp() {
 function startSchedulers() {
   startCardDueTodayPushScheduler();
   startManualDebtDueScheduler();
+  restartRecurringScheduler();
   restartBackupScheduler();
 }
 
 function stopSchedulers() {
   clearCardDueTodayPushScheduler();
   clearManualDebtDueScheduler();
+  clearRecurringScheduler();
   clearBackupScheduler();
 }
 

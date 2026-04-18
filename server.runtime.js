@@ -531,6 +531,19 @@ let backupJobRunning = false;
 let backupRestoreRunning = false;
 const RECURRING_SYNC_INITIAL_DELAY_MS = Math.max(1000, Number(process.env.RECURRING_SYNC_INITIAL_DELAY_MS || 10000) || 10000);
 const RECURRING_SYNC_INTERVAL_MINUTES = Math.max(1, Number(process.env.RECURRING_SYNC_INTERVAL_MINUTES || 5) || 5);
+const RECURRING_SYNC_DEBUG_ENABLED = parseBooleanSetting(process.env.RECURRING_SYNC_DEBUG, true);
+
+function recurringLog(message, details) {
+  if (!RECURRING_SYNC_DEBUG_ENABLED) return;
+
+  const prefix = `[recurring-scheduler] ${dayjs().format('YYYY-MM-DD HH:mm:ss')} ${message}`;
+  if (details === undefined) {
+    console.log(prefix);
+    return;
+  }
+
+  console.log(prefix, details);
+}
 
 function seedAppSettingsFromBootstrap() {
   const now = currentConfigTimestamp();
@@ -1973,6 +1986,9 @@ function clearManualDebtDueScheduler() {
 }
 
 function clearRecurringScheduler() {
+  const hadInitialHandle = Boolean(recurringSchedulerInitialHandle);
+  const hadIntervalHandle = Boolean(recurringSchedulerIntervalHandle);
+
   if (recurringSchedulerInitialHandle) {
     clearTimeout(recurringSchedulerInitialHandle);
     recurringSchedulerInitialHandle = null;
@@ -1981,18 +1997,40 @@ function clearRecurringScheduler() {
     clearInterval(recurringSchedulerIntervalHandle);
     recurringSchedulerIntervalHandle = null;
   }
+
+  if (hadInitialHandle || hadIntervalHandle) {
+    recurringLog('Agendador das recorrentes limpo para reconfiguração.', {
+      hadInitialHandle,
+      hadIntervalHandle
+    });
+  }
 }
 
 async function runRecurringTransactionSweep(referenceDate = dayjs()) {
-  if (recurringSweepRunning) return;
+  if (recurringSweepRunning) {
+    recurringLog('Sweep ignorado porque já existe uma execução em andamento.');
+    return { skipped: 'already_running' };
+  }
   recurringSweepRunning = true;
 
   try {
     const currentDate = dayjs(referenceDate);
-    if (!currentDate.isValid()) return;
+    if (!currentDate.isValid()) {
+      recurringLog('Sweep abortado porque a data de referência veio inválida.', {
+        referenceDate: String(referenceDate || '')
+      });
+      return { skipped: 'invalid_reference_date' };
+    }
 
     const currentYear = currentDate.year();
     const currentMonth = currentDate.month() + 1;
+    recurringLog('Sweep automático iniciado.', {
+      referenceDate: currentDate.format('YYYY-MM-DD'),
+      targetYear: currentYear,
+      targetMonth: currentMonth,
+      note: 'O job automático varre o mês real do servidor. Meses futuros só entram quando o calendário virar.'
+    });
+
     const users = db.prepare(`
       SELECT DISTINCT r.user_id
       FROM recurring_rules r
@@ -2001,19 +2039,43 @@ async function runRecurringTransactionSweep(referenceDate = dayjs()) {
       ORDER BY r.user_id
     `).all();
 
+    recurringLog('Usuários elegíveis encontrados para o sweep.', {
+      usersCount: users.length
+    });
+
+    const summaries = [];
     users.forEach((row) => {
       const targetUserId = Number(row?.user_id || 0);
       if (!targetUserId) return;
       try {
-        syncRecurringTransactions(targetUserId, currentYear, currentMonth, {
+        recurringLog(`Iniciando sincronização automática do usuário ${targetUserId}.`, {
+          targetYear: currentYear,
+          targetMonth: currentMonth
+        });
+        const summary = syncRecurringTransactions(targetUserId, currentYear, currentMonth, {
           referenceDate: currentDate,
           includeCurrentMonthBeforeDate: true,
           scope: 'target_only'
-        });
+        }) || {};
+        summaries.push(summary);
+        recurringLog(`Sincronização automática concluída para o usuário ${targetUserId}.`, summary);
       } catch (error) {
-        console.error(`[recurring-scheduler] Falha ao sincronizar o usuario ${targetUserId}:`, error?.message || error);
+        console.error(`[recurring-scheduler] Falha ao sincronizar o usuario ${targetUserId}:`, error?.stack || error?.message || error);
       }
     });
+
+    recurringLog('Sweep automático finalizado.', {
+      usersProcessed: summaries.length,
+      totalTransactionsCreated: summaries.reduce((acc, summary) => acc + Number(summary?.txnsCreated || 0), 0)
+    });
+
+    return {
+      targetYear: currentYear,
+      targetMonth: currentMonth,
+      usersProcessed: summaries.length,
+      totalTransactionsCreated: summaries.reduce((acc, summary) => acc + Number(summary?.txnsCreated || 0), 0),
+      summaries
+    };
   } finally {
     recurringSweepRunning = false;
   }
@@ -2023,13 +2085,21 @@ function restartRecurringScheduler() {
   clearRecurringScheduler();
 
   const intervalMs = RECURRING_SYNC_INTERVAL_MINUTES * 60 * 1000;
+  recurringLog('Agendador das recorrentes configurado.', {
+    initialDelayMs: RECURRING_SYNC_INITIAL_DELAY_MS,
+    intervalMinutes: RECURRING_SYNC_INTERVAL_MINUTES,
+    intervalMs,
+    debugEnabled: RECURRING_SYNC_DEBUG_ENABLED
+  });
 
   recurringSchedulerInitialHandle = setTimeout(() => {
-    runRecurringTransactionSweep().catch((err) => console.error('Falha no aquecimento das recorrentes do mês:', err?.message || err));
+    recurringLog('Disparo inicial do agendador das recorrentes.');
+    runRecurringTransactionSweep().catch((err) => console.error('Falha no aquecimento das recorrentes do mês:', err?.stack || err?.message || err));
   }, RECURRING_SYNC_INITIAL_DELAY_MS);
 
   recurringSchedulerIntervalHandle = setInterval(() => {
-    runRecurringTransactionSweep().catch((err) => console.error('Falha no job automático das recorrentes do mês:', err?.message || err));
+    recurringLog('Disparo recorrente do agendador das recorrentes.');
+    runRecurringTransactionSweep().catch((err) => console.error('Falha no job automático das recorrentes do mês:', err?.stack || err?.message || err));
   }, intervalMs);
 }
 
@@ -7347,11 +7417,34 @@ function syncRecurringTransactions(userId, targetYear, targetMonth, {
 } = {}) {
   const year = Number(targetYear);
   const month = Number(targetMonth);
-  if (!year || !month) return;
+  const reference = dayjs(referenceDate);
+  const summary = {
+    userId: Number(userId || 0) || null,
+    requestedYear: year || null,
+    requestedMonth: month || null,
+    referenceDate: reference.isValid() ? reference.format('YYYY-MM-DD') : String(referenceDate || ''),
+    includeCurrentMonthBeforeDate: Boolean(includeCurrentMonthBeforeDate),
+    scope: String(scope || 'up_to_target').trim().toLowerCase() === 'target_only' ? 'target_only' : 'up_to_target',
+    rulesTotal: 0,
+    rulesProcessed: 0,
+    txnsCreated: 0,
+    allocationsCreated: 0,
+    skippedNoLimit: 0,
+    skippedBeforeStart: 0,
+    skippedBeforeActiveFrom: 0,
+    skippedBecauseException: 0,
+    skippedBecauseExistingTxn: 0,
+    skippedBecauseMonthClosed: 0,
+    skippedBecauseTargetBeforeStart: 0,
+    skippedBecauseFutureMonthClamp: 0
+  };
 
-  const normalizedScope = String(scope || 'up_to_target').trim().toLowerCase() === 'target_only'
-    ? 'target_only'
-    : 'up_to_target';
+  if (!year || !month) {
+    recurringLog('Sincronização das recorrentes abortada por competência inválida.', summary);
+    return summary;
+  }
+
+  const normalizedScope = summary.scope;
 
   const rules = db.prepare(`
     SELECT r.*, c.name AS card_name, COALESCE(c.active, 1) AS card_active
@@ -7361,7 +7454,16 @@ function syncRecurringTransactions(userId, targetYear, targetMonth, {
     ORDER BY r.id
   `).all(userId);
 
-  if (!rules.length) return;
+  summary.rulesTotal = rules.length;
+  recurringLog(`Sync das recorrentes iniciada para o usuário ${userId}.`, {
+    ...summary,
+    note: 'Quando a competência pedida estiver no futuro, a regra é limitada ao mês real do servidor.'
+  });
+
+  if (!rules.length) {
+    recurringLog(`Nenhuma regra ativa encontrada para o usuário ${userId}.`, summary);
+    return summary;
+  }
 
   const activePeople = db.prepare("SELECT id FROM people WHERE user_id = ? AND active = 1 AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted' AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted' ORDER BY id").all(userId);
   const findTxn = db.prepare(`
@@ -7386,38 +7488,119 @@ function syncRecurringTransactions(userId, targetYear, targetMonth, {
   `);
 
   db.transaction(() => {
-    rules.forEach(rule => {
-      const syncLimit = getRecurringSyncLimitForRule(rule, year, month, referenceDate, { includeCurrentMonthBeforeDate });
-      if (!syncLimit) return;
-      if (compareMonthYear(rule.start_due_year, rule.start_due_month, syncLimit.year, syncLimit.month) > 0) return;
+    rules.forEach((rule) => {
+      summary.rulesProcessed += 1;
+      const ruleLabel = `regra ${rule.id} (${rule.description})`;
+      const syncLimit = getRecurringSyncLimitForRule(rule, year, month, reference, { includeCurrentMonthBeforeDate });
+
+      recurringLog(`Analisando ${ruleLabel}.`, {
+        requestedYear: year,
+        requestedMonth: month,
+        startDueYear: Number(rule.start_due_year || 0) || null,
+        startDueMonth: Number(rule.start_due_month || 0) || null,
+        activeFromYear: Number(rule.active_from_year || 0) || null,
+        activeFromMonth: Number(rule.active_from_month || 0) || null,
+        syncLimit
+      });
+
+      if (!syncLimit) {
+        summary.skippedNoLimit += 1;
+        recurringLog(`Pulando ${ruleLabel} porque não foi possível calcular o limite de sincronização.`);
+        return;
+      }
+
+      if (compareMonthYear(year, month, syncLimit.year, syncLimit.month) > 0) {
+        recurringLog(`A competência pedida para ${ruleLabel} foi limitada ao mês atual do servidor.`, {
+          requestedYear: year,
+          requestedMonth: month,
+          effectiveYear: syncLimit.year,
+          effectiveMonth: syncLimit.month,
+          note: 'Esse log aparece quando alguém olha um mês futuro antes da virada real do calendário.'
+        });
+      }
+
+      if (compareMonthYear(rule.start_due_year, rule.start_due_month, syncLimit.year, syncLimit.month) > 0) {
+        summary.skippedBeforeStart += 1;
+        recurringLog(`Pulando ${ruleLabel} porque a regra ainda começa depois do limite calculado.`, {
+          startDueYear: Number(rule.start_due_year || 0) || null,
+          startDueMonth: Number(rule.start_due_month || 0) || null,
+          syncLimit
+        });
+        return;
+      }
 
       const upsertForOffset = (offset) => {
         const due = shiftMonth(rule.start_due_year, rule.start_due_month, offset);
-        if (compareMonthYear(due.year, due.month, syncLimit.year, syncLimit.month) > 0) return;
-
-        if (compareMonthYear(due.year, due.month, rule.active_from_year, rule.active_from_month) < 0) {
+        if (compareMonthYear(due.year, due.month, syncLimit.year, syncLimit.month) > 0) {
+          if (compareMonthYear(due.year, due.month, year, month) === 0) {
+            summary.skippedBecauseFutureMonthClamp += 1;
+            recurringLog(`Pulando ${ruleLabel} em ${String(due.month).padStart(2, '0')}/${due.year} porque ainda é um mês futuro para o servidor.`, {
+              due,
+              syncLimit
+            });
+          }
           return;
         }
 
-        if (hasException.get(userId, rule.id, due.month, due.year) || findTxn.get(userId, rule.id, due.month, due.year)) {
+        if (compareMonthYear(due.year, due.month, rule.active_from_year, rule.active_from_month) < 0) {
+          summary.skippedBeforeActiveFrom += 1;
+          recurringLog(`Pulando ${ruleLabel} em ${String(due.month).padStart(2, '0')}/${due.year} porque a regra só reativa a partir de ${String(rule.active_from_month).padStart(2, '0')}/${rule.active_from_year}.`);
+          return;
+        }
+
+        if (hasException.get(userId, rule.id, due.month, due.year)) {
+          summary.skippedBecauseException += 1;
+          recurringLog(`Pulando ${ruleLabel} em ${String(due.month).padStart(2, '0')}/${due.year} porque existe exceção registrada para esse mês.`);
+          return;
+        }
+
+        const existingTxn = findTxn.get(userId, rule.id, due.month, due.year);
+        if (existingTxn) {
+          summary.skippedBecauseExistingTxn += 1;
+          recurringLog(`Pulando ${ruleLabel} em ${String(due.month).padStart(2, '0')}/${due.year} porque a transação ${existingTxn.id} já existe.`);
           return;
         }
 
         if (isMonthClosed(userId, due.month, due.year)) {
+          summary.skippedBecauseMonthClosed += 1;
+          recurringLog(`Pulando ${ruleLabel} em ${String(due.month).padStart(2, '0')}/${due.year} porque o mês está fechado.`);
           return;
         }
 
         const txnDate = occurrenceDateFromStart(rule.start_txn_date, offset) || rule.start_txn_date;
         const info = insTxn.run(userId, rule.card_id, txnDate, rule.description, rule.amount_cents, due.month, due.year, rule.id, rule.purchase_category_id || null, nowIso());
+        summary.txnsCreated += 1;
+        recurringLog(`Transação recorrente criada para ${ruleLabel}.`, {
+          transactionId: Number(info.lastInsertRowid || 0) || null,
+          dueMonth: due.month,
+          dueYear: due.year,
+          txnDate,
+          amountCents: Number(rule.amount_cents || 0) || 0
+        });
 
         if (activePeople.length === 1) {
           insAlloc.run(userId, info.lastInsertRowid, activePeople[0].id, rule.amount_cents, nowIso());
+          summary.allocationsCreated += 1;
+          recurringLog(`Rateio automático criado para a transação ${info.lastInsertRowid}.`, {
+            personId: Number(activePeople[0].id || 0) || null,
+            shareCents: Number(rule.amount_cents || 0) || 0
+          });
         }
       };
 
       if (normalizedScope === 'target_only') {
         const targetOffset = ((year - Number(rule.start_due_year || 0)) * 12) + (month - Number(rule.start_due_month || 0));
-        if (targetOffset < 0) return;
+        if (targetOffset < 0) {
+          summary.skippedBecauseTargetBeforeStart += 1;
+          recurringLog(`Pulando ${ruleLabel} porque a competência pedida vem antes do início da regra.`, {
+            targetOffset,
+            requestedYear: year,
+            requestedMonth: month,
+            startDueYear: Number(rule.start_due_year || 0) || null,
+            startDueMonth: Number(rule.start_due_month || 0) || null
+          });
+          return;
+        }
         upsertForOffset(targetOffset);
         return;
       }
@@ -7431,6 +7614,9 @@ function syncRecurringTransactions(userId, targetYear, targetMonth, {
       }
     });
   })();
+
+  recurringLog(`Sync das recorrentes finalizada para o usuário ${userId}.`, summary);
+  return summary;
 }
 
 function getRecurringSyncLimitForRule(rule, targetYear, targetMonth, referenceDate = dayjs(), { includeCurrentMonthBeforeDate = false } = {}) {
@@ -18539,6 +18725,11 @@ function createApp() {
 }
 
 function startSchedulers() {
+  recurringLog('Inicializando todos os agendadores do servidor.', {
+    pid: process.pid,
+    version: APP_VERSION,
+    nodeEnv: process.env.NODE_ENV || 'development'
+  });
   startCardDueTodayPushScheduler();
   startManualDebtDueScheduler();
   restartRecurringScheduler();
@@ -18571,6 +18762,12 @@ function startServer(options = {}) {
   const handleListen = () => {
     const activePort = resolveListeningPort(server, port);
     console.log(`✅ Rodando em http://localhost:${activePort}`);
+    recurringLog('Servidor pronto para receber conexões.', {
+      pid: process.pid,
+      version: APP_VERSION,
+      port: activePort,
+      startSchedulers: options.startSchedulers !== false
+    });
 
     if (options.startSchedulers !== false) {
       startSchedulers();

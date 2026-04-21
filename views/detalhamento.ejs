@@ -1,4 +1,4 @@
-<%- include("partials/header", { title: "AcerttaPay | 👑 Meu Controle" }) %>
+<%- include("partials/header", { title: "AcerttaPay | Meu Controle" }) %>
 
     <% 
         let incCents = 0;
@@ -164,7 +164,7 @@
 
         function buildSharedDebtTrailCountLabel(count) {
             const total = Number(count || 0);
-            if (total <= 0) return 'Tudo tranquilo por aqui. Nenhum acerto em aberto ✨';
+            if (total <= 0) return 'Nenhum acerto em aberto por aqui.';
             return total === 1 ? '1 acerto em aberto por aqui' : `${total} acertos em aberto por aqui`;
         }
 
@@ -239,9 +239,9 @@
                 <section class="op-page-hero op-dashboard-hero-v4 op-fade-up mb-6">
                     <div class="op-detalhamento-hero__content">
                         <div class="op-detalhamento-hero__copy min-w-0">
-                            <span class="op-page-hero__eyebrow">Seu QG financeiro</span>
-                            <h1 class="op-page-hero__title mt-4">👑 Meu Controle</h1>
-                            <p class="op-page-hero__subtitle mt-3">Oi, <span class="font-bold text-blue-600 dark:text-blue-300"><%= heroOwnerName %></span>! Aqui você acompanha tudo que entra, o que sai, as faturas e o fôlego do mês. Tudo no mesmo lugar, sem abrir mil telas.</p>
+                            <span class="op-page-hero__eyebrow">Painel financeiro do mês</span>
+                            <h1 class="op-page-hero__title mt-4">Meu Controle</h1>
+                            <p class="op-page-hero__subtitle mt-3">Olá, <span class="font-bold text-blue-600 dark:text-blue-300"><%= heroOwnerName %></span>. Aqui você acompanha entradas, saídas, faturas e o saldo previsto do mês em um só lugar.</p>
                         </div>
                         <button type="button"
                             class="op-icon-btn op-sensitive-toggle op-sensitive-toggle--mobile"
@@ -288,12 +288,12 @@
                                 <% if (isClosed) { %>
                                     <button onclick="toggleLock('open')"
                                         class="op-btn op-btn-danger-soft op-btn--block">
-                                        🔒 Mês Fechado
+                                        Mês fechado
                                     </button>
                                 <% } else { %>
                                     <button onclick="toggleLock('close')"
                                         class="op-btn op-btn-success op-btn--block">
-                                        🔓 Fechar Mês
+                                        Fechar mês
                                     </button>
                                 <% } %>
 

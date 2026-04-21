@@ -3156,71 +3156,35 @@
 })();
 
 (function () {
-  const STYLE_STORAGE_KEY = 'op-theme-style';
-  const VALID_STYLES = new Set(['classic', 'confete', 'orgulho']);
   const root = document.documentElement;
-  const body = document.body;
-
-  function getCurrentStyle() {
-    const style = root.dataset.themeStyle;
-    return VALID_STYLES.has(style) ? style : 'classic';
-  }
 
   function getCurrentAppearance() {
     return root.classList.contains('dark') ? 'dark' : 'light';
   }
 
-  function getThemeColor(style, appearance) {
-    if (style === 'confete') {
-      return appearance === 'dark' ? '#221531' : '#fff1f7';
-    }
-    if (style === 'orgulho') {
-      return appearance === 'dark' ? '#34173a' : '#f75f70';
-    }
-    return appearance === 'dark' ? '#020617' : '#eaf2ff';
+  function getThemeColor(appearance) {
+    return appearance === 'dark' ? '#0B1220' : '#F6F8FB';
   }
 
   function syncThemeChrome() {
-    const style = getCurrentStyle();
     const appearance = getCurrentAppearance();
-    root.dataset.themeStyle = style;
+    root.dataset.themeStyle = 'classic';
+
+    try {
+      localStorage.removeItem('op-theme-style');
+    } catch (error) {
+      // ignore storage issues
+    }
 
     const themeColorMeta = document.querySelector('meta[name="theme-color"]');
     if (themeColorMeta) {
-      themeColorMeta.setAttribute('content', getThemeColor(style, appearance));
+      themeColorMeta.setAttribute('content', getThemeColor(appearance));
     }
-
-    document.querySelectorAll('[data-theme-style-choice]').forEach((button) => {
-      const isActive = button.getAttribute('data-theme-style-choice') === style;
-      button.classList.toggle('is-active', isActive);
-      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    });
-
-    const styleLabels = {
-      classic: 'Visual Clássico ativo',
-      confete: 'Visual Confete ativo',
-      orgulho: 'Visual Orgulho ativo'
-    };
-    const styleCaptions = {
-      classic: 'Clássico ativo',
-      confete: 'Confete ativo',
-      orgulho: 'Orgulho ativo'
-    };
-
-    document.querySelectorAll('[data-theme-style-open]').forEach((button) => {
-      const label = styleLabels[style] || styleLabels.classic;
-      button.setAttribute('title', `${label}. Toque para trocar.`);
-      button.setAttribute('aria-label', `${label}. Toque para trocar.`);
-    });
-
-    document.querySelectorAll('[data-mobile-theme-style-caption]').forEach((node) => {
-      node.textContent = styleCaptions[style] || styleCaptions.classic;
-    });
 
     const nextAppearanceLabel = appearance === 'dark' ? 'Modo claro' : 'Modo escuro';
     const nextAppearanceHelper = appearance === 'dark'
-      ? 'Clareia a tela e deixa tudo mais aberto.'
-      : 'Deixa a tela mais confortável quando a luz abaixa.';
+      ? 'Mostra a interface com fundo claro e contraste mais aberto.'
+      : 'Mostra a interface com fundo escuro e contraste mais confortável.';
 
     document.querySelectorAll('[data-mobile-appearance-mode-label]').forEach((node) => {
       node.textContent = nextAppearanceLabel;
@@ -3232,17 +3196,6 @@
       button.setAttribute('title', nextAppearanceLabel);
       button.setAttribute('aria-label', nextAppearanceLabel);
     });
-  }
-
-  function setThemeStyle(style) {
-    const nextStyle = VALID_STYLES.has(style) ? style : 'classic';
-    root.dataset.themeStyle = nextStyle;
-    try {
-      localStorage.setItem(STYLE_STORAGE_KEY, nextStyle);
-    } catch (error) {
-      // ignore storage issues
-    }
-    syncThemeChrome();
   }
 
   function initMobileAppearanceMenu() {
@@ -3300,76 +3253,16 @@
     });
   }
 
-  function initThemeStyleCenter() {
-    const center = document.querySelector('[data-theme-style-center]');
-    if (!(center instanceof HTMLElement)) {
-      syncThemeChrome();
-      return;
-    }
-
-    const openButtons = document.querySelectorAll('[data-theme-style-open]');
-    const closeButtons = center.querySelectorAll('[data-theme-style-close]');
-    const backdrop = center.querySelector('[data-theme-style-backdrop]');
-    const choiceButtons = center.querySelectorAll('[data-theme-style-choice]');
-    let isOpen = false;
-
-    function setVisibility(visible) {
-      isOpen = visible;
-      center.classList.toggle('hidden', !visible);
-      center.setAttribute('aria-hidden', visible ? 'false' : 'true');
-      if (body) {
-        body.classList.toggle('overflow-hidden', visible);
-      }
-    }
-
-    openButtons.forEach((button) => {
-      button.addEventListener('click', () => setVisibility(true));
-    });
-
-    closeButtons.forEach((button) => {
-      button.addEventListener('click', () => setVisibility(false));
-    });
-
-    if (backdrop instanceof HTMLElement) {
-      backdrop.addEventListener('click', () => setVisibility(false));
-    }
-
-    center.addEventListener('click', (event) => {
-      const panel = center.querySelector('.op-style-center-panel');
-      if (!(panel instanceof HTMLElement)) return;
-      if (event.target === center && !panel.contains(event.target)) {
-        setVisibility(false);
-      }
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && isOpen) {
-        setVisibility(false);
-      }
-    });
-
-    choiceButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        const style = button.getAttribute('data-theme-style-choice') || 'classic';
-        setThemeStyle(style);
-        window.setTimeout(() => setVisibility(false), 120);
-      });
-    });
-
-    syncThemeChrome();
-  }
-
   window.OPSyncThemeChrome = syncThemeChrome;
-  window.OPSetThemeStyle = setThemeStyle;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       initMobileAppearanceMenu();
-      initThemeStyleCenter();
+      syncThemeChrome();
     });
   } else {
     initMobileAppearanceMenu();
-    initThemeStyleCenter();
+    syncThemeChrome();
   }
 })();
 

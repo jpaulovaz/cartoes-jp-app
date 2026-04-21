@@ -1,12 +1,12 @@
-<%- include("partials/header", { title: `AcerttaPay | Resumo da ópera ${String(month).padStart(2,'0')}/${year}` }) %>
+<%- include("partials/header", { title: `AcerttaPay | Resumo mensal ${String(month).padStart(2,'0')}/${year}` }) %>
 
   <div class="op-screen op-screen--summary op-summary-screen-v4 w-full max-w-[104rem] mx-auto space-y-5 pb-24" data-op-mobile-safe-area="bottom-nav" data-summary-autosave-root data-year="<%= year %>" data-month="<%= month %>">
 
     <section class="op-page-hero op-summary-hero-v4 op-fade-up mb-6">
       <div>
         <span class="op-page-hero__eyebrow">Resumo da rodada</span>
-        <h1 class="op-page-hero__title mt-4">Resumo da ópera — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
-        <p class="op-page-hero__subtitle mt-3">Confira cartões, parcerias e pagamentos do mês sem misturar isso com os gráficos.</p>
+        <h1 class="op-page-hero__title mt-4">Resumo mensal — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
+        <p class="op-page-hero__subtitle mt-3">Confira cartões, parcerias e pagamentos do mês sem misturar isso com a leitura analítica.</p>
       </div>
       <div class="op-page-hero__actions">
         <a href="/month/<%= year %>/<%= month %>"
@@ -62,8 +62,8 @@
           : 'Entrou e saiu no mesmo valor.');
     %>
     <div hidden data-offline-snapshot
-      data-snapshot-page="Resumo da ópera"
-      data-snapshot-title="Resumo da ópera - <%= String(month).padStart(2,'0') %>/<%= year %>"
+      data-snapshot-page="Resumo mensal"
+      data-snapshot-title="Resumo mensal - <%= String(month).padStart(2,'0') %>/<%= year %>"
       data-snapshot-summary="<%= `Cartões com ${formatBRLFromCents(summaryCardsRemainingCents)} ainda respirando e parcerias com ${formatBRLFromCents(summaryPeopleRemainingCents)} pendentes.` %>"
       data-snapshot-primary-label="Próxima fatura"
       data-snapshot-primary-value="<%= nextDueCard ? `${nextDueCard.card_name} · ${nextDueLabel}` : 'Sem fatura visível' %>"

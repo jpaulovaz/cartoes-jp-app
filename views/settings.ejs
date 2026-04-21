@@ -1,5 +1,5 @@
 
-<%- include("partials/header", { title: "AcerttaPay | Seu jeito no app" }) %>
+<%- include("partials/header", { title: "AcerttaPay | Configurações" }) %>
 
 <%
   const pendingRequests = Array.isArray(pendingFriendRequests) ? pendingFriendRequests : [];
@@ -255,19 +255,19 @@
 
 <%
   const settingsNavItems = [
-    { href: '#profile', icon: '👤', label: 'Perfil', classes: 'inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-amber-100/80 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35' },
-    { href: '#alerts', icon: '🔔', label: 'Alertas', classes: 'inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-bold text-sky-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-100/80 dark:border-sky-900 dark:bg-sky-900/20 dark:text-sky-200 dark:hover:bg-sky-900/35' },
-    { href: '#pix', icon: '💜', label: 'Pix', classes: 'inline-flex items-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-bold text-violet-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-violet-100/80 dark:border-violet-900 dark:bg-violet-900/20 dark:text-violet-200 dark:hover:bg-violet-900/35' },
-    { href: '#security', icon: '🔐', label: 'Segurança' },
-    { href: '/people#my-profile', icon: '🫶', label: 'Voltar pra Minha Rede' }
+    { href: '#profile', label: 'Perfil' },
+    { href: '#alerts', label: 'Alertas' },
+    { href: '#pix', label: 'Pix' },
+    { href: '#security', label: 'Segurança' },
+    { href: '/people#my-profile', label: 'Voltar para Minha Rede' }
   ];
 %>
 
 <div class="op-page-shell op-settings-screen-v4 mx-auto max-w-7xl space-y-5">
   <%- include('partials/page-hero', {
-    eyebrow: 'Seu jeito no app',
-    title: 'Seu jeito no app',
-    subtitle: 'Perfil, alertas, Pix e segurança agora ficam em uma casa só, sem bagunçar a parte social da sua rede.',
+    eyebrow: 'Preferências do app',
+    title: 'Configurações',
+    subtitle: 'Perfil, alertas, Pix e segurança em um só lugar, com a mesma leitura do restante do app.',
     heroClass: 'op-settings-hero-v4'
   }) %>
 

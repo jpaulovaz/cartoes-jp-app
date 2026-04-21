@@ -54,36 +54,36 @@
   const notificationPreferenceTotalCount = Number(notificationPreferenceState.totalCount || 0) || notificationPreferenceGroups.length;
   const notificationPreferenceCopy = {
     friendship_activity: {
-      title: 'Amizades',
-      description: 'Pedidos, aceites e mudanças por aqui.'
+      title: 'Minha Rede',
+      description: 'Pedidos, aceites e mudanças na sua rede.'
     },
     shared_debt_new: {
       title: 'Novos acertos',
-      description: 'Quando chega acerto, leva ou lembrete novo.'
+      description: 'Quando entra um novo acerto ou lembrete.'
     },
     shared_debt_updates: {
       title: 'Respostas dos acertos',
-      description: 'Atualizações, aceites, recusas e revisões.'
+      description: 'Aceites, recusas, revisões e novas respostas.'
     },
     shared_debt_payments: {
       title: 'Pagamentos',
-      description: 'Quando alguém marca ou confirma pagamento.'
+      description: 'Quando alguém avisa pagamento ou confirma recebimento.'
     },
     finance_date_alerts: {
       title: 'Datas do mês',
-      description: 'Quando chega o dia marcado da grana que entra ou sai.'
+      description: 'Lembretes das datas marcadas de entradas e saídas.'
     },
     due_date_alerts: {
       title: 'Datas combinadas',
-      description: 'Lembretes automáticos quando um acerto avulso ou lembrete privado bate na data.'
+      description: 'Lembretes de acertos avulsos e lembretes privados.'
     },
     monthly_pix_updates: {
       title: 'Pix do mês',
-      description: 'Pix informado, confirmado ou revisado.'
+      description: 'Atualizações do Pix informado ou confirmado no mês.'
     },
     card_due_today: {
       title: 'Fatura vencendo',
-      description: 'Lembrete no dia do vencimento do cartão.'
+      description: 'Aviso no dia do vencimento do cartão.'
     }
   };
   const signatureVibeOptions = Array.isArray(profileSignatureVibeOptions) ? profileSignatureVibeOptions : [];
@@ -205,7 +205,7 @@
     if (person && person.friendship_active && person.linked_user_pix_ready) {
       return {
         label: 'Pix ok',
-        summary: 'Quando rolar pagamento, vai no Pix do perfil.',
+        summary: 'Quando houver pagamento, o app usa o Pix do perfil.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200'
       };
     }
@@ -213,7 +213,7 @@
     if (person && person.friendship_active && person.linked_user_pix_enabled) {
       return {
         label: 'Pix pendente',
-        summary: 'O Pix foi ligado, mas ainda não ficou pronto.',
+        summary: 'O Pix foi informado e ainda está em validação.',
         badgeClasses: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
       };
     }
@@ -221,7 +221,7 @@
     if (person && person.friendship_active && person.has_app_user) {
       return {
         label: 'Pix pendente',
-        summary: 'A amizade vale; o Pix ainda falta.',
+        summary: 'A amizade está ativa. O Pix ainda não foi configurado.',
         badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300'
       };
     }
@@ -229,14 +229,14 @@
     if (person && person.has_app_user) {
       return {
         label: 'Depois da amizade',
-        summary: 'Depois da amizade, o Pix vem do perfil.',
+        summary: 'Depois da amizade, o Pix passa a vir do perfil.',
         badgeClasses: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200'
       };
     }
 
     return {
       label: 'Sem Pix por aqui',
-      summary: 'Se ela entrar no app, cadastra o Pix do lado de lá.',
+      summary: 'Quando esse contato entrar no app, o Pix poderá ser configurado no perfil.',
       badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300'
     };
   };
@@ -259,15 +259,23 @@
     { href: '#alerts', label: 'Alertas' },
     { href: '#pix', label: 'Pix' },
     { href: '#security', label: 'Segurança' },
-    { href: '/people#my-profile', label: 'Voltar para Minha Rede' }
+    { href: '/people#my-profile', label: 'Minha Rede' }
   ];
+
+  const settingsHeroMetaHtml = [
+    `<span class="badge">${notificationPreferenceEnabledCount}/${notificationPreferenceTotalCount} alertas ativos</span>`,
+    `<span class="badge">${selfPixEnabled && selfProfile?.pix_valid ? 'Pix pronto' : (selfPixEnabled ? 'Pix em ajuste' : 'Pix desligado')}</span>`,
+    `<span class="badge">${appPinEnabled ? 'PIN ativo' : 'PIN desligado'}</span>`,
+    `<span class="badge">${appPasskeyCount}/${appPasskeyMaxCount || 6} aparelho(s)</span>`
+  ].join('');
 %>
 
 <div class="op-page-shell op-settings-screen-v4 mx-auto max-w-7xl space-y-5">
   <%- include('partials/page-hero', {
-    eyebrow: 'Preferências do app',
+    eyebrow: 'Preferências da conta',
     title: 'Configurações',
-    subtitle: 'Perfil, alertas, Pix e segurança em um só lugar, com a mesma leitura do restante do app.',
+    subtitle: 'Perfil, alertas, Pix e segurança reunidos com leitura mais clara e operacional.',
+    metaHtml: settingsHeroMetaHtml,
     heroClass: 'op-settings-hero-v4'
   }) %>
 
@@ -353,7 +361,7 @@
       keyInput.placeholder = 'Ex.: 21999999999';
       keyInput.inputMode = 'numeric';
       keyInput.maxLength = 15;
-      help.textContent = 'Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.';
+      help.textContent = 'Informe DDD + número, com ou sem máscara. O código do país é tratado automaticamente.';
       return;
     }
 
@@ -361,7 +369,7 @@
       keyInput.placeholder = 'Ex.: 12345678900';
       keyInput.inputMode = 'numeric';
       keyInput.maxLength = 14;
-      help.textContent = 'Pode colar com pontuação ou só os números. A gente limpa por trás.';
+      help.textContent = 'Pode colar com ou sem pontuação. A limpeza acontece automaticamente.';
       return;
     }
 
@@ -369,24 +377,24 @@
       keyInput.placeholder = 'Ex.: 12345678000190';
       keyInput.inputMode = 'numeric';
       keyInput.maxLength = 18;
-      help.textContent = 'Pode colar com pontuação ou só os números. A gente limpa por trás.';
+      help.textContent = 'Pode colar com ou sem pontuação. A limpeza acontece automaticamente.';
       return;
     }
 
     if (type === 'email') {
       keyInput.placeholder = 'Ex.: joao@email.com';
-      help.textContent = 'Aqui vale o e-mail completinho, do jeitinho que está cadastrado no banco.';
+      help.textContent = 'Informe o e-mail completo cadastrado no banco.';
       return;
     }
 
     if (type === 'evp') {
       keyInput.placeholder = 'Ex.: 123e4567-e89b-12d3-a456-426614174000';
-      help.textContent = 'Se for chave aleatória, cole ela inteira e pronto.';
+      help.textContent = 'Cole a chave aleatória completa.';
       return;
     }
 
     keyInput.placeholder = 'Ex.: 21999999999';
-    help.textContent = 'Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.';
+    help.textContent = 'Informe DDD + número, com ou sem máscara. O código do país é tratado automaticamente.';
   }
 
   function updatePixCityUi(prefix, forceCity = false) {
@@ -538,8 +546,8 @@ function editContactFromButton(button) {
   }
 
   if (cancel) cancel.classList.remove('hidden');
-  if (eyebrow) eyebrow.textContent = 'Editando contato';
-  if (title) title.textContent = `Ajustando ${button.dataset.name || 'esse contato'}`;
+  if (eyebrow) eyebrow.textContent = 'Editar contato';
+  if (title) title.textContent = `Editar ${button.dataset.name || 'contato'}`;
   if (hint) hint.textContent = 'Mude só o que precisar e salve. O resto continua como está.';
   if (badge) badge.classList.remove('hidden');
   if (composer) {
@@ -730,7 +738,7 @@ function bindProfileSignatureForm() {
       previewVibe.classList.add('hidden');
     }
 
-    previewText.textContent = textInput.value || 'Quando você escrever um recado aqui, ele aparece para seus amigos na sua rede.';
+    previewText.textContent = textInput.value || 'Quando você salvar uma assinatura, ela aparece para quem já está na sua rede.';
   };
 
   vibeButtons.forEach((button) => {
@@ -947,7 +955,7 @@ function bindPixForm(prefix, options = {}) {
       if (!selected) return;
       submit.disabled = true;
       submit.textContent = 'Preparando foto...';
-      hint.textContent = 'Abrindo o ajuste da sua fotinha...';
+      hint.textContent = 'Abrindo o ajuste da sua foto...';
       try {
         await openModalForFile(selected);
         submit.textContent = 'Salvar foto';
@@ -1224,7 +1232,7 @@ function bindPixForm(prefix, options = {}) {
       currentInput.required = changing;
       manageTitle.textContent = changing ? 'Trocar PIN' : 'Criar PIN';
       manageHint.textContent = changing
-        ? 'Confirme o PIN atual e depois escolha o novo jeitinho de destravar o app.'
+        ? 'Confirme o PIN atual e depois escolha o novo PIN do app.'
         : 'Escolha um PIN numérico para proteger a abertura do app.';
       manageSubmit.textContent = changing ? 'Atualizar PIN' : 'Salvar PIN';
       setPinModalVisibility(manageModal, true);

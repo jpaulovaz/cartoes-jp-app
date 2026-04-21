@@ -1,9 +1,9 @@
-    <section id="profile" class="op-settings-profile-shell scroll-mt-28 mb-8 grid gap-6 xl:grid-cols-[minmax(0,1.02fr)_minmax(340px,0.98fr)] xl:items-start">
-      <div class="rounded-[32px] border border-amber-200 bg-white shadow-sm dark:border-amber-900/50 dark:bg-slate-800">
+    <section id="profile" class="op-settings-profile-shell op-settings-profile-layout scroll-mt-28 mb-8 grid gap-6 xl:grid-cols-[minmax(0,1.02fr)_minmax(340px,0.98fr)] xl:items-start">
+      <div class="op-settings-profile-panel rounded-[32px] border border-amber-200 bg-white shadow-sm dark:border-amber-900/50 dark:bg-slate-800">
         <div class="border-b border-amber-100 px-5 py-5 dark:border-amber-900/40 sm:px-6 sm:py-6">
           <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Perfil</div>
-          <h2 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Edite seu perfil do seu jeitinho</h2>
-          <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Nome, telefone e e-mail ficam abertos para ajuste aqui, na página que nasceu para isso.</p>
+          <h2 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Atualize seus dados principais</h2>
+          <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Nome, telefone e e-mail usados na sua rede e nos acertos ficam centralizados aqui.</p>
         </div>
         <div id="selfIdentityShell" class="border-t border-amber-100 p-5 dark:border-amber-900/40 sm:p-6">
           <form method="post" action="/people" id="selfIdentityForm" class="space-y-4" autocomplete="on">
@@ -60,27 +60,27 @@
               </label>
             </div>
 
-            <div class="rounded-[24px] border border-sky-100 bg-sky-50/80 px-4 py-3.5 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20 dark:text-slate-300">
-              Essas infos aparecem no clima de perfil: ajudam você a ser reconhecido nas divisões e deixam a conversa das cobranças com mais cara de gente de verdade, não de cadastro perdido no rolê.
+            <div class="op-settings-context-note rounded-[24px] border border-sky-100 bg-sky-50/80 px-4 py-3.5 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20 dark:text-slate-300">
+              Esses dados ajudam sua rede a reconhecer você nas divisões, cobranças e acertos do app.
             </div>
 
             <div class="pt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button type="button" id="selfIdentityCancel" onclick="resetSelfIdentityForm()" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto">Cancelar</button>
-              <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400 sm:w-auto">Guardar mudanças</button>
+              <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400 sm:w-auto">Salvar dados</button>
             </div>
           </form>
         </div>
       </div>
       <div class="grid gap-6">
-        <section class="op-settings-profile-card rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
+        <section class="op-settings-profile-card op-settings-overview-card rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Resumo rápido</div>
-              <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Como seu app está hoje</h3>
+              <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Visão geral da conta</h3>
             </div>
-            <p class="max-w-sm text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Os quatro atalhos ficam aqui do ladinho para você bater o olho e entender como a conta está se comportando.</p>
+            <p class="max-w-sm text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Os indicadores ao lado mostram o estado atual do seu perfil, alertas, Pix e acesso.</p>
           </div>
-          <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div class="op-settings-overview-grid mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
               <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Alertas</div>
               <div class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= notificationPreferenceEnabledCount %>/<%= notificationPreferenceTotalCount %></div>
@@ -106,9 +106,9 @@
 
         <section id="profile-photo" class="op-settings-photo-card flex h-full flex-col rounded-[32px] border border-sky-200 bg-white p-5 shadow-sm dark:border-sky-900/50 dark:bg-slate-800 sm:p-6">
           <div>
-            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Sua fotinha por aqui</div>
-            <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seu rosto no crachá do app</h3>
-            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Ela aparece no topo do app e nas divisões de compra. Sem foto, o ícone do AcerttaPay segura a bronca bonitinho.</p>
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Foto do perfil</div>
+            <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Sua foto na conta</h3>
+            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">A foto aparece no topo do app e nas divisões. Se não houver imagem, o app usa sua identificação padrão.</p>
           </div>
 
           <% const hasGoogleDefaultPhoto = !!(selfProfile && selfProfile.google_photo_url); %>
@@ -124,12 +124,12 @@
               <div id="profilePhotoPreviewWrap" class="hidden w-full items-center gap-3 rounded-2xl border border-sky-200/80 bg-sky-50/70 px-4 py-3 dark:border-sky-900/60 dark:bg-sky-950/20">
                 <img id="profilePhotoPreview" alt="Prévia da sua foto" class="h-14 w-14 rounded-full object-cover ring-2 ring-sky-200 dark:ring-sky-800/70">
                 <div class="min-w-0 flex-1">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Prévia da fotinha</div>
-                  <p id="profilePhotoHint" class="mt-1 text-sm font-medium leading-5 text-slate-600 dark:text-slate-300">Escolheu? Aí é só salvar que ela sobe lindona.</p>
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Prévia da foto</div>
+                  <p id="profilePhotoHint" class="mt-1 text-sm font-medium leading-5 text-slate-600 dark:text-slate-300">Se a prévia estiver certa, salve para aplicar na conta.</p>
                 </div>
               </div>
               <div class="w-full rounded-2xl border border-sky-200/80 bg-white/80 p-3 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-slate-300">
-                Escolha com calma, ajuste do seu jeitinho e salve quando estiver curtindo o resultado.
+                Você pode escolher a imagem, ajustar e salvar quando a prévia estiver certa.
               </div>
             </form>
 
@@ -157,9 +157,9 @@
           <div class="relative my-auto w-full max-w-3xl rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Ajuste sua fotinha</div>
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Ajuste sua foto</div>
                 <h4 class="mt-2 text-lg font-black text-slate-900 dark:text-white">Escolha o melhor enquadramento</h4>
-                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Arraste para posicionar, puxe o zoom se quiser e deixe seu rosto bem no centro do crachá.</p>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Arraste para posicionar, ajuste o zoom e centralize a imagem antes de salvar.</p>
               </div>
               <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800" data-profile-photo-modal-close>Fechar</button>
             </div>
@@ -170,7 +170,7 @@
                   <div class="pointer-events-none absolute inset-0 rounded-[28px] ring-1 ring-inset ring-white/35"></div>
                   <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0,transparent_56%,rgba(15,23,42,0.42)_100%)]"></div>
                 </div>
-                <p class="mt-3 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Dica amiga: se tiver mais gente na foto, arraste até deixar você no centro. A moldura redonda é só a prévia — o recorte sai certinho daqui.</p>
+                <p class="mt-3 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Se houver mais gente na foto, arraste até deixar você no centro. A moldura redonda serve como prévia do recorte final.</p>
               </div>
               <div class="rounded-[24px] border border-sky-200/80 bg-sky-50/70 p-4 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/20">
                 <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Como vai ficar</div>
@@ -184,7 +184,7 @@
                   <input id="profilePhotoCropZoom" type="range" min="1" max="3" step="0.01" value="1" class="h-2 w-full cursor-pointer appearance-none rounded-full bg-sky-100 accent-sky-600 dark:bg-slate-800">
                 </label>
                 <div class="mt-5 flex flex-col gap-3">
-                  <button type="button" id="profilePhotoCropApply" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Usar essa foto</button>
+                  <button type="button" id="profilePhotoCropApply" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700">Aplicar foto</button>
                   <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800" data-profile-photo-modal-close>Escolher outra depois</button>
                 </div>
               </div>

@@ -9289,6 +9289,223 @@ html[data-op-ui="v4"] .op-lock-screen-v4 .op-pin-key {
 }
 
 
+/* UI v4 beta 5.1 - Rede e preferências refinadas */
+html[data-op-ui="v4"] .op-network-screen-v4,
+html[data-op-ui="v4"] .op-settings-screen-v4 {
+  gap: 1.12rem;
+}
+
+html[data-op-ui="v4"] .op-network-hero-v4,
+html[data-op-ui="v4"] .op-settings-hero-v4 {
+  border-radius: 28px;
+  border: 1px solid rgba(226, 232, 240, 0.94);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.995), rgba(248, 250, 252, 0.97));
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.07);
+}
+
+html.dark[data-op-ui="v4"] .op-network-hero-v4,
+html.dark[data-op-ui="v4"] .op-settings-hero-v4 {
+  border-color: rgba(51, 65, 85, 0.92);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.975), rgba(15, 23, 42, 0.93));
+  box-shadow: 0 24px 54px rgba(2, 6, 23, 0.36);
+}
+
+html[data-op-ui="v4"] .op-network-profile-card,
+html[data-op-ui="v4"] .op-network-signature-card,
+html[data-op-ui="v4"] .op-network-requests-shell,
+html[data-op-ui="v4"] .op-network-list-section,
+html[data-op-ui="v4"] .op-contact-modal-panel,
+html[data-op-ui="v4"] .op-settings-profile-panel,
+html[data-op-ui="v4"] .op-settings-overview-card,
+html[data-op-ui="v4"] .op-settings-photo-card,
+html[data-op-ui="v4"] .op-settings-alerts-card,
+html[data-op-ui="v4"] .op-settings-pix-panel,
+html[data-op-ui="v4"] .op-settings-security-panel {
+  border-radius: 28px;
+  border-color: rgba(226, 232, 240, 0.92);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.995), rgba(248, 250, 252, 0.97));
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.07);
+}
+
+html.dark[data-op-ui="v4"] .op-network-profile-card,
+html.dark[data-op-ui="v4"] .op-network-signature-card,
+html.dark[data-op-ui="v4"] .op-network-requests-shell,
+html.dark[data-op-ui="v4"] .op-network-list-section,
+html.dark[data-op-ui="v4"] .op-contact-modal-panel,
+html.dark[data-op-ui="v4"] .op-settings-profile-panel,
+html.dark[data-op-ui="v4"] .op-settings-overview-card,
+html.dark[data-op-ui="v4"] .op-settings-photo-card,
+html.dark[data-op-ui="v4"] .op-settings-alerts-card,
+html.dark[data-op-ui="v4"] .op-settings-pix-panel,
+html.dark[data-op-ui="v4"] .op-settings-security-panel {
+  border-color: rgba(51, 65, 85, 0.92);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.975), rgba(15, 23, 42, 0.93));
+  box-shadow: 0 24px 52px rgba(2, 6, 23, 0.34);
+}
+
+html[data-op-ui="v4"] .op-network-profile-surface {
+  background: none !important;
+}
+
+html[data-op-ui="v4"] .op-network-profile-card .pointer-events-none.absolute.inset-0 {
+  opacity: 0.34;
+}
+
+html[data-op-ui="v4"] .op-network-profile-badge {
+  color: #0f172a;
+  letter-spacing: 0.12em;
+}
+
+html.dark[data-op-ui="v4"] .op-network-profile-badge {
+  color: #e2e8f0;
+}
+
+html[data-op-ui="v4"] .op-network-metric-grid > div,
+html[data-op-ui="v4"] .op-settings-overview-grid > div {
+  border-radius: 20px;
+  border: 1px solid rgba(226, 232, 240, 0.88);
+  background: rgba(248, 250, 252, 0.96);
+  box-shadow: none;
+}
+
+html.dark[data-op-ui="v4"] .op-network-metric-grid > div,
+html.dark[data-op-ui="v4"] .op-settings-overview-grid > div {
+  border-color: rgba(51, 65, 85, 0.92);
+  background: rgba(15, 23, 42, 0.88);
+}
+
+html[data-op-ui="v4"] .op-settings-context-note,
+html[data-op-ui="v4"] .op-settings-alerts-summary,
+html[data-op-ui="v4"] .op-settings-pix-switch-card,
+html[data-op-ui="v4"] .op-settings-pix-summary-card,
+html[data-op-ui="v4"] .op-settings-security-summary-card,
+html[data-op-ui="v4"] .op-settings-security-action-card,
+html[data-op-ui="v4"] .op-settings-security-passkey,
+html[data-op-ui="v4"] .op-network-request-card,
+html[data-op-ui="v4"] .op-network-card-insights > div {
+  border-radius: 24px;
+  border-color: rgba(226, 232, 240, 0.88);
+  box-shadow: none;
+}
+
+html.dark[data-op-ui="v4"] .op-settings-context-note,
+html.dark[data-op-ui="v4"] .op-settings-alerts-summary,
+html.dark[data-op-ui="v4"] .op-settings-pix-switch-card,
+html.dark[data-op-ui="v4"] .op-settings-pix-summary-card,
+html.dark[data-op-ui="v4"] .op-settings-security-summary-card,
+html.dark[data-op-ui="v4"] .op-settings-security-action-card,
+html.dark[data-op-ui="v4"] .op-settings-security-passkey,
+html.dark[data-op-ui="v4"] .op-network-request-card,
+html.dark[data-op-ui="v4"] .op-network-card-insights > div {
+  border-color: rgba(51, 65, 85, 0.9);
+}
+
+html[data-op-ui="v4"] .op-network-list-section input[type="search"],
+html[data-op-ui="v4"] .op-settings-screen-v4 input,
+html[data-op-ui="v4"] .op-settings-screen-v4 select,
+html[data-op-ui="v4"] .op-settings-screen-v4 textarea,
+html[data-op-ui="v4"] .op-contact-modal-panel input,
+html[data-op-ui="v4"] .op-contact-modal-panel select {
+  border-color: rgba(203, 213, 225, 0.94);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+}
+
+html.dark[data-op-ui="v4"] .op-network-list-section input[type="search"],
+html.dark[data-op-ui="v4"] .op-settings-screen-v4 input,
+html.dark[data-op-ui="v4"] .op-settings-screen-v4 select,
+html.dark[data-op-ui="v4"] .op-settings-screen-v4 textarea,
+html.dark[data-op-ui="v4"] .op-contact-modal-panel input,
+html.dark[data-op-ui="v4"] .op-contact-modal-panel select {
+  border-color: rgba(51, 65, 85, 0.94);
+  background: rgba(2, 6, 23, 0.32);
+}
+
+html[data-op-ui="v4"] .op-network-filter-strip [data-network-filter],
+html[data-op-ui="v4"] .op-settings-chip-nav .op-chip-nav__item,
+html[data-op-ui="v4"] .op-chip-nav-shell--people-grid .op-chip-nav__item {
+  min-height: 2.65rem;
+  border-radius: 999px;
+}
+
+html[data-op-ui="v4"] .op-network-card {
+  border-radius: 28px;
+  border-color: rgba(226, 232, 240, 0.92);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(248, 250, 252, 0.97));
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
+}
+
+html.dark[data-op-ui="v4"] .op-network-card {
+  border-color: rgba(51, 65, 85, 0.92);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.93));
+  box-shadow: 0 20px 42px rgba(2, 6, 23, 0.3);
+}
+
+html[data-op-ui="v4"] .op-network-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
+}
+
+html.dark[data-op-ui="v4"] .op-network-card:hover {
+  box-shadow: 0 24px 46px rgba(2, 6, 23, 0.36);
+}
+
+html[data-op-ui="v4"] .op-network-card > .h-1\.5,
+html[data-op-ui="v4"] .op-network-request-card > .h-1\.5 {
+  height: 2px;
+  opacity: 0.72;
+}
+
+html[data-op-ui="v4"] .op-network-card-actions > *,
+html[data-op-ui="v4"] .op-network-card-actions form > button,
+html[data-op-ui="v4"] .op-network-card-actions a {
+  min-height: 46px;
+  border-radius: 18px !important;
+}
+
+html[data-op-ui="v4"] .op-network-empty-state {
+  border-style: solid;
+  border-color: rgba(226, 232, 240, 0.9);
+  background: rgba(248, 250, 252, 0.94);
+}
+
+html.dark[data-op-ui="v4"] .op-network-empty-state {
+  border-color: rgba(51, 65, 85, 0.92);
+  background: rgba(15, 23, 42, 0.84);
+}
+
+html[data-op-ui="v4"] .op-settings-security-action-card button,
+html[data-op-ui="v4"] .op-settings-security-action-card form button {
+  min-height: 46px;
+}
+
+@media (max-width: 767px) {
+  html[data-op-ui="v4"] .op-network-hero-v4,
+  html[data-op-ui="v4"] .op-settings-hero-v4,
+  html[data-op-ui="v4"] .op-network-profile-card,
+  html[data-op-ui="v4"] .op-network-signature-card,
+  html[data-op-ui="v4"] .op-network-requests-shell,
+  html[data-op-ui="v4"] .op-network-list-section,
+  html[data-op-ui="v4"] .op-settings-profile-panel,
+  html[data-op-ui="v4"] .op-settings-overview-card,
+  html[data-op-ui="v4"] .op-settings-photo-card,
+  html[data-op-ui="v4"] .op-settings-alerts-card,
+  html[data-op-ui="v4"] .op-settings-pix-panel,
+  html[data-op-ui="v4"] .op-settings-security-panel,
+  html[data-op-ui="v4"] .op-contact-modal-panel {
+    border-radius: 22px;
+  }
+
+  html[data-op-ui="v4"] .op-network-card {
+    border-radius: 24px;
+  }
+
+  html[data-op-ui="v4"] .op-network-card-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+
 /* UI v4 beta 6 - Mobile, PWA e iOS polish */
 html[data-op-ui="v4"] {
   --op-topbar-height: 96px;

@@ -11293,6 +11293,11 @@ html[data-theme-style="orgulho"] .op-utility-btn--notify[data-push-visual-state=
     border-width: 2px;
   }
 
+  html[data-op-ui="v4"] .op-dashboard-kpi-grid > .op-paid-progress-card:nth-child(2n+1) .op-paid-progress-card__check {
+    left: 0.6rem;
+    transform: translate(0, -50%);
+  }
+
   html[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card__check svg {
     width: 1rem;
     height: 1rem;
@@ -11415,8 +11420,8 @@ html.op-vp-tight[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card 
 html.op-vp-compact[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card__check,
 html.op-vp-tight[data-op-ui="v4"] .op-dashboard-kpi-grid .op-paid-progress-card__check {
   top: 0;
-  left: 0;
-  transform: translate(-50%, -50%);
+  left: 0.6rem;
+  transform: translate(0, -50%);
   width: 1.95rem;
   height: 1.95rem;
   border-width: 2px;

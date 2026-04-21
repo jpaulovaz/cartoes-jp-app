@@ -1,15 +1,28 @@
 const { createImportRepository } = require('../repositories/import.repository');
+const { createStatementPdfService } = require('./statementPdf.service');
 
 function createImportService(deps = {}) {
   const repository = deps.repository || createImportRepository(deps);
+  const statementPdfService = deps.statementPdfService || createStatementPdfService(deps);
 
   function getImportPage(userId, context = {}) {
+    const importPdfJobs = statementPdfService.listRecentJobs(userId);
     return {
       cards: repository.getActiveCards(userId),
       error: null,
       formSeed: context.formSeed || null,
       importReport: context.importReport || null,
-      importPreview: context.preview || null
+      importPreview: context.preview || null,
+      importPdfFeature: statementPdfService.buildFeatureState(),
+      importPdfJobs
+    };
+  }
+
+  function getPdfJobsPanel(userId) {
+    const pdfJobs = statementPdfService.listRecentJobs(userId);
+    return {
+      pdfJobs,
+      hasRunningPdfJobs: pdfJobs.some((job) => job.isRunning)
     };
   }
 
@@ -54,6 +67,26 @@ function createImportService(deps = {}) {
         message: `Analisei ${repository.formatCountLabel(preview.summary.parsedCount, 'compra', 'compras')} de ${preview.periodLabel}. Agora e so revisar e confirmar.`
       }
     };
+  }
+
+  function createPdfImportJob(userId, body = {}, files = []) {
+    return statementPdfService.enqueuePdfImports(userId, body, files);
+  }
+
+  function openPdfImportReview(userId, jobId, req) {
+    return statementPdfService.openReviewFromJob(userId, jobId, req);
+  }
+
+  function getPdfImportCsvDownload(userId, jobId) {
+    return statementPdfService.getCsvDownload(userId, jobId);
+  }
+
+  function retryPdfImportJob(userId, jobId) {
+    return statementPdfService.retryJob(userId, jobId);
+  }
+
+  function deletePdfImportJob(userId, jobId) {
+    return statementPdfService.deleteJob(userId, jobId);
   }
 
   function confirmImportPreview(userId, preview, body = {}, req) {
@@ -185,6 +218,12 @@ function createImportService(deps = {}) {
     getImportPage,
     getCardsForUser,
     createImportPreview,
+    createPdfImportJob,
+    getPdfJobsPanel,
+    openPdfImportReview,
+    getPdfImportCsvDownload,
+    retryPdfImportJob,
+    deletePdfImportJob,
     confirmImportPreview,
     cancelImportPreview
   };

@@ -1059,6 +1059,23 @@ const ADDITIONAL_MESSAGE_CATALOG = [
     ]
   },
   {
+    catalogId: "NTF-042",
+    messageKey: "notification.statement_pdf.ready",
+    channel: "Central de avisos do app + Push",
+    previewRenderer: "notification",
+    category: "Importacao de fatura",
+    flow: "PDF com IA",
+    purpose: "Job pronto para revisao",
+    defaultTitle: "Seu PDF ja ficou pronto para conferir",
+    defaultBody: "{arquivo} no {cartao} ({competencia}) ja virou revisao. {status_resumo}",
+    variables: [
+      { name: "arquivo", required: true, fields: ["body"] },
+      { name: "cartao", required: true, fields: ["body"] },
+      { name: "competencia", required: true, fields: ["body"] },
+      { name: "status_resumo", required: true, fields: ["body"] },
+    ]
+  },
+  {
     catalogId: "GER-001",
     messageKey: "dashboard.friendship.pending.single",
     channel: "Card de alerta na visão geral",

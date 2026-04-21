@@ -40,6 +40,12 @@
         const expenseFinances = finances.filter((f) => f.type === 'expense');
         const expenseProgress = expensePaymentProgress || {};
         const cardProgress = cardPaymentProgress || {};
+        const detailAlertCount = Array.isArray(alerts) ? alerts.length : 0;
+        const detailSharedCount = Number(sharedDebtTrailPay.count || 0) + Number(sharedDebtTrailReceive.count || 0);
+        const detailMonthStateLabel = isClosed ? 'Mês fechado' : 'Mês em edição';
+        const detailBalanceCaption = saldoCents >= 0
+            ? 'Saldo previsto para fechar o mês.'
+            : 'Saldo previsto abaixo do ideal para este mês.';
 
         function clampProgressPct(value) {
             const pct = Number(value || 0);
@@ -187,8 +193,8 @@
                 if (privateCount > 0) parts.push(privateCount === 1 ? '1 lembrete privado' : `${privateCount} lembretes privados`);
             }
 
-            if (!parts.length) return 'Fica só no lembrete. Não entra no saldo do topo.';
-            return `${parts.join(' • ')}. Fica só no lembrete. Não entra no saldo do topo.`;
+            if (!parts.length) return 'Fica em acompanhamento e não entra no saldo principal.';
+            return `${parts.join(' • ')}. Fica em acompanhamento e não entra no saldo principal.`;
         }
 
         function buildSharedDebtTrailCtaLabel(scope) {
@@ -239,9 +245,18 @@
                 <section class="op-page-hero op-dashboard-hero-v4 op-fade-up mb-6">
                     <div class="op-detalhamento-hero__content">
                         <div class="op-detalhamento-hero__copy min-w-0">
-                            <span class="op-page-hero__eyebrow">Painel financeiro do mês</span>
+                            <span class="op-page-hero__eyebrow">Painel do mês</span>
                             <h1 class="op-page-hero__title mt-4">Meu Controle</h1>
-                            <p class="op-page-hero__subtitle mt-3">Olá, <span class="font-bold text-blue-600 dark:text-blue-300"><%= heroOwnerName %></span>. Aqui você acompanha entradas, saídas, faturas e o saldo previsto do mês em um só lugar.</p>
+                            <p class="op-page-hero__subtitle mt-3">Olá, <span class="font-bold text-blue-600 dark:text-blue-300"><%= heroOwnerName %></span>. Aqui você acompanha o que entra, o que sai, o cartão do mês e o saldo previsto sem sair do mesmo painel.</p>
+                            <div class="op-page-hero__meta mt-4">
+                                <span class="badge"><%= detailMonthStateLabel %></span>
+                                <span class="badge"><%= detailSharedCount > 0 ? `${detailSharedCount} acertos em andamento` : 'Acertos em dia' %></span>
+                                <% if (detailAlertCount > 0) { %>
+                                    <span class="badge border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100"><%= detailAlertCount === 1 ? '1 ponto de atenção' : `${detailAlertCount} pontos de atenção` %></span>
+                                <% } else { %>
+                                    <span class="badge border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100">Sem alertas no momento</span>
+                                <% } %>
+                            </div>
                         </div>
                         <button type="button"
                             class="op-icon-btn op-sensitive-toggle op-sensitive-toggle--mobile"
@@ -288,7 +303,7 @@
                                 <% if (isClosed) { %>
                                     <button onclick="toggleLock('open')"
                                         class="op-btn op-btn-danger-soft op-btn--block">
-                                        Mês fechado
+                                        Abrir mês
                                     </button>
                                 <% } else { %>
                                     <button onclick="toggleLock('close')"
@@ -299,7 +314,7 @@
 
                                 <button type="button" data-manual-modal-open
                                     <%= (isClosed || !cards || !cards.length) ? 'disabled' : '' %>
-                                    class="op-btn op-btn-success op-btn--block <%= (isClosed || !cards || !cards.length) ? 'opacity-60 cursor-not-allowed' : '' %>">
+                                    class="op-btn op-btn-primary op-btn--block <%= (isClosed || !cards || !cards.length) ? 'opacity-60 cursor-not-allowed' : '' %>">
                                     <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                                     </svg>
@@ -322,29 +337,6 @@
                 </section>
 
 
-                <% if (alerts && alerts.length) { %>
-                    <div class="mb-8 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
-                            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Olho vivo no mês</h2>
-                            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Os pontos que merecem sua atenção antes que virem dor de cabeça.</p>
-                        </div>
-                        <div class="p-4 md:p-5 grid gap-3">
-                            <% alerts.forEach(alert => { %>
-                                <div class="rounded-2xl border px-4 py-3 <%= alert.type === 'warning' ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20' : 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20' %>">
-                                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                        <div>
-                                            <div class="font-bold text-slate-800 dark:text-white"><%= alert.icon %> <%= alert.title %></div>
-                                            <div class="text-sm text-slate-600 dark:text-slate-300 mt-1"><%= alert.description %></div>
-                                        </div>
-                                        <% if (alert.href) { %>
-                                            <a href="<%= alert.href %>" class="op-btn op-btn-ghost px-4 py-2 text-sm">Abrir</a>
-                                        <% } %>
-                                    </div>
-                                </div>
-                            <% }) %>
-                        </div>
-                    </div>
-                <% } %>
 
 
                 <div id="modalManualDetalhamento" data-manual-modal aria-hidden="true"
@@ -414,7 +406,7 @@
                                         <% }) %>
                                         <option value="__new__">Criar categoria nova</option>
                                     </select>
-                                    <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Se quiser, você já organiza agora. Se não quiser, tudo bem também.</p>
+                                    <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Você pode organizar agora ou deixar sem categoria por enquanto.</p>
                                 </div>
                                 <div data-purchase-category-custom-shell hidden>
                                     <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nome da nova categoria</label>
@@ -427,8 +419,8 @@
           <input type="checkbox" name="assign_to_owner" value="1" <%= typeof isClosed !== 'undefined' && isClosed ? 'disabled' : '' %>
             class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
           <span>
-            <span class="block text-sm font-bold text-slate-800 dark:text-white">Essa ficou comigo</span>
-            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque aqui quando essa compra for só sua. Se tiver parcela ou repetição, a ideia segue junto.</span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Lançamento só meu</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Use quando a compra não entrar em divisão com outras pessoas.</span>
           </span>
         </label>
 
@@ -437,7 +429,7 @@
                                     class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
                                 <span>
                                     <span class="block text-sm font-bold text-slate-800 dark:text-white">Repetir todo mês</span>
-                                    <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Perfeito para academia, streaming, escola, internet e afins. Só funciona com 1 parcela.</span>
+                                    <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Use para assinaturas, mensalidades e despesas fixas. Funciona com 1 parcela.</span>
                                 </span>
                             </label>
 
@@ -456,15 +448,15 @@
                     </div>
                 </div>
 
-                <div class="op-dashboard-kpi-grid grid grid-cols-2 lg:grid-cols-5 gap-4">
-                    <div class="op-dashboard-kpi-card bg-emerald-500 p-5 rounded-3xl text-white shadow-sm border border-emerald-600">
-                        <% const incomeTopLabel = formatBRLFromCents(incCents); %>
-                        <p class="op-dashboard-kpi-card__label text-xs font-bold opacity-80 uppercase tracking-wider">Grana que entrou</p>
-                        <h3 class="op-dashboard-kpi-card__value text-xl xl:text-2xl font-black mt-1" data-sensitive-text data-sensitive-visible-value="<%= incomeTopLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(incomeTopLabel, true) %>">
-                            <%= incomeTopLabel %>
-                        </h3>
-                    </div>
-                    <div class="op-dashboard-kpi-card op-paid-progress-card op-paid-progress-card--expense" data-progress-card="expense" style="<%= getProgressCardStyle(expenseProgress) %>">
+                <div class="op-dashboard-kpi-grid op-dashboard-kpi-strip grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                    <% const incomeTopLabel = formatBRLFromCents(incCents); %>
+                    <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-income">
+                        <p class="op-dashboard-kpi-card__label">Entradas</p>
+                        <h3 class="op-dashboard-kpi-card__value mt-2" data-sensitive-text data-sensitive-visible-value="<%= incomeTopLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(incomeTopLabel, true) %>"><%= incomeTopLabel %></h3>
+                        <p class="op-dashboard-kpi-card__note mt-3">Total previsto para entrar no mês.</p>
+                    </article>
+
+                    <article class="op-dashboard-kpi-card op-paid-progress-card op-paid-progress-card--expense op-dashboard-kpi-card--tone-expense" data-progress-card="expense" style="<%= getProgressCardStyle(expenseProgress) %>">
                         <span class="op-paid-progress-card__fill" aria-hidden="true"></span>
                         <span class="op-paid-progress-card__check <%= expenseProgress.isComplete ? '' : 'hidden' %>" data-progress-check aria-hidden="true">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -472,12 +464,13 @@
                             </svg>
                         </span>
                         <div class="op-paid-progress-card__content">
-                            <p class="op-dashboard-kpi-card__label text-xs font-bold uppercase tracking-wider text-white/80">Saiu no mês</p>
-                            <h3 class="op-dashboard-kpi-card__value text-xl xl:text-2xl font-black mt-1" data-progress-total><%= formatBRLFromCents(expCents) %></h3>
-                            <p class="op-paid-progress-card__meta" data-progress-label><%= expenseProgress.label || 'Quando pintar saída, o progresso aparece aqui.' %></p>
+                            <p class="op-dashboard-kpi-card__label">Saídas</p>
+                            <h3 class="op-dashboard-kpi-card__value mt-2" data-progress-total><%= formatBRLFromCents(expCents) %></h3>
+                            <p class="op-dashboard-kpi-card__note mt-3" data-progress-label><%= expenseProgress.label || 'Acompanhe o que já saiu e o que ainda falta pagar.' %></p>
                         </div>
-                    </div>
-                    <div class="op-dashboard-kpi-card op-paid-progress-card op-paid-progress-card--cards" data-progress-card="cards" style="<%= getProgressCardStyle(cardProgress) %>">
+                    </article>
+
+                    <article class="op-dashboard-kpi-card op-paid-progress-card op-paid-progress-card--cards op-dashboard-kpi-card--tone-card" data-progress-card="cards" style="<%= getProgressCardStyle(cardProgress) %>">
                         <span class="op-paid-progress-card__fill" aria-hidden="true"></span>
                         <span class="op-paid-progress-card__check <%= cardProgress.isComplete ? '' : 'hidden' %>" data-progress-check aria-hidden="true">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -485,27 +478,61 @@
                             </svg>
                         </span>
                         <div class="op-paid-progress-card__content">
-                            <p class="op-dashboard-kpi-card__label text-xs font-bold uppercase tracking-wider text-white/80">Ficou nos cartões</p>
-                            <h3 class="op-dashboard-kpi-card__value text-xl xl:text-2xl font-black mt-1" data-progress-total><%= formatBRLFromCents(cardTotalCents) %></h3>
-                            <p class="op-paid-progress-card__meta" data-progress-label><%= cardProgress.label || 'Quando aparecer parcela sua nos cartões, o progresso mora aqui.' %></p>
+                            <p class="op-dashboard-kpi-card__label">Cartão do mês</p>
+                            <h3 class="op-dashboard-kpi-card__value mt-2" data-progress-total><%= formatBRLFromCents(cardTotalCents) %></h3>
+                            <p class="op-dashboard-kpi-card__note mt-3" data-progress-label><%= cardProgress.label || 'Valor previsto para a fatura deste mês.' %></p>
                         </div>
-                    </div>
-                    <div class="op-dashboard-kpi-card bg-rose-500 p-5 rounded-3xl text-white shadow-sm border border-rose-600">
-                        <p class="op-dashboard-kpi-card__label text-xs font-bold opacity-80 uppercase tracking-wider">Tudo comprometido</p>
-                        <h3 class="op-dashboard-kpi-card__value text-xl xl:text-2xl font-black mt-1">
-                            <%= formatBRLFromCents(expCents + cardTotalCents) %>
-                        </h3>
-                    </div>
-                    <div class="op-dashboard-kpi-card op-dashboard-kpi-card--balance bg-blue-600 p-5 rounded-3xl text-white shadow-sm border border-blue-700 col-span-2 lg:col-span-1">
-                        <% const balanceTopLabel = formatBRLFromCents(saldoCents); %>
-                        <p class="op-dashboard-kpi-card__label text-xs font-bold opacity-80 uppercase tracking-wider">Quanto sobra</p>
-                        <h3 class="op-dashboard-kpi-card__value text-xl xl:text-2xl font-black mt-1" data-sensitive-text data-sensitive-visible-value="<%= balanceTopLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(balanceTopLabel, true) %>">
-                            <%= balanceTopLabel %>
-                        </h3>
-                    </div>
+                    </article>
+
+                    <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-committed">
+                        <p class="op-dashboard-kpi-card__label">Comprometido</p>
+                        <h3 class="op-dashboard-kpi-card__value mt-2"><%= formatBRLFromCents(expCents + cardTotalCents) %></h3>
+                        <p class="op-dashboard-kpi-card__note mt-3">Despesas do mês somadas ao cartão.</p>
+                    </article>
+
+                    <% const balanceTopLabel = formatBRLFromCents(saldoCents); %>
+                    <article class="op-dashboard-kpi-card op-dashboard-kpi-card--balance <%= saldoCents < 0 ? 'op-dashboard-kpi-card--tone-critical' : 'op-dashboard-kpi-card--tone-balance' %>">
+                        <p class="op-dashboard-kpi-card__label">Saldo previsto</p>
+                        <h3 class="op-dashboard-kpi-card__value mt-2" data-sensitive-text data-sensitive-visible-value="<%= balanceTopLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(balanceTopLabel, true) %>"><%= balanceTopLabel %></h3>
+                        <p class="op-dashboard-kpi-card__note mt-3"><%= detailBalanceCaption %></p>
+                    </article>
                 </div>
 
-                <section class="mt-8 mb-8 space-y-4">
+                <% if (alerts && alerts.length) { %>
+                    <div class="mb-8 op-surface-card op-detalhamento-alerts bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Pontos de atenção</h2>
+                            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Itens que pedem ação ou acompanhamento neste mês.</p>
+                        </div>
+                        <div class="p-4 md:p-5 grid gap-3">
+                            <% alerts.forEach(alert => { %>
+                                <div class="op-detalhamento-alert-item rounded-2xl border px-4 py-3 <%= alert.type === 'warning' ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20' : 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20' %>">
+                                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                        <div>
+                                            <div class="font-bold text-slate-800 dark:text-white"><%= alert.title %></div>
+                                            <div class="text-sm text-slate-600 dark:text-slate-300 mt-1"><%= alert.description %></div>
+                                        </div>
+                                        <% if (alert.href) { %>
+                                            <a href="<%= alert.href %>" class="op-btn op-btn-ghost px-4 py-2 text-sm">Abrir</a>
+                                        <% } %>
+                                    </div>
+                                </div>
+                            <% }) %>
+                        </div>
+                    </div>
+                <% } %>
+
+
+                <section class="op-detalhamento-dues-section mt-8 mb-8 space-y-4">
+                    <div class="op-detalhamento-section-head flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div class="min-w-0">
+                            <div class="op-detalhamento-section-kicker">Acertos do mês</div>
+                            <h2 class="op-detalhamento-section-title mt-1">O que ainda está em andamento com outras pessoas</h2>
+                            <p class="op-detalhamento-section-copy mt-2">Esses valores ficam fora do saldo principal e ajudam a acompanhar o que ainda depende de envio, aceite ou recebimento.</p>
+                        </div>
+                        <a href="<%= sharedDebtTrailHeaderHref %>" class="op-btn op-btn-ghost shrink-0">Abrir acertos</a>
+                    </div>
+
                     <% if (sharedDebtTrailChips.length) { %>
                         <div class="flex flex-wrap gap-2">
                             <% sharedDebtTrailChips.forEach((chip) => { %>
@@ -517,37 +544,37 @@
                     <% } %>
 
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <a href="<%= sharedDebtTrailPay.href || '/shared-debts#received' %>" class="group block rounded-3xl border border-sky-600 bg-gradient-to-br from-sky-500 via-sky-600 to-blue-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
+                        <a href="<%= sharedDebtTrailPay.href || '/shared-debts#received' %>" class="op-detalhamento-dues-card op-detalhamento-dues-card--pay group block rounded-3xl border p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
                             <div class="flex items-start justify-between gap-4">
                                 <div class="min-w-0">
-                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Acertos pra pagar</p>
+                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Acertos a pagar</p>
                                     <h2 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(sharedDebtTrailPay.amountCents || 0)) %></h2>
                                     <p class="mt-2 text-sm font-semibold opacity-95"><%= buildSharedDebtTrailCountLabel(sharedDebtTrailPay.count) %></p>
                                     <p class="mt-2 text-[13px] font-semibold leading-5 opacity-95"><%= (sharedDebtTrailPay.status && sharedDebtTrailPay.status.label) || 'Nada puxando seu mês desse lado.' %></p>
                                     <p class="mt-2 text-[11px] font-medium leading-5 opacity-80"><%= buildSharedDebtTrailBreakdown('pay') %></p>
                                     <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= buildSharedDebtTrailCtaLabel('pay') %></p>
                                 </div>
-                                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">🧾</div>
+                                <div class="op-detalhamento-dues-card__icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" aria-hidden="true"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M7 3h7l5 5v13a1 1 0 01-1 1H7a2 2 0 01-2-2V5a2 2 0 012-2z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M14 3v5h5"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M9 13h6M9 17h6"></path></svg></div>
                             </div>
                         </a>
 
-                        <a href="<%= sharedDebtTrailReceive.href || '/shared-debts#sent' %>" class="group block rounded-3xl border border-cyan-700 bg-gradient-to-br from-cyan-600 via-cyan-600 to-blue-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
+                        <a href="<%= sharedDebtTrailReceive.href || '/shared-debts#sent' %>" class="op-detalhamento-dues-card op-detalhamento-dues-card--receive group block rounded-3xl border p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
                             <div class="flex items-start justify-between gap-4">
                                 <div class="min-w-0">
-                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Acertos pra receber</p>
+                                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Acertos a receber</p>
                                     <h2 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(sharedDebtTrailReceive.amountCents || 0)) %></h2>
                                     <p class="mt-2 text-sm font-semibold opacity-95"><%= buildSharedDebtTrailCountLabel(sharedDebtTrailReceive.count) %></p>
                                     <p class="mt-2 text-[13px] font-semibold leading-5 opacity-95"><%= (sharedDebtTrailReceive.status && sharedDebtTrailReceive.status.label) || 'Nada pendurado do lado de cá.' %></p>
                                     <p class="mt-2 text-[11px] font-medium leading-5 opacity-80"><%= buildSharedDebtTrailBreakdown('receive') %></p>
                                     <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= buildSharedDebtTrailCtaLabel('receive') %></p>
                                 </div>
-                                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">💸</div>
+                                <div class="op-detalhamento-dues-card__icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" aria-hidden="true"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-10V6m0 12v-2"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M4 7h16M5 11h14M5 17h14"></path></svg></div>
                             </div>
                         </a>
                     </div>
                 </section>
 
-                <section class="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <section class="op-detalhamento-card-health mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                     <div class="border-b border-slate-200 bg-slate-50/90 px-5 py-5 dark:border-slate-700 dark:bg-slate-900/70 sm:px-6">
                         <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                             <div class="min-w-0">
@@ -577,8 +604,8 @@
                             <div class="rounded-3xl border px-5 py-6 sm:px-6 <%= cardHealthCompact.tone === 'success' ? 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-900/20' : 'border-slate-200 bg-slate-50/80 dark:border-slate-600 dark:bg-slate-900/50' %>">
                                 <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                                     <div class="min-w-0">
-                                        <h3 class="text-lg font-extrabold <%= cardHealthCompact.tone === 'success' ? 'text-emerald-900 dark:text-emerald-100' : 'text-slate-900 dark:text-white' %>"><%= cardHealthCompact.title || 'Seu painel de cartão está quietinho.' %></h3>
-                                        <p class="mt-2 max-w-3xl text-sm font-medium leading-6 <%= cardHealthCompact.tone === 'success' ? 'text-emerald-900/80 dark:text-emerald-100/80' : 'text-slate-500 dark:text-slate-400' %>"><%= cardHealthCompact.description || 'Quando entrar fatura, mês futuro ou rateio com terceiros, esse bloco acorda sem bagunçar o topo.' %></p>
+                                        <h3 class="text-lg font-extrabold <%= cardHealthCompact.tone === 'success' ? 'text-emerald-900 dark:text-emerald-100' : 'text-slate-900 dark:text-white' %>"><%= cardHealthCompact.title || 'Seu painel de cartão está estável.' %></h3>
+                                        <p class="mt-2 max-w-3xl text-sm font-medium leading-6 <%= cardHealthCompact.tone === 'success' ? 'text-emerald-900/80 dark:text-emerald-100/80' : 'text-slate-500 dark:text-slate-400' %>"><%= cardHealthCompact.description || 'Quando houver fatura, mês futuro ou rateio com terceiros, este bloco volta a aparecer sem poluir o painel principal.' %></p>
                                         <% if (Array.isArray(cardHealthCompact.badges) && cardHealthCompact.badges.length) { %>
                                             <div class="mt-4 flex flex-wrap gap-2">
                                                 <% cardHealthCompact.badges.forEach((badge) => { %>
@@ -597,14 +624,14 @@
                     <% } else { %>
                         <div class="space-y-4 p-4 sm:p-6">
                             <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                                <a href="<%= cardHealthCurrent.ctaHref || cardHealthPrimaryCta.href || `/summary/${year}/${month}` %>" class="group block overflow-hidden rounded-3xl border border-blue-700 bg-gradient-to-br from-sky-600 via-blue-600 to-indigo-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5 xl:col-span-2">
+                                <a href="<%= cardHealthCurrent.ctaHref || cardHealthPrimaryCta.href || `/summary/${year}/${month}` %>" class="op-card-health-card op-card-health-card--current group block overflow-hidden rounded-3xl border p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5 xl:col-span-2">
                                     <div class="flex items-start justify-between gap-4">
                                         <div class="min-w-0">
-                                            <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Fatura rolando 💳</p>
+                                            <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Fatura em aberto</p>
                                             <h3 class="mt-2 text-2xl font-black sm:text-[2rem]"><%= formatBRLFromCents(Number(cardHealthCurrent.totalCents || 0)) %></h3>
                                             <p class="mt-2 text-sm font-semibold opacity-90"><%= cardHealthCurrent.countLabel || 'Sem cartão puxando esta referência.' %></p>
                                         </div>
-                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">💳</div>
+                                        <div class="op-card-health-card__icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" aria-hidden="true"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3" ry="3" stroke-width="1.9"></rect><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M3 10h18"></path></svg></div>
                                     </div>
                                     <div class="mt-4 h-2 w-full rounded-full bg-white/15">
                                         <div class="h-2 rounded-full bg-white" style="width: <%= Math.max(0, Math.min(100, Number(cardHealthCurrent.progressPct || 0))) %>%"></div>
@@ -630,14 +657,14 @@
                                     <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= cardHealthCurrent.ctaLabel || 'Abrir fechamento' %></p>
                                 </a>
 
-                                <a href="<%= cardHealthFuture.ctaHref || '/geral' %>" class="group block rounded-3xl border border-cyan-700 bg-gradient-to-br from-cyan-600 via-sky-600 to-blue-700 p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
+                                <a href="<%= cardHealthFuture.ctaHref || '/geral' %>" class="op-card-health-card op-card-health-card--future group block rounded-3xl border p-5 text-white shadow-sm transition-transform hover:-translate-y-0.5">
                                     <div class="flex items-start justify-between gap-4">
                                         <div class="min-w-0">
                                             <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Próximas faturas</p>
                                             <h3 class="mt-2 text-2xl font-black sm:text-[1.85rem]"><%= formatBRLFromCents(Number(cardHealthFuture.totalCents || 0)) %></h3>
                                             <p class="mt-2 text-sm font-semibold opacity-90"><%= cardHealthFuture.countLabel || 'Nenhuma competência futura aberta por enquanto.' %></p>
                                         </div>
-                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">🗓️</div>
+                                        <div class="op-card-health-card__icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" aria-hidden="true"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M8 3v3m8-3v3M4 9h16"></path><rect x="4" y="5" width="16" height="15" rx="3" ry="3" stroke-width="1.9"></rect></svg></div>
                                     </div>
                                     <div class="mt-4 grid grid-cols-2 gap-3">
                                         <div class="rounded-2xl bg-white/10 px-3 py-3 backdrop-blur-sm">
@@ -655,14 +682,14 @@
                             </div>
 
                             <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                                <a href="<%= cardHealthThird.ctaHref || `/summary/${year}/${month}` %>" class="group block rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm transition-transform hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/40">
+                                <a href="<%= cardHealthThird.ctaHref || `/summary/${year}/${month}` %>" class="op-card-health-card op-card-health-card--third group block rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm transition-transform hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/40">
                                     <div class="flex items-start justify-between gap-4">
                                         <div class="min-w-0">
                                             <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Com terceiros</p>
                                             <h3 class="mt-2 text-2xl font-black text-slate-900 dark:text-white sm:text-[1.85rem]"><%= formatBRLFromCents(Number(cardHealthThird.totalCents || 0)) %></h3>
                                             <p class="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200"><%= cardHealthThird.countLabel || 'Sem rateio com terceiros neste mês.' %></p>
                                         </div>
-                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-2xl text-white dark:bg-slate-100 dark:text-slate-900">🤝</div>
+                                        <div class="op-card-health-card__icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" aria-hidden="true"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M8 12l2 2 3-3"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M5 10V8a2 2 0 012-2h2l2 2h2a2 2 0 012 2v2"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M6 14v2a2 2 0 002 2h8a2 2 0 002-2v-2"></path></svg></div>
                                     </div>
                                     <div class="mt-4 h-2 w-full rounded-full bg-slate-200 dark:bg-slate-700">
                                         <div class="h-2 rounded-full bg-indigo-500" style="width: <%= Math.max(0, Math.min(100, Number(cardHealthThird.progressPct || 0))) %>%"></div>
@@ -681,33 +708,30 @@
                                     <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300"><%= cardHealthThird.ctaLabel || 'Ver pessoas do mês' %></p>
                                 </a>
 
-                                <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+                                <div class="op-card-health-card op-card-health-card--radar rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
                                     <div class="flex items-start justify-between gap-4">
                                         <div class="min-w-0">
                                             <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Radar do cartão</p>
                                             <h3 class="mt-2 text-2xl font-black text-slate-900 dark:text-white sm:text-[1.85rem]"><%= Number(cardHealthRadar.signalCount || 0) > 0 ? `${Number(cardHealthRadar.signalCount || 0)} sinal${Number(cardHealthRadar.signalCount || 0) === 1 ? '' : 's'}` : 'Tudo no trilho' %></h3>
                                             <p class="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200"><%= cardHealthRadar.signalLabel || 'Sem susto operacional por agora.' %></p>
                                         </div>
-                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-2xl text-white dark:bg-slate-100 dark:text-slate-900">🚦</div>
+                                        <div class="op-card-health-card__icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" aria-hidden="true"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="18" rx="3" ry="3" stroke-width="1.9"></rect><circle cx="12" cy="8" r="1" stroke-width="1.9"></circle><circle cx="12" cy="12" r="1" stroke-width="1.9"></circle><circle cx="12" cy="16" r="1" stroke-width="1.9"></circle></svg></div>
                                     </div>
 
                                     <% if (cardHealthRadar.items && cardHealthRadar.items.length) { %>
                                         <div class="mt-4 grid gap-3">
                                             <% cardHealthRadar.items.forEach((item) => { %>
                                                 <a href="<%= item.href || cardHealthRadar.ctaHref || `/month/${year}/${month}` %>" class="block rounded-2xl border px-4 py-3 <%= healthRadarItemClasses(item.tone) %>">
-                                                    <div class="flex items-start gap-3">
-                                                        <div class="text-lg leading-none"><%= item.icon || '•' %></div>
-                                                        <div class="min-w-0">
-                                                            <p class="text-sm font-extrabold text-slate-900 dark:text-white"><%= item.title %></p>
-                                                            <p class="mt-1 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300"><%= item.description %></p>
-                                                        </div>
+                                                    <div class="min-w-0">
+                                                        <p class="text-sm font-extrabold text-slate-900 dark:text-white"><%= item.title %></p>
+                                                        <p class="mt-1 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300"><%= item.description %></p>
                                                     </div>
                                                 </a>
                                             <% }) %>
                                         </div>
                                     <% } else { %>
                                         <div class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm font-medium leading-6 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-100">
-                                            Sem vencimento estourando, sem compra sem dono e sem cartão fechando hoje. Pode seguir o baile.
+                                            Sem vencimento estourando e sem compra sem dono neste momento.
                                         </div>
                                     <% } %>
 
@@ -717,14 +741,14 @@
                         </div>
                     <% } %>
                 </section>
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="op-detalhamento-operational-grid grid grid-cols-1 lg:grid-cols-2 gap-8">
 
-                    <div class="space-y-8">
-                        <div id="grana-entra" class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                            <div class="bg-slate-900 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="op-detalhamento-stack space-y-8">
+                        <div id="grana-entra" class="op-surface-card op-detalhamento-finance-card op-detalhamento-finance-card--income bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            <div class="op-detalhamento-panel-head bg-slate-900 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
-                                    <h5 class="text-white font-bold">✨ Grana que entra</h5>
-                                    <p class="text-xs font-medium text-white/70 mt-1">Valor único segue no toque rápido. Vários lançamentos abrem a listinha completinha.</p>
+                                    <h5 class="text-white font-bold">Entradas</h5>
+                                    <p class="text-xs font-medium text-white/70 mt-1">Lançamentos previstos para entrar no mês.</p>
                                 </div>
                                 <button type="button" onclick="openFinanceCreator('income')" <%= isClosed ? 'hidden' : '' %> class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition-colors hover:bg-white/20 sm:min-w-[10.5rem]">
                                     <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -736,7 +760,7 @@
                             <div class="p-4 sm:p-6">
                                 <% if (!incomeFinances.length) { %>
                                     <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/60 px-4 py-6 text-sm font-medium text-slate-500 dark:text-slate-400">
-                                        Ainda não caiu nada por aqui. Quando pintar uma entrada, ela aparece nessa vitrine.
+                                        Nenhuma entrada registrada neste mês até aqui.
                                     </div>
                                 <% } else { %>
                                     <div data-no-month-swipe>
@@ -768,7 +792,7 @@
                                                         <% if (variable) { const incomeVariableLabel = formatBRLFromCents(fin.amount_cents); %>
                                                             <button type="button" onclick="openVariableEditor(<%= fin.id %>)" class="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-right transition hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 sm:px-3">
                                                                 <span class="block font-mono text-[13px] font-black text-emerald-700 dark:text-emerald-300 sm:text-sm" data-sensitive-text data-sensitive-visible-value="<%= incomeVariableLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(incomeVariableLabel, true) %>"><%= incomeVariableLabel %></span>
-                                                                <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${itemCount} lançamento${itemCount === 1 ? '' : 's'}` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
+                                                                <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${itemCount} lançamento${itemCount === 1 ? '' : 's'}` : (isClosed ? 'Abrir detalhes' : 'Toque para informar') %></span>
                                                             </button>
                                                         <% } else { const incomeFixedValue = getDisplayValue(fin); %>
                                                             <input type="text" data-money-mask inputmode="numeric" data-sensitive-input data-sensitive-masked-value="<%= buildMaskedMoneyLabel(incomeFixedValue, false) %>" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-mono text-[13px] font-black text-right text-emerald-700 outline-none transition hover:border-emerald-300 focus:border-emerald-400 focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:border-emerald-900/40 dark:bg-emerald-900/30 dark:text-emerald-400 sm:text-sm" value="<%= incomeFixedValue %>" onblur="saveMath(<%= fin.id %>, this.value)">
@@ -785,11 +809,11 @@
                             </div>
                         </div>
 
-                        <div id="grana-sai" class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                            <div class="bg-slate-800 dark:bg-slate-900 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div id="grana-sai" class="op-surface-card op-detalhamento-finance-card op-detalhamento-finance-card--expense bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            <div class="op-detalhamento-panel-head bg-slate-800 dark:bg-slate-900 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
-                                    <h5 class="text-white font-bold">🧾 Grana que sai</h5>
-                                    <p class="text-xs font-medium text-white/70 mt-1">Vale para rotina, corre do trabalho, combustível e tudo que aperta o mês.</p>
+                                    <h5 class="text-white font-bold">Saídas</h5>
+                                    <p class="text-xs font-medium text-white/70 mt-1">Despesas do mês acompanhadas por valor, data e status.</p>
                                 </div>
                                 <button type="button" onclick="openFinanceCreator('expense')" <%= isClosed ? 'hidden' : '' %> class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition-colors hover:bg-white/20 sm:min-w-[10.5rem]">
                                     <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -801,7 +825,7 @@
                             <div class="p-4 sm:p-6">
                                 <% if (!expenseFinances.length) { %>
                                     <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/60 px-4 py-6 text-sm font-medium text-slate-500 dark:text-slate-400">
-                                        Ainda não saiu nada por aqui. Quando pintar uma saída, ela entra nessa lista.
+                                        Nenhuma saída registrada neste mês até aqui.
                                     </div>
                                 <% } else { %>
                                     <div data-no-month-swipe>
@@ -852,7 +876,7 @@
                                                         <% if (variable) { %>
                                                             <button type="button" onclick="openVariableEditor(<%= fin.id %>)" class="w-full rounded-2xl border border-rose-200 bg-rose-50 px-2.5 py-2 text-right transition hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900/40 dark:bg-rose-900/20 dark:hover:bg-rose-900/30 sm:px-3">
                                                                 <span class="block font-mono text-[13px] font-black text-rose-700 dark:text-rose-300 sm:text-sm"><%= formatBRLFromCents(fin.amount_cents) %></span>
-                                                                <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${paymentState.paidItemCount} de ${itemCount} pagos` : (isClosed ? 'Abrir listinha' : 'Toque para preencher') %></span>
+                                                                <span class="mt-1 block text-[10px] font-semibold leading-tight text-slate-500 dark:text-slate-400 sm:text-[11px]"><%= itemCount ? `${paymentState.paidItemCount} de ${itemCount} pagos` : (isClosed ? 'Abrir detalhes' : 'Toque para informar') %></span>
                                                             </button>
                                                         <% } else { %>
                                                             <input type="text" data-money-mask inputmode="numeric" <%= isClosed ? 'disabled' : '' %> class="w-full rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 font-mono text-[13px] font-black text-right text-rose-700 outline-none transition hover:border-rose-300 focus:border-rose-400 focus:ring-2 focus:ring-rose-500 disabled:opacity-60 dark:border-rose-900/40 dark:bg-rose-900/30 dark:text-rose-400 sm:text-sm" value="<%= getDisplayValue(fin) %>" onblur="saveMath(<%= fin.id %>, this.value)">
@@ -870,10 +894,10 @@
                         </div>
                     </div>
 
-                    <div class="space-y-8">
-                        <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                            <div class="bg-blue-700 dark:bg-blue-800 px-6 py-4">
-                                <h5 class="text-white font-bold">🧮 Conta rápida</h5>
+                    <div class="op-detalhamento-stack space-y-8">
+                        <div class="op-surface-card op-detalhamento-finance-card op-detalhamento-finance-card--calc bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            <div class="op-detalhamento-panel-head bg-blue-700 dark:bg-blue-800 px-6 py-4">
+                                <h5 class="text-white font-bold">Conta rápida</h5>
                             </div>
                             <div class="p-6">
                                 <textarea id="calc-pad" <%= isClosed ? 'disabled' : '' %> class="w-full font-mono text-sm bg-slate-50 dark:bg-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-60" rows="5" placeholder="Ex: 50 + 20" oninput="calculatePad()" onchange="saveNotes('math', this.value)"><%= notes.content_math %></textarea>
@@ -881,12 +905,12 @@
                             </div>
                         </div>
 
-                        <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                            <div class="bg-slate-600 dark:bg-slate-700 px-6 py-4">
-                                <h5 class="text-white font-bold">📝 Anotações que ajudam</h5>
+                        <div class="op-surface-card op-detalhamento-finance-card op-detalhamento-finance-card--notes bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            <div class="op-detalhamento-panel-head bg-slate-600 dark:bg-slate-700 px-6 py-4">
+                                <h5 class="text-white font-bold">Anotações do mês</h5>
                             </div>
                             <div class="p-6">
-                                <textarea <%= isClosed ? 'disabled' : '' %> class="w-full text-sm bg-slate-50 dark:bg-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-60" rows="8" placeholder="Pode jogar recados, ideias e lembretes do mês aqui..." onchange="saveNotes('text', this.value)"><%= notes.content_text %></textarea>
+                                <textarea <%= isClosed ? 'disabled' : '' %> class="w-full text-sm bg-slate-50 dark:bg-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-60" rows="8" placeholder="Registre recados, lembretes e decisões deste mês..." onchange="saveNotes('text', this.value)"><%= notes.content_text %></textarea>
                             </div>
                         </div>
                     </div>
@@ -899,7 +923,7 @@
                                 <div>
                                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300" id="finance-modal-eyebrow">Nova entrada</div>
                                     <h2 id="finance-modal-title" class="mt-1 text-xl font-black text-slate-900 dark:text-white">Criar item</h2>
-                                    <p id="finance-modal-subtitle" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Escolha o jeito certo e deixe a conta redondinha.</p>
+                                    <p id="finance-modal-subtitle" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Crie um item único ou uma lista de lançamentos.</p>
                                 </div>
                                 <button type="button" class="op-icon-btn shrink-0" data-finance-close aria-label="Fechar janela">✕</button>
                             </div>
@@ -924,7 +948,7 @@
                                         </div>
 
                                         <div id="finance-fixed-panel" class="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/60">
-                                            <p id="finance-fixed-copy" class="text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Esse item vai nascer como valor único. Se quiser, já deixe o dia marcado para os alertas do mês. O valor continua sendo ajustado direto na lista.</p>
+                                            <p id="finance-fixed-copy" class="text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Use valor único para itens simples. Se quiser, marque o dia para os alertas do mês.</p>
                                             <div id="finance-fixed-kind-shell" class="mt-4">
                                                 <div class="mb-2 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Esse dia significa</div>
                                                 <div class="grid gap-3 sm:grid-cols-2">
@@ -956,7 +980,7 @@
                                     <div class="rounded-[24px] border border-slate-200 bg-slate-50/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/70">
                                         <div class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Total que vai pra tela</div>
                                         <div id="finance-total-preview" class="mt-2 text-2xl font-black text-slate-900 dark:text-white">R$ 0,00</div>
-                                        <p id="finance-total-caption" class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">O valor você ajusta direto na lista depois.</p>
+                                        <p id="finance-total-caption" class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">O total do item aparece aqui.</p>
                                     </div>
                                 </div>
 
@@ -964,20 +988,20 @@
                                     <div class="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/60 sm:flex-row sm:items-center sm:justify-between">
                                         <div>
                                             <div class="text-sm font-bold text-slate-800 dark:text-white">Listinha dos lançamentos</div>
-                                            <p id="finance-variable-copy" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Cada linha soma no total do lado de fora. Você marca o pago, escolhe a data, conta o detalhe e põe o valor com mais conforto.</p>
+                                            <p id="finance-variable-copy" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Cada linha soma no total. Descreva o lançamento, informe a data e marque o que já foi pago.</p>
                                         </div>
                                         <button type="button" id="finance-add-item-btn" class="op-btn op-btn-primary px-4 py-2 text-sm">+ Adicionar linha</button>
                                     </div>
 
                                     <div id="finance-variable-empty" class="rounded-[24px] border border-dashed border-slate-300 bg-slate-50/80 px-4 py-6 text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-400">
-                                        Ainda não tem lançamento aqui. Adicione uma linha para começar a somar.
+                                        Adicione uma linha para começar.
                                     </div>
 
                                     <div id="finance-items-list" class="space-y-3"></div>
                                 </div>
 
                                 <div id="finance-readonly-note" class="hidden rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-                                    Este mês está fechado. Pode conferir a listinha numa boa, mas editar fica pra quando ele for reaberto.
+                                    Este mês está fechado. Você ainda pode consultar os lançamentos, mas a edição fica disponível somente após reabrir o mês.
                                 </div>
                             </div>
 
@@ -995,8 +1019,8 @@
                             <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 dark:border-slate-800 sm:px-6">
                                 <div>
                                     <div id="finance-delete-eyebrow" class="text-[11px] font-black uppercase tracking-[0.18em] text-rose-600 dark:text-rose-300">Apagar item</div>
-                                    <h2 id="finance-delete-title" class="mt-1 text-xl font-black text-slate-900 dark:text-white">Tem certeza mesmo?</h2>
-                                    <p id="finance-delete-subtitle" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Se você confirmar, esse item sai da lista sem dar meia-volta.</p>
+                                    <h2 id="finance-delete-title" class="mt-1 text-xl font-black text-slate-900 dark:text-white">Confirmar exclusão?</h2>
+                                    <p id="finance-delete-subtitle" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Ao confirmar, esse item sai da lista do mês.</p>
                                 </div>
                                 <button type="button" class="op-icon-btn shrink-0" data-finance-delete-close aria-label="Fechar janela">✕</button>
                             </div>
@@ -1441,7 +1465,7 @@
 
                     if (financeModalState.amountMode !== 'variable') {
                         financeRefs.totalPreview.textContent = 'R$ 0,00';
-                        financeRefs.totalCaption.textContent = 'O valor você ajusta direto na lista depois.';
+                        financeRefs.totalCaption.textContent = 'O total do item aparece aqui.';
                         return;
                     }
 
@@ -1537,8 +1561,8 @@
 
                     if (financeRefs.variableCopy) {
                         financeRefs.variableCopy.textContent = isExpense
-                            ? 'Cada linha soma no total do lado de fora. Você marca o pago, escolhe a data, conta o detalhe e põe o valor com mais conforto.'
-                            : 'Cada linha soma no total do lado de fora. Você escolhe a data, conta o detalhe e põe o valor com mais conforto.';
+                            ? 'Cada linha soma no total. Descreva o lançamento, informe a data e marque o que já foi pago.'
+                            : 'Cada linha soma no total. Descreva o lançamento e informe a data.';
                     }
 
                     setModeButtonState(financeModalState.amountMode);
@@ -1551,14 +1575,14 @@
                             ? (isIncome ? 'Montar uma entrada em vários lançamentos' : 'Montar uma saída em vários lançamentos')
                             : (isIncome ? 'Criar uma entrada de valor único' : 'Criar uma saída de valor único');
                         financeRefs.subtitle.textContent = isVariableMode
-                            ? 'Você dá um nome principal e soma cada pedacinho na listinha abaixo. As datas ajudam os alertas do mês a chegarem na hora certa.'
-                            : 'Salva o nome agora, deixa o dia opcional se quiser alerta e o valor continua no toque rápido lá na lista.';
+                            ? 'Você informa um nome principal e soma os lançamentos abaixo. As datas ajudam a organizar os alertas do mês.'
+                            : 'Salve o nome agora, use o dia se quiser alerta e mantenha o valor disponível na lista do mês.';
                         financeRefs.descriptionLabel.textContent = isIncome ? 'Nome da entrada' : 'Nome da saída';
                         financeRefs.descriptionInput.placeholder = isIncome ? 'Ex: Shows, Salário, Freelas' : 'Ex: Combustível, Alimentação, Operação';
                         financeRefs.saveButton.textContent = 'Salvar item';
                         if (financeRefs.fixedCopy) {
                             financeRefs.fixedCopy.textContent = isIncome
-                                ? 'Quer um empurrãozinho nos alertas? Deixe o dia marcado por aqui e o resto continua no toque rápido da lista.'
+                                ? 'Defina o dia para ativar alertas do mês e manter o valor disponível na lista.'
                                 : 'Deixe o dia ao lado do nome e marque se ele representa o vencimento ou o pagamento desse combinado.';
                         }
                     } else if (isEditFixed) {
@@ -1585,7 +1609,7 @@
                             : 'Tudo que você mexer aqui já recalcula o total que aparece na tela. As datas seguem ajudando o radar do mês.';
                         financeRefs.descriptionLabel.textContent = 'Nome principal';
                         financeRefs.descriptionInput.placeholder = 'Ex: Shows';
-                        financeRefs.saveButton.textContent = 'Salvar listinha';
+                        financeRefs.saveButton.textContent = 'Salvar lançamentos';
                     }
                 }
 
@@ -1798,16 +1822,14 @@
                                 : `Apagar ${financeLabel} de valor único`;
                         }
                         if (financeRefs.deleteTitle) {
-                            financeRefs.deleteTitle.textContent = resolvedAmountMode === 'variable'
-                                ? 'Tem certeza mesmo?'
-                                : 'Vai tirar esse item da lista?';
+                            financeRefs.deleteTitle.textContent = 'Confirmar exclusão?';
                         }
                         if (financeRefs.deleteSubtitle) {
                             financeRefs.deleteSubtitle.textContent = resolvedAmountMode === 'variable'
                                 ? (items.length
-                                    ? `Ao apagar ${finance.description || 'esse item'}, vai tudo isso junto no pacote:`
+                                    ? `Ao apagar ${finance.description || 'esse item'}, todos estes lançamentos serão removidos junto com ele:`
                                     : `Ao apagar ${finance.description || 'esse item'}, o nome principal também some da lista.`)
-                                : `Ao apagar ${finance.description || 'esse item'}, ele sai da lista na hora. Se bater dúvida, ainda dá tempo de voltar.`;
+                                : `Ao apagar ${finance.description || 'esse item'}, ele sai da lista imediatamente.`;
                         }
                         if (financeRefs.deleteConfirm) {
                             financeRefs.deleteConfirm.textContent = resolvedAmountMode === 'variable' ? 'Apagar tudo' : 'Apagar item';
@@ -1828,7 +1850,7 @@
                             if (!items.length) {
                                 const emptyState = document.createElement('div');
                                 emptyState.className = 'rounded-[22px] border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-400';
-                                emptyState.textContent = 'Esse item está zerado agora, mas apagar remove o nome principal da tela também.';
+                                emptyState.textContent = 'Esse item está sem lançamentos agora, mas a exclusão também remove o nome principal da tela.';
                                 financeRefs.deleteItems.appendChild(emptyState);
                             } else {
                                 items.forEach((item) => {
@@ -1872,7 +1894,7 @@
                             requestAnimationFrame(() => financeRefs.descriptionInput?.focus());
                         }
                     } catch (error) {
-                        alert(error.message || 'Não consegui abrir essa listinha agora.');
+                        alert(error.message || 'Não consegui abrir os lançamentos agora.');
                     }
                 }
 

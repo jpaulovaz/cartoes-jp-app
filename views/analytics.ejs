@@ -29,19 +29,22 @@
   const peopleRows = Array.isArray(peopleBreakdown) ? peopleBreakdown : [];
   const cardRows = Array.isArray(cardBreakdown) ? cardBreakdown : [];
   const hasFinanceFlow = financeTrend.some((point) => Number(point.income_cents || 0) > 0 || Number(point.expense_cents || 0) > 0 || Number(point.card_cents || 0) > 0);
+  const leadIncomeLabel = financeIncomeSources[0] ? financeIncomeSources[0].label : null;
+  const leadExpenseLabel = financeExpenseSources[0] ? financeExpenseSources[0].label : null;
+  const topCategoryLabel = graphKpis.topCategory ? graphKpis.topCategory.label : null;
 %>
 
-<div class="op-screen op-screen--summary op-screen--analytics op-analytics-screen-v4 w-full max-w-7xl mx-auto space-y-5 pb-24" data-op-mobile-safe-area="bottom-nav">
-  <section class="op-page-hero op-analytics-hero-v4 op-fade-up mb-6">
+<div class="op-screen op-screen--summary op-screen--analytics op-analytics-screen-v4 op-analytics-screen-v5 w-full max-w-7xl mx-auto space-y-5 pb-24" data-op-mobile-safe-area="bottom-nav">
+  <section class="op-page-hero op-analytics-hero-v4 op-analytics-hero-v5 op-fade-up mb-6">
     <div>
-      <span class="op-page-hero__eyebrow">Raio-x do mês</span>
+      <span class="op-page-hero__eyebrow">Painel analítico</span>
       <h1 class="op-page-hero__title mt-4">Análises do mês — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
-      <p class="op-page-hero__subtitle mt-3">Veja o que pesou no mês, o fluxo de entradas e saídas e a leitura dos cartões.</p>
+      <p class="op-page-hero__subtitle mt-3">Resumo executivo das entradas, saídas, cartão e principais pressões do período.</p>
       <div class="op-page-hero__meta mt-4">
-        <span class="badge">Ficou nos cartões: <%= formatBRLFromCents(cardSpendCents) %></span>
-        <span class="badge">Grana que entrou: <%= formatBRLFromCents(financeTotals.incomeCents || 0) %></span>
-        <span class="badge">Saiu no mês: <%= formatBRLFromCents(outsideExpenseCents) %></span>
-        <span class="badge"><%= merchantTop ? `Lugar que mais pesou: ${merchantTop.label}` : 'Quando o mês ganhar movimento, o lugar campeão aparece aqui' %></span>
+        <span class="badge">Cartões: <%= formatBRLFromCents(cardSpendCents) %></span>
+        <span class="badge">Entradas: <%= formatBRLFromCents(financeTotals.incomeCents || 0) %></span>
+        <span class="badge">Saídas: <%= formatBRLFromCents(outsideExpenseCents) %></span>
+        <span class="badge"><%= merchantTop ? `Maior pressão: ${merchantTop.label}` : 'Maior pressão: sem destaque no período' %></span>
       </div>
     </div>
     <div class="op-page-hero__actions op-page-hero__actions--compact">
@@ -55,83 +58,83 @@
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6m4 6V7m4 10v-3M5 19h14"></path>
         </svg>
-        Meu Radar
+        Painel
       </a>
     </div>
   </section>
 
-  <section class="mb-8 rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6" data-op-tabs>
+  <section class="mb-8 rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6 op-analytics-shell-card" data-op-tabs>
     <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
       <div>
-        <div class="op-analytics-chip inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Leitura esperta</div>
-        <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Seu mês, sem enrolação e sem conta misturada</h2>
-        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">Passe entre o resumão, o entra e sai, a divisão dos cartões e os lugares que mais pesaram no seu bolso.</p>
+        <div class="op-analytics-chip inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Visão do período</div>
+        <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Resumo analítico do mês</h2>
+        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">Navegue entre resumo, fluxo, distribuição por pessoas/cartões e estabelecimentos do período.</p>
       </div>
       <div class="flex flex-wrap items-center gap-2 xl:justify-end">
-        <a href="/analytics/<%= previousSummaryRef.year %>/<%= previousSummaryRef.month %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/60">← <span class="ml-2">Mês anterior</span></a>
-        <a href="/analytics/<%= nextSummaryRef.year %>/<%= nextSummaryRef.month %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/60"><span class="mr-2">Próximo mês</span>→</a>
+        <a href="/analytics/<%= previousSummaryRef.year %>/<%= previousSummaryRef.month %>" class="op-phase3-nav-btn inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/60">← <span class="ml-2">Mês anterior</span></a>
+        <a href="/analytics/<%= nextSummaryRef.year %>/<%= nextSummaryRef.month %>" class="op-phase3-nav-btn inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/60"><span class="mr-2">Próximo mês</span>→</a>
       </div>
     </div>
 
     <div class="mt-5 op-tab-strip" role="tablist" aria-label="Blocos das análises">
-      <button type="button" class="op-tab-btn is-active" role="tab" aria-selected="true" data-op-tab-target="overview"><span class="sm:hidden">Fechamento</span><span class="hidden sm:inline">Fechamento</span></button>
-      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="flow"><span class="sm:hidden">Entra e sai</span><span class="hidden sm:inline">Meu Radar</span></button>
-      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="split"><span class="sm:hidden">Turma e cartões</span><span class="hidden sm:inline">Pessoas e cartões</span></button>
-      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="places">Lugares</button>
+      <button type="button" class="op-tab-btn is-active" role="tab" aria-selected="true" data-op-tab-target="overview"><span class="sm:hidden">Resumo</span><span class="hidden sm:inline">Resumo</span></button>
+      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="flow"><span class="sm:hidden">Fluxo</span><span class="hidden sm:inline">Fluxo</span></button>
+      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="split"><span class="sm:hidden">Pessoas</span><span class="hidden sm:inline">Pessoas e cartões</span></button>
+      <button type="button" class="op-tab-btn" role="tab" aria-selected="false" data-op-tab-target="places">Estabelecimentos</button>
     </div>
 
     <div class="mt-6 space-y-6">
       <div data-op-tab-panel="overview">
-        <div class="grid gap-3 lg:grid-cols-4">
-          <div class="rounded-[24px] border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">Grana que entrou</div>
+        <div class="grid gap-3 lg:grid-cols-4 op-analytics-kpi-grid">
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--income rounded-[24px] border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">Entradas</div>
             <div class="mt-2 text-2xl font-black tracking-tight text-emerald-800 dark:text-emerald-100"><%= formatBRLFromCents(financeTotals.incomeCents || 0) %></div>
-            <p class="mt-2 text-xs leading-5 text-emerald-800/80 dark:text-emerald-100/80"><%= financeIncomeSources[0] ? `${financeIncomeSources[0].label} foi quem mais deu aquela força.` : 'Quando entrar grana por aqui, ela aparece sem drama.' %></p>
+            <p class="mt-2 text-xs leading-5 text-emerald-800/80 dark:text-emerald-100/80"><%= leadIncomeLabel ? `Principal origem: ${leadIncomeLabel}.` : 'Sem entradas registradas neste período.' %></p>
           </div>
-          <div class="rounded-[24px] border border-rose-200 bg-rose-50/90 p-4 dark:border-rose-900/60 dark:bg-rose-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-rose-700 dark:text-rose-300">Saiu no mês</div>
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--expense rounded-[24px] border border-rose-200 bg-rose-50/90 p-4 dark:border-rose-900/60 dark:bg-rose-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-rose-700 dark:text-rose-300">Saídas</div>
             <div class="mt-2 text-2xl font-black tracking-tight text-rose-800 dark:text-rose-100"><%= formatBRLFromCents(financeTotals.expenseCents || 0) %></div>
-            <p class="mt-2 text-xs leading-5 text-rose-800/80 dark:text-rose-100/80"><%= financeExpenseSources[0] ? `${financeExpenseSources[0].label} puxou mais essa parte.` : 'Se pintar saída por fora, ela aparece aqui.' %></p>
+            <p class="mt-2 text-xs leading-5 text-rose-800/80 dark:text-rose-100/80"><%= leadExpenseLabel ? `Principal saída: ${leadExpenseLabel}.` : 'Sem saídas fora do cartão neste período.' %></p>
           </div>
-          <div class="rounded-[24px] border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Ficou nos cartões</div>
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--cards rounded-[24px] border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Gastos no cartão</div>
             <div class="mt-2 text-2xl font-black tracking-tight text-amber-900 dark:text-amber-100"><%= formatBRLFromCents(cardSpendCents) %></div>
-            <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80"><%= graphKpis.topCategory ? `${graphKpis.topCategory.label} levou ${graphKpis.topCategory.share_pct || 0}% do seu pedaço no cartão.` : 'Quando você dividir as compras, esse cantinho mostra seu pedaço certinho.' %></p>
+            <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80"><%= topCategoryLabel ? `Maior categoria: ${topCategoryLabel}.` : 'Sem pressão relevante no cartão neste período.' %></p>
           </div>
-          <div class="rounded-[24px] border border-slate-200 bg-slate-900 p-4 text-white dark:border-slate-700 dark:bg-slate-950">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-300">Quanto sobra</div>
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--balance rounded-[24px] border border-slate-200 bg-slate-900 p-4 text-white dark:border-slate-700 dark:bg-slate-950">
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-300">Saldo previsto</div>
             <div class="mt-2 text-2xl font-black tracking-tight"><%= formatBRLFromCents(overallNetCents) %></div>
-            <p class="mt-2 text-xs leading-5 text-slate-300"><%= overallNetCents >= 0 ? 'Depois de juntar tudo, ainda sobrou um respiro.' : 'Aqui já dá para ver que o mês apertou mais do que devia.' %></p>
+            <p class="mt-2 text-xs leading-5 text-slate-300"><%= overallNetCents >= 0 ? 'Resultado projetado acima de zero.' : 'Resultado projetado abaixo de zero.' %></p>
           </div>
         </div>
 
         <section class="mt-6 op-surface-card rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6" data-summary-graphs-root data-summary-year="<%= year %>" data-summary-month="<%= month %>" data-summary-graphs-ready="false" data-summary-detail-base="analytics">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <div class="op-analytics-chip inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Seu retrato no cartão</div>
-              <h3 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">O que puxou seu mês e como isso vem andando</h3>
-              <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">Aqui entra o seu pedaço no cartão: por categoria e mês a mês, sem misturar com a conta inteira da turma.</p>
+              <div class="op-analytics-chip inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Visão do cartão</div>
+              <h3 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Principais pressões do cartão</h3>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">Distribuição por categoria e evolução mensal do valor que ficou no cartão.</p>
             </div>
             <div class="grid gap-3 sm:grid-cols-2 xl:w-[25rem]">
               <div class="rounded-[22px] border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/50">
-                <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Radar do mês</div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Variação do período</div>
                 <div class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">
                   <% if (graphInsights.currentVsAveragePct === null || graphInsights.currentVsAveragePct === undefined) { %>
-                    Ainda sem chão para comparar
+                    Ainda sem base histórica para comparação
                   <% } else if (Number(graphInsights.currentVsAveragePct || 0) > 0) { %>
                     <%= Number(graphInsights.currentVsAveragePct || 0) %>% acima da média recente
                   <% } else if (Number(graphInsights.currentVsAveragePct || 0) < 0) { %>
                     <%= Math.abs(Number(graphInsights.currentVsAveragePct || 0)) %>% abaixo da média dos últimos meses
                   <% } else { %>
-                    No mesmo pique da média recente
+                    Alinhado à média recente
                   <% } %>
                 </div>
-                <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">Média recente: <span class="font-bold text-slate-800 dark:text-slate-100"><%= formatBRLFromCents(graphInsights.averageMonthlySpendCents || 0) %></span>.</p>
+                <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">Média de referência: <span class="font-bold text-slate-800 dark:text-slate-100"><%= formatBRLFromCents(graphInsights.averageMonthlySpendCents || 0) %></span>.</p>
               </div>
               <div class="rounded-[22px] border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/50">
-                <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Categorias em dia</div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Classificação</div>
                 <div class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white"><%= Number(graphKpis.categoryCoveragePct || 0) %>% em ordem</div>
-                <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400"><%= formatBRLFromCents(graphKpis.uncategorizedCents || 0) %> ainda está sem categoria certinha.</p>
+                <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400"><%= Number(graphKpis.uncategorizedCents || 0) > 0 ? `${formatBRLFromCents(graphKpis.uncategorizedCents || 0)} ainda sem categoria.` : 'Tudo classificado neste período.' %></p>
               </div>
             </div>
           </div>
@@ -140,15 +143,15 @@
             <span class="font-bold text-slate-800 dark:text-slate-100">Dica:</span>
             <span>Tocou numa categoria ou num mês, a gente te leva direto para as compras daquele pedaço.</span>
             <div class="hidden sm:block h-4 w-px bg-slate-300 dark:bg-slate-700"></div>
-            <span data-summary-interaction-hint class="font-medium text-slate-500 dark:text-slate-400">Toque para fuçar sem medo.</span>
+            <span data-summary-interaction-hint class="font-medium text-slate-500 dark:text-slate-400">Toque para explorar o detalhe.</span>
           </div>
 
           <div class="mt-6 grid gap-4 xl:grid-cols-2 op-analytics-graph-grid op-analytics-graph-grid--overview">
             <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 op-analytics-graph-card">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div class="min-w-0">
-                  <h3 class="text-lg font-black text-slate-900 dark:text-white">Seu pedaço por categoria</h3>
-                  <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">Mostra para onde foi o seu pedaço do cartão neste mês.</p>
+                  <h3 class="text-lg font-black text-slate-900 dark:text-white">Distribuição por categoria</h3>
+                  <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">Participação das categorias no cartão do período.</p>
                 </div>
                 <span class="op-analytics-chip inline-flex items-center self-start rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Categorias</span>
               </div>
@@ -162,65 +165,65 @@
             <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 op-analytics-graph-card">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div class="min-w-0">
-                  <h3 class="text-lg font-black text-slate-900 dark:text-white">Seu cartão, mês a mês</h3>
-                  <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">Bom para ver quando o seu pedaço no cartão engrossou ou deu uma respirada.</p>
+                  <h3 class="text-lg font-black text-slate-900 dark:text-white">Evolução do cartão</h3>
+                  <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">Histórico dos últimos 6 meses do valor lançado no cartão.</p>
                 </div>
                 <span class="op-analytics-chip inline-flex items-center self-start rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
               </div>
               <div class="mt-4 op-analytics-line-wrap" data-summary-line-chart><div class="flex min-h-[260px] animate-pulse items-center justify-center rounded-[24px] border border-slate-200 bg-slate-50/80 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-400 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-500">Afinando a linha do tempo das compras...</div></div>
               <div class="mt-4 grid gap-3 sm:grid-cols-2">
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
-                  <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Comparação com o mês anterior</div>
+                  <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Vs. mês anterior</div>
                   <div class="mt-2 text-lg font-black <%= Number(graphKpis.deltaCents || 0) > 0 ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-300' %>"><%= Number(graphKpis.deltaCents || 0) > 0 ? '+' : '' %><%= formatBRLFromCents(graphKpis.deltaCents || 0) %></div>
-                  <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400"><% if (graphKpis.deltaPct === null || graphKpis.deltaPct === undefined) { %>Ainda sem chão para comparar.<% } else { %><%= Math.abs(Number(graphKpis.deltaPct || 0)) %>% <%= Number(graphKpis.deltaPct || 0) >= 0 ? 'acima' : 'abaixo' %> do mês anterior.<% } %></p>
+                  <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400"><% if (graphKpis.deltaPct === null || graphKpis.deltaPct === undefined) { %>Ainda sem base histórica para comparação.<% } else { %><%= Math.abs(Number(graphKpis.deltaPct || 0)) %>% <%= Number(graphKpis.deltaPct || 0) >= 0 ? 'acima' : 'abaixo' %> do mês anterior.<% } %></p>
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
-                  <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Pico recente</div>
+                  <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Maior ponto recente</div>
                   <div class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= graphInsights.peakPoint ? graphInsights.peakPoint.label : 'Ainda sem pico' %></div>
-                  <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400"><%= graphInsights.peakPoint ? `${formatBRLFromCents(graphInsights.peakPoint.total_cents || 0)} foi o maior total dos últimos meses.` : 'Assim que tiver histórico suficiente, o pico aparece aqui.' %></p>
+                  <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400"><%= graphInsights.peakPoint ? `${formatBRLFromCents(graphInsights.peakPoint.total_cents || 0)} foi o maior total dos últimos meses.` : 'Quando houver histórico suficiente, o maior ponto recente aparecerá aqui.' %></p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="sr-only" aria-live="polite" data-summary-graphs-status>Os gráficos do mês já estão no jeito.</div>
+          <div class="sr-only" aria-live="polite" data-summary-graphs-status>Os gráficos do mês foram carregados.</div>
           <script type="application/json" data-summary-graphs-json><%- JSON.stringify(analyticsCharts || { categories: [], monthlyTrend: [], kpis: {}, insights: {}, flowTrend: [] }) %></script>
         </section>
       </div>
 
       <div data-op-tab-panel="flow" hidden>
         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <div class="rounded-[24px] border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">Grana que entrou</div>
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--income rounded-[24px] border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">Entradas</div>
             <div class="mt-2 text-2xl font-black tracking-tight text-emerald-800 dark:text-emerald-100"><%= formatBRLFromCents(financeTotals.incomeCents || 0) %></div>
-            <p class="mt-2 text-xs leading-5 text-emerald-800/80 dark:text-emerald-100/80"><%= financeIncomeSources[0] ? `${financeIncomeSources[0].label} foi a maior força por aqui.` : 'Quando entrar grana, ela vai cair certinho aqui.' %></p>
+            <p class="mt-2 text-xs leading-5 text-emerald-800/80 dark:text-emerald-100/80"><%= financeIncomeSources[0] ? `${financeIncomeSources[0].label} foi a principal origem no período.` : 'Sem entradas registradas neste período.' %></p>
           </div>
-          <div class="rounded-[24px] border border-rose-200 bg-rose-50/90 p-4 dark:border-rose-900/60 dark:bg-rose-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-rose-700 dark:text-rose-300">Saiu no mês</div>
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--expense rounded-[24px] border border-rose-200 bg-rose-50/90 p-4 dark:border-rose-900/60 dark:bg-rose-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-rose-700 dark:text-rose-300">Saídas</div>
             <div class="mt-2 text-2xl font-black tracking-tight text-rose-800 dark:text-rose-100"><%= formatBRLFromCents(outsideExpenseCents) %></div>
-            <p class="mt-2 text-xs leading-5 text-rose-800/80 dark:text-rose-100/80"><%= financeExpenseSources[0] ? `${financeExpenseSources[0].label} puxou mais essa parte.` : 'Ainda não teve saída por fora registrada por aqui.' %></p>
+            <p class="mt-2 text-xs leading-5 text-rose-800/80 dark:text-rose-100/80"><%= financeExpenseSources[0] ? `${financeExpenseSources[0].label} foi a principal saída do período.` : 'Sem saídas fora do cartão neste período.' %></p>
           </div>
-          <div class="rounded-[24px] border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Ficou nos cartões</div>
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--cards rounded-[24px] border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Gastos no cartão</div>
             <div class="mt-2 text-2xl font-black tracking-tight text-amber-900 dark:text-amber-100"><%= formatBRLFromCents(cardSpendCents) %></div>
-            <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80"><%= cardSpendCents > 0 ? 'Aqui entra só o seu pedaço no cartão, sem misturar com o resto da turma.' : 'Quando você tiver valor no cartão, ele aparece aqui.' %></p>
+            <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80"><%= cardSpendCents > 0 ? 'Valor do cartão referente apenas à sua divisão no período.' : 'Sem valor de cartão registrado neste período.' %></p>
           </div>
-          <div class="rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Tudo comprometido</div>
+          <div class="op-analytics-kpi-card rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Total comprometido</div>
             <div class="mt-2 text-2xl font-black tracking-tight text-violet-900 dark:text-violet-100"><%= formatBRLFromCents(totalCommittedCents) %></div>
-            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Saiu no mês + seu pedaço no cartão. Sem maquiagem.</p>
+            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Saídas do mês somadas ao valor do cartão.</p>
           </div>
-          <div class="rounded-[24px] border border-slate-200 bg-slate-900 p-4 text-white dark:border-slate-700 dark:bg-slate-950">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-300">Quanto sobra</div>
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--balance rounded-[24px] border border-slate-200 bg-slate-900 p-4 text-white dark:border-slate-700 dark:bg-slate-950">
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-300">Saldo previsto</div>
             <div class="mt-2 text-2xl font-black tracking-tight"><%= formatBRLFromCents(overallNetCents) %></div>
-            <p class="mt-2 text-xs leading-5 text-slate-300"><%= overallNetCents >= 0 ? 'Depois de tudo isso, ainda sobrou um respiro.' : 'Depois de tudo isso, o mês já começou a apertar.' %></p>
+            <p class="mt-2 text-xs leading-5 text-slate-300"><%= overallNetCents >= 0 ? 'Resultado projetado positivo após consolidar o período.' : 'Resultado projetado negativo após consolidar o período.' %></p>
           </div>
         </div>
 
         <div class="mt-4 flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/50 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Quer ajeitar alguma peça?</div>
-            <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Salário, contas da casa, extras e outras saídas por fora continuam no mesmo cantinho de sempre.</p>
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Ajustes operacionais</div>
+            <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">As entradas e saídas fora do cartão continuam disponíveis no painel mensal.</p>
           </div>
           <a href="/detalhamento/<%= year %>/<%= month %>" class="op-btn op-btn-export op-btn--compact whitespace-nowrap">Abrir entra e sai</a>
         </div>
@@ -230,8 +233,8 @@
             <section class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
               <div class="flex items-start justify-between gap-3">
                 <div>
-                  <h3 class="text-lg font-black text-slate-900 dark:text-white">Como essa dança foi andando</h3>
-                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Aqui entram entradas, saídas por fora e o seu pedaço no cartão, tudo mês a mês.</p>
+                  <h3 class="text-lg font-black text-slate-900 dark:text-white">Evolução do fluxo</h3>
+                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Entradas, saídas fora do cartão e cartão no mesmo histórico mensal.</p>
                 </div>
                 <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
               </div>
@@ -270,8 +273,8 @@
               <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
                 <div class="flex items-start justify-between gap-3">
                   <div>
-                    <h3 class="text-lg font-black text-slate-900 dark:text-white">Quem mais trouxe grana</h3>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">As entradas ficam lado a lado para você bater o olho sem ficar caçando.</p>
+                    <h3 class="text-lg font-black text-slate-900 dark:text-white">Principais origens de entrada</h3>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Entradas organizadas por origem para leitura rápida.</p>
                   </div>
                   <span class="op-analytics-chip inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-300"><%= financeIncomeSources.length %> fonte<%= financeIncomeSources.length === 1 ? '' : 's' %></span>
                 </div>
@@ -291,14 +294,14 @@
                     <% }) %>
                   </div>
                 <% } else { %>
-                  <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não pintou entrada por aqui neste mês.</div>
+                  <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Não há entradas registradas neste período.</div>
                 <% } %>
               </div>
 
               <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
                 <div class="flex items-start justify-between gap-3">
                   <div>
-                    <h3 class="text-lg font-black text-slate-900 dark:text-white">O que mais puxou por fora</h3>
+                    <h3 class="text-lg font-black text-slate-900 dark:text-white">Principais saídas fora do cartão</h3>
                     <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Bom para ver rapidinho o que saiu sem passar pelo cartão.</p>
                   </div>
                   <span class="op-analytics-chip inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-rose-300"><%= financeExpenseSources.length %> saída<%= financeExpenseSources.length === 1 ? '' : 's' %></span>
@@ -352,7 +355,7 @@
           <div class="rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
             <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Pessoas na roda</div>
             <div class="mt-2 text-2xl font-black tracking-tight text-violet-900 dark:text-violet-100"><%= peopleRows.length %></div>
-            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Quem mais puxou o mês aparece logo abaixo, junto dos cartões.</p>
+            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">A maior pressão do período aparece abaixo, junto dos cartões.</p>
           </div>
         </div>
 
@@ -360,7 +363,7 @@
           <section class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
             <div class="flex items-start justify-between gap-3">
               <div>
-                <h3 class="text-lg font-black text-slate-900 dark:text-white">Quem mais puxou valor</h3>
+                <h3 class="text-lg font-black text-slate-900 dark:text-white">Participantes com maior participação</h3>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Ajuda a entender a divisão do mês pelas pessoas que entraram na conta.</p>
               </div>
               <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Pessoas</span>
@@ -384,7 +387,7 @@
                 <% }) %>
               </div>
             <% } else { %>
-              <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Quando o mês tiver divisão entre pessoas, esse ranking aparece por aqui.</div>
+              <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Quando houver divisão entre participantes, este ranking aparecerá aqui.</div>
             <% } %>
           </section>
 
@@ -415,7 +418,7 @@
                 <% }) %>
               </div>
             <% } else { %>
-              <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Quando esse mês ganhar compras em cartão, esse cantinho entra em cena.</div>
+              <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Quando houver compras em cartão no período, este ranking aparecerá aqui.</div>
             <% } %>
           </section>
         </div>
@@ -424,7 +427,7 @@
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h3 class="text-lg font-black text-slate-900 dark:text-white">Cartão por cartão, mês a mês</h3>
-              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Aqui o papo é total de cartão mesmo. Entrou cartão novo com compra, ele aparece sozinho por aqui.</p>
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Total por cartão usado no período.</p>
             </div>
             <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
           </div>
@@ -454,7 +457,7 @@
               <% }) %>
             </div>
           <% } else { %>
-            <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Assim que os cartões ganharem histórico, essa leitura entra em cena.</div>
+            <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Quando os cartões tiverem histórico suficiente, esta leitura aparecerá aqui.</div>
           <% } %>
         </section>
       </div>
@@ -462,9 +465,9 @@
       <div data-op-tab-panel="places" hidden>
         <div class="grid gap-3 lg:grid-cols-4 mb-6">
           <div class="rounded-[24px] border border-slate-200 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/50 lg:col-span-2">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Lugar campeão</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= merchantTop ? merchantTop.label : 'Ainda sem campeão' %></div>
-            <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400"><%= merchantTop ? `${formatBRLFromCents(merchantTop.total_cents || 0)} em ${merchantTop.txn_count || 0} compra${Number(merchantTop.txn_count || 0) === 1 ? '' : 's'}.` : 'Assim que um lugar puxar mais do que os outros, ele ganha destaque aqui.' %></p>
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Maior estabelecimento</div>
+            <div class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= merchantTop ? merchantTop.label : 'Ainda sem destaque' %></div>
+            <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400"><%= merchantTop ? `${formatBRLFromCents(merchantTop.total_cents || 0)} em ${merchantTop.txn_count || 0} compra${Number(merchantTop.txn_count || 0) === 1 ? '' : 's'}.` : 'Quando um estabelecimento concentrar mais valor, ele ganhará destaque aqui.' %></p>
           </div>
           <div class="rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
             <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Ranking</div>
@@ -482,10 +485,10 @@
         <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h3 class="text-lg font-black text-slate-900 dark:text-white">Ranking dos lugares</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Aqui fica o pódio do mês: quem mais apareceu, quem puxou mais grana e quem deu uma mudada em relação ao mês passado.</p>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Ranking dos estabelecimentos por presença, valor e variação no período.</p>
           </div>
           <div class="flex flex-wrap items-center gap-2 sm:justify-end">
-            <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Leitura por nome</span>
+            <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Leitura por estabelecimento</span>
             <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800" data-summary-ranking-toggle aria-expanded="<%= merchantRankingDefaultOpen ? 'true' : 'false' %>">
               <span data-summary-ranking-toggle-label><%= merchantRankingDefaultOpen ? 'Esconder ranking' : 'Mostrar ranking' %></span>
             </button>
@@ -512,7 +515,7 @@
                   <h4 class="text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= rankingLeader.label %></h4>
                   <span class="op-analytics-chip inline-flex items-center rounded-full border border-amber-200 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:border-amber-700 dark:bg-slate-900/60 dark:text-amber-200"><%= rankingLeader.share_pct || 0 %>% do mês</span>
                 </div>
-                <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">Esse aqui foi o campeão da vez. Se bater curiosidade, é só tocar no card dele logo abaixo.</p>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">Estabelecimento com maior valor consolidado no período.</p>
                 <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
                   <span><%= rankingLeader.txn_count || 0 %> compra<%= Number(rankingLeader.txn_count || 0) === 1 ? '' : 's' %></span>
                   <span class="hidden sm:inline">·</span>
@@ -522,7 +525,7 @@
                     <span class="font-bold <%= Number(rankingLeader.delta_cents || 0) > 0 ? 'text-rose-600 dark:text-rose-300' : Number(rankingLeader.delta_cents || 0) < 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-600 dark:text-slate-300' %>"><%= Number(rankingLeader.delta_cents || 0) > 0 ? 'Subiu' : Number(rankingLeader.delta_cents || 0) < 0 ? 'Respirou' : 'Ficou estável' %> <%= Math.abs(Number(rankingLeader.delta_pct || 0)) %>% em relação ao mês passado</span>
                   <% } else { %>
                     <span class="hidden sm:inline">·</span>
-                    <span class="font-bold text-slate-600 dark:text-slate-300">Primeira aparição forte por aqui</span>
+                    <span class="font-bold text-slate-600 dark:text-slate-300">Primeiro destaque relevante</span>
                   <% } %>
                 </div>
               </div>
@@ -534,7 +537,7 @@
                     <%= Number(rankingLeader.delta_cents || 0) > 0 ? '▲' : Number(rankingLeader.delta_cents || 0) < 0 ? '▼' : '•' %>
                     <%= Number(rankingLeader.delta_cents || 0) > 0 ? '+' : '' %><%= formatBRLFromCents(rankingLeader.delta_cents || 0) %> em relação ao mês passado
                   <% } else { %>
-                    Ainda sem chão para comparar esse craque.
+                    Ainda sem base histórica para comparação esse craque.
                   <% } %>
                 </div>
               </div>
@@ -651,7 +654,7 @@
           </div>
           <% } %>
         <% } else { %>
-          <div class="mt-4 flex min-h-[180px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não apareceu compra suficiente para montar esse ranking. Assim que o mês ganhar movimento, essa área entra em cena.</div>
+          <div class="mt-4 flex min-h-[180px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não há compras suficientes para montar este ranking. Quando o período ganhar histórico, esta área será preenchida.</div>
         <% } %>
         </div>
     </section>
@@ -660,8 +663,8 @@
       <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div class="op-analytics-chip inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Ajuda com nomes</div>
-          <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Como eu pego o jeito dos nomes que aparecem</h2>
-          <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">Quando você confirma um nome, eu vou pegando o jeito e deixo o ranking lá de cima mais redondinho. Sem inventar moda sozinho por aqui.</p>
+          <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Como os nomes são consolidados</h2>
+          <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">Quando você confirma um nome, o app consolida a leitura sem assumir agrupamentos sem validação.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2 lg:justify-end">
           <button type="button" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white" data-summary-intel-toggle aria-expanded="<%= merchantSectionDefaultOpen ? 'true' : 'false' %>">
@@ -673,7 +676,7 @@
       <div class="mt-5 space-y-5" data-summary-intel-panel <%= merchantSectionDefaultOpen ? '' : 'hidden' %>>
         <div class="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 lg:max-w-sm">
           <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Como isso entra nos eixos</div>
-          <p class="mt-2 leading-6">Você confirma quando fizer sentido, eu aprendo com calma e vou deixando os nomes mais arrumadinhos. Se não curtir, é só pausar e pronto.</p>
+          <p class="mt-2 leading-6">Você confirma quando fizer sentido, o app aprende com cautela e permite pausar qualquer regra.</p>
         </div>
 
       <div class="mt-5 grid gap-3 lg:grid-cols-3">
@@ -683,26 +686,26 @@
             <% if (merchantTop) { %>
               Você gastou <%= formatBRLFromCents(merchantTop.total_cents || 0) %> em <%= merchantTop.label %>
             <% } else { %>
-              Ainda sem um campeão do mês
+              Ainda sem destaque dominante no período
             <% } %>
           </div>
           <p class="mt-2 text-xs leading-5 text-emerald-800/80 dark:text-emerald-100/80">
             <% if (merchantTop) { %>
-              Foram <span class="font-bold"><%= merchantTop.txn_count || 0 %></span> compra(s), puxando <span class="font-bold"><%= merchantTop.share_pct || 0 %>%</span> do total lido por estabelecimento. Aqui a lupa já entrega o protagonista da novela.
+              Foram <span class="font-bold"><%= merchantTop.txn_count || 0 %></span> compra(s), representando <span class="font-bold"><%= merchantTop.share_pct || 0 %>%</span> do total lido por estabelecimento.
             <% } else { %>
-              Assim que o mês ganhar compras, esse bloco mostra quem mais apareceu por aqui.
+              Quando houver compras no período, este bloco exibirá a frequência dos estabelecimentos.
             <% } %>
           </p>
         </div>
         <div class="rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
           <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Nomes já reconhecidos</div>
           <div class="mt-2 text-xl font-black tracking-tight text-violet-900 dark:text-violet-100"><%= Number(graphInsights?.merchantCount || 0) %> nome<%= Number(graphInsights?.merchantCount || 0) === 1 ? '' : 's' %> no mapa</div>
-          <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Dessas, <span class="font-bold"><%= Number(graphInsights?.recognizedMerchantCount || 0) %></span> vieram de agrupamentos mais certeiros por palavra-chave. <% if (Number(graphInsights?.learnedMerchantCount || 0) > 0) { %><span class="font-bold"><%= Number(graphInsights?.learnedMerchantCount || 0) %></span> já aprenderam com as suas confirmações.<% } else { %>O resto entrou no modo prudente, sem forçar apelido onde não precisava.<% } %></p>
+          <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Dessas, <span class="font-bold"><%= Number(graphInsights?.recognizedMerchantCount || 0) %></span> vieram de agrupamentos confirmados por regra. <% if (Number(graphInsights?.learnedMerchantCount || 0) > 0) { %><span class="font-bold"><%= Number(graphInsights?.learnedMerchantCount || 0) %></span> já foram aprendidas com as suas confirmações.<% } else { %>O restante permaneceu em análise prudente, sem consolidação automática.<% } %></p>
         </div>
         <div class="rounded-[24px] border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
           <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Como isso ajuda</div>
           <div class="mt-2 text-xl font-black tracking-tight text-amber-900 dark:text-amber-100">Ranking que já abre a investigação</div>
-          <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80">Tocou num estabelecimento? A gente abre o mês já com a descrição filtrada, para você investigar sem ficar pescando compra na unha.</p>
+          <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80">Ao tocar em um estabelecimento, o mês abre com a descrição já filtrada para investigação direta.</p>
         </div>
       </div>
 
@@ -711,7 +714,7 @@
           <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h3 class="text-lg font-black text-slate-900 dark:text-white">Memória que você ensinou pro app</h3>
-              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Cada confirmação sua vira memória boa. Cada pausa evita teimosia. O app aprende, mas continua te ouvindo.</p>
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Cada confirmação cria uma regra útil. Cada pausa evita consolidação indevida. O controle continua com você.</p>
             </div>
             <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Aprende com você</span>
           </div>
@@ -720,17 +723,17 @@
             <div class="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 dark:border-emerald-900/50 dark:bg-emerald-950/20">
               <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Memórias ativas</div>
               <div class="mt-2 text-2xl font-black text-emerald-900 dark:text-emerald-100"><%= Number(merchantLearning?.activeCount || 0) %></div>
-              <p class="mt-1 text-xs leading-5 text-emerald-800/80 dark:text-emerald-100/80">Nomes que você já aprovou e que podem aparecer certinhos nas próximas compras.</p>
+              <p class="mt-1 text-xs leading-5 text-emerald-800/80 dark:text-emerald-100/80">Nomes aprovados que podem ser reaproveitados nas próximas compras.</p>
             </div>
             <div class="rounded-2xl border border-violet-200 bg-violet-50/80 px-4 py-3 dark:border-violet-900/50 dark:bg-violet-950/20">
               <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Aplicadas no mês</div>
               <div class="mt-2 text-2xl font-black text-violet-900 dark:text-violet-100"><%= Number(merchantLearning?.appliedRuleTxnCount || 0) %></div>
-              <p class="mt-1 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Compras deste mês que já aproveitaram essa memória, somando <span class="font-bold"><%= formatBRLFromCents(merchantLearning?.appliedRuleTotalCents || 0) %></span>.</p>
+              <p class="mt-1 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Compras deste período que já reaproveitaram essa memória, somando <span class="font-bold"><%= formatBRLFromCents(merchantLearning?.appliedRuleTotalCents || 0) %></span>.</p>
             </div>
             <div class="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/20">
               <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Sugestões na fila</div>
               <div class="mt-2 text-2xl font-black text-amber-900 dark:text-amber-100"><%= Number(graphInsights?.merchantSuggestionCount || 0) %></div>
-              <p class="mt-1 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80">Quando aparecer nome repetido com cara de conhecido, ele vem aqui pedir seu ok.</p>
+              <p class="mt-1 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80">Quando surgir repetição relevante, ela será enviada para validação.</p>
             </div>
           </div>
 
@@ -738,7 +741,7 @@
             <div class="mt-4 rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-800/70">
               <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Memória mais acionada</div>
               <div class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= merchantLearning.mostAppliedRule.label %></div>
-              <p class="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">Esse nome apareceu em <span class="font-bold"><%= Number(merchantLearning.mostAppliedRule.applied_txn_count || 0) %></span> compra(s) do mês e puxou <span class="font-bold"><%= formatBRLFromCents(merchantLearning.mostAppliedRule.applied_total_cents || 0) %></span>. Tá rendendo mais que café em segunda.</p>
+              <p class="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">Esse nome apareceu em <span class="font-bold"><%= Number(merchantLearning.mostAppliedRule.applied_txn_count || 0) %></span> compra(s) do período e concentrou <span class="font-bold"><%= formatBRLFromCents(merchantLearning.mostAppliedRule.applied_total_cents || 0) %></span>.</p>
             </div>
           <% } %>
         </div>
@@ -746,8 +749,8 @@
         <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
           <div class="flex items-start justify-between gap-3">
             <div>
-              <h3 class="text-lg font-black text-slate-900 dark:text-white">O que o app já pegou no ar</h3>
-              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Aqui fica o que já foi aprendido com a sua ajuda.</p>
+              <h3 class="text-lg font-black text-slate-900 dark:text-white">Regras já aprendidas</h3>
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Regras validadas com a sua ajuda.</p>
             </div>
             <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Você no comando</span>
           </div>
@@ -777,7 +780,7 @@
                         <input type="hidden" name="label" value="<%= rule.label %>">
                         <input type="hidden" name="search_term" value="<%= rule.search_term || '' %>">
                         <input type="hidden" name="source_sample" value="<%= rule.source_sample || '' %>">
-                        <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Pausar aprendizado</button>
+                        <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Pausar regra</button>
                       </form>
                     </div>
                   </div>
@@ -785,12 +788,12 @@
               <% }) %>
             </div>
           <% } else { %>
-            <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não tem nada aprendido por aqui. Quando você confirmar uma sugestão, ela passa a morar nesse cantinho.</div>
+            <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não há aprendizados ativos. Ao confirmar uma sugestão, ela passa a integrar esta lista.</div>
           <% } %>
 
           <% if (merchantLearning?.pausedRules && merchantLearning.pausedRules.length > 0) { %>
             <div class="mt-4 rounded-[22px] border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/60">
-              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Na geladeira por escolha sua</div>
+              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Aprendizados pausados</div>
               <div class="mt-3 space-y-3">
                 <% merchantLearning.pausedRules.forEach((rule) => { %>
                   <div class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
@@ -803,7 +806,7 @@
                       <input type="hidden" name="label" value="<%= rule.label %>">
                       <input type="hidden" name="search_term" value="<%= rule.search_term || '' %>">
                       <input type="hidden" name="source_sample" value="<%= rule.source_sample || '' %>">
-                      <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Reativar aprendizado</button>
+                      <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Reativar regra</button>
                     </form>
                   </div>
                 <% }) %>
@@ -816,8 +819,8 @@
       <div class="mt-5 rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h3 class="text-lg font-black text-slate-900 dark:text-white">Sugestões para você confirmar</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Quando o app percebe um nome que se repete, ele pede seu ok antes de juntar as compras. Nada de sair batizando tudo sozinho.</p>
+            <h3 class="text-lg font-black text-slate-900 dark:text-white">Sugestões para validar</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Quando o app identifica padrões de nome, ele pede validação antes de consolidar os estabelecimentos.</p>
           </div>
           <span class="op-analytics-chip inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-300"><%= merchantSuggestions.length %> sugest<%= merchantSuggestions.length === 1 ? 'ão' : 'ões' %> na fila</span>
         </div>
@@ -849,7 +852,7 @@
                     <input type="hidden" name="preview_label" value="<%= suggestion.preview_label || '' %>">
                     <input type="hidden" name="search_term" value="<%= suggestion.search_term || '' %>">
                     <input type="hidden" name="sample_description" value="<%= suggestion.sample_description || '' %>">
-                    <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-emerald-700">Pode juntar esses nomes</button>
+                    <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-emerald-700">Confirmar agrupamento</button>
                   </form>
                   <form method="POST" action="/analytics/<%= year %>/<%= month %>/merchant-suggestions/dismiss" class="sm:w-auto" data-scroll-preserve-form data-scroll-restore-target="[data-summary-intel-root]">
                     <input type="hidden" name="pattern" value="<%= suggestion.pattern %>">
@@ -857,14 +860,14 @@
                     <input type="hidden" name="preview_label" value="<%= suggestion.preview_label || '' %>">
                     <input type="hidden" name="search_term" value="<%= suggestion.search_term || '' %>">
                     <input type="hidden" name="sample_description" value="<%= suggestion.sample_description || '' %>">
-                    <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Agora não</button>
+                    <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Manter separado</button>
                   </form>
                 </div>
               </div>
             <% }) %>
           </div>
         <% } else { %>
-          <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Nesse mês a lupa não encontrou sugestões novas dignas de confirmação. Quando surgir padrão com cara de repeteco, ele aparece aqui para você decidir sem chute.</div>
+          <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Neste período não há novas sugestões para validar. Quando surgir um padrão relevante, ele aparecerá nesta área.</div>
         <% } %>
       </div>
     </section>

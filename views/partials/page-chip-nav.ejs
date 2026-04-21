@@ -1,0 +1,33 @@
+<%
+  const rawItems = typeof items === 'undefined' ? [] : items;
+  const navItems = Array.isArray(rawItems) ? rawItems : [];
+  const navShellClass = typeof shellClass === 'string' ? shellClass : '';
+  const navLabel = typeof ariaLabel === 'string' && ariaLabel.trim() ? ariaLabel.trim() : 'Atalhos da página';
+  const navShellClasses = ['op-chip-nav-shell', 'mb-5', navShellClass].filter(Boolean).join(' ');
+  function buildItemClasses(item) {
+    const base = 'op-chip-nav__item';
+    const custom = item && item.classes ? String(item.classes).trim() : '';
+    if (!custom) return base;
+    return custom.includes('op-chip-nav__item') ? custom : `${base} ${custom}`;
+  }
+%>
+<% if (navItems.length) { %>
+  <nav class="<%= navShellClasses %>" aria-label="<%= navLabel %>">
+    <div class="op-chip-nav op-chip-nav--scroll flex gap-2.5 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible">
+      <% navItems.forEach((item) => { %>
+        <% const classes = buildItemClasses(item); %>
+        <% if (item && item.type === 'button') { %>
+          <button type="button"<% if (item.onclick) { %> onclick="<%= item.onclick %>"<% } %> class="<%= classes %>">
+            <% if (item.icon) { %><span><%= item.icon %></span><% } %>
+            <%= item.label %>
+          </button>
+        <% } else { %>
+          <a href="<%= item && item.href ? item.href : '#' %>" class="<%= classes %>">
+            <% if (item && item.icon) { %><span><%= item.icon %></span><% } %>
+            <%= item && item.label ? item.label : '' %>
+          </a>
+        <% } %>
+      <% }) %>
+    </div>
+  </nav>
+<% } %>

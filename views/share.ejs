@@ -35,8 +35,8 @@
   const copyTextButtonLabel = pixAvailable ? 'Copiar texto + Pix' : 'Copiar texto';
 %>
 
-<div class="op-page-shell">
-  <section class="op-page-hero op-fade-up">
+<div class="op-page-shell op-share-screen-v4">
+  <section class="op-page-hero op-fade-up op-social-share-hero op-share-hero-v4">
     <div>
       <span class="op-page-hero__eyebrow">Resumo pronto pra mandar</span>
       <h1 class="op-page-hero__title mt-4">Compartilhar resumo</h1>
@@ -47,7 +47,7 @@
         <span class="badge"><%= items.length %> item(ns)</span>
       </div>
     </div>
-    <div class="op-page-hero__actions">
+    <div class="op-page-hero__actions op-social-share-hero__actions op-social-share-hero__actions--triple">
       <a href="/summary/<%= year %>/<%= month %>" class="op-btn op-hero-link op-hero-link--summary">
         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
         Voltar
@@ -63,7 +63,7 @@
     </div>
   </section>
 
-  <div class="op-surface-card op-fade-up rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 mb-6">
+  <div class="op-surface-card op-fade-up op-share-toolbar-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 mb-6">
     <form method="get" action="/share/<%= year %>/<%= month %>/<%= person.id %>" class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
       <div class="w-full md:max-w-sm">
         <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Como ordenar os itens</label>
@@ -78,7 +78,7 @@
     </form>
   </div>
 
-  <div class="op-surface-card op-fade-up rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 mb-6">
+  <div class="op-surface-card op-fade-up op-share-copy-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 mb-6">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
       <div class="min-w-0">
         <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/70 dark:text-sky-300/80"><%= pixAvailable ? 'Pix no resumo' : 'Texto do resumo' %></div>
@@ -104,7 +104,7 @@
     </div>
   </div>
 
-  <div class="op-preview-shell op-fade-up">
+  <div class="op-preview-shell op-fade-up op-share-preview-shell">
     <div class="op-preview-shell__label">Prévia do resumo</div>
     <div class="flex justify-center pb-2">
       <%- include('partials/share-summary-card', {

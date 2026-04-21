@@ -131,33 +131,36 @@
   </style>
 </head>
 <%
-  const pinState = appPinSecurity || {};
-  const pinGuard = appPinGuard || {};
+  const pinState = (typeof appPinSecurity !== 'undefined' && appPinSecurity) ? appPinSecurity : {};
+  const pinGuard = (typeof appPinGuard !== 'undefined' && appPinGuard) ? appPinGuard : {};
   const pinMinLength = Number(pinState.minLength || 4) || 4;
   const pinMaxLength = Number(pinState.maxLength || 6) || 6;
   const pinIdleLabel = pinState.idleLabel || '1 minuto';
   const pinIdleOptions = Array.isArray(pinState.idleOptions) ? pinState.idleOptions : [];
-  const showRecoveryPanel = !!reauthFresh;
+  const showRecoveryPanel = !!(typeof reauthFresh !== 'undefined' && reauthFresh);
   const guardRequiresReauth = !!pinGuard.requiresReauth;
   const guardCooldownActive = !!pinGuard.cooldownActive;
   const unlockTemporarilyDisabled = guardRequiresReauth || guardCooldownActive;
-  const recoveryMode = lockMode === 'recover' && showRecoveryPanel;
-  const safeNext = nextTarget || '/';
-  const displayName = (lockUser && lockUser.name) ? lockUser.name : 'Você';
-  const displayEmail = (lockUser && lockUser.email) ? lockUser.email : '';
-  const displayPhoto = (lockUser && lockUser.photo_url) ? lockUser.photo_url : '';
-  const flashType = flash && flash.type ? String(flash.type) : '';
-  const flashMessage = flash && flash.message ? String(flash.message) : '';
+  const currentLockMode = typeof lockMode !== 'undefined' ? lockMode : '';
+  const recoveryMode = currentLockMode === 'recover' && showRecoveryPanel;
+  const safeNext = (typeof nextTarget !== 'undefined' && nextTarget) ? nextTarget : '/';
+  const currentLockUser = (typeof lockUser !== 'undefined' && lockUser) ? lockUser : null;
+  const displayName = (currentLockUser && currentLockUser.name) ? currentLockUser.name : 'Você';
+  const displayEmail = (currentLockUser && currentLockUser.email) ? currentLockUser.email : '';
+  const displayPhoto = (currentLockUser && currentLockUser.photo_url) ? currentLockUser.photo_url : '';
+  const currentFlash = (typeof flash !== 'undefined' && flash) ? flash : null;
+  const flashType = currentFlash && currentFlash.type ? String(currentFlash.type) : '';
+  const flashMessage = currentFlash && currentFlash.message ? String(currentFlash.message) : '';
   const guardNoticeTone = pinGuard.noticeTone || 'neutral';
   const guardNoticeTitle = pinGuard.noticeTitle || '';
   const guardNoticeMessage = pinGuard.noticeMessage || '';
-  const passkeyLock = appPasskeyLock || {};
+  const passkeyLock = (typeof appPasskeyLock !== 'undefined' && appPasskeyLock) ? appPasskeyLock : {};
   const passkeyUnlockEnabled = !!passkeyLock.enabled;
 %>
-<body class="op-auth-page min-h-screen font-sans">
-  <main class="op-lock-main mx-auto flex min-h-screen w-full max-w-3xl items-center justify-center sm:p-6">
+<body class="op-auth-page op-lock-screen-v4 min-h-screen font-sans">
+  <main class="op-lock-main op-lock-main-v4 mx-auto flex min-h-screen w-full max-w-3xl items-center justify-center sm:p-6">
     <div class="op-lock-grid grid w-full max-w-xl gap-4 sm:gap-5">
-      <section class="op-auth-shell w-full">
+      <section class="op-auth-shell op-lock-shell-v4 w-full">
         <div class="op-auth-card overflow-hidden">
           <section class="op-lock-card-body relative z-10 px-6 py-7 lg:px-8 lg:py-9">
             <img src="/logo.png" alt="AcerttaPay" class="op-lock-logo mx-auto mb-6 w-full max-w-[240px] drop-shadow-[0_18px_26px_rgba(37,99,235,0.16)] sm:max-w-[280px]">
@@ -229,7 +232,7 @@
         </div>
       </section>
 
-      <section class="rounded-[28px] border border-slate-200 bg-white/90 px-5 py-4 shadow-lg shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-900/80 sm:px-6 sm:py-5">
+      <section class="op-lock-secondary-card rounded-[28px] border border-slate-200 bg-white/90 px-5 py-4 shadow-lg shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-900/80 sm:px-6 sm:py-5">
         <div class="op-lock-actions grid gap-3 sm:grid-cols-2">
           <a href="/lock/reauth/google" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-900">Esqueci meu PIN</a>
           <a href="/logout" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900">Sair por agora</a>
@@ -243,12 +246,12 @@
       </section>
 
       <% if (showRecoveryPanel) { %>
-        <section class="rounded-[28px] border border-emerald-200 bg-emerald-50/80 p-5 shadow-lg shadow-slate-900/5 dark:border-emerald-900/70 dark:bg-emerald-900/20 sm:p-6">
+        <section class="op-lock-recovery-card rounded-[28px] border border-emerald-200 bg-emerald-50/80 p-5 shadow-lg shadow-slate-900/5 dark:border-emerald-900/70 dark:bg-emerald-900/20 sm:p-6">
           <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Conta confirmada</div>
           <h3 class="mt-2 text-lg font-black text-slate-900 dark:text-white">Agora você pode trocar ou desligar o PIN</h3>
           <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Sua conta Google já foi confirmada. Esse passe fica aberto por alguns minutinhos para você trocar ou desligar essa trava sem precisar do PIN atual.</p>
 
-          <form method="post" action="/lock/recovery/setup" class="mt-4 grid gap-4 rounded-[24px] border border-white/80 bg-white/90 p-4 dark:border-slate-800 dark:bg-slate-950/70" autocomplete="off" id="recoveryPinForm">
+          <form method="post" action="/lock/recovery/setup" class="op-lock-recovery-form mt-4 grid gap-4 rounded-[24px] border border-white/80 bg-white/90 p-4 dark:border-slate-800 dark:bg-slate-950/70" autocomplete="off" id="recoveryPinForm">
             <input type="hidden" name="mode" value="create">
             <input type="hidden" name="next" value="<%= safeNext %>">
             <label class="block">

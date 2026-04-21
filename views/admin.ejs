@@ -17,7 +17,8 @@
     email: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M4 7h16v10a2 2 0 01-2 2H6a2 2 0 01-2-2V7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M4 8l8 6 8-6"></path></svg>',
     push: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M15 17h5l-1.4-1.4a2 2 0 01-.6-1.4V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M9 17a3 3 0 006 0"></path></svg>',
     backup: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M4 7a2 2 0 012-2h12a2 2 0 012 2v3H4V7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M4 10h16v7a2 2 0 01-2 2H6a2 2 0 01-2-2v-7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M9 14h6"></path></svg>',
-    session: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 3l7 4v5c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V7l7-4z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 9v3l2 2"></path></svg>'
+    session: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 3l7 4v5c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V7l7-4z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 9v3l2 2"></path></svg>',
+    statementPdf: '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M7 3h7l5 5v13a1 1 0 01-1 1H7a2 2 0 01-2-2V5a2 2 0 012-2z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M14 3v5h5"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M9 14h6M9 18h6"></path></svg>'
   };
   function renderStatusIcon(key) {
     return statusIconByKey[key] || '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 6v6l4 2"></path><circle cx="12" cy="12" r="9" stroke-width="1.9"></circle></svg>';
@@ -61,8 +62,8 @@
       description: 'Parâmetros que alteram o comportamento funcional do aplicativo.'
     },
     operations: {
-      title: 'Backup e recuperação',
-      description: 'Rotinas de cópia, armazenamento e restauração do ambiente.'
+      title: 'Operação e integrações',
+      description: 'Rotinas de backup, importação assistida e outros apoios operacionais do app.'
     },
     system: {
       title: 'Sistema',
@@ -98,6 +99,10 @@
     backup: {
       nav: 'Agendamento, destinos e restauração.',
       description: 'Gerencia backup automático, armazenamento local, Google Drive e restauração.'
+    },
+    statementPdf: {
+      nav: 'PDF, provedores e trilha técnica da IA.',
+      description: 'Configura o fluxo de fatura em PDF com fila, provedores e guarda curta dos artefatos.'
     },
     system: {
       nav: 'Parâmetros técnicos do servidor.',
@@ -165,8 +170,8 @@
   }
 %>
 
-<div class="max-w-[1500px] mx-auto space-y-6">
-  <section class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+<div class="op-page-shell op-admin-screen-v4 max-w-[1500px] mx-auto space-y-5 pb-24">
+  <section class="op-admin-hero-v4 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
     <div class="px-6 py-6 sm:px-8 flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
       <div class="min-w-0 max-w-4xl">
         <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Administração</span>
@@ -236,7 +241,7 @@
     </div>
   <% } %>
 
-  <div class="grid gap-6 xl:grid-cols-[290px,minmax(0,1fr)] xl:items-start">
+  <div class="op-admin-layout grid gap-6 xl:grid-cols-[290px,minmax(0,1fr)] xl:items-start">
     <aside class="self-start xl:sticky xl:top-32 xl:max-h-[calc(100vh-9rem)]">
       <%- include('partials/admin/sidebar', { navGroups, activeSectionKey, adminGuideUrl }) %>
     </aside>
@@ -245,7 +250,7 @@
       <section id="admin-section-overview"
                data-admin-search-target
                data-admin-search="visao geral servicos email backup push google seguranca acessos resumo rapido"
-               class="op-surface-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
+               class="op-surface-card op-admin-section-card op-admin-overview-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
         <div class="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-700 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div class="max-w-3xl">
             <span class="text-xs font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Resumo da ópera</span>
@@ -351,7 +356,7 @@
             <section id="admin-section-<%= section.key %>"
                      data-admin-search-target
                      data-admin-search="<%= fullText %>"
-                     class="op-surface-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
+                     class="op-surface-card op-admin-section-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
               <div class="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-700 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="min-w-0 max-w-3xl">
                   <div class="flex flex-wrap items-center gap-2">
@@ -861,9 +866,9 @@
   </div>
 </div>
 
-<div id="addUserModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-  <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-lg shadow-2xl border border-slate-200 dark:border-slate-700" onclick="event.stopPropagation()">
-    <div class="flex justify-between items-center mb-6">
+<div id="addUserModal" class="op-admin-access-modal hidden fixed inset-0 z-[72] bg-slate-900/60 backdrop-blur-sm p-3 sm:p-4 md:p-6" role="dialog" aria-modal="true" aria-labelledby="userModalTitle">
+  <div class="op-admin-access-modal__panel bg-white dark:bg-slate-800 rounded-2xl p-5 sm:p-6 w-full max-w-4xl shadow-2xl border border-slate-200 dark:border-slate-700" data-dialog-surface onclick="event.stopPropagation()">
+    <div class="op-admin-access-modal__header flex justify-between items-start gap-4 mb-6">
       <div>
         <h2 id="userModalTitle" class="text-xl font-black text-slate-800 dark:text-white">Novo acesso</h2>
         <p id="userModalDescription" class="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Esse e-mail poderá acessar o aplicativo com a conta Google correspondente.</p>
@@ -871,21 +876,21 @@
       <button type="button" onclick="closeAddUserModal()" class="op-icon-btn" aria-label="Fechar janela">✕</button>
     </div>
 
-    <form id="userForm" action="/admin/add-user" method="POST" class="space-y-4">
-      <div>
+    <form id="userForm" action="/admin/add-user" method="POST" class="op-admin-access-form">
+      <div class="op-admin-access-field op-admin-access-field--email">
         <label for="email" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">E-mail do Google</label>
         <input type="email" id="email" name="email" required placeholder="exemplo@gmail.com"
           class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
       </div>
 
-      <div>
+      <div class="op-admin-access-field op-admin-access-field--name">
         <label for="name" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Nome (opcional)</label>
         <input type="text" id="name" name="name" placeholder="Nome da pessoa"
           class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
         <p class="text-xs font-medium text-slate-400 mt-2">Se ficar em branco, o nome será preenchido a partir do e-mail.</p>
       </div>
 
-      <div>
+      <div class="op-admin-access-field op-admin-access-field--role">
         <label for="role" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Nível de acesso</label>
         <select id="role" name="role"
           class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium">
@@ -894,7 +899,7 @@
         </select>
       </div>
 
-      <label class="flex flex-wrap items-start gap-4 rounded-[24px] border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-4 cursor-pointer transition hover:border-slate-300 hover:shadow-sm dark:hover:border-slate-600">
+      <label class="op-admin-access-card op-admin-access-card--import flex flex-wrap items-start gap-4 rounded-[24px] border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-4 cursor-pointer transition hover:border-slate-300 hover:shadow-sm dark:hover:border-slate-600">
         <input type="checkbox" id="can_import" name="can_import" value="1" checked
           class="peer sr-only">
         <span class="min-w-0 flex-1 basis-full sm:basis-auto">
@@ -905,8 +910,8 @@
         <span aria-hidden="true" class="relative inline-flex h-8 w-14 shrink-0 rounded-full border border-slate-300 bg-slate-200 shadow-inner transition duration-200 ease-out after:absolute after:left-1 after:top-1 after:h-6 after:w-6 after:rounded-full after:bg-white after:shadow-sm after:transition after:duration-200 after:ease-out after:content-[''] peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:after:translate-x-6 dark:border-slate-600 dark:bg-slate-700 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 peer-focus-visible:ring-4 peer-focus-visible:ring-blue-100 dark:peer-focus-visible:ring-blue-900/40"></span>
       </label>
 
-      <div id="welcomeEmailControls" class="space-y-3">
-        <label class="flex flex-wrap items-start gap-4 rounded-[24px] border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-4 cursor-pointer transition hover:border-slate-300 hover:shadow-sm dark:hover:border-slate-600 <%= emailState && emailState.active ? '' : 'opacity-70 cursor-not-allowed' %>">
+      <div id="welcomeEmailControls" class="op-admin-access-stack">
+        <label class="op-admin-access-card op-admin-access-card--welcome flex flex-wrap items-start gap-4 rounded-[24px] border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-4 cursor-pointer transition hover:border-slate-300 hover:shadow-sm dark:hover:border-slate-600 <%= emailState && emailState.active ? '' : 'opacity-70 cursor-not-allowed' %>">
           <input type="checkbox" id="send_welcome_email" name="send_welcome_email" value="1" <%= emailState && emailState.active ? 'checked' : '' %> <%= emailState && emailState.active ? '' : 'disabled' %>
             class="peer sr-only">
           <span class="min-w-0 flex-1 basis-full sm:basis-auto">
@@ -922,14 +927,14 @@
           <span aria-hidden="true" class="relative inline-flex h-8 w-14 shrink-0 rounded-full border border-slate-300 bg-slate-200 shadow-inner transition duration-200 ease-out after:absolute after:left-1 after:top-1 after:h-6 after:w-6 after:rounded-full after:bg-white after:shadow-sm after:transition after:duration-200 after:ease-out after:content-[''] peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:after:translate-x-6 dark:border-slate-600 dark:bg-slate-700 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500 peer-focus-visible:ring-4 peer-focus-visible:ring-blue-100 dark:peer-focus-visible:ring-blue-900/40 peer-disabled:opacity-60"></span>
         </label>
 
-        <label class="block rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3">
+        <label class="op-admin-access-field op-admin-access-field--message block rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3">
           <span class="block text-xs font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Mensagem adicional do administrador (opcional)</span>
           <textarea id="welcome_admin_message" name="welcome_admin_message" rows="3" maxlength="280" placeholder="Inclua uma observação curta para acompanhar o convite, se necessário."
             class="mt-3 w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium text-slate-800 dark:text-slate-100"></textarea>
         </label>
       </div>
 
-      <div class="flex flex-col sm:flex-row gap-3 pt-2">
+      <div class="op-admin-access-actions flex flex-col sm:flex-row gap-3 pt-2">
         <button type="button" onclick="closeAddUserModal()"
           class="flex-1 px-5 py-3 rounded-xl font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all">
           Cancelar
@@ -960,6 +965,20 @@
   const defaultLoginUrl = <%- JSON.stringify(emailState && emailState.loginUrl ? emailState.loginUrl : '/login') %>;
   const activeAdminSection = <%- JSON.stringify(activeSectionKey) %>;
 
+  function setUserModalOpenState(isOpen) {
+    document.documentElement.classList.toggle('op-admin-access-modal-open', isOpen);
+    document.body?.classList.toggle('op-admin-access-modal-open', isOpen);
+  }
+
+  function setWelcomeControlsVisible(isVisible) {
+    if (welcomeEmailControls) {
+      welcomeEmailControls.classList.toggle('hidden', !isVisible);
+    }
+    if (userForm) {
+      userForm.classList.toggle('op-admin-access-form--welcome-hidden', !isVisible);
+    }
+  }
+
   function normalizeAdminText(value) {
     return String(value || '')
       .normalize('NFD')
@@ -978,7 +997,7 @@
     nameField.value = '';
     roleField.value = 'user';
     canImportField.checked = true;
-    if (welcomeEmailControls) welcomeEmailControls.classList.remove('hidden');
+    setWelcomeControlsVisible(true);
     if (sendWelcomeEmailField) {
       sendWelcomeEmailField.checked = !!emailWelcomeAvailable;
       sendWelcomeEmailField.disabled = !emailWelcomeAvailable;
@@ -992,6 +1011,7 @@
   function openAddUserModal() {
     configureUserModalForAdd();
     addUserModal.classList.remove('hidden');
+    setUserModalOpenState(true);
   }
 
   function openEditUserModal(button) {
@@ -1004,7 +1024,7 @@
     nameField.value = button.dataset.userName || '';
     roleField.value = button.dataset.userRole || 'user';
     canImportField.checked = button.dataset.userCanImport === '1';
-    if (welcomeEmailControls) welcomeEmailControls.classList.add('hidden');
+    setWelcomeControlsVisible(false);
     if (sendWelcomeEmailField) {
       sendWelcomeEmailField.checked = false;
     }
@@ -1012,10 +1032,12 @@
       welcomeAdminMessageField.value = '';
     }
     addUserModal.classList.remove('hidden');
+    setUserModalOpenState(true);
   }
 
   function closeAddUserModal() {
     addUserModal.classList.add('hidden');
+    setUserModalOpenState(false);
     configureUserModalForAdd();
   }
 

@@ -26,17 +26,23 @@
   const previewSummary = preview?.summary || {};
   const defaultReviewTab = previewAppCandidates.length > 0 ? 'app' : (previewCsvGroups.length > 0 ? 'csv' : 'final');
   const reviewReady = Boolean(preview);
+  const pdfFeature = importPdfFeature || { enabled: false, providersReady: false, providerLabels: [], config: {} };
+  const pdfJobs = Array.isArray(importPdfJobs) ? importPdfJobs : [];
+  const hasRunningPdfJobs = pdfJobs.some((job) => job.isRunning);
 %>
 
-<div class="mx-auto max-w-6xl space-y-6 pb-24">
-  <section class="op-page-hero op-fade-up">
+<div class="op-screen op-screen--import op-import-screen-v4 mx-auto max-w-6xl space-y-5 pb-24">
+  <section class="op-page-hero op-fade-up op-import-hero-v4">
     <div>
       <span class="op-page-hero__eyebrow">Trazer fatura pro app</span>
-      <h1 class="op-page-hero__title mt-4">Trazer pro app fatura em CSV</h1>
-      <p class="op-page-hero__subtitle mt-3">Agora o fluxo ganhou um pit-stop: antes de gravar, voce revisa o que entrou no arquivo, confere suspeitas de duplicidade e decide o que realmente vai pousar por aqui.</p>
+      <h1 class="op-page-hero__title mt-4">Trazer pro app fatura em CSV ou PDF</h1>
+      <p class="op-page-hero__subtitle mt-3">O CSV continua firme por aqui, e agora o PDF entra na mesma pista: sobe o arquivo, a fila processa e a revisao pousa no mesmo fluxo que voce ja conhece.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= cards.length %> cartao(oes) disponivel(is)</span>
         <span class="badge">Disponivel conforme sua permissao</span>
+        <% if (pdfFeature.enabled) { %>
+          <span class="badge">PDF com IA liberado</span>
+        <% } %>
         <% if (reviewReady) { %>
           <span class="badge">Previa pronta para revisao</span>
         <% } %>
@@ -55,7 +61,7 @@
   <% } %>
 
   <% if (reviewReady) { %>
-    <section class="rounded-[30px] border border-violet-200 bg-violet-50/90 p-5 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/25">
+    <section class="op-import-review-banner rounded-[30px] border border-violet-200 bg-violet-50/90 p-5 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/25">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div class="text-xs font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Previa pronta</div>
@@ -77,87 +83,149 @@
     </section>
   <% } %>
 
-  <div class="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
-    <section class="op-surface-card rounded-[32px] border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-700 dark:bg-slate-800">
+  <div class="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+    <section class="op-surface-card op-import-upload-card rounded-[32px] border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-700 dark:bg-slate-800">
       <div class="mb-5">
         <h2 class="text-lg font-black text-slate-900 dark:text-slate-100">Trazer nova fatura</h2>
-        <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">Escolha o cartao, diga em qual mes essa fatura entra e envie o CSV original da operadora. Em seguida, o app abre a revisao antes de gravar.</p>
+        <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">Escolha o cartao, diga em qual mes essa fatura entra e siga pelo formato que fizer mais sentido hoje.</p>
       </div>
 
-      <form method="post" action="/import" enctype="multipart/form-data" class="space-y-5">
-        <div>
-          <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartao</label>
-          <select name="card_id" required class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">
-            <option value="">Selecione um cartao</option>
-            <% cards.forEach((card) => { %>
-              <option value="<%= card.id %>" <%= Number(card.id) === selectedCardId ? 'selected' : '' %>><%= card.name %></option>
-            <% }) %>
-          </select>
-        </div>
-
-        <div class="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Vai entrar em qual mes?</label>
-            <select name="month" required class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">
-              <% monthNames.forEach((label, index) => { %>
-                <option value="<%= index + 1 %>" <%= (index + 1) === selectedMonth ? 'selected' : '' %>><%= label %></option>
-              <% }) %>
-            </select>
-          </div>
-          <div>
-            <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ano</label>
-            <select name="year" required class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">
-              <% years.forEach((year) => { %>
-                <option value="<%= year %>" <%= year === selectedYear ? 'selected' : '' %>><%= year %></option>
-              <% }) %>
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <div class="mb-1.5 flex items-center justify-between gap-3">
-            <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Arquivo CSV</label>
+      <div class="grid gap-4 lg:grid-cols-2">
+        <section class="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-700 dark:bg-slate-900/40">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Trazer CSV</div>
+              <h3 class="mt-1 text-base font-black text-slate-900 dark:text-slate-100">Arquivo da operadora</h3>
+            </div>
             <a href="/examples/card_csv_example.csv" download="card_csv_example.csv" class="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/50">
               Baixar exemplo
             </a>
           </div>
-          <label class="flex cursor-pointer flex-col gap-3 rounded-[28px] border border-dashed border-slate-300 bg-slate-50/80 px-5 py-5 transition hover:border-blue-300 hover:bg-blue-50/60 dark:border-slate-700 dark:bg-slate-900/50 dark:hover:border-blue-500 dark:hover:bg-blue-950/20">
-            <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-300">
-              <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-            </span>
-            <span>
-              <span class="block text-sm font-black text-slate-900 dark:text-slate-100">Escolher CSV</span>
-              <span data-import-file-label class="mt-1 block text-sm font-medium text-slate-500 dark:text-slate-400">Use o arquivo exportado da operadora do cartao. Formatos aceitos: .csv</span>
-            </span>
-            <input type="file" name="csvfile" accept=".csv,text/csv" required class="sr-only" data-import-file-input>
-          </label>
-          <p class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">Depois do upload, o app monta a revisao com as suspeitas no app, repeticoes no CSV e o que realmente vai entrar.</p>
-        </div>
 
-        <div class="flex flex-col gap-3 pt-2 sm:flex-row">
-          <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">
-            Analisar fatura
-          </button>
-        </div>
-      </form>
+          <form method="post" action="/import" enctype="multipart/form-data" class="mt-4 space-y-5">
+            <div>
+              <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartao</label>
+              <select name="card_id" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                <option value="">Selecione um cartao</option>
+                <% cards.forEach((card) => { %>
+                  <option value="<%= card.id %>" <%= Number(card.id) === selectedCardId ? 'selected' : '' %>><%= card.name %></option>
+                <% }) %>
+              </select>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Mes</label>
+                <select name="month" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                  <% monthNames.forEach((label, index) => { %>
+                    <option value="<%= index + 1 %>" <%= (index + 1) === selectedMonth ? 'selected' : '' %>><%= label %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div>
+                <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ano</label>
+                <select name="year" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                  <% years.forEach((year) => { %>
+                    <option value="<%= year %>" <%= year === selectedYear ? 'selected' : '' %>><%= year %></option>
+                  <% }) %>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label class="flex cursor-pointer flex-col gap-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-5 py-5 transition hover:border-blue-300 hover:bg-blue-50/60 dark:border-slate-700 dark:bg-slate-950 dark:hover:border-blue-500 dark:hover:bg-blue-950/20">
+                <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-300">
+                  <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                </span>
+                <span>
+                  <span class="block text-sm font-black text-slate-900 dark:text-slate-100">Escolher CSV</span>
+                  <span data-import-file-label class="mt-1 block text-sm font-medium text-slate-500 dark:text-slate-400">Use o arquivo exportado da operadora do cartao. Formatos aceitos: .csv</span>
+                </span>
+                <input type="file" name="csvfile" accept=".csv,text/csv" required class="sr-only" data-import-file-input>
+              </label>
+            </div>
+
+            <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">Analisar CSV</button>
+          </form>
+        </section>
+
+        <section class="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-700 dark:bg-slate-900/40">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Trazer PDF</div>
+              <h3 class="mt-1 text-base font-black text-slate-900 dark:text-slate-100">Fatura com IA</h3>
+            </div>
+            <% if (pdfFeature.providersReady) { %>
+              <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200"><%= pdfFeature.providerLabels.join(' + ') %></span>
+            <% } else { %>
+              <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">Configure a IA no admin</span>
+            <% } %>
+          </div>
+
+          <% if (!pdfFeature.enabled) { %>
+            <div class="mt-4 rounded-[24px] border border-amber-200 bg-amber-50/80 px-4 py-4 text-sm font-medium text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">O caminho por PDF está desligado no admin por enquanto.</div>
+          <% } else { %>
+          <form method="post" action="/import/pdf" enctype="multipart/form-data" class="mt-4 space-y-5">
+            <div>
+              <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartao</label>
+              <select name="card_id" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                <option value="">Selecione um cartao</option>
+                <% cards.forEach((card) => { %>
+                  <option value="<%= card.id %>" <%= Number(card.id) === selectedCardId ? 'selected' : '' %>><%= card.name %></option>
+                <% }) %>
+              </select>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Mes</label>
+                <select name="month" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                  <% monthNames.forEach((label, index) => { %>
+                    <option value="<%= index + 1 %>" <%= (index + 1) === selectedMonth ? 'selected' : '' %>><%= label %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div>
+                <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ano</label>
+                <select name="year" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                  <% years.forEach((year) => { %>
+                    <option value="<%= year %>" <%= year === selectedYear ? 'selected' : '' %>><%= year %></option>
+                  <% }) %>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label class="flex cursor-pointer flex-col gap-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-5 py-5 transition hover:border-violet-300 hover:bg-violet-50/60 dark:border-slate-700 dark:bg-slate-950 dark:hover:border-violet-500 dark:hover:bg-violet-950/20">
+                <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-300">
+                  <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                </span>
+                <span>
+                  <span class="block text-sm font-black text-slate-900 dark:text-slate-100">Escolher PDF(s)</span>
+                  <span data-import-pdf-file-label class="mt-1 block text-sm font-medium text-slate-500 dark:text-slate-400">Use uma ou mais faturas em PDF. O processamento entra em fila e cada job libera seu CSV no fim.</span>
+                </span>
+                <input type="file" name="pdffiles" accept="application/pdf,.pdf" multiple required class="sr-only" data-import-pdf-file-input>
+              </label>
+            </div>
+
+            <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50" <%= pdfFeature.providersReady ? '' : 'disabled' %>>Enviar PDF para fila</button>
+          </form>
+          <% } %>
+        </section>
+      </div>
     </section>
 
     <aside class="space-y-4">
-      <section class="op-surface-card rounded-[32px] border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-700 dark:bg-slate-800">
-        <h2 class="text-sm font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Como a revisao funciona</h2>
+      <section class="op-surface-card op-import-side-card rounded-[32px] border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-700 dark:bg-slate-800">
+        <h2 class="text-sm font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Na pratica</h2>
         <ul class="mt-4 space-y-3 text-sm font-medium text-slate-600 dark:text-slate-300">
-          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">1</span><span>O CSV eh lido sem gravar nada primeiro. O app so monta a previa.</span></li>
-          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">2</span><span>Compras com mesmo dia e valor no mes escolhido aparecem na aba de suspeitas do app.</span></li>
-          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">3</span><span>Linhas identicas dentro do proprio CSV ganham uma aba propria para voce decidir quantas entram.</span></li>
-          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">4</span><span>A ultima aba mostra o total final selecionado, comparando com o valor do arquivo para voce bater o olho antes do ok.</span></li>
-          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">5</span><span>So depois da confirmacao a importacao de verdade acontece.</span></li>
+          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">1</span><span>CSV e PDF passam pela mesma revisao antes de entrar no app.</span></li>
+          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">2</span><span>No PDF, cada job libera seus botoes assim que termina.</span></li>
+          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">3</span><span>Se rolar coincidencia por data e valor, ela aparece como aviso e voce decide.</span></li>
         </ul>
       </section>
 
-      <section class="rounded-[28px] border border-amber-200 bg-amber-50/90 p-5 text-sm font-medium text-amber-900 shadow-sm dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
-        <div class="text-xs font-black uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">Dica de uso</div>
-        <p class="mt-3 leading-6">Se o total final selecionado nao bater com o arquivo, vale checar se parte da fatura ja foi lancada manualmente por aqui. A diferenca aparece na tela justamente para evitar pegadinha.</p>
-      </section>
+      <%- include('partials/import-pdf-jobs', { pdfJobs, hasRunningPdfJobs }) %>
     </aside>
   </div>
 </div>
@@ -173,7 +241,7 @@
   </style>
   <div data-import-review-modal data-initial-open="1" class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-0 sm:items-center sm:p-5">
     <div class="absolute inset-0 backdrop-blur-[2px]" data-import-review-backdrop></div>
-    <section class="relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-slate-900 sm:h-auto sm:max-h-[94vh] sm:max-w-[96vw] 2xl:max-w-[1480px] sm:rounded-[30px] sm:border sm:border-slate-200 sm:ring-1 sm:ring-slate-200 dark:sm:border-slate-700 dark:sm:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="import-review-title">
+    <section class="op-import-review-modal relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-slate-900 sm:h-auto sm:max-h-[94vh] sm:max-w-[96vw] 2xl:max-w-[1480px] sm:rounded-[30px] sm:border sm:border-slate-200 sm:ring-1 sm:ring-slate-200 dark:sm:border-slate-700 dark:sm:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="import-review-title">
       <form id="import-review-form" method="post" action="/import/confirm" class="flex min-h-0 flex-1 flex-col">
         <input type="hidden" name="preview_id" value="<%= preview.id %>">
 
@@ -721,13 +789,73 @@
 
 <script>
   (function() {
-    const fileInput = document.querySelector('[data-import-file-input]');
-    const fileLabel = document.querySelector('[data-import-file-label]');
-    if (fileInput && fileLabel) {
-      fileInput.addEventListener('change', function() {
-        const fileName = fileInput.files && fileInput.files[0] ? fileInput.files[0].name : 'Use o arquivo exportado da operadora do cartao. Formatos aceitos: .csv';
-        fileLabel.textContent = fileName;
+    const csvFileInput = document.querySelector('[data-import-file-input]');
+    const csvFileLabel = document.querySelector('[data-import-file-label]');
+    if (csvFileInput && csvFileLabel) {
+      csvFileInput.addEventListener('change', function() {
+        const fileName = csvFileInput.files && csvFileInput.files[0] ? csvFileInput.files[0].name : 'Use o arquivo exportado da operadora do cartao. Formatos aceitos: .csv';
+        csvFileLabel.textContent = fileName;
       });
+    }
+
+    const pdfFileInput = document.querySelector('[data-import-pdf-file-input]');
+    const pdfFileLabel = document.querySelector('[data-import-pdf-file-label]');
+    if (pdfFileInput && pdfFileLabel) {
+      pdfFileInput.addEventListener('change', function() {
+        const fileName = pdfFileInput.files && pdfFileInput.files.length
+          ? (pdfFileInput.files.length === 1 ? pdfFileInput.files[0].name : `${pdfFileInput.files.length} PDFs prontos para a fila`)
+          : 'Use uma ou mais faturas em PDF. O processamento entra em fila e cada job libera seu CSV no fim.';
+        pdfFileLabel.textContent = fileName;
+      });
+    }
+
+    const PDF_JOBS_REFRESH_MS = 5000;
+    const pdfJobsPanelSelector = '[data-import-pdf-jobs-panel]';
+    let pdfJobsRefreshTimer = null;
+    let pdfJobsRefreshInFlight = false;
+
+    function schedulePdfJobsRefresh(delayMs) {
+      window.clearTimeout(pdfJobsRefreshTimer);
+      pdfJobsRefreshTimer = window.setTimeout(refreshPdfJobsPanel, delayMs);
+    }
+
+    async function refreshPdfJobsPanel() {
+      const panel = document.querySelector(pdfJobsPanelSelector);
+      if (!panel || panel.dataset.autoRefreshRunning !== '1' || pdfJobsRefreshInFlight) return;
+
+      const panelUrl = panel.dataset.importPdfJobsPanelUrl || '/import/pdf/jobs/panel';
+      pdfJobsRefreshInFlight = true;
+
+      try {
+        const response = await window.fetch(panelUrl, {
+          method: 'GET',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          credentials: 'same-origin',
+          cache: 'no-store'
+        });
+        if (!response.ok) throw new Error('panel-refresh-failed');
+
+        const html = await response.text();
+        const template = document.createElement('template');
+        template.innerHTML = html.trim();
+        const nextPanel = template.content.querySelector(pdfJobsPanelSelector);
+        const currentPanel = document.querySelector(pdfJobsPanelSelector);
+        if (!nextPanel || !currentPanel) return;
+
+        currentPanel.replaceWith(nextPanel);
+        if (nextPanel.dataset.autoRefreshRunning === '1') {
+          schedulePdfJobsRefresh(PDF_JOBS_REFRESH_MS);
+        }
+      } catch (error) {
+        schedulePdfJobsRefresh(PDF_JOBS_REFRESH_MS * 2);
+      } finally {
+        pdfJobsRefreshInFlight = false;
+      }
+    }
+
+    const initialPdfJobsPanel = document.querySelector(pdfJobsPanelSelector);
+    if (initialPdfJobsPanel && initialPdfJobsPanel.dataset.autoRefreshRunning === '1') {
+      schedulePdfJobsRefresh(PDF_JOBS_REFRESH_MS);
     }
 
     const modal = document.querySelector('[data-import-review-modal]');

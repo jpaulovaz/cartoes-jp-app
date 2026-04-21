@@ -1,0 +1,30 @@
+<%
+  const heroTitle = typeof title === 'string' ? title : '';
+  const heroEyebrow = typeof eyebrow === 'string' ? eyebrow : '';
+  const heroSubtitle = typeof subtitle === 'string' ? subtitle : '';
+  const heroMetaHtml = typeof metaHtml === 'string' ? metaHtml.trim() : '';
+  const heroActionsHtml = typeof actionsHtml === 'string' ? actionsHtml.trim() : '';
+  const heroExtraClass = typeof heroClass === 'string' ? heroClass : '';
+  const heroActionsExtraClass = typeof actionsWrapperClass === 'string' ? actionsWrapperClass : '';
+  const hasActions = Boolean(heroActionsHtml);
+  const hasMeta = Boolean(heroMetaHtml);
+  const heroClassName = ['op-page-hero', 'op-page-hero--compact', 'op-fade-up', 'mb-5', heroExtraClass].filter(Boolean).join(' ');
+  const actionsClassName = ['op-page-hero__actions', 'op-page-hero__actions--compact', 'shrink-0', heroActionsExtraClass].filter(Boolean).join(' ');
+%>
+<section class="<%= heroClassName %>" data-op-hero-shell>
+  <div class="op-page-hero__frame flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div class="op-page-hero__body">
+      <div class="op-page-hero__lead">
+        <% if (heroEyebrow) { %><span class="op-page-hero__eyebrow"><%= heroEyebrow %></span><% } %>
+        <h1 class="op-page-hero__title mt-3"><%= heroTitle %></h1>
+        <% if (heroSubtitle) { %><p class="op-page-hero__subtitle mt-2.5"><%= heroSubtitle %></p><% } %>
+      </div>
+      <% if (hasMeta) { %>
+        <div class="op-page-hero__meta op-page-hero__meta--inline mt-3"><%- heroMetaHtml %></div>
+      <% } %>
+    </div>
+    <% if (hasActions) { %>
+      <div class="<%= actionsClassName %>" data-op-hero-actions><%- heroActionsHtml %></div>
+    <% } %>
+  </div>
+</section>

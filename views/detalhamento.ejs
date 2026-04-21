@@ -228,14 +228,15 @@
         }
     %>
 
-            <div class="op-screen op-screen--detalhamento max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+            <div class="op-screen op-screen--detalhamento op-dashboard-screen-v4 max-w-6xl mx-auto"
+                data-op-mobile-safe-area="bottom-nav"
                 data-sensitive-scope="detalhamento"
                 data-month-swipe-area
                 data-month-swipe-prev="/detalhamento/<%= prevY %>/<%= prevM %>"
                 data-month-swipe-next="/detalhamento/<%= nextY %>/<%= nextM %>"
                 style="touch-action: pan-y pinch-zoom;">
 
-                <section class="op-page-hero op-fade-up mb-8">
+                <section class="op-page-hero op-dashboard-hero-v4 op-fade-up mb-6">
                     <div class="op-detalhamento-hero__content">
                         <div class="op-detalhamento-hero__copy min-w-0">
                             <span class="op-page-hero__eyebrow">Seu QG financeiro</span>
@@ -261,7 +262,7 @@
                         </button>
                     </div>
 
-                    <div class="op-detalhamento-hero__actions-shell w-full lg:max-w-[32rem]">
+                    <div class="op-detalhamento-hero__actions-shell w-full lg:max-w-[29rem]">
                         <div class="op-detalhamento-hero__actions-head">
                             <button type="button"
                                 class="op-icon-btn op-sensitive-toggle op-sensitive-toggle--desktop"
@@ -455,15 +456,15 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                    <div class="bg-emerald-500 p-5 rounded-3xl text-white shadow-sm border border-emerald-600">
+                <div class="op-dashboard-kpi-grid grid grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div class="op-dashboard-kpi-card bg-emerald-500 p-5 rounded-3xl text-white shadow-sm border border-emerald-600">
                         <% const incomeTopLabel = formatBRLFromCents(incCents); %>
-                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Grana que entrou</p>
-                        <h3 class="text-xl xl:text-2xl font-black mt-1" data-sensitive-text data-sensitive-visible-value="<%= incomeTopLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(incomeTopLabel, true) %>">
+                        <p class="op-dashboard-kpi-card__label text-xs font-bold opacity-80 uppercase tracking-wider">Grana que entrou</p>
+                        <h3 class="op-dashboard-kpi-card__value text-xl xl:text-2xl font-black mt-1" data-sensitive-text data-sensitive-visible-value="<%= incomeTopLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(incomeTopLabel, true) %>">
                             <%= incomeTopLabel %>
                         </h3>
                     </div>
-                    <div class="op-paid-progress-card op-paid-progress-card--expense" data-progress-card="expense" style="<%= getProgressCardStyle(expenseProgress) %>">
+                    <div class="op-dashboard-kpi-card op-paid-progress-card op-paid-progress-card--expense" data-progress-card="expense" style="<%= getProgressCardStyle(expenseProgress) %>">
                         <span class="op-paid-progress-card__fill" aria-hidden="true"></span>
                         <span class="op-paid-progress-card__check <%= expenseProgress.isComplete ? '' : 'hidden' %>" data-progress-check aria-hidden="true">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -471,12 +472,12 @@
                             </svg>
                         </span>
                         <div class="op-paid-progress-card__content">
-                            <p class="text-xs font-bold uppercase tracking-wider text-white/80">Saiu no mês</p>
-                            <h3 class="text-xl xl:text-2xl font-black mt-1" data-progress-total><%= formatBRLFromCents(expCents) %></h3>
+                            <p class="op-dashboard-kpi-card__label text-xs font-bold uppercase tracking-wider text-white/80">Saiu no mês</p>
+                            <h3 class="op-dashboard-kpi-card__value text-xl xl:text-2xl font-black mt-1" data-progress-total><%= formatBRLFromCents(expCents) %></h3>
                             <p class="op-paid-progress-card__meta" data-progress-label><%= expenseProgress.label || 'Quando pintar saída, o progresso aparece aqui.' %></p>
                         </div>
                     </div>
-                    <div class="op-paid-progress-card op-paid-progress-card--cards" data-progress-card="cards" style="<%= getProgressCardStyle(cardProgress) %>">
+                    <div class="op-dashboard-kpi-card op-paid-progress-card op-paid-progress-card--cards" data-progress-card="cards" style="<%= getProgressCardStyle(cardProgress) %>">
                         <span class="op-paid-progress-card__fill" aria-hidden="true"></span>
                         <span class="op-paid-progress-card__check <%= cardProgress.isComplete ? '' : 'hidden' %>" data-progress-check aria-hidden="true">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -484,21 +485,21 @@
                             </svg>
                         </span>
                         <div class="op-paid-progress-card__content">
-                            <p class="text-xs font-bold uppercase tracking-wider text-white/80">Ficou nos cartões</p>
-                            <h3 class="text-xl xl:text-2xl font-black mt-1" data-progress-total><%= formatBRLFromCents(cardTotalCents) %></h3>
+                            <p class="op-dashboard-kpi-card__label text-xs font-bold uppercase tracking-wider text-white/80">Ficou nos cartões</p>
+                            <h3 class="op-dashboard-kpi-card__value text-xl xl:text-2xl font-black mt-1" data-progress-total><%= formatBRLFromCents(cardTotalCents) %></h3>
                             <p class="op-paid-progress-card__meta" data-progress-label><%= cardProgress.label || 'Quando aparecer parcela sua nos cartões, o progresso mora aqui.' %></p>
                         </div>
                     </div>
-                    <div class="bg-rose-500 p-5 rounded-3xl text-white shadow-sm border border-rose-600">
-                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Tudo comprometido</p>
-                        <h3 class="text-xl xl:text-2xl font-black mt-1">
+                    <div class="op-dashboard-kpi-card bg-rose-500 p-5 rounded-3xl text-white shadow-sm border border-rose-600">
+                        <p class="op-dashboard-kpi-card__label text-xs font-bold opacity-80 uppercase tracking-wider">Tudo comprometido</p>
+                        <h3 class="op-dashboard-kpi-card__value text-xl xl:text-2xl font-black mt-1">
                             <%= formatBRLFromCents(expCents + cardTotalCents) %>
                         </h3>
                     </div>
-                    <div class="bg-blue-600 p-5 rounded-3xl text-white shadow-sm border border-blue-700 col-span-2 lg:col-span-1">
+                    <div class="op-dashboard-kpi-card op-dashboard-kpi-card--balance bg-blue-600 p-5 rounded-3xl text-white shadow-sm border border-blue-700 col-span-2 lg:col-span-1">
                         <% const balanceTopLabel = formatBRLFromCents(saldoCents); %>
-                        <p class="text-xs font-bold opacity-80 uppercase tracking-wider">Quanto sobra</p>
-                        <h3 class="text-xl xl:text-2xl font-black mt-1" data-sensitive-text data-sensitive-visible-value="<%= balanceTopLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(balanceTopLabel, true) %>">
+                        <p class="op-dashboard-kpi-card__label text-xs font-bold opacity-80 uppercase tracking-wider">Quanto sobra</p>
+                        <h3 class="op-dashboard-kpi-card__value text-xl xl:text-2xl font-black mt-1" data-sensitive-text data-sensitive-visible-value="<%= balanceTopLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(balanceTopLabel, true) %>">
                             <%= balanceTopLabel %>
                         </h3>
                     </div>

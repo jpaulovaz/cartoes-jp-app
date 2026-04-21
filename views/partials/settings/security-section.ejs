@@ -1,0 +1,250 @@
+    <section id="security" class="op-settings-security-shell scroll-mt-28 xl:mx-auto xl:max-w-[80rem]">
+        <section id="app-security" class="op-settings-security-card xl:col-span-2 rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Segurança do app</div>
+              <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">PIN e bloqueio por inatividade</h3>
+              <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Aqui você decide se o app pede um PIN numérico para abrir e depois de quanto tempo ele volta a travar sozinho.</p>
+            </div>
+            <% if (appPinEnabled) { %>
+              <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">PIN ligado</span>
+            <% } else { %>
+              <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">PIN desligado</span>
+            <% } %>
+          </div>
+
+          <div class="mt-5 grid gap-4">
+            <div class="grid gap-4 xl:grid-cols-2 xl:items-stretch">
+              <div class="h-full rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+                <div class="flex items-start gap-3">
+                  <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700" aria-hidden="true">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0-.967.784-1.75 1.75-1.75S15.5 10.033 15.5 11c0 .645-.35 1.208-.87 1.51-.358.208-.63.57-.63.98V15m-4-4V8a4 4 0 118 0v3m-10 0h12a1 1 0 011 1v7a1 1 0 01-1 1H7a1 1 0 01-1-1v-7a1 1 0 011-1z"></path></svg>
+                  </span>
+                  <div class="min-w-0 flex-1">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Resumo atual</div>
+                    <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
+                      <% if (appPinEnabled) { %>
+                        O app já pede PIN para destravar e hoje está configurado para bloquear <strong class="font-semibold text-slate-700 dark:text-slate-100"><%= appPinIdleLabel %></strong>.
+                      <% } else { %>
+                        Hoje ele abre direto, sem pedir PIN. Se quiser, você pode ligar essa proteção e deixar a tela financeira mais resguardada.
+                      <% } %>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex h-full flex-col rounded-[26px] border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+                <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                  <% if (!appPinEnabled) { %>
+                    <button type="button" data-app-pin-open="create" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400">Ativar PIN</button>
+                  <% } else { %>
+                    <button type="button" data-app-pin-open="change" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400">Trocar PIN</button>
+                    <form method="post" action="/lock/engage" class="contents sm:contents">
+                      <input type="hidden" name="reason" value="manual">
+                      <input type="hidden" name="return_to" value="/settings#security">
+                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Bloquear agora</button>
+                    </form>
+                    <button type="button" data-app-pin-open="idle" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Tempo de bloqueio</button>
+                    <button type="button" data-app-pin-open="disable" class="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-white px-5 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">Desligar PIN</button>
+                  <% } %>
+                </div>
+                <p class="mt-3 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Seu PIN pode ter de <%= appPinMinLength %> a <%= appPinMaxLength %> dígitos. A recomendação amiga é usar <strong class="font-semibold text-slate-700 dark:text-slate-100">6 números</strong> e fugir de combinações óbvias, tipo 1234, 0000 ou repeteco.</p>
+              </div>
+            </div>
+
+            <div class="grid gap-4 xl:grid-cols-2 xl:items-stretch">
+              <div class="h-full rounded-[26px] border border-sky-200/70 bg-sky-50/80 px-4 py-4 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20 sm:px-5">
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Como isso se comporta</div>
+                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Depois de ligado, o app trava sozinho ao abrir de novo ou quando passa do tempo que você escolher. Se esquecer o PIN, na tela de bloqueio dá para confirmar sua conta Google e redefinir por lá.</p>
+              </div>
+
+              <div class="h-full rounded-[26px] border border-dashed border-slate-200 bg-slate-50/70 px-4 py-4 text-sm font-medium leading-6 text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 sm:px-5">
+                <div class="font-black text-slate-900 dark:text-white">Dica boa para não se enrolar</div>
+                <p class="mt-2">Se em algum momento esse PIN sumir da cabeça, tenta destravar normalmente. Se não rolar, a tela de bloqueio oferece a saída com Google para você redefinir sem ficar preso.</p>
+              </div>
+            </div>
+
+            <div class="rounded-[26px] border border-violet-200/70 bg-violet-50/80 px-4 py-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20 sm:px-5">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Desbloqueio pelo aparelho</div>
+                    <span class="inline-flex items-center rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-black text-violet-700 dark:border-violet-800 dark:bg-slate-900/70 dark:text-violet-200"><%= appPasskeyCount %>/<%= appPasskeyMaxCount || 6 %> aparelhos</span>
+                  </div>
+                  <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Se o aparelho topar, dá para usar digital, rosto ou a proteção dele para abrir o app. O PIN continua ali como plano B.</p>
+                </div>
+                <% if (appPasskeyState.canRegister) { %>
+                  <button type="button" id="appPasskeyRegisterButton" class="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 sm:w-auto sm:shrink-0">Adicionar neste aparelho</button>
+                <% } else if (appPasskeyState.limitReached) { %>
+                  <div class="inline-flex items-center rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-bold text-amber-700 dark:border-amber-800 dark:bg-slate-900/70 dark:text-amber-200 sm:shrink-0">Você já chegou no limite de aparelhos por aqui.</div>
+                <% } %>
+              </div>
+
+              <p id="appPasskeyFeedback" class="mt-3 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= appPasskeyState.helpText || 'Quando quiser, dá para preparar este aparelho para destravar o app com um toque mais esperto.' %></p>
+
+              <% if (appPasskeyItems.length) { %>
+                <div class="mt-4 grid gap-3 lg:grid-cols-2">
+                  <% appPasskeyItems.forEach((item) => { %>
+                    <div class="h-full rounded-[22px] border border-white/80 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+                      <div class="flex h-full flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div class="min-w-0 flex-1">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <div class="truncate text-sm font-black text-slate-900 dark:text-white"><%= item.label %></div>
+                            <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= item.badgeTone === 'emerald' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200' : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300' %>"><%= item.badgeLabel %></span>
+                          </div>
+                          <div class="mt-2 grid gap-1 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400 sm:grid-cols-2">
+                            <p>Preparado em <strong class="font-semibold text-slate-700 dark:text-slate-200"><%= item.createdAtLabel || 'agora há pouco' %></strong></p>
+                            <p><%= item.hasBeenUsed ? 'Último uso em' : 'Ainda não foi usado para destravar' %> <strong class="font-semibold text-slate-700 dark:text-slate-200"><%= item.hasBeenUsed ? item.lastUsedAtLabel : '—' %></strong></p>
+                          </div>
+                        </div>
+                        <form method="post" action="/people/security/passkeys/<%= item.id %>/delete" data-confirm-prompt="Remover <%= item.label %> da lista de desbloqueio? O PIN continua funcionando normalmente." class="sm:shrink-0">
+                          <input type="hidden" name="return_to" value="/settings#security">
+                          <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20 sm:w-auto">Remover</button>
+                        </form>
+                      </div>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } %>
+            </div>
+          </div>
+        </section>
+
+        <div id="appPinManageModal" class="fixed inset-0 z-[130] hidden items-center justify-center overflow-y-auto p-4 sm:p-6" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="appPinManageTitle" aria-describedby="appPinManageHint appPinRulesHint">
+          <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" data-app-pin-close></div>
+          <div class="relative my-auto w-full max-w-lg rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Segurança do app</div>
+                <h4 id="appPinManageTitle" class="mt-2 text-lg font-black text-slate-900 dark:text-white">Criar PIN</h4>
+                <p id="appPinManageHint" class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Escolha um PIN numérico para proteger a abertura do app.</p>
+              </div>
+              <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800" data-app-pin-close aria-label="Fechar">✕</button>
+            </div>
+
+            <p id="appPinRulesHint" class="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs font-semibold leading-5 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-200">Para manter a proteção mais esperta, combinações muito óbvias como 1234, 0000 ou sequências repetidas não passam.</p>
+
+            <form method="post" action="/people/security/pin/setup" class="mt-5 grid gap-4" id="appPinManageForm" autocomplete="off">
+              <input type="hidden" name="return_to" value="/settings#security">
+              <input type="hidden" name="mode" id="appPinManageMode" value="create">
+
+              <div id="appPinCurrentGroup" class="hidden">
+                <label class="block">
+                  <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">PIN atual</span>
+                  <div class="relative">
+                    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="current_pin" id="appPinCurrentInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-14 py-3.5 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••">
+                    <button type="button" data-app-pin-visibility-toggle data-target="appPinCurrentInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
+                  </div>
+                  <div class="mt-3" data-pin-slots data-input-id="appPinCurrentInput" data-max-length="<%= appPinMaxLength %>"></div>
+                </label>
+              </div>
+
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Novo PIN</span>
+                <div class="relative">
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="pin" id="appPinNewInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-14 py-3.5 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <button type="button" data-app-pin-visibility-toggle data-target="appPinNewInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
+                </div>
+                <div class="mt-3" data-pin-slots data-input-id="appPinNewInput" data-max-length="<%= appPinMaxLength %>"></div>
+              </label>
+
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Confirmar PIN</span>
+                <div class="relative">
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="pin_confirm" id="appPinConfirmInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-14 py-3.5 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <button type="button" data-app-pin-visibility-toggle data-target="appPinConfirmInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
+                </div>
+                <div class="mt-3" data-pin-slots data-input-id="appPinConfirmInput" data-max-length="<%= appPinMaxLength %>"></div>
+              </label>
+
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Depois de quanto tempo travar de novo</span>
+                <select name="pin_idle_seconds" id="appPinIdleSelect" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-bold text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20">
+                  <% appPinIdleOptions.forEach((option) => { %>
+                    <option value="<%= option.value %>" <%= option.selected ? 'selected' : '' %>><%= option.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button type="button" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto" data-app-pin-close>Cancelar</button>
+                <button type="submit" id="appPinManageSubmit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400 sm:w-auto">Salvar PIN</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+
+        <div id="appPinIdleModal" class="fixed inset-0 z-[130] hidden items-center justify-center overflow-y-auto p-4 sm:p-6" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="appPinIdleTitle" aria-describedby="appPinIdleHint">
+          <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" data-app-pin-idle-close></div>
+          <div class="relative my-auto w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">Tempo de bloqueio</div>
+                <h4 id="appPinIdleTitle" class="mt-2 text-lg font-black text-slate-900 dark:text-white">Quer mudar quando o app trava de novo?</h4>
+                <p id="appPinIdleHint" class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Escolha o novo tempo e me confirma o PIN atual. Aí eu troco essa régua sem precisar mexer na senha.</p>
+              </div>
+              <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800" data-app-pin-idle-close aria-label="Fechar">✕</button>
+            </div>
+
+            <form method="post" action="/people/security/pin/idle" class="mt-5 grid gap-4" id="appPinIdleForm" autocomplete="off">
+              <input type="hidden" name="return_to" value="/settings#security">
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">PIN atual</span>
+                <div class="relative">
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="current_pin" id="appPinIdleCurrentInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-14 py-3.5 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <button type="button" data-app-pin-visibility-toggle data-target="appPinIdleCurrentInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
+                </div>
+                <div class="mt-3" data-pin-slots data-input-id="appPinIdleCurrentInput" data-max-length="<%= appPinMaxLength %>"></div>
+              </label>
+
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Depois de quanto tempo travar de novo</span>
+                <select name="pin_idle_seconds" id="appPinIdleManageSelect" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-bold text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20">
+                  <% appPinIdleOptions.forEach((option) => { %>
+                    <option value="<%= option.value %>" <%= option.selected ? 'selected' : '' %>><%= option.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button type="button" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto" data-app-pin-idle-close>Cancelar</button>
+                <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400 sm:w-auto">Atualizar tempo</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div id="appPinDisableModal" class="fixed inset-0 z-[130] hidden items-center justify-center overflow-y-auto p-4 sm:p-6" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="appPinDisableTitle" aria-describedby="appPinDisableHint">
+          <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" data-app-pin-disable-close></div>
+          <div class="relative my-auto w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-rose-600 dark:text-rose-300">Desligar PIN</div>
+                <h4 id="appPinDisableTitle" class="mt-2 text-lg font-black text-slate-900 dark:text-white">Tem certeza que quer tirar essa camada?</h4>
+                <p id="appPinDisableHint" class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Para confirmar, me conta o PIN atual. Aí eu desligo essa proteção extra sem mexer na sua conta Google.</p>
+              </div>
+              <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800" data-app-pin-disable-close aria-label="Fechar">✕</button>
+            </div>
+
+            <form method="post" action="/people/security/pin/disable" class="mt-5 grid gap-4" id="appPinDisableForm" autocomplete="off">
+              <input type="hidden" name="return_to" value="/settings#security">
+              <label class="block">
+                <span class="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">PIN atual</span>
+                <div class="relative">
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="<%= appPinMaxLength %>" name="current_pin" id="appPinDisableInput" enterkeyhint="done" autocomplete="one-time-code" class="w-full rounded-2xl border border-slate-300 bg-white px-14 py-3.5 text-center text-lg font-black tracking-[0.35em] text-slate-900 shadow-sm transition-all outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-500/20" placeholder="••••" required>
+                  <button type="button" data-app-pin-visibility-toggle data-target="appPinDisableInput" class="absolute inset-y-0 right-3 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-slate-500">Ver</button>
+                </div>
+                <div class="mt-3" data-pin-slots data-input-id="appPinDisableInput" data-max-length="<%= appPinMaxLength %>"></div>
+              </label>
+
+              <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button type="button" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto" data-app-pin-disable-close>Cancelar</button>
+                <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 bg-rose-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-rose-500/20 transition-all hover:-translate-y-0.5 hover:bg-rose-700 sm:w-auto">Desligar PIN</button>
+              </div>
+            </form>
+          </div>
+        </div>
+    </section>
+
+    </section>

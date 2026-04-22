@@ -13059,3 +13059,132 @@ html[data-op-ui="v4"] .op-analytics-screen-v5 .op-page-hero__actions > a {
 .op-share-screen-v5 .op-preview-shell__label,.op-whatsapp-screen-v5 .op-preview-shell__label{display:inline-flex;align-items:center;border-radius:999px;padding:.5rem .875rem;background:rgba(37,99,235,.08);color:#1d4ed8;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:.72rem}
 .dark .op-share-screen-v5 .op-preview-shell__label,.dark .op-whatsapp-screen-v5 .op-preview-shell__label{background:rgba(59,130,246,.16);color:#bfdbfe}
 @media (max-width:768px){.op-summary-hero-v5,.op-debts-hero-v5,.op-cards-hero-v5,.op-import-hero-v5,.op-share-hero-v5,.op-whatsapp-hero-v5{padding:1.25rem}.op-summary-screen-v5::before,.op-debts-screen-v5::before,.op-cards-screen-v5::before,.op-import-screen-v5::before,.op-share-screen-v5::before,.op-whatsapp-screen-v5::before{height:12rem}}
+
+
+/* Phase 6 — Admin */
+.op-admin-v5-hero {
+  position: relative;
+  overflow: hidden;
+}
+
+.op-admin-v5-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.12), transparent 36%),
+    linear-gradient(180deg, rgba(148, 163, 184, 0.04), transparent 72%);
+}
+
+html.dark .op-admin-v5-hero::after {
+  background:
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.16), transparent 36%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.16), transparent 72%);
+}
+
+.op-admin-v5-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.op-admin-v5-stat-grid {
+  display: grid;
+  gap: 0.875rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.op-admin-v5-stat {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94));
+  border-radius: 1.25rem;
+  padding: 1rem;
+  min-width: 0;
+}
+
+html.dark .op-admin-v5-stat {
+  border-color: rgba(71, 85, 105, 0.72);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.62));
+}
+
+.op-admin-v5-stat__label {
+  font-size: 0.68rem;
+  line-height: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgb(100 116 139);
+}
+
+html.dark .op-admin-v5-stat__label {
+  color: rgb(148 163 184);
+}
+
+.op-admin-v5-stat__value {
+  margin-top: 0.55rem;
+  font-size: clamp(1.75rem, 2vw, 2.15rem);
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: rgb(15 23 42);
+}
+
+html.dark .op-admin-v5-stat__value {
+  color: rgb(248 250 252);
+}
+
+.op-admin-v5-stat__meta {
+  margin-top: 0.45rem;
+  font-size: 0.82rem;
+  line-height: 1.35rem;
+  color: rgb(71 85 105);
+}
+
+html.dark .op-admin-v5-stat__meta {
+  color: rgb(203 213 225);
+}
+
+.op-admin-v5-action-grid {
+  align-content: start;
+}
+
+.op-admin-v5-sidebar .op-admin-v5-note {
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  background: rgba(37, 99, 235, 0.05);
+  border-radius: 1rem;
+  padding: 0.95rem 1rem;
+  color: rgb(71 85 105);
+  font-size: 0.86rem;
+  line-height: 1.45rem;
+}
+
+html.dark .op-admin-v5-sidebar .op-admin-v5-note {
+  border-color: rgba(59, 130, 246, 0.24);
+  background: rgba(30, 41, 59, 0.72);
+  color: rgb(203 213 225);
+}
+
+.op-admin-v5-note__title {
+  font-size: 0.68rem;
+  line-height: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgb(37 99 235);
+}
+
+html.dark .op-admin-v5-note__title {
+  color: rgb(147 197 253);
+}
+
+@media (max-width: 767px) {
+  .op-admin-v5-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 479px) {
+  .op-admin-v5-stat-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

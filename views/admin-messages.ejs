@@ -7,30 +7,42 @@
 %>
 
 <div class="op-page-shell op-admin-messages-screen-v4 mx-auto max-w-[1500px] space-y-5 pb-24">
-  <section class="op-admin-messages-hero-v4 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+  <section class="op-admin-messages-hero-v4 op-admin-v5-hero rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
     <div class="px-6 py-6 sm:px-8 flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
       <div class="min-w-0 max-w-4xl">
         <div class="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500 dark:text-slate-400">
           <a href="/admin" class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/50 dark:hover:bg-slate-900">
             <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-            Voltar para o admin
+            Voltar para o painel
           </a>
           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/50"><%= migratedMessageCount %> mensagem(ns) nesta fase</span>
         </div>
-        <span class="mt-4 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Catálogo de recados</span>
-        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">Textos que o app fala</h1>
+        <span class="mt-4 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Catálogo de mensagens</span>
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">Mensagens do aplicativo</h1>
         <p class="mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-          Aqui você ajusta título e texto das mensagens já migradas para o catálogo, com prévia contextual antes de salvar,
-          exporta o catálogo em CSV e também importa revisões em lote com uma prévia antes de aplicar.
+          Revise títulos e textos do catálogo com prévia contextual antes de salvar, exporte o inventário em CSV e importe revisões em lote com confirmação antes de aplicar.
         </p>
-        <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
-          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= messageStats.total %> no catálogo</span>
-          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= messageStats.custom %> customizada(s)</span>
-          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= messageStats.defaults %> no padrão</span>
-          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/40"><%= messageStats.push %> com push de teste</span>
-          <% if (messageStats.attention > 0) { %>
-            <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"><%= messageStats.attention %> pedindo revisão</span>
-          <% } %>
+        <div class="mt-5 op-admin-v5-stat-grid">
+          <article class="op-admin-v5-stat">
+            <div class="op-admin-v5-stat__label">Mensagens</div>
+            <div class="op-admin-v5-stat__value"><%= messageStats.total %></div>
+            <div class="op-admin-v5-stat__meta">Disponíveis no catálogo</div>
+          </article>
+          <article class="op-admin-v5-stat">
+            <div class="op-admin-v5-stat__label">Customizadas</div>
+            <div class="op-admin-v5-stat__value"><%= messageStats.custom %></div>
+            <div class="op-admin-v5-stat__meta">Texto fora do padrão</div>
+          </article>
+          <article class="op-admin-v5-stat">
+            <div class="op-admin-v5-stat__label">No padrão</div>
+            <div class="op-admin-v5-stat__value"><%= messageStats.defaults %></div>
+            <div class="op-admin-v5-stat__meta">Usando catálogo base</div>
+          </article>
+          <article class="op-admin-v5-stat">
+            <div class="op-admin-v5-stat__label">Push de teste</div>
+            <div class="op-admin-v5-stat__value"><%= messageStats.push %></div>
+            <div class="op-admin-v5-stat__meta"><%= messageStats.attention %> em revisão</div>
+          </article>
         </div>
         <p class="mt-3 max-w-3xl text-xs leading-relaxed text-slate-500 dark:text-slate-400">
           Observação: o inventário original tinha 77 linhas, mas os push automáticos de cartão foram desdobrados em 6 variações editáveis no catálogo.
@@ -38,7 +50,7 @@
         </p>
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-2 xl:min-w-[520px]">
+      <div class="op-admin-v5-action-grid grid gap-3 sm:grid-cols-2 xl:min-w-[520px]">
         <a href="/admin/messages/export.csv" class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
           Exportar CSV
         </a>
@@ -58,7 +70,7 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
       </div>
       <div>
-        <div class="op-inline-alert__title">Ainda pede carinho</div>
+        <div class="op-inline-alert__title">Revise antes de salvar</div>
         <div class="op-inline-alert__text"><%= pageError %></div>
       </div>
     </div>
@@ -70,7 +82,7 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
       </div>
       <div>
-        <div class="op-inline-alert__title">Tudo certinho</div>
+        <div class="op-inline-alert__title">Catálogo atualizado</div>
         <div class="op-inline-alert__text"><%= pageSuccess %></div>
       </div>
     </div>
@@ -80,10 +92,10 @@
     <div class="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-700">
       <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div class="max-w-3xl">
-          <span class="text-xs font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Localizar rapidinho</span>
-          <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Busca, filtros e recorte da fase</h2>
+          <span class="text-xs font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Busca e filtros</span>
+          <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Localizar mensagens</h2>
           <p class="mt-3 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">
-            Você pode filtrar por canal, categoria e status. A lista abaixo já mostra o catálogo completo desta entrega, incluindo as variações de push que foram abertas em linhas separadas.
+            Filtre por canal, categoria e status. A lista abaixo já mostra o catálogo desta entrega, incluindo as variações de push abertas em linhas separadas.
           </p>
         </div>
         <div class="flex flex-wrap gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
@@ -125,7 +137,7 @@
             <option value="all" <%= filters.status === 'all' ? 'selected' : '' %>>Todos</option>
             <option value="custom" <%= filters.status === 'custom' ? 'selected' : '' %>>Customizadas</option>
             <option value="default" <%= filters.status === 'default' ? 'selected' : '' %>>No padrão</option>
-            <option value="attention" <%= filters.status === 'attention' ? 'selected' : '' %>>Pedindo revisão</option>
+            <option value="attention" <%= filters.status === 'attention' ? 'selected' : '' %>>Em revisão</option>
           </select>
         </label>
 
@@ -171,7 +183,7 @@
             <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-300">Prévia do lote</span>
             <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= importPreview.fileName %></h2>
             <p class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-              Nada entra em campo antes da sua confirmação. Aqui você vê o tamanho do impacto, confere se tem linha pedindo ajuste e só depois aplica o lote no catálogo.
+              Nada é aplicado antes da sua confirmação. Aqui você vê o impacto do lote, revisa linhas que exigem ajuste e só depois confirma a importação.
             </p>
           </div>
           <div class="grid gap-2 sm:grid-cols-2 xl:min-w-[360px] text-xs font-semibold text-slate-600 dark:text-slate-300">
@@ -210,7 +222,7 @@
       <% if (importPreview.errors && importPreview.errors.length) { %>
         <div class="px-6 py-5 sm:px-8 border-b border-slate-100 dark:border-slate-700">
           <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 dark:border-amber-900/60 dark:bg-amber-950/30">
-            <div class="text-sm font-semibold text-amber-800 dark:text-amber-200">Tem linha pedindo ajuste antes da importação</div>
+            <div class="text-sm font-semibold text-amber-800 dark:text-amber-200">Há linhas que exigem ajuste antes da importação</div>
             <ul class="mt-3 space-y-2 text-sm leading-relaxed text-amber-700 dark:text-amber-300">
               <% importPreview.errors.slice(0, 12).forEach((item) => { %>
                 <li>Linha <strong><%= item.lineNumber %></strong>: <%= item.message %></li>
@@ -649,7 +661,7 @@
       pushTools.classList.remove('hidden');
 
       if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
-        pushHelper.textContent = 'Este navegador não oferece suporte completo para push. Aqui vale usar um navegador com alertas ativos.';
+        pushHelper.textContent = 'Este navegador não oferece suporte completo a push. Use um navegador com notificações ativas.';
         return;
       }
 
@@ -658,16 +670,16 @@
         const subscription = await registration.pushManager.getSubscription();
         if (!subscription) {
           pushHelper.textContent = Notification.permission === 'denied'
-            ? 'Os alertas estão bloqueados neste navegador. Libere a permissão para conseguir testar aqui.'
-            : 'Ative os alertas neste aparelho primeiro. Depois o botão de teste acorda sozinho.';
+            ? 'As notificações estão bloqueadas neste navegador. Libere a permissão para testar aqui.'
+            : 'Ative as notificações neste aparelho primeiro. Depois o teste ficará disponível.';
           return;
         }
 
         currentPushSubscription = typeof subscription.toJSON === 'function' ? subscription.toJSON() : JSON.parse(JSON.stringify(subscription));
         pushSendButton.disabled = false;
-        pushHelper.textContent = 'Tudo certinho! Este aparelho já está pronto para receber um push de teste.';
+        pushHelper.textContent = 'Este aparelho já está pronto para receber um push de teste.';
       } catch (error) {
-        pushHelper.textContent = 'Não consegui confirmar o estado do push neste aparelho agora.';
+        pushHelper.textContent = 'Não foi possível confirmar o estado do push neste aparelho agora.';
       }
     }
 
@@ -729,7 +741,7 @@
       }
 
       pushSendButton.disabled = true;
-      setPushFeedback('Mandando o push de teste para este aparelho...', 'info');
+      setPushFeedback('Enviando push de teste para este aparelho...', 'info');
 
       try {
         const response = await fetch(activeForm.dataset.pushTestRoute, {
@@ -745,7 +757,7 @@
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || !data.ok) {
-          const message = data.message || 'Não consegui mandar o push de teste agora.';
+          const message = data.message || 'Não foi possível enviar o push de teste agora.';
           setPushFeedback(message, 'error');
           setFormFeedback(activeForm, message, 'error');
           return;
@@ -754,7 +766,7 @@
         setPushFeedback(data.message || 'Push de teste enviado com sucesso.', 'success');
         setFormFeedback(activeForm, data.message || 'Push de teste enviado com sucesso.', 'success');
       } catch (error) {
-        const message = error?.message || 'Não consegui mandar o push de teste agora.';
+        const message = error?.message || 'Não foi possível enviar o push de teste agora.';
         setPushFeedback(message, 'error');
         setFormFeedback(activeForm, message, 'error');
       } finally {

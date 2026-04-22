@@ -1,4 +1,4 @@
-<%- include("partials/header", { title: "Compartilhar resumo" }) %>
+<%- include("partials/header", { title: "AcerttaPay | Enviar no WhatsApp" }) %>
 <%
   const periodLabel = `${String(month).padStart(2, '0')}/${year}`;
   const getItemCents = (item) => {
@@ -35,15 +35,15 @@
   const sharePixContext = shareContext && shareContext.pix ? shareContext.pix : null;
   const pixAvailable = !!(sharePixContext && sharePixContext.available);
   const whatsappAutoSecondText = (shareContext && shareContext.whatsappAutoSecondMessage) || ((sharePixContext && sharePixContext.available && sharePixContext.payload) || '');
-  const copyTextButtonLabel = pixAvailable ? 'Copiar texto do WhatsApp + Pix' : 'Copiar texto do WhatsApp';
+  const copyTextButtonLabel = pixAvailable ? 'Copiar mensagem + Pix' : 'Copiar mensagem';
 %>
 
-<div class="op-page-shell op-whatsapp-screen-v4">
-  <section class="op-page-hero op-fade-up op-social-share-hero op-whatsapp-hero-v4">
+<div class="op-page-shell op-whatsapp-screen-v4 op-whatsapp-screen-v5">
+  <section class="op-page-hero op-fade-up op-social-share-hero op-whatsapp-hero-v4 op-whatsapp-hero-v5">
     <div>
-      <span class="op-page-hero__eyebrow">Pronto pra mandar</span>
-      <h1 class="op-page-hero__title mt-4">Compartilhar resumo</h1>
-      <p class="op-page-hero__subtitle mt-3">Monte uma imagem bonitinha e pronta pra cair no chat certo.</p>
+      <span class="op-page-hero__eyebrow">Envio por WhatsApp</span>
+      <h1 class="op-page-hero__title mt-4">Enviar no WhatsApp</h1>
+      <p class="op-page-hero__subtitle mt-3">Gere a imagem e envie o resumo com a mensagem já preparada.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= person.name %></span>
         <span class="badge">Ref. <%= periodLabel %></span>
@@ -71,14 +71,14 @@
   <div class="op-surface-card op-fade-up op-whatsapp-toolbar-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 mb-6">
     <form method="get" action="/whatsapp/<%= year %>/<%= month %>/<%= person.id %>" class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
       <div class="w-full md:max-w-sm">
-        <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Como você quer ordenar os itens?</label>
+        <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Ordenação dos itens</label>
         <select name="order" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950">
           <option value="recent" <%= selectedItemOrder === 'recent' ? 'selected' : '' %>>Mais recentes primeiro</option>
           <option value="oldest" <%= selectedItemOrder === 'oldest' ? 'selected' : '' %>>Mais antigos primeiro</option>
         </select>
       </div>
       <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
-        Atualizar ordem
+        Aplicar ordem
       </button>
     </form>
   </div>
@@ -96,13 +96,13 @@
             <% if (sharePixContext.ownerName) { %><span class="badge">Pix de <%= sharePixContext.ownerName %></span><% } %>
           </div>
         <% } else { %>
-          <h2 class="mt-2 text-lg font-black tracking-[-0.03em] text-slate-900 dark:text-slate-100"><%= shareContext && shareContext.state === 'settled' ? 'Aqui vai só o registro bonito mesmo.' : 'O WhatsApp segue prontinho, e o Pix entra assim que você deixar isso redondinho.' %></h2>
-          <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= sharePixContext && sharePixContext.reason ? sharePixContext.reason : 'A mensagem continua organizada e a imagem segue igualzinha ao relatório que você já aprovou.' %></p>
+          <h2 class="mt-2 text-lg font-black tracking-[-0.03em] text-slate-900 dark:text-slate-100"><%= shareContext && shareContext.state === 'settled' ? 'Aqui vai só o registro do resumo.' : 'A mensagem continua pronta, e o Pix entra assim que estiver disponível para envio.' %></h2>
+          <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= sharePixContext && sharePixContext.reason ? sharePixContext.reason : 'A mensagem continua organizada e a imagem segue pronta para envio manual.' %></p>
         <% } %>
       </div>
       <div class="flex flex-wrap gap-3">
         <% if (pixAvailable) { %>
-          <button id="btnCopyPix" type="button" class="inline-flex items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 px-5 py-3 text-sm font-bold text-blue-700 transition-all hover:-translate-y-0.5 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-950/50">Copiar Pix 💸</button>
+          <button id="btnCopyPix" type="button" class="inline-flex items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 px-5 py-3 text-sm font-bold text-blue-700 transition-all hover:-translate-y-0.5 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-950/50">Copiar Pix</button>
         <% } %>
         <button id="btnCopyWhatsappText" type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-bold text-slate-700 transition-all hover:-translate-y-0.5 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"><%= copyTextButtonLabel %></button>
       </div>
@@ -115,14 +115,14 @@
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M10.29 3.86l-8 14A1 1 0 003.17 19h17.66a1 1 0 00.88-1.5l-8-14a1 1 0 00-1.74 0z"></path></svg>
       </div>
       <div>
-        <div class="op-inline-alert__title">Faltou um telefone por aqui</div>
+        <div class="op-inline-alert__title">Telefone não informado</div>
         <div class="op-inline-alert__text">O download da imagem continua disponível. Para liberar o envio pelo WhatsApp, preencha um telefone válido em Minha Rede.</div>
       </div>
     </div>
   <% } %>
 
   <div class="op-preview-shell op-fade-up op-share-preview-shell op-whatsapp-preview-shell">
-    <div class="op-preview-shell__label">Como vai ficar a imagem</div>
+    <div class="op-preview-shell__label">Prévia da imagem</div>
     <div class="flex justify-center pb-2">
       <%- include('partials/share-summary-card', {
         cardId: 'cardPreview',
@@ -208,7 +208,7 @@
 
   async function copyTextToClipboard(value) {
     const text = normalizeCopyText(value);
-    if (!text) throw new Error('Nada pronto para copiar por aqui.');
+    if (!text) throw new Error('Nada foi preparado para copiar ainda.');
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(text);
@@ -627,8 +627,8 @@
       }
 
       alert(whatsappPixPayload
-        ? 'Prontinho! O resumo foi com a imagem primeiro e o Pix copia e cola foi logo atrás.'
-        : 'Prontinho! O resumo foi enviado no WhatsApp com a imagem.');
+        ? 'Envio concluído. O resumo foi com a imagem primeiro e o Pix copia e cola seguiu logo depois.'
+        : 'Envio concluído. O resumo foi enviado no WhatsApp com a imagem.');
     } catch (error) {
       console.error('[whatsapp] send failure', error);
       alert(error && error.message ? error.message : 'Não consegui enviar a imagem pelo WhatsApp agora.');
@@ -640,7 +640,7 @@
   async function copyWhatsappText() {
     try {
       await copyTextToClipboard(whatsappShareText);
-      alert('Texto do WhatsApp copiado. Agora é só colar quando quiser.');
+      alert('Mensagem do WhatsApp copiada. Agora é só colar quando quiser.');
     } catch (error) {
       console.error('[whatsapp] copy text failure', error);
       alert(error && error.message ? error.message : 'Não consegui copiar o texto agora.');
@@ -650,7 +650,7 @@
   async function copyPixPayload() {
     try {
       await copyTextToClipboard(whatsappPixPayload);
-      alert('Pix copia e cola copiado. Agora ficou facinho mandar esse atalho.');
+      alert('Pix copia e cola copiado. Agora é só enviar esse atalho.');
     } catch (error) {
       console.error('[whatsapp] copy pix failure', error);
       alert(error && error.message ? error.message : 'Não consegui copiar o Pix agora.');

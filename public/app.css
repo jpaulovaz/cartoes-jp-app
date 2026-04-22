@@ -13041,3 +13041,21 @@ html[data-op-ui="v4"] .op-analytics-screen-v5 .op-page-hero__actions > a {
     min-height: auto;
   }
 }
+
+
+/* ============================== Phase 5 - Remaining user screens ============================== */
+.op-summary-screen-v5,.op-debts-screen-v5,.op-cards-screen-v5,.op-import-screen-v5,.op-share-screen-v5,.op-whatsapp-screen-v5{position:relative}
+.op-summary-screen-v5::before,.op-debts-screen-v5::before,.op-cards-screen-v5::before,.op-import-screen-v5::before,.op-share-screen-v5::before,.op-whatsapp-screen-v5::before{content:"";position:absolute;inset:0 auto auto 0;height:18rem;width:100%;pointer-events:none;background:radial-gradient(circle at top center,rgba(37,99,235,.08),transparent 58%)}
+.op-summary-hero-v5,.op-debts-hero-v5,.op-cards-hero-v5,.op-import-hero-v5,.op-share-hero-v5,.op-whatsapp-hero-v5{background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(246,248,251,.9));border:1px solid rgba(148,163,184,.2);box-shadow:0 20px 50px rgba(15,23,42,.06)}
+.dark .op-summary-hero-v5,.dark .op-debts-hero-v5,.dark .op-cards-hero-v5,.dark .op-import-hero-v5,.dark .op-share-hero-v5,.dark .op-whatsapp-hero-v5{background:linear-gradient(180deg,rgba(15,23,42,.92),rgba(15,23,42,.84));border-color:rgba(51,65,85,.8);box-shadow:0 24px 60px rgba(2,6,23,.35)}
+.op-summary-screen-v5 .badge,.op-debts-screen-v5 .badge,.op-cards-screen-v5 .badge,.op-import-screen-v5 .badge,.op-share-screen-v5 .badge,.op-whatsapp-screen-v5 .badge{border-color:rgba(148,163,184,.28);background:rgba(255,255,255,.82);color:#334155}
+.dark .op-summary-screen-v5 .badge,.dark .op-debts-screen-v5 .badge,.dark .op-cards-screen-v5 .badge,.dark .op-import-screen-v5 .badge,.dark .op-share-screen-v5 .badge,.dark .op-whatsapp-screen-v5 .badge{background:rgba(15,23,42,.72);color:#e2e8f0;border-color:rgba(71,85,105,.7)}
+.op-summary-screen-v5 .op-surface-card,.op-debts-screen-v5 .op-surface-card,.op-cards-screen-v5 .op-surface-card,.op-import-screen-v5 .op-surface-card,.op-share-screen-v5 .op-surface-card,.op-whatsapp-screen-v5 .op-surface-card{box-shadow:0 12px 34px rgba(15,23,42,.06)}
+.op-summary-screen-v5 [data-summary-cash-section]{border-color:rgba(37,99,235,.12)}
+.op-debts-screen-v5 .op-dual-accordion,.op-debts-screen-v5 .op-shared-section-card,.op-debts-screen-v5 .op-shared-hero-kpi{box-shadow:0 12px 32px rgba(15,23,42,.05)}
+.op-cards-screen-v5 .op-cards-shell article{transition:transform .18s ease,box-shadow .18s ease}
+.op-cards-screen-v5 .op-cards-shell article:hover{transform:translateY(-2px);box-shadow:0 18px 40px rgba(15,23,42,.08)}
+.op-import-screen-v5 .op-import-review-banner{border-color:rgba(124,58,237,.18);box-shadow:0 18px 40px rgba(124,58,237,.08)}
+.op-share-screen-v5 .op-preview-shell__label,.op-whatsapp-screen-v5 .op-preview-shell__label{display:inline-flex;align-items:center;border-radius:999px;padding:.5rem .875rem;background:rgba(37,99,235,.08);color:#1d4ed8;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:.72rem}
+.dark .op-share-screen-v5 .op-preview-shell__label,.dark .op-whatsapp-screen-v5 .op-preview-shell__label{background:rgba(59,130,246,.16);color:#bfdbfe}
+@media (max-width:768px){.op-summary-hero-v5,.op-debts-hero-v5,.op-cards-hero-v5,.op-import-hero-v5,.op-share-hero-v5,.op-whatsapp-hero-v5{padding:1.25rem}.op-summary-screen-v5::before,.op-debts-screen-v5::before,.op-cards-screen-v5::before,.op-import-screen-v5::before,.op-share-screen-v5::before,.op-whatsapp-screen-v5::before{height:12rem}}

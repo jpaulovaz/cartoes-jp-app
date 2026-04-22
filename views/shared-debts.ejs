@@ -934,21 +934,21 @@
   data-snapshot-cta-label="<%= isArchiveMode ? 'Voltar para o arquivo' : 'Voltar para os acertos' %>"
   data-snapshot-cta-href="<%= isArchiveMode ? otherPath : '/shared-debts' %>"></div>
 
-<div class="op-screen op-screen--shared-debts op-debts-screen-v4 max-w-7xl mx-auto space-y-8">
-  <section class="op-page-hero op-fade-up op-debts-hero-v4">
+<div class="op-screen op-screen--shared-debts op-debts-screen-v4 op-debts-screen-v5 max-w-7xl mx-auto space-y-8">
+  <section class="op-page-hero op-fade-up op-debts-hero-v4 op-debts-hero-v5">
     <div>
-      <span class="op-page-hero__eyebrow"><%= isArchiveMode ? 'Histórico guardado' : 'Tudo o que você combinou' %></span>
-      <h1 class="op-page-hero__title mt-4"><%= isArchiveMode ? 'Arquivo de acertos' : 'Central de acertos' %></h1>
+      <span class="op-page-hero__eyebrow"><%= isArchiveMode ? 'Histórico de acertos' : 'Fluxo entre pessoas' %></span>
+      <h1 class="op-page-hero__title mt-4"><%= isArchiveMode ? 'Arquivo de acertos' : 'Acertos' %></h1>
       <p class="op-page-hero__subtitle mt-3"><%= isArchiveMode
-        ? 'Aqui ficam os acertos e lembretes que já saíram da fila principal. Continua fácil de achar e, se precisar, você restaura num toque.'
-        : 'Aqui você vê o que chegou para você, o que você enviou e o que ainda está guardado na caixa de saída. Sem envio automático e sem susto.' %></p>
+        ? 'Consulte o que já foi encerrado sem perder a trilha do que foi combinado por aqui.'
+        : 'Acompanhe o que chegou para você, o que saiu da sua caixa de saída e o que ainda depende de ação, sem mudar a lógica atual do aplicativo.' %></p>
       <div class="op-page-hero__meta mt-4">
         <% if (isArchiveMode) { %>
-          <span class="badge">Mesmo jeito de navegar da central principal</span>
-          <span class="badge">Restaurar traz o item de volta para as ativas</span>
+          <span class="badge">Consulta com opção de restaurar</span>
+          <span class="badge">Mesmo fluxo visual das ativas</span>
         <% } else { %>
-          <span class="badge">Salvou uma divisão? Ela vai para a caixa de saída</span>
-          <span class="badge">Você decide quando enviar para a outra pessoa</span>
+          <span class="badge">Divisões ficam na caixa de saída até o envio</span>
+          <span class="badge">Você controla envio, pagamento e confirmação</span>
         <% } %>
       </div>
       <div class="mt-5 flex flex-wrap gap-3 op-shared-action-row">
@@ -1008,8 +1008,8 @@
       <article class="op-debts-overview-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div class="max-w-2xl">
-            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-500 dark:text-emerald-300">Acertos do cartão por mês</div>
-            <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">O cartão agora anda pelo mês</h2>
+            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-500 dark:text-emerald-300">Fluxo do cartão por competência</div>
+            <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Leitura mensal do cartão</h2>
             <p class="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">O histórico do envio continua aqui, mas o pagamento conversa com o mês do cartão entre vocês. Fica mais fácil entender quanto falta, o que já entrou e o que ainda espera confirmação.</p>
           </div>
           <div class="flex flex-wrap gap-2 lg:justify-end op-shared-action-row op-shared-action-row--compact">
@@ -1069,8 +1069,8 @@
     <div class="op-debts-outbox-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div class="max-w-2xl">
-          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Fora do cartão</div>
-          <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Criar um combinado avulso</h2>
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Lançamento fora do cartão</div>
+          <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Registrar acerto avulso</h2>
           <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">Ótimo para almoço, ingresso, Pix emprestado ou qualquer valor que não veio do cartão. Você escolhe se a pessoa recebe no app ou se isso fica só no seu radar.</p>
         </div>
 
@@ -1083,7 +1083,7 @@
             <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
             </svg>
-            Novo combinado
+            Novo acerto avulso
           </button>
           <p class="text-xs font-medium text-slate-500 dark:text-slate-400 lg:text-right">Poucos campos, data de hoje automática e opção de lembrar na data combinada.</p>
         </div>
@@ -1204,7 +1204,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
     <div class="absolute inset-x-0 bottom-0 flex max-h-[90vh] flex-col overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[84vh] sm:max-w-2xl sm:rounded-[32px]">
       <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
         <div>
-          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Combinado avulso</div>
+          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Acerto avulso</div>
           <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Criar combinado fora do cartão</h3>
           <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Vai com a data de hoje e, se quiser, você ainda marca uma data combinada para o app lembrar depois.</p>
         </div>
@@ -1220,7 +1220,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
         </div>
 
         <div class="space-y-2">
-          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Como esse combinado vai seguir?</div>
+          <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Como esse acerto vai seguir?</div>
           <div class="grid gap-3 sm:grid-cols-2">
             <label class="cursor-pointer rounded-2xl border border-violet-200 bg-violet-50/70 px-4 py-3 transition-colors data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-60" data-manual-debt-mode-card="app">
               <input type="radio" name="mode" value="app" class="sr-only" data-manual-debt-mode-input="app" checked>
@@ -1236,7 +1236,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
         </div>
 
         <label class="block">
-          <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Com quem é esse combinado?</span>
+          <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Com quem é esse acerto?</span>
           <select name="person_id" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20" data-manual-debt-person-select <%= manualDebtPeopleList.length ? '' : 'disabled' %>>
             <% (manualDebtPeopleList || []).forEach((person, index) => { %>
               <option value="<%= person.id %>" <%= index === 0 ? 'selected' : '' %> data-can-app="<%= person.can_share_charge && person.friendship_active ? '1' : '0' %>" data-has-app="<%= person.has_app_user ? '1' : '0' %>" data-friendship-active="<%= person.friendship_active ? '1' : '0' %>" data-email="<%= person.linked_user_email || person.email || '' %>" data-phone="<%= person.phone || '' %>"><%= person.name %><%= person.linked_user_email ? ` · ${person.linked_user_email}` : (person.email ? ` · ${person.email}` : '') %></option>
@@ -1862,12 +1862,12 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                         <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/80 dark:bg-emerald-900/20 px-4 py-4">
                           <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div class="min-w-0 flex-1">
-                              <div class="text-sm font-bold text-slate-900 dark:text-white"><%= item.pix_is_current_user_creditor ? 'Seu Pix já está pronto' : 'Pix prontinho para pagar' %></div>
+                              <div class="text-sm font-bold text-slate-900 dark:text-white"><%= item.pix_is_current_user_creditor ? 'Seu Pix já está pronto' : 'Pix pronto para pagamento' %></div>
                               <p class="mt-1 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300">
                                 <% if (item.pix_is_current_user_creditor) { %>
-                                  Esse é o código que a outra pessoa pode copiar daqui sem malabarismo. Ele sempre sai com o valor pendente atual.
+                                  Esse é o código que a outra pessoa pode copiar daqui diretamente. Ele sempre sai com o valor pendente atual.
                                 <% } else if (item.status === 'pending') { %>
-                                  Se quiser, você já pode copiar o Pix agora mesmo. A decisão sobre o lembrete continua aqui do lado, sem drama.
+                                  Se quiser, você já pode copiar o Pix agora mesmo. A decisão sobre o lembrete continua aqui do lado, sem tirar o controle desta tela.
                                 <% } else { %>
                                   O valor ainda está em aberto, então o Pix já sai com o total certinho para facilitar a quitação.
                                 <% } %>
@@ -2583,9 +2583,9 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                               <div class="text-sm font-bold text-slate-900 dark:text-white"><%= item.pix_is_current_user_creditor ? 'Seu Pix já está pronto' : 'Pix prontinho para pagar' %></div>
                               <p class="mt-1 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300">
                                 <% if (item.pix_is_current_user_creditor) { %>
-                                  Esse é o código que a outra pessoa pode copiar daqui sem malabarismo. Ele sempre sai com o valor pendente atual.
+                                  Esse é o código que a outra pessoa pode copiar daqui diretamente. Ele sempre sai com o valor pendente atual.
                                 <% } else if (item.status === 'pending') { %>
-                                  Se quiser, você já pode copiar o Pix agora mesmo. A decisão sobre o lembrete continua aqui do lado, sem drama.
+                                  Se quiser, você já pode copiar o Pix agora mesmo. A decisão sobre o lembrete continua aqui do lado, sem tirar o controle desta tela.
                                 <% } else { %>
                                   O valor ainda está em aberto, então o Pix já sai com o total certinho para facilitar a quitação.
                                 <% } %>
@@ -2814,7 +2814,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                       <% } else if (item.status === 'settled') { %>
                         <div class="rounded-2xl border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20 px-4 py-3">
                           <div class="text-sm font-bold text-slate-900 dark:text-white">Lembrete recebido</div>
-                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Esse combinado foi fechado em <strong><%= privateReminderSettledLabel(item) %></strong><% if (item.settlement_note) { %> com a observação <span class="font-semibold"><%= item.settlement_note %></span><% } %>.</div>
+                          <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Esse acerto foi fechado em <strong><%= privateReminderSettledLabel(item) %></strong><% if (item.settlement_note) { %> com a observação <span class="font-semibold"><%= item.settlement_note %></span><% } %>.</div>
                         </div>
                       <% } else if (item.status === 'cancelled') { %>
                         <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-3">

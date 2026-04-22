@@ -256,13 +256,8 @@
     </div>
   <% } %>
 
-  <div class="op-admin-layout grid gap-6 xl:grid-cols-[290px,minmax(0,1fr)] xl:items-start">
-    <aside class="self-start xl:sticky xl:top-32 xl:max-h-[calc(100vh-9rem)]">
-      <%- include('partials/admin/sidebar', { navGroups, activeSectionKey, adminGuideUrl }) %>
-    </aside>
-
-    <div class="space-y-6 min-w-0">
-      <section id="admin-section-overview"
+  <div class="op-admin-layout space-y-6 min-w-0">
+    <section id="admin-section-overview"
                data-admin-search-target
                data-admin-search="visao geral servicos email backup push google seguranca acessos resumo rapido"
                class="op-surface-card op-admin-section-card op-admin-overview-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
@@ -328,9 +323,9 @@
                 <div class="text-xs font-black uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Prioridades operacionais</div>
                 <h3 class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">Prioridades</h3>
                 <ul class="mt-4 space-y-3 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
-                  <li>• Use os atalhos para liberar acesso, testar e-mail ou executar backup sem navegar pela página.</li>
-                  <li>• Históricos e blocos de apoio foram mantidos em áreas secundárias para preservar a leitura principal.</li>
-                  <li>• A busca lateral localiza seções e campos sem exigir rolagem manual extensa.</li>
+                  <li>• Use as ações rápidas do topo para liberar acesso, testar e-mail ou executar backup sem mudar de contexto.</li>
+                  <li>• As seções abaixo seguem agrupadas por rotina operacional e infraestrutura para reduzir ruído visual.</li>
+                  <li>• Históricos e blocos de apoio permanecem em áreas secundárias para preservar a leitura principal.</li>
                 </ul>
               </div>
               <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
@@ -877,7 +872,6 @@
           <% }) %>
         </section>
       <% }) %>
-    </div>
   </div>
 </div>
 

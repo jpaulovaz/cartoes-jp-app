@@ -795,10 +795,12 @@ function createSharedDebtsService(deps = {}) {
       payload = deps.buildPixPayload({
         keyType: creditorProfile.pixKeyType,
         keyValue: creditorProfile.pixKeyValue,
-        merchantName: creditorProfile.pixMerchantName || creditorProfile.ownerName || creditorRecord?.name,
+        merchantName: creditorProfile.ownerName || creditorProfile.pixMerchantName || creditorRecord?.name,
         merchantCity: creditorProfile.pixCity,
         amountCents: requestedAmountCents,
         txid,
+        referenceLabel: '***',
+        pointOfInitiationMethod: '11',
         description: deps.sanitizePixText(`CARTAO ${String(settlementRow.month).padStart(2, '0')}/${settlementRow.year}`, { max: 72 })
       });
 
@@ -1242,10 +1244,12 @@ function createSharedDebtsService(deps = {}) {
     const payload = deps.buildPixPayload({
       keyType: creditorProfile.pixKeyType,
       keyValue: creditorProfile.pixKeyValue,
-      merchantName: creditorProfile.pixMerchantName || creditorProfile.ownerName || requestRow.requester_name,
+      merchantName: creditorProfile.ownerName || creditorProfile.pixMerchantName || requestRow.requester_name,
       merchantCity: creditorProfile.pixCity,
       amountCents: pendingCents,
       txid,
+      referenceLabel: '***',
+      pointOfInitiationMethod: '11',
       description: deps.sanitizePixText(requestRow.description_snapshot, { max: 72 })
     });
     const qrDataUrl = deps.QRCode

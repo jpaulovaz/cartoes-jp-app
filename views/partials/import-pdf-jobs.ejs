@@ -49,7 +49,7 @@
               </form>
             <% } %>
             <% if (job.canDelete) { %>
-              <form method="post" action="/import/pdf/jobs/<%= job.id %>/delete" onsubmit="return window.confirm('Quer mesmo apagar este job e todos os arquivos gerados? Depois não dá para desfazer.')">
+              <form method="post" action="/import/pdf/jobs/<%= job.id %>/delete" data-confirm-prompt="Quer mesmo apagar este job e todos os arquivos gerados? Depois não dá para desfazer.">
                 <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-rose-300 bg-white px-4 py-2.5 text-xs font-bold text-rose-700 transition hover:bg-rose-50 dark:border-rose-900/60 dark:bg-slate-950 dark:text-rose-200">Excluir</button>
               </form>
             <% } %>

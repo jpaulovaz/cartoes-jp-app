@@ -1260,7 +1260,20 @@
           : (items.length > 1
               ? `Aplicar ${actionLabel} em ${items.length} compra(s), incluindo próximas parcelas das compras parceladas?`
               : `Aplicar ${actionLabel} incluindo próximas parcelas desta compra parcelada?`);
-        return window.confirm(fallbackText) ? 'future' : 'single';
+
+        if (typeof window.showAppAlert === 'function') {
+          await window.showAppAlert({
+            title: 'Não consegui abrir a confirmação',
+            message: `${fallbackText}
+
+Tente novamente em instantes.`,
+            tone: 'error',
+            buttonLabel: 'Entendi'
+          });
+        } else {
+          showAllocMessage('Não consegui abrir a confirmação agora. Tente novamente em instantes.', 'error');
+        }
+        return null;
       }
 
       async function confirmDeleteScope(items, scope) {
@@ -1279,7 +1292,30 @@
           return await window.confirmTypedAction(message);
         }
 
-        return window.confirm(message);
+        if (window.showActionDialog) {
+          const result = await window.showActionDialog({
+            title: 'Confirmar exclusão',
+            message,
+            tone: 'error',
+            options: [
+              { label: 'Excluir', value: true, tone: 'danger' },
+              { label: 'Cancelar', value: false, tone: 'cancel' }
+            ]
+          });
+          return result === true;
+        }
+
+        if (typeof window.showAppAlert === 'function') {
+          await window.showAppAlert({
+            title: 'Não consegui abrir a confirmação',
+            message: 'Tente novamente em instantes para concluir a exclusão.',
+            tone: 'error',
+            buttonLabel: 'Entendi'
+          });
+        } else {
+          showAllocMessage('Não consegui abrir a confirmação agora. Tente novamente em instantes.', 'error');
+        }
+        return false;
       }
 
       async function postBulkAction(url, payload) {

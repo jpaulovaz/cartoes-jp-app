@@ -606,6 +606,28 @@
     }
   }
 
+
+  function showShareToast(message, tone = 'info', options = {}) {
+    const text = String(message || '').trim();
+    if (!text) return null;
+    if (typeof window.showAppToast === 'function') {
+      return window.showAppToast(text, { tone, ...options });
+    }
+    console[tone === 'error' ? 'error' : 'log']('[share]', text);
+    return null;
+  }
+
+  async function showShareAlert(message, { title = 'Não consegui concluir', tone = 'error', buttonLabel = 'Entendi' } = {}) {
+    const text = String(message || '').trim();
+    if (!text) return false;
+    if (typeof window.showAppAlert === 'function') {
+      await window.showAppAlert({ title, message: text, tone, buttonLabel });
+      return true;
+    }
+    showShareToast(text, tone, title ? { title } : {});
+    return false;
+  }
+
   async function downloadReceipt() {
     const restore = setBusy(document.getElementById('btnPng'), 'Gerando imagem...');
     try {
@@ -633,9 +655,9 @@
       triggerDownloadFromFile(file);
       try {
         await copyTextToClipboard(shareMessageText);
-        alert('O compartilhamento direto não apareceu neste aparelho. A imagem foi baixada e o texto do resumo ficou copiado para uso manual.');
+        showShareToast('O compartilhamento direto não apareceu neste aparelho. A imagem foi baixada e o texto do resumo ficou copiado para uso manual.', 'info', { title: 'Use o envio manual' });
       } catch (_) {
-        alert('O compartilhamento direto não apareceu neste aparelho. A imagem foi baixada para compartilhamento manual.');
+        showShareToast('O compartilhamento direto não apareceu neste aparelho. A imagem foi baixada para compartilhamento manual.', 'info', { title: 'Use o envio manual' });
       }
     } catch (error) {
       if (error && error.name === 'AbortError') return;
@@ -645,13 +667,13 @@
         triggerDownloadFromFile(fallbackFile);
         try {
           await copyTextToClipboard(shareMessageText);
-          alert('Não consegui abrir o menu de compartilhamento agora. A imagem foi baixada e o texto do resumo ficou copiado para uso manual.');
+          showShareToast('Não consegui abrir o menu de compartilhamento agora. A imagem foi baixada e o texto do resumo ficou copiado para uso manual.', 'info', { title: 'Use o envio manual' });
         } catch (_) {
-          alert('Não consegui abrir o menu de compartilhamento agora. A imagem foi baixada para compartilhamento manual.');
+          showShareToast('Não consegui abrir o menu de compartilhamento agora. A imagem foi baixada para compartilhamento manual.', 'info', { title: 'Use o envio manual' });
         }
       } catch (downloadError) {
         console.error('[share] fallback failure', downloadError);
-        alert('Não foi possível gerar ou compartilhar a imagem agora.');
+        await showShareAlert('Não foi possível gerar ou compartilhar a imagem agora.', { title: 'Falha no compartilhamento', tone: 'error' });
       }
     } finally {
       restore();
@@ -661,20 +683,20 @@
   async function copyShareText() {
     try {
       await copyTextToClipboard(shareMessageText);
-      alert('Texto do resumo copiado. Agora é só colar no canal desejado.');
+      showShareToast('Texto do resumo copiado. Agora é só colar no canal desejado.', 'success', { title: 'Texto copiado' });
     } catch (error) {
       console.error('[share] copy text failure', error);
-      alert(error && error.message ? error.message : 'Não consegui copiar o texto agora.');
+      showShareToast(error && error.message ? error.message : 'Não consegui copiar o texto agora.', 'error', { title: 'Não consegui copiar' });
     }
   }
 
   async function copyPixPayload() {
     try {
       await copyTextToClipboard(sharePixPayload);
-      alert('Pix copia e cola copiado. Agora é só enviar esse atalho.');
+      showShareToast('Pix copia e cola copiado. Agora é só enviar esse atalho.', 'success', { title: 'Pix copiado' });
     } catch (error) {
       console.error('[share] copy pix failure', error);
-      alert(error && error.message ? error.message : 'Não consegui copiar o Pix agora.');
+      showShareToast(error && error.message ? error.message : 'Não consegui copiar o Pix agora.', 'error', { title: 'Não consegui copiar' });
     }
   }
 

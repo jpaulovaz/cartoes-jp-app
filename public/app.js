@@ -223,7 +223,7 @@
       if (typeof window.showAppToast === 'function') {
         window.showAppToast(message, { tone: 'info' });
       } else {
-        alert(message);
+        console.info('[alloc]', message);
       }
       return;
     }
@@ -244,7 +244,7 @@
       if (typeof window.showAppToast === 'function') {
         window.showAppToast(message, { tone: 'info' });
       } else {
-        alert(message);
+        console.info('[alloc]', message);
       }
       return;
     }
@@ -2528,8 +2528,10 @@
       const message = error?.message || 'Não deu para configurar os alertas neste aparelho agora.';
       if (typeof window.showAppAlert === 'function') {
         await window.showAppAlert({ title: 'Alertas neste aparelho', message, tone: 'error' });
+      } else if (typeof window.showAppToast === 'function') {
+        window.showAppToast(message, { tone: 'error', title: 'Alertas neste aparelho' });
       } else {
-        window.alert(message);
+        console.error('[push]', message);
       }
     }
   }

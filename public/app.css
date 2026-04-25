@@ -13188,3 +13188,53 @@ html.dark .op-admin-v5-note__title {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Phase 1 - confirmation-box replacement infrastructure */
+[data-app-toast-root] {
+  top: calc(var(--op-top-safe, 0px) + 0.85rem);
+}
+
+.op-app-toast {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.98);
+  animation: op-app-toast-in 180ms ease forwards;
+  will-change: transform, opacity;
+}
+
+.op-app-toast.is-leaving {
+  animation: op-app-toast-out 160ms ease forwards;
+}
+
+@keyframes op-app-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes op-app-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+@media (max-width: 767px) {
+  html[data-op-ui="v4"] [data-app-toast-root] {
+    top: calc(var(--op-top-safe, 0px) + 0.95rem);
+    padding-left: max(0.9rem, calc(0.9rem + var(--op-left-safe, 0px) * 0.35));
+    padding-right: max(0.9rem, calc(0.9rem + var(--op-right-safe, 0px) * 0.35));
+  }
+
+  html[data-op-ui="v4"] .op-app-toast {
+    max-width: 100%;
+  }
+}

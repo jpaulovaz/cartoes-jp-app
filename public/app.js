@@ -523,6 +523,148 @@
     });
   }
 
+  async function copyTextToClipboard(value) {
+    const text = String(value || '');
+    if (!text) return false;
+
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (_error) {
+        // segue para o fallback local
+      }
+    }
+
+    try {
+      const helper = document.createElement('textarea');
+      helper.value = text;
+      helper.setAttribute('readonly', 'readonly');
+      helper.setAttribute('aria-hidden', 'true');
+      helper.style.position = 'fixed';
+      helper.style.top = '-9999px';
+      helper.style.left = '-9999px';
+      helper.style.opacity = '0';
+      helper.style.pointerEvents = 'none';
+      document.body.appendChild(helper);
+      try {
+        helper.focus({ preventScroll: true });
+      } catch (_error) {
+        helper.focus();
+      }
+      helper.select();
+      if (typeof helper.setSelectionRange === 'function') {
+        helper.setSelectionRange(0, helper.value.length);
+      }
+      const copied = typeof document.execCommand === 'function' ? document.execCommand('copy') : false;
+      helper.remove();
+      return !!copied;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function focusCopyDialogField(field) {
+    if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;
+    window.requestAnimationFrame(() => {
+      try {
+        field.focus({ preventScroll: true });
+      } catch (_error) {
+        field.focus();
+      }
+      field.select();
+      if (typeof field.setSelectionRange === 'function') {
+        field.setSelectionRange(0, field.value.length);
+      }
+    });
+  }
+
+  async function showCopyValueDialog({
+    title = 'Copie este link',
+    message = 'Não consegui copiar automaticamente neste navegador. Tente outra vez ou copie manualmente pelo campo abaixo.',
+    value = '',
+    label = 'Conteúdo',
+    tone = 'warning',
+    copyLabel = 'Copiar',
+    copiedLabel = 'Copiado',
+    closeLabel = 'Fechar',
+    successMessage = 'Conteúdo copiado',
+    hintMessage = 'O campo fica pronto para seleção manual caso a cópia automática seja bloqueada.'
+  } = {}) {
+    const text = String(value || '');
+    let field = null;
+    let copyButton = null;
+    let copied = false;
+
+    await showActionDialog({
+      title,
+      message,
+      tone,
+      widthClass: 'max-w-xl',
+      body(container) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'op-copy-dialog';
+
+        const labelEl = document.createElement('label');
+        labelEl.className = 'op-copy-dialog__label';
+        labelEl.textContent = label;
+        wrapper.appendChild(labelEl);
+
+        field = document.createElement('textarea');
+        field.className = 'op-copy-dialog__field';
+        field.value = text;
+        field.readOnly = true;
+        field.spellcheck = false;
+        field.rows = Math.min(6, Math.max(3, Math.ceil(Math.max(text.length, 1) / 72)));
+        field.setAttribute('aria-label', label);
+        wrapper.appendChild(field);
+
+        const hint = document.createElement('p');
+        hint.className = 'op-copy-dialog__hint';
+        hint.textContent = hintMessage;
+        wrapper.appendChild(hint);
+
+        const actions = document.createElement('div');
+        actions.className = 'op-copy-dialog__actions';
+
+        copyButton = document.createElement('button');
+        copyButton.type = 'button';
+        copyButton.className = 'op-btn op-btn-primary op-btn--compact';
+        copyButton.textContent = copyLabel;
+        copyButton.addEventListener('click', async () => {
+          if (copyButton.disabled) return;
+          copyButton.disabled = true;
+          const didCopy = await copyTextToClipboard(text);
+          if (didCopy) {
+            copied = true;
+            copyButton.textContent = copiedLabel;
+            focusCopyDialogField(field);
+            showAppToast(successMessage, { tone: 'success' });
+            return;
+          }
+          copyButton.disabled = false;
+          focusCopyDialogField(field);
+          showAppToast('Selecione o campo e copie manualmente se o navegador continuar bloqueando a cópia.', {
+            tone: 'warning',
+            title: 'Cópia manual'
+          });
+        });
+        actions.appendChild(copyButton);
+        wrapper.appendChild(actions);
+
+        container.appendChild(wrapper);
+      },
+      options: [
+        { label: closeLabel, value: false, tone: 'secondary' }
+      ],
+      onOpen() {
+        focusCopyDialogField(field);
+      }
+    });
+
+    return copied;
+  }
+
   function ensureAppToastRoot() {
     if (appToastState?.root && document.body.contains(appToastState.root)) {
       return appToastState;
@@ -612,6 +754,8 @@
   window.showActionDialog = showActionDialog;
   window.showAppAlert = showAppAlert;
   window.showAppToast = showAppToast;
+  window.copyTextToClipboard = copyTextToClipboard;
+  window.showCopyValueDialog = showCopyValueDialog;
   window.confirmTypedAction = confirmTypedAction;
 })();
 

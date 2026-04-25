@@ -1072,27 +1072,52 @@
     });
   });
 
+  function flashCopyLoginButton(button) {
+    if (!button) return;
+    const previous = button.textContent;
+    button.textContent = 'Link copiado';
+    setTimeout(() => {
+      button.textContent = previous;
+    }, 1800);
+  }
+
   document.querySelectorAll('[data-copy-login-url]').forEach((button) => {
     button.addEventListener('click', async () => {
       const loginUrl = button.dataset.loginUrl || defaultLoginUrl;
-      try {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(loginUrl);
-        } else {
-          const helper = document.createElement('textarea');
-          helper.value = loginUrl;
-          document.body.appendChild(helper);
-          helper.select();
-          document.execCommand('copy');
-          helper.remove();
+      const copied = typeof window.copyTextToClipboard === 'function'
+        ? await window.copyTextToClipboard(loginUrl)
+        : false;
+
+      if (copied) {
+        flashCopyLoginButton(button);
+        return;
+      }
+
+      if (typeof window.showCopyValueDialog === 'function') {
+        const copiedFromDialog = await window.showCopyValueDialog({
+          title: 'Copie o link de acesso',
+          message: 'Não consegui copiar automaticamente neste navegador. Tente novamente ou copie manualmente pelo campo abaixo.',
+          value: loginUrl,
+          label: 'Link de acesso',
+          tone: 'warning',
+          copyLabel: 'Copiar link',
+          closeLabel: 'Fechar',
+          successMessage: 'Link copiado',
+          hintMessage: 'Deixe este modal aberto se quiser conferir o endereço antes de compartilhar.'
+        });
+        if (copiedFromDialog) {
+          flashCopyLoginButton(button);
         }
-        const previous = button.textContent;
-        button.textContent = 'Link copiado';
-        setTimeout(() => {
-          button.textContent = previous;
-        }, 1800);
-      } catch (_error) {
-        window.prompt('Copie este link:', loginUrl);
+        return;
+      }
+
+      if (typeof window.showAppAlert === 'function') {
+        await window.showAppAlert({
+          title: 'Copie o link de acesso',
+          message: loginUrl,
+          tone: 'warning',
+          buttonLabel: 'Fechar'
+        });
       }
     });
   });

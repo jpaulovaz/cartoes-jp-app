@@ -13238,3 +13238,83 @@ html.dark .op-admin-v5-note__title {
     max-width: 100%;
   }
 }
+
+
+/* Phase 5 - admin copy dialog */
+.op-copy-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.op-copy-dialog__label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+.op-copy-dialog__field {
+  width: 100%;
+  min-height: 5.5rem;
+  resize: vertical;
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  background: #f8fafc;
+  color: #0f172a;
+  padding: 0.95rem 1rem;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.op-copy-dialog__field:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.18);
+  outline-offset: 0;
+  border-color: rgba(37, 99, 235, 0.46);
+  background: #ffffff;
+}
+
+.op-copy-dialog__hint {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: #64748b;
+}
+
+.op-copy-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-start;
+}
+
+.op-copy-dialog__actions .op-btn {
+  width: auto;
+}
+
+html.dark .op-copy-dialog__label {
+  color: #cbd5e1;
+}
+
+html.dark .op-copy-dialog__field {
+  border-color: rgba(100, 116, 139, 0.42);
+  background: rgba(15, 23, 42, 0.82);
+  color: #e2e8f0;
+}
+
+html.dark .op-copy-dialog__field:focus {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(15, 23, 42, 0.96);
+  outline-color: rgba(96, 165, 250, 0.22);
+}
+
+html.dark .op-copy-dialog__hint {
+  color: #94a3b8;
+}
+
+@media (max-width: 639px) {
+  .op-copy-dialog__actions .op-btn {
+    width: 100%;
+  }
+}

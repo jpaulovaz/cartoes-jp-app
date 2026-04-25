@@ -582,6 +582,28 @@
     });
   }
 
+
+  function showWhatsappToast(message, tone = 'info', options = {}) {
+    const text = String(message || '').trim();
+    if (!text) return null;
+    if (typeof window.showAppToast === 'function') {
+      return window.showAppToast(text, { tone, ...options });
+    }
+    console[tone === 'error' ? 'error' : 'log']('[whatsapp]', text);
+    return null;
+  }
+
+  async function showWhatsappAlert(message, { title = 'Não consegui concluir', tone = 'error', buttonLabel = 'Entendi' } = {}) {
+    const text = String(message || '').trim();
+    if (!text) return false;
+    if (typeof window.showAppAlert === 'function') {
+      await window.showAppAlert({ title, message: text, tone, buttonLabel });
+      return true;
+    }
+    showWhatsappToast(text, tone, title ? { title } : {});
+    return false;
+  }
+
   async function downloadReceipt() {
     const restore = setBusy(document.getElementById('btnPng'), 'Gerando imagem...');
     try {
@@ -626,12 +648,16 @@
         throw new Error(result.error || 'Falha na API de envio.');
       }
 
-      alert(whatsappPixPayload
-        ? 'Envio concluído. O resumo foi com a imagem primeiro e o Pix copia e cola seguiu logo depois.'
-        : 'Envio concluído. O resumo foi enviado no WhatsApp com a imagem.');
+      showWhatsappToast(
+        whatsappPixPayload
+          ? 'O resumo foi com a imagem primeiro e o Pix copia e cola seguiu logo depois.'
+          : 'O resumo foi enviado no WhatsApp com a imagem.',
+        'success',
+        { title: 'Envio concluído' }
+      );
     } catch (error) {
       console.error('[whatsapp] send failure', error);
-      alert(error && error.message ? error.message : 'Não consegui enviar a imagem pelo WhatsApp agora.');
+      await showWhatsappAlert(error && error.message ? error.message : 'Não consegui enviar a imagem pelo WhatsApp agora.', { title: 'Falha no envio', tone: 'error' });
     } finally {
       restore();
     }
@@ -640,20 +666,20 @@
   async function copyWhatsappText() {
     try {
       await copyTextToClipboard(whatsappShareText);
-      alert('Mensagem do WhatsApp copiada. Agora é só colar quando quiser.');
+      showWhatsappToast('Mensagem do WhatsApp copiada. Agora é só colar quando quiser.', 'success', { title: 'Texto copiado' });
     } catch (error) {
       console.error('[whatsapp] copy text failure', error);
-      alert(error && error.message ? error.message : 'Não consegui copiar o texto agora.');
+      showWhatsappToast(error && error.message ? error.message : 'Não consegui copiar o texto agora.', 'error', { title: 'Não consegui copiar' });
     }
   }
 
   async function copyPixPayload() {
     try {
       await copyTextToClipboard(whatsappPixPayload);
-      alert('Pix copia e cola copiado. Agora é só enviar esse atalho.');
+      showWhatsappToast('Pix copia e cola copiado. Agora é só enviar esse atalho.', 'success', { title: 'Pix copiado' });
     } catch (error) {
       console.error('[whatsapp] copy pix failure', error);
-      alert(error && error.message ? error.message : 'Não consegui copiar o Pix agora.');
+      showWhatsappToast(error && error.message ? error.message : 'Não consegui copiar o Pix agora.', 'error', { title: 'Não consegui copiar' });
     }
   }
 

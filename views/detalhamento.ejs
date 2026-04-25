@@ -1644,6 +1644,50 @@
                     return data;
                 }
 
+                function detailToast(message, tone = 'info', options = {}) {
+                    const text = String(message || '').trim();
+                    if (!text) return;
+                    if (typeof window.showAppToast === 'function') {
+                        window.showAppToast(text, { tone, ...options });
+                        return;
+                    }
+                    console[tone === 'error' ? 'error' : 'log']('[detalhamento]', text);
+                }
+
+                async function detailAlert(message, { title = 'Não consegui concluir', tone = 'error', buttonLabel = 'Entendi' } = {}) {
+                    const text = String(message || '').trim();
+                    if (!text) return false;
+                    if (typeof window.showAppAlert === 'function') {
+                        await window.showAppAlert({ title, message: text, tone, buttonLabel });
+                        return true;
+                    }
+                    detailToast(text, tone, title ? { title } : {});
+                    return false;
+                }
+
+                async function confirmMonthLock(status) {
+                    const isClosing = status === 'close';
+                    if (typeof window.showActionDialog === 'function') {
+                        const result = await window.showActionDialog({
+                            title: isClosing ? 'Fechar mês?' : 'Reabrir mês?',
+                            subtitle: isClosing
+                                ? 'As edições ficam bloqueadas até você reabrir.'
+                                : 'Os lançamentos voltam a ficar editáveis.',
+                            message: isClosing
+                                ? 'Depois do fechamento, os valores continuam visíveis, mas a tela deixa de aceitar alterações até você reabrir o mês.'
+                                : 'Ao reabrir, você volta a editar valores, anotações e lançamentos normalmente.',
+                            tone: isClosing ? 'warning' : 'info',
+                            options: [
+                                { label: isClosing ? 'Fechar mês' : 'Reabrir mês', value: true, tone: isClosing ? 'danger' : 'primary' },
+                                { label: 'Cancelar', value: false, tone: 'cancel' }
+                            ],
+                            dismissValue: false
+                        });
+                        return result === true;
+                    }
+                    return false;
+                }
+
                 async function handleFixedPaymentToggle(event) {
                     const toggle = event?.currentTarget;
                     if (!toggle) return;
@@ -1670,7 +1714,7 @@
                     } catch (error) {
                         toggle.checked = previousPaid;
                         applyFixedToggleVisual(toggle, previousPaid);
-                        alert(error.message || 'Não consegui marcar essa conta agora.');
+                        detailToast(error.message || 'Não consegui marcar essa conta agora.', 'error', { title: 'Não consegui concluir' });
                     } finally {
                         toggle.disabled = detailMonthIsClosed;
                     }
@@ -1689,7 +1733,7 @@
                     if (financeModalState.readOnly) return;
                     const description = (financeRefs.descriptionInput?.value || '').trim();
                     if (!description) {
-                        alert('Dá um nome para esse item antes de salvar.');
+                        detailToast('Dá um nome para esse item antes de salvar.', 'warning', { title: 'Item sem nome' });
                         financeRefs.descriptionInput?.focus();
                         return;
                     }
@@ -1733,7 +1777,7 @@
 
                         location.reload();
                     } catch (error) {
-                        alert(error.message || 'Não consegui salvar esse item agora.');
+                        await detailAlert(error.message || 'Não consegui salvar esse item agora.', { title: 'Não consegui salvar', tone: 'error' });
                     }
                 }
 
@@ -1757,7 +1801,7 @@
                             body: JSON.stringify({ field, value })
                         });
                     } catch (error) {
-                        alert(error.message || 'Não consegui atualizar esse item agora.');
+                        await detailAlert(error.message || 'Não consegui atualizar esse item agora.', { title: 'Não consegui atualizar', tone: 'error' });
                         location.reload();
                     }
                 }
@@ -1771,7 +1815,7 @@
                         });
                         location.reload();
                     } catch (error) {
-                        alert(error.message || 'Não consegui salvar esse valor agora.');
+                        await detailAlert(error.message || 'Não consegui salvar esse valor agora.', { title: 'Não consegui salvar', tone: 'error' });
                         location.reload();
                     }
                 }
@@ -1783,16 +1827,12 @@
                             body: JSON.stringify({ type, content })
                         });
                     } catch (error) {
-                        alert(error.message || 'Não consegui salvar essa anotação agora.');
+                        detailToast(error.message || 'Não consegui salvar essa anotação agora.', 'error', { title: 'Não consegui salvar' });
                     }
                 }
 
                 async function toggleLock(status) {
-                    const msg = status === 'close'
-                        ? 'Deseja FECHAR este mês? Você não poderá mais editar os valores até reabrir.'
-                        : 'Deseja REABRIR este mês para edições?';
-
-                    if (!confirm(msg)) return;
+                    if (!(await confirmMonthLock(status))) return;
 
                     try {
                         await fetchJson('/finances/toggle-close', {
@@ -1801,7 +1841,7 @@
                         });
                         location.reload();
                     } catch (error) {
-                        alert(error.message || 'Não consegui mudar o cadeado agora.');
+                        await detailAlert(error.message || 'Não consegui mudar o cadeado agora.', { title: 'Não consegui concluir', tone: 'error' });
                     }
                 }
 
@@ -1872,7 +1912,7 @@
 
                         showDeleteModal();
                     } catch (error) {
-                        alert(error.message || 'Não consegui abrir os detalhes desse item agora.');
+                        detailToast(error.message || 'Não consegui abrir os detalhes desse item agora.', 'error', { title: 'Não consegui concluir' });
                     }
                 }
 
@@ -1894,7 +1934,7 @@
                             requestAnimationFrame(() => financeRefs.descriptionInput?.focus());
                         }
                     } catch (error) {
-                        alert(error.message || 'Não consegui abrir os lançamentos agora.');
+                        detailToast(error.message || 'Não consegui abrir os lançamentos agora.', 'error', { title: 'Não consegui concluir' });
                     }
                 }
 
@@ -1916,7 +1956,7 @@
                             requestAnimationFrame(() => { if (financeRefs.fixedDayInput) financeRefs.fixedDayInput.focus(); else financeRefs.descriptionInput?.focus(); });
                         }
                     } catch (error) {
-                        alert(error.message || 'Não consegui abrir esse valor único agora.');
+                        detailToast(error.message || 'Não consegui abrir esse valor único agora.', 'error', { title: 'Não consegui concluir' });
                     }
                 }
 
@@ -1968,7 +2008,7 @@
                         await fetchJson(`/finances/delete/${financeDeleteState.financeId}`, { method: 'POST' });
                         location.reload();
                     } catch (error) {
-                        alert(error.message || 'Não consegui apagar esse item agora.');
+                        detailToast(error.message || 'Não consegui apagar esse item agora.', 'error', { title: 'Não consegui concluir' });
                     }
                 });
 

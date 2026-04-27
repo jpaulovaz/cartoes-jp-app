@@ -1,8 +1,8 @@
   <section id="network-list" class="op-network-list-section scroll-mt-28 mb-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
     <div>
       <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Sua rede ativa</div>
-      <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Minha Rede e contatos</h2>
-      <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Use a busca, filtre do seu jeito e ache alguém rapidinho.</p>
+      <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Relações e contatos</h2>
+      <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Busque, filtre e acompanhe quem já está na sua rede ou ainda depende de ação.</p>
     </div>
 
     <% if (contactList.length) { %>
@@ -12,15 +12,15 @@
           <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
           </span>
-          <input type="search" id="networkSearch" class="w-full rounded-2xl border border-slate-300 bg-slate-50 py-3.5 pl-11 pr-4 text-sm font-medium text-slate-900 shadow-sm transition outline-none focus:border-slate-500 focus:bg-white focus:ring-2 focus:ring-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-slate-400 dark:focus:bg-slate-950 dark:focus:ring-slate-500/20" placeholder="Buscar por nome, e-mail ou telefone">
+          <input type="search" id="networkSearch" class="w-full rounded-2xl border border-slate-300 bg-slate-50 py-3.5 pl-11 pr-4 text-sm font-medium text-slate-900 shadow-sm transition outline-none focus:border-slate-500 focus:bg-white focus:ring-2 focus:ring-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-slate-400 dark:focus:bg-slate-950 dark:focus:ring-slate-500/20" placeholder="Buscar por nome, telefone ou e-mail">
         </label>
 
-        <div class="flex flex-wrap gap-2">
+        <div class="op-network-filter-strip flex flex-wrap gap-2">
           <button type="button" data-network-filter="all" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Todos <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= contactList.length %></span></button>
           <button type="button" data-network-filter="friend" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Minha rede <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= activeFriendCount %></span></button>
           <button type="button" data-network-filter="pending" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Convites <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= pendingContactCount %></span></button>
           <button type="button" data-network-filter="discover" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Já no app <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= discoverableCount %></span></button>
-          <button type="button" data-network-filter="local" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Só na sua lista <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= localOnlyCount %></span></button>
+          <button type="button" data-network-filter="local" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Na sua lista <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"><%= localOnlyCount %></span></button>
         </div>
       </div>
 
@@ -33,25 +33,25 @@
              const profileSignatureVisible = p.friendship_active && !!(p.profile_signature_text || p.profile_signature_vibe);
              let personHintText = '';
              if (!p.email) {
-               personHintText = 'Com e-mail, fica mais fácil achar essa pessoa no app.';
+               personHintText = 'Com e-mail, fica mais fácil localizar esse contato no app.';
              } else if (!p.has_app_user) {
-               personHintText = 'Ainda não achamos essa pessoa no app. Se ela entrar depois, o Pix continua sendo dela.';
+               personHintText = 'Este contato ainda não foi encontrado no app. Se entrar depois, o perfil passa a centralizar o Pix.';
              } else if (p.friendship_active && !p.active) {
-               personHintText = 'A amizade vale, mas esse contato está pausado.';
+               personHintText = 'A relação está ativa, mas este contato está pausado.';
              } else if (p.friendship_active && p.linked_user_pix_ready) {
-               personHintText = 'Quando rolar pagamento, o app usa o Pix do perfil dela.';
+               personHintText = 'Quando houver pagamento, o app usa o Pix do perfil.';
              } else if (p.friendship_active && p.linked_user_pix_enabled && !p.linked_user_pix_ready) {
-               personHintText = 'A amizade vale, mas o Pix dela ainda está terminando.';
+               personHintText = 'A relação está ativa, mas o Pix ainda está em validação.';
              } else if (p.friendship_active) {
-               personHintText = 'A amizade já vale. Só falta o Pix dela.';
+               personHintText = 'A relação está ativa. Falta apenas configurar o Pix.';
              } else if (p.friendship_state === 'pending_sent') {
-               personHintText = 'Convite enviado. Agora é esperar.';
+               personHintText = 'Convite enviado. Aguardando retorno.';
              } else if (p.friendship_state === 'pending_received') {
-               personHintText = 'Essa pessoa já te chamou. É só aceitar.';
+               personHintText = 'Este contato já enviou um convite. Basta aceitar.';
              } else if (!p.active) {
-               personHintText = 'Esse contato usa o app, mas está pausado.';
+               personHintText = 'Este contato usa o app, mas está pausado.';
              } else {
-               personHintText = 'O app já encontrou essa pessoa. Se fizer sentido, mande convite.';
+               personHintText = 'O app já encontrou este contato. Se fizer sentido, envie um convite.';
              }
         %>
           <article
@@ -69,7 +69,7 @@
                     <div class="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-lg font-black text-slate-600 transition-colors group-hover:bg-sky-50 group-hover:text-sky-600 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:bg-sky-900/40"><%= getAvatarInitials(p) %></div>
                   <% } %>
                   <% if (p.friendship_active) { %>
-                    <span class="absolute -bottom-1 -right-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-emerald-200 bg-emerald-500 text-[13px] text-white shadow-sm dark:border-emerald-700" title="Amizade ativa">🔗</span>
+                    <span class="absolute -bottom-1 -right-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-emerald-200 bg-emerald-500 text-[13px] text-white shadow-sm dark:border-emerald-700" title="Relacionamento ativo"><svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14L21 3m0 0h-6m6 0v6M14 10L3 21m0 0h6m-6 0v-6"></path></svg></span>
                   <% } %>
                 </div>
 
@@ -118,17 +118,17 @@
                   </div>
 
                   <div class="mt-3 inline-flex max-w-full items-center gap-2 overflow-hidden rounded-full border border-slate-200 bg-slate-50/80 px-3 py-2 text-[13px] font-semibold leading-5 text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 whitespace-nowrap">
-                    <span aria-hidden="true">💬</span>
+                    <span aria-hidden="true"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h8M8 14h5m7 6l-3.6-1.8a2 2 0 00-.9-.2H6a3 3 0 01-3-3V7a3 3 0 013-3h12a3 3 0 013 3v8a3 3 0 01-3 3h-.5a2 2 0 00-.9.2L20 20z"></path></svg></span>
                     <span class="block min-w-0 max-w-full overflow-hidden text-ellipsis"><%= personState.summary %></span>
                   </div>
                 </div>
               </div>
 
-              <div class="flex flex-wrap gap-2">
+              <div class="op-network-filter-strip flex flex-wrap gap-2">
                 <%- renderPersonStatusChips(p) %>
               </div>
 
-              <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <div class="op-network-card-actions grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 <% if (p.friendship_state === 'active') { %>
                   <form method="post" action="/people/<%= p.id %>/unfriend" class="min-w-0" data-confirm-prompt="Desfazer amizade com <%= p.name %>? O histórico continua salvo, mas novas cobranças entre vocês param na hora.">
                     <button class="<%= personActionMatchComprasClass %> border-rose-200 bg-white text-rose-700 hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20">
@@ -189,7 +189,7 @@
                 </form>
               </div>
 
-              <div class="grid gap-3 xl:grid-cols-2">
+              <div class="op-network-card-insights grid gap-3 xl:grid-cols-2">
                 <div class="rounded-[24px] border border-violet-200/70 bg-violet-50/80 px-4 py-3.5 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20">
                   <div class="flex flex-wrap items-center gap-2">
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600/80 dark:text-violet-300/80">Pix nas cobranças</div>
@@ -204,7 +204,7 @@
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     </span>
                     <div class="min-w-0 flex-1">
-                      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/70 dark:text-sky-300/80">Recado do app</div>
+                      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/70 dark:text-sky-300/80">Situação atual</div>
                       <p class="mt-1 text-[13px] font-medium leading-5 text-slate-600 dark:text-slate-300"><%= personHintText %></p>
                     </div>
                   </div>
@@ -214,12 +214,12 @@
           </article>
         <% }) %>
 
-        <div id="networkFilteredEmpty" class="hidden rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 px-6 py-10 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400 lg:col-span-2">Nada apareceu com esse filtro agora. Limpa a busca ou troque o filtro para ver mais gente.</div>
+        <div id="networkFilteredEmpty" class="op-network-empty-state hidden rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 px-6 py-10 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400 lg:col-span-2">Nenhum contato corresponde ao filtro atual. Ajuste a busca ou troque o filtro para continuar.</div>
       </div>
     <% } else { %>
-      <div class="mt-6 rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 px-6 py-12 text-center dark:border-slate-700 dark:bg-slate-900/50">
-        <div class="text-sm font-medium text-slate-500 dark:text-slate-400">Sua rede ainda está vazia por aqui. Quando quiser, comece adicionando quem participa das suas divisões e cobranças.</div>
-        <button type="button" onclick="openContactComposeModal(this)" class="mt-4 inline-flex items-center justify-center rounded-2xl border border-sky-600 bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-sky-700 dark:border-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400">Adicionar primeiro contato</button>
+      <div class="op-network-empty-state mt-6 rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 px-6 py-12 text-center dark:border-slate-700 dark:bg-slate-900/50">
+        <div class="text-sm font-medium text-slate-500 dark:text-slate-400">Sua rede ainda está vazia. Quando quiser, comece adicionando quem participa das suas divisões e acertos.</div>
+        <button type="button" onclick="openContactComposeModal(this)" class="mt-4 inline-flex items-center justify-center rounded-2xl border border-sky-600 bg-sky-600 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-sky-700 dark:border-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400">Adicionar contato</button>
       </div>
     <% } %>
   </section>

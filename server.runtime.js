@@ -18281,10 +18281,12 @@ async function buildSharePixContext({ userId, month, year, person, totalCents, p
         const payload = buildPixPayload({
           keyType: ownerPixProfile.pixKeyType,
           keyValue: ownerPixProfile.pixKeyValue,
-          merchantName: ownerPixProfile.pixMerchantName || ownerPixProfile.ownerName || 'ACERTTAPAY',
+          merchantName: ownerPixProfile.ownerName || ownerPixProfile.pixMerchantName || 'ACERTTAPAY',
           merchantCity: ownerPixProfile.pixCity || PIX_DEFAULT_CITY,
           amountCents: safeRemainingCents,
           txid,
+          referenceLabel: '***',
+          pointOfInitiationMethod: '11',
           description
         });
 

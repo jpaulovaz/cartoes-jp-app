@@ -1,4 +1,4 @@
-      <form method="post" action="/people" id="pix" class="op-settings-pix-card mb-8 xl:col-span-2 rounded-[32px] border border-violet-200 bg-white p-5 shadow-sm dark:border-violet-900/50 dark:bg-slate-800 sm:p-6 xl:mx-auto xl:max-w-[80rem]">
+      <form method="post" action="/people" id="pix" class="op-settings-pix-card op-settings-pix-panel mb-8 xl:col-span-2 rounded-[32px] border border-violet-200 bg-white p-5 shadow-sm dark:border-violet-900/50 dark:bg-slate-800 sm:p-6 xl:mx-auto xl:max-w-[80rem]">
           <input type="hidden" name="id" value="<%= selfProfile.id %>">
           <input type="hidden" name="profile_section" value="pix">
           <input type="hidden" name="return_to" value="/settings#pix">
@@ -6,31 +6,31 @@
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">Receber por Pix</div>
-              <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Seu Pix pronto para receber</h3>
-              <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Aqui você decide se quer deixar seu Pix pronto para quando alguém for te pagar.</p>
+              <h3 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Configuração de Pix</h3>
+              <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Defina se o seu Pix fica disponível e qual chave será usada nos recebimentos.</p>
             </div>
             <% if (selfProfile.pix_enabled && selfProfile.pix_valid) { %>
-              <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pronto para uso</span>
+              <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pix pronto</span>
             <% } else if (selfProfile.pix_enabled) { %>
-              <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Pedindo um ajuste</span>
+              <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Em ajuste</span>
             <% } else { %>
-              <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">Ainda desligado</span>
+              <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">Pix desligado</span>
             <% } %>
           </div>
 
           <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(280px,0.82fr)_minmax(0,1.18fr)] xl:items-start">
             <div class="grid gap-4">
-              <div class="rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+              <div class="op-settings-pix-switch-card rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
                 <label class="flex cursor-pointer items-start gap-3">
                   <input type="checkbox" name="pix_enabled" id="selfPixEnabled" value="1" class="mt-1 h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" <%= selfPixEnabled ? 'checked' : '' %>>
                   <span class="min-w-0 flex-1">
-                    <span class="block text-sm font-black text-slate-900 dark:text-white">Deixar Pix pronto por aqui</span>
-                    <span class="mt-1 block text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Sua chave fica escondidinha na lista e só aparece inteira na hora de copiar.</span>
+                    <span class="block text-sm font-black text-slate-900 dark:text-white">Disponibilizar Pix nesta conta</span>
+                    <span class="mt-1 block text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">A chave fica protegida na interface e só aparece por completo na hora de copiar.</span>
                   </span>
                 </label>
               </div>
 
-              <div class="rounded-[26px] border border-violet-200/70 bg-violet-50/80 px-4 py-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20 sm:px-5">
+              <div class="op-settings-pix-summary-card rounded-[26px] border border-violet-200/70 bg-violet-50/80 px-4 py-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20 sm:px-5">
                 <div class="flex items-start gap-3">
                   <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-violet-600 shadow-sm ring-1 ring-violet-100 dark:bg-slate-800 dark:text-violet-300 dark:ring-violet-900/50" aria-hidden="true">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1zm7 4h.01"></path></svg>
@@ -43,9 +43,9 @@
                         <% if (selfProfile.pix_city) { %>
                           Cidade do Pix: <strong class="font-semibold text-slate-700 dark:text-slate-100"><%= selfProfile.pix_city %><%= selfProfile.pix_state ? ' / ' + selfProfile.pix_state : '' %></strong>.
                         <% } %>
-                        Esse é o Pix que aparece quando alguém precisa te pagar.
+                        Essa é a chave usada quando alguém precisa te pagar pelo app.
                       <% } else { %>
-                        Nenhuma chave salva por aqui ainda. Quando você ligar isso, quem for te pagar já encontra seu Pix sem correria.
+                        Nenhuma chave foi salva ainda. Quando você ativar essa opção, o app passa a exibir seu Pix para recebimentos.
                       <% } %>
                     </p>
                   </div>
@@ -98,11 +98,11 @@
                 </label>
 
                 <div class="flex flex-col gap-3 lg:items-end lg:self-end">
-                  <div id="selfPixDormantHint" class="rounded-[24px] border border-dashed border-violet-200 bg-violet-50/70 px-4 py-4 text-sm font-medium leading-6 text-slate-600 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-slate-300 lg:max-w-[24rem] <%= selfPixEnabled ? 'hidden' : '' %>">
-                    <div class="font-black text-slate-900 dark:text-white">Pode deixar desligado sem problema.</div>
-                    <p class="mt-2">Quando quiser, é só ligar, preencher e salvar.</p>
+                  <div id="selfPixDormantHint" class="op-settings-context-note rounded-[24px] border border-dashed border-violet-200 bg-violet-50/70 px-4 py-4 text-sm font-medium leading-6 text-slate-600 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-slate-300 lg:max-w-[24rem] <%= selfPixEnabled ? 'hidden' : '' %>">
+                    <div class="font-black text-slate-900 dark:text-white">Você pode deixar o Pix desligado.</div>
+                    <p class="mt-2">Quando quiser, basta ativar, preencher os dados e salvar.</p>
                   </div>
-                  <button type="submit" class="inline-flex w-full items-center justify-center self-start rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 sm:w-auto lg:self-end">Salvar meu Pix</button>
+                  <button type="submit" class="inline-flex w-full items-center justify-center self-start rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 sm:w-auto lg:self-end">Salvar Pix</button>
                 </div>
               </div>
             </div>

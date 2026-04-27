@@ -1,14 +1,14 @@
 <%- include("partials/header", { title: "AcerttaPay | Carteira de cartões" }) %>
 
-  <div class="op-screen op-screen--cards op-cards-screen-v4 mx-auto max-w-5xl space-y-5 pb-24">
-    <section class="op-page-hero op-fade-up op-cards-hero-v4 mb-6">
+  <div class="op-screen op-screen--cards op-cards-screen-v4 op-cards-screen-v5 mx-auto max-w-5xl space-y-5 pb-24">
+    <section class="op-page-hero op-fade-up op-cards-hero-v4 op-cards-hero-v5 mb-6">
       <div>
-        <span class="op-page-hero__eyebrow">Tudo no jeito</span>
+        <span class="op-page-hero__eyebrow">Carteira do app</span>
         <h1 class="op-page-hero__title mt-4">Carteira de cartões</h1>
-        <p class="op-page-hero__subtitle mt-3">Ajuste fechamento e vencimento uma vez e deixe o app fazer as contas sem drama.</p>
+        <p class="op-page-hero__subtitle mt-3">Defina fechamento, vencimento e bandeira para manter a leitura mensal consistente.</p>
         <div class="op-page-hero__meta mt-4">
           <span class="badge"><%= cards ? cards.length : 0 %> cartão(ões)</span>
-          <span class="badge">Fechamento e vencimento no jeito</span>
+          <span class="badge">Base pronta para o mês e o resumo</span>
         </div>
       </div>
     </section>
@@ -19,8 +19,8 @@
         <input type="hidden" name="edit_id" id="card-form-edit-id" value="">
 
         <div class="op-cards-form-intro mb-5">
-          <h2 id="card-form-title" class="text-xl font-black text-slate-900 dark:text-white">Trazer cartão pra carteira</h2>
-          <p id="card-form-subtitle" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Preencha uma vez e deixe o app pronto para sugerir a fatura certinha.</p>
+          <h2 id="card-form-title" class="text-xl font-black text-slate-900 dark:text-white">Cadastrar cartão</h2>
+          <p id="card-form-subtitle" class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Preencha uma vez e mantenha o cálculo mensal alinhado ao fechamento real do cartão.</p>
         </div>
 
         <div class="grid md:grid-cols-12 gap-3 items-end">
@@ -62,7 +62,7 @@
             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
             </svg>
-            <span id="card-form-submit-label">Guardar cartão</span>
+            <span id="card-form-submit-label">Salvar cartão</span>
           </button>
         </div>
         <p class="text-xs font-medium text-slate-400 dark:text-slate-500 mt-3 flex items-center">
@@ -115,7 +115,7 @@
               </div>
               <span
                 class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border shrink-0 <%= c.active ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300' %>">
-                <%= c.active ? 'Ativo' : 'Desativado' %>
+                <%= c.active ? 'Ativo' : 'Em pausa' %>
               </span>
             </div>
 
@@ -129,16 +129,16 @@
                 data-card-due-day="<%= c.due_day || '' %>"
                 data-card-brand="<%= c.brand || '' %>"
                 class="op-btn op-btn-info op-btn--block">
-                Ajustar cartão
+                Editar dados
               </button>
 
               <div class="grid gap-2 sm:grid-cols-2">
                 <form method="post" action="/cards/<%= c.id %>/toggle"
-                  data-confirm-prompt="<%= c.active ? 'Colocar em pausa' : 'Trazer de volta' %> o cartão <%= c.name %>? Esta ação não apaga histórico."
+                  data-confirm-prompt="<%= c.active ? 'Pausar cartão' : 'Reativar cartão' %> o cartão <%= c.name %>? Esta ação não apaga histórico."
                   data-confirm-phrase="Eu confirmo">
                   <button
                     class="w-full px-4 py-2.5 text-sm font-bold rounded-xl border <%= c.active ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' %> transition-colors shadow-sm">
-                    <%= c.active ? 'Colocar em pausa' : 'Trazer de volta' %>
+                    <%= c.active ? 'Pausar cartão' : 'Reativar cartão' %>
                   </button>
                 </form>
 
@@ -147,7 +147,7 @@
                   data-confirm-phrase="Eu confirmo">
                   <button
                     class="w-full px-4 py-2.5 text-sm font-bold rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors shadow-sm">
-                    Excluir
+                    Excluir cartão
                   </button>
                 </form>
               </div>
@@ -176,14 +176,14 @@
       const cancelButton = document.getElementById('card-form-cancel');
 
       const createState = {
-        title: 'Colocar cartão novo na carteira',
-        subtitle: 'Preencha uma vez e deixe o app pronto para sugerir a fatura certinha.',
+        title: 'Cadastrar cartão',
+        subtitle: 'Preencha uma vez e mantenha o cálculo mensal alinhado ao fechamento real do cartão.',
         submit: 'Salvar cartão'
       };
 
       const editState = {
-        title: 'Ajustar cartão da carteira',
-        subtitle: 'Mudou o nome, a bandeira ou as datas? Aqui você deixa tudo redondinho de novo.',
+        title: 'Editar cartão',
+        subtitle: 'Atualize nome, bandeira ou datas sempre que o cartão mudar.',
         submit: 'Atualizar cartão'
       };
 

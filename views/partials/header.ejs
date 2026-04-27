@@ -61,10 +61,12 @@
   <script>
     (function () {
       const root = document.documentElement;
-      const styleKey = 'op-theme-style';
-      const storedStyle = localStorage.getItem(styleKey);
-      const validStyles = new Set(['classic', 'confete', 'orgulho']);
-      root.dataset.themeStyle = validStyles.has(storedStyle) ? storedStyle : 'classic';
+      root.dataset.themeStyle = 'classic';
+      try {
+        localStorage.removeItem('op-theme-style');
+      } catch (error) {
+        // ignore storage issues
+      }
 
       const storedTheme = localStorage.getItem('theme');
       const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -73,17 +75,7 @@
 
       const themeColorMeta = document.querySelector('meta[name="theme-color"]');
       if (themeColorMeta) {
-        let themeColor;
-        if (root.dataset.opUi === 'v4') {
-          themeColor = nextTheme === 'dark' ? '#08111e' : '#f4f7fb';
-        } else if (root.dataset.themeStyle === 'confete') {
-          themeColor = nextTheme === 'dark' ? '#1f1633' : '#fff3f7';
-        } else if (root.dataset.themeStyle === 'orgulho') {
-          themeColor = nextTheme === 'dark' ? '#34173a' : '#f75f70';
-        } else {
-          themeColor = nextTheme === 'dark' ? '#020617' : '#eaf2ff';
-        }
-        themeColorMeta.setAttribute('content', themeColor);
+        themeColorMeta.setAttribute('content', nextTheme === 'dark' ? '#0B1220' : '#F6F8FB');
       }
     })();
 
@@ -187,6 +179,21 @@
      const recentNotificationItems = safeRecentNotifications;
      const userPhotoUrl = (safeUserAvatar && safeUserAvatar.photo_url) ? String(safeUserAvatar.photo_url) : '';
      const hasUserPhoto = !!userPhotoUrl;
+     const currentPathName = typeof currentPath === 'string' ? currentPath : '';
+     function resolveTopbarSectionLabel(pathname) {
+       if (/^\/analytics(?:\/|$)/.test(pathname)) return 'Análises';
+       if (/^\/(?:summary|month|geral)(?:\/|$)/.test(pathname)) return 'Resumo do mês';
+       if (/^\/people(?:\/|$)/.test(pathname)) return 'Minha rede';
+       if (/^\/shared-debts(?:\/|$)/.test(pathname)) return 'Acertos';
+       if (/^\/cards(?:\/|$)/.test(pathname)) return 'Cartões';
+       if (/^\/import(?:\/|$)/.test(pathname)) return 'Importação';
+       if (/^\/settings(?:\/|$)/.test(pathname)) return 'Configurações';
+       if (/^\/(?:share|whatsapp)(?:\/|$)/.test(pathname)) return 'Compartilhamento';
+       if (/^\/admin(?:\/|$)/.test(pathname)) return 'Admin';
+       if (/^\/(?:detalhamento|txn)(?:\/|$)/.test(pathname) || pathname === '/') return 'Painel do mês';
+       return 'Painel financeiro';
+     }
+     const currentSectionLabel = resolveTopbarSectionLabel(currentPathName);
   %>
 
   <header class="sticky top-0 z-50 px-3 pt-[max(env(safe-area-inset-top,0px),0.25rem)] md:px-4 lg:px-6" data-op-topbar>
@@ -197,14 +204,14 @@
           <span class="op-brand-copy min-w-0">
             <span class="op-brand-kicker block text-[11px] font-extrabold uppercase tracking-[0.18em] text-sky-200/80">AcerttaPay</span>
             <span class="op-brand-title mt-1 block truncate text-lg font-black tracking-tight text-white"><%= ownerShortName %></span>
-            <span class="op-brand-subtitle mt-0.5 block truncate text-sm font-medium text-slate-300">Seu QG financeiro</span>
+            <span class="op-brand-subtitle mt-0.5 block truncate text-sm font-medium text-slate-300"><%= currentSectionLabel %></span>
           </span>
         </a>
 
         <nav class="op-desktop-nav flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-1">
           <a href="<%= defaultDashboardHref %>" data-nav-key="painel" class="op-nav-link">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h4a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h4a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2"></path></svg>
-            Meu Radar
+            Painel
           </a>
           <a href="/geral" data-nav-key="geral" class="op-nav-link">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
@@ -245,9 +252,6 @@
               <% } %>
             </span>
           </button>
-          <button type="button" class="op-utility-btn op-utility-btn--style" data-theme-style-open title="Trocar visual" aria-label="Trocar visual do app">
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12.5 3C7.806 3 4 6.358 4 10.5c0 2.037.923 3.885 2.431 5.246.563.507.867 1.25.867 2.008V19a2 2 0 002 2h1.327a1 1 0 00.916-.599l.863-1.94a1 1 0 01.914-.6H15a5 5 0 100-10c-.551 0-1-.449-1-1V3.126c-.49-.083-.992-.126-1.5-.126z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.5 5.5l2 2M15 7l3-3"></path></svg>
-          </button>
           <button onclick="toggleDarkMode()" class="op-utility-btn" title="Alternar claro e escuro" aria-label="Alternar claro e escuro">
             <svg class="h-5 w-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
             <svg class="h-5 w-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
@@ -266,8 +270,8 @@
             <% if (hasUserPhoto) { %><img src="<%= userPhotoUrl %>" alt="<%= ownerShortName %>" loading="lazy" referrerpolicy="no-referrer" class="h-12 w-12 rounded-full object-cover shadow-[0_10px_24px_rgba(37,99,235,0.3)] ring-2 ring-white/25"><% } else { %><img src="/icon-192.png" alt="AcerttaPay" class="h-12 w-12 rounded-[1.1rem] object-cover shadow-[0_10px_24px_rgba(37,99,235,0.3)]"><% } %>
             <span class="op-brand-copy min-w-0">
               <span class="op-brand-title block truncate text-sm font-black text-white"><%= ownerShortName %></span>
-              <span class="op-brand-subtitle block truncate text-xs font-medium text-slate-300 sm:hidden">Seu QG</span>
-              <span class="op-brand-subtitle hidden truncate text-xs font-medium text-slate-300 sm:block">Seu QG financeiro</span>
+              <span class="op-brand-subtitle block truncate text-xs font-medium text-slate-300 sm:hidden"><%= currentSectionLabel %></span>
+              <span class="op-brand-subtitle hidden truncate text-xs font-medium text-slate-300 sm:block"><%= currentSectionLabel %></span>
             </span>
           </a>
           <button type="button" class="op-utility-btn op-utility-btn--notify shrink-0" data-push-center-open data-push-center-open-variant="icon" data-push-visual-state="loading" aria-haspopup="dialog" aria-controls="notification-center" aria-expanded="false" title="Abrir seus alertas" aria-label="Abrir seus alertas">
@@ -278,7 +282,7 @@
               <% } %>
             </span>
           </button>
-          <button type="button" class="op-utility-btn shrink-0" data-mobile-appearance-open title="Ajustes visuais" aria-label="Abrir ajustes visuais">
+          <button type="button" class="op-utility-btn shrink-0" data-mobile-appearance-open title="Abrir aparência" aria-label="Abrir menu de aparência">
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.983 5.5c.345-1.414 2.362-1.414 2.707 0a1.392 1.392 0 001.98.937c1.277-.711 2.705.717 1.994 1.994a1.392 1.392 0 00.937 1.98c1.414.345 1.414 2.362 0 2.707a1.392 1.392 0 00-.937 1.98c.711 1.277-.717 2.705-1.994 1.994a1.392 1.392 0 00-1.98.937c-.345 1.414-2.362 1.414-2.707 0a1.392 1.392 0 00-1.98-.937c-1.277.711-2.705-.717-1.994-1.994a1.392 1.392 0 00-.937-1.98c-1.414-.345-1.414-2.362 0-2.707a1.392 1.392 0 00.937-1.98c-.711-1.277.717-2.705 1.994-1.994.861.479 1.92-.01 1.98-.937z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
           </button>
           <% if (safeUser) { %>
@@ -297,20 +301,10 @@
     <div class="op-mobile-appearance-menu__wrap pointer-events-none absolute inset-x-0 top-0 flex justify-end px-3 pt-[calc(env(safe-area-inset-top,0px)+5.2rem)]">
       <div class="op-mobile-appearance-menu__panel pointer-events-auto w-[min(18rem,calc(100vw-1.5rem))] rounded-[26px] border border-slate-200 bg-white/96 p-3 shadow-2xl ring-1 ring-slate-200 backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/96 dark:ring-slate-700">
         <div class="mb-2 px-1">
-          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Ajustes visuais</div>
-          <p class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">Aqui você troca a roupa do app sem mexer na vida financeira.</p>
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Aparência</div>
+          <p class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">Escolha entre claro e escuro. O restante do app segue o mesmo padrão visual.</p>
         </div>
         <div class="space-y-2">
-          <button type="button" class="op-mobile-appearance-menu__button" data-theme-style-open data-mobile-appearance-action>
-            <span class="op-mobile-appearance-menu__icon" aria-hidden="true">
-              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12.5 3C7.806 3 4 6.358 4 10.5c0 2.037.923 3.885 2.431 5.246.563.507.867 1.25.867 2.008V19a2 2 0 002 2h1.327a1 1 0 00.916-.599l.863-1.94a1 1 0 01.914-.6H15a5 5 0 100-10c-.551 0-1-.449-1-1V3.126c-.49-.083-.992-.126-1.5-.126z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.5 5.5l2 2M15 7l3-3"></path></svg>
-            </span>
-            <span class="min-w-0 flex-1 text-left">
-              <span class="block text-sm font-black text-slate-900 dark:text-white">Trocar visual</span>
-              <span class="mt-0.5 block text-xs font-semibold text-slate-500 dark:text-slate-400" data-mobile-theme-style-caption>Clássico, Confete ou Orgulho</span>
-            </span>
-            <svg class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-          </button>
           <button type="button" class="op-mobile-appearance-menu__button" onclick="toggleDarkMode()" data-mobile-appearance-action data-mobile-appearance-mode-button>
             <span class="op-mobile-appearance-menu__icon" aria-hidden="true">
               <svg class="h-5 w-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
@@ -318,7 +312,7 @@
             </span>
             <span class="min-w-0 flex-1 text-left">
               <span class="block text-sm font-black text-slate-900 dark:text-white" data-mobile-appearance-mode-label>Modo escuro</span>
-              <span class="mt-0.5 block text-xs font-semibold text-slate-500 dark:text-slate-400" data-mobile-appearance-mode-helper>Deixa a tela mais confortável quando a luz abaixa.</span>
+              <span class="mt-0.5 block text-xs font-semibold text-slate-500 dark:text-slate-400" data-mobile-appearance-mode-helper>Mostra a interface com fundo escuro e contraste mais confortável.</span>
             </span>
           </button>
         </div>
@@ -333,8 +327,8 @@
         <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 dark:border-slate-800 sm:px-6">
           <div>
             <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Central de alertas</div>
-            <h2 id="notification-center-title" class="mt-1 text-xl font-black text-slate-900 dark:text-white">Seu sininho agora cuida do app todo</h2>
-            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Avisos de vencimento, respostas e confirmações passam por aqui neste aparelho.</p>
+            <h2 id="notification-center-title" class="mt-1 text-xl font-black text-slate-900 dark:text-white">Seus alertas em um só lugar</h2>
+            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Avisos de vencimento, respostas e confirmações aparecem aqui neste aparelho.</p>
           </div>
           <button type="button" class="op-icon-btn shrink-0" data-notification-center-close aria-label="Fechar central de alertas">✕</button>
         </div>
@@ -401,76 +395,11 @@
                 <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-200/80 text-slate-500 dark:bg-slate-700 dark:text-slate-300">
                   <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.389 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"></path></svg>
                 </div>
-                <div class="mt-3 text-sm font-black text-slate-900 dark:text-white">Tudo tranquilo por aqui ✨</div>
-                <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Quando pintar algo importante, esse cantinho te chama.</p>
+                <div class="mt-3 text-sm font-black text-slate-900 dark:text-white">Nenhum alerta novo</div>
+                <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Quando surgir algo importante, ele aparece aqui.</p>
               </div>
             <% } %>
           </section>
-        </div>
-      </section>
-    </div>
-  </div>
-
-  <div id="theme-style-center" data-theme-style-center class="fixed inset-0 z-[10042] hidden" aria-hidden="true">
-    <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-theme-style-backdrop></div>
-    <div class="relative z-10 flex min-h-full items-end justify-center overflow-y-auto px-3 py-3 sm:items-center sm:px-4 sm:py-6">
-      <section class="op-style-center-panel w-full max-w-5xl overflow-x-hidden overflow-y-auto overscroll-contain rounded-[30px] border border-slate-200 bg-white/95 shadow-2xl ring-1 ring-slate-200 backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95 dark:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="theme-style-title">
-        <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 dark:border-slate-800 sm:px-6">
-          <div>
-            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-fuchsia-600 dark:text-fuchsia-300">Trocar visual</div>
-            <h2 id="theme-style-title" class="mt-1 text-xl font-black text-slate-900 dark:text-white">Clássico, Confete ou Orgulho?</h2>
-            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">A função continua igualzinha. O que muda aqui é só a roupa do app — agora com mais um jeitinho de brilhar.</p>
-          </div>
-          <button type="button" class="op-icon-btn shrink-0" data-theme-style-close aria-label="Fechar seleção de visual">✕</button>
-        </div>
-        <div class="space-y-5 px-5 py-5 sm:px-6">
-          <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <button type="button" class="op-style-card" data-theme-style-choice="classic">
-              <span class="op-style-card__preview op-style-card__preview--classic" aria-hidden="true">
-                <span class="op-style-card__preview-topbar"></span>
-                <span class="op-style-card__preview-body"></span>
-                <span class="op-style-card__preview-pill"></span>
-              </span>
-              <span class="op-style-card__content">
-                <span class="op-style-card__kicker">Clássico</span>
-                <span class="op-style-card__title">Elegante, tech e focado</span>
-                <span class="op-style-card__text">Para quem curte um visual mais sóbrio, com cara de cockpit financeiro arrumadinho.</span>
-              </span>
-              <span class="op-style-card__check" data-theme-style-check>Ativo</span>
-            </button>
-
-            <button type="button" class="op-style-card" data-theme-style-choice="confete">
-              <span class="op-style-card__preview op-style-card__preview--confete" aria-hidden="true">
-                <span class="op-style-card__preview-topbar"></span>
-                <span class="op-style-card__preview-body"></span>
-                <span class="op-style-card__preview-pill"></span>
-              </span>
-              <span class="op-style-card__content">
-                <span class="op-style-card__kicker">Confete</span>
-                <span class="op-style-card__title">Divertido, moderno e quentinho</span>
-                <span class="op-style-card__text">Mais cor, mais personalidade e um clima leve sem perder o conforto visual do dia a dia.</span>
-              </span>
-              <span class="op-style-card__check" data-theme-style-check>Ativo</span>
-            </button>
-
-            <button type="button" class="op-style-card" data-theme-style-choice="orgulho">
-              <span class="op-style-card__preview op-style-card__preview--orgulho" aria-hidden="true">
-                <span class="op-style-card__preview-topbar"></span>
-                <span class="op-style-card__preview-body"></span>
-                <span class="op-style-card__preview-pill"></span>
-              </span>
-              <span class="op-style-card__content">
-                <span class="op-style-card__kicker">Orgulho</span>
-                <span class="op-style-card__title">Vibrante, acolhedor e cheio de presença</span>
-                <span class="op-style-card__text">Mais cor, mais brilho e uma energia de celebração que continua confortável de usar do começo ao fim.</span>
-              </span>
-              <span class="op-style-card__check" data-theme-style-check>Ativo</span>
-            </button>
-          </div>
-
-          <div class="rounded-[26px] border border-slate-200 bg-slate-50/80 px-4 py-4 text-sm font-medium leading-6 text-slate-600 dark:border-slate-800 dark:bg-slate-800/70 dark:text-slate-300">
-            <strong class="font-black text-slate-900 dark:text-white">Dica amiga:</strong> você pode misturar o visual com claro ou escuro do jeito que ficar mais gostoso de usar. O app deixa você brincar sem bagunçar nada.
-          </div>
         </div>
       </section>
     </div>

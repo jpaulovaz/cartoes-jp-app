@@ -1,9 +1,9 @@
-<div class="op-surface-card op-admin-sidebar-card rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/95 space-y-5 xl:flex xl:max-h-[calc(100vh-9rem)] xl:flex-col xl:overflow-hidden">
+<div class="op-surface-card op-admin-sidebar-card op-admin-v5-sidebar rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/95 space-y-5 xl:flex xl:max-h-[calc(100vh-9rem)] xl:flex-col xl:overflow-hidden">
   <div>
-    <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Navegação</div>
-    <h2 class="mt-2 text-lg font-semibold tracking-tight text-slate-900 dark:text-white">Mapa da administração</h2>
+    <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Painel administrativo</div>
+    <h2 class="mt-2 text-lg font-semibold tracking-tight text-slate-900 dark:text-white">Navegação do painel</h2>
     <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-      Use a busca para localizar seções, campos e ações sem percorrer toda a página.
+      Use a busca para localizar seções, campos e ações sem percorrer o painel inteiro.
     </p>
   </div>
 
@@ -19,6 +19,11 @@
              class="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 py-3 pl-10 pr-4 text-sm text-slate-800 dark:text-slate-100 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-300 dark:focus:border-slate-500 dark:focus:ring-slate-700">
     </div>
   </label>
+
+  <div class="op-admin-v5-note">
+    <div class="op-admin-v5-note__title">Leitura operacional</div>
+    <p class="mt-2">Campos com badge amarelo exigem reinício do servidor. O restante entra em vigor logo após salvar.</p>
+  </div>
 
   <div class="space-y-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1">
     <% navGroups.forEach((group) => { %>
@@ -55,13 +60,13 @@
 
   <details class="rounded-xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-900/40">
     <summary class="cursor-pointer list-none font-semibold text-slate-800 dark:text-slate-100 flex items-center justify-between gap-3">
-      Como usar o painel
+      Como navegar
       <span class="text-xs font-bold text-slate-400 dark:text-slate-500">abrir</span>
     </summary>
     <div class="mt-3 space-y-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
       <p>• Use a navegação lateral para alternar entre operação diária e configurações técnicas.</p>
       <p>• Ações operacionais ficam separadas dos formulários para reduzir ruído visual.</p>
-      <p>• O guia completo continua disponível como apoio, mas a página foi organizada para leitura direta.</p>
+      <p>• O guia completo continua disponível como apoio, mas a leitura principal já está concentrada nesta tela.</p>
       <a href="<%= adminGuideUrl %>" class="inline-flex items-center rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-white dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
         Abrir guia completo
       </a>

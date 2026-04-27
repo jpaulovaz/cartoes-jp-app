@@ -13,9 +13,9 @@
     <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div class="max-w-3xl">
         <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Acessos</span>
-        <h2 class="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Usuários e permissões</h2>
+        <h2 class="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Gestão de acessos</h2>
         <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-          Tabela centralizada para revisar permissões, status do convite e atividade recente sem fragmentar a leitura em vários cards.
+          Tabela única para revisar permissões, status do convite e atividade recente sem fragmentar a leitura em vários blocos.
         </p>
       </div>
 
@@ -104,7 +104,7 @@
     </div>
 
     <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between text-sm text-slate-600 dark:text-slate-300">
-      <p>Layout de tabela para leitura rápida de grandes volumes, com filtros, ordenação e paginação local.</p>
+      <p>Tabela operacional para volumes maiores, com filtros, ordenação e paginação local.</p>
       <span data-access-results class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300"><%= usersList.length %> resultado(s)</span>
     </div>
   </div>
@@ -203,7 +203,7 @@
                     </form>
 
                     <% if (!isSelf) { %>
-                      <form action="/admin/remove-user/<%= u.id %>" method="POST" onsubmit="return confirm('Excluir esse acesso da área ativa? O histórico continua salvo, mas a exclusão trava se ainda houver cobrança aberta, Pix do mês em andamento ou rascunho na caixa de saída.')">
+                      <form action="/admin/remove-user/<%= u.id %>" method="POST" data-confirm-prompt="Excluir esse acesso da área ativa? O histórico continua salvo, mas a exclusão trava se ainda houver cobrança aberta, Pix do mês em andamento ou rascunho na caixa de saída.">
                         <button type="submit" class="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/40">
                           Remover
                         </button>

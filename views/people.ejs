@@ -54,36 +54,36 @@
   const notificationPreferenceTotalCount = Number(notificationPreferenceState.totalCount || 0) || notificationPreferenceGroups.length;
   const notificationPreferenceCopy = {
     friendship_activity: {
-      title: 'Minha rede',
-      description: 'Pedidos, aceites e mudanças por aqui.'
+      title: 'Minha Rede',
+      description: 'Pedidos, aceites e mudanças na sua rede.'
     },
     shared_debt_new: {
       title: 'Novos acertos',
-      description: 'Quando chega acerto, leva ou lembrete novo.'
+      description: 'Quando entra um novo acerto ou lembrete.'
     },
     shared_debt_updates: {
       title: 'Respostas dos acertos',
-      description: 'Atualizações, aceites, recusas e revisões.'
+      description: 'Aceites, recusas, revisões e novas respostas.'
     },
     shared_debt_payments: {
       title: 'Pagamentos',
-      description: 'Quando alguém avisa que pagou ou confirma o recebimento.'
+      description: 'Quando alguém avisa pagamento ou confirma recebimento.'
     },
     finance_date_alerts: {
       title: 'Datas do mês',
-      description: 'Quando chega o dia marcado da grana que entra ou sai.'
+      description: 'Lembretes das datas marcadas de entradas e saídas.'
     },
     due_date_alerts: {
       title: 'Datas combinadas',
-      description: 'Lembretes automáticos quando um acerto avulso ou lembrete privado bate na data.'
+      description: 'Lembretes de acertos avulsos e lembretes privados.'
     },
     monthly_pix_updates: {
       title: 'Pix do mês',
-      description: 'Pix informado, confirmado ou revisado.'
+      description: 'Atualizações do Pix informado ou confirmado no mês.'
     },
     card_due_today: {
       title: 'Fatura vencendo',
-      description: 'Lembrete no dia do vencimento do cartão.'
+      description: 'Aviso no dia do vencimento do cartão.'
     }
   };
   const signatureVibeOptions = Array.isArray(profileSignatureVibeOptions) ? profileSignatureVibeOptions : [];
@@ -159,7 +159,7 @@
       return {
         key: 'friend',
         label: 'Minha Rede',
-        summary: 'Já podem dividir e cobrar.',
+        summary: 'Relacionamento ativo para dividir e cobrar.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
         barClasses: 'from-emerald-400 via-cyan-400 to-sky-500'
       };
@@ -169,7 +169,7 @@
       return {
         key: 'pending',
         label: 'Te chamou',
-        summary: 'Falta você aceitar.',
+        summary: 'Aguardando sua resposta.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
         barClasses: 'from-emerald-400 via-amber-300 to-orange-400'
       };
@@ -179,7 +179,7 @@
       return {
         key: 'pending',
         label: 'Convite enviado',
-        summary: 'Agora é esperar a resposta.',
+        summary: 'Convite enviado. Falta retorno.',
         badgeClasses: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200',
         barClasses: 'from-amber-300 via-orange-400 to-rose-400'
       };
@@ -189,7 +189,7 @@
       return {
         key: 'discover',
         label: 'No app',
-        summary: 'Dá para mandar convite.',
+        summary: 'Contato disponível para convite.',
         badgeClasses: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200',
         barClasses: 'from-sky-400 via-cyan-400 to-violet-400'
       };
@@ -198,7 +198,7 @@
     return {
       key: 'local',
       label: 'Na sua lista',
-      summary: 'Só aparece na sua lista.',
+      summary: 'Contato salvo apenas na sua lista.',
       badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300',
       barClasses: 'from-slate-300 via-slate-200 to-slate-400 dark:from-slate-600 dark:via-slate-500 dark:to-slate-700'
     };
@@ -208,7 +208,7 @@
     if (person && person.friendship_active && person.linked_user_pix_ready) {
       return {
         label: 'Pix ok',
-        summary: 'Quando rolar pagamento, vai no Pix do perfil.',
+        summary: 'Quando houver pagamento, o app usa o Pix do perfil.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200'
       };
     }
@@ -216,7 +216,7 @@
     if (person && person.friendship_active && person.linked_user_pix_enabled) {
       return {
         label: 'Pix pendente',
-        summary: 'O Pix foi ligado, mas ainda não ficou pronto.',
+        summary: 'O Pix foi informado e ainda está em validação.',
         badgeClasses: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
       };
     }
@@ -224,7 +224,7 @@
     if (person && person.friendship_active && person.has_app_user) {
       return {
         label: 'Pix pendente',
-        summary: 'A amizade vale; o Pix ainda falta.',
+        summary: 'A amizade está ativa. O Pix ainda não foi configurado.',
         badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300'
       };
     }
@@ -232,14 +232,14 @@
     if (person && person.has_app_user) {
       return {
         label: 'Depois da amizade',
-        summary: 'Depois da amizade, o Pix vem do perfil.',
+        summary: 'Depois da amizade, o Pix passa a vir do perfil.',
         badgeClasses: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200'
       };
     }
 
     return {
       label: 'Sem Pix por aqui',
-      summary: 'Se ela entrar no app, cadastra o Pix do lado de lá.',
+      summary: 'Quando esse contato entrar no app, o Pix poderá ser configurado no perfil.',
       badgeClasses: 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300'
     };
   };
@@ -259,26 +259,26 @@
 
 <%
   const peopleNavItems = [
-    { href: '#my-profile', icon: '👑', label: 'Seu perfil' },
-    ...(pendingRequests.length ? [{ href: '#friend-requests', icon: '💌', label: 'Convites recebidos', classes: 'inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-100/80 dark:border-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:bg-emerald-900/35' }] : []),
-    { href: '/settings', icon: '🔔', label: 'Seus ajustes', classes: 'inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-amber-100/80 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35' },
-    { type: 'button', onclick: 'openContactComposeModal(this)', icon: '➕', label: 'Adicionar alguém', classes: 'op-chip-nav__item op-chip-nav__item--add-person inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-bold text-sky-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-100/80 dark:border-sky-400/40 dark:bg-sky-950/80 dark:text-sky-100 dark:hover:bg-sky-900/95' },
-    { href: '#network-list', icon: '🫶', label: 'Explorar sua rede', classes: 'inline-flex items-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-bold text-violet-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-violet-100/80 dark:border-violet-900 dark:bg-violet-900/20 dark:text-violet-200 dark:hover:bg-violet-900/35' }
+    { href: '#my-profile', label: 'Perfil' },
+    ...(pendingRequests.length ? [{ href: '#friend-requests', label: 'Convites recebidos' }] : []),
+    { href: '/settings', label: 'Configurações' },
+    { type: 'button', onclick: 'openContactComposeModal(this)', label: 'Adicionar contato' },
+    { href: '#network-list', label: 'Lista da rede' }
   ];
 %>
 
 <%
   const peopleHeroMetaHtml = [
-    `<span class="badge">${activeFriendCount} na sua rede</span>`,
+    `<span class="badge">${activeFriendCount} na rede</span>`,
     `<span class="badge">${pendingContactCount} convite(s)</span>`,
     `<span class="badge">${readyPixNetworkCount} com Pix pronto</span>`
   ].join('');%>
 
 <div class="op-page-shell op-network-screen-v4 mx-auto max-w-7xl">
   <%- include('partials/page-hero', {
-    eyebrow: 'Seu perfil social + sua rede',
+    eyebrow: 'Rede financeira',
     title: 'Minha Rede',
-    subtitle: 'Seu perfil, seus convites e toda a rede que já conversa com você dentro do app.',
+    subtitle: 'Perfil, convites e contatos reunidos com foco em relacionamento e operação.',
     metaHtml: peopleHeroMetaHtml,
     heroClass: 'op-network-hero-v4'
   }) %>
@@ -367,7 +367,7 @@
       keyInput.placeholder = 'Ex.: 21999999999';
       keyInput.inputMode = 'numeric';
       keyInput.maxLength = 15;
-      help.textContent = 'Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.';
+      help.textContent = 'Informe DDD + número, com ou sem máscara. O código do país é tratado automaticamente.';
       return;
     }
 
@@ -375,7 +375,7 @@
       keyInput.placeholder = 'Ex.: 12345678900';
       keyInput.inputMode = 'numeric';
       keyInput.maxLength = 14;
-      help.textContent = 'Pode colar com pontuação ou só os números. A gente limpa por trás.';
+      help.textContent = 'Pode colar com ou sem pontuação. A limpeza acontece automaticamente.';
       return;
     }
 
@@ -383,24 +383,24 @@
       keyInput.placeholder = 'Ex.: 12345678000190';
       keyInput.inputMode = 'numeric';
       keyInput.maxLength = 18;
-      help.textContent = 'Pode colar com pontuação ou só os números. A gente limpa por trás.';
+      help.textContent = 'Pode colar com ou sem pontuação. A limpeza acontece automaticamente.';
       return;
     }
 
     if (type === 'email') {
       keyInput.placeholder = 'Ex.: joao@email.com';
-      help.textContent = 'Aqui vale o e-mail completinho, do jeitinho que está cadastrado no banco.';
+      help.textContent = 'Informe o e-mail completo cadastrado no banco.';
       return;
     }
 
     if (type === 'evp') {
       keyInput.placeholder = 'Ex.: 123e4567-e89b-12d3-a456-426614174000';
-      help.textContent = 'Se for chave aleatória, cole ela inteira e pronto.';
+      help.textContent = 'Cole a chave aleatória completa.';
       return;
     }
 
     keyInput.placeholder = 'Ex.: 21999999999';
-    help.textContent = 'Se for celular, pode mandar só DDD + número, com ou sem máscara. O +55 entra por nossa conta.';
+    help.textContent = 'Informe DDD + número, com ou sem máscara. O código do país é tratado automaticamente.';
   }
 
   function updatePixCityUi(prefix, forceCity = false) {
@@ -624,8 +624,8 @@ function editContactFromButton(button) {
   }
 
   if (cancel) cancel.classList.remove('hidden');
-  if (eyebrow) eyebrow.textContent = 'Editando contato';
-  if (title) title.textContent = `Ajustando ${button.dataset.name || 'esse contato'}`;
+  if (eyebrow) eyebrow.textContent = 'Editar contato';
+  if (title) title.textContent = `Editar ${button.dataset.name || 'contato'}`;
   if (hint) hint.textContent = 'Mude só o que precisar e salve. O resto continua como está.';
   if (badge) badge.classList.remove('hidden');
 
@@ -664,8 +664,8 @@ function resetContactForm() {
   }
 
   if (cancel) cancel.classList.add('hidden');
-  if (eyebrow) eyebrow.textContent = 'Chamar pra rede 🙋';
-  if (title) title.textContent = 'Quem vai entrar nessa roda?';
+  if (eyebrow) eyebrow.textContent = 'Novo contato';
+  if (title) title.textContent = 'Adicionar ou editar contato';
   if (hint) hint.textContent = 'Salve nome, telefone e e-mail. Se essa pessoa também usa o app, você pode mandar o convite depois. O Pix fica por conta dela.';
   if (badge) badge.classList.add('hidden');
 }
@@ -831,7 +831,7 @@ function bindProfileSignatureForm() {
       previewVibe.classList.add('hidden');
     }
 
-    previewText.textContent = textInput.value || 'Quando você escrever um recado aqui, ele aparece para seus amigos na sua rede.';
+    previewText.textContent = textInput.value || 'Quando você salvar uma assinatura, ela aparece para quem já está na sua rede.';
   };
 
   vibeButtons.forEach((button) => {
@@ -1048,7 +1048,7 @@ function bindPixForm(prefix, options = {}) {
       if (!selected) return;
       submit.disabled = true;
       submit.textContent = 'Preparando foto...';
-      hint.textContent = 'Abrindo o ajuste da sua fotinha...';
+      hint.textContent = 'Abrindo o ajuste da sua foto...';
       try {
         await openModalForFile(selected);
         submit.textContent = 'Salvar foto';
@@ -1325,7 +1325,7 @@ function bindPixForm(prefix, options = {}) {
       currentInput.required = changing;
       manageTitle.textContent = changing ? 'Trocar PIN' : 'Criar PIN';
       manageHint.textContent = changing
-        ? 'Confirme o PIN atual e depois escolha o novo jeitinho de destravar o app.'
+        ? 'Confirme o PIN atual e depois escolha o novo PIN do app.'
         : 'Escolha um PIN numérico para proteger a abertura do app.';
       manageSubmit.textContent = changing ? 'Atualizar PIN' : 'Salvar PIN';
       setPinModalVisibility(manageModal, true);

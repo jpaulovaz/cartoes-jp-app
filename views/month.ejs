@@ -44,15 +44,15 @@
   }
 %>
 
-  <div class="op-screen op-screen--month op-month-screen-v4 w-full max-w-[104rem] mx-auto space-y-5 pb-24">
-    <section class="op-page-hero op-month-hero-v4 op-fade-up">
+  <div class="op-screen op-screen--month op-month-screen-v4 op-month-screen-v5 w-full max-w-[104rem] mx-auto space-y-5 pb-24">
+    <section class="op-page-hero op-month-hero-v4 op-month-hero-v5 op-fade-up">
       <div>
-        <span class="op-page-hero__eyebrow">Gestão do mês</span>
+        <span class="op-page-hero__eyebrow">Operação do mês</span>
         <h1 class="op-page-hero__title mt-4">Compras do mês — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
-        <p class="op-page-hero__subtitle mt-3">Revise as compras do mês, divida valores e deixe tudo redondinho sem sofrer no caminho.</p>
+        <p class="op-page-hero__subtitle mt-3">Filtre, revise e ajuste os lançamentos do período.</p>
         <div class="op-page-hero__meta mt-4">
-          <span class="badge"><%= isClosed ? 'Mês fechado' : 'Mês em edição' %></span>
-          <span class="badge"><%= txns ? txns.length : 0 %> item(ns)</span>
+          <span class="badge"><%= isClosed ? 'Período fechado' : 'Período aberto' %></span>
+          <span class="badge"><%= txns ? txns.length : 0 %> lançamento(s)</span>
         </div>
         <div id="allocMsg" class="mt-3 h-5 text-sm font-bold text-emerald-600 transition-all duration-300"></div>
       </div>
@@ -107,10 +107,10 @@
 
     <% if (isClosed) { %>
       <div class="op-inline-alert op-inline-alert--warning op-month-alert">
-        <div class="op-inline-alert__icon">🔒</div>
+        <div class="op-inline-alert__icon" aria-hidden="true"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V8a4 4 0 10-8 0v3m-2 0h12a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6a2 2 0 012-2z"/></svg></div>
         <div>
-          <div class="op-inline-alert__title">Mês fechado por aqui</div>
-          <div class="op-inline-alert__text">Distribuições, exclusões e novas compras em <%= String(month).padStart(2,'0') %>/<%= year %> estão bloqueadas.</div>
+          <div class="op-inline-alert__title">Período fechado</div>
+          <div class="op-inline-alert__text">Novos lançamentos e alterações ficam bloqueados em <%= String(month).padStart(2,'0') %>/<%= year %>.</div>
         </div>
       </div>
     <% } %>
@@ -118,10 +118,10 @@
     <% const monthDraftQueueSummary = draftQueueSummaryForMonth || { queueCount: 0, itemCount: 0, totalCents: 0 }; %>
     <% if (monthDraftQueueSummary.queueCount > 0) { %>
       <div class="op-inline-alert op-inline-alert--info op-month-alert">
-        <div class="op-inline-alert__icon">📤</div>
+        <div class="op-inline-alert__icon" aria-hidden="true"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 12l-4-4m4 4l4-4M4 20h16"/></svg></div>
         <div>
-          <div class="op-inline-alert__title">Caixa de saída aquecendo para <%= String(month).padStart(2,'0') %>/<%= year %></div>
-          <div class="op-inline-alert__text">Você tem <strong><%= monthDraftQueueSummary.itemCount %> cobrança(s)</strong> guardada(s) em <strong><%= monthDraftQueueSummary.queueCount %> rascunho(s)</strong>, somando <strong><%= formatBRLFromCents(monthDraftQueueSummary.totalCents) %></strong>. Quando quiser, é só disparar tudo lá em <a href="/shared-debts#draft-queues" class="underline underline-offset-2">Acertos</a>.</div>
+          <div class="op-inline-alert__title">Rascunhos de cobrança pendentes</div>
+          <div class="op-inline-alert__text">Há <strong><%= monthDraftQueueSummary.itemCount %> cobrança(s)</strong> em <strong><%= monthDraftQueueSummary.queueCount %> rascunho(s)</strong>, somando <strong><%= formatBRLFromCents(monthDraftQueueSummary.totalCents) %></strong>. Quando quiser, finalize em <a href="/shared-debts#draft-queues" class="underline underline-offset-2">Acertos</a>.</div>
         </div>
       </div>
     <% } %>
@@ -130,8 +130,8 @@
       <details class="group op-month-recurring-toggle">
         <summary class="flex cursor-pointer list-none items-start justify-between gap-3">
           <div>
-            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Compras que se repetem</h2>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Aqui ficam as compras que voltam todo mês e merecem um olho de vez em quando.</p>
+            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Lançamentos recorrentes</h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Itens que continuam aparecendo em novas competências.</p>
           </div>
           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600 transition group-open:rotate-180 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">⌄</span>
         </summary>
@@ -165,7 +165,7 @@
               <div class="mt-4 flex flex-wrap gap-2">
                 <% if (rule.status === 'active') { %>
                   <form method="post" action="/recurring/<%= rule.id %>/state"
-                    data-confirm-prompt="Pausar a compra recorrente <%= rule.description %>? Se a compra deste mês ainda não rolou, ela sai junto com as próximas. Se já rolou, o mês atual fica guardado."
+                    data-confirm-prompt="Pausar a compra recorrente <%= rule.description %>? Se o lançamento deste mês ainda não aconteceu, ele sai junto com os próximos. Se já aconteceu, o período atual permanece registrado."
                     data-confirm-phrase="Eu confirmo">
                     <input type="hidden" name="action" value="pause">
                     <button class="px-4 py-2 rounded-xl text-sm font-bold border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">Pausar</button>
@@ -179,7 +179,7 @@
 
                 <% if (rule.status !== 'ended') { %>
                   <form method="post" action="/recurring/<%= rule.id %>/state"
-                    data-confirm-prompt="Encerrar a compra recorrente <%= rule.description %>? Se a compra deste mês ainda não rolou, ela sai junto com as próximas. O que já rolou continua no histórico."
+                    data-confirm-prompt="Encerrar a compra recorrente <%= rule.description %>? Se o lançamento deste mês ainda não aconteceu, ele sai junto com os próximos. O que já aconteceu permanece no histórico."
                     data-confirm-phrase="Eu confirmo">
                     <input type="hidden" name="action" value="end">
                     <button class="px-4 py-2 rounded-xl text-sm font-bold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Encerrar</button>
@@ -194,8 +194,8 @@
           <div class="op-empty-state__icon">
             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10m-11 9h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v11a2 2 0 002 2z"></path></svg>
           </div>
-          <div class="op-empty-state__title">Nenhuma compra recorrente por aqui</div>
-          <p class="op-empty-state__text">Crie uma compra manual e marque <strong class="text-slate-700 dark:text-slate-200">Repetir todo mês</strong> para deixar essa rotina no piloto semi-automático.</p>
+          <div class="op-empty-state__title">Nenhum lançamento recorrente</div>
+          <p class="op-empty-state__text">Ao criar uma compra, marque <strong class="text-slate-700 dark:text-slate-200">Repetir mensalmente</strong> para manter esse fluxo automatizado.</p>
         </div>
       <% } %>
         </div>
@@ -249,7 +249,7 @@
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Vai cair em qual fatura?</label>
             <input type="month" name="first_due" value="<%= year %>-<%= String(month).padStart(2, '0') %>" required data-manual-first-due <%= isClosed ? "disabled" : "" %>
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
-            <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">A gente sugere isso pela data da compra e pelo fechamento do cartão. Se precisar, pode ajustar sem cerimônia.</p>
+            <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Sugestão feita pela data da compra e pelo fechamento do cartão. Ajuste se necessário.</p>
           </div>
 
           <div>
@@ -269,7 +269,7 @@
                 <% }) %>
                 <option value="__new__">Criar categoria nova</option>
               </select>
-              <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">É opcional. Se quiser deixar para depois, a compra segue a vida normalmente.</p>
+              <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Opcional. Você pode classificar depois sem perder o lançamento.</p>
             </div>
             <div data-purchase-category-custom-shell hidden>
               <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nome da nova categoria</label>
@@ -282,8 +282,8 @@
           <input type="checkbox" name="assign_to_owner" value="1" <%= typeof isClosed !== 'undefined' && isClosed ? 'disabled' : '' %>
             class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
           <span>
-            <span class="block text-sm font-bold text-slate-800 dark:text-white">Essa ficou comigo</span>
-            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque aqui quando essa compra for só sua. Se tiver parcela ou repetição, a ideia segue junto.</span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Lançamento só meu</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Use quando o lançamento não precisar ser dividido.</span>
           </span>
         </label>
 
@@ -292,7 +292,7 @@
               class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
             <span>
               <span class="block text-sm font-bold text-slate-800 dark:text-white">Repetir todo mês</span>
-              <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Perfeito para academia, streaming, escola, internet e afins. Só funciona com 1 parcela.</span>
+              <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Indicado para despesas fixas. Disponível apenas com 1 parcela.</span>
             </span>
           </label>
 
@@ -315,8 +315,8 @@
     <details class="op-surface-card op-month-categories-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6 group">
       <summary class="flex cursor-pointer list-none items-start justify-between gap-3">
         <div>
-          <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Categorias de compra</h2>
-          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Use esse cantinho para organizar suas categorias sem bagunçar o histórico que já existe.</p>
+          <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Categorias</h2>
+          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Cadastre e archive categorias sem alterar lançamentos antigos.</p>
         </div>
         <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600 transition group-open:rotate-180 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">⌄</span>
       </summary>
@@ -332,14 +332,14 @@
                 </form>
               <% }) %>
             <% } else { %>
-              <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">Ainda não apareceu nenhuma categoria ativa por aqui.</div>
+              <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">Ainda não há categorias ativas neste período.</div>
             <% } %>
           </div>
         </div>
 
         <div>
           <div class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Arquivadas</div>
-          <p class="mt-1 text-xs font-medium text-slate-400 dark:text-slate-500">Arquivar tira a categoria dos seletores, mas não mexe no histórico das compras que já usaram esse nome.</p>
+          <p class="mt-1 text-xs font-medium text-slate-400 dark:text-slate-500">Arquivar remove a categoria dos seletores sem alterar o histórico já classificado.</p>
           <div class="mt-3 flex flex-wrap gap-2">
             <% const archivedPurchaseCategories = sortedPurchaseCategories.filter(category => !category.active); %>
             <% if (archivedPurchaseCategories.length) { %>
@@ -357,7 +357,18 @@
       </div>
     </details>
 
-    <div class="op-surface-card op-month-filter-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6">
+    <div class="op-surface-card op-month-filter-card op-month-filter-card--v5 bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6">
+      <div class="op-month-filter-card__head">
+        <div>
+          <div class="op-month-filter-card__eyebrow">Busca e filtros</div>
+          <h2 class="op-month-filter-card__title">Filtrar lançamentos</h2>
+          <p class="op-month-filter-card__text">Refine a lista por data, descrição, cartão, categoria, pessoa e status.</p>
+        </div>
+        <div class="op-month-filter-card__meta">
+          <span class="badge"><%= txns ? txns.length : 0 %> lançamento(s)</span>
+          <span class="badge"><%= isClosed ? 'Somente leitura' : 'Edição ativa' %></span>
+        </div>
+      </div>
       <form method="get" action="/month/<%= year %>/<%= month %>" class="op-month-filter-grid grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         <input type="hidden" name="sort" value="<%= sort %>" />
         <input type="hidden" name="dir" value="<%= dir %>" />
@@ -448,24 +459,24 @@
       <div class="op-month-ledger-head border-b border-slate-200 dark:border-slate-700 px-5 py-4">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Lista de compras</h2>
+            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Lançamentos do período</h2>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
               <% if (isClosed) { %>
-                Este mês está em modo somente leitura. Abra um item para consultar os detalhes sem alterar a distribuição.
+                Período em leitura. Abra um item para consultar os detalhes sem alterar a distribuição.
               <% } else { %>
-                Toque ou clique em uma compra para abrir as ações. Para selecionar várias, use <strong class="font-bold text-slate-700 dark:text-slate-200">Selecionar</strong> ou segure um item no celular.
+                Toque em um item para abrir ações. Use <strong class="font-bold text-slate-700 dark:text-slate-200">Selecionar</strong> para aplicar ajustes em lote.
               <% } %>
             </p>
           </div>
           <% if (!isClosed) { %>
             <div class="flex flex-col sm:flex-row gap-2">
-              <button type="button" id="monthEnterSelectionBtn"
+              <button type="button" id="monthEnterSelectionBtn" data-op-batch-trigger
                 class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
-                Selecionar
+                Selecionar em lote
               </button>
               <button type="button" id="monthExitSelectionBtn"
                 class="hidden inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
-                Cancelar Seleção
+                Sair da seleção
               </button>
             </div>
           <% } %>
@@ -602,10 +613,10 @@
 
                       <div class="mt-2 text-[11px] font-medium text-slate-400 dark:text-slate-500">
                         <% if (isClosed) { %>
-                          Abra a compra para consultar a divisão dela.
+                          Abra o item para consultar a divisão.
                         <% } else { %>
-                          <span class="op-month-row__hint md:hidden">Toque para ações · Segure para selecionar</span>
-                          <span class="op-month-row__hint hidden md:inline">Clique para ações · Ctrl/Cmd+clique para selecionar</span>
+                          <span class="op-month-row__hint md:hidden">Toque para abrir ações · Segure para selecionar</span>
+                          <span class="op-month-row__hint hidden md:inline">Clique para abrir ações · Ctrl/Cmd+clique para selecionar</span>
                         <% } %>
                       </div>
                     </div>
@@ -622,8 +633,8 @@
         <div class="op-empty-state__icon">
           <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
         </div>
-        <div class="op-empty-state__title">Nenhum resultado</div>
-        <p class="op-empty-state__text">Nenhum item encontrado com os filtros de busca atuais. Ajuste os critérios ou limpe a busca para voltar à lista completa.</p>
+        <div class="op-empty-state__title">Nenhum lançamento encontrado</div>
+        <p class="op-empty-state__text">Nenhum lançamento encontrado com os filtros atuais. Ajuste os critérios ou limpe a busca para voltar à lista completa.</p>
       </div>
       <% } %>
 
@@ -639,8 +650,8 @@
             <span id="monthSelectionCount"
               class="inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-2xl bg-blue-600 px-3 text-sm font-black text-white shadow-lg shadow-blue-500/25">0</span>
             <div>
-              <div class="text-sm font-black text-slate-900 dark:text-slate-100">Modo seleção</div>
-              <div id="monthSelectionSummary" class="text-xs font-medium text-slate-500 dark:text-slate-400">Selecione um ou mais itens para abrir as ações do lote.</div>
+              <div class="text-sm font-black text-slate-900 dark:text-slate-100">Seleção em lote</div>
+              <div id="monthSelectionSummary" class="text-xs font-medium text-slate-500 dark:text-slate-400">Selecione um ou mais lançamentos para liberar as ações em lote.</div>
             </div>
           </div>
         </div>
@@ -1249,7 +1260,20 @@
           : (items.length > 1
               ? `Aplicar ${actionLabel} em ${items.length} compra(s), incluindo próximas parcelas das compras parceladas?`
               : `Aplicar ${actionLabel} incluindo próximas parcelas desta compra parcelada?`);
-        return window.confirm(fallbackText) ? 'future' : 'single';
+
+        if (typeof window.showAppAlert === 'function') {
+          await window.showAppAlert({
+            title: 'Não consegui abrir a confirmação',
+            message: `${fallbackText}
+
+Tente novamente em instantes.`,
+            tone: 'error',
+            buttonLabel: 'Entendi'
+          });
+        } else {
+          showAllocMessage('Não consegui abrir a confirmação agora. Tente novamente em instantes.', 'error');
+        }
+        return null;
       }
 
       async function confirmDeleteScope(items, scope) {
@@ -1268,7 +1292,30 @@
           return await window.confirmTypedAction(message);
         }
 
-        return window.confirm(message);
+        if (window.showActionDialog) {
+          const result = await window.showActionDialog({
+            title: 'Confirmar exclusão',
+            message,
+            tone: 'error',
+            options: [
+              { label: 'Excluir', value: true, tone: 'danger' },
+              { label: 'Cancelar', value: false, tone: 'cancel' }
+            ]
+          });
+          return result === true;
+        }
+
+        if (typeof window.showAppAlert === 'function') {
+          await window.showAppAlert({
+            title: 'Não consegui abrir a confirmação',
+            message: 'Tente novamente em instantes para concluir a exclusão.',
+            tone: 'error',
+            buttonLabel: 'Entendi'
+          });
+        } else {
+          showAllocMessage('Não consegui abrir a confirmação agora. Tente novamente em instantes.', 'error');
+        }
+        return false;
       }
 
       async function postBulkAction(url, payload) {
@@ -1463,7 +1510,7 @@
           ? 'Se você salvar com alcance futuro, a compra atual, as próximas recorrências já criadas e a regra da recorrência andam juntas.'
           : item.has_future_installments
             ? 'Se você salvar com alcance futuro, a parcela atual e as próximas acompanham a mudança.'
-            : 'Mudanças aqui valem só para esta compra. Salvou, atualizou e partiu.';
+            : 'As mudanças valem apenas para este lançamento.';
         refs.stack.appendChild(buildImpactPanel({ tone: 'info', title: typeTitle, body: typeBody }));
 
         const splitMode = inferItemSplitMode(item);
@@ -1515,7 +1562,7 @@
 
         const summary = document.createElement('div');
         summary.className = 'rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-200';
-        summary.innerHTML = `<div class="flex flex-wrap items-center gap-2"><span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Edição segura</span><span class="inline-flex items-center rounded-full bg-slate-900/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:bg-slate-100/10 dark:text-slate-300">${escapeHtml(item.recurring_rule_id ? 'Recorrente' : (item.has_future_installments ? 'Parcelada' : 'Única'))}</span></div><div class="mt-2 text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(formatMoney(item.amount_cents))} · ${escapeHtml(formatMonthLabel(item.month, item.year))}</div><p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Ajuste os dados da compra e, se houver parcelas ou recorrência, a gente pergunta o alcance antes de salvar.</p>${item.card_name ? `<div class="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartão atual: ${escapeHtml(item.card_name)}</div>` : ''}</div>`;
+        summary.innerHTML = `<div class="flex flex-wrap items-center gap-2"><span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Edição segura</span><span class="inline-flex items-center rounded-full bg-slate-900/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:bg-slate-100/10 dark:text-slate-300">${escapeHtml(item.recurring_rule_id ? 'Recorrente' : (item.has_future_installments ? 'Parcelada' : 'Única'))}</span></div><div class="mt-2 text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(formatMoney(item.amount_cents))} · ${escapeHtml(formatMonthLabel(item.month, item.year))}</div><p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Revise os dados do lançamento. Se houver parcelas ou recorrência, o alcance será confirmado antes de salvar.</p>${item.card_name ? `<div class="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartão atual: ${escapeHtml(item.card_name)}</div>` : ''}</div>`;
         wrapper.appendChild(summary);
 
         if (item.import_id) {
@@ -1814,7 +1861,7 @@
         selectionHeader.innerHTML = `
           <div>
             <div class="text-sm font-black text-slate-900 dark:text-slate-100">Quem entra nessa divisão?</div>
-            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Marque as pessoas participantes. A grade fica mais compacta para aguentar de 2 até 20 nomes sem engolir os botões finais.</p>
+            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Selecione quem participa do rateio deste lançamento.</p>
           </div>
         `;
         selectionSection.appendChild(selectionHeader);
@@ -1839,7 +1886,7 @@
 
         const outboxNote = document.createElement('div');
         outboxNote.className = 'rounded-[22px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-900 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200';
-        outboxNote.textContent = 'Ao guardar, a divisão fica salva por aqui e o que virar acerto vai para a caixa de saída. Você manda depois, no seu tempo.';
+        outboxNote.textContent = 'Ao guardar, a divisão fica salva e o que virar acerto segue para a caixa de saída.';
         wrapper.appendChild(outboxNote);
 
         const splitModeSection = document.createElement('section');
@@ -1849,7 +1896,7 @@
         const splitModeHeader = document.createElement('div');
         splitModeHeader.innerHTML = `
           <div class="text-sm font-black text-slate-900 dark:text-slate-100">Como você quer dividir essa compra?</div>
-          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Quando entram 2 ou mais pessoas, escolha o estilo da divisão antes de salvar.</p>
+          <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Quando houver 2 ou mais participantes, escolha a regra de divisão antes de salvar.</p>
         `;
         splitModeSection.appendChild(splitModeHeader);
 
@@ -2276,7 +2323,7 @@
 
         const intro = document.createElement('div');
         intro.className = 'rounded-[22px] border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200';
-        intro.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Seleção</div><div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">${items.length} compra(s) · ${escapeHtml(formatMoney(sumAmounts(items)))}</div><p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">A data da compra será mantida. O app vai ajustar só a fatura e o mês desse lançamento.</p>`;
+        intro.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Seleção</div><div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">${items.length} compra(s) · ${escapeHtml(formatMoney(sumAmounts(items)))}</div><p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">A data da compra será mantida. Apenas a competência e a fatura do lançamento serão ajustadas.</p>`;
         wrapper.appendChild(intro);
 
         const quickRow = document.createElement('div');
@@ -2406,7 +2453,7 @@
 
         const summary = document.createElement('div');
         summary.className = 'rounded-[22px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900 dark:border-red-800 dark:bg-red-900/20 dark:text-red-100';
-        summary.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-red-500/80 dark:text-red-300/80">Exclusão</div><div class="mt-1 text-sm font-black">${items.length} compra(s) · ${escapeHtml(formatMoney(sumAmounts(items)))}</div><p class="mt-2 text-sm font-medium text-red-700/90 dark:text-red-200/90">Isso apaga as compras selecionadas e as divisões associadas.</p>`;
+        summary.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-red-500/80 dark:text-red-300/80">Exclusão</div><div class="mt-1 text-sm font-black">${items.length} compra(s) · ${escapeHtml(formatMoney(sumAmounts(items)))}</div><p class="mt-2 text-sm font-medium text-red-700/90 dark:text-red-200/90">Isso remove os lançamentos selecionados e suas divisões associadas.</p>`;
         wrapper.appendChild(summary);
 
         let scopeValue = 'single';
@@ -2414,7 +2461,7 @@
         if (futureItems.length) {
           const note = document.createElement('div');
           note.className = 'rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100';
-          note.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-amber-500/90 dark:text-amber-300/80">Compras parceladas</div><p class="mt-1">${futureItems.length} item(ns) parcelado(s) exigem definição de alcance antes da exclusão.</p>${nonInstallmentCount > 0 ? `<p class="mt-2 text-sm font-medium text-amber-800/90 dark:text-amber-200/90">Os ${nonInstallmentCount} item(ns) sem parcelamento serão excluídos apenas uma vez.</p>` : ''}`;
+          note.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-amber-500/90 dark:text-amber-300/80">Lançamentos parcelados</div><p class="mt-1">${futureItems.length} item(ns) parcelado(s) exigem definição de alcance antes da exclusão.</p>${nonInstallmentCount > 0 ? `<p class="mt-2 text-sm font-medium text-amber-800/90 dark:text-amber-200/90">Os ${nonInstallmentCount} item(ns) sem parcelamento serão excluídos apenas uma vez.</p>` : ''}`;
           wrapper.appendChild(note);
 
           const scopeGroup = document.createElement('div');

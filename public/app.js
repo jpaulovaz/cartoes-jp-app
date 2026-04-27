@@ -219,7 +219,12 @@
       .map(cb => cb.value);
 
     if (selected.length === 0) {
-      alert("Escolha pelo menos uma pessoa antes de copiar essa divisão.");
+      const message = 'Escolha pelo menos uma pessoa antes de copiar essa divisão.';
+      if (typeof window.showAppToast === 'function') {
+        window.showAppToast(message, { tone: 'info' });
+      } else {
+        console.info('[alloc]', message);
+      }
       return;
     }
 
@@ -235,7 +240,12 @@
     const data = localStorage.getItem('copiedAlloc');
 
     if (!data) {
-      alert("Ainda não há nada copiado. Primeiro copie uma divisão e depois cole aqui.");
+      const message = 'Ainda não há nada copiado. Primeiro copie uma divisão e depois cole aqui.';
+      if (typeof window.showAppToast === 'function') {
+        window.showAppToast(message, { tone: 'info' });
+      } else {
+        console.info('[alloc]', message);
+      }
       return;
     }
 
@@ -266,6 +276,7 @@
 
 (function () {
   let dialogState = null;
+  let appToastState = null;
 
   function toneClasses(tone) {
     const base = 'w-full rounded-2xl px-4 py-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-900';
@@ -273,6 +284,26 @@
     if (tone === 'cancel') return `${base} border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 focus:ring-red-400 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200 dark:hover:bg-red-900/35 dark:focus:ring-red-500`;
     if (tone === 'primary') return `${base} bg-slate-900 text-white hover:bg-slate-800 focus:ring-slate-500 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white dark:focus:ring-slate-300`;
     return `${base} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:ring-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus:ring-slate-500`;
+  }
+
+  function getToastToneClasses(tone) {
+    if (tone === 'success') {
+      return 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-100';
+    }
+    if (tone === 'error') {
+      return 'border-red-200 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-900/35 dark:text-red-100';
+    }
+    if (tone === 'warning') {
+      return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-900/35 dark:text-amber-100';
+    }
+    return 'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-800 dark:bg-sky-900/35 dark:text-sky-100';
+  }
+
+  function normalizeToastArgs(message, toneOrOptions, maybeOptions) {
+    if (typeof toneOrOptions === 'string') {
+      return { ...(maybeOptions || {}), tone: toneOrOptions, message };
+    }
+    return { ...(toneOrOptions || {}), message };
   }
 
   function hasVisibleMonthSheet() {
@@ -284,6 +315,8 @@
 
   function setDialogVisibility(state, visible) {
     state.root.classList.toggle('hidden', !visible);
+    state.root.setAttribute('aria-hidden', visible ? 'false' : 'true');
+
     if (visible) {
       if (state.root.parentElement === document.body) {
         document.body.appendChild(state.root);
@@ -304,15 +337,21 @@
 
     const root = document.createElement('div');
     root.className = 'fixed inset-0 z-[10050] hidden';
+    root.setAttribute('aria-hidden', 'true');
     root.innerHTML = `
       <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-dialog-backdrop></div>
       <div class="relative z-10 flex min-h-full items-end justify-center p-4 sm:items-center">
-        <div class="w-full max-w-md overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" data-dialog-surface>
+        <div class="w-full max-w-md overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" data-dialog-surface role="dialog" aria-modal="true" aria-labelledby="op-app-dialog-title" aria-describedby="op-app-dialog-message">
           <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-            <h3 class="text-base font-bold text-slate-900 dark:text-slate-100" data-dialog-title></h3>
+            <div class="hidden pb-2" data-dialog-badge-wrap>
+              <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.2em]" data-dialog-badge></span>
+            </div>
+            <h3 class="text-base font-bold text-slate-900 dark:text-slate-100" id="op-app-dialog-title" data-dialog-title></h3>
+            <p class="mt-1 hidden text-sm leading-6 text-slate-500 dark:text-slate-400" data-dialog-subtitle></p>
           </div>
-          <div class="px-5 py-4">
-            <p class="text-sm leading-6 text-slate-600 whitespace-pre-line dark:text-slate-300" data-dialog-message></p>
+          <div class="px-5 py-4 space-y-4">
+            <p class="text-sm leading-6 text-slate-600 whitespace-pre-line dark:text-slate-300" id="op-app-dialog-message" data-dialog-message></p>
+            <div class="hidden" data-dialog-body></div>
           </div>
           <div class="flex flex-col gap-2 px-5 pb-5" data-dialog-buttons></div>
         </div>
@@ -324,71 +363,385 @@
       root,
       surface: root.querySelector('[data-dialog-surface]'),
       title: root.querySelector('[data-dialog-title]'),
+      subtitle: root.querySelector('[data-dialog-subtitle]'),
+      badgeWrap: root.querySelector('[data-dialog-badge-wrap]'),
+      badge: root.querySelector('[data-dialog-badge]'),
       message: root.querySelector('[data-dialog-message]'),
+      body: root.querySelector('[data-dialog-body]'),
       buttons: root.querySelector('[data-dialog-buttons]'),
-      activeResolve: null
+      activeResolve: null,
+      activeConfig: null,
+      lastFocus: null
     };
 
     const closeDialog = (value) => {
       if (!dialogState?.activeResolve) return;
       const resolve = dialogState.activeResolve;
+      const focusTarget = dialogState.lastFocus;
       dialogState.activeResolve = null;
+      dialogState.activeConfig = null;
+      dialogState.lastFocus = null;
       setDialogVisibility(dialogState, false);
       resolve(value);
+      if (focusTarget instanceof HTMLElement && document.contains(focusTarget)) {
+        window.requestAnimationFrame(() => {
+          try {
+            focusTarget.focus({ preventScroll: true });
+          } catch (_) {
+            focusTarget.focus();
+          }
+        });
+      }
     };
 
-    root.querySelector('[data-dialog-backdrop]')?.addEventListener('click', () => closeDialog(null));
+    root.querySelector('[data-dialog-backdrop]')?.addEventListener('click', () => {
+      if (dialogState?.activeConfig?.closeOnBackdrop === false) return;
+      closeDialog(dialogState?.activeConfig?.dismissValue ?? null);
+    });
     root.addEventListener('click', (event) => {
       const surface = dialogState?.surface;
       if (!dialogState?.activeResolve || !surface) return;
-      if (!surface.contains(event.target)) closeDialog(null);
+      if (surface.contains(event.target)) return;
+      if (dialogState?.activeConfig?.closeOnBackdrop === false) return;
+      closeDialog(dialogState?.activeConfig?.dismissValue ?? null);
     });
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && dialogState?.activeResolve) {
-        closeDialog(null);
-      }
+      if (event.key !== 'Escape' || !dialogState?.activeResolve) return;
+      if (dialogState?.activeConfig?.closeOnEscape === false) return;
+      closeDialog(dialogState?.activeConfig?.dismissValue ?? null);
     });
 
     dialogState.close = closeDialog;
     return dialogState;
   }
 
-  function showActionDialog({ title = 'Confirma essa ação?', message = '', options = [] } = {}) {
+  function applyDialogBadge(state, tone) {
+    if (!(state?.badge instanceof HTMLElement) || !(state?.badgeWrap instanceof HTMLElement)) return;
+    const classes = tone === 'error'
+      ? 'bg-red-100 text-red-700 dark:bg-red-900/35 dark:text-red-200'
+      : tone === 'success'
+        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/35 dark:text-emerald-200'
+        : tone === 'warning'
+          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/35 dark:text-amber-200'
+          : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200';
+    const label = tone === 'error'
+      ? 'Atenção'
+      : tone === 'success'
+        ? 'Concluído'
+        : tone === 'warning'
+          ? 'Cuidado'
+          : 'Aviso';
+    state.badge.className = `inline-flex items-center rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.2em] ${classes}`;
+    state.badge.textContent = label;
+    state.badgeWrap.classList.remove('hidden');
+  }
+
+  function showActionDialog({
+    title = 'Confirma essa ação?',
+    subtitle = '',
+    message = '',
+    tone = 'info',
+    options = [],
+    body = null,
+    widthClass = 'max-w-md',
+    closeOnBackdrop = true,
+    closeOnEscape = true,
+    dismissValue = null,
+    onOpen = null
+  } = {}) {
     const state = ensureActionDialog();
 
     if (state.activeResolve) {
       const previousResolve = state.activeResolve;
       state.activeResolve = null;
-      previousResolve(null);
+      previousResolve(dismissValue);
     }
 
+    const normalizedOptions = Array.isArray(options) && options.length
+      ? options
+      : [{ label: 'Entendi', value: true, tone: tone === 'error' ? 'danger' : 'primary' }];
+
+    state.activeConfig = { closeOnBackdrop, closeOnEscape, dismissValue };
+    state.lastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     state.title.textContent = title;
-    state.message.textContent = message;
+    state.subtitle.textContent = subtitle || '';
+    state.subtitle.classList.toggle('hidden', !subtitle);
+    state.message.textContent = message || '';
+    state.message.classList.toggle('hidden', !message);
+    state.body.innerHTML = '';
+    state.body.classList.add('hidden');
     state.buttons.innerHTML = '';
+    applyDialogBadge(state, tone);
+
+    if (state.surface instanceof HTMLElement) {
+      state.surface.className = state.surface.className.replace(/max-w-[^\s]+/g, '').trim();
+      state.surface.classList.add(widthClass || 'max-w-md');
+    }
+
+    if (typeof body === 'string' && body.trim()) {
+      state.body.innerHTML = body;
+      state.body.classList.remove('hidden');
+    } else if (body instanceof HTMLElement) {
+      state.body.appendChild(body);
+      state.body.classList.remove('hidden');
+    } else if (typeof body === 'function') {
+      body(state.body, state);
+      state.body.classList.toggle('hidden', !state.body.childElementCount && !state.body.textContent.trim());
+    }
 
     return new Promise((resolve) => {
       state.activeResolve = resolve;
 
-      options.forEach((option, index) => {
+      normalizedOptions.forEach((option, index) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = toneClasses(option.tone || 'secondary');
         button.textContent = option.label;
         button.addEventListener('click', () => state.close(option.value));
         state.buttons.appendChild(button);
-        if (index === 0) {
+        if (option.autofocus || index === 0) {
           window.requestAnimationFrame(() => button.focus());
         }
       });
 
       setDialogVisibility(state, true);
+
+      if (typeof onOpen === 'function') {
+        window.requestAnimationFrame(() => onOpen(state));
+      }
     });
+  }
+
+  async function showAppAlert({ title = 'Aviso', message = '', tone = 'info', buttonLabel = 'Entendi' } = {}) {
+    return showActionDialog({
+      title,
+      message,
+      tone,
+      options: [
+        { label: buttonLabel, value: true, tone: tone === 'error' ? 'danger' : 'primary' }
+      ]
+    });
+  }
+
+  async function copyTextToClipboard(value) {
+    const text = String(value || '');
+    if (!text) return false;
+
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (_error) {
+        // segue para o fallback local
+      }
+    }
+
+    try {
+      const helper = document.createElement('textarea');
+      helper.value = text;
+      helper.setAttribute('readonly', 'readonly');
+      helper.setAttribute('aria-hidden', 'true');
+      helper.style.position = 'fixed';
+      helper.style.top = '-9999px';
+      helper.style.left = '-9999px';
+      helper.style.opacity = '0';
+      helper.style.pointerEvents = 'none';
+      document.body.appendChild(helper);
+      try {
+        helper.focus({ preventScroll: true });
+      } catch (_error) {
+        helper.focus();
+      }
+      helper.select();
+      if (typeof helper.setSelectionRange === 'function') {
+        helper.setSelectionRange(0, helper.value.length);
+      }
+      const copied = typeof document.execCommand === 'function' ? document.execCommand('copy') : false;
+      helper.remove();
+      return !!copied;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function focusCopyDialogField(field) {
+    if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;
+    window.requestAnimationFrame(() => {
+      try {
+        field.focus({ preventScroll: true });
+      } catch (_error) {
+        field.focus();
+      }
+      field.select();
+      if (typeof field.setSelectionRange === 'function') {
+        field.setSelectionRange(0, field.value.length);
+      }
+    });
+  }
+
+  async function showCopyValueDialog({
+    title = 'Copie este link',
+    message = 'Não consegui copiar automaticamente neste navegador. Tente outra vez ou copie manualmente pelo campo abaixo.',
+    value = '',
+    label = 'Conteúdo',
+    tone = 'warning',
+    copyLabel = 'Copiar',
+    copiedLabel = 'Copiado',
+    closeLabel = 'Fechar',
+    successMessage = 'Conteúdo copiado',
+    hintMessage = 'O campo fica pronto para seleção manual caso a cópia automática seja bloqueada.'
+  } = {}) {
+    const text = String(value || '');
+    let field = null;
+    let copyButton = null;
+    let copied = false;
+
+    await showActionDialog({
+      title,
+      message,
+      tone,
+      widthClass: 'max-w-xl',
+      body(container) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'op-copy-dialog';
+
+        const labelEl = document.createElement('label');
+        labelEl.className = 'op-copy-dialog__label';
+        labelEl.textContent = label;
+        wrapper.appendChild(labelEl);
+
+        field = document.createElement('textarea');
+        field.className = 'op-copy-dialog__field';
+        field.value = text;
+        field.readOnly = true;
+        field.spellcheck = false;
+        field.rows = Math.min(6, Math.max(3, Math.ceil(Math.max(text.length, 1) / 72)));
+        field.setAttribute('aria-label', label);
+        wrapper.appendChild(field);
+
+        const hint = document.createElement('p');
+        hint.className = 'op-copy-dialog__hint';
+        hint.textContent = hintMessage;
+        wrapper.appendChild(hint);
+
+        const actions = document.createElement('div');
+        actions.className = 'op-copy-dialog__actions';
+
+        copyButton = document.createElement('button');
+        copyButton.type = 'button';
+        copyButton.className = 'op-btn op-btn-primary op-btn--compact';
+        copyButton.textContent = copyLabel;
+        copyButton.addEventListener('click', async () => {
+          if (copyButton.disabled) return;
+          copyButton.disabled = true;
+          const didCopy = await copyTextToClipboard(text);
+          if (didCopy) {
+            copied = true;
+            copyButton.textContent = copiedLabel;
+            focusCopyDialogField(field);
+            showAppToast(successMessage, { tone: 'success' });
+            return;
+          }
+          copyButton.disabled = false;
+          focusCopyDialogField(field);
+          showAppToast('Selecione o campo e copie manualmente se o navegador continuar bloqueando a cópia.', {
+            tone: 'warning',
+            title: 'Cópia manual'
+          });
+        });
+        actions.appendChild(copyButton);
+        wrapper.appendChild(actions);
+
+        container.appendChild(wrapper);
+      },
+      options: [
+        { label: closeLabel, value: false, tone: 'secondary' }
+      ],
+      onOpen() {
+        focusCopyDialogField(field);
+      }
+    });
+
+    return copied;
+  }
+
+  function ensureAppToastRoot() {
+    if (appToastState?.root && document.body.contains(appToastState.root)) {
+      return appToastState;
+    }
+
+    const root = document.createElement('div');
+    root.dataset.appToastRoot = '1';
+    root.className = 'pointer-events-none fixed inset-x-0 top-4 z-[10060] flex flex-col items-center gap-2 px-4';
+    document.body.appendChild(root);
+
+    appToastState = { root };
+    return appToastState;
+  }
+
+  function removeToastLater(toast, delay = 180) {
+    window.setTimeout(() => {
+      toast.remove();
+      if (appToastState?.root && !appToastState.root.childElementCount) {
+        appToastState.root.remove();
+        appToastState = null;
+      }
+    }, delay);
+  }
+
+  function showAppToast(message, toneOrOptions = 'info', maybeOptions) {
+    const config = normalizeToastArgs(message, toneOrOptions, maybeOptions);
+    const text = String(config.message || '').trim();
+    if (!text) return null;
+
+    const state = ensureAppToastRoot();
+    const title = String(config.title || '').trim();
+    const tone = String(config.tone || 'info').trim().toLowerCase();
+    const duration = Number.isFinite(Number(config.duration)) ? Math.max(1200, Number(config.duration)) : 3200;
+
+    const toast = document.createElement('div');
+    toast.dataset.appToast = '1';
+    toast.setAttribute('role', tone === 'error' ? 'alert' : 'status');
+    toast.className = `op-app-toast pointer-events-auto w-full max-w-md rounded-[22px] border px-4 py-3 text-sm shadow-2xl backdrop-blur ${getToastToneClasses(tone)}`;
+
+    if (title) {
+      const titleEl = document.createElement('div');
+      titleEl.className = 'font-semibold leading-5';
+      titleEl.textContent = title;
+      toast.appendChild(titleEl);
+
+      const bodyEl = document.createElement('div');
+      bodyEl.className = 'mt-1 text-sm leading-6 opacity-95';
+      bodyEl.textContent = text;
+      toast.appendChild(bodyEl);
+    } else {
+      const bodyEl = document.createElement('div');
+      bodyEl.className = 'font-semibold leading-6';
+      bodyEl.textContent = text;
+      toast.appendChild(bodyEl);
+    }
+
+    state.root.appendChild(toast);
+
+    const timer = window.setTimeout(() => {
+      toast.classList.add('is-leaving');
+      removeToastLater(toast);
+    }, duration);
+
+    toast.addEventListener('click', () => {
+      window.clearTimeout(timer);
+      toast.classList.add('is-leaving');
+      removeToastLater(toast, 120);
+    }, { once: true });
+
+    return toast;
   }
 
   async function confirmTypedAction(message, phrase = 'Eu confirmo') {
     const result = await showActionDialog({
       title: 'Confirma a exclusão?',
       message,
+      tone: 'error',
       options: [
         { label: 'Excluir', value: true, tone: 'danger' },
         { label: 'Cancelar', value: false, tone: 'cancel' }
@@ -399,6 +752,10 @@
   }
 
   window.showActionDialog = showActionDialog;
+  window.showAppAlert = showAppAlert;
+  window.showAppToast = showAppToast;
+  window.copyTextToClipboard = copyTextToClipboard;
+  window.showCopyValueDialog = showCopyValueDialog;
   window.confirmTypedAction = confirmTypedAction;
 })();
 
@@ -2152,30 +2509,11 @@
   }
 
   function showPushToast(message, tone = 'info') {
-    if (!message) return;
-
-    let container = document.querySelector('[data-push-toast-root]');
-    if (!(container instanceof HTMLElement)) {
-      container = document.createElement('div');
-      container.dataset.pushToastRoot = '1';
-      container.className = 'pointer-events-none fixed inset-x-0 top-4 z-[10060] flex justify-center px-4';
-      document.body.appendChild(container);
+    if (typeof window.showAppToast === 'function') {
+      return window.showAppToast(message, { tone });
     }
-
-    const toast = document.createElement('div');
-    const toneClasses = tone === 'success'
-      ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-100'
-      : tone === 'error'
-        ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/35 dark:text-red-100'
-        : 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-900/35 dark:text-sky-100';
-    toast.className = `pointer-events-auto w-full max-w-md rounded-[22px] border px-4 py-3 text-sm font-semibold shadow-2xl backdrop-blur ${toneClasses}`;
-    toast.textContent = message;
-    container.appendChild(toast);
-
-    window.setTimeout(() => {
-      toast.remove();
-      if (container && !container.childElementCount) container.remove();
-    }, 3200);
+    if (!message) return null;
+    return null;
   }
 
   function setPushToggleState(button, statusEl, state) {
@@ -2331,7 +2669,14 @@
     } catch (error) {
       console.error(error);
       await syncPushUi().catch((syncError) => console.error(syncError));
-      window.alert(error?.message || 'Não deu para configurar os alertas neste aparelho agora.');
+      const message = error?.message || 'Não deu para configurar os alertas neste aparelho agora.';
+      if (typeof window.showAppAlert === 'function') {
+        await window.showAppAlert({ title: 'Alertas neste aparelho', message, tone: 'error' });
+      } else if (typeof window.showAppToast === 'function') {
+        window.showAppToast(message, { tone: 'error', title: 'Alertas neste aparelho' });
+      } else {
+        console.error('[push]', message);
+      }
     }
   }
 
@@ -3156,71 +3501,35 @@
 })();
 
 (function () {
-  const STYLE_STORAGE_KEY = 'op-theme-style';
-  const VALID_STYLES = new Set(['classic', 'confete', 'orgulho']);
   const root = document.documentElement;
-  const body = document.body;
-
-  function getCurrentStyle() {
-    const style = root.dataset.themeStyle;
-    return VALID_STYLES.has(style) ? style : 'classic';
-  }
 
   function getCurrentAppearance() {
     return root.classList.contains('dark') ? 'dark' : 'light';
   }
 
-  function getThemeColor(style, appearance) {
-    if (style === 'confete') {
-      return appearance === 'dark' ? '#221531' : '#fff1f7';
-    }
-    if (style === 'orgulho') {
-      return appearance === 'dark' ? '#34173a' : '#f75f70';
-    }
-    return appearance === 'dark' ? '#020617' : '#eaf2ff';
+  function getThemeColor(appearance) {
+    return appearance === 'dark' ? '#0B1220' : '#F6F8FB';
   }
 
   function syncThemeChrome() {
-    const style = getCurrentStyle();
     const appearance = getCurrentAppearance();
-    root.dataset.themeStyle = style;
+    root.dataset.themeStyle = 'classic';
+
+    try {
+      localStorage.removeItem('op-theme-style');
+    } catch (error) {
+      // ignore storage issues
+    }
 
     const themeColorMeta = document.querySelector('meta[name="theme-color"]');
     if (themeColorMeta) {
-      themeColorMeta.setAttribute('content', getThemeColor(style, appearance));
+      themeColorMeta.setAttribute('content', getThemeColor(appearance));
     }
-
-    document.querySelectorAll('[data-theme-style-choice]').forEach((button) => {
-      const isActive = button.getAttribute('data-theme-style-choice') === style;
-      button.classList.toggle('is-active', isActive);
-      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    });
-
-    const styleLabels = {
-      classic: 'Visual Clássico ativo',
-      confete: 'Visual Confete ativo',
-      orgulho: 'Visual Orgulho ativo'
-    };
-    const styleCaptions = {
-      classic: 'Clássico ativo',
-      confete: 'Confete ativo',
-      orgulho: 'Orgulho ativo'
-    };
-
-    document.querySelectorAll('[data-theme-style-open]').forEach((button) => {
-      const label = styleLabels[style] || styleLabels.classic;
-      button.setAttribute('title', `${label}. Toque para trocar.`);
-      button.setAttribute('aria-label', `${label}. Toque para trocar.`);
-    });
-
-    document.querySelectorAll('[data-mobile-theme-style-caption]').forEach((node) => {
-      node.textContent = styleCaptions[style] || styleCaptions.classic;
-    });
 
     const nextAppearanceLabel = appearance === 'dark' ? 'Modo claro' : 'Modo escuro';
     const nextAppearanceHelper = appearance === 'dark'
-      ? 'Clareia a tela e deixa tudo mais aberto.'
-      : 'Deixa a tela mais confortável quando a luz abaixa.';
+      ? 'Mostra a interface com fundo claro e contraste mais aberto.'
+      : 'Mostra a interface com fundo escuro e contraste mais confortável.';
 
     document.querySelectorAll('[data-mobile-appearance-mode-label]').forEach((node) => {
       node.textContent = nextAppearanceLabel;
@@ -3232,17 +3541,6 @@
       button.setAttribute('title', nextAppearanceLabel);
       button.setAttribute('aria-label', nextAppearanceLabel);
     });
-  }
-
-  function setThemeStyle(style) {
-    const nextStyle = VALID_STYLES.has(style) ? style : 'classic';
-    root.dataset.themeStyle = nextStyle;
-    try {
-      localStorage.setItem(STYLE_STORAGE_KEY, nextStyle);
-    } catch (error) {
-      // ignore storage issues
-    }
-    syncThemeChrome();
   }
 
   function initMobileAppearanceMenu() {
@@ -3300,76 +3598,16 @@
     });
   }
 
-  function initThemeStyleCenter() {
-    const center = document.querySelector('[data-theme-style-center]');
-    if (!(center instanceof HTMLElement)) {
-      syncThemeChrome();
-      return;
-    }
-
-    const openButtons = document.querySelectorAll('[data-theme-style-open]');
-    const closeButtons = center.querySelectorAll('[data-theme-style-close]');
-    const backdrop = center.querySelector('[data-theme-style-backdrop]');
-    const choiceButtons = center.querySelectorAll('[data-theme-style-choice]');
-    let isOpen = false;
-
-    function setVisibility(visible) {
-      isOpen = visible;
-      center.classList.toggle('hidden', !visible);
-      center.setAttribute('aria-hidden', visible ? 'false' : 'true');
-      if (body) {
-        body.classList.toggle('overflow-hidden', visible);
-      }
-    }
-
-    openButtons.forEach((button) => {
-      button.addEventListener('click', () => setVisibility(true));
-    });
-
-    closeButtons.forEach((button) => {
-      button.addEventListener('click', () => setVisibility(false));
-    });
-
-    if (backdrop instanceof HTMLElement) {
-      backdrop.addEventListener('click', () => setVisibility(false));
-    }
-
-    center.addEventListener('click', (event) => {
-      const panel = center.querySelector('.op-style-center-panel');
-      if (!(panel instanceof HTMLElement)) return;
-      if (event.target === center && !panel.contains(event.target)) {
-        setVisibility(false);
-      }
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && isOpen) {
-        setVisibility(false);
-      }
-    });
-
-    choiceButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        const style = button.getAttribute('data-theme-style-choice') || 'classic';
-        setThemeStyle(style);
-        window.setTimeout(() => setVisibility(false), 120);
-      });
-    });
-
-    syncThemeChrome();
-  }
-
   window.OPSyncThemeChrome = syncThemeChrome;
-  window.OPSetThemeStyle = setThemeStyle;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       initMobileAppearanceMenu();
-      initThemeStyleCenter();
+      syncThemeChrome();
     });
   } else {
     initMobileAppearanceMenu();
-    initThemeStyleCenter();
+    syncThemeChrome();
   }
 })();
 

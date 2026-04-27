@@ -223,7 +223,34 @@ function sanitizeTxid(value) {
   return safe || '***';
 }
 
-function buildPixPayload({ keyType, keyValue, merchantName, merchantCity, amountCents, txid, description } = {}) {
+function sanitizePixReferenceLabel(value) {
+  const raw = String(value || '').trim();
+  if (!raw || raw === '***') return '***';
+  return sanitizeTxid(raw);
+}
+
+function normalizePixPointOfInitiationMethod(value) {
+  const normalized = String(value || '').trim();
+  if (normalized === '11' || normalized === '12') return normalized;
+  return null;
+}
+
+function getPixDescriptionMaxLength(keyValue) {
+  const keyLength = String(keyValue || '').length;
+  return Math.max(0, Math.min(72, 73 - keyLength));
+}
+
+function buildPixPayload({
+  keyType,
+  keyValue,
+  merchantName,
+  merchantCity,
+  amountCents,
+  txid,
+  referenceLabel,
+  pointOfInitiationMethod = '11',
+  description
+} = {}) {
   const profile = validatePixProfile({
     enabled: true,
     keyType,
@@ -242,17 +269,27 @@ function buildPixPayload({ keyType, keyValue, merchantName, merchantCity, amount
     emv('01', profile.keyValue)
   ];
 
-  const safeDescription = sanitizePixText(description, { max: 72 });
+  const safeDescription = sanitizePixText(description, { max: getPixDescriptionMaxLength(profile.keyValue) });
   if (safeDescription) {
     merchantAccountFields.push(emv('02', safeDescription));
   }
 
+  const safePointOfInitiationMethod = normalizePixPointOfInitiationMethod(pointOfInitiationMethod);
+  const safeReferenceLabel = sanitizePixReferenceLabel(referenceLabel);
+
   const fields = [
-    emv('00', '01'),
+    emv('00', '01')
+  ];
+
+  if (safePointOfInitiationMethod) {
+    fields.push(emv('01', safePointOfInitiationMethod));
+  }
+
+  fields.push(
     emv('26', merchantAccountFields.join('')),
     emv('52', '0000'),
     emv('53', '986')
-  ];
+  );
 
   const cents = Math.max(0, Number(amountCents || 0));
   if (cents > 0) {
@@ -263,7 +300,7 @@ function buildPixPayload({ keyType, keyValue, merchantName, merchantCity, amount
     emv('58', 'BR'),
     emv('59', profile.merchantName),
     emv('60', profile.city),
-    emv('62', emv('05', sanitizeTxid(txid)))
+    emv('62', emv('05', safeReferenceLabel))
   );
 
   const partialPayload = `${fields.join('')}6304`;
@@ -291,6 +328,7 @@ module.exports = {
   maskPixKey,
   sanitizePixText,
   sanitizeTxid,
+  sanitizePixReferenceLabel,
   buildPixPayload,
   buildSharedDebtPixTxid,
   buildSharedDebtCardMonthlyPixTxid

@@ -14692,7 +14692,7 @@ function buildImportInstallmentExecutionPlan({ userId, cardId, previewMonth, pre
       source: 'statement_import',
       generated_future_installment: false
     }),
-    matchedChainRootId,
+    matchedChainRootId: matchedGroupRootId,
     overwriteCurrentParentTxnId,
     currentInsertParentTxnId: overwriteTargetRow
       ? (overwriteCurrentParentTxnId || Number(overwriteTargetRow.parent_txn_id || overwriteTargetRow.parentTxnId || 0) || null)

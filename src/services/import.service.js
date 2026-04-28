@@ -177,7 +177,13 @@ function createImportService(deps = {}) {
         repository.queueSharedDebtDraftsForTransactions(userId, overwrittenRows);
       }
 
-      const feedback = repository.buildImportConfirmationMessage(preview, importedItems.length, persistResult.overwrittenIds.length);
+      const feedback = repository.buildImportConfirmationMessage(preview, {
+        importedLineCount: importedItems.length,
+        overwrittenCount: persistResult.overwrittenIds.length,
+        createdTransactionCount: persistResult.createdTransactionCount,
+        futureCreatedCount: persistResult.futureCreatedCount,
+        blockedFutureExpansionCount: persistResult.blockedFutureExpansionCount
+      });
       repository.clearImportPreview(req);
       repository.setImportFormSeed(req, preview.formSeed || null);
       return {

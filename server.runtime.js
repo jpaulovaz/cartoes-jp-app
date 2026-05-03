@@ -11081,11 +11081,11 @@ function applyPurchaseCategoryToTransactions(userId, rows, purchaseCategoryId, {
 
 function getInstallmentChainRows(userId, txnRow) {
   if (!txnRow) return [];
-  const rootId = Number(txnRow.parent_txn_id || txnRow.id || 0);
+  const rootId = Number(txnRow.parent_txn_id || txnRow.parentTxnId || txnRow.id || 0);
   if (!rootId) return [];
 
   return db.prepare(`
-    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id, t.purchase_category_id,
+    SELECT t.id, t.import_id, t.description, t.amount_cents, t.card_id, t.recurring_rule_id, t.parent_txn_id, t.purchase_category_id, t.raw_json,
            COALESCE(t.due_month, i.month) AS month,
            COALESCE(t.due_year, i.year) AS year
     FROM transactions t
@@ -11093,28 +11093,70 @@ function getInstallmentChainRows(userId, txnRow) {
     WHERE t.user_id = ?
       AND (t.id = ? OR t.parent_txn_id = ?)
     ORDER BY COALESCE(t.due_year, i.year) ASC, COALESCE(t.due_month, i.month) ASC, t.id ASC
-  `).all(userId, rootId, rootId);
+  `).all(userId, rootId, rootId).map((row) => ({
+    ...row,
+    installment: resolveImportInstallmentMeta({
+      rawJson: row.raw_json,
+      description: row.description,
+      amountCents: row.amount_cents
+    })
+  }));
 }
 
 function formatInstallmentDescription(baseDescription, position, total) {
-  const cleanBase = String(baseDescription || '').trim();
+  const cleanBase = normalizeImportInstallmentBaseDescription(baseDescription);
   const normalizedTotal = Math.max(1, Number(total || 1));
   const normalizedPosition = Math.min(normalizedTotal, Math.max(1, Number(position || 1)));
   if (normalizedTotal <= 1) return cleanBase;
   return `${cleanBase} (${String(normalizedPosition).padStart(2, '0')}/${String(normalizedTotal).padStart(2, '0')})`;
 }
 
+function buildInstallmentMetaByTxnId(userId, txnRow) {
+  const installmentChain = getInstallmentChainRows(userId, txnRow);
+  const metaMap = new Map();
+  installmentChain.forEach((row, index) => {
+    const explicitMeta = row.installment || null;
+    if (explicitMeta) {
+      metaMap.set(Number(row.id || 0), {
+        position: Number(explicitMeta.position || 1),
+        total: Number(explicitMeta.total || 1),
+        baseDescription: stripTrailingInstallmentMarker(row.description)
+      });
+      return;
+    }
+    metaMap.set(Number(row.id || 0), {
+      position: index + 1,
+      total: installmentChain.length || 1,
+      baseDescription: stripTrailingInstallmentMarker(row.description)
+    });
+  });
+  return metaMap;
+}
 
-function buildImportOverwriteDescription(userId, txnRow, nextBaseDescription) {
-  const cleanBaseDescription = String(nextBaseDescription || '').trim() || '(sem descricao)';
+function buildImportOverwriteDescription(userId, txnRow, nextBaseDescription, previewItem = null) {
+  const previewInstallment = previewItem?.installment || resolveImportInstallmentMeta({
+    raw: previewItem?.raw,
+    description: previewItem?.description,
+    amountCents: previewItem?.amountCents
+  });
+  const cleanBaseDescription = normalizeImportInstallmentBaseDescription(
+    previewInstallment ? previewInstallment.baseDescription : stripTrailingInstallmentMarker(nextBaseDescription)
+  ) || '(sem descricao)';
   if (!txnRow || !txnRow.id) return cleanBaseDescription;
 
-  const installmentChain = getInstallmentChainRows(userId, txnRow);
-  if (!installmentChain.length) return cleanBaseDescription;
+  const installmentMeta = buildInstallmentMetaByTxnId(userId, txnRow).get(Number(txnRow.id || 0)) || null;
+  if (!installmentMeta || Number(installmentMeta.total || 1) <= 1) return cleanBaseDescription;
+  return formatInstallmentDescription(cleanBaseDescription, installmentMeta.position, installmentMeta.total);
+}
 
-  const currentIndex = installmentChain.findIndex((row) => Number(row.id || 0) === Number(txnRow.id || 0));
-  if (currentIndex < 0 || installmentChain.length <= 1) return cleanBaseDescription;
-  return formatInstallmentDescription(cleanBaseDescription, currentIndex + 1, installmentChain.length);
+
+function isEditableImportedInstallmentTxn(txnRow) {
+  if (!txnRow || Number(txnRow.import_id || txnRow.importId || 0) <= 0) return false;
+  return !!resolveImportInstallmentMeta({
+    rawJson: txnRow.raw_json,
+    description: txnRow.description,
+    amountCents: txnRow.amount_cents || txnRow.amountCents || 0
+  });
 }
 
 function getEditableTransactionScopeRows(userId, txnRow, scope = 'single') {
@@ -13464,6 +13506,190 @@ function normalizeImportCardNumber(value) {
     .trim();
 }
 
+function safeParseImportRawJson(value) {
+  if (!value) return {};
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return { ...value };
+  }
+  try {
+    const parsed = JSON.parse(String(value || '{}'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return parsed;
+  } catch (error) {
+    return {};
+  }
+}
+
+function normalizeImportInstallmentBaseDescription(value) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*[\-–—:;/,]+$/g, '')
+    .trim();
+}
+
+function stripTrailingInstallmentMarker(description) {
+  const safe = String(description || '').replace(/\s+/g, ' ').trim();
+  if (!safe) return '';
+
+  let base = safe
+    .replace(/\s*(?:[\-–—:;/,]\s*)?\(?\d{1,2}\s*\/\s*\d{1,2}\)?\s*$/i, '')
+    .replace(/\s*(?:[\-–—:;/,]\s*)?(?:parc(?:ela)?\s*)?\d{1,2}\s*(?:de|\/)\s*\d{1,2}\s*$/i, '')
+    .replace(/\s*(?:[\-–—:;/,]\s*)?\d{1,2}\s+de\s+\d{1,2}\s*$/i, '')
+    .replace(/\s*[()\-–—:;/,]+$/g, '')
+    .trim();
+
+  if (!base) {
+    base = safe
+      .replace(/\(?\d{1,2}\s*\/\s*\d{1,2}\)?/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  return normalizeImportInstallmentBaseDescription(base || safe) || safe;
+}
+
+function buildImportInstallmentMeta(position, total, baseDescription, extra = {}) {
+  const normalizedPosition = Number(position || 0);
+  const normalizedTotal = Number(total || 0);
+  if (!Number.isInteger(normalizedPosition) || !Number.isInteger(normalizedTotal)) return null;
+  if (normalizedPosition < 1 || normalizedTotal <= 1 || normalizedPosition > normalizedTotal || normalizedTotal > 240) return null;
+  const cleanBaseDescription = normalizeImportInstallmentBaseDescription(baseDescription) || '(sem descricao)';
+  return {
+    detected: true,
+    position: normalizedPosition,
+    total: normalizedTotal,
+    label: `${normalizedPosition}/${normalizedTotal}`,
+    baseDescription: cleanBaseDescription,
+    normalizedBaseDescription: normalizeImportDuplicateText(cleanBaseDescription),
+    ...extra
+  };
+}
+
+function getImportInstallmentMetaFromRaw(rawLike) {
+  const raw = safeParseImportRawJson(rawLike);
+  const rawConflictReason = String(raw?.import_installment_conflict?.reason || '').trim() || null;
+  const candidates = [raw.import_installment, raw.installment, raw.importInstallment].filter((candidate) => candidate && typeof candidate === 'object');
+  for (const candidate of candidates) {
+    const normalizedConfidence = String(candidate.confidence || '').trim().toLowerCase();
+    const meta = buildImportInstallmentMeta(
+      candidate.position ?? candidate.current_position ?? candidate.installment_position,
+      candidate.total ?? candidate.installment_total,
+      candidate.base_description ?? candidate.baseDescription ?? candidate.description_base,
+      {
+        source: candidate.source || 'raw',
+        confidence: ['high', 'medium', 'low'].includes(normalizedConfidence) ? normalizedConfidence : null,
+        patternKind: String(candidate.pattern_kind || candidate.patternKind || '').trim() || null,
+        validator: String(candidate.validator || '').trim() || null,
+        conflictReason: String(candidate.conflict_reason || candidate.conflictReason || rawConflictReason || '').trim() || null,
+        fromRaw: true
+      }
+    );
+    if (meta) return meta;
+  }
+  return null;
+}
+
+function detectImportInstallmentMetaFromDescription(description, amountCents = 0) {
+  if (Number(amountCents || 0) <= 0) return null;
+  const safe = String(description || '').replace(/\s+/g, ' ').trim();
+  if (!safe) return null;
+
+  const patterns = [
+    /(?:^|\s|\()(\d{1,2})\s*\/\s*(\d{1,2})(?:\))?\s*$/i,
+    /\bparc(?:ela)?\s*(\d{1,2})\s*(?:de|\/)\s*(\d{1,2})\s*$/i,
+    /\b(\d{1,2})\s+de\s+(\d{1,2})\s*$/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = safe.match(pattern);
+    if (!match) continue;
+    const meta = buildImportInstallmentMeta(match[1], match[2], stripTrailingInstallmentMarker(safe), {
+      source: 'description',
+      fromRaw: false
+    });
+    if (meta) return meta;
+  }
+
+  return null;
+}
+
+function resolveImportInstallmentMeta({ raw = null, rawJson = null, description = '', amountCents = 0 } = {}) {
+  return getImportInstallmentMetaFromRaw(rawJson || raw)
+    || detectImportInstallmentMetaFromDescription(description, amountCents)
+    || null;
+}
+
+function buildImportInstallmentRawPayload(rawLike, installmentMeta, extra = {}) {
+  const raw = safeParseImportRawJson(rawLike);
+  if (!installmentMeta) return raw;
+  const { conflictReason: extraConflictReason = null, ...safeExtra } = extra || {};
+  const normalizedConfidence = String(installmentMeta.confidence || '').trim().toLowerCase();
+  raw.import_installment = {
+    detected: true,
+    position: Number(installmentMeta.position || 0) || 1,
+    total: Number(installmentMeta.total || 0) || 1,
+    label: installmentMeta.label || `${Number(installmentMeta.position || 0) || 1}/${Number(installmentMeta.total || 0) || 1}`,
+    base_description: installmentMeta.baseDescription || '(sem descricao)',
+    source: installmentMeta.source || 'statement_import',
+    ...(normalizedConfidence && ['high', 'medium', 'low'].includes(normalizedConfidence) ? { confidence: normalizedConfidence } : {}),
+    ...(String(installmentMeta.patternKind || '').trim() ? { pattern_kind: String(installmentMeta.patternKind).trim() } : {}),
+    ...(String(installmentMeta.validator || '').trim() ? { validator: String(installmentMeta.validator).trim() } : {}),
+    ...safeExtra
+  };
+  const conflictReason = String(extraConflictReason || installmentMeta.conflictReason || raw?.import_installment_conflict?.reason || '').trim() || null;
+  if (conflictReason) {
+    raw.import_installment_conflict = {
+      ...(raw.import_installment_conflict && typeof raw.import_installment_conflict === 'object' ? raw.import_installment_conflict : {}),
+      reason: conflictReason
+    };
+  }
+  return raw;
+}
+
+function buildImportInstallmentDueKey(month, year) {
+  return `${String(year || '').trim()}-${String(month || '').trim()}`;
+}
+
+function buildImportInstallmentSchedule(month, year, installmentMeta) {
+  const meta = installmentMeta && typeof installmentMeta === 'object'
+    ? installmentMeta
+    : resolveImportInstallmentMeta({ description: '', amountCents: 1, raw: installmentMeta });
+  if (!meta) return [];
+
+  const schedule = [];
+  const futureCount = Math.max(0, Number(meta.total || 0) - Number(meta.position || 0));
+  for (let offset = 0; offset <= futureCount; offset += 1) {
+    const due = shiftMonth(year, month, offset);
+    schedule.push({
+      offset,
+      position: Number(meta.position || 1) + offset,
+      total: Number(meta.total || 1),
+      dueMonth: due.month,
+      dueYear: due.year,
+      dueKey: buildImportInstallmentDueKey(due.month, due.year)
+    });
+  }
+
+  return schedule;
+}
+
+function matchImportInstallmentExistingRowToItem(row, item) {
+  if (!row || !item) return false;
+  const itemMeta = item.installment || resolveImportInstallmentMeta({ raw: item.raw, description: item.description, amountCents: item.amountCents });
+  if (!itemMeta) return false;
+  if (Number(row.amountCents || 0) !== Number(item.amountCents || 0)) return false;
+
+  const rowMeta = row.installment || resolveImportInstallmentMeta({ raw: row.raw, description: row.description, amountCents: row.amountCents });
+  const rowBase = normalizeImportDuplicateText((rowMeta && rowMeta.baseDescription) || stripTrailingInstallmentMarker(row.description));
+  if (rowBase !== normalizeImportDuplicateText(itemMeta.baseDescription)) return false;
+
+  const itemCard = normalizeImportCardNumber(item.cardNumber);
+  const rowCard = normalizeImportCardNumber(row.cardNumber);
+  if (itemCard && rowCard && itemCard !== rowCard) return false;
+
+  return true;
+}
+
 function buildImportDuplicateFingerprint({ cardId, month, year, txnDate, description, amountCents, cardNumber }) {
   return [
     Number(cardId) || 0,
@@ -13634,6 +13860,14 @@ function buildImportPreviewItem(txn, sourceIndex) {
   const description = String(txn.description || '').trim() || '(sem descricao)';
   const amountCents = Number(txn.amount_cents) || 0;
   const cardNumber = normalizeImportCardNumber(txn.card_number) || null;
+  const installment = resolveImportInstallmentMeta({
+    raw: txn.raw,
+    description,
+    amountCents
+  });
+  const raw = buildImportInstallmentRawPayload(txn.raw || {}, installment, {
+    source: installment?.source || 'statement_import'
+  });
 
   return {
     id: `item_${sourceIndex + 1}`,
@@ -13641,11 +13875,19 @@ function buildImportPreviewItem(txn, sourceIndex) {
     isoDate,
     dateLabel: formatImportPreviewDateLabel(isoDate || txn.txn_date),
     description,
+    baseDescription: (installment && installment.baseDescription) || description,
     amountCents,
     amountLabel: formatBRLFromCents(amountCents),
     cardNumber,
     cardNumberLabel: formatImportPreviewCardNumberLabel(cardNumber),
-    raw: txn.raw || {}
+    raw,
+    installment,
+    installmentLabel: installment ? `${String(installment.position).padStart(2, '0')}/${String(installment.total).padStart(2, '0')}` : null,
+    projectedImportAffectedCount: 1,
+    projectedImportNewTransactionCount: 1,
+    projectedOverwriteAffectedCount: 1,
+    projectedOverwriteNewTransactionCount: 0,
+    installmentImpact: null
   };
 }
 
@@ -13704,9 +13946,72 @@ function compareImportExistingMatches(a, b) {
   return Number(a?.id || 0) - Number(b?.id || 0);
 }
 
-function getExistingImportMonthRows(userId, cardId, month, year) {
+function mapImportExistingRow(userId, row) {
+  const importId = Number(row.import_id || 0) || null;
+  const monthNumber = Number(row.month || 0) || null;
+  const yearNumber = Number(row.year || 0) || null;
+  const isManual = !importId;
+  const isClosedMonth = Boolean(monthNumber && yearNumber && isMonthClosed(userId, monthNumber, yearNumber));
+  const allocationCount = Math.max(0, Number(row.allocation_count || 0));
+  const sharedDebtRequestCount = Math.max(0, Number(row.shared_debt_request_count || 0));
+  const sharedDebtQueueCount = Math.max(0, Number(row.shared_debt_queue_count || 0));
+  const raw = safeParseImportRawJson(row.raw_json);
+  const installment = resolveImportInstallmentMeta({
+    raw,
+    description: row.description,
+    amountCents: row.amount_cents
+  });
+  const hasInstallmentChain = Number(row.parent_txn_id || 0) > 0 || Number(row.has_child_installments || 0) > 0;
+
+  const mapped = {
+    id: Number(row.id),
+    importId,
+    cardId: Number(row.card_id || 0) || null,
+    month: monthNumber,
+    year: yearNumber,
+    txnDate: String(row.txn_date || '').trim() || null,
+    dateLabel: formatImportPreviewDateLabel(row.txn_date),
+    description: String(row.description || '').trim() || '(sem descricao)',
+    amountCents: Number(row.amount_cents) || 0,
+    amountLabel: formatBRLFromCents(Number(row.amount_cents) || 0),
+    cardNumber: normalizeImportCardNumber(row.card_number) || null,
+    cardNumberLabel: formatImportPreviewCardNumberLabel(row.card_number),
+    originLabel: importId ? 'Ja importada' : 'Lancada manualmente',
+    isManual,
+    isImported: !!importId,
+    overwriteEligible: Boolean(isManual && !isClosedMonth),
+    isClosedMonth,
+    overwriteUnavailableReason: importId
+      ? 'Essa coincidencia ja veio de importacao e fica so como referencia.'
+      : (isClosedMonth ? getMonthLockMessage(monthNumber, yearNumber) : null),
+    purchaseCategoryId: Number(row.purchase_category_id || 0) || null,
+    purchaseCategoryName: String(row.purchase_category_name || '').trim() || null,
+    allocationCount,
+    hasInstallmentChain,
+    hasRecurringRule: Number(row.recurring_rule_id || 0) > 0,
+    parentTxnId: Number(row.parent_txn_id || 0) || null,
+    recurringRuleId: Number(row.recurring_rule_id || 0) || null,
+    sharedDebtRequestCount,
+    sharedDebtQueueCount,
+    sharedDebtSummary: buildImportSharedDebtSummary({
+      requestCount: sharedDebtRequestCount,
+      draftCount: sharedDebtQueueCount
+    }),
+    raw,
+    installment,
+    normalizedBaseDescription: normalizeImportDuplicateText((installment && installment.baseDescription) || stripTrailingInstallmentMarker(row.description))
+  };
+
+  mapped.overwriteBadgeLabel = mapped.overwriteEligible
+    ? 'Manual · elegivel'
+    : (mapped.isManual ? 'Manual travado' : 'Ja importada');
+  mapped.version = buildImportExistingMatchVersion(mapped);
+  return mapped;
+}
+
+function getExistingImportRowsForCardDueRange(userId, cardId, startMonth, startYear, endMonth, endYear) {
   const rows = db.prepare(`
-    SELECT t.id, t.import_id, t.card_id, t.txn_date, t.description, t.amount_cents, t.card_number,
+    SELECT t.id, t.import_id, t.card_id, t.txn_date, t.description, t.amount_cents, t.card_number, t.raw_json,
            t.purchase_category_id, t.parent_txn_id, t.recurring_rule_id,
            COALESCE(t.due_month, i.month) AS month,
            COALESCE(t.due_year, i.year) AS year,
@@ -13741,64 +14046,22 @@ function getExistingImportMonthRows(userId, cardId, month, year) {
     LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
     WHERE t.user_id = ?
       AND t.card_id = ?
-      AND ${EFFECTIVE_DUE_MONTH_SQL} = ?
-      AND ${EFFECTIVE_DUE_YEAR_SQL} = ?
-    ORDER BY t.txn_date IS NULL ASC, t.txn_date ASC, t.amount_cents DESC, t.id ASC
-  `).all(userId, cardId, month, year);
+      AND (
+        COALESCE(t.due_year, i.year) > ? OR
+        (COALESCE(t.due_year, i.year) = ? AND COALESCE(t.due_month, i.month) >= ?)
+      )
+      AND (
+        COALESCE(t.due_year, i.year) < ? OR
+        (COALESCE(t.due_year, i.year) = ? AND COALESCE(t.due_month, i.month) <= ?)
+      )
+    ORDER BY COALESCE(t.due_year, i.year) ASC, COALESCE(t.due_month, i.month) ASC, t.txn_date IS NULL ASC, t.txn_date ASC, t.amount_cents DESC, t.id ASC
+  `).all(userId, cardId, startYear, startYear, startMonth, endYear, endYear, endMonth);
 
-  return rows.map((row) => {
-    const importId = Number(row.import_id || 0) || null;
-    const monthNumber = Number(row.month || 0) || null;
-    const yearNumber = Number(row.year || 0) || null;
-    const isManual = !importId;
-    const isClosedMonth = Boolean(monthNumber && yearNumber && isMonthClosed(userId, monthNumber, yearNumber));
-    const allocationCount = Math.max(0, Number(row.allocation_count || 0));
-    const sharedDebtRequestCount = Math.max(0, Number(row.shared_debt_request_count || 0));
-    const sharedDebtQueueCount = Math.max(0, Number(row.shared_debt_queue_count || 0));
-    const hasInstallmentChain = Number(row.parent_txn_id || 0) > 0 || Number(row.has_child_installments || 0) > 0;
+  return rows.map((row) => mapImportExistingRow(userId, row)).sort(compareImportExistingMatches);
+}
 
-    const mapped = {
-      id: Number(row.id),
-      importId,
-      cardId: Number(row.card_id || 0) || null,
-      month: monthNumber,
-      year: yearNumber,
-      txnDate: String(row.txn_date || '').trim() || null,
-      dateLabel: formatImportPreviewDateLabel(row.txn_date),
-      description: String(row.description || '').trim() || '(sem descricao)',
-      amountCents: Number(row.amount_cents) || 0,
-      amountLabel: formatBRLFromCents(Number(row.amount_cents) || 0),
-      cardNumber: normalizeImportCardNumber(row.card_number) || null,
-      cardNumberLabel: formatImportPreviewCardNumberLabel(row.card_number),
-      originLabel: importId ? 'Ja importada' : 'Lancada manualmente',
-      isManual,
-      isImported: !!importId,
-      overwriteEligible: Boolean(isManual && !isClosedMonth),
-      isClosedMonth,
-      overwriteUnavailableReason: importId
-        ? 'Essa coincidencia ja veio de importacao e fica so como referencia.'
-        : (isClosedMonth ? getMonthLockMessage(monthNumber, yearNumber) : null),
-      purchaseCategoryId: Number(row.purchase_category_id || 0) || null,
-      purchaseCategoryName: String(row.purchase_category_name || '').trim() || null,
-      allocationCount,
-      hasInstallmentChain,
-      hasRecurringRule: Number(row.recurring_rule_id || 0) > 0,
-      parentTxnId: Number(row.parent_txn_id || 0) || null,
-      recurringRuleId: Number(row.recurring_rule_id || 0) || null,
-      sharedDebtRequestCount,
-      sharedDebtQueueCount,
-      sharedDebtSummary: buildImportSharedDebtSummary({
-        requestCount: sharedDebtRequestCount,
-        draftCount: sharedDebtQueueCount
-      })
-    };
-
-    mapped.overwriteBadgeLabel = mapped.overwriteEligible
-      ? 'Manual · elegivel'
-      : (mapped.isManual ? 'Manual travado' : 'Ja importada');
-    mapped.version = buildImportExistingMatchVersion(mapped);
-    return mapped;
-  }).sort(compareImportExistingMatches);
+function getExistingImportMonthRows(userId, cardId, month, year) {
+  return getExistingImportRowsForCardDueRange(userId, cardId, month, year, month, year);
 }
 
 function countExactExistingMatchesForImportItem(item, matches, cardId, month, year) {
@@ -13828,15 +14091,94 @@ function countExactExistingMatchesForImportItem(item, matches, cardId, month, ye
   }, 0);
 }
 
-function buildImportPreviewSummary({ parsedCount, parsedTotalCents, existingCount, existingTotalCents, autoCount, autoTotalCents, appDuplicateCandidates, csvDuplicateGroups }) {
+
+function buildImportInstallmentPreviewImpact({ item, relatedRows = [], previewMonth, previewYear } = {}) {
+  const installment = item?.installment || resolveImportInstallmentMeta({ raw: item?.raw, description: item?.description, amountCents: item?.amountCents });
+  if (!installment) return null;
+
+  const schedule = buildImportInstallmentSchedule(previewMonth, previewYear, installment);
+  const futureSchedule = schedule.slice(1);
+  const impactBase = {
+    label: `${String(installment.position).padStart(2, '0')}/${String(installment.total).padStart(2, '0')}`,
+    futureCreateCount: 0,
+    futureExistingCount: 0,
+    hasConflict: false,
+    conflictReason: null,
+    projectedImportAffectedCount: 1,
+    projectedOverwriteAffectedCount: 1,
+    projectedOverwriteNewTransactionCount: 0,
+    projectedImportNewTransactionCount: 1
+  };
+  if (installment.conflictReason) {
+    return {
+      ...impactBase,
+      hasConflict: true,
+      conflictReason: installment.conflictReason
+    };
+  }
+  if (!futureSchedule.length) return impactBase;
+
+  const scheduleKeys = new Set(futureSchedule.map((entry) => entry.dueKey));
+  const matchingRows = (Array.isArray(relatedRows) ? relatedRows : [])
+    .filter((row) => scheduleKeys.has(buildImportInstallmentDueKey(row.month, row.year)))
+    .filter((row) => matchImportInstallmentExistingRowToItem(row, item));
+
+  const rootGroups = new Map();
+  const dueGroups = new Map();
+  const mismatchedTotals = new Set();
+
+  matchingRows.forEach((row) => {
+    const rootKey = Number(row.parentTxnId || row.id || 0) || Number(row.id || 0);
+    if (!rootGroups.has(rootKey)) rootGroups.set(rootKey, []);
+    rootGroups.get(rootKey).push(row);
+
+    const dueKey = buildImportInstallmentDueKey(row.month, row.year);
+    if (!dueGroups.has(dueKey)) dueGroups.set(dueKey, []);
+    dueGroups.get(dueKey).push(row);
+
+    const rowInstallment = row.installment || null;
+    if (rowInstallment && Number(rowInstallment.total || 0) > 1 && Number(rowInstallment.total || 0) !== Number(installment.total || 0)) {
+      mismatchedTotals.add(Number(rowInstallment.total || 0));
+    }
+  });
+
+  let conflictReason = null;
+  if (mismatchedTotals.size > 0) {
+    conflictReason = 'O app encontrou parcelas parecidas com total diferente.';
+  } else if (rootGroups.size > 1) {
+    conflictReason = 'O app encontrou mais de uma cadeia parecida nas próximas faturas.';
+  } else if (Array.from(dueGroups.values()).some((rows) => rows.length > 1)) {
+    conflictReason = 'Mais de uma parcela parecida apareceu no mesmo mês futuro.';
+  }
+
+  const futureExistingCount = futureSchedule.reduce((sum, entry) => sum + (dueGroups.has(entry.dueKey) ? 1 : 0), 0);
+  const futureCreateCount = conflictReason ? 0 : futureSchedule.reduce((sum, entry) => sum + (dueGroups.has(entry.dueKey) ? 0 : 1), 0);
+
+  return {
+    ...impactBase,
+    futureCreateCount,
+    futureExistingCount,
+    hasConflict: !!conflictReason,
+    conflictReason,
+    matchedChainRootId: rootGroups.size === 1 ? Array.from(rootGroups.keys())[0] : null,
+    projectedImportAffectedCount: 1 + futureCreateCount,
+    projectedOverwriteAffectedCount: 1 + futureCreateCount,
+    projectedOverwriteNewTransactionCount: futureCreateCount,
+    projectedImportNewTransactionCount: 1 + futureCreateCount
+  };
+}
+
+function buildImportPreviewSummary({ parsedCount, parsedTotalCents, existingCount, existingTotalCents, autoCount, autoTotalCents, autoAffectedCount = 0, appDuplicateCandidates, csvDuplicateGroups }) {
   const appDuplicateCount = appDuplicateCandidates.length;
   const appDuplicateTotalCents = appDuplicateCandidates.reduce((sum, candidate) => sum + Number(candidate.amountCents || 0), 0);
   const csvDuplicateGroupCount = csvDuplicateGroups.length;
   const csvDuplicateLineCount = csvDuplicateGroups.reduce((sum, group) => sum + Number(group.occurrenceCount || 0), 0);
   const csvDuplicateTotalCents = csvDuplicateGroups.reduce((sum, group) => sum + Number(group.groupTotalCents || 0), 0);
   const defaultCsvCount = csvDuplicateGroups.reduce((sum, group) => sum + Number(group.defaultKeepCount || 0), 0);
+  const defaultCsvAffectedCount = csvDuplicateGroups.reduce((sum, group) => sum + Number(group.defaultAffectedCount || 0), 0);
   const defaultCsvTotalCents = csvDuplicateGroups.reduce((sum, group) => sum + (Number(group.amountCents || 0) * Number(group.defaultKeepCount || 0)), 0);
   const defaultFinalCount = autoCount + defaultCsvCount;
+  const defaultFinalAffectedCount = autoAffectedCount + defaultCsvAffectedCount;
   const defaultFinalTotalCents = autoTotalCents + defaultCsvTotalCents;
   const projectedCardCount = existingCount + defaultFinalCount;
   const projectedCardTotalCents = existingTotalCents + defaultFinalTotalCents;
@@ -13861,6 +14203,7 @@ function buildImportPreviewSummary({ parsedCount, parsedTotalCents, existingCoun
     defaultFinalCount,
     defaultNewImportCount: defaultFinalCount,
     defaultOverwriteCount: 0,
+    defaultFinalAffectedCount,
     defaultFinalTotalCents,
     defaultFinalTotalLabel: formatBRLFromCents(defaultFinalTotalCents),
     projectedCardCount,
@@ -13873,6 +14216,13 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
   const items = txns.map((txn, index) => buildImportPreviewItem(txn, index));
   const itemMap = new Map(items.map((item) => [item.id, item]));
   const existingRows = getExistingImportMonthRows(userId, cardId, month, year);
+  const maxFutureOffset = items.reduce((maxOffset, item) => {
+    const installment = item.installment || null;
+    if (!installment) return maxOffset;
+    return Math.max(maxOffset, Math.max(0, Number(installment.total || 0) - Number(installment.position || 0)));
+  }, 0);
+  const lastDue = maxFutureOffset > 0 ? shiftMonth(year, month, maxFutureOffset) : { month, year };
+  const existingRowsInRange = getExistingImportRowsForCardDueRange(userId, cardId, month, year, lastDue.month, lastDue.year);
   const existingByDayAmount = new Map();
 
   for (const row of existingRows) {
@@ -13880,6 +14230,21 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
     if (!existingByDayAmount.has(key)) existingByDayAmount.set(key, []);
     existingByDayAmount.get(key).push(row);
   }
+
+  items.forEach((item) => {
+    const installmentImpact = buildImportInstallmentPreviewImpact({
+      item,
+      relatedRows: existingRowsInRange,
+      previewMonth: month,
+      previewYear: year
+    });
+    if (!installmentImpact) return;
+    item.installmentImpact = installmentImpact;
+    item.projectedImportAffectedCount = Number(installmentImpact.projectedImportAffectedCount || 1);
+    item.projectedImportNewTransactionCount = Number(installmentImpact.projectedImportNewTransactionCount || 1);
+    item.projectedOverwriteAffectedCount = Number(installmentImpact.projectedOverwriteAffectedCount || 1);
+    item.projectedOverwriteNewTransactionCount = Number(installmentImpact.projectedOverwriteNewTransactionCount || 0);
+  });
 
   const csvGroupsByFingerprint = new Map();
   for (const item of items) {
@@ -13909,6 +14274,9 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
     const defaultKeepCount = Math.max(0, Math.min(groupItems.length, groupItems.length - existingMatches.length));
     const exactMatchCount = countExactExistingMatchesForImportItem(representative, existingMatches, cardId, month, year);
     const groupId = `csv_group_${csvDuplicateGroups.length + 1}`;
+    const defaultImportItems = groupItems.slice(0, defaultKeepCount);
+    const defaultImportItemIds = defaultImportItems.map((item) => item.id);
+    const defaultAffectedCount = defaultImportItems.reduce((sum, item) => sum + Number(item.projectedImportAffectedCount || 1), 0);
 
     groupItems.forEach((item) => csvGroupIdByItemId.set(item.id, groupId));
 
@@ -13916,6 +14284,8 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
       id: groupId,
       representativeItemId: representative.id,
       itemIds: groupItems.map((item) => item.id),
+      defaultImportItemIds,
+      defaultAffectedCount,
       occurrenceCount: groupItems.length,
       defaultKeepCount,
       amountCents: representative.amountCents,
@@ -13943,6 +14313,7 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
       const overwriteCandidates = existingMatches.filter((match) => match.overwriteEligible);
       const lockedManualMatches = existingMatches.filter((match) => match.isManual && !match.overwriteEligible);
       const importedMatches = existingMatches.filter((match) => match.isImported);
+      const installmentImpact = item.installmentImpact || null;
 
       appDuplicateCandidates.push({
         id: `app_group_${appDuplicateCandidates.length + 1}`,
@@ -13963,7 +14334,12 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
           ? null
           : (lockedManualMatches.length > 0
               ? 'Os manuais encontrados ficam só como referência porque esse mês está fechado.'
-              : 'As coincidências daqui ficam só como referência, porque já vieram de importação.')
+              : 'As coincidências daqui ficam só como referência, porque já vieram de importação.'),
+        installmentImpact,
+        projectedImportAffectedCount: 1,
+        projectedImportNewTransactionCount: 1,
+        projectedOverwriteAffectedCount: installmentImpact ? Number(installmentImpact.projectedOverwriteAffectedCount || 1) : 1,
+        projectedOverwriteNewTransactionCount: installmentImpact ? Number(installmentImpact.projectedOverwriteNewTransactionCount || 0) : 0
       });
       continue;
     }
@@ -13978,6 +14354,7 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
   const existingTotalCents = existingRows.reduce((sum, row) => sum + Number(row.amountCents || 0), 0);
   const autoCount = autoItems.length;
   const autoTotalCents = autoItems.reduce((sum, item) => sum + Number(item.amountCents || 0), 0);
+  const autoAffectedCount = autoItems.reduce((sum, item) => sum + Number(item.projectedImportAffectedCount || 1), 0);
 
   return {
     id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex'),
@@ -14000,6 +14377,7 @@ function buildImportPreviewData({ userId, cardId, cardName, month, year, origina
       existingTotalCents,
       autoCount,
       autoTotalCents,
+      autoAffectedCount,
       appDuplicateCandidates,
       csvDuplicateGroups
     })
@@ -14075,10 +14453,163 @@ function resolveImportPreviewSelection(preview, body) {
   };
 }
 
-function buildImportConfirmationMessage(preview, importedCount, overwrittenCount = 0) {
+function hasChildInstallmentsForTransaction(userId, txnId) {
+  const safeTxnId = Number(txnId || 0);
+  if (!safeTxnId) return false;
+  return !!db.prepare(`
+    SELECT 1
+    FROM transactions t
+    WHERE t.user_id = ?
+      AND t.parent_txn_id = ?
+    LIMIT 1
+  `).get(userId, safeTxnId);
+}
+
+function buildImportInstallmentExecutionPlan({ userId, cardId, previewMonth, previewYear, item, overwriteTargetRow = null, suppressFutureExpansion = false } = {}) {
+  const installment = item?.installment || resolveImportInstallmentMeta({ raw: item?.raw, description: item?.description, amountCents: item?.amountCents });
+  if (!installment) return null;
+
+  const schedule = buildImportInstallmentSchedule(previewMonth, previewYear, installment);
+  const currentEntry = schedule[0] || null;
+  const futureSchedule = schedule.slice(1);
+  if (installment.conflictReason) {
+    return {
+      installment,
+      currentEntry,
+      futureSchedule,
+      currentDescription: formatInstallmentDescription(installment.baseDescription, installment.position, installment.total),
+      currentRaw: buildImportInstallmentRawPayload(item.raw || {}, installment, {
+        source: 'statement_import',
+        generated_future_installment: false,
+        conflictReason: installment.conflictReason
+      }),
+      matchedChainRootId: null,
+      overwriteCurrentParentTxnId: null,
+      currentInsertParentTxnId: overwriteTargetRow
+        ? (Number(overwriteTargetRow.parent_txn_id || overwriteTargetRow.parentTxnId || 0) || null)
+        : null,
+      futureExistingCount: 0,
+      futureCreateCount: 0,
+      futureRowsToCreate: [],
+      hasConflict: true,
+      conflictReason: installment.conflictReason
+    };
+  }
+  const futureKeys = new Set(futureSchedule.map((entry) => entry.dueKey));
+  const relatedRows = futureSchedule.length
+    ? getExistingImportRowsForCardDueRange(userId, cardId, futureSchedule[0].dueMonth, futureSchedule[0].dueYear, futureSchedule[futureSchedule.length - 1].dueMonth, futureSchedule[futureSchedule.length - 1].dueYear)
+    : [];
+  const matchingRows = relatedRows
+    .filter((row) => futureKeys.has(buildImportInstallmentDueKey(row.month, row.year)))
+    .filter((row) => matchImportInstallmentExistingRowToItem(row, item));
+
+  const rootGroups = new Map();
+  const dueGroups = new Map();
+  const mismatchedTotals = new Set();
+  matchingRows.forEach((row) => {
+    const rootKey = Number(row.parentTxnId || row.id || 0) || Number(row.id || 0);
+    if (!rootGroups.has(rootKey)) rootGroups.set(rootKey, []);
+    rootGroups.get(rootKey).push(row);
+
+    const dueKey = buildImportInstallmentDueKey(row.month, row.year);
+    if (!dueGroups.has(dueKey)) dueGroups.set(dueKey, []);
+    dueGroups.get(dueKey).push(row);
+
+    const rowInstallment = row.installment || null;
+    if (rowInstallment && Number(rowInstallment.total || 0) > 1 && Number(rowInstallment.total || 0) !== Number(installment.total || 0)) {
+      mismatchedTotals.add(Number(rowInstallment.total || 0));
+    }
+  });
+
+  let conflictReason = null;
+  if (mismatchedTotals.size > 0) {
+    conflictReason = 'O app encontrou parcelas parecidas com total diferente.';
+  } else if (rootGroups.size > 1) {
+    conflictReason = 'O app encontrou mais de uma cadeia parecida nas próximas faturas.';
+  } else if (Array.from(dueGroups.values()).some((rows) => rows.length > 1)) {
+    conflictReason = 'Mais de uma parcela parecida apareceu no mesmo mês futuro.';
+  }
+
+  const matchedGroupRootId = rootGroups.size === 1 ? Number(Array.from(rootGroups.keys())[0] || 0) || null : null;
+  let overwriteCurrentParentTxnId = null;
+  if (!conflictReason && overwriteTargetRow && matchedGroupRootId) {
+    const targetOwnRootId = Number(overwriteTargetRow.parent_txn_id || overwriteTargetRow.parentTxnId || overwriteTargetRow.id || 0) || null;
+    const targetHasOwnChain = Boolean(Number(overwriteTargetRow.parent_txn_id || overwriteTargetRow.parentTxnId || 0) > 0 || hasChildInstallmentsForTransaction(userId, overwriteTargetRow.id));
+    if (targetOwnRootId && matchedGroupRootId !== targetOwnRootId) {
+      if (targetHasOwnChain) {
+        conflictReason = 'A parcela atual já faz parte de outra cadeia parcelada.';
+      } else {
+        overwriteCurrentParentTxnId = matchedGroupRootId;
+      }
+    }
+  }
+
+  if (!conflictReason && suppressFutureExpansion) {
+    conflictReason = 'A expansão automática ficou desligada porque a linha atual foi mantida como nova mesmo com coincidência neste mês.';
+  }
+
+  const futureExistingCount = futureSchedule.reduce((sum, entry) => sum + (dueGroups.has(entry.dueKey) ? 1 : 0), 0);
+  const futureRowsToCreate = conflictReason
+    ? []
+    : futureSchedule
+        .filter((entry) => !dueGroups.has(entry.dueKey))
+        .map((entry) => {
+          const installmentMeta = buildImportInstallmentMeta(entry.position, installment.total, installment.baseDescription, {
+            source: 'statement_import',
+            fromRaw: false
+          });
+          return {
+            dueMonth: entry.dueMonth,
+            dueYear: entry.dueYear,
+            description: formatInstallmentDescription(installment.baseDescription, entry.position, installment.total),
+            amountCents: Number(item.amountCents || 0),
+            cardNumber: normalizeImportCardNumber(item.cardNumber) || null,
+            isoDate: item.isoDate || null,
+            purchaseCategoryId: overwriteTargetRow ? (Number(overwriteTargetRow.purchase_category_id || overwriteTargetRow.purchaseCategoryId || 0) || null) : null,
+            raw: buildImportInstallmentRawPayload(item.raw || {}, installmentMeta, {
+              source: 'statement_import',
+              generated_future_installment: true
+            })
+          };
+        });
+
+  return {
+    installment,
+    currentEntry,
+    futureSchedule,
+    currentDescription: formatInstallmentDescription(installment.baseDescription, installment.position, installment.total),
+    currentRaw: buildImportInstallmentRawPayload(item.raw || {}, installment, {
+      source: 'statement_import',
+      generated_future_installment: false
+    }),
+    matchedChainRootId: matchedGroupRootId,
+    overwriteCurrentParentTxnId,
+    currentInsertParentTxnId: overwriteTargetRow
+      ? (overwriteCurrentParentTxnId || Number(overwriteTargetRow.parent_txn_id || overwriteTargetRow.parentTxnId || 0) || null)
+      : (matchedGroupRootId || null),
+    futureExistingCount,
+    futureCreateCount: futureRowsToCreate.length,
+    futureRowsToCreate,
+    hasConflict: !!conflictReason,
+    conflictReason
+  };
+}
+
+function buildImportConfirmationMessage(preview, importedSummary = {}, overwrittenCount = 0) {
   const periodLabel = preview?.periodLabel || monthLabel(preview?.month, preview?.year);
-  const safeImportedCount = Math.max(0, Number(importedCount || 0));
-  const safeOverwrittenCount = Math.max(0, Number(overwrittenCount || 0));
+  const summaryPayload = typeof importedSummary === 'object' && importedSummary !== null
+    ? importedSummary
+    : {
+        importedLineCount: importedSummary,
+        overwrittenCount
+      };
+
+  const safeImportedCount = Math.max(0, Number(summaryPayload.importedLineCount || 0));
+  const safeOverwrittenCount = Math.max(0, Number(summaryPayload.overwrittenCount || 0));
+  const safeCreatedTransactionCount = Math.max(0, Number(summaryPayload.createdTransactionCount || 0));
+  const safeFutureCreatedCount = Math.max(0, Number(summaryPayload.futureCreatedCount || 0));
+  const safeBlockedFutureExpansionCount = Math.max(0, Number(summaryPayload.blockedFutureExpansionCount || 0));
+
   if (safeImportedCount <= 0 && safeOverwrittenCount <= 0) {
     return {
       type: 'info',
@@ -14098,8 +14629,8 @@ function buildImportConfirmationMessage(preview, importedCount, overwrittenCount
   const actionParts = [];
   if (safeImportedCount > 0) {
     actionParts.push(safeImportedCount === 1
-      ? '1 compra nova entrou'
-      : `${safeImportedCount} compras novas entraram`);
+      ? '1 linha nova entrou'
+      : `${safeImportedCount} linhas novas entraram`);
   }
   if (safeOverwrittenCount > 0) {
     actionParts.push(safeOverwrittenCount === 1
@@ -14107,15 +14638,33 @@ function buildImportConfirmationMessage(preview, importedCount, overwrittenCount
       : `${safeOverwrittenCount} lancamentos manuais foram sobrescritos`);
   }
 
+  const detailParts = [];
+  if (safeCreatedTransactionCount > safeImportedCount) {
+    detailParts.push(safeCreatedTransactionCount === 1
+      ? '1 transacao foi criada'
+      : `${safeCreatedTransactionCount} transacoes foram criadas`);
+  }
+  if (safeFutureCreatedCount > 0) {
+    detailParts.push(safeFutureCreatedCount === 1
+      ? '1 parcela futura ficou preparada'
+      : `${safeFutureCreatedCount} parcelas futuras ficaram preparadas`);
+  }
+  if (safeBlockedFutureExpansionCount > 0) {
+    detailParts.push(safeBlockedFutureExpansionCount === 1
+      ? '1 cadeia parcelada ficou so na parcela atual por prudencia'
+      : `${safeBlockedFutureExpansionCount} cadeias parceladas ficaram so na parcela atual por prudencia`);
+  }
+
   const baseMessage = `${actionParts.join(' e ')} em ${periodLabel}.`;
+  const detailMessage = detailParts.length ? ` ${detailParts.join('. ')}.` : '';
 
   if (!reviewedParts.length) {
-    return { type: 'success', message: `${baseMessage} Tudo certinho por aqui.` };
+    return { type: 'success', message: `${baseMessage}${detailMessage} Tudo certinho por aqui.` };
   }
 
   return {
     type: 'success',
-    message: `${baseMessage} Revisei ${reviewedParts.join(' e ')} com voce antes de confirmar.`
+    message: `${baseMessage}${detailMessage} Revisei ${reviewedParts.join(' e ')} com voce antes de confirmar.`
   };
 }
 
@@ -14140,6 +14689,7 @@ registerImportRoutes(app, {
   buildImportExistingMatchVersion,
   buildImportOverwriteAuditSnapshot,
   buildImportOverwriteDescription,
+  buildImportInstallmentExecutionPlan,
   isMonthClosed,
   getMonthLockMessage,
   getTransactionScopeRowsByIds,
@@ -15660,6 +16210,7 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
   });
   const isClosed = isMonthClosed(userId, txn.month, txn.year);
   const hasFutureInstallmentsForTxn = hasFutureInstallments(userId, txn);
+  const canEditPurchase = !Number(txn.import_id || 0) || isEditableImportedInstallmentTxn(txn);
   const initialSplitMode = inferAllocationMode(Number(txn.amount_cents || 0), allocationRows);
   const purchaseCategories = getPurchaseCategories(userId, {
     includeIds: txn.purchase_category_id ? [txn.purchase_category_id] : []
@@ -15679,7 +16230,8 @@ app.get("/txn/:id", ensureAuthenticated, (req, res) => {
     cards,
     formatBRLFromCents,
     isClosed,
-    hasFutureInstallments: hasFutureInstallmentsForTxn
+    hasFutureInstallments: hasFutureInstallmentsForTxn,
+    canEditPurchase
   });
 });
 
@@ -15706,7 +16258,8 @@ app.post("/txn/:id/edit", ensureAuthenticated, (req, res) => {
   };
 
   if (!txn) return res.status(404).send("Transação não encontrada.");
-  if (Number(txn.import_id || 0) > 0) {
+  const allowImportedEdit = isEditableImportedInstallmentTxn(txn);
+  if (Number(txn.import_id || 0) > 0 && !allowImportedEdit) {
     return respondError(409, 'Compras importadas ainda não entram na edição completa. Por enquanto, esse ajuste segue no combo excluir e lançar de novo.');
   }
   if (isMonthClosed(userId, txn.month, txn.year)) {
@@ -15778,6 +16331,7 @@ app.post("/txn/:id/edit", ensureAuthenticated, (req, res) => {
   }
 
   const dueShiftDelta = getMonthDelta(txn.year, txn.month, targetDueYear, targetDueMonth);
+  const baseDescriptionForInstallments = normalizeImportInstallmentBaseDescription(stripTrailingInstallmentMarker(description)) || description;
   const futureScope = applyScope === 'future';
   const isRecurring = Number(txn.recurring_rule_id || 0) > 0;
 
@@ -15811,8 +16365,7 @@ app.post("/txn/:id/edit", ensureAuthenticated, (req, res) => {
       isRecurring
     }));
   }
-  const installmentChain = txn.parent_txn_id || txn.id ? getInstallmentChainRows(userId, txn) : [];
-  const installmentMetaByTxnId = new Map(installmentChain.map((row, index) => [Number(row.id), { position: index + 1, total: installmentChain.length || 1 }]));
+  const installmentMetaByTxnId = buildInstallmentMetaByTxnId(userId, txn);
 
   const hasEditMutations = targetRows.some((row) => {
     let nextDueMonth = targetDueMonth;
@@ -15917,7 +16470,7 @@ app.post("/txn/:id/edit", ensureAuthenticated, (req, res) => {
       let nextDescription = description;
       const installmentMeta = installmentMetaByTxnId.get(Number(row.id || 0));
       if (installmentMeta && Number(installmentMeta.total || 1) > 1) {
-        nextDescription = formatInstallmentDescription(description, installmentMeta.position, installmentMeta.total);
+        nextDescription = formatInstallmentDescription(baseDescriptionForInstallments || description, installmentMeta.position, installmentMeta.total);
       }
 
       updateTxn.run(nextTxnDate, nextDescription, amountCents, cardIdNum, nextDueMonth, nextDueYear, purchaseCategoryId, row.id, userId);

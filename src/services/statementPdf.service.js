@@ -190,6 +190,184 @@ function normalizeBrDate(value) {
   return null;
 }
 
+function parseBrDateParts(value) {
+  const normalized = normalizeBrDate(value);
+  if (!normalized) return null;
+  const match = normalized.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+  return {
+    day: Number(match[1]),
+    month: Number(match[2]),
+    year: Number(match[3])
+  };
+}
+
+function formatBrDateParts(parts) {
+  const day = Number(parts?.day || 0);
+  const month = Number(parts?.month || 0);
+  const year = Number(parts?.year || 0);
+  if (!day || !month || !year) return null;
+  return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${String(year).padStart(4, '0')}`;
+}
+
+function shiftStatementMonth(month, year, offset) {
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  if (!safeMonth || !safeYear) return null;
+  const anchor = new Date(Date.UTC(safeYear, safeMonth - 1 + Number(offset || 0), 1));
+  if (Number.isNaN(anchor.getTime())) return null;
+  return {
+    month: anchor.getUTCMonth() + 1,
+    year: anchor.getUTCFullYear()
+  };
+}
+
+function inferInstallmentPurchaseYear({ statementMonth, statementYear, purchaseMonth, position }) {
+  const safePurchaseMonth = Number(purchaseMonth || 0);
+  const safePosition = Number(position || 0);
+  if (!safePurchaseMonth || !safePosition) return null;
+
+  const candidateOffsets = Array.from(new Set([
+    Math.max(0, safePosition),
+    Math.max(0, safePosition - 1)
+  ]));
+
+  for (const offset of candidateOffsets) {
+    const candidate = shiftStatementMonth(statementMonth, statementYear, -offset);
+    if (!candidate) continue;
+    if (Number(candidate.month || 0) !== safePurchaseMonth) continue;
+    return {
+      year: Number(candidate.year || 0) || null,
+      matchedOffset: offset
+    };
+  }
+
+  return null;
+}
+
+function buildDateInferenceMetadata({ originalDate, adjustedDate, reason, strategy, installmentMeta = null, matchedOffset = null }) {
+  const metadata = {
+    original_date: originalDate,
+    adjusted_date: adjustedDate,
+    reason,
+    strategy
+  };
+  if (installmentMeta) {
+    metadata.installment = {
+      position: Number(installmentMeta.position || 0) || null,
+      total: Number(installmentMeta.total || 0) || null,
+      label: installmentMeta.label || null
+    };
+  }
+  if (matchedOffset != null) {
+    metadata.matched_month_offset = Number(matchedOffset || 0);
+  }
+  return metadata;
+}
+
+function inferRowDateFromStatementContext(row, { statementMonth, statementYear, installmentMeta = null } = {}) {
+  const parsed = parseBrDateParts(row?.date);
+  if (!parsed) return null;
+
+  const safeStatementMonth = Number(statementMonth || 0);
+  const safeStatementYear = Number(statementYear || 0);
+  if (!safeStatementMonth || !safeStatementYear) return null;
+
+  let inferredYear = null;
+  let reason = null;
+  let strategy = null;
+  let matchedOffset = null;
+
+  if (installmentMeta && Number(installmentMeta.position || 0) > 0 && Number(installmentMeta.total || 0) > 1) {
+    const installmentInference = inferInstallmentPurchaseYear({
+      statementMonth: safeStatementMonth,
+      statementYear: safeStatementYear,
+      purchaseMonth: parsed.month,
+      position: installmentMeta.position
+    });
+    if (installmentInference && Number(installmentInference.year || 0)) {
+      inferredYear = Number(installmentInference.year || 0);
+      matchedOffset = installmentInference.matchedOffset;
+      reason = 'Ano reancorado pela parcela atual e pela competencia da fatura.';
+      strategy = 'installment_position_alignment';
+    }
+  }
+
+  if (inferredYear == null) {
+    const rolloverYear = parsed.month > safeStatementMonth ? safeStatementYear - 1 : safeStatementYear;
+    const looksFutureWithinStatementYear = parsed.year > safeStatementYear
+      || (parsed.year === safeStatementYear && parsed.month > safeStatementMonth);
+    if (looksFutureWithinStatementYear) {
+      inferredYear = rolloverYear;
+      reason = 'Ano reancorado porque a data extraida cairia no futuro em relacao a competencia da fatura.';
+      strategy = installmentMeta ? 'generic_future_guard_for_installment' : 'generic_future_guard';
+    }
+  }
+
+  if (inferredYear == null || inferredYear === parsed.year) return null;
+
+  const adjustedDate = formatBrDateParts({
+    day: parsed.day,
+    month: parsed.month,
+    year: inferredYear
+  });
+  if (!adjustedDate || adjustedDate === String(row?.date || '').trim()) return null;
+
+  return {
+    adjustedDate,
+    metadata: buildDateInferenceMetadata({
+      originalDate: row.date,
+      adjustedDate,
+      reason,
+      strategy,
+      installmentMeta,
+      matchedOffset
+    })
+  };
+}
+
+function applyStatementDateInference(rows = [], { statementMonth, statementYear, enrichmentByRowId = null } = {}) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const enrichmentMap = enrichmentByRowId instanceof Map ? enrichmentByRowId : new Map();
+  const adjustedRows = [];
+  const adjustments = [];
+
+  safeRows.forEach((row) => {
+    const enrichmentEntry = enrichmentMap.get(row?.id) || null;
+    const installmentMeta = enrichmentEntry?.meta || detectInstallmentMetaFromDescription(row?.description, row?.amountCents) || null;
+    const inferred = inferRowDateFromStatementContext(row, {
+      statementMonth,
+      statementYear,
+      installmentMeta
+    });
+
+    if (!inferred) {
+      adjustedRows.push(row);
+      return;
+    }
+
+    adjustedRows.push({
+      ...row,
+      date: inferred.adjustedDate,
+      dateInference: inferred.metadata
+    });
+    adjustments.push({
+      rowId: row.id,
+      description: row.description,
+      originalDate: row.date,
+      adjustedDate: inferred.adjustedDate,
+      strategy: inferred.metadata.strategy,
+      installmentLabel: installmentMeta?.label || null
+    });
+  });
+
+  return {
+    rows: adjustedRows,
+    adjustments,
+    adjustedCount: adjustments.length
+  };
+}
+
 function parseAmountToCents(value) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Math.round(value * 100);
@@ -962,6 +1140,10 @@ function buildTxnsForPreview(validationResult, providerKey, cardName, installmen
       warnings: validationResult.warnings
     };
 
+    if (row?.dateInference && typeof row.dateInference === 'object') {
+      raw.import_date_inference = row.dateInference;
+    }
+
     const enrichment = enrichmentByRowId.get(row.id) || null;
     if (enrichment?.meta) {
       raw.import_installment = {
@@ -1266,6 +1448,23 @@ async function processQueuedJob(job) {
     year: job.year
   });
 
+  const dateInference = applyStatementDateInference(bestResult.validation.rows, {
+    statementMonth: job.month,
+    statementYear: job.year,
+    enrichmentByRowId: installmentEnrichment?.enrichmentByRowId || null
+  });
+  const previewRows = dateInference.rows;
+
+  if (dateInference.adjustedCount > 0) {
+    repository.appendJobEvent(
+      job.id,
+      'info',
+      dateInference.adjustedCount === 1
+        ? '1 data teve o ano reancorado pela competencia da fatura para evitar uma compra no futuro.'
+        : `${dateInference.adjustedCount} datas tiveram o ano reancorado pela competencia da fatura para evitar compras no futuro.`
+    );
+  }
+
   if (installmentEnrichment.errorMessage) {
     repository.appendJobEvent(job.id, 'warning', `A segunda leitura de parcelamento caiu no fluxo simples: ${installmentEnrichment.errorMessage}`);
   } else if (installmentEnrichment.detectedCount > 0) {
@@ -1290,7 +1489,11 @@ async function processQueuedJob(job) {
     });
   }
 
-  const txns = buildTxnsForPreview(bestResult.validation, bestResult.providerKey, job.cardName, installmentEnrichment);
+  const previewValidation = {
+    ...bestResult.validation,
+    rows: previewRows
+  };
+  const txns = buildTxnsForPreview(previewValidation, bestResult.providerKey, job.cardName, installmentEnrichment);
   const preview = deps.buildImportPreviewData({
     userId: job.userId,
     cardId: job.cardId,
@@ -1300,7 +1503,7 @@ async function processQueuedJob(job) {
     originalFilename: job.originalFilename,
     txns
   });
-  const csvText = buildCsvFromRows(job.cardName, bestResult.validation.rows);
+  const csvText = buildCsvFromRows(job.cardName, previewRows);
 
   repository.saveArtifact({
     jobId: job.id,
@@ -1311,11 +1514,12 @@ async function processQueuedJob(job) {
       issuer: bestResult.validation.issuerKey,
       confidence: bestResult.validation.confidence,
       warnings: bestResult.validation.warnings,
-      import_rows: bestResult.validation.rows.map((row) => ({
+      import_rows: previewRows.map((row) => ({
         date: row.date,
         description: row.description,
         amount: row.amountCents / 100,
-        card_last4: row.cardLast4 || null
+        card_last4: row.cardLast4 || null,
+        ...(row.dateInference ? { date_inference: row.dateInference } : {})
       }))
     }, null, 2),
     encoding: 'utf8'

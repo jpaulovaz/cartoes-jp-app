@@ -141,7 +141,7 @@ const {
   buildImportPreviewFromBuffer,
   applyImportPreview
 } = require('./src/messageCsvService');
-const { registerAuthRoutes, registerSecurityRoutes, registerNotificationsRoutes, registerAdminCoreRoutes, registerAdminMessagesRoutes, registerCardsRoutes, registerFinancesRoutes, registerImportRoutes, registerSummaryRoutes, registerSharedDebtsRoutes, registerPeopleRoutes, registerSocialShareRoutes } = require('./src/routes');
+const { registerAuthRoutes, registerSecurityRoutes, registerNotificationsRoutes, registerAdminCoreRoutes, registerAdminMessagesRoutes, registerCardsRoutes, registerFinancesRoutes, registerImportRoutes, registerSummaryRoutes, registerSharedDebtsRoutes, registerPeopleRoutes, registerSocialShareRoutes, registerMonthlyEmailSummaryRoutes } = require('./src/routes');
 
 // Migração oficial executada explicitamente pelo bootstrap do runtime.
 // Seed opcional permanece fora do bootstrap automático.
@@ -215,6 +215,7 @@ function getCardBrandMeta(value) {
 // Schema permanente fica exclusivamente na trilha oficial de migração (Fase 1B).
 const { parseCsvByCardName } = require("./src/importers");
 const { formatBRLFromCents, parseMonthYear, toISOFromBRDate, centsFromPtBrMoney } = require("./src/utils");
+const { buildMonthTransactionsCsv } = require("./src/monthTransactionsCsv");
 const {
   PIX_DEFAULT_STATE,
   PIX_DEFAULT_CITY,
@@ -745,17 +746,49 @@ function buildLoginUrl(req) {
   return origin ? `${origin}/login` : '/login';
 }
 
+function buildAppUrl(req, targetPath = '/') {
+  const rawPath = String(targetPath || '/').trim();
+  const safePath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+  const origin = buildAppOriginFromRequest(req);
+  return origin ? `${origin}${safePath}` : safePath;
+}
+
 function sanitizeAdminEmailMessage(value) {
   return String(value || '').trim().slice(0, 280);
 }
 
 function summarizeEmailPayload(payload = {}) {
   const safe = payload && typeof payload === 'object' ? payload : {};
+  const period = safe.period && typeof safe.period === 'object'
+    ? { month: Number(safe.period.month || 0) || null, year: Number(safe.period.year || 0) || null }
+    : null;
+  const sections = safe.sections && typeof safe.sections === 'object'
+    ? Object.fromEntries(Object.entries(safe.sections).map(([key, value]) => [key, !!value]))
+    : null;
+  const attachments = safe.attachments && typeof safe.attachments === 'object'
+    ? {
+        transactionsCsv: !!safe.attachments.transactionsCsv,
+        csvFilename: String(safe.attachments.csvFilename || '').trim(),
+        csvRowCount: Number(safe.attachments.csvRowCount || 0) || 0,
+        csvByteLength: Number(safe.attachments.csvByteLength || 0) || 0
+      }
+    : null;
+  const urls = safe.urls && typeof safe.urls === 'object'
+    ? {
+        appUrl: String(safe.urls.appUrl || '').trim(),
+        analyticsUrl: String(safe.urls.analyticsUrl || '').trim()
+      }
+    : null;
+
   return JSON.stringify({
     loginUrl: String(safe.loginUrl || '').trim(),
     subject: String(safe.subject || '').trim(),
     preview: String(safe.preview || '').trim(),
     customMessage: sanitizeAdminEmailMessage(safe.customMessage || ''),
+    period,
+    sections,
+    attachments,
+    urls,
     accepted: Array.isArray(safe.accepted) ? safe.accepted.slice(0, 5) : [],
     rejected: Array.isArray(safe.rejected) ? safe.rejected.slice(0, 5) : [],
     response: String(safe.response || '').trim()
@@ -797,11 +830,16 @@ function finalizeEmailDeliveryEvent(eventId, { status, providerMessageId = '', e
   );
 }
 
-function getNextWelcomeEmailAttemptNo(targetUserId) {
+function getNextEmailAttemptNo(kind, targetUserId) {
+  const safeKind = String(kind || '').trim() || 'welcome';
   const safeUserId = Number(targetUserId || 0);
   if (!safeUserId) return 1;
-  const row = emailDeliveryEventsCountAttemptsForUserKind.get('welcome', safeUserId);
+  const row = emailDeliveryEventsCountAttemptsForUserKind.get(safeKind, safeUserId);
   return Math.max(1, Number(row?.total || 0) + 1);
+}
+
+function getNextWelcomeEmailAttemptNo(targetUserId) {
+  return getNextEmailAttemptNo('welcome', targetUserId);
 }
 
 function getLatestWelcomeEmailStatusMap() {
@@ -11530,9 +11568,8 @@ app.post("/geral/:year/:month/card/:cardId/delete", ensureAuthenticated, (req, r
   return res.redirect("/geral");
 });
 
-function sendMonthTransactionsCsv(res, userId, month, year) {
-
-  const rows = db.prepare(`
+function getMonthTransactionsCsvRows(userId, month, year) {
+  return db.prepare(`
     SELECT
       COALESCE(t.txn_date, '') AS txn_date,
       t.description,
@@ -11541,7 +11578,7 @@ function sendMonthTransactionsCsv(res, userId, month, year) {
       t.amount_cents,
       CASE WHEN EXISTS (
         SELECT 1 FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id
-      ) THEN 'Sim' ELSE 'Não' END AS allocated,
+      ) THEN 'Sim' ELSE 'N\u00e3o' END AS allocated,
       COALESCE((
         SELECT GROUP_CONCAT(name, ', ') FROM (
           SELECT p.name AS name
@@ -11562,28 +11599,18 @@ function sendMonthTransactionsCsv(res, userId, month, year) {
       )
     ORDER BY c.name, COALESCE(t.txn_date, ''), t.description
   `).all(userId, month, year, month, year);
+}
 
-  const header = ['Data da compra', 'Descrição', 'Cartão', 'Número', 'Valor (R$)', 'Distribuído', 'Pessoas', 'Origem', 'Competência'];
-  const lines = [header.map(csvEscape).join(';')];
+function buildMonthTransactionsCsvExport(userId, month, year) {
+  const rows = getMonthTransactionsCsvRows(userId, month, year);
+  return buildMonthTransactionsCsv(rows, { month, year });
+}
 
-  rows.forEach(row => {
-    lines.push([
-      formatDateBR(row.txn_date),
-      row.description,
-      row.card_name,
-      row.card_number,
-      formatBRLFromCents(row.amount_cents),
-      row.allocated,
-      row.people_names,
-      row.origem,
-      monthLabel(month, year)
-    ].map(csvEscape).join(';'));
-  });
-
-  const filename = `acerttapay-cartoes-${year}-${String(month).padStart(2, '0')}.csv`;
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.send('\uFEFF' + lines.join('\r\n'));
+function sendMonthTransactionsCsv(res, userId, month, year) {
+  const csv = buildMonthTransactionsCsvExport(userId, month, year);
+  res.setHeader('Content-Type', csv.contentType);
+  res.setHeader('Content-Disposition', `attachment; filename="${csv.filename}"`);
+  res.send(csv.content);
 }
 
 app.get("/geral/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
@@ -18390,6 +18417,23 @@ registerSummaryRoutes(app, {
   getMonthLockMessage,
   upsertCardStatementsForMonth,
   upsertPersonPaymentsForMonth
+});
+
+registerMonthlyEmailSummaryRoutes(app, {
+  ensureAuthenticated,
+  parseMonthYear,
+  buildMonthlyReviewViewModel,
+  buildMonthTransactionsCsvExport,
+  getEmailRuntimeConfig,
+  isEmailConfigured,
+  normalizeEmail,
+  buildAppUrl,
+  createEmailDeliveryEvent,
+  finalizeEmailDeliveryEvent,
+  getNextEmailAttemptNo,
+  sendEmail,
+  logEmailFlowError,
+  buildEmailTransportLogContext
 });
 
 function getPersonStatementExportData(userId, month, year, personId, itemOrder = "oldest") {

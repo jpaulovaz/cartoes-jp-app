@@ -67,6 +67,36 @@ function formatAddress(name, email) {
   return safeName ? `"${safeName.replace(/"/g, '\\"')}" <${safeEmail}>` : safeEmail;
 }
 
+
+function normalizeAttachment(attachment = {}) {
+  if (!attachment || typeof attachment !== 'object') return null;
+  const filename = String(attachment.filename || '').trim().replace(/[\r\n]+/g, ' ');
+  if (!filename) return null;
+
+  const normalized = { filename };
+  if (Buffer.isBuffer(attachment.content)) {
+    normalized.content = attachment.content;
+  } else if (attachment.content != null) {
+    normalized.content = String(attachment.content);
+  } else if (attachment.path) {
+    normalized.path = String(attachment.path);
+  } else {
+    return null;
+  }
+
+  const contentType = String(attachment.contentType || '').trim();
+  if (contentType) normalized.contentType = contentType;
+  const encoding = String(attachment.encoding || '').trim();
+  if (encoding) normalized.encoding = encoding;
+  return normalized;
+}
+
+function normalizeAttachments(value) {
+  if (!Array.isArray(value)) return undefined;
+  const attachments = value.map(normalizeAttachment).filter(Boolean);
+  return attachments.length ? attachments : undefined;
+}
+
 function buildTransportConfig(config = {}) {
   const host = String(config.host || '').trim();
   const port = normalizePort(config.port, normalizeBoolean(config.secure, false) ? 465 : 587);
@@ -128,6 +158,8 @@ async function sendEmail(config = {}, message = {}) {
     throw new Error('Falta o e-mail de destino para enviar essa mensagem.');
   }
 
+  const attachments = normalizeAttachments(message.attachments);
+
   const info = await transporter.sendMail({
     from: defaults.from,
     to,
@@ -135,7 +167,8 @@ async function sendEmail(config = {}, message = {}) {
     text: String(message.text || ''),
     html: String(message.html || ''),
     replyTo: normalizeEmailAddress(message.replyTo) || defaults.replyTo,
-    headers: message.headers && typeof message.headers === 'object' ? message.headers : undefined
+    headers: message.headers && typeof message.headers === 'object' ? message.headers : undefined,
+    attachments
   });
 
   return {

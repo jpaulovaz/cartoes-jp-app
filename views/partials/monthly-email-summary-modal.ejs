@@ -1,0 +1,70 @@
+<% const monthlySummaryRecipient = user && user.email ? user.email : 'seu e-mail de login'; %>
+<div data-monthly-email-modal aria-hidden="true" class="hidden fixed inset-0 z-[10030] bg-slate-900/60 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+  <div class="pointer-events-none flex min-h-full items-end justify-center sm:items-center">
+    <div class="op-monthly-email-modal pointer-events-auto flex w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]">
+      <div class="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 dark:border-slate-700 sm:px-6">
+        <div>
+          <p class="text-[11px] font-black uppercase tracking-[0.22em] text-blue-500 dark:text-blue-300">Resumo no e-mail</p>
+          <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Mandar o resumo desse m&ecirc;s?</h2>
+          <p class="mt-1 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Escolha o que vai junto e a gente leva esse raio-x financeiro para o seu e-mail, sem drama e com CSV na mala.</p>
+        </div>
+        <button type="button" data-monthly-email-close class="op-icon-btn" aria-label="Fechar">x</button>
+      </div>
+
+      <form data-monthly-email-form class="flex flex-1 flex-col overflow-hidden">
+        <div class="op-monthly-email-modal__scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+          <div class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100">
+            <div>Compet&ecirc;ncia: <span data-monthly-email-period-label>--/----</span></div>
+            <div class="mt-1 text-xs font-medium text-blue-700 dark:text-blue-200">Vai para: <span data-monthly-email-recipient><%= monthlySummaryRecipient %></span></div>
+          </div>
+
+          <fieldset class="mt-4 space-y-3">
+            <legend class="text-xs font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">O que entra no pacote?</legend>
+
+            <label class="op-monthly-email-option">
+              <input type="checkbox" data-monthly-email-section="overview" checked>
+              <span><strong>Retrato do m&ecirc;s</strong><small>Totais, pagos, faltando, status do m&ecirc;s e atalhos para voltar ao app.</small></span>
+            </label>
+
+            <label class="op-monthly-email-option">
+              <input type="checkbox" data-monthly-email-section="cards" checked>
+              <span><strong>Compras por cart&atilde;o</strong><small>Resumo por cart&atilde;o com total, pago, pendente e vencimento usado.</small></span>
+            </label>
+
+            <label class="op-monthly-email-option">
+              <input type="checkbox" data-monthly-email-section="analytics" checked>
+              <span><strong>Meu peda&ccedil;o e categorias</strong><small>Top categorias, maior estabelecimento e gr&aacute;ficos simples para e-mail.</small></span>
+            </label>
+
+            <label class="op-monthly-email-option">
+              <input type="checkbox" data-monthly-email-section="financeFlow" checked>
+              <span><strong>Entradas e sa&iacute;das fora do cart&atilde;o</strong><small>Receitas, despesas avulsas e saldo previsto do m&ecirc;s.</small></span>
+            </label>
+
+            <label class="op-monthly-email-option">
+              <input type="checkbox" data-monthly-email-section="people" checked>
+              <span><strong>Pessoas e acertos</strong><small>Totais por pessoa e pend&ecirc;ncias. Na V1, isso s&oacute; vai para voc&ecirc;.</small></span>
+            </label>
+
+            <label class="op-monthly-email-option op-monthly-email-option--attachment">
+              <input type="checkbox" data-monthly-email-attachment="transactionsCsv" checked>
+              <span><strong>CSV de compras</strong><small>Anexo .csv com as compras da compet&ecirc;ncia para abrir no Excel/Sheets.</small></span>
+            </label>
+          </fieldset>
+
+          <div data-monthly-email-status class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" role="status" aria-live="polite">
+            Pronto para enviar. O destinat&aacute;rio fica travado no seu e-mail de login por seguran&ccedil;a.
+          </div>
+        </div>
+
+        <div class="flex shrink-0 flex-col gap-2 border-t border-slate-200 px-4 py-4 dark:border-slate-700 sm:flex-row sm:justify-end sm:px-6">
+          <button type="button" data-monthly-email-close class="op-btn op-btn-ghost sm:min-w-[8rem]">Agora n&atilde;o</button>
+          <button type="submit" data-monthly-email-submit class="op-btn op-btn-info sm:min-w-[12rem]">
+            <span data-monthly-email-submit-label>Enviar meu resumo</span>
+            <span data-monthly-email-submit-spinner class="hidden">Enviando...</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

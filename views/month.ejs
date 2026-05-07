@@ -1565,7 +1565,7 @@ Tente novamente em instantes.`,
         summary.innerHTML = `<div class="flex flex-wrap items-center gap-2"><span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Edição segura</span><span class="inline-flex items-center rounded-full bg-slate-900/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:bg-slate-100/10 dark:text-slate-300">${escapeHtml(item.recurring_rule_id ? 'Recorrente' : (item.has_future_installments ? 'Parcelada' : 'Única'))}</span></div><div class="mt-2 text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(formatMoney(item.amount_cents))} · ${escapeHtml(formatMonthLabel(item.month, item.year))}</div><p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Revise os dados do lançamento. Se houver parcelas ou recorrência, o alcance será confirmado antes de salvar.</p>${item.card_name ? `<div class="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartão atual: ${escapeHtml(item.card_name)}</div>` : ''}</div>`;
         wrapper.appendChild(summary);
 
-        if (item.import_id) {
+        if (item.import_id && !item.can_edit_purchase) {
           const warning = document.createElement('div');
           warning.className = 'rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100';
           warning.textContent = 'Compras importadas ainda não entram na edição completa. Por enquanto, esse ajuste segue no combo excluir e lançar de novo.';

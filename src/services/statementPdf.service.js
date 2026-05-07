@@ -53,6 +53,43 @@ const STATEMENT_JSON_SCHEMA = {
   }
 };
 
+
+const INSTALLMENT_ENRICHMENT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['warnings', 'rows'],
+  properties: {
+    warnings: {
+      type: 'array',
+      description: 'Liste incertezas importantes em portugues do Brasil. Se nao houver alerta, devolva um array vazio.',
+      items: {
+        type: 'string',
+        description: 'Frase curta em portugues do Brasil explicando a incerteza.'
+      }
+    },
+    rows: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['row_id', 'installment_detected'],
+        properties: {
+          row_id: { type: 'string' },
+          installment_detected: { type: 'boolean' },
+          installment_position: { type: ['integer', 'null'] },
+          installment_total: { type: ['integer', 'null'] },
+          base_description: { type: ['string', 'null'] },
+          confidence: {
+            type: ['string', 'null'],
+            enum: ['high', 'medium', 'low', null]
+          },
+          pattern_kind: { type: ['string', 'null'] }
+        }
+      }
+    }
+  }
+};
+
 const MONTH_TOKEN_TO_NUMBER = {
   jan: '01', janeiro: '01', january: '01',
   fev: '02', fevereiro: '02', feb: '02', february: '02',
@@ -151,6 +188,184 @@ function normalizeBrDate(value) {
   }
 
   return null;
+}
+
+function parseBrDateParts(value) {
+  const normalized = normalizeBrDate(value);
+  if (!normalized) return null;
+  const match = normalized.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+  return {
+    day: Number(match[1]),
+    month: Number(match[2]),
+    year: Number(match[3])
+  };
+}
+
+function formatBrDateParts(parts) {
+  const day = Number(parts?.day || 0);
+  const month = Number(parts?.month || 0);
+  const year = Number(parts?.year || 0);
+  if (!day || !month || !year) return null;
+  return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${String(year).padStart(4, '0')}`;
+}
+
+function shiftStatementMonth(month, year, offset) {
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  if (!safeMonth || !safeYear) return null;
+  const anchor = new Date(Date.UTC(safeYear, safeMonth - 1 + Number(offset || 0), 1));
+  if (Number.isNaN(anchor.getTime())) return null;
+  return {
+    month: anchor.getUTCMonth() + 1,
+    year: anchor.getUTCFullYear()
+  };
+}
+
+function inferInstallmentPurchaseYear({ statementMonth, statementYear, purchaseMonth, position }) {
+  const safePurchaseMonth = Number(purchaseMonth || 0);
+  const safePosition = Number(position || 0);
+  if (!safePurchaseMonth || !safePosition) return null;
+
+  const candidateOffsets = Array.from(new Set([
+    Math.max(0, safePosition),
+    Math.max(0, safePosition - 1)
+  ]));
+
+  for (const offset of candidateOffsets) {
+    const candidate = shiftStatementMonth(statementMonth, statementYear, -offset);
+    if (!candidate) continue;
+    if (Number(candidate.month || 0) !== safePurchaseMonth) continue;
+    return {
+      year: Number(candidate.year || 0) || null,
+      matchedOffset: offset
+    };
+  }
+
+  return null;
+}
+
+function buildDateInferenceMetadata({ originalDate, adjustedDate, reason, strategy, installmentMeta = null, matchedOffset = null }) {
+  const metadata = {
+    original_date: originalDate,
+    adjusted_date: adjustedDate,
+    reason,
+    strategy
+  };
+  if (installmentMeta) {
+    metadata.installment = {
+      position: Number(installmentMeta.position || 0) || null,
+      total: Number(installmentMeta.total || 0) || null,
+      label: installmentMeta.label || null
+    };
+  }
+  if (matchedOffset != null) {
+    metadata.matched_month_offset = Number(matchedOffset || 0);
+  }
+  return metadata;
+}
+
+function inferRowDateFromStatementContext(row, { statementMonth, statementYear, installmentMeta = null } = {}) {
+  const parsed = parseBrDateParts(row?.date);
+  if (!parsed) return null;
+
+  const safeStatementMonth = Number(statementMonth || 0);
+  const safeStatementYear = Number(statementYear || 0);
+  if (!safeStatementMonth || !safeStatementYear) return null;
+
+  let inferredYear = null;
+  let reason = null;
+  let strategy = null;
+  let matchedOffset = null;
+
+  if (installmentMeta && Number(installmentMeta.position || 0) > 0 && Number(installmentMeta.total || 0) > 1) {
+    const installmentInference = inferInstallmentPurchaseYear({
+      statementMonth: safeStatementMonth,
+      statementYear: safeStatementYear,
+      purchaseMonth: parsed.month,
+      position: installmentMeta.position
+    });
+    if (installmentInference && Number(installmentInference.year || 0)) {
+      inferredYear = Number(installmentInference.year || 0);
+      matchedOffset = installmentInference.matchedOffset;
+      reason = 'Ano reancorado pela parcela atual e pela competencia da fatura.';
+      strategy = 'installment_position_alignment';
+    }
+  }
+
+  if (inferredYear == null) {
+    const rolloverYear = parsed.month > safeStatementMonth ? safeStatementYear - 1 : safeStatementYear;
+    const looksFutureWithinStatementYear = parsed.year > safeStatementYear
+      || (parsed.year === safeStatementYear && parsed.month > safeStatementMonth);
+    if (looksFutureWithinStatementYear) {
+      inferredYear = rolloverYear;
+      reason = 'Ano reancorado porque a data extraida cairia no futuro em relacao a competencia da fatura.';
+      strategy = installmentMeta ? 'generic_future_guard_for_installment' : 'generic_future_guard';
+    }
+  }
+
+  if (inferredYear == null || inferredYear === parsed.year) return null;
+
+  const adjustedDate = formatBrDateParts({
+    day: parsed.day,
+    month: parsed.month,
+    year: inferredYear
+  });
+  if (!adjustedDate || adjustedDate === String(row?.date || '').trim()) return null;
+
+  return {
+    adjustedDate,
+    metadata: buildDateInferenceMetadata({
+      originalDate: row.date,
+      adjustedDate,
+      reason,
+      strategy,
+      installmentMeta,
+      matchedOffset
+    })
+  };
+}
+
+function applyStatementDateInference(rows = [], { statementMonth, statementYear, enrichmentByRowId = null } = {}) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const enrichmentMap = enrichmentByRowId instanceof Map ? enrichmentByRowId : new Map();
+  const adjustedRows = [];
+  const adjustments = [];
+
+  safeRows.forEach((row) => {
+    const enrichmentEntry = enrichmentMap.get(row?.id) || null;
+    const installmentMeta = enrichmentEntry?.meta || detectInstallmentMetaFromDescription(row?.description, row?.amountCents) || null;
+    const inferred = inferRowDateFromStatementContext(row, {
+      statementMonth,
+      statementYear,
+      installmentMeta
+    });
+
+    if (!inferred) {
+      adjustedRows.push(row);
+      return;
+    }
+
+    adjustedRows.push({
+      ...row,
+      date: inferred.adjustedDate,
+      dateInference: inferred.metadata
+    });
+    adjustments.push({
+      rowId: row.id,
+      description: row.description,
+      originalDate: row.date,
+      adjustedDate: inferred.adjustedDate,
+      strategy: inferred.metadata.strategy,
+      installmentLabel: installmentMeta?.label || null
+    });
+  });
+
+  return {
+    rows: adjustedRows,
+    adjustments,
+    adjustedCount: adjustments.length
+  };
 }
 
 function parseAmountToCents(value) {
@@ -307,6 +522,7 @@ function detectIssuerHint(text, filename = '') {
   if (/ita[uú]|lançamentos atuais|pagamento efetuado em/.test(source)) return 'itau';
   if (/sam's club|sams club|cart[aã]o sam's club/.test(source)) return 'sams_club';
   if (/carrefour|banco csf|cartaocarrefour/.test(source)) return 'carrefour';
+  if (/mercado\s+pago|cartao de credito mercado pago|cartão de crédito mercado pago/.test(source)) return 'mercado_pago';
   if (/\bnubank\b|\bnu pagamentos\b/.test(source)) return 'nubank';
   if (/\bbanco\s+inter\b|\binter\s+loop\b|\bcart[aã]o\s+inter\b|\binter\s+(visa|mastercard|elo|black|gold|platinum)\b/.test(source)) return 'inter';
   return 'unknown';
@@ -393,6 +609,267 @@ function buildExtractionPrompt({ issuerHint, cardName, month, year, text }) {
   ].join('\n');
 }
 
+
+function normalizeInstallmentBaseDescription(value) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*[\-–—:;/,]+$/g, '')
+    .trim();
+}
+
+function stripTrailingInstallmentMarker(description) {
+  const safe = String(description || '').replace(/\s+/g, ' ').trim();
+  if (!safe) return '';
+
+  let base = safe
+    .replace(/\s*(?:[\-–—:;/,]\s*)?\(?\d{1,2}\s*\/\s*\d{1,2}\)?\s*$/i, '')
+    .replace(/\s*(?:[\-–—:;/,]\s*)?(?:parc(?:ela)?\s*)?\d{1,2}\s*(?:de|\/)\s*\d{1,2}\)?\s*$/i, '')
+    .replace(/\s*(?:[\-–—:;/,]\s*)?\(?\d{1,2}\s+de\s+\d{1,2}\)?\s*$/i, '')
+    .replace(/\s*[()\-–—:;/,]+$/g, '')
+    .trim();
+
+  if (!base) {
+    base = safe
+      .replace(/\(?\d{1,2}\s*\/\s*\d{1,2}\)?/g, ' ')
+      .replace(/\(?\d{1,2}\s+de\s+\d{1,2}\)?/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  return normalizeInstallmentBaseDescription(base || safe) || safe;
+}
+
+function buildInstallmentMeta(position, total, baseDescription, extra = {}) {
+  const normalizedPosition = Number(position || 0);
+  const normalizedTotal = Number(total || 0);
+  if (!Number.isInteger(normalizedPosition) || !Number.isInteger(normalizedTotal)) return null;
+  if (normalizedPosition < 1 || normalizedTotal <= 1 || normalizedPosition > normalizedTotal || normalizedTotal > 240) return null;
+  const cleanBaseDescription = normalizeInstallmentBaseDescription(baseDescription) || '(sem descricao)';
+  return {
+    detected: true,
+    position: normalizedPosition,
+    total: normalizedTotal,
+    label: `${normalizedPosition}/${normalizedTotal}`,
+    baseDescription: cleanBaseDescription,
+    ...extra
+  };
+}
+
+function detectInstallmentMetaFromDescription(description, amountCents = 0) {
+  if (Number(amountCents || 0) <= 0) return null;
+  const safe = normalizeWhitespace(description);
+  if (!safe) return null;
+
+  const patterns = [
+    /(?:^|\s|\-|\()([A-Z])?\s*(\d{1,2})\s*\/\s*(\d{1,2})(?:\))?\s*$/i,
+    /\bparc(?:ela)?\s*(\d{1,2})\s*(?:de|\/)\s*(\d{1,2})\)?\s*$/i,
+    /\(\s*parc(?:ela)?\s*(\d{1,2})\s*(?:de|\/)\s*(\d{1,2})\s*\)$/i,
+    /(?:^|\s|\-|\()([A-Z])?\s*(\d{1,2})\s+de\s+(\d{1,2})(?:\))?\s*$/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = safe.match(pattern);
+    if (!match) continue;
+    const numbers = match.slice(1).filter((value) => /^\d+$/.test(String(value || '')));
+    if (numbers.length < 2) continue;
+    const meta = buildInstallmentMeta(numbers[0], numbers[1], stripTrailingInstallmentMarker(safe), {
+      source: 'description',
+      validator: 'regex',
+      fromRaw: false
+    });
+    if (meta) return meta;
+  }
+
+  return null;
+}
+
+function buildInstallmentEnrichmentPrompt({ issuerHint, cardName, month, year, rows }) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const payload = safeRows.map((row) => ({
+    row_id: row.id,
+    date: row.date,
+    description: row.description,
+    amount: Number(row.amountCents || 0) / 100,
+    card_last4: row.cardLast4 || null
+  }));
+
+  return [
+    'Você recebe linhas já extraídas de uma fatura de cartão e deve apenas enriquecer metadados de parcelamento.',
+    'Não altere datas, valores, descrição, quantidade de linhas ou row_id.',
+    'Sua missão é só dizer se cada linha é uma compra parcelada, qual a parcela atual, qual o total e qual a descrição-base sem o marcador de parcela.',
+    'Considere as variações comuns entre emissores brasileiros, como 02/08, 02 DE 08, Parcela 1 de 5, (Parcela 02 de 02), -6/12, F 10/10, S 01/03 e formatos equivalentes.',
+    'Quando a linha não for parcelada, devolva installment_detected false para aquele row_id.',
+    'Só marque parcelamento para compras parceladas reais. Não use parcelamento da fatura, rotativo, pagamento mínimo ou parcelamento automático da fatura como compra parcelada.',
+    'PIX CRED PARCELADO e compras parceladas de lojista são compras válidas quando a linha representa a compra em si.',
+    'A base_description deve manter o nome do lojista e remover apenas o marcador de parcela.',
+    `Cartão selecionado no app: ${cardName}.`,
+    `Competência escolhida no app: ${String(month).padStart(2, '0')}/${year}.`,
+    `Emissor percebido: ${issuerHint || 'unknown'}.`,
+    '',
+    'Linhas para classificar (JSON):',
+    JSON.stringify(payload, null, 2)
+  ].join('\n');
+}
+
+function mergeInstallmentEnrichment(rows = [], payload = null) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const warnings = uniqueNormalizedTextList(Array.isArray(payload?.warnings) ? payload.warnings : []);
+  const payloadRows = Array.isArray(payload?.rows) ? payload.rows : [];
+  const sourceRowsById = new Map(safeRows.map((row) => [row.id, row]));
+  const aiByRowId = new Map();
+  payloadRows.forEach((row) => {
+    const rowId = normalizeWhitespace(row?.row_id || '');
+    if (!rowId || aiByRowId.has(rowId)) return;
+    aiByRowId.set(rowId, row);
+  });
+
+  const enrichmentByRowId = new Map();
+  let conflictCount = 0;
+
+  safeRows.forEach((sourceRow) => {
+    const localMeta = detectInstallmentMetaFromDescription(sourceRow.description, sourceRow.amountCents);
+    const aiRow = aiByRowId.get(sourceRow.id);
+    const aiDetected = !!aiRow?.installment_detected;
+    const aiMeta = aiDetected
+      ? buildInstallmentMeta(
+          aiRow?.installment_position,
+          aiRow?.installment_total,
+          aiRow?.base_description || stripTrailingInstallmentMarker(sourceRow.description),
+          {
+            source: 'ai_enrichment',
+            confidence: ['high', 'medium', 'low'].includes(String(aiRow?.confidence || '').trim().toLowerCase())
+              ? String(aiRow.confidence).trim().toLowerCase()
+              : 'medium',
+            patternKind: normalizeWhitespace(aiRow?.pattern_kind || '') || null,
+            validator: localMeta ? 'ai_and_regex' : 'ai_only',
+            fromRaw: false
+          }
+        )
+      : null;
+
+    let finalMeta = null;
+    let conflictReason = null;
+
+    if (aiMeta && localMeta) {
+      if (Number(aiMeta.position || 0) !== Number(localMeta.position || 0) || Number(aiMeta.total || 0) !== Number(localMeta.total || 0)) {
+        conflictReason = 'A IA e a validacao local discordaram sobre a fracao da parcela.';
+        conflictCount += 1;
+        warnings.push(`${sourceRow.id}: ${conflictReason}`);
+        finalMeta = {
+          ...localMeta,
+          source: 'description',
+          confidence: 'medium',
+          validator: 'regex_conflict_fallback',
+          conflictReason
+        };
+      } else {
+        finalMeta = {
+          ...aiMeta,
+          position: localMeta.position,
+          total: localMeta.total,
+          label: localMeta.label,
+          validator: 'ai_and_regex'
+        };
+      }
+    } else if (aiMeta) {
+      finalMeta = aiMeta;
+    } else if (localMeta) {
+      finalMeta = {
+        ...localMeta,
+        source: 'description',
+        confidence: 'medium',
+        validator: 'regex_fallback'
+      };
+    }
+
+    if (!finalMeta) return;
+
+    enrichmentByRowId.set(sourceRow.id, {
+      meta: finalMeta,
+      conflictReason
+    });
+  });
+
+  return {
+    warnings: uniqueNormalizedTextList(warnings),
+    enrichmentByRowId,
+    detectedCount: Array.from(enrichmentByRowId.values()).filter((entry) => entry?.meta).length,
+    conflictCount
+  };
+}
+
+async function runInstallmentEnrichment(providerKey, context) {
+  if (!providerKey) return null;
+  const prompt = buildInstallmentEnrichmentPrompt({
+    issuerHint: context.issuerHint,
+    cardName: context.cardName,
+    month: context.month,
+    year: context.year,
+    rows: context.rows
+  });
+  return runProvider(providerKey, {
+    ...context,
+    prompt,
+    responseSchema: INSTALLMENT_ENRICHMENT_SCHEMA,
+    schemaName: 'statement_installment_enrichment',
+    systemMessage: 'Você classifica parcelamento linha a linha e responde apenas no JSON schema solicitado.'
+  });
+}
+
+async function enrichValidatedRowsInstallments({ rows = [], config, providerKey, issuerHint, cardName, month, year }) {
+  const localFallback = mergeInstallmentEnrichment(rows, null);
+  if (!Array.isArray(rows) || !rows.length || !providerKey) {
+    return {
+      ...localFallback,
+      usedAi: false,
+      providerKey: null,
+      rawText: null,
+      errorMessage: null,
+      responseMeta: null
+    };
+  }
+
+  try {
+    const response = await runInstallmentEnrichment(providerKey, {
+      config,
+      issuerHint,
+      cardName,
+      month,
+      year,
+      rows
+    });
+    if (!response?.parsed) {
+      return {
+        ...localFallback,
+        usedAi: false,
+        providerKey,
+        rawText: response?.rawText || null,
+        errorMessage: 'A IA de parcelamento nao devolveu JSON utilizavel.',
+        responseMeta: response?.meta || null
+      };
+    }
+
+    const merged = mergeInstallmentEnrichment(rows, response.parsed);
+    return {
+      ...merged,
+      usedAi: true,
+      providerKey,
+      rawText: response.rawText || null,
+      errorMessage: null,
+      responseMeta: response.meta || null
+    };
+  } catch (error) {
+    return {
+      ...localFallback,
+      usedAi: false,
+      providerKey,
+      rawText: null,
+      errorMessage: normalizeProviderErrorMessage(error, providerKey, config),
+      responseMeta: null
+    };
+  }
+}
+
 function extractPdfText(pdfPath) {
   try {
     const raw = execFileSync('pdftotext', ['-layout', '-enc', 'UTF-8', pdfPath, '-'], {
@@ -408,14 +885,15 @@ function extractPdfText(pdfPath) {
   }
 }
 
-async function callGemini({ apiKey, model, prompt, timeoutMs }) {
+
+async function callGeminiStructured({ apiKey, model, prompt, timeoutMs, responseSchema, systemMessage = null }) {
   const response = await axios.post(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     {
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      contents: [{ role: 'user', parts: [{ text: systemMessage ? `${systemMessage}\n\n${prompt}` : prompt }] }],
       generationConfig: {
         responseMimeType: 'application/json',
-        responseJsonSchema: STATEMENT_JSON_SCHEMA,
+        responseJsonSchema: responseSchema,
         temperature: 0.1
       }
     },
@@ -447,7 +925,18 @@ async function callGemini({ apiKey, model, prompt, timeoutMs }) {
   };
 }
 
-async function callOpenAI({ apiKey, model, prompt, timeoutMs }) {
+async function callGemini({ apiKey, model, prompt, timeoutMs }) {
+  return callGeminiStructured({
+    apiKey,
+    model,
+    prompt,
+    timeoutMs,
+    responseSchema: STATEMENT_JSON_SCHEMA,
+    systemMessage: null
+  });
+}
+
+async function callOpenAIStructured({ apiKey, model, prompt, timeoutMs, responseSchema, schemaName = 'statement_import_rows', systemMessage = 'Você extrai faturas de cartão e responde apenas no JSON schema solicitado.' }) {
   const response = await axios.post(
     'https://api.openai.com/v1/chat/completions',
     {
@@ -456,15 +945,15 @@ async function callOpenAI({ apiKey, model, prompt, timeoutMs }) {
       response_format: {
         type: 'json_schema',
         json_schema: {
-          name: 'statement_import_rows',
+          name: schemaName,
           strict: true,
-          schema: STATEMENT_JSON_SCHEMA
+          schema: responseSchema
         }
       },
       messages: [
         {
           role: 'system',
-          content: 'Você extrai faturas de cartão e responde apenas no JSON schema solicitado.'
+          content: systemMessage
         },
         {
           role: 'user',
@@ -498,6 +987,18 @@ async function callOpenAI({ apiKey, model, prompt, timeoutMs }) {
       completionId: response.data?.id || null
     }
   };
+}
+
+async function callOpenAI({ apiKey, model, prompt, timeoutMs }) {
+  return callOpenAIStructured({
+    apiKey,
+    model,
+    prompt,
+    timeoutMs,
+    responseSchema: STATEMENT_JSON_SCHEMA,
+    schemaName: 'statement_import_rows',
+    systemMessage: 'Você extrai faturas de cartão e responde apenas no JSON schema solicitado.'
+  });
 }
 
 function validateStructuredRows(payload, { providerKey, issuerHint }) {
@@ -622,13 +1123,14 @@ function validateStructuredRows(payload, { providerKey, issuerHint }) {
   };
 }
 
-function buildTxnsForPreview(validationResult, providerKey, cardName) {
-  return validationResult.rows.map((row) => ({
-    card_number: row.cardLast4,
-    txn_date: row.date,
-    description: row.description,
-    amount_cents: row.amountCents,
-    raw: {
+
+function buildTxnsForPreview(validationResult, providerKey, cardName, installmentEnrichment = null) {
+  const enrichmentByRowId = installmentEnrichment?.enrichmentByRowId instanceof Map
+    ? installmentEnrichment.enrichmentByRowId
+    : new Map();
+
+  return validationResult.rows.map((row) => {
+    const raw = {
       source: 'pdf_ia',
       provider: providerKey,
       issuer: validationResult.issuerKey,
@@ -636,8 +1138,40 @@ function buildTxnsForPreview(validationResult, providerKey, cardName) {
       card_name: cardName,
       card_last4: row.cardLast4,
       warnings: validationResult.warnings
+    };
+
+    if (row?.dateInference && typeof row.dateInference === 'object') {
+      raw.import_date_inference = row.dateInference;
     }
-  }));
+
+    const enrichment = enrichmentByRowId.get(row.id) || null;
+    if (enrichment?.meta) {
+      raw.import_installment = {
+        detected: true,
+        position: Number(enrichment.meta.position || 0) || 1,
+        total: Number(enrichment.meta.total || 0) || 1,
+        label: enrichment.meta.label || `${Number(enrichment.meta.position || 0) || 1}/${Number(enrichment.meta.total || 0) || 1}`,
+        base_description: enrichment.meta.baseDescription || stripTrailingInstallmentMarker(row.description) || row.description,
+        source: enrichment.meta.source || 'ai_enrichment',
+        confidence: enrichment.meta.confidence || 'medium',
+        pattern_kind: enrichment.meta.patternKind || null,
+        validator: enrichment.meta.validator || null
+      };
+      if (enrichment.conflictReason) {
+        raw.import_installment_conflict = {
+          reason: enrichment.conflictReason
+        };
+      }
+    }
+
+    return {
+      card_number: row.cardLast4,
+      txn_date: row.date,
+      description: row.description,
+      amount_cents: row.amountCents,
+      raw
+    };
+  });
 }
 
 function chooseBestResult(results = []) {
@@ -725,20 +1259,42 @@ function emitJobReadyNotification(job, validation, warningMessage) {
 }
 
 async function runProvider(providerKey, context) {
+  const timeoutMs = Number(context?.timeoutMs || context?.config?.providerTimeoutMs || 180000);
   if (providerKey === 'gemini') {
+    if (context?.responseSchema) {
+      return callGeminiStructured({
+        apiKey: context.config.geminiApiKey,
+        model: context.config.geminiModel,
+        prompt: context.prompt,
+        timeoutMs,
+        responseSchema: context.responseSchema,
+        systemMessage: context.systemMessage || null
+      });
+    }
     return callGemini({
       apiKey: context.config.geminiApiKey,
       model: context.config.geminiModel,
       prompt: context.prompt,
-      timeoutMs: context.config.providerTimeoutMs
+      timeoutMs
     });
   }
   if (providerKey === 'openai') {
+    if (context?.responseSchema) {
+      return callOpenAIStructured({
+        apiKey: context.config.openaiApiKey,
+        model: context.config.openaiModel,
+        prompt: context.prompt,
+        timeoutMs,
+        responseSchema: context.responseSchema,
+        schemaName: context.schemaName || 'statement_enrichment',
+        systemMessage: context.systemMessage || 'Você responde apenas no JSON schema solicitado.'
+      });
+    }
     return callOpenAI({
       apiKey: context.config.openaiApiKey,
       model: context.config.openaiModel,
       prompt: context.prompt,
-      timeoutMs: context.config.providerTimeoutMs
+      timeoutMs
     });
   }
   throw new Error('Provedor de IA desconhecido.');
@@ -882,7 +1438,62 @@ async function processQueuedJob(job) {
     return;
   }
 
-  const txns = buildTxnsForPreview(bestResult.validation, bestResult.providerKey, job.cardName);
+  const installmentEnrichment = await enrichValidatedRowsInstallments({
+    rows: bestResult.validation.rows,
+    config,
+    providerKey: bestResult.providerKey,
+    issuerHint,
+    cardName: job.cardName,
+    month: job.month,
+    year: job.year
+  });
+
+  const dateInference = applyStatementDateInference(bestResult.validation.rows, {
+    statementMonth: job.month,
+    statementYear: job.year,
+    enrichmentByRowId: installmentEnrichment?.enrichmentByRowId || null
+  });
+  const previewRows = dateInference.rows;
+
+  if (dateInference.adjustedCount > 0) {
+    repository.appendJobEvent(
+      job.id,
+      'info',
+      dateInference.adjustedCount === 1
+        ? '1 data teve o ano reancorado pela competencia da fatura para evitar uma compra no futuro.'
+        : `${dateInference.adjustedCount} datas tiveram o ano reancorado pela competencia da fatura para evitar compras no futuro.`
+    );
+  }
+
+  if (installmentEnrichment.errorMessage) {
+    repository.appendJobEvent(job.id, 'warning', `A segunda leitura de parcelamento caiu no fluxo simples: ${installmentEnrichment.errorMessage}`);
+  } else if (installmentEnrichment.detectedCount > 0) {
+    repository.appendJobEvent(
+      job.id,
+      installmentEnrichment.conflictCount > 0 ? 'warning' : 'info',
+      installmentEnrichment.conflictCount > 0
+        ? `${installmentEnrichment.detectedCount} linha(s) receberam metadados de parcelamento e ${installmentEnrichment.conflictCount} ficaram travadas na parcela atual por conflito de validação.`
+        : `${installmentEnrichment.detectedCount} linha(s) receberam metadados de parcelamento antes da revisão.`
+    );
+  }
+
+  if ((config.debugEnabled || installmentEnrichment.conflictCount > 0 || (installmentEnrichment.warnings || []).length > 0) && installmentEnrichment.rawText) {
+    repository.saveArtifact({
+      jobId: job.id,
+      kind: 'installment_enrichment',
+      providerKey: installmentEnrichment.providerKey || bestResult.providerKey,
+      filename: `${installmentEnrichment.providerKey || bestResult.providerKey}-installment-enrichment.json`,
+      mimeType: 'application/json',
+      content: installmentEnrichment.rawText,
+      encoding: 'utf8'
+    });
+  }
+
+  const previewValidation = {
+    ...bestResult.validation,
+    rows: previewRows
+  };
+  const txns = buildTxnsForPreview(previewValidation, bestResult.providerKey, job.cardName, installmentEnrichment);
   const preview = deps.buildImportPreviewData({
     userId: job.userId,
     cardId: job.cardId,
@@ -892,7 +1503,7 @@ async function processQueuedJob(job) {
     originalFilename: job.originalFilename,
     txns
   });
-  const csvText = buildCsvFromRows(job.cardName, bestResult.validation.rows);
+  const csvText = buildCsvFromRows(job.cardName, previewRows);
 
   repository.saveArtifact({
     jobId: job.id,
@@ -903,11 +1514,12 @@ async function processQueuedJob(job) {
       issuer: bestResult.validation.issuerKey,
       confidence: bestResult.validation.confidence,
       warnings: bestResult.validation.warnings,
-      import_rows: bestResult.validation.rows.map((row) => ({
+      import_rows: previewRows.map((row) => ({
         date: row.date,
         description: row.description,
         amount: row.amountCents / 100,
-        card_last4: row.cardLast4 || null
+        card_last4: row.cardLast4 || null,
+        ...(row.dateInference ? { date_inference: row.dateInference } : {})
       }))
     }, null, 2),
     encoding: 'utf8'

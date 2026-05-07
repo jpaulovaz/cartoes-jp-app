@@ -1466,8 +1466,14 @@
 
   function setMonthlyEmailStatus(node, message, tone = 'info') {
     if (!(node instanceof HTMLElement)) return;
-    node.textContent = String(message || '');
-    node.dataset.tone = tone;
+    const nextMessage = String(message || '').trim();
+    node.textContent = nextMessage;
+    node.classList.toggle('hidden', !nextMessage);
+    if (nextMessage) {
+      node.dataset.tone = tone;
+    } else {
+      delete node.dataset.tone;
+    }
   }
 
   function setMonthlyEmailLoading(form, loading) {
@@ -1527,7 +1533,7 @@
       resetMonthlyEmailForm(form);
       setMonthlyEmailLoading(form, false);
       if (periodLabel instanceof HTMLElement) periodLabel.textContent = label;
-      setMonthlyEmailStatus(statusNode, 'Pronto para enviar. O destinatario fica travado no seu email de login por seguranca.', 'info');
+      setMonthlyEmailStatus(statusNode, '', 'info');
       document.body.classList.add('op-monthly-email-modal-open');
       modal.classList.remove('hidden');
       modal.setAttribute('aria-hidden', 'false');

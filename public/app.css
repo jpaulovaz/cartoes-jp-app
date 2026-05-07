@@ -8816,6 +8816,16 @@ html.dark[data-op-ui="v4"] .op-screen--month .op-month-selection-toolbar {
 }
 
 @media (max-width: 1023px) {
+  html[data-op-ui="v4"] .op-radar-period__summary {
+    align-items: stretch;
+    justify-content: flex-start;
+    min-height: 0;
+  }
+
+  html[data-op-ui="v4"] .op-radar-period__summary > .flex-1 {
+    flex: 0 1 auto;
+  }
+
   html[data-op-ui="v4"] .op-radar-period__stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -8823,6 +8833,7 @@ html.dark[data-op-ui="v4"] .op-screen--month .op-month-selection-toolbar {
   html[data-op-ui="v4"] .op-radar-period__actions {
     width: 100%;
     max-width: none;
+    flex: 0 0 auto;
     flex-wrap: nowrap;
   }
 
@@ -8860,6 +8871,11 @@ html.dark[data-op-ui="v4"] .op-screen--month .op-month-selection-toolbar {
 
   html[data-op-ui="v4"] .op-radar-stat {
     padding: 0.7rem 0.75rem;
+  }
+
+  html[data-op-ui="v4"] .op-radar-period__actions {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
   }
 
   html[data-op-ui="v4"] .op-radar-period__action-grid {

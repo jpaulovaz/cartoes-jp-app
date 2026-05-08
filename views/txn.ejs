@@ -366,6 +366,15 @@
       return currencyFormatter.format((Number(cents || 0)) / 100);
     }
 
+    function normalizeShareForTxn(cents) {
+      const absoluteCents = Math.abs(Number(cents || 0));
+      return amountCents < 0 ? -absoluteCents : absoluteCents;
+    }
+
+    function getMoneyInputDisplayCents(cents) {
+      return Math.abs(Number(cents || 0));
+    }
+
     function escapeHtml(value) {
       return String(value || '')
         .replace(/&/g, '&amp;')
@@ -437,7 +446,9 @@
       if (!exactSummary) return;
       const selectedIds = getSelectedIds();
       const typedTotal = selectedIds.reduce((sum, personId) => sum + Number(draftShares[personId] || 0), 0);
-      const diff = amountCents - typedTotal;
+      const targetAbs = Math.abs(amountCents);
+      const typedAbs = selectedIds.reduce((sum, personId) => sum + Math.abs(Number(draftShares[personId] || 0)), 0);
+      const diff = targetAbs - typedAbs;
       let toneClass = 'text-emerald-700 dark:text-emerald-300';
       let helperText = 'Fechou certinho. Agora é só salvar.';
       if (diff > 0) {
@@ -488,13 +499,13 @@
         input.type = 'text';
         input.name = `share_amounts[${personId}]`;
         input.placeholder = '0,00';
-        input.value = formatInputFromCents(draftShares[personId]);
+        input.value = formatInputFromCents(getMoneyInputDisplayCents(draftShares[personId]));
         input.disabled = isClosed;
         input.className = 'w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900/70 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20';
         input.setAttribute('data-money-mask', '1');
         bindMoneyMask(input);
         input.addEventListener('input', () => {
-          draftShares[personId] = inputValueToCents(input);
+          draftShares[personId] = normalizeShareForTxn(inputValueToCents(input));
           renderExactSummary();
           showError('');
         });
@@ -504,7 +515,7 @@
     }
 
     function syncSaveButtons() {
-      const requiresModeChoice = !isClosed && amountCents >= 0 && getSelectedIds().length > 1;
+      const requiresModeChoice = !isClosed && getSelectedIds().length > 1;
       const shouldDisable = requiresModeChoice && !getSplitMode();
       saveButtons.forEach((button) => {
         button.disabled = shouldDisable;
@@ -514,7 +525,7 @@
 
     function syncUi() {
       const selectedIds = getSelectedIds();
-      const canChooseMode = selectedIds.length > 1 && amountCents >= 0;
+      const canChooseMode = selectedIds.length > 1;
       if (splitModeShell) splitModeShell.hidden = !canChooseMode;
 
       if (!canChooseMode) {
@@ -576,8 +587,8 @@
       purchase_category_id: Number(txn.purchase_category_id || 0),
       recurring_rule_id: Number(txn.recurring_rule_id || 0),
       import_id: Number(txn.import_id || 0),
-      can_edit_purchase: <%= canEditPurchase ? 'true' : 'false' %>,
-      has_future_installments: <%= hasFutureInstallments ? 'true' : 'false' %>,
+      can_edit_purchase: !!canEditPurchase,
+      has_future_installments: !!hasFutureInstallments,
       selected_ids: (selected || []).map(Number),
       selected_shares: selectedShares || {}
     }).replace(/</g, '\u003c') %>;
@@ -786,7 +797,7 @@
     if (!isClosed) {
       form.addEventListener('submit', (event) => {
         const selectedIds = getSelectedIds();
-        const needsModeChoice = amountCents >= 0 && selectedIds.length > 1;
+        const needsModeChoice = selectedIds.length > 1;
         if (needsModeChoice && !getSplitMode()) {
           event.preventDefault();
           showError('Escolha como a compra será dividida antes de salvar.');

@@ -359,9 +359,6 @@ function parseAllocationPlan({
   }
 
   const baseAmount = Number(rows[0]?.amount_cents || 0);
-  if (baseAmount < 0) {
-    throw new Error('Valor definido ainda não está disponível para lançamentos negativos. Aqui, siga em partes iguais.');
-  }
   const differentAmountRow = rows.find(row => Number(row.amount_cents || 0) !== baseAmount);
   if (differentAmountRow) {
     throw new Error('O valor definido só funciona quando todas as compras escolhidas têm o mesmo valor. Use partes iguais ou aplique em uma compra por vez.');
@@ -369,23 +366,27 @@ function parseAllocationPlan({
 
   const shareSource = rawShareAmounts && typeof rawShareAmounts === 'object' ? rawShareAmounts : {};
   const shareMap = {};
+  const targetSign = baseAmount < 0 ? -1 : 1;
 
   for (const personId of personIds) {
     const rawValue = Object.prototype.hasOwnProperty.call(shareSource, personId)
       ? shareSource[personId]
       : shareSource[String(personId)];
     const cents = normalizeShareAmountInput(rawValue);
-    if (cents === null || !Number.isFinite(cents) || cents < 0) {
+    if (cents === null || !Number.isFinite(cents)) {
       throw new Error('Revise os valores definidos. Cada pessoa marcada precisa ter um valor válido.');
     }
-    shareMap[personId] = cents;
+
+    const absoluteCents = Math.abs(Math.round(cents));
+    shareMap[personId] = targetSign < 0 ? -absoluteCents : absoluteCents;
   }
 
-  const totalDefined = personIds.reduce((sum, personId) => sum + Number(shareMap[personId] || 0), 0);
-  if (totalDefined !== baseAmount) {
-    const diff = Math.abs(baseAmount - totalDefined);
+  const targetAbs = Math.abs(baseAmount);
+  const totalDefinedAbs = personIds.reduce((sum, personId) => sum + Math.abs(Number(shareMap[personId] || 0)), 0);
+  if (totalDefinedAbs !== targetAbs) {
+    const diff = Math.abs(targetAbs - totalDefinedAbs);
     const diffLabel = formatBRLFromCents(diff);
-    if (totalDefined < baseAmount) {
+    if (totalDefinedAbs < targetAbs) {
       throw new Error(`Ainda falta ${diffLabel} para fechar o total da compra.`);
     }
     throw new Error(`Passou ${diffLabel} do total da compra. Dá uma aparada e tenta de novo.`);
@@ -16187,7 +16188,7 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
       rawSplitMode: req.body.split_mode,
       rawShareAmounts: req.body.share_amounts,
       targetRows,
-      requireSplitModeSelection: Number(txn.amount_cents || 0) >= 0
+      requireSplitModeSelection: true
     });
 
     replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
@@ -16619,7 +16620,7 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
       rawSplitMode: req.body.split_mode,
       rawShareAmounts: req.body.share_amounts,
       targetRows,
-      requireSplitModeSelection: Number(txn.amount_cents || 0) >= 0
+      requireSplitModeSelection: true
     });
 
     replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
@@ -16721,7 +16722,7 @@ app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
       rawSplitMode: req.body.split_mode,
       rawShareAmounts: req.body.share_amounts,
       targetRows,
-      requireSplitModeSelection: sourceRows.length === 1 && Number(sourceRows[0].amount_cents || 0) >= 0
+      requireSplitModeSelection: sourceRows.length === 1
     });
 
     replaceAllocationsForTransactions(userId, targetRows, allocationPlan);

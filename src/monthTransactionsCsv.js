@@ -24,7 +24,26 @@ function buildMonthTransactionsCsv(rows = [], { month, year } = {}) {
   const safeRows = Array.isArray(rows) ? rows : [];
   const safeMonth = Number(month || 0);
   const safeYear = Number(year || 0);
-  const header = ['Data da compra', 'Descri\u00e7\u00e3o', 'Cart\u00e3o', 'N\u00famero', 'Valor (R$)', 'Distribu\u00eddo', 'Pessoas', 'Origem', 'Compet\u00eancia'];
+  const header = [
+    'Data da compra',
+    'Descri\u00e7\u00e3o',
+    'Cart\u00e3o',
+    'N\u00famero',
+    'Valor (R$)',
+    'Distribu\u00eddo',
+    'Pessoas',
+    'Divis\u00e3o detalhada',
+    'Categoria',
+    'Tipo de lan\u00e7amento',
+    'Forma de compra',
+    'Parcela',
+    'Parcela atual',
+    'Total de parcelas',
+    'Compra base',
+    'Fatura',
+    'Origem',
+    'Compet\u00eancia'
+  ];
   const lines = [header.map(csvEscape).join(';')];
 
   safeRows.forEach((row) => {
@@ -36,6 +55,15 @@ function buildMonthTransactionsCsv(rows = [], { month, year } = {}) {
       formatBRLFromCents(row.amount_cents),
       row.allocated,
       row.people_names,
+      row.allocation_details,
+      row.purchase_category_name,
+      row.entry_type,
+      row.purchase_mode,
+      row.installment_label,
+      row.installment_position,
+      row.installment_total,
+      row.base_description,
+      row.due_label,
       row.origem,
       monthLabel(safeMonth, safeYear)
     ].map(csvEscape).join(';'));

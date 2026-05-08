@@ -11569,14 +11569,108 @@ app.post("/geral/:year/:month/card/:cardId/delete", ensureAuthenticated, (req, r
   return res.redirect("/geral");
 });
 
+function getCsvAllocationDetailsByTxnId(userId, txnIds) {
+  const safeTxnIds = Array.from(new Set((txnIds || [])
+    .map((id) => Number(id || 0))
+    .filter((id) => Number.isInteger(id) && id > 0)));
+  const detailsByTxnId = new Map();
+  if (!safeTxnIds.length) return detailsByTxnId;
+
+  const placeholders = safeTxnIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT a.transaction_id, p.name, a.share_cents
+    FROM allocations a
+    JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id
+    WHERE a.user_id = ?
+      AND a.transaction_id IN (${placeholders})
+    ORDER BY a.transaction_id ASC, p.name ASC, p.id ASC
+  `).all(userId, ...safeTxnIds);
+
+  rows.forEach((row) => {
+    const txnId = Number(row.transaction_id || 0);
+    if (!txnId) return;
+    const name = String(row.name || '').replace(/\s+/g, ' ').trim() || 'Pessoa';
+    const detail = `${name}: ${formatBRLFromCents(Number(row.share_cents || 0))}`;
+    if (!detailsByTxnId.has(txnId)) detailsByTxnId.set(txnId, []);
+    detailsByTxnId.get(txnId).push(detail);
+  });
+
+  return new Map(Array.from(detailsByTxnId.entries()).map(([txnId, details]) => [txnId, details.join(' | ')]));
+}
+
+function buildCsvInstallmentMetaForRow(userId, row) {
+  const amountForDetection = Math.abs(Number(row?.amount_cents || 0));
+  const explicitMeta = resolveImportInstallmentMeta({
+    rawJson: row?.raw_json,
+    description: row?.description,
+    amountCents: amountForDetection
+  });
+
+  if (explicitMeta && Number(explicitMeta.total || 1) > 1) {
+    return explicitMeta;
+  }
+
+  const chainMeta = buildInstallmentMetaByTxnId(userId, row).get(Number(row?.id || 0)) || null;
+  if (chainMeta && Number(chainMeta.total || 1) > 1) {
+    return chainMeta;
+  }
+
+  return explicitMeta || null;
+}
+
+function enrichMonthTransactionsCsvRows(userId, rows) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const allocationDetailsByTxnId = getCsvAllocationDetailsByTxnId(userId, safeRows.map((row) => row.id));
+
+  return safeRows.map((row) => {
+    const amountCents = Number(row.amount_cents || 0);
+    const installmentMeta = buildCsvInstallmentMetaForRow(userId, row);
+    const installmentTotal = Math.max(1, Number(installmentMeta?.total || 1));
+    const installmentPosition = Math.min(installmentTotal, Math.max(1, Number(installmentMeta?.position || 1)));
+    const isInstallment = installmentTotal > 1;
+    const isRecurring = Number(row.recurring_rule_id || 0) > 0;
+    const purchaseMode = isRecurring ? 'Recorrente' : (isInstallment ? 'Parcelada' : 'À vista');
+    const installmentLabel = isRecurring
+      ? 'Recorrente'
+      : (isInstallment
+        ? `${String(installmentPosition).padStart(2, '0')}/${String(installmentTotal).padStart(2, '0')}`
+        : 'À vista');
+    const baseDescription = isInstallment || isRecurring
+      ? (installmentMeta?.baseDescription || stripTrailingInstallmentMarker(row.description) || row.description)
+      : '';
+    const dueMonth = Number(row.effective_due_month || 0);
+    const dueYear = Number(row.effective_due_year || 0);
+
+    return {
+      ...row,
+      allocation_details: allocationDetailsByTxnId.get(Number(row.id || 0)) || '',
+      purchase_category_name: String(row.purchase_category_name || '').trim() || 'Sem categoria',
+      entry_type: amountCents < 0 ? 'Crédito' : (amountCents > 0 ? 'Compra' : 'Valor zerado'),
+      purchase_mode: purchaseMode,
+      installment_label: installmentLabel,
+      installment_position: isInstallment ? installmentPosition : '',
+      installment_total: isInstallment ? installmentTotal : '',
+      base_description: baseDescription,
+      due_label: dueMonth && dueYear ? monthLabel(dueMonth, dueYear) : ''
+    };
+  });
+}
+
 function getMonthTransactionsCsvRows(userId, month, year) {
-  return db.prepare(`
+  const rows = db.prepare(`
     SELECT
+      t.id,
       COALESCE(t.txn_date, '') AS txn_date,
       t.description,
       c.name AS card_name,
       COALESCE(t.card_number, '') AS card_number,
       t.amount_cents,
+      t.raw_json,
+      t.parent_txn_id,
+      t.recurring_rule_id,
+      COALESCE(t.due_month, i.month) AS effective_due_month,
+      COALESCE(t.due_year, i.year) AS effective_due_year,
+      COALESCE(pc.name, '') AS purchase_category_name,
       CASE WHEN EXISTS (
         SELECT 1 FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id
       ) THEN 'Sim' ELSE 'N\u00e3o' END AS allocated,
@@ -11593,13 +11687,14 @@ function getMonthTransactionsCsvRows(userId, month, year) {
     FROM transactions t
     JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
     WHERE t.user_id = ?
-      AND (
-        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
-        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
-      )
+      AND ${EFFECTIVE_DUE_MONTH_SQL} = ?
+      AND ${EFFECTIVE_DUE_YEAR_SQL} = ?
     ORDER BY c.name, COALESCE(t.txn_date, ''), t.description
-  `).all(userId, month, year, month, year);
+  `).all(userId, month, year);
+
+  return enrichMonthTransactionsCsvRows(userId, rows);
 }
 
 function buildMonthTransactionsCsvExport(userId, month, year) {

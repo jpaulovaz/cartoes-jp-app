@@ -1686,6 +1686,27 @@
     input.value = digits ? formatMoneyDigits(digits) : '';
   }
 
+  function isPasteLikeInput(event) {
+    const inputType = String(event && event.inputType || '');
+    return inputType === 'insertFromPaste' || inputType === 'insertFromDrop' || inputType === 'insertReplacementText';
+  }
+
+  function getClipboardText(event) {
+    const data = event && (event.clipboardData || window.clipboardData);
+    if (!data || typeof data.getData !== 'function') return '';
+    return data.getData('text/plain') || data.getData('text') || '';
+  }
+
+  function applyMoneyTextToInput(input, text) {
+    const digits = extractMoneyDigits(text);
+    if (!digits) return false;
+    input.dataset.moneyDigits = digits;
+    input.value = formatMoneyDigits(digits);
+    placeCaretToEnd(input);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }
+
   function bindMoneyMask(input) {
     if (!(input instanceof HTMLInputElement) || input.dataset.moneyMaskBound === '1') return;
     input.dataset.moneyMaskBound = '1';
@@ -1698,6 +1719,7 @@
 
     input.addEventListener('beforeinput', (event) => {
       if (event.inputType && event.inputType.startsWith('delete')) return;
+      if (isPasteLikeInput(event)) return;
       if (!event.data) return;
       if (/\D/.test(event.data)) {
         event.preventDefault();
@@ -1709,11 +1731,21 @@
       placeCaretToEnd(input);
     });
 
-    input.addEventListener('paste', () => {
-      requestAnimationFrame(() => {
+    input.addEventListener('paste', (event) => {
+      const pastedText = getClipboardText(event);
+      if (!pastedText) {
+        requestAnimationFrame(() => {
+          renderMoneyInput(input, true);
+          placeCaretToEnd(input);
+        });
+        return;
+      }
+
+      event.preventDefault();
+      if (!applyMoneyTextToInput(input, pastedText)) {
         renderMoneyInput(input, true);
         placeCaretToEnd(input);
-      });
+      }
     });
 
     input.addEventListener('focus', () => {

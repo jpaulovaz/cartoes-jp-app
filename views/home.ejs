@@ -1,5 +1,21 @@
 <%- include("partials/header", { title: "AcerttaPay | Meu Radar" }) %>
 
+<%
+  function safeRadarNumber(value) {
+    const numeric = Number(value || 0);
+    return Number.isFinite(numeric) ? numeric : 0;
+  }
+
+  function pluralizeRadar(count, singular, plural) {
+    return Number(count || 0) === 1 ? singular : plural;
+  }
+
+  function getRadarSharedRows(group) {
+    if (!group || !group.sharedProjectionSummary || !Array.isArray(group.sharedProjectionSummary.rows)) return [];
+    return group.sharedProjectionSummary.rows;
+  }
+%>
+
   <div class="op-screen op-screen--home op-radar-screen max-w-6xl mx-auto space-y-5">
 
   <section class="op-page-hero op-radar-hero op-fade-up">
@@ -200,8 +216,15 @@
                         <% } %>
                       </h2>
                       <p class="op-radar-period__caption text-sm font-medium text-slate-500 dark:text-slate-400">
-                        <%= group.cards.length %>
-                          <%= group.cards.length===1 ? 'cartão na área' : 'cartões na área' %>
+                        <% if (group.cards.length > 0) { %>
+                          <%= group.cards.length %> <%= pluralizeRadar(group.cards.length, 'cartão na área', 'cartões na área') %>
+                        <% } else { %>
+                          Sem cartão próprio neste mês
+                        <% } %>
+                        <% if (group.hasSharedProjections) { %>
+                          <span class="mx-1 text-slate-300 dark:text-slate-600">•</span>
+                          <%= group.shared_count || getRadarSharedRows(group).length || 0 %> <%= pluralizeRadar(group.shared_count || getRadarSharedRows(group).length, 'compartilhada aceita', 'compartilhadas aceitas') %>
+                        <% } %>
                       </p>
                     </div>
                   </div>
@@ -228,6 +251,29 @@
                       </span>
                     </div>
                   </div>
+
+                  <% if (group.hasSharedProjections) { %>
+                    <div class="op-radar-shared-overview mt-3 ml-0 lg:ml-16 rounded-2xl border border-violet-100 bg-violet-50/80 px-3 py-2.5 text-xs font-bold text-violet-800 dark:border-violet-900/60 dark:bg-violet-900/20 dark:text-violet-100">
+                      <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                        <span class="inline-flex items-center gap-1.5">
+                          <span class="h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-500"></span>
+                          Cartões próprios: <strong><%= formatBRLFromCents(group.own_total_cents || 0) %></strong>
+                        </span>
+                        <span class="hidden text-violet-300 sm:inline">•</span>
+                        <span class="inline-flex items-center gap-1.5">
+                          <span class="h-2 w-2 rounded-full bg-violet-500"></span>
+                          Compartilhadas aceitas: <strong><%= formatBRLFromCents(group.shared_total_cents || 0) %></strong>
+                        </span>
+                        <% if (safeRadarNumber(group.shared_pending_cents) > 0) { %>
+                          <span class="hidden text-violet-300 sm:inline">•</span>
+                          <span class="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-200">
+                            <span class="h-2 w-2 rounded-full bg-amber-500"></span>
+                            Em conferência: <strong><%= formatBRLFromCents(group.shared_pending_cents || 0) %></strong>
+                          </span>
+                        <% } %>
+                      </div>
+                    </div>
+                  <% } %>
                 </div>
 
                 <div class="op-radar-period__actions flex items-center gap-3 mt-5 lg:mt-0 pt-5 lg:pt-0 border-t border-slate-100 dark:border-slate-700 lg:border-none">
@@ -272,72 +318,143 @@
               </summary>
 
               <div class="op-radar-period__panel p-5 sm:p-6 bg-slate-50/50 dark:bg-slate-900/50">
-                <h3 class="text-sm font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4">Cartões que apareceram neste mês
-                </h3>
+                <% const radarSharedRows = getRadarSharedRows(group); %>
 
-                <div class="op-radar-card-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <% group.cards.forEach(card=> { %>
-                    <div
-                      class="op-radar-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-md transition-all flex flex-col relative">
+                <% if (group.cards.length) { %>
+                  <h3 class="text-sm font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4">Cartões que apareceram neste mês
+                  </h3>
 
-                      <% const cardBrandMeta = getCardBrandMeta(card.card_brand); %>
-                      <div class="op-radar-card__head flex justify-between items-start gap-3 mb-3">
-                        <div>
-                          <div class="font-extrabold text-slate-800 dark:text-white text-lg break-words leading-tight">
-                            <%= card.card_name %>
-                          </div>
-                          <% if (cardBrandMeta) { %>
-                            <div class="mt-2">
-                              <span class="op-card-brand-badge">
-                                <img src="<%= cardBrandMeta.asset %>" alt="<%= cardBrandMeta.label %>" class="op-card-brand-logo" loading="lazy">
-                                <span><%= cardBrandMeta.label %></span>
-                              </span>
+                  <div class="op-radar-card-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <% group.cards.forEach(card=> { %>
+                      <div
+                        class="op-radar-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-md transition-all flex flex-col relative">
+
+                        <% const cardBrandMeta = getCardBrandMeta(card.card_brand); %>
+                        <div class="op-radar-card__head flex justify-between items-start gap-3 mb-3">
+                          <div>
+                            <div class="font-extrabold text-slate-800 dark:text-white text-lg break-words leading-tight">
+                              <%= card.card_name %>
                             </div>
+                            <% if (cardBrandMeta) { %>
+                              <div class="mt-2">
+                                <span class="op-card-brand-badge">
+                                  <img src="<%= cardBrandMeta.asset %>" alt="<%= cardBrandMeta.label %>" class="op-card-brand-logo" loading="lazy">
+                                  <span><%= cardBrandMeta.label %></span>
+                                </span>
+                              </div>
+                            <% } %>
+                          </div>
+                          <span class="op-radar-card__badge bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold px-2 py-1 rounded-md whitespace-nowrap">
+                            <%= card.txn_count %> lançamentos
+                          </span>
+                        </div>
+
+                        <div class="op-radar-card__file text-xs font-medium text-slate-400 dark:text-slate-500 mb-4 break-all">
+                          Arquivo usado: <%= card.original_filename || "N/A" %>
+                        </div>
+
+                        <div class="op-radar-card__metrics grid grid-cols-2 gap-3 mb-4">
+                          <div class="op-radar-card__metric rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2">
+                            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Total de lançamentos</div>
+                            <div class="text-lg font-black text-slate-800 dark:text-white"><%= card.txn_count %></div>
+                          </div>
+                          <div class="op-radar-card__metric rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2">
+                            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Quanto esse cartão somou</div>
+                            <div class="text-sm font-black text-slate-800 dark:text-white"><%= formatBRLFromCents(card.import_total) %></div>
+                          </div>
+                        </div>
+
+                        <div class="op-radar-card__actions mt-auto space-y-2">
+                          <a href="/month/<%= card.year %>/<%= card.month %>?f_card=<%= card.card_name %>"
+                            class="op-btn op-btn-ghost op-btn--block">
+                            Ver compras desse cartão
+                          </a>
+                          <% if (group.isClosed) { %>
+                            <div class="block w-full text-center px-4 py-2.5 bg-amber-50 border border-amber-200 text-amber-800 font-semibold text-sm rounded-lg dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200">
+                              Mês fechado — sem apagar nada por aqui
+                            </div>
+                          <% } else { %>
+                            <form method="post" action="/geral/<%= card.year %>/<%= card.month %>/card/<%= card.card_id %>/delete"
+                              data-confirm-prompt="Quer mesmo apagar todas as compras do cartão <%= card.card_name %> em <%= group.label %>? Isso também remove as divisões ligadas a esses lançamentos."
+                              data-confirm-phrase="Quero apagar">
+                              <button
+                                class="op-btn op-btn-danger-soft op-btn--block">
+                                Apagar compras desse cartão
+                              </button>
+                            </form>
                           <% } %>
                         </div>
-                        <span class="op-radar-card__badge bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold px-2 py-1 rounded-md whitespace-nowrap">
-                          <%= card.txn_count %> lançamentos
+                      </div>
+                    <% }) %>
+                  </div>
+                <% } else { %>
+                  <div class="rounded-[24px] border border-dashed border-slate-300 bg-white/70 px-4 py-5 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                    Nenhum cartão próprio apareceu nesta competência. O valor do mês vem das compras compartilhadas aceitas.
+                  </div>
+                <% } %>
+
+                <% if (group.hasSharedProjections) { %>
+                  <% const radarSharedPreviewRows = radarSharedRows.slice(0, 3); %>
+                  <section class="mt-5 rounded-[26px] border border-violet-100 bg-white p-4 shadow-sm dark:border-violet-900/50 dark:bg-slate-800/80">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div class="min-w-0">
+                        <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">
+                          Compra compartilhada recebida
                         </span>
+                        <h3 class="mt-3 text-base font-black text-slate-900 dark:text-white">Compartilhadas aceitas também entram no radar</h3>
+                        <p class="mt-1 max-w-3xl text-sm font-medium text-slate-500 dark:text-slate-400">
+                          Elas contam no total do mês, mas continuam somente leitura. Pagamento, contestação e confirmação ficam na Central de Acertos.
+                        </p>
                       </div>
+                      <a href="/shared-debts#received" class="inline-flex w-full items-center justify-center rounded-2xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-black text-violet-700 transition hover:-translate-y-0.5 hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200 dark:hover:bg-violet-900/35 sm:w-auto">
+                        Central de Acertos
+                      </a>
+                    </div>
 
-                      <div class="op-radar-card__file text-xs font-medium text-slate-400 dark:text-slate-500 mb-4 break-all">
-                        Arquivo usado: <%= card.original_filename || "N/A" %>
+                    <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <div class="rounded-2xl border border-violet-100 bg-violet-50/80 px-3 py-2.5 dark:border-violet-900/60 dark:bg-violet-900/20">
+                        <div class="text-[10px] font-black uppercase tracking-[0.15em] text-violet-600 dark:text-violet-300">Total aceito</div>
+                        <div class="mt-1 text-lg font-black text-violet-800 dark:text-violet-100"><%= formatBRLFromCents(group.shared_total_cents || 0) %></div>
                       </div>
-
-                      <div class="op-radar-card__metrics grid grid-cols-2 gap-3 mb-4">
-                        <div class="op-radar-card__metric rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2">
-                          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Total de lançamentos</div>
-                          <div class="text-lg font-black text-slate-800 dark:text-white"><%= card.txn_count %></div>
-                        </div>
-                        <div class="op-radar-card__metric rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2">
-                          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Quanto esse cartão somou</div>
-                          <div class="text-sm font-black text-slate-800 dark:text-white"><%= formatBRLFromCents(card.import_total) %></div>
-                        </div>
+                      <div class="rounded-2xl border border-emerald-100 bg-emerald-50/80 px-3 py-2.5 dark:border-emerald-900/60 dark:bg-emerald-900/20">
+                        <div class="text-[10px] font-black uppercase tracking-[0.15em] text-emerald-600 dark:text-emerald-300">Pago confirmado</div>
+                        <div class="mt-1 text-lg font-black text-emerald-700 dark:text-emerald-200"><%= formatBRLFromCents(group.shared_paid_cents || 0) %></div>
                       </div>
-
-                      <div class="op-radar-card__actions mt-auto space-y-2">
-                        <a href="/month/<%= card.year %>/<%= card.month %>?f_card=<%= card.card_name %>"
-                          class="op-btn op-btn-ghost op-btn--block">
-                          Ver compras desse cartão
-                        </a>
-                        <% if (group.isClosed) { %>
-                          <div class="block w-full text-center px-4 py-2.5 bg-amber-50 border border-amber-200 text-amber-800 font-semibold text-sm rounded-lg dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200">
-                            Mês fechado — sem apagar nada por aqui
-                          </div>
-                        <% } else { %>
-                          <form method="post" action="/geral/<%= card.year %>/<%= card.month %>/card/<%= card.card_id %>/delete"
-                            data-confirm-prompt="Quer mesmo apagar todas as compras do cartão <%= card.card_name %> em <%= group.label %>? Isso também remove as divisões ligadas a esses lançamentos."
-                            data-confirm-phrase="Quero apagar">
-                            <button
-                              class="op-btn op-btn-danger-soft op-btn--block">
-                              Apagar compras desse cartão
-                            </button>
-                          </form>
-                        <% } %>
+                      <div class="rounded-2xl border border-amber-100 bg-amber-50/80 px-3 py-2.5 dark:border-amber-900/60 dark:bg-amber-900/20">
+                        <div class="text-[10px] font-black uppercase tracking-[0.15em] text-amber-600 dark:text-amber-300">Em conferência</div>
+                        <div class="mt-1 text-lg font-black text-amber-700 dark:text-amber-200"><%= formatBRLFromCents(group.shared_pending_cents || 0) %></div>
+                      </div>
+                      <div class="rounded-2xl border border-sky-100 bg-sky-50/80 px-3 py-2.5 dark:border-sky-900/60 dark:bg-sky-900/20">
+                        <div class="text-[10px] font-black uppercase tracking-[0.15em] text-sky-600 dark:text-sky-300">Ainda falta</div>
+                        <div class="mt-1 text-lg font-black text-sky-700 dark:text-sky-200"><%= formatBRLFromCents(group.shared_open_cents || 0) %></div>
                       </div>
                     </div>
-                    <% }) %>
-                </div>
+
+                    <% if (radarSharedPreviewRows.length) { %>
+                      <div class="mt-4 grid gap-3 lg:grid-cols-3">
+                        <% radarSharedPreviewRows.forEach(item => { %>
+                          <article class="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-3 dark:border-slate-700 dark:bg-slate-900/45">
+                            <div class="flex items-start justify-between gap-3">
+                              <div class="min-w-0">
+                                <div class="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Enviado por <%= item.requesterName || 'alguém' %></div>
+                                <div class="mt-1 text-sm font-black text-slate-900 dark:text-white break-words"><%= item.description || 'Compra compartilhada' %></div>
+                                <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= item.categoryName || 'Compartilhadas' %> · <%= item.statusLabel || 'Aceita' %></div>
+                              </div>
+                              <div class="shrink-0 text-right text-sm font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amountCents || 0) %></div>
+                            </div>
+                          </article>
+                        <% }) %>
+                      </div>
+                    <% } %>
+
+                    <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p class="text-xs font-medium text-slate-500 dark:text-slate-400">O cartão continua do remetente. Aqui entra só a sua parte aceita, sem botão perigoso no meio do caminho.</p>
+                      <a href="/month/<%= group.year %>/<%= group.month %>" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
+                        Ver no mês
+                      </a>
+                    </div>
+                  </section>
+                <% } %>
 
               </div>
 

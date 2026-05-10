@@ -73,6 +73,37 @@ function createSharedPurchaseProjectionRepository(deps = {}) {
     `).all(safeUserId, safeMonth, safeYear);
   }
 
+
+  function getAcceptedProjectionPeriods(userId) {
+    const safeUserId = Number(userId || 0);
+    if (!safeUserId) return [];
+
+    return db.prepare(`
+      SELECT
+        COALESCE(r.source_due_month, i.month, t.due_month) AS month,
+        COALESCE(r.source_due_year, i.year, t.due_year) AS year,
+        COUNT(*) AS count,
+        SUM(CASE WHEN r.amount_cents > 0 THEN r.amount_cents ELSE 0 END) AS total_cents
+      FROM shared_debt_requests r
+      LEFT JOIN transactions t
+        ON t.id = r.source_transaction_id
+       AND t.user_id = r.requester_user_id
+      LEFT JOIN imports i
+        ON i.id = t.import_id
+       AND i.user_id = t.user_id
+      WHERE r.receiver_user_id = ?
+        AND COALESCE(r.request_kind, 'card') = 'card'
+        AND r.status IN ('accepted', 'settled')
+        AND r.amount_cents > 0
+        AND COALESCE(r.source_due_month, i.month, t.due_month) IS NOT NULL
+        AND COALESCE(r.source_due_year, i.year, t.due_year) IS NOT NULL
+      GROUP BY
+        COALESCE(r.source_due_year, i.year, t.due_year),
+        COALESCE(r.source_due_month, i.month, t.due_month)
+      ORDER BY year DESC, month DESC
+    `).all(safeUserId);
+  }
+
   function getReportedPaymentIntentRows(userId, month, year) {
     const safeUserId = Number(userId || 0);
     const safeMonth = Number(month || 0);
@@ -105,6 +136,7 @@ function createSharedPurchaseProjectionRepository(deps = {}) {
 
   return {
     getAcceptedProjectionRows,
+    getAcceptedProjectionPeriods,
     getReportedPaymentIntentRows
   };
 }

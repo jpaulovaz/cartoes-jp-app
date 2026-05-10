@@ -430,6 +430,11 @@ function getAcceptedSharedPurchaseProjectionSummary(userId, month, year, options
   return sharedPurchaseProjectionService.getAcceptedSharedPurchaseProjectionSummary(userId, month, year, options);
 }
 
+function getAcceptedSharedPurchaseProjectionPeriods(userId, options = {}) {
+  if (!sharedPurchaseProjectionService || typeof sharedPurchaseProjectionService.getAcceptedSharedPurchaseProjectionPeriods !== 'function') return [];
+  return sharedPurchaseProjectionService.getAcceptedSharedPurchaseProjectionPeriods(userId, options);
+}
+
 function buildEmptySharedPurchaseProjectionSummary(month, year, extra = {}) {
   return {
     enabled: sharedPurchaseProjectionService.isEnabled(),
@@ -455,6 +460,15 @@ function getAcceptedSharedPurchaseProjectionSummarySafe(userId, month, year, opt
   } catch (error) {
     console.warn('[shared-purchase-projections] Falha ao carregar projecoes aceitas:', error?.message || error);
     return buildEmptySharedPurchaseProjectionSummary(month, year, { error: true });
+  }
+}
+
+function getAcceptedSharedPurchaseProjectionPeriodsSafe(userId, options = {}) {
+  try {
+    return getAcceptedSharedPurchaseProjectionPeriods(userId, options);
+  } catch (error) {
+    console.warn('[shared-purchase-projections] Falha ao carregar competencias com projecoes:', error?.message || error);
+    return [];
   }
 }
 
@@ -11414,23 +11428,32 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
   // 3. Agrupamos por mês/ano e consolidamos os cartões dentro de cada mês
   const groupedMap = new Map();
 
-  recent.forEach(r => {
-    const monthKey = `${r.year}-${r.month}`;
+  function ensureRadarMonthGroup(year, month) {
+    const safeYear = Number(year || 0);
+    const safeMonth = Number(month || 0);
+    if (!safeYear || !safeMonth) return null;
+    const key = `${safeYear}-${safeMonth}`;
 
-    if (!groupedMap.has(monthKey)) {
-      groupedMap.set(monthKey, {
-        year: r.year,
-        month: r.month,
-        label: `${String(r.month).padStart(2, '0')}/${r.year}`,
+    if (!groupedMap.has(key)) {
+      groupedMap.set(key, {
+        year: safeYear,
+        month: safeMonth,
+        label: `${String(safeMonth).padStart(2, '0')}/${safeYear}`,
         cards: [],
         total_cents: 0,
         paid_cents: 0,
         remaining_cents: 0,
-        cardsMap: new Map()
+        cardsMap: new Map(),
+        sharedProjectionSummary: buildEmptySharedPurchaseProjectionSummary(safeMonth, safeYear)
       });
     }
 
-    const group = groupedMap.get(monthKey);
+    return groupedMap.get(key);
+  }
+
+  recent.forEach(r => {
+    const group = ensureRadarMonthGroup(r.year, r.month);
+    if (!group) return;
     group.total_cents += r.import_total;
 
     if (!group.cardsMap.has(r.card_id)) {
@@ -11456,6 +11479,11 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
     }
   });
 
+  const sharedProjectionPeriods = getAcceptedSharedPurchaseProjectionPeriodsSafe(userId);
+  sharedProjectionPeriods.forEach((period) => {
+    ensureRadarMonthGroup(period.year, period.month);
+  });
+
   const groupedRecent = Array.from(groupedMap.values()).map(group => {
     const cards = Array.from(group.cardsMap.values())
       .map(card => {
@@ -11473,18 +11501,41 @@ app.get("/geral", ensureAuthenticated, (req, res) => {
       })
       .sort((a, b) => a.card_name.localeCompare(b.card_name, 'pt-BR', { sensitivity: 'base' }));
 
-    const paid_cents = cards.reduce((totalPaid, card) => {
+    const own_total_cents = Number(group.total_cents || 0);
+    const own_paid_cents = cards.reduce((totalPaid, card) => {
       return totalPaid + (statements[`${group.year}-${group.month}-${card.card_id}`] || 0);
     }, 0);
+    const own_remaining_cents = Math.max(0, own_total_cents - own_paid_cents);
+    const sharedProjectionSummary = getAcceptedSharedPurchaseProjectionSummarySafe(userId, group.month, group.year);
+    const shared_total_cents = Number(sharedProjectionSummary.totalCents || 0);
+    const shared_paid_cents = Number(sharedProjectionSummary.confirmedPaidCents || 0);
+    const shared_pending_cents = Number(sharedProjectionSummary.pendingReportedCents || 0);
+    const shared_open_cents = Number(sharedProjectionSummary.openCents || 0);
+    const shared_remaining_cents = Number(sharedProjectionSummary.remainingCents || Math.max(0, shared_total_cents - shared_paid_cents));
+    const total_cents = own_total_cents + shared_total_cents;
+    const paid_cents = own_paid_cents + shared_paid_cents;
+    const remaining_cents = own_remaining_cents + shared_remaining_cents;
 
     return {
       year: group.year,
       month: group.month,
       label: group.label,
       cards,
-      total_cents: group.total_cents,
+      total_cents,
       paid_cents,
-      remaining_cents: Math.max(0, group.total_cents - paid_cents),
+      remaining_cents,
+      own_total_cents,
+      own_paid_cents,
+      own_remaining_cents,
+      shared_total_cents,
+      shared_paid_cents,
+      shared_pending_cents,
+      shared_open_cents,
+      shared_remaining_cents,
+      shared_count: Number(sharedProjectionSummary.count || 0),
+      sharedProjectionSummary,
+      hasSharedProjections: shared_total_cents > 0,
+      isSharedOnly: cards.length === 0 && shared_total_cents > 0,
       isClosed: closedMonths.has(monthKey(group.month, group.year))
     };
   });

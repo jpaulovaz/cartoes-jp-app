@@ -299,6 +299,24 @@ function createSharedPurchaseProjectionService(deps = {}) {
     return sortProjections(rows.map((row) => normalizeProjectionRow(row, pendingByRequestId.get(Number(row.request_id || 0)) || 0)));
   }
 
+  function getAcceptedSharedPurchaseProjectionPeriods(userId, options = {}) {
+    if (!isEnabled() && !options.ignoreFeatureFlag) return [];
+    if (!repository || typeof repository.getAcceptedProjectionPeriods !== 'function') return [];
+
+    return repository.getAcceptedProjectionPeriods(userId)
+      .map((row) => ({
+        month: Number(row.month || 0),
+        year: Number(row.year || 0),
+        count: toPositiveInt(row.count),
+        totalCents: toPositiveInt(row.total_cents)
+      }))
+      .filter((row) => row.month >= 1 && row.month <= 12 && row.year > 0)
+      .sort((a, b) => {
+        if (b.year !== a.year) return b.year - a.year;
+        return b.month - a.month;
+      });
+  }
+
   function getAcceptedSharedPurchaseProjectionSummary(userId, month, year, options = {}) {
     const rows = getAcceptedSharedPurchaseProjections(userId, month, year, options);
     return {
@@ -312,6 +330,7 @@ function createSharedPurchaseProjectionService(deps = {}) {
   return {
     isEnabled,
     getAcceptedSharedPurchaseProjections,
+    getAcceptedSharedPurchaseProjectionPeriods,
     getAcceptedSharedPurchaseProjectionSummary
   };
 }

@@ -33,7 +33,7 @@ function sanitizeText(value, fallback = '') {
 
 function buildVirtualCardName(row = {}) {
   const requesterName = sanitizeText(row.requester_name, row.requester_email || 'amigo');
-  const cardName = sanitizeText(row.card_name_snapshot || row.source_card_name, 'cartao compartilhado');
+  const cardName = sanitizeText(row.card_name_snapshot || row.source_card_name, 'cartão compartilhado');
   return `Compartilhado por ${requesterName} - ${cardName}`;
 }
 
@@ -52,7 +52,7 @@ function buildStatusMeta({ amountCents, confirmedPaidCents, pendingReportedCents
     return { statusKey: 'settled', statusLabel: 'Quitada', statusTone: 'success' };
   }
   if (pending > 0) {
-    return { statusKey: 'awaiting_confirmation', statusLabel: 'Aguardando confirmacao', statusTone: 'warning' };
+    return { statusKey: 'awaiting_confirmation', statusLabel: 'Aguardando confirmação', statusTone: 'warning' };
   }
   if (confirmed > 0) {
     return { statusKey: 'partial', statusLabel: 'Parcial', statusTone: 'info' };
@@ -111,7 +111,7 @@ function normalizeProjectionRow(row = {}, reportedCents = 0) {
     statusTone: statusMeta.statusTone,
     rawStatus: row.status || '',
     virtualCardName: buildVirtualCardName(row),
-    cardName: sanitizeText(row.card_name_snapshot || row.source_card_name, 'Cartao compartilhado'),
+    cardName: sanitizeText(row.card_name_snapshot || row.source_card_name, 'Cartão compartilhado'),
     categoryName,
     purchaseCategoryName: categoryName,
     originLabel: 'Compra compartilhada recebida',

@@ -430,6 +430,34 @@ function getAcceptedSharedPurchaseProjectionSummary(userId, month, year, options
   return sharedPurchaseProjectionService.getAcceptedSharedPurchaseProjectionSummary(userId, month, year, options);
 }
 
+function buildEmptySharedPurchaseProjectionSummary(month, year, extra = {}) {
+  return {
+    enabled: sharedPurchaseProjectionService.isEnabled(),
+    month: Number(month || 0),
+    year: Number(year || 0),
+    count: 0,
+    totalCents: 0,
+    confirmedPaidCents: 0,
+    pendingReportedCents: 0,
+    openCents: 0,
+    remainingCents: 0,
+    hasItems: false,
+    byRequester: [],
+    byCategory: [],
+    rows: [],
+    ...extra
+  };
+}
+
+function getAcceptedSharedPurchaseProjectionSummarySafe(userId, month, year, options = {}) {
+  try {
+    return getAcceptedSharedPurchaseProjectionSummary(userId, month, year, options);
+  } catch (error) {
+    console.warn('[shared-purchase-projections] Falha ao carregar projecoes aceitas:', error?.message || error);
+    return buildEmptySharedPurchaseProjectionSummary(month, year, { error: true });
+  }
+}
+
 const upload = multer({ storage: multer.memoryStorage() });
 const backupRestoreUpload = multer({
   dest: path.join(os.tmpdir(), 'acerttapay-restore-uploads'),
@@ -16069,11 +16097,17 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
   };
 
   const draftQueueSummaryForMonth = getSharedDebtSendQueueDraftSummary(userId, { month, year });
+  const sharedPurchaseProjectionSummary = getAcceptedSharedPurchaseProjectionSummarySafe(userId, month, year);
+  const sharedPurchaseProjections = Array.isArray(sharedPurchaseProjectionSummary.rows)
+    ? sharedPurchaseProjectionSummary.rows
+    : [];
 
   return safeRenderView(res, "month", {
     month,
     year,
     txns,
+    sharedPurchaseProjections,
+    sharedPurchaseProjectionSummary,
     people,
     cards,
     recurringRules,

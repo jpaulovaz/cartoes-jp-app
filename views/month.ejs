@@ -34,6 +34,23 @@
   const sortedActivePurchaseCategories = sortByFriendlyName(activePurchaseCategories || []);
   const sortedPurchaseCategories = sortByFriendlyName(purchaseCategories || []);
   const sortedPeopleForSelection = sortPeopleForSelection(people || []);
+  const sharedReceivedProjections = (typeof sharedPurchaseProjections !== 'undefined' && Array.isArray(sharedPurchaseProjections)) ? sharedPurchaseProjections : [];
+  const sharedReceivedSummary = (typeof sharedPurchaseProjectionSummary !== 'undefined' && sharedPurchaseProjectionSummary) ? sharedPurchaseProjectionSummary : { count: 0, totalCents: 0, confirmedPaidCents: 0, pendingReportedCents: 0, openCents: 0, rows: [] };
+  const sharedReceivedCount = Number(sharedReceivedSummary.count || sharedReceivedProjections.length || 0);
+
+  function getSharedProjectionStatusClasses(statusTone) {
+    const tone = String(statusTone || '').toLowerCase();
+    if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200';
+    if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200';
+    if (tone === 'info') return 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200';
+    return 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300';
+  }
+
+  function getSharedProjectionFirstName(value) {
+    const text = String(value || '').trim();
+    if (!text) return 'alguém';
+    return text.split(/\s+/).filter(Boolean)[0] || text;
+  }
 
   function getParticipantChipLabel(person, totalParticipants) {
     const label = getParticipantDisplayName(person);
@@ -53,6 +70,9 @@
         <div class="op-page-hero__meta mt-4">
           <span class="badge"><%= isClosed ? 'Período fechado' : 'Período aberto' %></span>
           <span class="badge"><%= txns ? txns.length : 0 %> lançamento(s)</span>
+          <% if (sharedReceivedCount > 0) { %>
+            <span class="badge"><%= sharedReceivedCount %> compartilhada(s)</span>
+          <% } %>
         </div>
         <div id="allocMsg" class="mt-3 h-5 text-sm font-bold text-emerald-600 transition-all duration-300"></div>
       </div>
@@ -455,6 +475,99 @@
       </form>
     </div>
 
+    <% if (sharedReceivedProjections.length) { %>
+      <section class="op-surface-card op-month-shared-projections-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-emerald-100 dark:border-emerald-900/60 p-5 mb-6 overflow-hidden">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div class="min-w-0">
+            <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
+              Aceitas por você
+            </span>
+            <h2 class="mt-3 text-lg font-extrabold text-slate-800 dark:text-white">Compras compartilhadas aceitas</h2>
+            <p class="mt-1 max-w-3xl text-sm font-medium text-slate-500 dark:text-slate-400">
+              Esses itens já entraram no seu mês, mas continuam em modo consulta: nada de editar, excluir, dividir ou fechar por aqui. O combinado segue na Central de Acertos.
+            </p>
+          </div>
+          <a href="/shared-debts#received"
+            class="inline-flex w-full items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-black text-emerald-700 transition hover:-translate-y-0.5 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:bg-emerald-900/35 sm:w-auto">
+            Abrir Central de Acertos
+          </a>
+        </div>
+
+        <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/60">
+            <div class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Total aceito</div>
+            <div class="mt-1 text-xl font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(sharedReceivedSummary.totalCents || 0) %></div>
+          </div>
+          <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/20">
+            <div class="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-600 dark:text-emerald-300">Pago confirmado</div>
+            <div class="mt-1 text-xl font-black text-emerald-700 dark:text-emerald-200"><%= formatBRLFromCents(sharedReceivedSummary.confirmedPaidCents || 0) %></div>
+          </div>
+          <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-900/20">
+            <div class="text-[11px] font-black uppercase tracking-[0.16em] text-amber-600 dark:text-amber-300">Aguardando confirmação</div>
+            <div class="mt-1 text-xl font-black text-amber-700 dark:text-amber-200"><%= formatBRLFromCents(sharedReceivedSummary.pendingReportedCents || 0) %></div>
+          </div>
+          <div class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 dark:border-sky-800 dark:bg-sky-900/20">
+            <div class="text-[11px] font-black uppercase tracking-[0.16em] text-sky-600 dark:text-sky-300">Ainda falta</div>
+            <div class="mt-1 text-xl font-black text-sky-700 dark:text-sky-200"><%= formatBRLFromCents(sharedReceivedSummary.openCents || 0) %></div>
+          </div>
+        </div>
+
+        <div class="mt-5 grid gap-4 lg:grid-cols-2">
+          <% sharedReceivedProjections.forEach(item => { %>
+            <article class="rounded-[26px] border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/45">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= formatDateBR(item.date) %></span>
+                    <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Compartilhada</span>
+                    <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">Somente leitura</span>
+                  </div>
+                  <h3 class="mt-3 text-base font-black text-slate-900 dark:text-white break-words"><%= item.description %></h3>
+                  <p class="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                    Enviado por <strong class="text-slate-700 dark:text-slate-200"><%= item.requesterName || 'alguém' %></strong> · Cartão de origem: <strong class="text-slate-700 dark:text-slate-200"><%= item.cardName || 'Cartão compartilhado' %></strong>
+                  </p>
+                </div>
+                <div class="shrink-0 text-left sm:text-right">
+                  <div class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Sua parte</div>
+                  <div class="text-2xl font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(item.amountCents || 0) %></div>
+                </div>
+              </div>
+
+              <div class="mt-4 flex flex-wrap gap-2">
+                <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold <%= getSharedProjectionStatusClasses(item.statusTone) %>"><%= item.statusLabel || 'Aceita' %></span>
+                <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200"><%= item.categoryName || 'Compartilhadas' %></span>
+              </div>
+
+              <div class="mt-4 grid gap-2 sm:grid-cols-3">
+                <div class="rounded-2xl border border-emerald-200 bg-white px-3 py-2 dark:border-emerald-800 dark:bg-slate-950/80">
+                  <div class="text-[10px] font-black uppercase tracking-wide text-emerald-600 dark:text-emerald-300">Confirmado</div>
+                  <div class="mt-0.5 text-sm font-black text-emerald-700 dark:text-emerald-200"><%= formatBRLFromCents(item.confirmedPaidCents || 0) %></div>
+                </div>
+                <div class="rounded-2xl border border-amber-200 bg-white px-3 py-2 dark:border-amber-800 dark:bg-slate-950/80">
+                  <div class="text-[10px] font-black uppercase tracking-wide text-amber-600 dark:text-amber-300">Em conferência</div>
+                  <div class="mt-0.5 text-sm font-black text-amber-700 dark:text-amber-200"><%= formatBRLFromCents(item.pendingReportedCents || 0) %></div>
+                </div>
+                <div class="rounded-2xl border border-sky-200 bg-white px-3 py-2 dark:border-sky-800 dark:bg-slate-950/80">
+                  <div class="text-[10px] font-black uppercase tracking-wide text-sky-600 dark:text-sky-300">Falta</div>
+                  <div class="mt-0.5 text-sm font-black text-sky-700 dark:text-sky-200"><%= formatBRLFromCents(item.openCents || 0) %></div>
+                </div>
+              </div>
+
+              <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">
+                  <%= getSharedProjectionFirstName(item.requesterName) %> ainda controla essa compra. Para pagar, contestar ou acompanhar, vá para Acertos.
+                </p>
+                <a href="<%= item.actionsUrl || '/shared-debts#received' %>"
+                  class="inline-flex shrink-0 items-center justify-center rounded-2xl bg-slate-900 px-4 py-2 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
+                  Ver em Acertos
+                </a>
+              </div>
+            </article>
+          <% }) %>
+        </div>
+      </section>
+    <% } %>
+
     <div class="op-surface-card op-month-ledger-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
       <div class="op-month-ledger-head border-b border-slate-200 dark:border-slate-700 px-5 py-4">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -633,8 +746,8 @@
         <div class="op-empty-state__icon">
           <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
         </div>
-        <div class="op-empty-state__title">Nenhum lançamento encontrado</div>
-        <p class="op-empty-state__text">Nenhum lançamento encontrado com os filtros atuais. Ajuste os critérios ou limpe a busca para voltar à lista completa.</p>
+        <div class="op-empty-state__title"><%= sharedReceivedCount > 0 ? 'Nenhum lançamento próprio encontrado' : 'Nenhum lançamento encontrado' %></div>
+        <p class="op-empty-state__text"><%= sharedReceivedCount > 0 ? 'As compras compartilhadas aceitas aparecem acima em modo somente leitura. Para os lançamentos próprios, ajuste os filtros ou limpe a busca.' : 'Nenhum lançamento encontrado com os filtros atuais. Ajuste os critérios ou limpe a busca para voltar à lista completa.' %></p>
       </div>
       <% } %>
 

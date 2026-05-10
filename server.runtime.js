@@ -18483,9 +18483,23 @@ function buildMonthlyReviewViewModel(userId, month, year) {
   const personalMerchantSuggestions = getPersonMerchantSuggestions(userId, selfPersonId, month, year, 4);
   const cardMonthlyTrend = getCardMonthlyTrend(userId, month, year, 6);
   const privateDebtReminderSummary = getPrivateDebtReminderDashboardSummary(userId);
+  const sharedPurchaseProjectionSummary = getAcceptedSharedPurchaseProjectionSummarySafe(userId, month, year);
+  const sharedPurchaseProjectionRows = Array.isArray(sharedPurchaseProjectionSummary?.rows)
+    ? sharedPurchaseProjectionSummary.rows
+    : [];
   const personalCardShareCents = Number(selfPersonPanel?.total_cents || 0);
   const personalPaidCents = Number(selfPersonPanel?.paid_cents || 0);
   const personalRemainingCents = Math.max(0, personalCardShareCents - personalPaidCents);
+  const personalFinancialSnapshot = {
+    ownCardShareCents: personalCardShareCents,
+    sharedAcceptedCents: Number(sharedPurchaseProjectionSummary?.totalCents || 0),
+    totalCents: personalCardShareCents + Number(sharedPurchaseProjectionSummary?.totalCents || 0),
+    ownPaidCents: personalPaidCents,
+    sharedConfirmedPaidCents: Number(sharedPurchaseProjectionSummary?.confirmedPaidCents || 0),
+    sharedPendingReportedCents: Number(sharedPurchaseProjectionSummary?.pendingReportedCents || 0),
+    sharedOpenCents: Number(sharedPurchaseProjectionSummary?.openCents || 0),
+    sharedRemainingCents: Number(sharedPurchaseProjectionSummary?.remainingCents || 0)
+  };
   const personalCategorizedCents = personalCategories
     .filter((item) => !item.is_uncategorized)
     .reduce((acc, item) => acc + Number(item?.total_cents || 0), 0);
@@ -18588,6 +18602,9 @@ function buildMonthlyReviewViewModel(userId, month, year) {
     isClosed,
     summaryCharts,
     privateDebtReminderSummary,
+    sharedPurchaseProjectionSummary,
+    sharedPurchaseProjectionRows,
+    personalFinancialSnapshot,
     previousSummaryRef: shiftMonth(year, month, -1),
     nextSummaryRef: shiftMonth(year, month, 1)
   };

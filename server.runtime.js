@@ -216,6 +216,7 @@ function getCardBrandMeta(value) {
 const { parseCsvByCardName } = require("./src/importers");
 const { formatBRLFromCents, parseMonthYear, toISOFromBRDate, centsFromPtBrMoney } = require("./src/utils");
 const { buildMonthTransactionsCsv } = require("./src/monthTransactionsCsv");
+const { createSharedPurchaseProjectionService } = require("./src/services/sharedPurchaseProjection.service");
 const {
   PIX_DEFAULT_STATE,
   PIX_DEFAULT_CITY,
@@ -419,6 +420,16 @@ function replaceAllocationsForTransactions(userId, targetRows, allocationPlan) {
 
 
 const app = express();
+const sharedPurchaseProjectionService = createSharedPurchaseProjectionService({ db });
+
+function getAcceptedSharedPurchaseProjections(userId, month, year, options = {}) {
+  return sharedPurchaseProjectionService.getAcceptedSharedPurchaseProjections(userId, month, year, options);
+}
+
+function getAcceptedSharedPurchaseProjectionSummary(userId, month, year, options = {}) {
+  return sharedPurchaseProjectionService.getAcceptedSharedPurchaseProjectionSummary(userId, month, year, options);
+}
+
 const upload = multer({ storage: multer.memoryStorage() });
 const backupRestoreUpload = multer({
   dest: path.join(os.tmpdir(), 'acerttapay-restore-uploads'),

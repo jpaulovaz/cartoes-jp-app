@@ -1412,6 +1412,7 @@ function runMigrations() {
   CREATE INDEX IF NOT EXISTS idx_recurring_rules_user_status ON recurring_rules(user_id, status);
   CREATE INDEX IF NOT EXISTS idx_people_email ON people(user_id, email);
   CREATE INDEX IF NOT EXISTS idx_shared_debts_receiver_status ON shared_debt_requests(receiver_user_id, status, created_at);
+  CREATE INDEX IF NOT EXISTS idx_shared_debts_projection_receiver ON shared_debt_requests(receiver_user_id, request_kind, status, source_due_year, source_due_month, amount_cents);
   CREATE INDEX IF NOT EXISTS idx_shared_debts_requester_status ON shared_debt_requests(requester_user_id, status, created_at);
   CREATE INDEX IF NOT EXISTS idx_shared_debts_source_allocation ON shared_debt_requests(source_allocation_id);
   CREATE INDEX IF NOT EXISTS idx_shared_debts_source_person ON shared_debt_requests(requester_user_id, source_transaction_id, source_person_id);
@@ -1431,6 +1432,7 @@ function runMigrations() {
   CREATE INDEX IF NOT EXISTS idx_shared_debt_monthly_settlements_receiver ON shared_debt_monthly_settlements(receiver_user_id, year, month, request_kind);
   CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_settlement_status ON shared_debt_payment_intents(settlement_id, status, created_at);
   CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_pair ON shared_debt_payment_intents(requester_user_id, receiver_user_id, year, month, request_kind, status);
+  CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_intents_receiver_projection ON shared_debt_payment_intents(receiver_user_id, request_kind, year, month, status);
   CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_allocations_intent ON shared_debt_payment_allocations(intent_id, request_id);
   CREATE INDEX IF NOT EXISTS idx_shared_debt_payment_allocations_request ON shared_debt_payment_allocations(request_id);
   CREATE INDEX IF NOT EXISTS idx_shared_debt_send_queues_requester_status ON shared_debt_send_queues(requester_user_id, status, source_due_year DESC, source_due_month DESC, updated_at DESC);

@@ -1446,6 +1446,15 @@ Tente novamente em instantes.`,
         input.setAttribute('inputmode', 'numeric');
       }
 
+      function normalizeShareForAmount(cents, totalCents) {
+        const absoluteCents = Math.abs(Number(cents || 0));
+        return Number(totalCents || 0) < 0 ? -absoluteCents : absoluteCents;
+      }
+
+      function getMoneyInputDisplayCents(cents) {
+        return Math.abs(Number(cents || 0));
+      }
+
 
       function buildPurchaseFormField(labelText, field) {
         const wrapper = document.createElement('div');
@@ -1483,14 +1492,9 @@ Tente novamente em instantes.`,
         const amount = Number(item.amount_cents || 0);
         const values = participantIds.map((personId) => Number(shares[personId] || 0));
         const total = values.reduce((sum, value) => sum + value, 0);
-        if (amount > 0 && total === amount) {
-          const base = Math.floor(amount / participantIds.length);
-          let remainder = amount - (base * participantIds.length);
-          const expected = participantIds.map(() => {
-            const next = base + (remainder > 0 ? 1 : 0);
-            if (remainder > 0) remainder -= 1;
-            return next;
-          });
+        if (amount !== 0 && total === amount) {
+          const expectedMap = buildEqualShareMapLocal(amount, participantIds);
+          const expected = participantIds.map((personId) => Number(expectedMap[personId] || 0));
           return expected.every((value, index) => value === values[index]) ? 'equal' : 'exact';
         }
         return 'exact';
@@ -1842,7 +1846,7 @@ Tente novamente em instantes.`,
         const initialSelectedIds = uniformSelection !== null
           ? uniformSelection
           : (singleItem ? (singleItem.selected_ids || []).map(Number) : []);
-        const exactModeAvailable = !!singleItem && Number(singleItem.amount_cents || 0) >= 0;
+        const exactModeAvailable = !!singleItem;
         const draftShares = { ...(singleItem ? normalizeSelectedShares(singleItem) : {}) };
 
         if (uniformSelection === null && items.length > 1) {
@@ -2012,15 +2016,16 @@ Tente novamente em instantes.`,
             input.name = `share_amounts[${personId}]`;
             input.placeholder = '0,00';
             input.value = window.OPMoneyMask && typeof window.OPMoneyMask.formatFromCents === 'function'
-              ? window.OPMoneyMask.formatFromCents(draftShares[personId])
-              : formatMoney(draftShares[personId]);
+              ? window.OPMoneyMask.formatFromCents(getMoneyInputDisplayCents(draftShares[personId]))
+              : formatMoney(getMoneyInputDisplayCents(draftShares[personId]));
             input.className = 'w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900/70 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20';
             input.setAttribute('data-money-mask', '1');
             bindDynamicMoneyMask(input);
             input.addEventListener('input', () => {
-              draftShares[personId] = window.OPMoneyMask && typeof window.OPMoneyMask.toCents === 'function'
+              const rawCents = window.OPMoneyMask && typeof window.OPMoneyMask.toCents === 'function'
                 ? window.OPMoneyMask.toCents(input.value)
                 : Number(String(input.value || '').replace(/\D/g, '')) || 0;
+              draftShares[personId] = normalizeShareForAmount(rawCents, singleItem.amount_cents);
               syncExactTotals();
             });
             row.appendChild(input);
@@ -2036,7 +2041,9 @@ Tente novamente em instantes.`,
           const selectedIds = getSelectedIds();
           const typedTotal = selectedIds.reduce((sum, personId) => sum + Number(draftShares[personId] || 0), 0);
           const targetTotal = Number(singleItem.amount_cents || 0);
-          const diff = targetTotal - typedTotal;
+          const targetAbs = Math.abs(targetTotal);
+          const typedAbs = selectedIds.reduce((sum, personId) => sum + Math.abs(Number(draftShares[personId] || 0)), 0);
+          const diff = targetAbs - typedAbs;
           let toneClass = 'text-emerald-700 dark:text-emerald-300';
           let helperText = 'Fechou certinho. Agora é só salvar.';
           if (diff > 0) {

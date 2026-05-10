@@ -10,6 +10,7 @@ const { createSummaryRouter } = require('./summary.routes');
 const { createSharedDebtsRouter } = require('./sharedDebts.routes');
 const { createPeopleRouter } = require('./people.routes');
 const { createSocialShareRouter } = require('./socialShare.routes');
+const { createMonthlyEmailSummaryRouter } = require('./monthlyEmailSummary.routes');
 
 function registerAuthRoutes(app, deps = {}) {
   app.use(createAuthRouter(deps));
@@ -59,6 +60,10 @@ function registerSocialShareRoutes(app, deps = {}) {
   app.use(createSocialShareRouter(deps));
 }
 
+function registerMonthlyEmailSummaryRoutes(app, deps = {}) {
+  app.use(createMonthlyEmailSummaryRouter(deps));
+}
+
 module.exports = {
   registerAuthRoutes,
   registerSecurityRoutes,
@@ -72,6 +77,7 @@ module.exports = {
   registerSharedDebtsRoutes,
   registerPeopleRoutes,
   registerSocialShareRoutes,
+  registerMonthlyEmailSummaryRoutes,
   createAuthRouter,
   createSecurityRouter,
   createNotificationsRouter,
@@ -83,5 +89,6 @@ module.exports = {
   createSummaryRouter,
   createSharedDebtsRouter,
   createPeopleRouter,
-  createSocialShareRouter
+  createSocialShareRouter,
+  createMonthlyEmailSummaryRouter
 };

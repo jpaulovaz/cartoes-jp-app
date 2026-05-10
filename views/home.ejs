@@ -139,6 +139,8 @@
     </div>
   </div>
 
+  <%- include("partials/monthly-email-summary-modal") %>
+
   <div>
     <% if (!groupedRecent || groupedRecent.length===0) { %>
       <div class="op-empty-state op-radar-empty op-fade-up">
@@ -229,23 +231,35 @@
                 </div>
 
                 <div class="op-radar-period__actions flex items-center gap-3 mt-5 lg:mt-0 pt-5 lg:pt-0 border-t border-slate-100 dark:border-slate-700 lg:border-none">
-                  <a href="/month/<%= group.year %>/<%= group.month %>"
-                    class="op-btn op-btn--compact op-hero-link op-hero-link--month flex-1 lg:w-[9.75rem] whitespace-nowrap"
-                    onclick="event.stopPropagation()">
-                    Ver mês
-                  </a>
+                  <div class="op-radar-period__action-grid">
+                    <a href="/month/<%= group.year %>/<%= group.month %>"
+                      class="op-btn op-btn--compact op-hero-link op-hero-link--month"
+                      onclick="event.stopPropagation()">
+                      Ver m&ecirc;s
+                    </a>
 
-                  <a href="/summary/<%= group.year %>/<%= group.month %>"
-                    class="op-btn op-btn--compact op-hero-link op-hero-link--summary flex-1 lg:w-[9.75rem] whitespace-nowrap"
-                    onclick="event.stopPropagation()">
-                    Fechamento
-                  </a>
+                    <a href="/summary/<%= group.year %>/<%= group.month %>"
+                      class="op-btn op-btn--compact op-hero-link op-hero-link--summary"
+                      onclick="event.stopPropagation()">
+                      Fechamento
+                    </a>
 
-                  <a href="/analytics/<%= group.year %>/<%= group.month %>"
-                    class="op-btn op-btn--compact op-hero-link op-hero-link--analytics flex-1 lg:w-[9.75rem] whitespace-nowrap"
-                    onclick="event.stopPropagation()">
-                    Análises
-                  </a>
+                    <a href="/analytics/<%= group.year %>/<%= group.month %>"
+                      class="op-btn op-btn--compact op-hero-link op-hero-link--analytics"
+                      onclick="event.stopPropagation()">
+                      An&aacute;lises
+                    </a>
+
+                    <button type="button"
+                      class="op-btn op-btn--compact op-hero-link op-hero-link--email-summary"
+                      data-monthly-summary-email-open
+                      data-monthly-year="<%= group.year %>"
+                      data-monthly-month="<%= group.month %>"
+                      data-monthly-label="<%= group.label %>"
+                      onclick="event.preventDefault(); event.stopPropagation();">
+                      Resumo no e-mail
+                    </button>
+                  </div>
 
                   <div
                     class="op-radar-period__chevron w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-300 group-open:rotate-180 transition-transform duration-300 ml-2">

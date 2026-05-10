@@ -1458,6 +1458,171 @@
 })();
 
 (function () {
+  function moveMonthlyEmailModalToBody(modal) {
+    if (!(modal instanceof HTMLElement)) return null;
+    if (modal.parentElement !== document.body) document.body.appendChild(modal);
+    return modal;
+  }
+
+  function setMonthlyEmailStatus(node, message, tone = 'info') {
+    if (!(node instanceof HTMLElement)) return;
+    const nextMessage = String(message || '').trim();
+    node.textContent = nextMessage;
+    node.classList.toggle('hidden', !nextMessage);
+    if (nextMessage) {
+      node.dataset.tone = tone;
+    } else {
+      delete node.dataset.tone;
+    }
+  }
+
+  function setMonthlyEmailLoading(form, loading) {
+    if (!(form instanceof HTMLFormElement)) return;
+    const submit = form.querySelector('[data-monthly-email-submit]');
+    const label = form.querySelector('[data-monthly-email-submit-label]');
+    const spinner = form.querySelector('[data-monthly-email-submit-spinner]');
+    form.dataset.loading = loading ? 'true' : 'false';
+    if (submit instanceof HTMLButtonElement) submit.disabled = !!loading;
+    if (label instanceof HTMLElement) label.classList.toggle('hidden', !!loading);
+    if (spinner instanceof HTMLElement) spinner.classList.toggle('hidden', !loading);
+  }
+
+  function resetMonthlyEmailForm(form) {
+    if (!(form instanceof HTMLFormElement)) return;
+    form.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      if (input instanceof HTMLInputElement) input.checked = true;
+    });
+  }
+
+  function readMonthlyEmailOptions(form) {
+    const sections = {};
+    const attachments = {};
+    form.querySelectorAll('[data-monthly-email-section]').forEach((input) => {
+      if (!(input instanceof HTMLInputElement)) return;
+      const key = input.getAttribute('data-monthly-email-section');
+      if (key) sections[key] = input.checked;
+    });
+    form.querySelectorAll('[data-monthly-email-attachment]').forEach((input) => {
+      if (!(input instanceof HTMLInputElement)) return;
+      const key = input.getAttribute('data-monthly-email-attachment');
+      if (key) attachments[key] = input.checked;
+    });
+    return { sections, attachments, recipientMode: 'self' };
+  }
+
+  function setupMonthlyEmailSummaryModal() {
+    const modal = moveMonthlyEmailModalToBody(document.querySelector('[data-monthly-email-modal]'));
+    if (!(modal instanceof HTMLElement)) return;
+
+    const form = modal.querySelector('[data-monthly-email-form]');
+    if (!(form instanceof HTMLFormElement)) return;
+
+    const periodLabel = modal.querySelector('[data-monthly-email-period-label]');
+    const statusNode = modal.querySelector('[data-monthly-email-status]');
+    const closeButtons = Array.from(modal.querySelectorAll('[data-monthly-email-close]')).filter((element) => element instanceof HTMLElement);
+    const openButtons = Array.from(document.querySelectorAll('[data-monthly-summary-email-open]')).filter((element) => element instanceof HTMLElement);
+
+    function openModal(button) {
+      const year = Number(button.getAttribute('data-monthly-year') || 0);
+      const month = Number(button.getAttribute('data-monthly-month') || 0);
+      const label = String(button.getAttribute('data-monthly-label') || `${String(month).padStart(2, '0')}/${year}`).trim();
+      if (!year || !month) return;
+
+      form.dataset.year = String(year);
+      form.dataset.month = String(month);
+      resetMonthlyEmailForm(form);
+      setMonthlyEmailLoading(form, false);
+      if (periodLabel instanceof HTMLElement) periodLabel.textContent = label;
+      setMonthlyEmailStatus(statusNode, '', 'info');
+      document.body.classList.add('op-monthly-email-modal-open');
+      modal.classList.remove('hidden');
+      modal.setAttribute('aria-hidden', 'false');
+      const firstInput = modal.querySelector('input[type="checkbox"]');
+      window.setTimeout(() => {
+        if (firstInput instanceof HTMLElement) firstInput.focus({ preventScroll: true });
+      }, 40);
+    }
+
+    function closeModal() {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('op-monthly-email-modal-open');
+      setMonthlyEmailLoading(form, false);
+    }
+
+    openButtons.forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openModal(button);
+      });
+    });
+
+    closeButtons.forEach((button) => {
+      button.addEventListener('click', closeModal);
+    });
+
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closeModal();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+    });
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (form.dataset.loading === 'true') return;
+      const year = Number(form.dataset.year || 0);
+      const month = Number(form.dataset.month || 0);
+      if (!year || !month) {
+        setMonthlyEmailStatus(statusNode, 'Nao consegui identificar o mes desse resumo. Fecha e tenta abrir de novo.', 'error');
+        return;
+      }
+
+      setMonthlyEmailLoading(form, true);
+      setMonthlyEmailStatus(statusNode, 'Enviando seu resumo... o carteiro digital ja saiu correndo.', 'info');
+
+      try {
+        const response = await fetch(`/monthly-summary-email/${year}/${month}/send`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json'
+          },
+          body: JSON.stringify(readMonthlyEmailOptions(form))
+        });
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (jsonError) {
+          payload = null;
+        }
+        if (!response.ok || !payload || payload.ok === false || payload.success === false) {
+          throw new Error(payload?.message || payload?.error || 'Nao consegui mandar esse resumo agora.');
+        }
+        const message = payload.message || 'Pronto! Seu resumo foi para seu email.';
+        setMonthlyEmailStatus(statusNode, message, 'success');
+        if (typeof window.showAppToast === 'function') {
+          window.showAppToast(message, { tone: 'success', title: 'Resumo enviado', duration: 5200 });
+        }
+        window.setTimeout(closeModal, 900);
+      } catch (error) {
+        const message = error?.message || 'Nao consegui mandar esse resumo agora.';
+        setMonthlyEmailStatus(statusNode, message, 'error');
+        if (typeof window.showAppToast === 'function') {
+          window.showAppToast(message, { tone: 'error', title: 'Email nao saiu' });
+        }
+      } finally {
+        setMonthlyEmailLoading(form, false);
+      }
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', setupMonthlyEmailSummaryModal);
+})();
+
+(function () {
   function bindRecurringToggle(form) {
     const recurringToggle = form.querySelector('[data-recurring-toggle]');
     const installmentsInput = form.querySelector('[data-installments-input]');
@@ -1521,6 +1686,27 @@
     input.value = digits ? formatMoneyDigits(digits) : '';
   }
 
+  function isPasteLikeInput(event) {
+    const inputType = String(event && event.inputType || '');
+    return inputType === 'insertFromPaste' || inputType === 'insertFromDrop' || inputType === 'insertReplacementText';
+  }
+
+  function getClipboardText(event) {
+    const data = event && (event.clipboardData || window.clipboardData);
+    if (!data || typeof data.getData !== 'function') return '';
+    return data.getData('text/plain') || data.getData('text') || '';
+  }
+
+  function applyMoneyTextToInput(input, text) {
+    const digits = extractMoneyDigits(text);
+    if (!digits) return false;
+    input.dataset.moneyDigits = digits;
+    input.value = formatMoneyDigits(digits);
+    placeCaretToEnd(input);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }
+
   function bindMoneyMask(input) {
     if (!(input instanceof HTMLInputElement) || input.dataset.moneyMaskBound === '1') return;
     input.dataset.moneyMaskBound = '1';
@@ -1533,6 +1719,7 @@
 
     input.addEventListener('beforeinput', (event) => {
       if (event.inputType && event.inputType.startsWith('delete')) return;
+      if (isPasteLikeInput(event)) return;
       if (!event.data) return;
       if (/\D/.test(event.data)) {
         event.preventDefault();
@@ -1544,11 +1731,21 @@
       placeCaretToEnd(input);
     });
 
-    input.addEventListener('paste', () => {
-      requestAnimationFrame(() => {
+    input.addEventListener('paste', (event) => {
+      const pastedText = getClipboardText(event);
+      if (!pastedText) {
+        requestAnimationFrame(() => {
+          renderMoneyInput(input, true);
+          placeCaretToEnd(input);
+        });
+        return;
+      }
+
+      event.preventDefault();
+      if (!applyMoneyTextToInput(input, pastedText)) {
         renderMoneyInput(input, true);
         placeCaretToEnd(input);
-      });
+      }
     });
 
     input.addEventListener('focus', () => {

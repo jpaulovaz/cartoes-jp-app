@@ -141,7 +141,7 @@ const {
   buildImportPreviewFromBuffer,
   applyImportPreview
 } = require('./src/messageCsvService');
-const { registerAuthRoutes, registerSecurityRoutes, registerNotificationsRoutes, registerAdminCoreRoutes, registerAdminMessagesRoutes, registerCardsRoutes, registerFinancesRoutes, registerImportRoutes, registerSummaryRoutes, registerSharedDebtsRoutes, registerPeopleRoutes, registerSocialShareRoutes } = require('./src/routes');
+const { registerAuthRoutes, registerSecurityRoutes, registerNotificationsRoutes, registerAdminCoreRoutes, registerAdminMessagesRoutes, registerCardsRoutes, registerFinancesRoutes, registerImportRoutes, registerSummaryRoutes, registerSharedDebtsRoutes, registerPeopleRoutes, registerSocialShareRoutes, registerMonthlyEmailSummaryRoutes } = require('./src/routes');
 
 // Migração oficial executada explicitamente pelo bootstrap do runtime.
 // Seed opcional permanece fora do bootstrap automático.
@@ -215,6 +215,7 @@ function getCardBrandMeta(value) {
 // Schema permanente fica exclusivamente na trilha oficial de migração (Fase 1B).
 const { parseCsvByCardName } = require("./src/importers");
 const { formatBRLFromCents, parseMonthYear, toISOFromBRDate, centsFromPtBrMoney } = require("./src/utils");
+const { buildMonthTransactionsCsv } = require("./src/monthTransactionsCsv");
 const {
   PIX_DEFAULT_STATE,
   PIX_DEFAULT_CITY,
@@ -358,9 +359,6 @@ function parseAllocationPlan({
   }
 
   const baseAmount = Number(rows[0]?.amount_cents || 0);
-  if (baseAmount < 0) {
-    throw new Error('Valor definido ainda não está disponível para lançamentos negativos. Aqui, siga em partes iguais.');
-  }
   const differentAmountRow = rows.find(row => Number(row.amount_cents || 0) !== baseAmount);
   if (differentAmountRow) {
     throw new Error('O valor definido só funciona quando todas as compras escolhidas têm o mesmo valor. Use partes iguais ou aplique em uma compra por vez.');
@@ -368,23 +366,27 @@ function parseAllocationPlan({
 
   const shareSource = rawShareAmounts && typeof rawShareAmounts === 'object' ? rawShareAmounts : {};
   const shareMap = {};
+  const targetSign = baseAmount < 0 ? -1 : 1;
 
   for (const personId of personIds) {
     const rawValue = Object.prototype.hasOwnProperty.call(shareSource, personId)
       ? shareSource[personId]
       : shareSource[String(personId)];
     const cents = normalizeShareAmountInput(rawValue);
-    if (cents === null || !Number.isFinite(cents) || cents < 0) {
+    if (cents === null || !Number.isFinite(cents)) {
       throw new Error('Revise os valores definidos. Cada pessoa marcada precisa ter um valor válido.');
     }
-    shareMap[personId] = cents;
+
+    const absoluteCents = Math.abs(Math.round(cents));
+    shareMap[personId] = targetSign < 0 ? -absoluteCents : absoluteCents;
   }
 
-  const totalDefined = personIds.reduce((sum, personId) => sum + Number(shareMap[personId] || 0), 0);
-  if (totalDefined !== baseAmount) {
-    const diff = Math.abs(baseAmount - totalDefined);
+  const targetAbs = Math.abs(baseAmount);
+  const totalDefinedAbs = personIds.reduce((sum, personId) => sum + Math.abs(Number(shareMap[personId] || 0)), 0);
+  if (totalDefinedAbs !== targetAbs) {
+    const diff = Math.abs(targetAbs - totalDefinedAbs);
     const diffLabel = formatBRLFromCents(diff);
-    if (totalDefined < baseAmount) {
+    if (totalDefinedAbs < targetAbs) {
       throw new Error(`Ainda falta ${diffLabel} para fechar o total da compra.`);
     }
     throw new Error(`Passou ${diffLabel} do total da compra. Dá uma aparada e tenta de novo.`);
@@ -745,17 +747,49 @@ function buildLoginUrl(req) {
   return origin ? `${origin}/login` : '/login';
 }
 
+function buildAppUrl(req, targetPath = '/') {
+  const rawPath = String(targetPath || '/').trim();
+  const safePath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+  const origin = buildAppOriginFromRequest(req);
+  return origin ? `${origin}${safePath}` : safePath;
+}
+
 function sanitizeAdminEmailMessage(value) {
   return String(value || '').trim().slice(0, 280);
 }
 
 function summarizeEmailPayload(payload = {}) {
   const safe = payload && typeof payload === 'object' ? payload : {};
+  const period = safe.period && typeof safe.period === 'object'
+    ? { month: Number(safe.period.month || 0) || null, year: Number(safe.period.year || 0) || null }
+    : null;
+  const sections = safe.sections && typeof safe.sections === 'object'
+    ? Object.fromEntries(Object.entries(safe.sections).map(([key, value]) => [key, !!value]))
+    : null;
+  const attachments = safe.attachments && typeof safe.attachments === 'object'
+    ? {
+        transactionsCsv: !!safe.attachments.transactionsCsv,
+        csvFilename: String(safe.attachments.csvFilename || '').trim(),
+        csvRowCount: Number(safe.attachments.csvRowCount || 0) || 0,
+        csvByteLength: Number(safe.attachments.csvByteLength || 0) || 0
+      }
+    : null;
+  const urls = safe.urls && typeof safe.urls === 'object'
+    ? {
+        appUrl: String(safe.urls.appUrl || '').trim(),
+        analyticsUrl: String(safe.urls.analyticsUrl || '').trim()
+      }
+    : null;
+
   return JSON.stringify({
     loginUrl: String(safe.loginUrl || '').trim(),
     subject: String(safe.subject || '').trim(),
     preview: String(safe.preview || '').trim(),
     customMessage: sanitizeAdminEmailMessage(safe.customMessage || ''),
+    period,
+    sections,
+    attachments,
+    urls,
     accepted: Array.isArray(safe.accepted) ? safe.accepted.slice(0, 5) : [],
     rejected: Array.isArray(safe.rejected) ? safe.rejected.slice(0, 5) : [],
     response: String(safe.response || '').trim()
@@ -797,11 +831,16 @@ function finalizeEmailDeliveryEvent(eventId, { status, providerMessageId = '', e
   );
 }
 
-function getNextWelcomeEmailAttemptNo(targetUserId) {
+function getNextEmailAttemptNo(kind, targetUserId) {
+  const safeKind = String(kind || '').trim() || 'welcome';
   const safeUserId = Number(targetUserId || 0);
   if (!safeUserId) return 1;
-  const row = emailDeliveryEventsCountAttemptsForUserKind.get('welcome', safeUserId);
+  const row = emailDeliveryEventsCountAttemptsForUserKind.get(safeKind, safeUserId);
   return Math.max(1, Number(row?.total || 0) + 1);
+}
+
+function getNextWelcomeEmailAttemptNo(targetUserId) {
+  return getNextEmailAttemptNo('welcome', targetUserId);
 }
 
 function getLatestWelcomeEmailStatusMap() {
@@ -11530,18 +11569,111 @@ app.post("/geral/:year/:month/card/:cardId/delete", ensureAuthenticated, (req, r
   return res.redirect("/geral");
 });
 
-function sendMonthTransactionsCsv(res, userId, month, year) {
+function getCsvAllocationDetailsByTxnId(userId, txnIds) {
+  const safeTxnIds = Array.from(new Set((txnIds || [])
+    .map((id) => Number(id || 0))
+    .filter((id) => Number.isInteger(id) && id > 0)));
+  const detailsByTxnId = new Map();
+  if (!safeTxnIds.length) return detailsByTxnId;
 
+  const placeholders = safeTxnIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT a.transaction_id, p.name, a.share_cents
+    FROM allocations a
+    JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id
+    WHERE a.user_id = ?
+      AND a.transaction_id IN (${placeholders})
+    ORDER BY a.transaction_id ASC, p.name ASC, p.id ASC
+  `).all(userId, ...safeTxnIds);
+
+  rows.forEach((row) => {
+    const txnId = Number(row.transaction_id || 0);
+    if (!txnId) return;
+    const name = String(row.name || '').replace(/\s+/g, ' ').trim() || 'Pessoa';
+    const detail = `${name}: ${formatBRLFromCents(Number(row.share_cents || 0))}`;
+    if (!detailsByTxnId.has(txnId)) detailsByTxnId.set(txnId, []);
+    detailsByTxnId.get(txnId).push(detail);
+  });
+
+  return new Map(Array.from(detailsByTxnId.entries()).map(([txnId, details]) => [txnId, details.join(' | ')]));
+}
+
+function buildCsvInstallmentMetaForRow(userId, row) {
+  const amountForDetection = Math.abs(Number(row?.amount_cents || 0));
+  const explicitMeta = resolveImportInstallmentMeta({
+    rawJson: row?.raw_json,
+    description: row?.description,
+    amountCents: amountForDetection
+  });
+
+  if (explicitMeta && Number(explicitMeta.total || 1) > 1) {
+    return explicitMeta;
+  }
+
+  const chainMeta = buildInstallmentMetaByTxnId(userId, row).get(Number(row?.id || 0)) || null;
+  if (chainMeta && Number(chainMeta.total || 1) > 1) {
+    return chainMeta;
+  }
+
+  return explicitMeta || null;
+}
+
+function enrichMonthTransactionsCsvRows(userId, rows) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const allocationDetailsByTxnId = getCsvAllocationDetailsByTxnId(userId, safeRows.map((row) => row.id));
+
+  return safeRows.map((row) => {
+    const amountCents = Number(row.amount_cents || 0);
+    const installmentMeta = buildCsvInstallmentMetaForRow(userId, row);
+    const installmentTotal = Math.max(1, Number(installmentMeta?.total || 1));
+    const installmentPosition = Math.min(installmentTotal, Math.max(1, Number(installmentMeta?.position || 1)));
+    const isInstallment = installmentTotal > 1;
+    const isRecurring = Number(row.recurring_rule_id || 0) > 0;
+    const purchaseMode = isRecurring ? 'Recorrente' : (isInstallment ? 'Parcelada' : 'À vista');
+    const installmentLabel = isRecurring
+      ? 'Recorrente'
+      : (isInstallment
+        ? `${String(installmentPosition).padStart(2, '0')}/${String(installmentTotal).padStart(2, '0')}`
+        : 'À vista');
+    const baseDescription = isInstallment || isRecurring
+      ? (installmentMeta?.baseDescription || stripTrailingInstallmentMarker(row.description) || row.description)
+      : '';
+    const dueMonth = Number(row.effective_due_month || 0);
+    const dueYear = Number(row.effective_due_year || 0);
+
+    return {
+      ...row,
+      allocation_details: allocationDetailsByTxnId.get(Number(row.id || 0)) || '',
+      purchase_category_name: String(row.purchase_category_name || '').trim() || 'Sem categoria',
+      entry_type: amountCents < 0 ? 'Crédito' : (amountCents > 0 ? 'Compra' : 'Valor zerado'),
+      purchase_mode: purchaseMode,
+      installment_label: installmentLabel,
+      installment_position: isInstallment ? installmentPosition : '',
+      installment_total: isInstallment ? installmentTotal : '',
+      base_description: baseDescription,
+      due_label: dueMonth && dueYear ? monthLabel(dueMonth, dueYear) : ''
+    };
+  });
+}
+
+function getMonthTransactionsCsvRows(userId, month, year) {
   const rows = db.prepare(`
     SELECT
+      t.id,
       COALESCE(t.txn_date, '') AS txn_date,
       t.description,
       c.name AS card_name,
       COALESCE(t.card_number, '') AS card_number,
       t.amount_cents,
+      t.raw_json,
+      t.parent_txn_id,
+      t.recurring_rule_id,
+      COALESCE(t.due_month, i.month) AS effective_due_month,
+      COALESCE(t.due_year, i.year) AS effective_due_year,
+      COALESCE(pc.name, '') AS purchase_category_name,
       CASE WHEN EXISTS (
         SELECT 1 FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id
-      ) THEN 'Sim' ELSE 'Não' END AS allocated,
+      ) THEN 'Sim' ELSE 'N\u00e3o' END AS allocated,
       COALESCE((
         SELECT GROUP_CONCAT(name, ', ') FROM (
           SELECT p.name AS name
@@ -11555,35 +11687,26 @@ function sendMonthTransactionsCsv(res, userId, month, year) {
     FROM transactions t
     JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
     LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
     WHERE t.user_id = ?
-      AND (
-        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?) OR
-        (${EFFECTIVE_DUE_MONTH_SQL} = ? AND ${EFFECTIVE_DUE_YEAR_SQL} = ?)
-      )
+      AND ${EFFECTIVE_DUE_MONTH_SQL} = ?
+      AND ${EFFECTIVE_DUE_YEAR_SQL} = ?
     ORDER BY c.name, COALESCE(t.txn_date, ''), t.description
-  `).all(userId, month, year, month, year);
+  `).all(userId, month, year);
 
-  const header = ['Data da compra', 'Descrição', 'Cartão', 'Número', 'Valor (R$)', 'Distribuído', 'Pessoas', 'Origem', 'Competência'];
-  const lines = [header.map(csvEscape).join(';')];
+  return enrichMonthTransactionsCsvRows(userId, rows);
+}
 
-  rows.forEach(row => {
-    lines.push([
-      formatDateBR(row.txn_date),
-      row.description,
-      row.card_name,
-      row.card_number,
-      formatBRLFromCents(row.amount_cents),
-      row.allocated,
-      row.people_names,
-      row.origem,
-      monthLabel(month, year)
-    ].map(csvEscape).join(';'));
-  });
+function buildMonthTransactionsCsvExport(userId, month, year) {
+  const rows = getMonthTransactionsCsvRows(userId, month, year);
+  return buildMonthTransactionsCsv(rows, { month, year });
+}
 
-  const filename = `acerttapay-cartoes-${year}-${String(month).padStart(2, '0')}.csv`;
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.send('\uFEFF' + lines.join('\r\n'));
+function sendMonthTransactionsCsv(res, userId, month, year) {
+  const csv = buildMonthTransactionsCsvExport(userId, month, year);
+  res.setHeader('Content-Type', csv.contentType);
+  res.setHeader('Content-Disposition', `attachment; filename="${csv.filename}"`);
+  res.send(csv.content);
 }
 
 app.get("/geral/:year/:month/export.csv", ensureAuthenticated, (req, res) => {
@@ -16160,7 +16283,7 @@ app.post("/txn/:id/alloc", ensureAuthenticated, (req, res) => {
       rawSplitMode: req.body.split_mode,
       rawShareAmounts: req.body.share_amounts,
       targetRows,
-      requireSplitModeSelection: Number(txn.amount_cents || 0) >= 0
+      requireSplitModeSelection: true
     });
 
     replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
@@ -16592,7 +16715,7 @@ app.post("/txn/:id", ensureAuthenticated, (req, res) => {
       rawSplitMode: req.body.split_mode,
       rawShareAmounts: req.body.share_amounts,
       targetRows,
-      requireSplitModeSelection: Number(txn.amount_cents || 0) >= 0
+      requireSplitModeSelection: true
     });
 
     replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
@@ -16694,7 +16817,7 @@ app.post("/month/:year/:month/bulk/alloc", ensureAuthenticated, (req, res) => {
       rawSplitMode: req.body.split_mode,
       rawShareAmounts: req.body.share_amounts,
       targetRows,
-      requireSplitModeSelection: sourceRows.length === 1 && Number(sourceRows[0].amount_cents || 0) >= 0
+      requireSplitModeSelection: sourceRows.length === 1
     });
 
     replaceAllocationsForTransactions(userId, targetRows, allocationPlan);
@@ -18390,6 +18513,23 @@ registerSummaryRoutes(app, {
   getMonthLockMessage,
   upsertCardStatementsForMonth,
   upsertPersonPaymentsForMonth
+});
+
+registerMonthlyEmailSummaryRoutes(app, {
+  ensureAuthenticated,
+  parseMonthYear,
+  buildMonthlyReviewViewModel,
+  buildMonthTransactionsCsvExport,
+  getEmailRuntimeConfig,
+  isEmailConfigured,
+  normalizeEmail,
+  buildAppUrl,
+  createEmailDeliveryEvent,
+  finalizeEmailDeliveryEvent,
+  getNextEmailAttemptNo,
+  sendEmail,
+  logEmailFlowError,
+  buildEmailTransportLogContext
 });
 
 function getPersonStatementExportData(userId, month, year, personId, itemOrder = "oldest") {

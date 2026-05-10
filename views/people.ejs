@@ -262,7 +262,7 @@
     { href: '#my-profile', label: 'Perfil' },
     ...(pendingRequests.length ? [{ href: '#friend-requests', label: 'Convites recebidos' }] : []),
     { href: '/settings', label: 'Configurações' },
-    { type: 'button', onclick: 'openContactComposeModal(this)', label: 'Adicionar contato' },
+    { type: 'button', onclick: 'openContactComposeModal(this)', label: 'Adicionar contato', classes: 'op-chip-nav__item op-chip-nav__item--add-person' },
     { href: '#network-list', label: 'Lista da rede' }
   ];
 %>

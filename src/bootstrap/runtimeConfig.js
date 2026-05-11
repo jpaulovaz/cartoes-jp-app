@@ -73,7 +73,7 @@ function configureRuntimeConfig(overrides = {}) {
 
   if (runtimeConfigLocked) {
     if (!sameRuntimeConfig(runtimeConfig, nextConfig)) {
-      throw new Error('A configuração de runtime do OrganizaPay já foi inicializada nesta execução.');
+      throw new Error('A configuração de runtime do AcerttaPay já foi inicializada nesta execução.');
     }
     return runtimeConfig;
   }

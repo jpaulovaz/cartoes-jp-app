@@ -253,7 +253,7 @@ const SETTING_DEFINITIONS = [
     key: 'MAIL_FROM_NAME',
     section: 'email',
     label: 'Nome do remetente',
-    helper: 'Exemplo: OrganizaPay ou Time AcerttaPay.',
+    helper: 'Exemplo: AcerttaPay ou Time AcerttaPay.',
     input: 'text',
     defaultValue: 'AcerttaPay',
     placeholder: 'AcerttaPay',

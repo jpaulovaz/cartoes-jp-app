@@ -11,7 +11,7 @@ function sameBootstrapTarget(left, right) {
 function buildFailureMessage(runtimeConfig, error) {
   const dbPath = runtimeConfig?.dbPath || 'desconhecido';
   const message = error?.message || 'Erro sem mensagem durante a migração oficial.';
-  return `Falha crítica ao executar a trilha oficial de migração do OrganizaPay para o banco ${dbPath}: ${message}`;
+  return `Falha crítica ao executar a trilha oficial de migração do AcerttaPay para o banco ${dbPath}: ${message}`;
 }
 
 function bootstrapDatabase(options = {}) {

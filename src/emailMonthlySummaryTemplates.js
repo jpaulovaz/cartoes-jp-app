@@ -194,7 +194,7 @@ function buildMonthlySummaryEmailTemplate({ viewModel = {}, sections = {}, attac
     buildKpiCard('Saldo previsto', formatBRLFromCents(estimatedNetCents), `${statusLabel} - entradas menos saidas mapeadas`)
   ];
   if (hasSharedAccepted) {
-    introCardItems.splice(1, 0, buildKpiCard('Compartilhadas aceitas', formatBRLFromCents(sharedAcceptedCents), `${Number(sharedSummary.count || sharedRowsSource.length || 0)} item(ns) somente leitura`));
+    introCardItems.splice(1, 0, buildKpiCard('Compartilhadas aceitas', formatBRLFromCents(sharedAcceptedCents), `${Number(sharedSummary.count || sharedRowsSource.length || 0)} recebida(s) de amigos`));
   }
   const introCards = buildKpiGrid(introCardItems);
 
@@ -240,11 +240,11 @@ function buildMonthlySummaryEmailTemplate({ viewModel = {}, sections = {}, attac
     buildKpiCard('Total aceito', formatBRLFromCents(sharedAcceptedCents), `${Number(sharedSummary.count || sharedRowsSource.length || 0)} item(ns) no mes`),
     buildKpiCard('Pago confirmado', formatBRLFromCents(sharedConfirmedPaidCents), 'Confirmado na Central de Acertos'),
     buildKpiCard('Em conferencia', formatBRLFromCents(sharedPendingReportedCents), 'Informado e aguardando confirmacao'),
-    buildKpiCard('Ainda falta', formatBRLFromCents(sharedOpenCents), 'Saldo aberto dessa origem')
+    buildKpiCard('Ainda falta', formatBRLFromCents(sharedOpenCents), 'Saldo ainda em aberto')
   ]);
   const sharedHtml = enabledSections.sharedAccepted && hasSharedAccepted ? renderSection(
     'Compras compartilhadas aceitas',
-    'Entraram no seu mes, mas seguem em modo somente leitura e com controle na Central de Acertos.',
+    'Entraram no seu mes e continuam acompanhadas pela Central de Acertos.',
     `${sharedSummaryCards}<div style="margin-top:14px;">${renderSimpleTable(['Compra', 'Enviado por', 'Valor', 'Pago', 'Em conferencia', 'Falta', 'Status'], sharedRows)}</div>`
   ) : '';
 

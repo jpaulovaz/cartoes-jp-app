@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="public/logo.png" alt="Logo do OrganizaPay" width="96" />
-  <h1>💳 OrganizaPay</h1>
+  <img src="public/logo.png" alt="Logo do AcerttaPay" width="96" />
+  <h1>💳 AcerttaPay</h1>
   <p><strong>Seu cantinho financeiro para cartões, competências mensais, contas compartilhadas e cobranças entre amigos.</strong></p>
   <p>
     Um app web/PWA pensado para a vida real: importa fatura, organiza mês, divide gastos por pessoa,
@@ -21,7 +21,7 @@
 
 ## ✨ Visão rápida
 
-O **OrganizaPay** é uma aplicação web com experiência de **PWA** focada em controle financeiro com ênfase em:
+O **AcerttaPay** é uma aplicação web com experiência de **PWA** focada em controle financeiro com ênfase em:
 
 - **cartões de crédito** com vencimento e fechamento;
 - **competência mensal** como regra de organização;
@@ -57,7 +57,7 @@ O **OrganizaPay** é uma aplicação web com experiência de **PWA** focada em c
 <a id="o-que-o-app-resolve"></a>
 ## 📌 O que o app resolve
 
-O OrganizaPay nasceu para lidar com situações que aplicativos genéricos normalmente tratam mal:
+O AcerttaPay nasceu para lidar com situações que aplicativos genéricos normalmente tratam mal:
 
 - compras que caem em **competências diferentes** por causa do fechamento do cartão;
 - gastos que precisam ser **divididos entre 2, 3 ou 20 pessoas**;
@@ -351,15 +351,15 @@ A área `/admin` virou a “casinha oficial das configurações” do app. É l�
 - ajustes estruturais do sistema.
 
 ### Documentação já disponível no projeto
-- [Guia da Central Admin](public/docs/guia-central-admin-organizapay.pdf)
-- [Guia de Backup](public/docs/guia-backup-organizapay.pdf)
+- [Guia da Central Admin](public/docs/guia-central-admin-acerttapay.pdf)
+- [Guia de Backup](public/docs/guia-backup-acerttapay.pdf)
 
 ---
 
 <a id="pwa-e-offline"></a>
 ## 📱 PWA e offline
 
-O OrganizaPay pode ser instalado como app em dispositivos compatíveis e já conta com:
+O AcerttaPay pode ser instalado como app em dispositivos compatíveis e já conta com:
 
 - `manifest.json`;
 - ícones para instalação;
@@ -459,7 +459,7 @@ npm run seed
 
 ## 🗺️ Roadmap natural do produto
 
-Evoluções que combinam com o OrganizaPay:
+Evoluções que combinam com o AcerttaPay:
 
 - filtros e busca mais avançados nas telas principais;
 - auditoria de ações sensíveis;

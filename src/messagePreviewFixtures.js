@@ -114,7 +114,7 @@ const BASE_MESSAGE_PREVIEW_FIXTURES = {
     pessoa: 'Mari',
     valor_pago: 'R$ 120,00',
     valor_restante: 'R$ 120,00',
-    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405120.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304ABCD'
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.acerttapay@pix.com5204000053039865405120.005802BR5925ACERTTAPAY TESTE6009SAO PAULO62070503***6304ABCD'
   },
   'share.summary.open.native.no_pix': {
     periodo: '04/2026',
@@ -125,7 +125,7 @@ const BASE_MESSAGE_PREVIEW_FIXTURES = {
     periodo: '04/2026',
     pessoa: 'Mari',
     valor_restante: 'R$ 240,00',
-    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405240.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304EFGH'
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.acerttapay@pix.com5204000053039865405240.005802BR5925ACERTTAPAY TESTE6009SAO PAULO62070503***6304EFGH'
   },
   'whatsapp.summary.settled.caption': {
     periodo: '04/2026',
@@ -139,7 +139,7 @@ const BASE_MESSAGE_PREVIEW_FIXTURES = {
   },
   'whatsapp.summary.partial.followup': {
     valor_restante: 'R$ 120,00',
-    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405120.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304ABCD'
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.acerttapay@pix.com5204000053039865405120.005802BR5925ACERTTAPAY TESTE6009SAO PAULO62070503***6304ABCD'
   },
   'whatsapp.summary.open.caption': {
     periodo: '04/2026',
@@ -148,43 +148,43 @@ const BASE_MESSAGE_PREVIEW_FIXTURES = {
   },
   'whatsapp.summary.open.followup': {
     valor_restante: 'R$ 240,00',
-    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405240.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304EFGH'
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.acerttapay@pix.com5204000053039865405240.005802BR5925ACERTTAPAY TESTE6009SAO PAULO62070503***6304EFGH'
   },
   'whatsapp.summary.auto.second.pix_only': {
-    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405240.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304EFGH'
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.acerttapay@pix.com5204000053039865405240.005802BR5925ACERTTAPAY TESTE6009SAO PAULO62070503***6304EFGH'
   },
   'whatsapp.summary.auto.second.fallback': {
     valor_restante: 'R$ 240,00',
-    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405240.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304EFGH'
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.acerttapay@pix.com5204000053039865405240.005802BR5925ACERTTAPAY TESTE6009SAO PAULO62070503***6304EFGH'
   },
   'whatsapp.summary.pix_payload_only': {
-    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405240.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304EFGH'
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.acerttapay@pix.com5204000053039865405240.005802BR5925ACERTTAPAY TESTE6009SAO PAULO62070503***6304EFGH'
   },
   'pix.manual_request.share': {
     credor: 'Mari',
     valor: 'R$ 72,00',
     descricao: 'pizza do sábado',
-    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com520400005303986540572.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304IJKL'
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.acerttapay@pix.com520400005303986540572.005802BR5925ACERTTAPAY TESTE6009SAO PAULO62070503***6304IJKL'
   },
   'pix.monthly_settlement.share': {
     credor: 'Mari',
     valor: 'R$ 240,00',
     periodo: '04/2026',
-    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.organizapay@pix.com5204000053039865405240.005802BR5925ORGANIZAPAY TESTE6009SAO PAULO62070503***6304MNOP'
+    pix_payload: '00020126580014BR.GOV.BCB.PIX0136teste.acerttapay@pix.com5204000053039865405240.005802BR5925ACERTTAPAY TESTE6009SAO PAULO62070503***6304MNOP'
   },
   'email.admin_access.welcome': {
     app: 'AcerttaPay',
     nome: 'Mari',
     admin_ou_sistema: 'Caio',
     perfil: 'Usuário do app',
-    link_login: 'https://app.organizapay.com.br/login',
+    link_login: 'https://app.acerttapay.com.br/login',
     recado_admin: 'Qualquer dúvida, me chama por aqui que eu te ajudo.'
   },
   'email.admin_access.test': {
     app: 'AcerttaPay',
     nome: 'Mari',
     admin_ou_time: 'Caio',
-    link_login: 'https://app.organizapay.com.br/login'
+    link_login: 'https://app.acerttapay.com.br/login'
   }
 };
 

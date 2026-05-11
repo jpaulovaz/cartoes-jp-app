@@ -77,7 +77,7 @@ function buildMessageCsvExport() {
   });
 
   return {
-    filename: `catalogo_mensagens_organizaPay_${new Date().toISOString().slice(0, 10)}.csv`,
+    filename: `catalogo_mensagens_acerttapay_${new Date().toISOString().slice(0, 10)}.csv`,
     content: `\uFEFF${lines.join('\r\n')}`,
     rowCount: rows.length
   };

@@ -1593,7 +1593,7 @@ if (require.main === module) {
   try {
     runMigrations();
   } catch (error) {
-    console.error('[organizapay:migrate] Falha crítica na trilha oficial de migração.', error);
+    console.error('[acerttapay:migrate] Falha crítica na trilha oficial de migração.', error);
     process.exitCode = 1;
   }
 }

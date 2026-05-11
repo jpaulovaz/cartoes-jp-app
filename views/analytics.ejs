@@ -217,7 +217,7 @@
           <div class="op-analytics-kpi-card rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
             <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Compartilhadas</div>
             <div class="mt-2 text-2xl font-black tracking-tight text-violet-900 dark:text-violet-100"><%= formatBRLFromCents(sharedAcceptedCents) %></div>
-            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80"><%= hasSharedAcceptedAnalytics ? `${sharedAcceptedCount} aceita${sharedAcceptedCount === 1 ? '' : 's'} em modo somente leitura.` : 'Nada aceito de amigos neste mês.' %></p>
+            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80"><%= hasSharedAcceptedAnalytics ? `${sharedAcceptedCount} recebida${sharedAcceptedCount === 1 ? '' : 's'} de amigos.` : 'Nada aceito de amigos neste mês.' %></p>
           </div>
           <div class="op-analytics-kpi-card rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
             <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Total comprometido</div>
@@ -368,7 +368,7 @@
           <div class="rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
             <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Compartilhadas aceitas</div>
             <div class="mt-2 text-2xl font-black tracking-tight text-violet-900 dark:text-violet-100"><%= formatBRLFromCents(sharedAcceptedCents) %></div>
-            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Entram no retrato, sem virar cartão virtual.</p>
+            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Entram no retrato do mês como recebidas de amigos.</p>
           </div>
           <div class="rounded-[24px] border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
             <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">Pago nos cartões</div>
@@ -450,7 +450,7 @@
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h3 class="text-lg font-black text-slate-900 dark:text-white">Cartão por cartão, mês a mês</h3>
-              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400"><%= hasSharedAcceptedAnalytics ? 'Total por cartão próprio; as compartilhadas ficam separadas para não virar cartão virtual.' : 'Total por cartão usado no período.' %></p>
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400"><%= hasSharedAcceptedAnalytics ? 'Total por cartão próprio; recebidas de amigos aparecem em grupo próprio.' : 'Total por cartão usado no período.' %></p>
             </div>
             <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
           </div>

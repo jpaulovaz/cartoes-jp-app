@@ -13555,3 +13555,59 @@ html.dark[data-op-ui="v4"] .op-detalhamento-dues-card__icon {
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.92);
 }
+
+/* v4.2.13 - polimento de chips, botoes e contrastes */
+.badge,
+.op-app-main :is(.op-chip-nav__item, .op-mobile-chip, .op-info-pill, .op-paid-summary-chip, .op-analytics-chip, .op-card-brand-badge, .op-network-profile-badge),
+.op-app-main :is(span,a,button,div).inline-flex[class*="rounded-full"] {
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  white-space: nowrap;
+  line-height: 1.05;
+  vertical-align: middle;
+}
+
+.op-app-main :is(span,a,button,div).inline-flex[class*="rounded-full"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.op-app-main :is(span,a,button,div).inline-flex[class*="rounded-full"] > :is(span,strong,em) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.op-month-row__meta a[href*="shared-debts"],
+.op-month-ledger-row a[href*="shared-debts"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: max-content;
+  white-space: nowrap;
+  line-height: 1;
+  text-align: center;
+}
+
+html.dark[data-op-ui="v4"] .op-btn-export,
+html.dark .op-month-export-btn {
+  border-color: rgba(45, 212, 191, 0.34);
+  background: linear-gradient(180deg, rgba(20, 184, 166, 0.92), rgba(15, 118, 110, 0.88));
+  color: #ecfeff;
+  box-shadow: 0 14px 28px rgba(20, 184, 166, 0.18);
+}
+
+html.dark[data-op-ui="v4"] .op-btn-export:hover,
+html.dark .op-month-export-btn:hover {
+  border-color: rgba(94, 234, 212, 0.46);
+  background: linear-gradient(180deg, rgba(45, 212, 191, 0.96), rgba(13, 148, 136, 0.92));
+  color: #ffffff;
+}
+
+html[data-op-ui="v4"] .op-month-filter-actions {
+  align-self: end;
+  align-items: end;
+  padding-bottom: 0;
+}

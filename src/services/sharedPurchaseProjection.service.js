@@ -39,7 +39,7 @@ function buildVirtualCardName(row = {}) {
 
 function buildActionsUrl(row = {}) {
   const requestId = Number(row.request_id || 0);
-  return requestId ? `/shared-debts?request=${requestId}#received` : '/shared-debts#received';
+  return requestId ? `/shared-debts?request=${requestId}#request-${requestId}` : '/shared-debts#received';
 }
 
 function buildStatusMeta({ amountCents, confirmedPaidCents, pendingReportedCents, rawStatus } = {}) {

@@ -5923,7 +5923,7 @@ function renderSharedDebtsPage(req, res, { archiveMode = false } = {}) {
 
   const payload = buildSharedDebtsPagePayload(userId, req.query, archiveMode);
   return safeRenderView(res, 'shared-debts', {
-    title: archiveMode ? 'AcerttaPay | Arquivo de acertos' : 'AcerttaPay | Acertos',
+    title: archiveMode ? 'AcerttaPay | Arquivo da Central de Acertos' : 'AcerttaPay | Central de Acertos',
     ...payload,
     formatBRLFromCents,
     monthLabel,

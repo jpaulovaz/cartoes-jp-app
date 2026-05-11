@@ -363,6 +363,30 @@
     return item?.source_due_month && item?.source_due_year ? monthLabel(item.source_due_month, item.source_due_year) : '—';
   }
 
+  function itemMonthHref(item, scope) {
+    if (isManualItem(item)) return null;
+    const month = Number(item?.source_due_month || 0);
+    const year = Number(item?.source_due_year || 0);
+    if (!month || !year) return null;
+
+    if (scope === 'received') {
+      const status = String(item?.status || '').trim();
+      if (!['accepted', 'settled'].includes(status)) return null;
+      return `/month/${year}/${month}#shared-purchases`;
+    }
+
+    return `/month/${year}/${month}`;
+  }
+
+  function groupMonthHref(group, scope) {
+    const month = Number(group?.month || 0);
+    const year = Number(group?.year || 0);
+    if (!month || !year) return null;
+    const hasMonthItem = (group?.items || []).some((item) => !!itemMonthHref(item, scope));
+    if (!hasMonthItem) return null;
+    return scope === 'received' ? `/month/${year}/${month}#shared-purchases` : `/month/${year}/${month}`;
+  }
+
   function itemObservacaoLabel(item) {
     return isManualItem(item) ? 'Recado do lembrete' : 'Observação do envio';
   }
@@ -937,18 +961,18 @@
 <div class="op-screen op-screen--shared-debts op-debts-screen-v4 op-debts-screen-v5 max-w-7xl mx-auto space-y-8">
   <section class="op-page-hero op-fade-up op-debts-hero-v4 op-debts-hero-v5">
     <div>
-      <span class="op-page-hero__eyebrow"><%= isArchiveMode ? 'Histórico de acertos' : 'Fluxo entre pessoas' %></span>
-      <h1 class="op-page-hero__title mt-4"><%= isArchiveMode ? 'Arquivo de acertos' : 'Acertos' %></h1>
+      <span class="op-page-hero__eyebrow"><%= isArchiveMode ? 'Histórico da central' : 'Central de operação entre pessoas' %></span>
+      <h1 class="op-page-hero__title mt-4"><%= isArchiveMode ? 'Arquivo da Central de Acertos' : 'Central de Acertos' %></h1>
       <p class="op-page-hero__subtitle mt-3"><%= isArchiveMode
         ? 'Consulte o que já foi encerrado sem perder a trilha do que foi combinado por aqui.'
-        : 'Acompanhe o que chegou para você, o que saiu da sua caixa de saída e o que ainda depende de ação, sem mudar a lógica atual do aplicativo.' %></p>
+        : 'Aqui ficam recebimentos, envios, pagamentos e confirmações. As compras aceitas já podem aparecer no mês financeiro, mas o controle do combinado continua nesta central.' %></p>
       <div class="op-page-hero__meta mt-4">
         <% if (isArchiveMode) { %>
           <span class="badge">Consulta com opção de restaurar</span>
           <span class="badge">Mesmo fluxo visual das ativas</span>
         <% } else { %>
-          <span class="badge">Divisões ficam na caixa de saída até o envio</span>
-          <span class="badge">Você controla envio, pagamento e confirmação</span>
+          <span class="badge">Aceitas entram no mês em modo consulta</span>
+          <span class="badge">Pagamentos e confirmações seguem por aqui</span>
         <% } %>
       </div>
       <div class="mt-5 flex flex-wrap gap-3 op-shared-action-row">
@@ -997,6 +1021,40 @@
           <div class="op-kpi-card__label text-amber-600 dark:text-amber-300">Sua vez</div>
           <div class="op-kpi-card__value text-amber-700 dark:text-amber-200"><%= actionCount %></div>
           <div class="op-kpi-card__hint text-amber-700/80 dark:text-amber-200/80">Pedindo sua ação</div>
+        <% } %>
+      </div>
+    </div>
+  </section>
+
+  <section class="op-fade-up" aria-label="Atalhos da Central de Acertos">
+    <div class="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
+      <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <a href="#received" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:bg-white dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-slate-900">
+          Recebidas
+          <span class="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400"><%= countLabel(received.length, 'acerto', 'acertos') %> chegando pra você</span>
+        </a>
+        <a href="#sent" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:bg-white dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-slate-900">
+          Enviadas
+          <span class="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400"><%= countLabel(sentHeroCount, 'acerto', 'acertos') %> no seu radar</span>
+        </a>
+        <% if (!isArchiveMode) { %>
+          <a href="#draft-queues" class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-black text-sky-800 transition hover:-translate-y-0.5 hover:bg-white dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-100 dark:hover:bg-sky-900/30">
+            Caixa de saída
+            <span class="mt-1 block text-xs font-semibold text-sky-700/80 dark:text-sky-100/80"><%= countLabel(draftQueueSummaryMeta.queueCount, 'rascunho', 'rascunhos') %> antes do envio</span>
+          </a>
+          <a href="<%= otherPath %>" class="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-black text-violet-800 transition hover:-translate-y-0.5 hover:bg-white dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-100 dark:hover:bg-violet-900/30">
+            Arquivo
+            <span class="mt-1 block text-xs font-semibold text-violet-700/80 dark:text-violet-100/80"><%= countLabel(archiveTotalCount || 0, 'item guardado', 'itens guardados') %></span>
+          </a>
+        <% } else { %>
+          <a href="<%= otherPath %>" class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-800 transition hover:-translate-y-0.5 hover:bg-white dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-100 dark:hover:bg-emerald-900/30">
+            Voltar para ativas
+            <span class="mt-1 block text-xs font-semibold text-emerald-700/80 dark:text-emerald-100/80">Fluxo principal da central</span>
+          </a>
+          <span class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">
+            No arquivo
+            <span class="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400"><%= countLabel(archivedTotalVisible, 'item', 'itens') %> para consulta</span>
+          </span>
         <% } %>
       </div>
     </div>
@@ -1058,6 +1116,10 @@
           <details class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
             <summary class="cursor-pointer list-none text-sm font-black text-slate-900 dark:text-white">3. Depois você acompanha por aqui</summary>
             <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">O que chegou para você fica em “Chegou pra você”. O que você mandou fica em “Você enviou”. E o cartão do mês continua organizado na carteira mensal.</p>
+          </details>
+          <details class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/20">
+            <summary class="cursor-pointer list-none text-sm font-black text-slate-900 dark:text-white">4. Aceitou? Também aparece no mês</summary>
+            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Compras de cartão aceitas entram no mês financeiro de quem recebeu em modo somente leitura. Dá para consultar em /month, mas pagamento, confirmação e contestação continuam nesta central.</p>
           </details>
         </div>
         <a href="<%= monthlyGuideHref %>" target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Abrir guia completo</a>
@@ -2013,7 +2075,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                 </div>
               </summary>
 
-              <% const receivedMonthSheetId = `received-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const receivedMonthArchiveItems = (group.items || []).filter(canArchiveItem); const receivedSettlementEntries = buildGroupSettlementEntries(group, 'received'); %>
+              <% const receivedMonthSheetId = `received-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const receivedMonthArchiveItems = (group.items || []).filter(canArchiveItem); const receivedSettlementEntries = buildGroupSettlementEntries(group, 'received'); const receivedGroupMonthHref = groupMonthHref(group, 'received'); %>
               <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4 space-y-4">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -2025,6 +2087,9 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                       <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
                       Ver lista do mês
                     </button>
+                    <% if (receivedGroupMonthHref) { %>
+                      <a href="<%= receivedGroupMonthHref %>" class="inline-flex items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:bg-emerald-900/35">Ver no mês</a>
+                    <% } %>
                     <% if (receivedMonthArchiveItems.length) { %>
                       <form method="POST" action="<%= isArchiveMode ? '/shared-debts/bulk/unarchive' : '/shared-debts/bulk/archive' %>" class="contents">
                         <% receivedMonthArchiveItems.forEach((archiveItem) => { %><input type="hidden" name="request_ids" value="<%= archiveItem.id %>"><% }) %>
@@ -2860,7 +2925,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                 </div>
               </summary>
 
-              <% const sentMonthSheetId = `sent-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmSheetId = `sent-month-confirm-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmableItems = getSentMonthConfirmableItems(group); const sentMonthConfirmableTotal = sumAmountCents(sentMonthConfirmableItems); const sentMonthCounterparts = countDistinctCounterparts(sentMonthConfirmableItems, 'sent'); const sentMonthArchiveItems = (group.items || []).filter(canArchiveItem); const sentSettlementEntries = buildGroupSettlementEntries(group, 'sent'); %>
+              <% const sentMonthSheetId = `sent-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmSheetId = `sent-month-confirm-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmableItems = getSentMonthConfirmableItems(group); const sentMonthConfirmableTotal = sumAmountCents(sentMonthConfirmableItems); const sentMonthCounterparts = countDistinctCounterparts(sentMonthConfirmableItems, 'sent'); const sentMonthArchiveItems = (group.items || []).filter(canArchiveItem); const sentSettlementEntries = buildGroupSettlementEntries(group, 'sent'); const sentGroupMonthHref = groupMonthHref(group, 'sent'); %>
               <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4 space-y-4">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -2872,6 +2937,9 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                       <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
                       Ver lista do mês
                     </button>
+                    <% if (sentGroupMonthHref) { %>
+                      <a href="<%= sentGroupMonthHref %>" class="inline-flex items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition-colors hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200 dark:hover:bg-blue-900/35">Ver mês de origem</a>
+                    <% } %>
                     <% if (sentMonthArchiveItems.length) { %>
                       <form method="POST" action="<%= isArchiveMode ? '/shared-debts/bulk/unarchive' : '/shared-debts/bulk/archive' %>" class="contents">
                         <% sentMonthArchiveItems.forEach((archiveItem) => { %><input type="hidden" name="request_ids" value="<%= archiveItem.id %>"><% }) %>

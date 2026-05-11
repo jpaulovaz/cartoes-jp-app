@@ -141,7 +141,7 @@
         <div class="op-inline-alert__icon" aria-hidden="true"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 12l-4-4m4 4l4-4M4 20h16"/></svg></div>
         <div>
           <div class="op-inline-alert__title">Rascunhos de cobrança pendentes</div>
-          <div class="op-inline-alert__text">Há <strong><%= monthDraftQueueSummary.itemCount %> cobrança(s)</strong> em <strong><%= monthDraftQueueSummary.queueCount %> rascunho(s)</strong>, somando <strong><%= formatBRLFromCents(monthDraftQueueSummary.totalCents) %></strong>. Quando quiser, finalize em <a href="/shared-debts#draft-queues" class="underline underline-offset-2">Acertos</a>.</div>
+          <div class="op-inline-alert__text">Há <strong><%= monthDraftQueueSummary.itemCount %> cobrança(s)</strong> em <strong><%= monthDraftQueueSummary.queueCount %> rascunho(s)</strong>, somando <strong><%= formatBRLFromCents(monthDraftQueueSummary.totalCents) %></strong>. Quando quiser, finalize em <a href="/shared-debts#draft-queues" class="underline underline-offset-2">Central de Acertos</a>.</div>
         </div>
       </div>
     <% } %>
@@ -476,7 +476,7 @@
     </div>
 
     <% if (sharedReceivedProjections.length) { %>
-      <section class="op-surface-card op-month-shared-projections-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-emerald-100 dark:border-emerald-900/60 p-5 mb-6 overflow-hidden">
+      <section id="shared-purchases" class="op-surface-card op-month-shared-projections-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-emerald-100 dark:border-emerald-900/60 p-5 mb-6 overflow-hidden scroll-mt-24">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div class="min-w-0">
             <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
@@ -555,11 +555,11 @@
 
               <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p class="text-xs font-medium text-slate-500 dark:text-slate-400">
-                  <%= getSharedProjectionFirstName(item.requesterName) %> ainda controla essa compra. Para pagar, contestar ou acompanhar, vá para Acertos.
+                  <%= getSharedProjectionFirstName(item.requesterName) %> ainda controla essa compra. Para pagar, contestar ou acompanhar, vá para a Central de Acertos.
                 </p>
                 <a href="<%= item.actionsUrl || '/shared-debts#received' %>"
                   class="inline-flex shrink-0 items-center justify-center rounded-2xl bg-slate-900 px-4 py-2 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
-                  Ver em Acertos
+                  Ver na Central
                 </a>
               </div>
             </article>

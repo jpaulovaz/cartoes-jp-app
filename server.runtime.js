@@ -15746,6 +15746,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     isClosed,
     today
   });
+  const sharedPurchaseProjectionDetailSummary = getAcceptedSharedPurchaseProjectionSummarySafe(userId, currentMonth, currentYear);
 
   if ((todayManualDebtBucket.pay || []).length) {
     alerts.push(buildManualDebtDueDashboardAlert('pay', todayManualDebtBucket.pay, manualDebtDueContext.dateKey));
@@ -15991,7 +15992,8 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
     expensePaymentProgress,
     cardPaymentProgress,
     sharedDebtDetailModuleSummary,
-    cardHealthDetailModuleSummary
+    cardHealthDetailModuleSummary,
+    sharedPurchaseProjectionDetailSummary
   });
 });
 
@@ -17494,12 +17496,22 @@ function getSummaryMerchantRanking(userId, month, year, limit = 6) {
       search_term: merchant.searchTerm || '',
       total_cents: 0,
       txn_count: 0,
+      shared_total_cents: 0,
+      shared_txn_count: 0,
+      has_shared_origin: false,
       confidence: merchant.confidence,
       source: merchant.source,
       sample_descriptions: []
     };
-    current.total_cents += Number(row.amount_cents || 0);
+    const amountCents = Number(row.amount_cents || 0);
+    const isSharedOrigin = row?.origin_kind === 'shared_received' || row?.is_shared === true;
+    current.total_cents += amountCents;
     current.txn_count += 1;
+    if (isSharedOrigin) {
+      current.shared_total_cents += amountCents;
+      current.shared_txn_count += 1;
+      current.has_shared_origin = true;
+    }
     const sample = String(row.description || '').trim();
     if (sample && current.sample_descriptions.length < 2 && !current.sample_descriptions.includes(sample)) {
       current.sample_descriptions.push(sample);
@@ -17652,12 +17664,22 @@ function buildMerchantRankingOverviewFromRows({ rows = [], previousRows = [], us
       search_term: merchant.searchTerm || '',
       total_cents: 0,
       txn_count: 0,
+      shared_total_cents: 0,
+      shared_txn_count: 0,
+      has_shared_origin: false,
       confidence: merchant.confidence,
       source: merchant.source,
       sample_descriptions: []
     };
-    current.total_cents += Number(row.amount_cents || 0);
+    const amountCents = Number(row.amount_cents || 0);
+    const isSharedOrigin = row?.origin_kind === 'shared_received' || row?.is_shared === true;
+    current.total_cents += amountCents;
     current.txn_count += 1;
+    if (isSharedOrigin) {
+      current.shared_total_cents += amountCents;
+      current.shared_txn_count += 1;
+      current.has_shared_origin = true;
+    }
     const sample = String(row.description || '').trim();
     if (sample && current.sample_descriptions.length < 2 && !current.sample_descriptions.includes(sample)) {
       current.sample_descriptions.push(sample);
@@ -17716,8 +17738,10 @@ function buildMerchantRankingOverviewFromRows({ rows = [], previousRows = [], us
   };
 }
 
-function getPersonMerchantRanking(userId, personId, month, year, limit = 6) {
+function getPersonMerchantRanking(userId, personId, month, year, limit = 6, options = {}) {
   const safePersonId = Number(personId || 0);
+  const extraRows = Array.isArray(options.extraRows) ? options.extraRows : [];
+  const extraPreviousRows = Array.isArray(options.extraPreviousRows) ? options.extraPreviousRows : [];
   if (!safePersonId) {
     return {
       ranking: [],
@@ -17762,8 +17786,8 @@ function getPersonMerchantRanking(userId, personId, month, year, limit = 6) {
   `).all(userId, safePersonId, previousRef.month, previousRef.year, previousRef.month, previousRef.year);
 
   return buildMerchantRankingOverviewFromRows({
-    rows,
-    previousRows,
+    rows: rows.concat(extraRows),
+    previousRows: previousRows.concat(extraPreviousRows),
     userRules: getMerchantLearningRules(userId),
     limit
   });
@@ -17875,6 +17899,130 @@ function getPersonShareMonthlyTrend(userId, personId, month, year, monthsBack = 
   }
 
   return points;
+}
+
+
+function normalizeProjectionCategoryLabel(value) {
+  const label = String(value || '').replace(/\s+/g, ' ').trim();
+  return label || 'Compartilhadas';
+}
+
+function mergeSharedProjectionCategories(categories = [], sharedRows = []) {
+  const map = new Map();
+  const orderedKeys = [];
+
+  (Array.isArray(categories) ? categories : []).forEach((item) => {
+    const label = normalizeProjectionCategoryLabel(item?.label || item?.categoryName || 'Sem categoria');
+    const key = label.toLocaleLowerCase('pt-BR');
+    if (!map.has(key)) {
+      orderedKeys.push(key);
+      map.set(key, {
+        id: item?.id ? Number(item.id) : null,
+        label,
+        total_cents: 0,
+        txn_count: 0,
+        shared_total_cents: 0,
+        shared_txn_count: 0,
+        own_total_cents: 0,
+        own_txn_count: 0,
+        is_uncategorized: !!item?.is_uncategorized,
+        has_shared_origin: false
+      });
+    }
+    const bucket = map.get(key);
+    const totalCents = Math.max(0, Number(item?.total_cents || item?.totalCents || 0));
+    const txnCount = Math.max(0, Number(item?.txn_count || item?.count || 0));
+    bucket.total_cents += totalCents;
+    bucket.own_total_cents += totalCents;
+    bucket.txn_count += txnCount;
+    bucket.own_txn_count += txnCount;
+    if (!bucket.id && item?.id) bucket.id = Number(item.id);
+    bucket.is_uncategorized = bucket.is_uncategorized || !!item?.is_uncategorized;
+  });
+
+  (Array.isArray(sharedRows) ? sharedRows : []).forEach((item) => {
+    const amountCents = Math.max(0, Number(item?.amountCents || item?.totalCents || 0));
+    if (!amountCents) return;
+    const label = normalizeProjectionCategoryLabel(item?.categoryName || item?.purchaseCategoryName || 'Compartilhadas');
+    const key = label.toLocaleLowerCase('pt-BR');
+    if (!map.has(key)) {
+      orderedKeys.push(key);
+      map.set(key, {
+        id: null,
+        label,
+        total_cents: 0,
+        txn_count: 0,
+        shared_total_cents: 0,
+        shared_txn_count: 0,
+        own_total_cents: 0,
+        own_txn_count: 0,
+        is_uncategorized: label.toLocaleLowerCase('pt-BR') === 'sem categoria',
+        has_shared_origin: false
+      });
+    }
+    const bucket = map.get(key);
+    bucket.total_cents += amountCents;
+    bucket.shared_total_cents += amountCents;
+    bucket.txn_count += 1;
+    bucket.shared_txn_count += 1;
+    bucket.has_shared_origin = true;
+  });
+
+  return orderedKeys
+    .map((key) => map.get(key))
+    .filter((item) => Number(item.total_cents || 0) > 0)
+    .sort((a, b) => {
+      const totalDiff = Number(b.total_cents || 0) - Number(a.total_cents || 0);
+      if (totalDiff !== 0) return totalDiff;
+      return String(a.label || '').localeCompare(String(b.label || ''), 'pt-BR', { sensitivity: 'base' });
+    });
+}
+
+function mergeSharedProjectionTrend(userId, trendPoints = [], currentSummary = null) {
+  const points = Array.isArray(trendPoints) ? trendPoints : [];
+  return points.map((point) => {
+    const pointMonth = Number(point?.month || 0);
+    const pointYear = Number(point?.year || 0);
+    const canReuseCurrent = currentSummary
+      && Number(currentSummary.month || 0) === pointMonth
+      && Number(currentSummary.year || 0) === pointYear;
+    const projectionSummary = canReuseCurrent
+      ? currentSummary
+      : getAcceptedSharedPurchaseProjectionSummarySafe(userId, pointMonth, pointYear);
+    const ownCardCents = Math.max(0, Number(point?.total_cents || 0));
+    const sharedCents = Math.max(0, Number(projectionSummary?.totalCents || 0));
+    const sharedConfirmedCents = Math.max(0, Number(projectionSummary?.confirmedPaidCents || 0));
+    const sharedPendingCents = Math.max(0, Number(projectionSummary?.pendingReportedCents || 0));
+    const sharedOpenCents = Math.max(0, Number(projectionSummary?.openCents || 0));
+    return {
+      ...point,
+      own_card_cents: ownCardCents,
+      shared_cents: sharedCents,
+      shared_confirmed_cents: sharedConfirmedCents,
+      shared_pending_cents: sharedPendingCents,
+      shared_open_cents: sharedOpenCents,
+      shared_count: Math.max(0, Number(projectionSummary?.count || 0)),
+      has_shared_origin: sharedCents > 0,
+      total_cents: ownCardCents + sharedCents
+    };
+  });
+}
+
+function buildSharedProjectionMerchantRows(sharedRows = []) {
+  return (Array.isArray(sharedRows) ? sharedRows : [])
+    .map((item) => {
+      const amountCents = Math.max(0, Number(item?.amountCents || item?.totalCents || 0));
+      if (!amountCents) return null;
+      return {
+        id: item?.id || `shared-request:${Number(item?.sourceRequestId || 0)}`,
+        description: item?.description || item?.originLabel || 'Compra compartilhada recebida',
+        amount_cents: amountCents,
+        origin_kind: 'shared_received',
+        is_shared: true,
+        requester_name: item?.requesterName || ''
+      };
+    })
+    .filter(Boolean);
 }
 
 function getSummaryMonthlyTrend(userId, month, year, monthsBack = 5) {
@@ -18477,33 +18625,51 @@ function buildMonthlyReviewViewModel(userId, month, year) {
   const selfPersonPanel = selfPersonId
     ? personPanel.find((item) => Number(item.person_id || 0) === selfPersonId) || null
     : null;
-  const personalCategories = getPersonShareCategoryDistribution(userId, selfPersonId, month, year);
-  const personalMonthlyTrend = getPersonShareMonthlyTrend(userId, selfPersonId, month, year, 5);
-  const personalMerchantRanking = getPersonMerchantRanking(userId, selfPersonId, month, year, 6);
-  const personalMerchantSuggestions = getPersonMerchantSuggestions(userId, selfPersonId, month, year, 4);
-  const cardMonthlyTrend = getCardMonthlyTrend(userId, month, year, 6);
   const privateDebtReminderSummary = getPrivateDebtReminderDashboardSummary(userId);
   const sharedPurchaseProjectionSummary = getAcceptedSharedPurchaseProjectionSummarySafe(userId, month, year);
   const sharedPurchaseProjectionRows = Array.isArray(sharedPurchaseProjectionSummary?.rows)
     ? sharedPurchaseProjectionSummary.rows
     : [];
+  const personalCategoriesBase = getPersonShareCategoryDistribution(userId, selfPersonId, month, year);
+  const personalCategories = mergeSharedProjectionCategories(personalCategoriesBase, sharedPurchaseProjectionRows);
+  const personalMonthlyTrendBase = getPersonShareMonthlyTrend(userId, selfPersonId, month, year, 5);
+  const personalMonthlyTrend = mergeSharedProjectionTrend(userId, personalMonthlyTrendBase, sharedPurchaseProjectionSummary);
+  const previousSharedRef = getRelativeMonthYear(month, year, -1);
+  const previousSharedPurchaseProjectionSummary = getAcceptedSharedPurchaseProjectionSummarySafe(userId, previousSharedRef.month, previousSharedRef.year);
+  const previousSharedPurchaseProjectionRows = Array.isArray(previousSharedPurchaseProjectionSummary?.rows)
+    ? previousSharedPurchaseProjectionSummary.rows
+    : [];
+  const personalMerchantRanking = getPersonMerchantRanking(userId, selfPersonId, month, year, 6, {
+    extraRows: buildSharedProjectionMerchantRows(sharedPurchaseProjectionRows),
+    extraPreviousRows: buildSharedProjectionMerchantRows(previousSharedPurchaseProjectionRows)
+  });
+  const personalMerchantSuggestions = getPersonMerchantSuggestions(userId, selfPersonId, month, year, 4);
+  const cardMonthlyTrend = getCardMonthlyTrend(userId, month, year, 6);
   const personalCardShareCents = Number(selfPersonPanel?.total_cents || 0);
   const personalPaidCents = Number(selfPersonPanel?.paid_cents || 0);
+  const sharedAcceptedCents = Number(sharedPurchaseProjectionSummary?.totalCents || 0);
+  const sharedConfirmedPaidCents = Number(sharedPurchaseProjectionSummary?.confirmedPaidCents || 0);
+  const sharedPendingReportedCents = Number(sharedPurchaseProjectionSummary?.pendingReportedCents || 0);
+  const sharedOpenCents = Number(sharedPurchaseProjectionSummary?.openCents || 0);
+  const sharedRemainingCents = Number(sharedPurchaseProjectionSummary?.remainingCents || 0);
+  const personalTotalSpendCents = personalCardShareCents + sharedAcceptedCents;
+  const personalPaidWithSharedCents = personalPaidCents + sharedConfirmedPaidCents;
   const personalRemainingCents = Math.max(0, personalCardShareCents - personalPaidCents);
+  const personalRemainingWithSharedCents = personalRemainingCents + sharedRemainingCents;
   const personalFinancialSnapshot = {
     ownCardShareCents: personalCardShareCents,
-    sharedAcceptedCents: Number(sharedPurchaseProjectionSummary?.totalCents || 0),
-    totalCents: personalCardShareCents + Number(sharedPurchaseProjectionSummary?.totalCents || 0),
+    sharedAcceptedCents,
+    totalCents: personalTotalSpendCents,
     ownPaidCents: personalPaidCents,
-    sharedConfirmedPaidCents: Number(sharedPurchaseProjectionSummary?.confirmedPaidCents || 0),
-    sharedPendingReportedCents: Number(sharedPurchaseProjectionSummary?.pendingReportedCents || 0),
-    sharedOpenCents: Number(sharedPurchaseProjectionSummary?.openCents || 0),
-    sharedRemainingCents: Number(sharedPurchaseProjectionSummary?.remainingCents || 0)
+    sharedConfirmedPaidCents,
+    sharedPendingReportedCents,
+    sharedOpenCents,
+    sharedRemainingCents
   };
   const personalCategorizedCents = personalCategories
     .filter((item) => !item.is_uncategorized)
     .reduce((acc, item) => acc + Number(item?.total_cents || 0), 0);
-  const personalCoveragePct = personalCardShareCents > 0 ? Math.round((personalCategorizedCents / personalCardShareCents) * 100) : 0;
+  const personalCoveragePct = personalTotalSpendCents > 0 ? Math.round((personalCategorizedCents / personalTotalSpendCents) * 100) : 0;
   const personalTopCategory = personalCategories.find((item) => Number(item?.total_cents || 0) > 0) || null;
   const personalPreviousPoint = personalMonthlyTrend.length > 1 ? personalMonthlyTrend[personalMonthlyTrend.length - 2] : null;
   const personalCurrentPoint = personalMonthlyTrend.length > 0 ? personalMonthlyTrend[personalMonthlyTrend.length - 1] : null;
@@ -18522,12 +18688,16 @@ function buildMonthlyReviewViewModel(userId, month, year) {
   const flowTrend = (financeAnalytics?.trend || []).map((point) => {
     const key = `${point.year}-${String(point.month).padStart(2, '0')}`;
     const personalPoint = personalTrendMap.get(key);
-    const cardCents = Number(personalPoint?.total_cents || 0);
+    const ownCardCents = Number(personalPoint?.own_card_cents ?? personalPoint?.total_cents ?? 0);
+    const sharedCents = Number(personalPoint?.shared_cents || 0);
+    const personalSpendCents = ownCardCents + sharedCents;
     const outsideExpenseCents = Number(point.expense_cents || 0);
-    const totalOutflowCents = outsideExpenseCents + cardCents;
+    const totalOutflowCents = outsideExpenseCents + personalSpendCents;
     return {
       ...point,
-      card_cents: cardCents,
+      card_cents: ownCardCents,
+      shared_cents: sharedCents,
+      personal_spend_cents: personalSpendCents,
       total_outflow_cents: totalOutflowCents,
       net_cents: Number(point.income_cents || 0) - totalOutflowCents
     };
@@ -18537,18 +18707,25 @@ function buildMonthlyReviewViewModel(userId, month, year) {
     monthlyTrend: personalMonthlyTrend,
     flowTrend,
     kpis: {
-      totalSpentCents: personalCardShareCents,
-      totalPaidCardsCents: personalPaidCents,
-      totalRemainingCardsCents: personalRemainingCents,
+      totalSpentCents: personalTotalSpendCents,
+      ownCardSpentCents: personalCardShareCents,
+      sharedAcceptedCents,
+      totalPaidCardsCents: personalPaidWithSharedCents,
+      ownPaidCardsCents: personalPaidCents,
+      sharedConfirmedPaidCents,
+      sharedPendingReportedCents,
+      totalRemainingCardsCents: personalRemainingWithSharedCents,
+      ownRemainingCardsCents: personalRemainingCents,
+      sharedRemainingCents,
       categorizedCents: personalCategorizedCents,
-      uncategorizedCents: Math.max(0, personalCardShareCents - personalCategorizedCents),
+      uncategorizedCents: Math.max(0, personalTotalSpendCents - personalCategorizedCents),
       categoryCoveragePct: personalCoveragePct,
       deltaCents: personalDeltaCents,
       deltaPct: personalDeltaPct,
       topCategory: personalTopCategory ? {
         label: personalTopCategory.label,
         total_cents: personalTopCategory.total_cents,
-        share_pct: personalCardShareCents > 0 ? Math.round((Number(personalTopCategory.total_cents || 0) / personalCardShareCents) * 100) : 0
+        share_pct: personalTotalSpendCents > 0 ? Math.round((Number(personalTopCategory.total_cents || 0) / personalTotalSpendCents) * 100) : 0
       } : null
     },
     insights: {
@@ -18563,6 +18740,9 @@ function buildMonthlyReviewViewModel(userId, month, year) {
         ? Math.round(((Number(personalCurrentPoint?.total_cents || 0) - personalAverageMonthlySpendCents) / personalAverageMonthlySpendCents) * 100)
         : null,
       trackedCategories: personalCategories.length,
+      sharedAcceptedCents,
+      sharedAcceptedCount: Number(sharedPurchaseProjectionSummary?.count || 0),
+      includesSharedAccepted: sharedAcceptedCents > 0,
       merchantCount: personalMerchantRanking.merchantCount,
       recognizedMerchantCount: personalMerchantRanking.recognizedCount,
       learnedMerchantCount: personalMerchantRanking.learnedCount,
@@ -18575,13 +18755,29 @@ function buildMonthlyReviewViewModel(userId, month, year) {
             txn_count: personalMerchantRanking.topMerchant.txn_count,
             share_pct: personalMerchantRanking.topMerchant.share_pct,
             avg_ticket_cents: personalMerchantRanking.topMerchant.avg_ticket_cents,
-            search_term: personalMerchantRanking.topMerchant.search_term || ''
+            search_term: personalMerchantRanking.topMerchant.search_term || '',
+            shared_total_cents: personalMerchantRanking.topMerchant.shared_total_cents || 0,
+            shared_txn_count: personalMerchantRanking.topMerchant.shared_txn_count || 0,
+            has_shared_origin: !!personalMerchantRanking.topMerchant.has_shared_origin
           }
         : null
     },
     establishments: personalMerchantRanking.ranking,
     establishmentSuggestions: personalMerchantSuggestions.length ? personalMerchantSuggestions : (summaryCharts?.establishmentSuggestions || []),
-    cardTrendByCard: cardMonthlyTrend.cards
+    cardTrendByCard: cardMonthlyTrend.cards,
+    sharedAccepted: {
+      totalCents: sharedAcceptedCents,
+      confirmedPaidCents: sharedConfirmedPaidCents,
+      pendingReportedCents: sharedPendingReportedCents,
+      openCents: sharedOpenCents,
+      remainingCents: sharedRemainingCents,
+      count: Number(sharedPurchaseProjectionSummary?.count || 0),
+      byCategory: sharedPurchaseProjectionSummary?.byCategory || [],
+      byRequester: sharedPurchaseProjectionSummary?.byRequester || [],
+      topRows: sharedPurchaseProjectionRows.slice()
+        .sort((a, b) => Number(b?.amountCents || 0) - Number(a?.amountCents || 0))
+        .slice(0, 5)
+    }
   };
 
   return {

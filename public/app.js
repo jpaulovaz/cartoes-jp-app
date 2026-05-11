@@ -2127,8 +2127,21 @@
     const others = filtered.slice(5).reduce((acc, item) => {
       acc.total_cents += Number(item.total_cents || 0);
       acc.txn_count += Number(item.txn_count || 0);
+      acc.shared_total_cents += Number(item.shared_total_cents || 0);
+      acc.shared_txn_count += Number(item.shared_txn_count || 0);
+      acc.has_shared_origin = Boolean(acc.has_shared_origin || item.has_shared_origin);
       return acc;
-    }, { id: null, label: 'Outras categorias', total_cents: 0, txn_count: 0, is_uncategorized: false, is_aggregate: true });
+    }, {
+      id: null,
+      label: 'Outras categorias',
+      total_cents: 0,
+      txn_count: 0,
+      shared_total_cents: 0,
+      shared_txn_count: 0,
+      has_shared_origin: false,
+      is_uncategorized: false,
+      is_aggregate: true
+    });
 
     if (others.total_cents > 0) visible.push(others);
     return visible;
@@ -2209,6 +2222,10 @@
       <div class="op-analytics-category-list">
         ${segments.map((segment, index) => {
           const canOpen = !segment.is_aggregate && !segment.is_uncategorized && Number(segment.id || 0) > 0;
+          const sharedCents = Number(segment.shared_total_cents || 0);
+          const sharedMeta = sharedCents > 0
+            ? `<span class="op-analytics-category-item__meta text-violet-700 dark:text-violet-300">inclui ${formatMoney(sharedCents)} compartilhado</span>`
+            : '';
           return `
             <button type="button" class="op-analytics-category-item group" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}" data-segment-index="${index}" ${canOpen ? '' : 'data-category-disabled="true"'}>
               <span class="op-analytics-category-item__body">
@@ -2222,6 +2239,7 @@
                 <span class="op-analytics-category-item__meta-row">
                   <span class="op-analytics-category-item__meta">${segment.txn_count || 0} compra(s)</span>
                   <span class="op-analytics-category-item__amount">${formatMoney(segment.total_cents)}</span>
+                  ${sharedMeta}
                 </span>
                 <span class="op-analytics-category-item__bar"><span style="width:${Math.max(8, Number(segment.share || 0))}%;background:${segment.color}"></span></span>
               </span>
@@ -2327,12 +2345,19 @@
 
     const polyline = coords.map((point) => `${point.x},${point.y}`).join(' ');
     const areaPolyline = `${padding.left},${height - padding.bottom} ${polyline} ${coords[coords.length - 1].x},${height - padding.bottom}`;
-    const pointCardsMarkup = coords.map((point, index) => `
+    const pointCardsMarkup = coords.map((point, index) => {
+      const sharedCents = Number(point.shared_cents || 0);
+      const sharedLine = sharedCents > 0
+        ? `<div class="mt-1 text-[11px] font-bold text-violet-700 dark:text-violet-300">+ ${formatMoney(sharedCents)} compartilhado</div>`
+        : '';
+      return `
           <button type="button" class="rounded-2xl border ${point.is_current ? 'border-violet-300 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/20' : 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/70'} px-3 py-2.5 text-left transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-month-point data-point-index="${index}" data-point-year="${point.year}" data-point-month="${point.month}" data-point-label="${point.label}">
             <div class="text-[11px] font-bold uppercase tracking-[0.18em] ${point.is_current ? 'text-violet-700 dark:text-violet-300' : 'text-slate-500 dark:text-slate-400'}">${point.label}</div>
             <div class="mt-1 text-sm font-black ${point.is_current ? 'text-violet-700 dark:text-violet-200' : 'text-slate-900 dark:text-white'}">${formatMoney(point.total_cents)}</div>
+            ${sharedLine}
           </button>
-        `).join('');
+        `;
+    }).join('');
 
     chartNode.innerHTML = `
       <div class="op-analytics-line-layout${isNarrowScreen ? '' : ' op-analytics-line-layout--desktop'}">

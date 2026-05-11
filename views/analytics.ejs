@@ -20,15 +20,20 @@
   const financeTrendDisplay = [...financeTrend].reverse();
   const financeIncomeSources = financeAnalytics && Array.isArray(financeAnalytics.incomeSources) ? financeAnalytics.incomeSources : [];
   const financeExpenseSources = financeAnalytics && Array.isArray(financeAnalytics.expenseSources) ? financeAnalytics.expenseSources : [];
-  const financeTrendMax = Math.max(1, ...financeTrend.map((point) => Math.max(Number(point.income_cents || 0), Number(point.expense_cents || 0), Number(point.card_cents || 0))));
-  const cardSpendCents = Number(graphKpis.totalSpentCents || 0);
+  const sharedAnalytics = analyticsSource && analyticsSource.sharedAccepted ? analyticsSource.sharedAccepted : { totalCents: 0, confirmedPaidCents: 0, pendingReportedCents: 0, openCents: 0, remainingCents: 0, count: 0, topRows: [] };
+  const sharedAcceptedCents = Number(sharedAnalytics.totalCents || graphKpis.sharedAcceptedCents || 0);
+  const sharedAcceptedCount = Number(sharedAnalytics.count || graphInsights.sharedAcceptedCount || 0);
+  const ownCardSpendCents = Number(graphKpis.ownCardSpentCents !== undefined && graphKpis.ownCardSpentCents !== null ? graphKpis.ownCardSpentCents : (graphKpis.totalSpentCents || 0));
+  const cardSpendCents = Number(graphKpis.totalSpentCents || (ownCardSpendCents + sharedAcceptedCents));
+  const hasSharedAcceptedAnalytics = sharedAcceptedCents > 0;
+  const financeTrendMax = Math.max(1, ...financeTrend.map((point) => Math.max(Number(point.income_cents || 0), Number(point.expense_cents || 0), Number(point.card_cents || 0), Number(point.shared_cents || 0))));
   const outsideExpenseCents = Number(financeTotals.expenseCents || 0);
   const totalOutflowCents = outsideExpenseCents + cardSpendCents;
   const overallNetCents = Number(financeTotals.incomeCents || 0) - totalOutflowCents;
   const totalCommittedCents = totalOutflowCents;
   const peopleRows = Array.isArray(peopleBreakdown) ? peopleBreakdown : [];
   const cardRows = Array.isArray(cardBreakdown) ? cardBreakdown : [];
-  const hasFinanceFlow = financeTrend.some((point) => Number(point.income_cents || 0) > 0 || Number(point.expense_cents || 0) > 0 || Number(point.card_cents || 0) > 0);
+  const hasFinanceFlow = financeTrend.some((point) => Number(point.income_cents || 0) > 0 || Number(point.expense_cents || 0) > 0 || Number(point.card_cents || 0) > 0 || Number(point.shared_cents || 0) > 0);
   const leadIncomeLabel = financeIncomeSources[0] ? financeIncomeSources[0].label : null;
   const leadExpenseLabel = financeExpenseSources[0] ? financeExpenseSources[0].label : null;
   const topCategoryLabel = graphKpis.topCategory ? graphKpis.topCategory.label : null;
@@ -41,7 +46,8 @@
       <h1 class="op-page-hero__title mt-4">Análises do mês — <%= String(month).padStart(2,'0') %>/<%= year %></h1>
       <p class="op-page-hero__subtitle mt-3">Resumo executivo das entradas, saídas, cartão e principais pressões do período.</p>
       <div class="op-page-hero__meta mt-4">
-        <span class="badge">Cartões: <%= formatBRLFromCents(cardSpendCents) %></span>
+        <span class="badge">Cartões próprios: <%= formatBRLFromCents(ownCardSpendCents) %></span>
+        <% if (hasSharedAcceptedAnalytics) { %><span class="badge border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-800 dark:bg-violet-900/30 dark:text-violet-100">Compartilhadas: <%= formatBRLFromCents(sharedAcceptedCents) %></span><% } %>
         <span class="badge">Entradas: <%= formatBRLFromCents(financeTotals.incomeCents || 0) %></span>
         <span class="badge">Saídas: <%= formatBRLFromCents(outsideExpenseCents) %></span>
         <span class="badge"><%= merchantTop ? `Maior pressão: ${merchantTop.label}` : 'Maior pressão: sem destaque no período' %></span>
@@ -97,9 +103,9 @@
             <p class="mt-2 text-xs leading-5 text-rose-800/80 dark:text-rose-100/80"><%= leadExpenseLabel ? `Principal saída: ${leadExpenseLabel}.` : 'Sem saídas fora do cartão neste período.' %></p>
           </div>
           <div class="op-analytics-kpi-card op-analytics-kpi-card--cards rounded-[24px] border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Gastos no cartão</div>
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Gastos do período</div>
             <div class="mt-2 text-2xl font-black tracking-tight text-amber-900 dark:text-amber-100"><%= formatBRLFromCents(cardSpendCents) %></div>
-            <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80"><%= topCategoryLabel ? `Maior categoria: ${topCategoryLabel}.` : 'Sem pressão relevante no cartão neste período.' %></p>
+            <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80"><%= hasSharedAcceptedAnalytics ? `${formatBRLFromCents(ownCardSpendCents)} em cartões próprios + ${formatBRLFromCents(sharedAcceptedCents)} em compartilhadas.` : (topCategoryLabel ? `Maior categoria: ${topCategoryLabel}.` : 'Sem pressão relevante no cartão neste período.') %></p>
           </div>
           <div class="op-analytics-kpi-card op-analytics-kpi-card--balance rounded-[24px] border border-slate-200 bg-slate-900 p-4 text-white dark:border-slate-700 dark:bg-slate-950">
             <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-300">Saldo previsto</div>
@@ -151,7 +157,7 @@
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div class="min-w-0">
                   <h3 class="text-lg font-black text-slate-900 dark:text-white">Distribuição por categoria</h3>
-                  <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">Participação das categorias no cartão do período.</p>
+                  <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400"><%= hasSharedAcceptedAnalytics ? 'Participação das categorias considerando cartões próprios e compartilhadas aceitas.' : 'Participação das categorias no cartão do período.' %></p>
                 </div>
                 <span class="op-analytics-chip inline-flex items-center self-start rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Categorias</span>
               </div>
@@ -165,8 +171,8 @@
             <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 op-analytics-graph-card">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div class="min-w-0">
-                  <h3 class="text-lg font-black text-slate-900 dark:text-white">Evolução do cartão</h3>
-                  <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">Histórico dos últimos 6 meses do valor lançado no cartão.</p>
+                  <h3 class="text-lg font-black text-slate-900 dark:text-white">Evolução do seu mês</h3>
+                  <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">Histórico dos últimos 6 meses com cartões próprios e compartilhadas aceitas.</p>
                 </div>
                 <span class="op-analytics-chip inline-flex items-center self-start rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
               </div>
@@ -192,7 +198,7 @@
       </div>
 
       <div data-op-tab-panel="flow" hidden>
-        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
           <div class="op-analytics-kpi-card op-analytics-kpi-card--income rounded-[24px] border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
             <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">Entradas</div>
             <div class="mt-2 text-2xl font-black tracking-tight text-emerald-800 dark:text-emerald-100"><%= formatBRLFromCents(financeTotals.incomeCents || 0) %></div>
@@ -204,14 +210,19 @@
             <p class="mt-2 text-xs leading-5 text-rose-800/80 dark:text-rose-100/80"><%= financeExpenseSources[0] ? `${financeExpenseSources[0].label} foi a principal saída do período.` : 'Sem saídas fora do cartão neste período.' %></p>
           </div>
           <div class="op-analytics-kpi-card op-analytics-kpi-card--cards rounded-[24px] border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Gastos no cartão</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-amber-900 dark:text-amber-100"><%= formatBRLFromCents(cardSpendCents) %></div>
-            <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80"><%= cardSpendCents > 0 ? 'Valor do cartão referente apenas à sua divisão no período.' : 'Sem valor de cartão registrado neste período.' %></p>
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Cartões próprios</div>
+            <div class="mt-2 text-2xl font-black tracking-tight text-amber-900 dark:text-amber-100"><%= formatBRLFromCents(ownCardSpendCents) %></div>
+            <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80"><%= ownCardSpendCents > 0 ? 'Valor referente apenas à sua divisão nos cartões.' : 'Sem valor de cartão próprio no período.' %></p>
+          </div>
+          <div class="op-analytics-kpi-card rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Compartilhadas</div>
+            <div class="mt-2 text-2xl font-black tracking-tight text-violet-900 dark:text-violet-100"><%= formatBRLFromCents(sharedAcceptedCents) %></div>
+            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80"><%= hasSharedAcceptedAnalytics ? `${sharedAcceptedCount} aceita${sharedAcceptedCount === 1 ? '' : 's'} em modo somente leitura.` : 'Nada aceito de amigos neste mês.' %></p>
           </div>
           <div class="op-analytics-kpi-card rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
             <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Total comprometido</div>
             <div class="mt-2 text-2xl font-black tracking-tight text-violet-900 dark:text-violet-100"><%= formatBRLFromCents(totalCommittedCents) %></div>
-            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Saídas do mês somadas ao valor do cartão.</p>
+            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Saídas do mês somadas aos cartões próprios e às compartilhadas aceitas.</p>
           </div>
           <div class="op-analytics-kpi-card op-analytics-kpi-card--balance rounded-[24px] border border-slate-200 bg-slate-900 p-4 text-white dark:border-slate-700 dark:bg-slate-950">
             <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-300">Saldo previsto</div>
@@ -234,7 +245,7 @@
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <h3 class="text-lg font-black text-slate-900 dark:text-white">Evolução do fluxo</h3>
-                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Entradas, saídas fora do cartão e cartão no mesmo histórico mensal.</p>
+                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Entradas, saídas fora do cartão, cartões próprios e compartilhadas aceitas no mesmo histórico mensal.</p>
                 </div>
                 <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
               </div>
@@ -243,6 +254,7 @@
                      const incomePct = financeTrendMax > 0 ? Math.max(8, Math.round((Number(point.income_cents || 0) / financeTrendMax) * 100)) : 0;
                      const expensePct = financeTrendMax > 0 ? Math.max(8, Math.round((Number(point.expense_cents || 0) / financeTrendMax) * 100)) : 0;
                      const cardPct = financeTrendMax > 0 ? Math.max(8, Math.round((Number(point.card_cents || 0) / financeTrendMax) * 100)) : 0;
+                     const sharedPct = financeTrendMax > 0 ? Math.max(8, Math.round((Number(point.shared_cents || 0) / financeTrendMax) * 100)) : 0;
                 %>
                   <div class="rounded-[22px] border <%= point.is_current ? 'border-violet-300 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/20' : 'border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60' %> p-4">
                     <div class="flex items-center justify-between gap-2">
@@ -259,9 +271,15 @@
                         <div class="mt-1 h-2 rounded-full bg-rose-100 dark:bg-rose-950/40"><div class="h-2 rounded-full bg-rose-500 dark:bg-rose-400" style="width:<%= expensePct %>%"></div></div>
                       </div>
                       <div>
-                        <div class="flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300"><span>Cartão</span><span><%= formatBRLFromCents(point.card_cents || 0) %></span></div>
+                        <div class="flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300"><span>Cartões próprios</span><span><%= formatBRLFromCents(point.card_cents || 0) %></span></div>
                         <div class="mt-1 h-2 rounded-full bg-amber-100 dark:bg-amber-950/40"><div class="h-2 rounded-full bg-amber-500 dark:bg-amber-400" style="width:<%= cardPct %>%"></div></div>
                       </div>
+                      <% if (Number(point.shared_cents || 0) > 0) { %>
+                        <div>
+                          <div class="flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300"><span>Compartilhadas</span><span><%= formatBRLFromCents(point.shared_cents || 0) %></span></div>
+                          <div class="mt-1 h-2 rounded-full bg-violet-100 dark:bg-violet-950/40"><div class="h-2 rounded-full bg-violet-500 dark:bg-violet-400" style="width:<%= sharedPct %>%"></div></div>
+                        </div>
+                      <% } %>
                     </div>
                     <div class="mt-3 text-xs font-semibold <%= Number(point.net_cents || 0) >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300' %>">Quanto sobrou: <%= formatBRLFromCents(point.net_cents || 0) %></div>
                   </div>
@@ -336,7 +354,7 @@
         <% } %>
       </div>
       <div data-op-tab-panel="split" hidden>
-        <div class="grid gap-3 lg:grid-cols-4">
+        <div class="grid gap-3 lg:grid-cols-5">
           <div class="rounded-[24px] border border-slate-200 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/50">
             <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Dividido entre pessoas</div>
             <div class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(totalKpis.totalPeopleAssignedCents || 0) %></div>
@@ -346,6 +364,11 @@
             <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Sem dono ainda</div>
             <div class="mt-2 text-2xl font-black tracking-tight text-amber-900 dark:text-amber-100"><%= formatBRLFromCents(totalKpis.totalUnassignedCents || 0) %></div>
             <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80">Bom para achar o que ainda não foi distribuído.</p>
+          </div>
+          <div class="rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Compartilhadas aceitas</div>
+            <div class="mt-2 text-2xl font-black tracking-tight text-violet-900 dark:text-violet-100"><%= formatBRLFromCents(sharedAcceptedCents) %></div>
+            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Entram no retrato, sem virar cartão virtual.</p>
           </div>
           <div class="rounded-[24px] border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
             <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">Pago nos cartões</div>
@@ -427,7 +450,7 @@
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h3 class="text-lg font-black text-slate-900 dark:text-white">Cartão por cartão, mês a mês</h3>
-              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Total por cartão usado no período.</p>
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400"><%= hasSharedAcceptedAnalytics ? 'Total por cartão próprio; as compartilhadas ficam separadas para não virar cartão virtual.' : 'Total por cartão usado no período.' %></p>
             </div>
             <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
           </div>
@@ -567,6 +590,9 @@
                 </div>
                 <div class="mt-4 text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(merchant.total_cents || 0) %></div>
                 <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= merchant.share_pct || 0 %>% do mês · <%= merchant.txn_count || 0 %> compra<%= Number(merchant.txn_count || 0) === 1 ? '' : 's' %></div>
+                <% if (Number(merchant.shared_total_cents || 0) > 0) { %>
+                  <div class="mt-2 inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-violet-700 dark:border-violet-800 dark:bg-violet-900/30 dark:text-violet-100">inclui <%= formatBRLFromCents(merchant.shared_total_cents || 0) %> compartilhado</div>
+                <% } %>
                 <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
                   <span class="op-analytics-chip inline-flex items-center rounded-full border border-white/80 bg-white/80 px-2.5 py-1 text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">ticket médio <%= formatBRLFromCents(merchant.avg_ticket_cents || 0) %></span>
                   <% if (merchant.delta_pct !== null && merchant.delta_pct !== undefined) { %>
@@ -624,6 +650,10 @@
                       <% if (merchant.confidence === 'high') { %>
                         <span class="hidden sm:inline">·</span>
                         <span class="font-bold text-emerald-700 dark:text-emerald-300">nome certinho</span>
+                      <% } %>
+                      <% if (Number(merchant.shared_total_cents || 0) > 0) { %>
+                        <span class="hidden sm:inline">·</span>
+                        <span class="font-bold text-violet-700 dark:text-violet-300">inclui compartilhada</span>
                       <% } %>
                     </div>
                     <% if (merchantSample) { %>

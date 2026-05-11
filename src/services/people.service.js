@@ -98,10 +98,13 @@ function createPeopleService(deps = {}) {
     const parsed = deps.parseMonthYear(params.month, params.year);
     if (!parsed) return { badRequest: 'Esse mês/ano veio estranho por aqui.' };
 
-    const tab = String(query.tab || 'open').trim().toLowerCase() === 'history' ? 'history' : 'open';
+    const comprasFilters = {
+      q: String(query.q || '').trim().slice(0, 120),
+      status: String(query.status || 'all').trim().toLowerCase()
+    };
 
     try {
-      const ledger = deps.buildPeopleComprasComigoLedger(userId, personId, parsed.month, parsed.year);
+      const ledger = deps.buildPeopleComprasComigoLedger(userId, personId, parsed.month, parsed.year, { filters: comprasFilters });
       const contact = ledger.contact;
       const prevMonth = deps.shiftMonth(parsed.year, parsed.month, -1);
       const nextMonth = deps.shiftMonth(parsed.year, parsed.month, 1);
@@ -110,10 +113,13 @@ function createPeopleService(deps = {}) {
       const isCurrentMonth = currentMonth.year === parsed.year && currentMonth.month === parsed.month;
       const basePath = `/people/${personId}/compras-comigo/${parsed.year}/${parsed.month}`;
       const currentMonthPath = `/people/${personId}/compras-comigo/${currentMonth.year}/${currentMonth.month}`;
+      const queryEntries = Object.entries(comprasFilters)
+        .filter(([, value]) => value && String(value).trim() && String(value).trim() !== 'all');
+      const querySuffix = queryEntries.length ? `?${new URLSearchParams(queryEntries).toString()}` : '';
 
       return {
         viewModel: {
-          title: `AcerttaPay | Compras comigo · ${contact.name || 'Amizade'}`,
+          title: `AcerttaPay | Compras com ${contact.name || 'Amizade'}`,
           person: contact,
           contact,
           month: parsed.month,
@@ -121,23 +127,74 @@ function createPeopleService(deps = {}) {
           monthLabel: deps.monthLabel,
           formatBRLFromCents: deps.formatBRLFromCents,
           formatDateBR: deps.formatDateBR,
+          outgoingRows: ledger.outgoingRows || [],
+          incomingOpenItems: ledger.incomingOpenItems || ledger.openItems || [],
+          incomingHistoryItems: ledger.incomingHistoryItems || ledger.historyItems || [],
           openItems: ledger.openItems,
           historyItems: ledger.historyItems,
           summary: ledger.summary,
-          activeTab: tab,
+          comprasFilters,
           availableRanks: ledger.availableRanks,
-          previousMonthHref: `/people/${personId}/compras-comigo/${prevMonth.year}/${prevMonth.month}?tab=${tab}`,
-          nextMonthHref: `/people/${personId}/compras-comigo/${nextMonth.year}/${nextMonth.month}?tab=${tab}`,
-          currentMonthHref: `${currentMonthPath}?tab=${tab}`,
-          openTabHref: `${basePath}?tab=open`,
-          historyTabHref: `${basePath}?tab=history`,
+          previousMonthHref: `/people/${personId}/compras-comigo/${prevMonth.year}/${prevMonth.month}${querySuffix}`,
+          nextMonthHref: `/people/${personId}/compras-comigo/${nextMonth.year}/${nextMonth.month}${querySuffix}`,
+          currentMonthHref: `${currentMonthPath}${querySuffix}`,
+          clearFiltersHref: basePath,
           backHref: '/people#network-lounge',
-          sharedDebtsHref: '/shared-debts#received',
+          sharedDebtsHref: '/shared-debts',
+          draftQueuesHref: '/shared-debts#draft-queues',
           isCurrentMonth
         }
       };
     } catch (error) {
       return { redirectTo: '/people', flash: { type: 'error', message: error?.message || 'Não consegui abrir as compras dessa amizade agora.' } };
+    }
+  }
+
+  function createComprasComigoChargeDraft({ userId, personId, params, body }) {
+    const parsed = deps.parseMonthYear(params.month, params.year);
+    const fallback = parsed
+      ? `/people/${personId}/compras-comigo/${parsed.year}/${parsed.month}`
+      : `/people/${personId}/compras-comigo`;
+    if (!parsed) {
+      return { redirectTo: '/people', flash: { type: 'error', message: 'Esse mês/ano veio estranho por aqui.' } };
+    }
+
+    const transactionId = Number(body.transaction_id || body.transactionId || 0);
+    const scope = String(body.scope || 'single').trim().toLowerCase() === 'future' ? 'future' : 'single';
+    if (!transactionId) {
+      return { redirectTo: fallback, flash: { type: 'error', message: 'Escolha uma compra válida para criar a cobrança.' } };
+    }
+
+    try {
+      const result = deps.createPeopleComprasComigoChargeDraft(userId, personId, transactionId, { scope, month: parsed.month, year: parsed.year });
+      const itemCount = Number(result.itemCount || 0);
+      const skippedCount = Number(result.skippedCount || 0);
+      if (!itemCount) {
+        return {
+          redirectTo: fallback,
+          flash: { type: 'info', message: 'Não criei cobrança nova porque essa divisão já está na caixa de saída ou já possui cobrança ativa.' }
+        };
+      }
+
+      const periodPart = scope === 'future' && itemCount > 1
+        ? `${itemCount} parcelas entraram`
+        : 'A cobrança entrou';
+      const skippedPart = skippedCount > 0
+        ? ` ${skippedCount} item(ns) já tinham cobrança ou não estavam elegíveis e ficaram de fora.`
+        : '';
+
+      return {
+        redirectTo: `${fallback}?status=all#eu-marquei`,
+        flash: {
+          type: 'success',
+          message: `${periodPart} na caixa de saída. Revise e envie quando quiser.${skippedPart}`
+        }
+      };
+    } catch (error) {
+      return {
+        redirectTo: fallback,
+        flash: { type: 'error', message: error?.message || 'Não consegui criar essa cobrança agora.' }
+      };
     }
   }
 
@@ -580,6 +637,7 @@ function createPeopleService(deps = {}) {
     removeProfilePhoto,
     redirectComprasComigo,
     getComprasComigoPage,
+    createComprasComigoChargeDraft,
     saveNotificationPreferences,
     savePerson,
     sendFriendRequest,

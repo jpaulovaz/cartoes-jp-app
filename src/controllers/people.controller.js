@@ -79,6 +79,16 @@ function createPeopleController(deps = {}) {
       return safeRenderView(res, 'people-compras-comigo', result.viewModel);
     },
 
+    createComprasComigoChargeDraft(req, res) {
+      const result = service.createComprasComigoChargeDraft({
+        userId: req.user.id,
+        personId: Number(req.params.id || 0),
+        params: req.params,
+        body: req.body
+      });
+      return redirectWithResult(req, res, result, `/people/${req.params.id}/compras-comigo/${req.params.year}/${req.params.month}`);
+    },
+
     saveNotificationPreferences(req, res) {
       const result = service.saveNotificationPreferences({ userId: req.user.id, body: req.body, req });
       return redirectWithResult(req, res, result, '/settings#alerts');

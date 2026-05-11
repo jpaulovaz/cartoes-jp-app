@@ -1,72 +1,76 @@
-<%- include("partials/header", { title: title || `AcerttaPay | Compras comigo` }) %>
+<%- include("partials/header", { title: title || `AcerttaPay | Compras com ${contact && contact.name ? contact.name : 'amizade'}` }) %>
 
 <%
   const contactPerson = contact || person || {};
-  const safeOpenItems = Array.isArray(openItems) ? openItems : [];
-  const safeHistoryItems = Array.isArray(historyItems) ? historyItems : [];
+  const safeOutgoingRows = Array.isArray(outgoingRows) ? outgoingRows : [];
+  const safeIncomingOpenItems = Array.isArray(incomingOpenItems) ? incomingOpenItems : [];
+  const safeIncomingHistoryItems = Array.isArray(incomingHistoryItems) ? incomingHistoryItems : [];
+  const safeIncomingItems = safeIncomingOpenItems.concat(safeIncomingHistoryItems).sort((a, b) => {
+    const aDate = new Date(a.source_txn_date || a.created_at || a.updated_at || 0).getTime() || 0;
+    const bDate = new Date(b.source_txn_date || b.created_at || b.updated_at || 0).getTime() || 0;
+    return bDate - aDate;
+  });
   const safeSummary = summary || {};
-  const isHistoryTab = String(activeTab || 'open') === 'history';
-  const visibleItems = isHistoryTab ? safeHistoryItems : safeOpenItems;
+  const safeFilters = comprasFilters || filters || {};
+  const activeStatusFilter = String(safeFilters.status || 'all').trim().toLowerCase();
+  const searchValue = String(safeFilters.q || '').trim();
   const monthText = typeof monthLabel === 'function' ? monthLabel(month, year) : `${String(month).padStart(2, '0')}/${year}`;
   const monthChipText = `${String(month).padStart(2, '0')} / ${year}`;
-  const availableMonthEntries = Array.isArray(availableRanks) ? availableRanks
-    .map((rank) => {
-      const safeRank = Number(rank || 0);
-      if (!safeRank) return null;
-      const entryYear = Math.floor(safeRank / 100);
-      const entryMonth = safeRank % 100;
-      if (!entryMonth || !entryYear) return null;
-      return {
-        rank: safeRank,
-        month: entryMonth,
-        year: entryYear,
-        label: typeof monthLabel === 'function' ? monthLabel(entryMonth, entryYear) : `${String(entryMonth).padStart(2, '0')}/${entryYear}`,
-        href: `/people/${contactPerson.id}/compras-comigo/${entryYear}/${entryMonth}?tab=${isHistoryTab ? 'history' : 'open'}`
-      };
-    })
-    .filter(Boolean)
-    : [];
+  const pageBasePath = `/people/${contactPerson.id}/compras-comigo/${year}/${month}`;
+  const createChargeAction = `${pageBasePath}/create-charge`;
+  const statusOptions = [
+    { value: 'all', label: 'Todos os status' },
+    { value: 'chargeable', label: 'Sem cobrança' },
+    { value: 'draft', label: 'Na caixa de saída' },
+    { value: 'sent', label: 'Enviadas ou aceitas' },
+    { value: 'done', label: 'Concluídas' }
+  ];
 
-  function initials(name) {
-    const parts = String(name || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
-    return parts.length ? parts.map((part) => part.charAt(0).toUpperCase()).join('') : 'OP';
+  function chipClass(extra) {
+    return `inline-flex max-w-full items-center justify-center rounded-full border px-2.5 py-1 text-center text-[11px] font-black leading-none whitespace-nowrap ${extra || 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200'}`;
   }
 
-  function participantAvatarUrl(personEntry) {
-    if (personEntry && personEntry.photo_url) return String(personEntry.photo_url);
-    if (personEntry && personEntry.linked_user_photo_url) return String(personEntry.linked_user_photo_url);
-    return '';
+  function shortDate(value) {
+    return value ? formatDateBR(value) : monthText;
   }
 
-  function quickActionClasses(action) {
-    const tone = String(action && action.tone ? action.tone : 'primary');
-    if (tone === 'success') {
-      return 'border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 dark:border-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400';
-    }
-    if (tone === 'danger') {
-      return 'border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-900/20';
-    }
-    return 'border border-violet-600 bg-violet-600 text-white hover:bg-violet-700 dark:border-violet-500 dark:bg-violet-500 dark:hover:bg-violet-400';
+  function incomingDateLabel(item) {
+    return item.sourceDateLabel || (item.source_txn_date ? formatDateBR(item.source_txn_date) : (item.created_at ? formatDateBR(item.created_at) : monthText));
+  }
+
+  function incomingCardLabel(item) {
+    if (item.request_kind === 'manual' || item.isManual) return 'Avulsa';
+    return item.card_name_snapshot || 'Cartão';
+  }
+
+  function incomingValue(item) {
+    return Number(item.total_cents || item.amount_cents || 0);
+  }
+
+  function statusFilterSelected(value) {
+    return activeStatusFilter === value ? 'selected' : '';
   }
 %>
 
 <div class="op-screen op-screen--month mx-auto max-w-7xl space-y-6 pb-24">
   <section class="op-page-hero op-fade-up">
     <div>
-      <span class="op-page-hero__eyebrow">Parceria + competência do mês</span>
-      <h1 class="op-page-hero__title mt-4">Compras comigo — <%= contactPerson.name || 'Amizade' %></h1>
-      <p class="op-page-hero__subtitle mt-3">Aqui entram só as compras em que <%= contactPerson.name || 'essa pessoa' %> te envolveu, sem virar vitrine da vida financeira do outro lado.</p>
+      <span class="op-page-hero__eyebrow">Compras com amigo</span>
+      <h1 class="op-page-hero__title mt-4">Compras com <%= contactPerson.name || 'essa pessoa' %></h1>
+      <p class="op-page-hero__subtitle mt-3">Veja o que vocês dividiram em <%= monthText %> e crie cobranças que ainda não estão na caixa de saída.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge"><%= monthText %></span>
-        <span class="badge"><%= formatBRLFromCents(safeSummary.openAmountCents || 0) %> em aberto</span>
-        <span class="badge"><%= safeSummary.needsMyActionCount || 0 %> pedindo minha ação</span>
-        <span class="badge"><%= safeSummary.waitingOtherSideCount || 0 %> aguardando o outro lado</span>
+        <span class="badge"><%= safeOutgoingRows.length %> que você marcou</span>
+        <span class="badge"><%= safeIncomingItems.length %> recebida(s)</span>
+        <% if ((safeSummary.chargeableCount || 0) > 0) { %>
+          <span class="badge"><%= safeSummary.chargeableCount %> para cobrar</span>
+        <% } %>
       </div>
     </div>
 
     <div class="op-page-hero__actions w-full lg:max-w-[32rem]">
-      <a href="<%= backHref || '/people' %>" class="op-btn op-hero-link op-hero-link--network op-btn--block">← Voltar para Minha Rede</a>
-      <a href="<%= sharedDebtsHref || '/shared-debts' %>" class="op-btn op-hero-link op-hero-link--debts op-btn--block">Abrir Acertos</a>
+      <a href="<%= backHref || '/people#network-lounge' %>" class="op-btn op-hero-link op-hero-link--network op-btn--block">← Voltar para Minha Rede</a>
+      <a href="<%= sharedDebtsHref || '/shared-debts' %>" class="op-btn op-hero-link op-hero-link--debts op-btn--block">Abrir Central de Acertos</a>
 
       <div class="w-full flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 p-1 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/70">
         <a href="<%= previousMonthHref %>" class="op-btn op-btn-ghost flex-1">← Anterior</a>
@@ -82,155 +86,160 @@
     </div>
   </section>
 
-  <div class="op-inline-alert op-inline-alert--info">
-    <div class="op-inline-alert__icon">🔎</div>
-    <div>
-      <div class="op-inline-alert__title">Recorte sem invasão</div>
-      <div class="op-inline-alert__text">Essa tela mostra só o que <strong><%= contactPerson.name || 'essa pessoa' %></strong> lançou para você. Nada de abrir compras em que você não entra na dança.</div>
+  <section class="grid gap-4 md:grid-cols-3">
+    <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <div class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Eu marquei</div>
+      <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(safeSummary.outgoingMarkedCents || 0) %></div>
+      <p class="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Parte de <%= contactPerson.name || 'essa pessoa' %> nas compras do mês.</p>
     </div>
-  </div>
-
-  <section class="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-5">
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-      <div class="flex min-w-0 items-center gap-4">
-        <div class="relative h-14 w-14 shrink-0">
-          <% if (participantAvatarUrl(contactPerson)) { %>
-            <img src="<%= participantAvatarUrl(contactPerson) %>" alt="<%= contactPerson.name || 'Amizade' %>" loading="lazy" referrerpolicy="no-referrer" class="h-14 w-14 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700">
-          <% } else { %>
-            <div class="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-lg font-black text-slate-600 dark:bg-slate-900 dark:text-slate-300"><%= initials(contactPerson.name) %></div>
-          <% } %>
-          <span class="absolute -bottom-1 -right-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-emerald-200 bg-emerald-500 text-[13px] text-white shadow-sm dark:border-emerald-700" title="Amizade ativa">🔗</span>
-        </div>
-
-        <div class="min-w-0">
-          <p class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Leitura mensal da parceria</p>
-          <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white"><%= contactPerson.name || 'Amizade' %> · <%= monthText %></h2>
-          <p class="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">A navegação segue mês a mês, no mesmo espírito do /month, para ninguém se perder no meio das competências.</p>
-        </div>
-      </div>
-
-      <% if (availableMonthEntries.length > 1) { %>
-        <div class="flex flex-wrap gap-2 lg:max-w-[26rem] lg:justify-end">
-          <% availableMonthEntries.slice(0, 6).forEach((entry) => { const activeEntry = Number(entry.month) === Number(month) && Number(entry.year) === Number(year); %>
-            <a href="<%= entry.href %>" class="inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-bold transition-colors <%= activeEntry ? 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800' %>"><%= entry.label %></a>
-          <% }) %>
-        </div>
-      <% } %>
+    <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <div class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Para criar cobrança</div>
+      <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= safeSummary.chargeableCount || 0 %></div>
+      <p class="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Itens sem cobrança ativa ou rascunho.</p>
+    </div>
+    <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <div class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Recebidas</div>
+      <div class="mt-2 text-2xl font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(safeSummary.incomingOpenAmountCents || 0) %></div>
+      <p class="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Valores em aberto que vieram dessa amizade.</p>
     </div>
   </section>
 
-  <div class="flex flex-wrap gap-3">
-    <a href="<%= openTabHref %>" class="inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-black shadow-sm transition-colors <%= !isHistoryTab ? 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800' %>">
-      Em aberto
-      <span class="rounded-full px-2 py-0.5 text-[11px] <%= !isHistoryTab ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300' %>"><%= safeSummary.openCount || safeOpenItems.length %></span>
-    </a>
-    <a href="<%= historyTabHref %>" class="inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-black shadow-sm transition-colors <%= isHistoryTab ? 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800' %>">
-      Histórico
-      <span class="rounded-full px-2 py-0.5 text-[11px] <%= isHistoryTab ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300' %>"><%= safeSummary.historyCount || safeHistoryItems.length %></span>
-    </a>
-  </div>
+  <section class="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-5">
+    <form method="GET" action="<%= pageBasePath %>" class="grid gap-3 md:grid-cols-[minmax(0,1fr)_16rem_auto_auto] md:items-end">
+      <label class="block">
+        <span class="mb-1 block text-xs font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Buscar</span>
+        <input type="search" name="q" value="<%= searchValue %>" placeholder="Descrição, cartão, categoria ou status" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm outline-none transition focus:border-violet-300 focus:ring-4 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-violet-900/30">
+      </label>
+      <label class="block">
+        <span class="mb-1 block text-xs font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Status</span>
+        <select name="status" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm outline-none transition focus:border-violet-300 focus:ring-4 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-violet-900/30">
+          <% statusOptions.forEach((option) => { %>
+            <option value="<%= option.value %>" <%= statusFilterSelected(option.value) %>><%= option.label %></option>
+          <% }) %>
+        </select>
+      </label>
+      <button type="submit" class="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">Filtrar</button>
+      <a href="<%= clearFiltersHref || pageBasePath %>" class="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Limpar</a>
+    </form>
+  </section>
 
-  <% if (!visibleItems.length) { %>
-    <div class="op-empty-state">
-      <div class="op-empty-state__icon"><%= isHistoryTab ? '🗂️' : '🧾' %></div>
-      <div class="op-empty-state__title"><%= isHistoryTab ? `Nada no histórico de ${monthText}` : `Nada em aberto em ${monthText}` %></div>
-      <p class="op-empty-state__text">
-        <% if (isHistoryTab) { %>
-          Quando algum acerto dessa parceria encerrar ou sair de cena nessa competência, ele aparece aqui sem bagunçar a fila principal.
-        <% } else { %>
-          Aqui entram só os itens que <%= contactPerson.name || 'essa pessoa' %> lançou para você nessa competência. Se tudo estiver quietinho, pode comemorar sem culpa.
-        <% } %>
-      </p>
-    </div>
-  <% } else { %>
-    <div class="grid gap-4">
-      <% visibleItems.forEach((item) => { %>
-        <% const quickActions = Array.isArray(item.quickActions) ? item.quickActions : []; %>
-        <% const requestHref = `/shared-debts?request=${item.id}`; %>
-        <% const actionHref = item.actionMeta && item.actionMeta.href ? String(item.actionMeta.href) : requestHref; %>
-        <% const actionLabel = actionHref === requestHref && quickActions.length ? 'Abrir conversa completa' : (item.actionMeta && item.actionMeta.label ? item.actionMeta.label : 'Abrir no acerto'); %>
-        <% const actionIsSettlementHref = actionHref.indexOf('?settlement=') !== -1; %>
-        <% const quickActionHasSameHref = quickActions.some((action) => action && action.kind === 'link' && String(action.href || '') === actionHref); %>
-        <article class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition-all dark:border-slate-700 dark:bg-slate-800 sm:p-6">
-          <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div class="min-w-0 flex-1">
-              <div class="flex flex-wrap items-start gap-3">
-                <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= item.isCard ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200' : 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200' %>"><%= item.isCard ? 'No cartão' : 'Avulsa' %></span>
-                    <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= item.statusMeta.classes %>"><%= item.statusMeta.label %></span>
-                  </div>
-                  <h3 class="mt-3 text-xl font-black text-slate-900 dark:text-white"><%= item.description_snapshot %></h3>
-                  <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= item.detailLine %></p>
-                </div>
+  <details id="outgoing" class="rounded-[30px] border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800" open>
+    <summary class="flex cursor-pointer list-none flex-col gap-3 border-b border-slate-200 px-5 py-5 dark:border-slate-700 md:flex-row md:items-center md:justify-between">
+      <div>
+        <div class="text-[11px] font-black uppercase tracking-[0.22em] text-violet-600 dark:text-violet-300">Eu marquei para <%= contactPerson.name || 'essa pessoa' %></div>
+        <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Compras que podem virar cobrança</h2>
+        <p class="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">Quando necessário, crie a cobrança e ela vai para a caixa de saída.</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <span class="badge"><%= safeOutgoingRows.length %> itens</span>
+        <% if ((safeSummary.chargeableCount || 0) > 0) { %><span class="badge"><%= safeSummary.chargeableCount %> sem cobrança</span><% } %>
+        <% if ((safeSummary.outgoingDraftCount || 0) > 0) { %><span class="badge"><%= safeSummary.outgoingDraftCount %> na caixa</span><% } %>
+      </div>
+    </summary>
 
-                <div class="w-full shrink-0 rounded-[24px] border border-slate-200 bg-slate-50/90 px-4 py-3 text-left shadow-sm dark:border-slate-700 dark:bg-slate-900/70 lg:w-auto lg:min-w-[12rem] lg:text-right">
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Minha parte</div>
-                  <div class="mt-1 text-2xl font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(item.total_cents || 0) %></div>
-                  <% if ((item.amount_paid_cents || 0) > 0 && !item.payment_marked_at) { %>
-                    <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= formatBRLFromCents(item.amount_paid_cents || 0) %> já abatidos · <%= formatBRLFromCents(item.amount_pending_cents || 0) %> em aberto</div>
-                  <% } else if (item.payment_marked_at && String(item.status || '') === 'accepted') { %>
-                    <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">Pagamento já avisado por aqui</div>
+    <% if (!safeOutgoingRows.length) { %>
+      <div class="op-empty-state op-empty-state--compact m-5">
+        <div class="op-empty-state__icon">🧾</div>
+        <div class="op-empty-state__title">Nada marcado para essa pessoa em <%= monthText %></div>
+        <p class="op-empty-state__text">Quando você dividir uma compra com <%= contactPerson.name || 'essa pessoa' %>, ela aparece aqui.</p>
+      </div>
+    <% } else { %>
+      <div class="op-table-shell overflow-x-auto xl:overflow-x-visible">
+        <table class="op-month-ledger-table block md:table min-w-full md:min-w-[86rem] xl:min-w-0 xl:w-full text-sm text-left">
+          <thead class="hidden md:table-header-group bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-[11px] tracking-wider">
+            <tr>
+              <th class="px-4 py-4">Data</th>
+              <th class="px-4 py-4">Descrição</th>
+              <th class="px-4 py-4 text-center">Categoria</th>
+              <th class="px-4 py-4 text-center">Cartão</th>
+              <th class="px-4 py-4 text-right">Parte da pessoa</th>
+              <th class="px-4 py-4 text-center">Status</th>
+              <th class="px-4 py-4 pr-8 text-left min-w-[16rem]">Ação</th>
+            </tr>
+          </thead>
+          <tbody class="block md:table-row-group">
+            <% safeOutgoingRows.forEach((row) => { %>
+              <tr class="op-month-row op-month-ledger-row block md:table-row mb-3 rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-800/60 md:mb-0 md:rounded-none md:border-b md:border-x-0 md:border-t-0 md:border-slate-100 md:bg-transparent md:p-0 md:shadow-none dark:md:border-slate-700 align-middle space-y-1 md:space-y-0">
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap"><div class="flex items-center justify-between gap-3 md:block"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Data</span><span><%= row.dateLabel %></span></div></td>
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-black text-slate-900 dark:text-white"><div class="flex items-start justify-between gap-3 md:block"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 pt-0.5">Descrição</span><span class="text-right md:text-left break-words"><%= row.description %></span></div></td>
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-center"><div class="flex items-center justify-between gap-3 md:block"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Categoria</span><span class="<%= chipClass('border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200') %>"><%= row.categoryName %></span></div></td>
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-center"><div class="flex items-center justify-between gap-3 md:block"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Cartão</span><span class="<%= chipClass() %>"><%= row.cardName %></span></div></td>
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-right font-black text-slate-900 dark:text-white"><div class="flex items-center justify-between gap-3 md:block"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Parte</span><span><%= row.shareFormatted %></span></div></td>
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-center"><div class="flex items-center justify-between gap-3 md:justify-center"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Status</span><span class="<%= chipClass(row.statusMeta && row.statusMeta.classes) %>"><%= row.statusMeta && row.statusMeta.label ? row.statusMeta.label : 'Sem status' %></span></div></td>
+                <td class="block md:table-cell px-0 md:px-4 pr-0 md:pr-8 py-3 md:py-3">
+                  <% if (row.canCreateCharge) { %>
+                    <form method="POST" action="<%= createChargeAction %>" class="inline-flex w-full md:w-auto" data-compras-comigo-create-form>
+                      <input type="hidden" name="transaction_id" value="<%= row.transactionId %>">
+                      <input type="hidden" name="scope" value="single" data-compras-comigo-scope-input>
+                      <% if (row.hasFutureEligibleInstallments) { %>
+                        <button type="button" class="inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-400 md:w-auto" data-compras-comigo-create-charge data-has-future="1" data-future-count="<%= row.futureEligibleCount %>" data-future-total="<%= row.futureEligibleTotalFormatted %>" data-description="<%= row.description %>">Criar cobrança</button>
+                      <% } else { %>
+                        <button type="submit" class="inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-400 md:w-auto">Criar cobrança</button>
+                      <% } %>
+                    </form>
+                  <% } else if (row.actionHref) { %>
+                    <a href="<%= row.actionHref %>" class="inline-flex min-h-[44px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 md:w-auto"><%= row.statusMeta && row.statusMeta.key === 'draft' ? 'Ver caixa' : 'Ver acerto' %></a>
+                  <% } else { %>
+                    <span class="text-sm font-semibold text-slate-400 dark:text-slate-500">—</span>
                   <% } %>
-                </div>
-              </div>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </details>
 
-              <div class="mt-4 rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
-                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Leitura rápida</div>
-                <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= item.hint %></p>
-                <% if (item.request_note) { %>
-                  <div class="mt-3 rounded-2xl border border-dashed border-slate-200 bg-white/90 px-3 py-2.5 text-sm font-medium leading-6 text-slate-600 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300">
-                    <span class="font-black text-slate-700 dark:text-slate-100">Bom saber:</span> <%= item.request_note %>
-                  </div>
-                <% } %>
-              </div>
+  <details id="incoming" class="rounded-[30px] border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800" open>
+    <summary class="flex cursor-pointer list-none flex-col gap-3 border-b border-slate-200 px-5 py-5 dark:border-slate-700 md:flex-row md:items-center md:justify-between">
+      <div>
+        <div class="text-[11px] font-black uppercase tracking-[0.22em] text-cyan-600 dark:text-cyan-300">Recebidas de <%= contactPerson.name || 'essa pessoa' %></div>
+        <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Compras que chegaram para você</h2>
+        <p class="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">Itens que essa amizade compartilhou com você nesta competência.</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <span class="badge"><%= safeIncomingItems.length %> itens</span>
+        <% if ((safeSummary.incomingOpenAmountCents || 0) > 0) { %><span class="badge"><%= formatBRLFromCents(safeSummary.incomingOpenAmountCents || 0) %> em aberto</span><% } %>
+      </div>
+    </summary>
 
-              <% if (item.metaRows && item.metaRows.length) { %>
-                <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  <% item.metaRows.forEach((meta) => { %>
-                    <div class="rounded-[22px] border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
-                      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400"><%= meta.label %></div>
-                      <div class="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100"><%= meta.value %></div>
-                    </div>
-                  <% }) %>
-                </div>
-              <% } %>
-            </div>
-
-            <div class="flex shrink-0 flex-col gap-2 lg:w-[16rem]">
-              <% if (quickActions.length) { %>
-                <div class="grid gap-2 <%= quickActions.length > 1 ? 'sm:grid-cols-2 lg:grid-cols-1' : '' %>">
-                  <% quickActions.forEach((action) => { %>
-                    <% if (action.kind === 'form') { %>
-                      <form method="POST" action="<%= action.action %>" <%= action.confirmPrompt ? `data-confirm-prompt="${action.confirmPrompt}"` : '' %>>
-                        <% (action.fields || []).forEach((field) => { %>
-                          <input type="hidden" name="<%= field.name %>" value="<%= field.value %>">
-                        <% }) %>
-                        <button type="submit" class="inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl px-4 py-3 text-sm font-black shadow-sm transition-colors <%= quickActionClasses(action) %>"><%= action.label %></button>
-                      </form>
-                    <% } else { %>
-                      <a href="<%= action.href %>" class="inline-flex min-h-[48px] items-center justify-center rounded-2xl px-4 py-3 text-sm font-black shadow-sm transition-colors <%= quickActionClasses(action) %>"><%= action.label %></a>
-                    <% } %>
-                  <% }) %>
-                </div>
-              <% } %>
-
-              <% if (!quickActionHasSameHref) { %>
-                <a href="<%= actionHref %>" class="inline-flex min-h-[48px] items-center justify-center rounded-2xl <%= quickActions.length ? 'border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800' : 'bg-violet-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-violet-500/20 hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-400' %> transition-colors"><%= actionLabel %></a>
-              <% } %>
-
-              <% if (item.isCard && item.card_monthly_settlement_id && !actionIsSettlementHref) { %>
-                <a href="/shared-debts?settlement=<%= item.card_monthly_settlement_id %>" class="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Abrir carteira do mês</a>
-              <% } %>
-              <% if (actionHref !== requestHref) { %>
-                <a href="<%= requestHref %>" class="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Ver no acerto</a>
-              <% } %>
-            </div>
-          </div>
-        </article>
-      <% }) %>
-    </div>
-  <% } %>
+    <% if (!safeIncomingItems.length) { %>
+      <div class="op-empty-state op-empty-state--compact m-5">
+        <div class="op-empty-state__icon">🤝</div>
+        <div class="op-empty-state__title">Nada recebido dessa amizade em <%= monthText %></div>
+        <p class="op-empty-state__text">Quando <%= contactPerson.name || 'essa pessoa' %> dividir uma compra com você, ela aparece aqui.</p>
+      </div>
+    <% } else { %>
+      <div class="op-table-shell overflow-x-auto xl:overflow-x-visible">
+        <table class="op-month-ledger-table block md:table min-w-full md:min-w-[80rem] xl:min-w-0 xl:w-full text-sm text-left">
+          <thead class="hidden md:table-header-group bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-[11px] tracking-wider">
+            <tr>
+              <th class="px-4 py-4">Data</th>
+              <th class="px-4 py-4">Descrição</th>
+              <th class="px-4 py-4 text-center">Origem</th>
+              <th class="px-4 py-4 text-right">Minha parte</th>
+              <th class="px-4 py-4 text-center">Status</th>
+              <th class="px-4 py-4 pr-8 text-left">Ação</th>
+            </tr>
+          </thead>
+          <tbody class="block md:table-row-group">
+            <% safeIncomingItems.forEach((item) => { %>
+              <% const itemHref = item.actionMeta && item.actionMeta.href ? item.actionMeta.href : `/shared-debts?request=${item.id}`; %>
+              <tr class="op-month-row op-month-ledger-row block md:table-row mb-3 rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-800/60 md:mb-0 md:rounded-none md:border-b md:border-x-0 md:border-t-0 md:border-slate-100 md:bg-transparent md:p-0 md:shadow-none dark:md:border-slate-700 align-middle space-y-1 md:space-y-0">
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap"><div class="flex items-center justify-between gap-3 md:block"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Data</span><span><%= incomingDateLabel(item) %></span></div></td>
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-black text-slate-900 dark:text-white"><div class="flex items-start justify-between gap-3 md:block"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 pt-0.5">Descrição</span><span class="text-right md:text-left break-words"><%= item.description_snapshot || 'Compra compartilhada' %></span></div></td>
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-center"><div class="flex items-center justify-between gap-3 md:block"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Origem</span><span class="<%= chipClass('border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200') %>"><%= incomingCardLabel(item) %></span></div></td>
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-right font-black text-slate-900 dark:text-white"><div class="flex items-center justify-between gap-3 md:block"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Minha parte</span><span><%= formatBRLFromCents(incomingValue(item)) %></span></div></td>
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-center"><div class="flex items-center justify-between gap-3 md:justify-center"><span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400">Status</span><span class="<%= chipClass(item.statusMeta && item.statusMeta.classes) %>"><%= item.statusMeta && item.statusMeta.label ? item.statusMeta.label : 'Em aberto' %></span></div></td>
+                <td class="block md:table-cell px-0 md:px-4 pr-0 md:pr-8 py-3 md:py-3"><a href="<%= itemHref %>" class="inline-flex min-h-[44px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 md:w-auto">Ver acerto</a></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </details>
 </div>
 
 <%- include("partials/footer") %>

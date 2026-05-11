@@ -1406,6 +1406,7 @@ function runMigrations() {
   CREATE INDEX IF NOT EXISTS idx_txn_purchase_category ON transactions(user_id, purchase_category_id);
   CREATE INDEX IF NOT EXISTS idx_alloc_user ON allocations(user_id);
   CREATE INDEX IF NOT EXISTS idx_alloc_txn ON allocations(transaction_id);
+  CREATE INDEX IF NOT EXISTS idx_alloc_user_person_txn ON allocations(user_id, person_id, transaction_id);
   CREATE INDEX IF NOT EXISTS idx_statements_user ON card_statements(user_id);
   CREATE INDEX IF NOT EXISTS idx_payments_user ON person_payments(user_id);
   CREATE INDEX IF NOT EXISTS idx_txn_recurring_rule ON transactions(recurring_rule_id);

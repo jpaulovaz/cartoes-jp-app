@@ -13103,7 +13103,641 @@ function sortPeopleComprasComigoHistoryItems(items = []) {
   return (Array.isArray(items) ? items.slice() : []).sort((a, b) => historyStamp(b) - historyStamp(a));
 }
 
-function buildPeopleComprasComigoLedger(userId, personId, month, year) {
+
+function getPeopleComprasComigoDraftQueueItem(userId, transactionId, personId) {
+  const safeUserId = Number(userId || 0);
+  const safeTxnId = Number(transactionId || 0);
+  const safePersonId = Number(personId || 0);
+  if (!safeUserId || !safeTxnId || !safePersonId) return null;
+
+  return db.prepare(`
+    SELECT
+      i.*,
+      q.id AS queue_id,
+      q.source_due_month AS queue_month,
+      q.source_due_year AS queue_year,
+      q.updated_at AS queue_updated_at,
+      q.total_cents AS queue_total_cents,
+      q.item_count AS queue_item_count
+    FROM shared_debt_send_queue_items i
+    JOIN shared_debt_send_queues q ON q.id = i.queue_id
+    WHERE q.requester_user_id = ?
+      AND q.request_kind = 'card'
+      AND q.status = 'draft'
+      AND i.cancelled_at IS NULL
+      AND i.source_transaction_id = ?
+      AND i.source_person_id = ?
+    ORDER BY q.updated_at DESC, i.updated_at DESC, i.id DESC
+    LIMIT 1
+  `).get(safeUserId, safeTxnId, safePersonId) || null;
+}
+
+function getPeopleComprasComigoLatestRequestForOutgoing(userId, transactionId, personId) {
+  const safeUserId = Number(userId || 0);
+  const safeTxnId = Number(transactionId || 0);
+  const safePersonId = Number(personId || 0);
+  if (!safeUserId || !safeTxnId || !safePersonId) return null;
+
+  return db.prepare(`
+    SELECT *
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND request_kind = 'card'
+      AND source_transaction_id = ?
+      AND source_person_id = ?
+    ORDER BY id DESC
+    LIMIT 1
+  `).get(safeUserId, safeTxnId, safePersonId) || null;
+}
+
+function isPeopleComprasComigoBlockingRequestStatus(status) {
+  const normalized = String(status || '').trim().toLowerCase();
+  return ['pending', 'accepted', 'settled', 'rejected_by_receiver', 'rejection_contested_by_sender'].includes(normalized);
+}
+
+function getPeopleComprasComigoOutgoingStatusMeta({ draftItem = null, request = null, eligible = true, reason = '' } = {}) {
+  if (!eligible) {
+    return {
+      key: 'not_eligible',
+      label: reason || 'Não elegível',
+      classes: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300',
+      canCreateCharge: false,
+      actionHref: null
+    };
+  }
+
+  if (draftItem) {
+    return {
+      key: 'draft',
+      label: 'Na caixa de saída',
+      classes: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200',
+      canCreateCharge: false,
+      actionHref: '/shared-debts#draft-queues'
+    };
+  }
+
+  const status = String(request?.status || '').trim().toLowerCase();
+  if (!status) {
+    return {
+      key: 'none',
+      label: 'Sem cobrança',
+      classes: 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200',
+      canCreateCharge: true,
+      actionHref: null
+    };
+  }
+
+  if (status === 'pending') {
+    return {
+      key: 'pending',
+      label: 'Aguardando aceite',
+      classes: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200',
+      canCreateCharge: false,
+      actionHref: `/shared-debts?request=${Number(request.id || 0)}`
+    };
+  }
+
+  if (status === 'accepted') {
+    return {
+      key: request?.payment_marked_at ? 'accepted_paid_marked' : 'accepted',
+      label: request?.payment_marked_at ? 'Em confirmação' : 'Aceita',
+      classes: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
+      canCreateCharge: false,
+      actionHref: Number(request.card_monthly_settlement_id || 0) ? `/shared-debts?settlement=${Number(request.card_monthly_settlement_id || 0)}` : `/shared-debts?request=${Number(request.id || 0)}`
+    };
+  }
+
+  if (status === 'settled') {
+    return {
+      key: 'settled',
+      label: 'Concluída',
+      classes: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
+      canCreateCharge: false,
+      actionHref: `/shared-debts?request=${Number(request.id || 0)}`
+    };
+  }
+
+  if (status === 'rejected_by_receiver') {
+    return {
+      key: 'rejected_by_receiver',
+      label: 'Recusada',
+      classes: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-900/20 dark:text-rose-200',
+      canCreateCharge: false,
+      actionHref: `/shared-debts?request=${Number(request.id || 0)}`
+    };
+  }
+
+  if (status === 'rejection_contested_by_sender') {
+    return {
+      key: 'rejection_contested_by_sender',
+      label: 'Em revisão',
+      classes: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200',
+      canCreateCharge: false,
+      actionHref: `/shared-debts?request=${Number(request.id || 0)}`
+    };
+  }
+
+  if (canRecreateSharedDebtDraftFromHistory(request)) {
+    return {
+      key: status || 'recreatable',
+      label: 'Pode recriar',
+      classes: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200',
+      canCreateCharge: true,
+      actionHref: request?.id ? `/shared-debts?request=${Number(request.id || 0)}` : null
+    };
+  }
+
+  return {
+    key: status || 'blocked',
+    label: 'Já tratada',
+    classes: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300',
+    canCreateCharge: false,
+    actionHref: request?.id ? `/shared-debts?request=${Number(request.id || 0)}` : null
+  };
+}
+
+function getPeopleComprasComigoPersonAllocationForTxn(userId, transactionId, personId) {
+  const safeUserId = Number(userId || 0);
+  const safeTxnId = Number(transactionId || 0);
+  const safePersonId = Number(personId || 0);
+  if (!safeUserId || !safeTxnId || !safePersonId) return null;
+
+  return db.prepare(`
+    SELECT
+      a.id AS allocation_id,
+      a.person_id,
+      a.share_cents,
+      p.name AS person_name,
+      p.email AS person_email,
+      pal.linked_user_id AS linked_user_id,
+      remote_u.name AS receiver_user_name,
+      remote_u.email AS receiver_user_email
+    FROM allocations a
+    JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id
+    LEFT JOIN person_app_links pal ON pal.owner_user_id = p.user_id AND pal.person_id = p.id
+    LEFT JOIN users remote_u ON remote_u.id = pal.linked_user_id AND COALESCE(remote_u.status, 'active') <> 'deleted'
+    WHERE a.user_id = ?
+      AND a.transaction_id = ?
+      AND a.person_id = ?
+      AND COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
+    LIMIT 1
+  `).get(safeUserId, safeTxnId, safePersonId) || null;
+}
+
+function hasActiveDraftOrRequestForPersonTransaction(userId, transactionId, personId) {
+  if (getPeopleComprasComigoDraftQueueItem(userId, transactionId, personId)) return true;
+  const latestRequest = getPeopleComprasComigoLatestRequestForOutgoing(userId, transactionId, personId);
+  return !!(latestRequest && isPeopleComprasComigoBlockingRequestStatus(latestRequest.status));
+}
+
+function getPeopleComprasComigoFutureChargePreview(userId, txnRow, personId) {
+  const safeUserId = Number(userId || 0);
+  const safePersonId = Number(personId || 0);
+  if (!safeUserId || !safePersonId || !txnRow) {
+    return { count: 0, totalCents: 0, txnIds: [] };
+  }
+
+  const currentTxnId = Number(txnRow.id || 0);
+  const rows = getInstallmentScopeRows(safeUserId, txnRow, 'future')
+    .filter((row) => Number(row?.id || 0) && Number(row.id || 0) !== currentTxnId);
+
+  const eligibleRows = [];
+  rows.forEach((row) => {
+    const allocation = getPeopleComprasComigoPersonAllocationForTxn(safeUserId, row.id, safePersonId);
+    if (!allocation || Number(allocation.share_cents || 0) <= 0) return;
+    if (hasActiveDraftOrRequestForPersonTransaction(safeUserId, row.id, safePersonId)) return;
+    eligibleRows.push({ row, allocation });
+  });
+
+  return {
+    count: eligibleRows.length,
+    totalCents: eligibleRows.reduce((sum, item) => sum + Math.max(0, Number(item.allocation?.share_cents || 0)), 0),
+    txnIds: eligibleRows.map((item) => Number(item.row.id || 0)).filter(Boolean)
+  };
+}
+
+function filterPeopleComprasComigoIncomingItems(items, filters = {}) {
+  const normalizedFilters = {
+    q: normalizeSharedDebtSearchTerm(filters?.q || ''),
+    status: String(filters?.status || 'all').trim().toLowerCase()
+  };
+
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    if (normalizedFilters.q) {
+      const haystack = normalizeSharedDebtSearchTerm([
+        item.description_snapshot,
+        item.card_name_snapshot,
+        item.requester_name,
+        item.statusMeta?.label,
+        item.displayMonthLabel,
+        item.batch_display_label
+      ].join(' '));
+      if (!haystack.includes(normalizedFilters.q)) return false;
+    }
+
+    if (normalizedFilters.status !== 'all') {
+      const key = String(item?.statusMeta?.key || item?.status || '').trim().toLowerCase();
+      if (normalizedFilters.status === 'chargeable' || normalizedFilters.status === 'draft') return false;
+      if (normalizedFilters.status === 'sent' && !['pending', 'accepted', 'accepted_partial', 'accepted_paid_marked', 'rejected_by_receiver', 'rejection_contested_by_sender'].includes(key)) return false;
+      else if (normalizedFilters.status === 'done' && key !== 'settled') return false;
+      else if (!['sent', 'done'].includes(normalizedFilters.status) && key !== normalizedFilters.status) return false;
+    }
+
+    return true;
+  });
+}
+
+function buildPeopleComprasComigoOutgoingRows(userId, personId, month, year, filters = {}) {
+  const safeUserId = Number(userId || 0);
+  const safePersonId = Number(personId || 0);
+  const safeMonth = Number(month || 0);
+  const safeYear = Number(year || 0);
+  if (!safeUserId || !safePersonId || !safeMonth || !safeYear) return [];
+
+  const contact = getPeopleComprasComigoContact(safeUserId, safePersonId);
+  const hasFriendship = !!(contact?.friendship_active && Number(contact?.linked_user_id || 0));
+  const rawRows = db.prepare(`
+    SELECT
+      a.id AS allocation_id,
+      a.share_cents,
+      a.person_id,
+      t.id,
+      t.txn_date,
+      t.description,
+      t.amount_cents,
+      t.card_number,
+      t.card_id,
+      t.parent_txn_id,
+      t.recurring_rule_id,
+      COALESCE(t.due_month, i.month) AS month,
+      COALESCE(t.due_year, i.year) AS year,
+      c.name AS card_name,
+      pc.name AS category_name
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    LEFT JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
+    LEFT JOIN purchase_categories pc ON pc.id = t.purchase_category_id AND pc.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND a.person_id = ?
+      AND COALESCE(t.due_month, i.month) = ?
+      AND COALESCE(t.due_year, i.year) = ?
+    ORDER BY COALESCE(t.txn_date, t.created_at, '') ASC, t.id ASC
+  `).all(safeUserId, safePersonId, safeMonth, safeYear);
+
+  const normalizedFilters = {
+    q: normalizeSharedDebtSearchTerm(filters?.q || ''),
+    status: String(filters?.status || 'all').trim().toLowerCase()
+  };
+
+  return rawRows.map((row) => {
+    const draftItem = getPeopleComprasComigoDraftQueueItem(safeUserId, row.id, safePersonId);
+    const latestRequest = getPeopleComprasComigoLatestRequestForOutgoing(safeUserId, row.id, safePersonId);
+    const shareCents = Number(row.share_cents || 0);
+    let eligible = true;
+    let reason = '';
+    if (shareCents <= 0) {
+      eligible = false;
+      reason = 'Valor não elegível';
+    } else if (!hasFriendship) {
+      eligible = false;
+      reason = 'Amizade inativa';
+    }
+
+    const statusMeta = getPeopleComprasComigoOutgoingStatusMeta({ draftItem, request: latestRequest, eligible, reason });
+    const txnScopeRow = {
+      id: Number(row.id || 0),
+      import_id: null,
+      description: row.description,
+      amount_cents: Number(row.amount_cents || 0),
+      card_id: Number(row.card_id || 0) || null,
+      recurring_rule_id: Number(row.recurring_rule_id || 0) || null,
+      parent_txn_id: Number(row.parent_txn_id || 0) || null,
+      purchase_category_id: null,
+      month: Number(row.month || 0),
+      year: Number(row.year || 0)
+    };
+    const futurePreview = getPeopleComprasComigoFutureChargePreview(safeUserId, txnScopeRow, safePersonId);
+    const dateLabel = row.txn_date ? formatDateBR(row.txn_date) : monthLabel(row.month, row.year);
+    const cardNumberLabel = String(row.card_number || '').trim() || '-';
+
+    return {
+      id: `txn-person:${Number(row.id || 0)}:${safePersonId}`,
+      transactionId: Number(row.id || 0),
+      allocationId: Number(row.allocation_id || 0),
+      personId: safePersonId,
+      receiverUserId: Number(contact?.linked_user_id || 0) || null,
+      date: row.txn_date || null,
+      dateLabel,
+      month: Number(row.month || 0),
+      year: Number(row.year || 0),
+      description: row.description || 'Compra sem descrição',
+      categoryName: row.category_name || 'Sem categoria',
+      cardName: row.card_name || 'Cartão',
+      cardNumberLabel,
+      shareCents,
+      shareFormatted: formatBRLFromCents(shareCents),
+      statusMeta,
+      canCreateCharge: !!statusMeta.canCreateCharge,
+      hasFutureEligibleInstallments: Number(futurePreview.count || 0) > 0,
+      futureEligibleCount: Number(futurePreview.count || 0),
+      futureEligibleTotalCents: Number(futurePreview.totalCents || 0),
+      futureEligibleTotalFormatted: formatBRLFromCents(Number(futurePreview.totalCents || 0)),
+      actionHref: statusMeta.actionHref,
+      latestRequestId: Number(latestRequest?.id || 0) || null,
+      draftQueueId: Number(draftItem?.queue_id || 0) || null,
+      sortStamp: row.txn_date ? dayjs(row.txn_date).valueOf() : ((Number(row.year || 0) * 100 + Number(row.month || 0)) || 0)
+    };
+  }).filter((row) => {
+    if (normalizedFilters.q) {
+      const haystack = normalizeSharedDebtSearchTerm([
+        row.description,
+        row.categoryName,
+        row.cardName,
+        row.statusMeta?.label
+      ].join(' '));
+      if (!haystack.includes(normalizedFilters.q)) return false;
+    }
+
+    if (normalizedFilters.status !== 'all') {
+      const key = String(row.statusMeta?.key || '').trim();
+      if (normalizedFilters.status === 'chargeable' && !row.canCreateCharge) return false;
+      else if (normalizedFilters.status === 'draft' && key !== 'draft') return false;
+      else if (normalizedFilters.status === 'sent' && !['pending', 'accepted', 'accepted_paid_marked', 'rejected_by_receiver', 'rejection_contested_by_sender'].includes(key)) return false;
+      else if (normalizedFilters.status === 'done' && key !== 'settled') return false;
+      else if (!['chargeable', 'draft', 'sent', 'done'].includes(normalizedFilters.status) && key !== normalizedFilters.status) return false;
+    }
+
+    return true;
+  });
+}
+
+function getPeopleComprasComigoOutgoingPeriodRanks(userId, personId) {
+  const safeUserId = Number(userId || 0);
+  const safePersonId = Number(personId || 0);
+  if (!safeUserId || !safePersonId) return [];
+
+  return db.prepare(`
+    SELECT DISTINCT COALESCE(t.due_year, i.year) AS year, COALESCE(t.due_month, i.month) AS month
+    FROM allocations a
+    JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+    LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+    WHERE a.user_id = ?
+      AND a.person_id = ?
+      AND COALESCE(t.due_month, i.month) IS NOT NULL
+      AND COALESCE(t.due_year, i.year) IS NOT NULL
+  `).all(safeUserId, safePersonId)
+    .map((row) => (Number(row.year || 0) * 100) + Number(row.month || 0))
+    .filter(Boolean);
+}
+
+function buildSharedDebtDraftQueueActionsForPersonTransaction(userId, personId, txnId) {
+  const cleanTxnId = Number(txnId || 0);
+  const cleanPersonId = Number(personId || 0);
+  if (!cleanTxnId || !cleanPersonId) return { actions: [], reason: 'INVALID_INPUT' };
+
+  const txn = getSharedDebtCardTransactionSnapshot(userId, cleanTxnId);
+  if (!txn) return { actions: [], reason: 'TXN_NOT_FOUND' };
+  if (!Number(txn.due_month || 0) || !Number(txn.due_year || 0)) return { actions: [], reason: 'NO_PERIOD' };
+
+  const allocationRow = getSharedDebtEligibleAllocationRows(userId, cleanTxnId)
+    .find((row) => Number(row.person_id || 0) === cleanPersonId && Number(row.share_cents || 0) > 0);
+  if (!allocationRow) return { actions: [], reason: 'NOT_ELIGIBLE' };
+
+  if (getPeopleComprasComigoDraftQueueItem(userId, cleanTxnId, cleanPersonId)) {
+    return { actions: [], reason: 'DRAFT_EXISTS' };
+  }
+
+  const latestRequest = getPeopleComprasComigoLatestRequestForOutgoing(userId, cleanTxnId, cleanPersonId);
+  if (latestRequest && !canRecreateSharedDebtDraftFromHistory(latestRequest)) {
+    return { actions: [], reason: 'REQUEST_EXISTS' };
+  }
+
+  const receiverUserId = Number(allocationRow.receiver_user_id || 0);
+  if (!receiverUserId) return { actions: [], reason: 'NO_RECEIVER' };
+
+  return {
+    reason: 'OK',
+    actions: [{
+      requesterUserId: Number(userId || 0),
+      receiverUserId,
+      sourceTransactionId: cleanTxnId,
+      sourceAllocationId: Number(allocationRow.allocation_id || 0) || null,
+      sourcePersonId: cleanPersonId,
+      sourceDueMonth: Number(txn.due_month || 0),
+      sourceDueYear: Number(txn.due_year || 0),
+      sourceTxnDateSnapshot: txn.txn_date || null,
+      cardId: Number(txn.card_id || 0) || null,
+      cardNameSnapshot: txn.card_name || null,
+      descriptionSnapshot: txn.description,
+      amountCents: Number(allocationRow.share_cents || 0),
+      receiverEmailSnapshot: normalizeEmail(allocationRow.person_email || allocationRow.receiver_user_email),
+      receiverNameSnapshot: allocationRow.person_name || allocationRow.receiver_user_name || null,
+      actionKind: 'create',
+      targetRequestId: null,
+      baselineStatusSnapshot: null
+    }]
+  };
+}
+
+function persistSharedDebtDraftQueueActions(userId, actions = []) {
+  const cleanActions = (Array.isArray(actions) ? actions : [])
+    .filter((action) => Number(action?.requesterUserId || 0) === Number(userId || 0))
+    .filter((action) => Number(action?.receiverUserId || 0) && Number(action?.sourceTransactionId || 0) && Number(action?.sourcePersonId || 0))
+    .filter((action) => Number(action?.sourceDueMonth || 0) && Number(action?.sourceDueYear || 0));
+
+  if (!cleanActions.length) {
+    return { queueCount: 0, itemCount: 0, totalCents: 0, createCount: 0, skippedCount: 0 };
+  }
+
+  const queueGroups = new Map();
+  cleanActions.forEach((action) => {
+    const key = `${Number(action.receiverUserId || 0)}:${Number(action.sourceDueYear || 0)}:${Number(action.sourceDueMonth || 0)}`;
+    if (!queueGroups.has(key)) {
+      queueGroups.set(key, {
+        receiverUserId: Number(action.receiverUserId || 0),
+        month: Number(action.sourceDueMonth || 0),
+        year: Number(action.sourceDueYear || 0),
+        receiverEmailSnapshot: action.receiverEmailSnapshot || null,
+        receiverNameSnapshot: action.receiverNameSnapshot || null,
+        items: []
+      });
+    }
+
+    const group = queueGroups.get(key);
+    if (!group.receiverEmailSnapshot && action.receiverEmailSnapshot) group.receiverEmailSnapshot = action.receiverEmailSnapshot;
+    if (!group.receiverNameSnapshot && action.receiverNameSnapshot) group.receiverNameSnapshot = action.receiverNameSnapshot;
+    group.items.push(action);
+  });
+
+  const upsertItem = db.prepare(`
+    INSERT INTO shared_debt_send_queue_items (
+      queue_id, requester_user_id, receiver_user_id, source_transaction_id,
+      source_allocation_id, source_person_id, source_due_month, source_due_year,
+      source_txn_date_snapshot, card_id, card_name_snapshot, description_snapshot,
+      amount_cents, receiver_email_snapshot, receiver_name_snapshot, action_kind,
+      target_request_id, baseline_status_snapshot, sent_request_id, cancelled_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+    ON CONFLICT(queue_id, source_transaction_id, source_person_id) DO UPDATE SET
+      requester_user_id = excluded.requester_user_id,
+      receiver_user_id = excluded.receiver_user_id,
+      source_allocation_id = excluded.source_allocation_id,
+      source_due_month = excluded.source_due_month,
+      source_due_year = excluded.source_due_year,
+      source_txn_date_snapshot = excluded.source_txn_date_snapshot,
+      card_id = excluded.card_id,
+      card_name_snapshot = excluded.card_name_snapshot,
+      description_snapshot = excluded.description_snapshot,
+      amount_cents = excluded.amount_cents,
+      receiver_email_snapshot = excluded.receiver_email_snapshot,
+      receiver_name_snapshot = excluded.receiver_name_snapshot,
+      action_kind = excluded.action_kind,
+      target_request_id = excluded.target_request_id,
+      baseline_status_snapshot = excluded.baseline_status_snapshot,
+      sent_request_id = NULL,
+      cancelled_at = NULL,
+      updated_at = excluded.updated_at
+  `);
+
+  const touchedQueueIds = new Set();
+  db.transaction(() => {
+    queueGroups.forEach((group) => {
+      const existingQueue = getSharedDebtDraftQueueRow({
+        requesterUserId: userId,
+        receiverUserId: group.receiverUserId,
+        month: group.month,
+        year: group.year,
+        requestKind: 'card'
+      });
+
+      const queueId = Number(existingQueue?.id || 0) || createSharedDebtSendQueue({
+        requesterUserId: userId,
+        receiverUserId: group.receiverUserId,
+        month: group.month,
+        year: group.year,
+        requestKind: 'card',
+        receiverEmailSnapshot: group.receiverEmailSnapshot,
+        receiverNameSnapshot: group.receiverNameSnapshot
+      });
+
+      touchedQueueIds.add(queueId);
+      group.items.forEach((item) => {
+        const now = nowIso();
+        upsertItem.run(
+          queueId,
+          item.requesterUserId,
+          item.receiverUserId,
+          item.sourceTransactionId,
+          item.sourceAllocationId,
+          item.sourcePersonId,
+          item.sourceDueMonth,
+          item.sourceDueYear,
+          item.sourceTxnDateSnapshot,
+          item.cardId,
+          item.cardNameSnapshot,
+          item.descriptionSnapshot,
+          Math.max(0, Number(item.amountCents || 0)),
+          item.receiverEmailSnapshot,
+          item.receiverNameSnapshot,
+          normalizeSharedDebtQueueActionKind(item.actionKind),
+          item.targetRequestId || null,
+          item.baselineStatusSnapshot || null,
+          now,
+          now
+        );
+      });
+      refreshSharedDebtSendQueue(queueId);
+    });
+  })();
+
+  return cleanActions.reduce((acc, action) => {
+    acc.itemCount += 1;
+    acc.totalCents += Math.max(0, Number(action.amountCents || 0));
+    acc.createCount += normalizeSharedDebtQueueActionKind(action.actionKind) === 'create' ? 1 : 0;
+    return acc;
+  }, { queueCount: touchedQueueIds.size, itemCount: 0, totalCents: 0, createCount: 0, skippedCount: 0 });
+}
+
+function queueSharedDebtDraftsForPersonAllocations(userId, personId, txnIds = []) {
+  const safeUserId = Number(userId || 0);
+  const safePersonId = Number(personId || 0);
+  const cleanTxnIds = Array.from(new Set((txnIds || []).map(Number).filter(Boolean)));
+  if (!safeUserId || !safePersonId || !cleanTxnIds.length) {
+    return { queueCount: 0, itemCount: 0, totalCents: 0, createCount: 0, skippedCount: 0, reasons: {} };
+  }
+
+  const actions = [];
+  const reasons = {};
+  cleanTxnIds.forEach((txnId) => {
+    const result = buildSharedDebtDraftQueueActionsForPersonTransaction(safeUserId, safePersonId, txnId);
+    if (result.actions && result.actions.length) {
+      result.actions.forEach((action) => actions.push(action));
+      return;
+    }
+    const reason = result.reason || 'SKIPPED';
+    reasons[reason] = Number(reasons[reason] || 0) + 1;
+  });
+
+  const summary = persistSharedDebtDraftQueueActions(safeUserId, actions);
+  return {
+    ...summary,
+    skippedCount: cleanTxnIds.length - Number(summary.itemCount || 0),
+    reasons
+  };
+}
+
+function createPeopleComprasComigoChargeDraft(userId, personId, transactionId, options = {}) {
+  const safeUserId = Number(userId || 0);
+  const safePersonId = Number(personId || 0);
+  const safeTxnId = Number(transactionId || 0);
+  if (!safeUserId || !safePersonId || !safeTxnId) {
+    const error = new Error('Não consegui identificar essa compra para criar a cobrança.');
+    error.code = 'INVALID_INPUT';
+    throw error;
+  }
+
+  const contact = getPeopleComprasComigoContact(safeUserId, safePersonId);
+  if (!contact) {
+    const error = new Error('Não encontrei esse contato por aqui.');
+    error.code = 'PERSON_NOT_FOUND';
+    throw error;
+  }
+
+  if (!contact.friendship_active || !Number(contact.linked_user_id || 0)) {
+    const error = new Error('Essa pessoa precisa estar conectada a você no app antes de receber uma cobrança.');
+    error.code = 'FRIENDSHIP_REQUIRED';
+    throw error;
+  }
+
+  const txnRow = getTransactionScopeRow(safeUserId, safeTxnId);
+  if (!txnRow) {
+    const error = new Error('Não encontrei esse lançamento na sua conta.');
+    error.code = 'TXN_NOT_FOUND';
+    throw error;
+  }
+
+  const expectedMonth = Number(options?.month || 0);
+  const expectedYear = Number(options?.year || 0);
+  if (expectedMonth && expectedYear && (Number(txnRow.month || 0) !== expectedMonth || Number(txnRow.year || 0) !== expectedYear)) {
+    const error = new Error('Essa compra pertence a outra competência. Abra o mês correto para criar a cobrança.');
+    error.code = 'TXN_PERIOD_MISMATCH';
+    throw error;
+  }
+
+  const scope = String(options?.scope || 'single').trim().toLowerCase() === 'future' ? 'future' : 'single';
+  const scopeRows = scope === 'future' ? collectScopedTxnRows(safeUserId, [txnRow], 'future') : [txnRow];
+  const txnIds = scopeRows.map((row) => Number(row?.id || 0)).filter(Boolean);
+  const summary = queueSharedDebtDraftsForPersonAllocations(safeUserId, safePersonId, txnIds);
+
+  return {
+    contact,
+    scope,
+    requestedCount: txnIds.length,
+    ...summary
+  };
+}
+
+function buildPeopleComprasComigoLedger(userId, personId, month, year, options = {}) {
   const safeUserId = Number(userId || 0);
   const safeMonth = Number(month || 0);
   const safeYear = Number(year || 0);
@@ -13129,37 +13763,56 @@ function buildPeopleComprasComigoLedger(userId, personId, month, year) {
       && !archivedRequestIds.has(requestId);
   });
 
-  const openItems = sortPeopleComprasComigoOpenItems(
-    received
-      .filter((item) => isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, safeMonth, safeYear, 'open'))
-      .map((item) => decoratePeopleComprasComigoItem(item, { contactName: contact.name || contact.linked_user_name || 'essa amizade', viewedMonth: safeMonth, viewedYear: safeYear }))
+  const incomingOpenItems = filterPeopleComprasComigoIncomingItems(
+    sortPeopleComprasComigoOpenItems(
+      received
+        .filter((item) => isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, safeMonth, safeYear, 'open'))
+        .map((item) => decoratePeopleComprasComigoItem(item, { contactName: contact.name || contact.linked_user_name || 'essa amizade', viewedMonth: safeMonth, viewedYear: safeYear }))
+    ),
+    options?.filters || {}
   );
 
-  const historyItems = sortPeopleComprasComigoHistoryItems(
-    received
-      .filter((item) => isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, safeMonth, safeYear, 'history'))
-      .map((item) => decoratePeopleComprasComigoItem(item, { contactName: contact.name || contact.linked_user_name || 'essa amizade', viewedMonth: safeMonth, viewedYear: safeYear }))
+  const incomingHistoryItems = filterPeopleComprasComigoIncomingItems(
+    sortPeopleComprasComigoHistoryItems(
+      received
+        .filter((item) => isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, safeMonth, safeYear, 'history'))
+        .map((item) => decoratePeopleComprasComigoItem(item, { contactName: contact.name || contact.linked_user_name || 'essa amizade', viewedMonth: safeMonth, viewedYear: safeYear }))
+    ),
+    options?.filters || {}
   );
 
-  const availableRanks = getPeopleComprasComigoRelevantMonthRanks(received);
+  const outgoingRows = buildPeopleComprasComigoOutgoingRows(safeUserId, Number(contact.id || personId || 0), safeMonth, safeYear, options?.filters || {});
+  const outgoingPeriodRanks = getPeopleComprasComigoOutgoingPeriodRanks(safeUserId, Number(contact.id || personId || 0));
+  const availableRanks = Array.from(new Set([
+    ...getPeopleComprasComigoRelevantMonthRanks(received),
+    ...outgoingPeriodRanks
+  ])).filter(Boolean).sort((a, b) => b - a);
+
   const summary = {
-    openAmountCents: openItems.reduce((sum, item) => {
+    incomingOpenAmountCents: incomingOpenItems.reduce((sum, item) => {
       if (!['pending', 'accepted', 'accepted_partial', 'accepted_paid_marked'].includes(String(item?.statusMeta?.key || ''))) return sum;
       const amount = String(item?.statusMeta?.key || '') === 'accepted_paid_marked'
         ? Math.max(0, Number(item?.total_cents || 0))
         : Math.max(0, Number(item?.amount_pending_cents || item?.total_cents || 0));
       return sum + amount;
     }, 0),
-    needsMyActionCount: openItems.filter((item) => item?.myActionNeeded).length,
-    waitingOtherSideCount: openItems.filter((item) => item?.waitingOtherSide).length,
-    openCount: openItems.length,
-    historyCount: historyItems.length
+    outgoingMarkedCents: outgoingRows.reduce((sum, item) => sum + Math.max(0, Number(item.shareCents || 0)), 0),
+    chargeableCount: outgoingRows.filter((item) => item.canCreateCharge).length,
+    outgoingDraftCount: outgoingRows.filter((item) => String(item?.statusMeta?.key || '') === 'draft').length,
+    incomingNeedsMyActionCount: incomingOpenItems.filter((item) => item?.myActionNeeded).length,
+    incomingWaitingOtherSideCount: incomingOpenItems.filter((item) => item?.waitingOtherSide).length,
+    incomingOpenCount: incomingOpenItems.length,
+    incomingHistoryCount: incomingHistoryItems.length,
+    outgoingCount: outgoingRows.length
   };
 
   return {
     contact,
-    openItems,
-    historyItems,
+    outgoingRows,
+    incomingOpenItems,
+    incomingHistoryItems,
+    openItems: incomingOpenItems,
+    historyItems: incomingHistoryItems,
     availableRanks,
     summary
   };
@@ -13175,13 +13828,16 @@ function getPreferredPeopleComprasComigoMonth(userId, personId) {
     return Number(item?.requester_user_id || 0) === Number(contact.linked_user_id || 0)
       && !archivedRequestIds.has(requestId);
   });
+  const outgoingRanks = getPeopleComprasComigoOutgoingPeriodRanks(userId, personId);
 
   const today = dayjs();
   const current = { year: today.year(), month: today.month() + 1 };
-  const currentHasItems = received.some((item) => isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, current.month, current.year, 'open') || isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, current.month, current.year, 'history'));
-  if (currentHasItems || !received.length) return current;
+  const currentRank = (current.year * 100) + current.month;
+  const currentHasItems = received.some((item) => isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, current.month, current.year, 'open') || isSharedDebtRequestVisibleInPeopleComprasComigoMonth(item, current.month, current.year, 'history'))
+    || outgoingRanks.includes(currentRank);
+  if (currentHasItems || (!received.length && !outgoingRanks.length)) return current;
 
-  const ranks = getPeopleComprasComigoRelevantMonthRanks(received);
+  const ranks = Array.from(new Set([...getPeopleComprasComigoRelevantMonthRanks(received), ...outgoingRanks])).filter(Boolean).sort((a, b) => b - a);
   const preferred = rankToMonthYear(ranks[0]);
   return preferred || current;
 }
@@ -13713,6 +14369,7 @@ registerPeopleRoutes(app, {
   looksLikeGoogleDefaultAvatar,
   getPreferredPeopleComprasComigoMonth,
   buildPeopleComprasComigoLedger,
+  createPeopleComprasComigoChargeDraft,
   parseMonthYear,
   shiftMonth,
   dayjs,

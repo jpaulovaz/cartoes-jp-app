@@ -4339,3 +4339,87 @@
   schedule();
   touchServer(true);
 })();
+
+(function () {
+  function onReady(callback) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', callback, { once: true });
+      return;
+    }
+    callback();
+  }
+
+  function findChargeForm(button) {
+    const selector = button?.dataset?.comprasComigoForm || '';
+    const bySelector = selector ? document.querySelector(selector) : null;
+    if (bySelector instanceof HTMLFormElement) return bySelector;
+    const closest = button.closest('form[data-compras-comigo-create-form]');
+    return closest instanceof HTMLFormElement ? closest : null;
+  }
+
+  function submitChargeForm(form, scope, button) {
+    const scopeInput = form.querySelector('[data-compras-comigo-scope-input]');
+    if (scopeInput instanceof HTMLInputElement) {
+      scopeInput.value = scope === 'future' ? 'future' : 'single';
+    }
+    if (button instanceof HTMLButtonElement) {
+      button.disabled = true;
+      button.classList.add('opacity-70', 'cursor-wait');
+    }
+    if (typeof form.requestSubmit === 'function') {
+      form.requestSubmit();
+      return;
+    }
+    form.submit();
+  }
+
+  function buildFutureInstallmentsMessage(button) {
+    const count = Number(button.dataset.futureCount || 0);
+    const total = String(button.dataset.futureTotal || '').trim();
+    const description = String(button.dataset.description || '').trim();
+    const countText = count === 1 ? '1 parcela futura elegível' : `${count} parcelas futuras elegíveis`;
+    return [
+      description ? `Compra: ${description}` : '',
+      `Encontramos ${countText}${total ? `, somando ${total}` : ''}.`,
+      'A cobrança criada agora vai para a caixa de saída, para você revisar e enviar quando quiser.'
+    ].filter(Boolean).join('\n\n');
+  }
+
+  function bindComprasComigoChargeButtons() {
+    document.querySelectorAll('[data-compras-comigo-create-charge]').forEach((button) => {
+      if (!(button instanceof HTMLButtonElement) || button.dataset.comprasComigoBound === '1') return;
+      button.dataset.comprasComigoBound = '1';
+      button.addEventListener('click', async () => {
+        const form = findChargeForm(button);
+        if (!(form instanceof HTMLFormElement)) return;
+
+        const hasFuture = String(button.dataset.hasFuture || '') === '1';
+        if (!hasFuture) {
+          submitChargeForm(form, 'single', button);
+          return;
+        }
+
+        let choice = null;
+        if (typeof window.showActionDialog === 'function') {
+          choice = await window.showActionDialog({
+            title: 'Criar cobrança para parcelas?',
+            message: buildFutureInstallmentsMessage(button),
+            options: [
+              { label: 'Somente esta parcela', value: 'single', tone: 'secondary' },
+              { label: 'Esta e próximas parcelas', value: 'future', tone: 'primary' },
+              { label: 'Cancelar', value: null, tone: 'cancel' }
+            ],
+            dismissValue: null
+          });
+        } else {
+          choice = window.confirm('Incluir também as próximas parcelas elegíveis na caixa de saída?') ? 'future' : 'single';
+        }
+
+        if (!choice) return;
+        submitChargeForm(form, choice, button);
+      });
+    });
+  }
+
+  onReady(bindComprasComigoChargeButtons);
+})();

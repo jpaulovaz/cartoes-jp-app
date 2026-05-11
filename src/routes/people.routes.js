@@ -12,6 +12,7 @@ function createPeopleRouter(deps = {}) {
   router.get('/settings', deps.ensureAuthenticated, controller.renderSettingsPage);
   router.get('/people/:id/compras-comigo', deps.ensureAuthenticated, controller.redirectComprasComigo);
   router.get('/people/:id/compras-comigo/:year/:month', deps.ensureAuthenticated, controller.renderComprasComigoPage);
+  router.post('/people/:id/compras-comigo/:year/:month/create-charge', deps.ensureAuthenticated, controller.createComprasComigoChargeDraft);
   router.post('/people/notification-preferences', deps.ensureAuthenticated, controller.saveNotificationPreferences);
   router.post('/people', deps.ensureAuthenticated, controller.savePerson);
   router.post('/people/:id/send-friend-request', deps.ensureAuthenticated, controller.sendFriendRequest);

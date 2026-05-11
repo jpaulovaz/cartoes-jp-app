@@ -1307,22 +1307,6 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
           <% }) %>
         </div>
       <% } else { %>
-                  <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">Esse rascunho ficou sem itens visíveis por aqui. Se ele estiver estranho, pode descartar sem dó.</div>
-                <% } %>
-              </div>
-
-              <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap op-shared-action-row">
-                <form method="post" action="/shared-debts/draft-queues/<%= queue.id %>/send" class="sm:flex-1">
-                  <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Enviar agora</button>
-                </form>
-                <form method="post" action="/shared-debts/draft-queues/<%= queue.id %>/discard" class="sm:flex-1">
-                  <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Descartar rascunho</button>
-                </form>
-              </div>
-            </article>
-          <% }) %>
-        </div>
-      <% } else { %>
         <div class="mt-5 rounded-[26px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm font-medium leading-6 text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
           Nada guardado na caixa de saída por enquanto. Quando você salvar uma divisão, ela aparece aqui antes de ser enviada.
         </div>
@@ -2478,6 +2462,8 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
             </details>
           <% }) %>
         </div>
+            </details>
+          <% }) %>
       <% } %>
       </div>
     </details>
@@ -2986,9 +2972,6 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                       <% }) %>
                     </div>
                   </details>
-                <% }) %>
-              </div>
-            </details>
           <% } %>
 
           <% sentGroups.forEach((group, groupIndex) => {

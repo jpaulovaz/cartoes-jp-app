@@ -1838,6 +1838,12 @@
       syncRemainingCell(root.querySelector(`[data-summary-card-remaining][data-card-id="${cardId}"]`), remainingCents);
     });
 
+    root.querySelectorAll('[data-summary-card-shared-row]').forEach((row) => {
+      totalTotal += Number(row.getAttribute('data-total-cents') || 0);
+      paidTotal += Number(row.getAttribute('data-paid-cents') || 0);
+      remainingTotal += Number(row.getAttribute('data-remaining-cents') || 0);
+    });
+
     const paidCell = root.querySelector('[data-summary-cards-total-paid]');
     const remainingCell = root.querySelector('[data-summary-cards-total-remaining]');
     if (paidCell) paidCell.textContent = formatCents(paidTotal);

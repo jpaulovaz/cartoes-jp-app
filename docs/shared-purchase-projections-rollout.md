@@ -1,6 +1,6 @@
 # AcerttaPay 4.2 - QA e rollout das compras compartilhadas aceitas
 
-Este checklist fecha a linha 4.2.x da funcionalidade de compras compartilhadas aceitas em modo somente leitura.
+Este checklist fecha a linha 4.2.x da funcionalidade de compras compartilhadas aceitas em modo somente leitura e cobre o refinamento UX 4.2.11, que integrou compras próprias e compartilhadas no mesmo fluxo visual.
 
 ## Regra de ouro
 
@@ -29,9 +29,20 @@ Com a flag desligada, as telas voltam a ignorar as projecoes sem apagar dados, m
 3. Rodar `npm run verify:shared-projections`.
 4. Confirmar que `ENABLE_SHARED_PURCHASE_PROJECTIONS=1` esta definido no ambiente.
 5. Abrir `/shared-debts` e validar que a rota continua funcionando como Central de Acertos.
-6. Abrir `/month`, `/geral`, `/summary`, `/detalhamento` e `/analytics` com um usuario que recebeu uma cobranca aceita.
+6. Abrir `/month`, `/geral`, `/summary`, `/detalhamento` e `/analytics` com um usuario que recebeu uma cobranca aceita, confirmando a integração visual sem cards redundantes.
 7. Exportar CSV pela interface e conferir a linha com `Origem = Compra compartilhada recebida` e `Somente leitura = Sim`.
 8. Enviar resumo mensal por e-mail em ambiente com SMTP configurado e conferir o bloco de compartilhadas e o CSV anexo.
+
+
+## Checklist UX 4.2.11
+
+- `/month` deve exibir compras próprias e compartilhadas na mesma lista de **Lançamentos do período**.
+- Linhas compartilhadas precisam ter chip `Compartilhada`, `data-shared-request-id` e `data-readonly-row="1"`.
+- Linhas compartilhadas não podem ter `data-txn-id`, não entram em seleção em lote e não abrem ações de editar, excluir, dividir, mover ou categorizar.
+- `/summary` não deve exibir painel separado de compartilhadas; elas aparecem no quadro **Cartões do período** como linhas de consulta, agrupadas por amigo/cartão/vencimento.
+- `/detalhamento` deve mostrar **Pontos de atenção** antes do bloco de compras recebidas de amigos.
+- `/geral` deve usar apenas resumo compacto, sem preview grande nem KPIs repetidos de compartilhadas.
+- Textos visíveis devem usar linguagem simples, como `Compartilhada`, `Recebida de amigos` e `Central de Acertos`; evitar termos internos como `projeção` e `modo somente leitura` na interface principal.
 
 ## Cenários obrigatórios de homologação
 

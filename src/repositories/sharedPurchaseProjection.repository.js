@@ -19,6 +19,7 @@ function createSharedPurchaseProjectionRepository(deps = {}) {
         r.source_transaction_id,
         r.source_allocation_id,
         r.source_person_id,
+        r.card_id AS shared_card_id,
         r.source_due_month,
         r.source_due_year,
         r.source_txn_date_snapshot,
@@ -41,11 +42,16 @@ function createSharedPurchaseProjectionRepository(deps = {}) {
         requester.email AS requester_email,
         receiver.name AS receiver_name,
         receiver.email AS receiver_email,
+        pc.id AS category_id,
         pc.name AS category_name,
         t.txn_date AS source_txn_date,
         t.description AS source_description,
         t.amount_cents AS source_amount_cents,
-        c.name AS source_card_name
+        t.card_number AS source_card_number,
+        c.name AS source_card_name,
+        c.due_day AS source_card_due_day,
+        c.close_day AS source_card_close_day,
+        c.holiday_scope AS source_card_holiday_scope
       FROM shared_debt_requests r
       LEFT JOIN transactions t
         ON t.id = r.source_transaction_id

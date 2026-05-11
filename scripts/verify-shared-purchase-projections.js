@@ -116,15 +116,19 @@ function runSharedPurchaseProjectionVerification(options = {}) {
     ensure(runtime.includes('mergeSharedProjectionCategories'), 'analytics precisa mesclar categorias de compartilhadas');
     ensure(runtime.includes('mergeSharedProjectionTrend'), 'analytics precisa mesclar tendencia de compartilhadas');
     ensure(runtime.includes('sharedPurchaseProjectionDetailSummary'), 'detalhamento precisa receber resumo de compartilhadas');
+    ensure(runtime.includes('buildMonthLedgerRows'), 'server.runtime.js precisa montar ledger unificado para /month');
+    ensure(runtime.includes('filterSharedPurchaseProjectionRowsForMonth'), 'server.runtime.js precisa aplicar filtros tambem nas linhas compartilhadas');
   }
 
   if (exists('views/month.ejs')) {
     const monthView = read('views/month.ejs');
-    ensure(monthView.includes('id="shared-purchases"'), 'month.ejs precisa ter ancora para o bloco de compartilhadas');
-    ensure(monthView.includes('sharedReceivedProjections'), 'month.ejs precisa renderizar projecoes separadas das transactions');
-    ensure(monthView.includes('Compras compartilhadas aceitas'), 'month.ejs precisa nomear o bloco de compartilhadas');
-    ensure(monthView.includes('Somente leitura'), 'month.ejs precisa sinalizar somente leitura');
-    ensure(monthView.includes('Ver na Central'), 'month.ejs precisa direcionar acoes para a Central de Acertos');
+    ensure(monthView.includes('monthLedgerRowsForView'), 'month.ejs precisa renderizar lista unificada de lancamentos');
+    ensure(monthView.includes("ledgerRow.kind === 'shared'"), 'month.ejs precisa tratar linhas compartilhadas dentro do ledger unico');
+    ensure(monthView.includes('data-shared-request-id'), 'month.ejs precisa identificar linhas compartilhadas sem usar ID de transaction');
+    ensure(monthView.includes('data-readonly-row="1"'), 'month.ejs precisa marcar linhas compartilhadas como consulta');
+    ensure(monthView.includes('Compartilhada'), 'month.ejs precisa sinalizar origem compartilhada com chip');
+    ensure(monthView.includes('Ver acerto'), 'month.ejs precisa direcionar acoes para a Central de Acertos');
+    ensure(monthView.includes("[data-month-row][data-txn-id]"), 'JS embutido de month.ejs deve selecionar apenas transactions reais para acoes/bulk');
     ensure(!monthView.includes('data-txn-id="<%= item.id'), 'month.ejs nao deve tratar linha compartilhada como transaction real');
     ensure(!monthView.includes('name="transaction_id" value="<%= item.id'), 'month.ejs nao deve enviar ID virtual para endpoint de transacao');
   }
@@ -132,25 +136,33 @@ function runSharedPurchaseProjectionVerification(options = {}) {
   if (exists('views/home.ejs')) {
     ensureIncludes('views/home.ejs', [
       'shared_total_cents',
-      'Compartilhadas aceitas',
+      'recebidos de amigos',
       'hasSharedProjections'
     ]);
+    ensure(!read('views/home.ejs').includes('radarSharedPreviewRows'), 'home.ejs nao deve voltar a mostrar preview grande de compartilhadas na sanfona');
   }
 
   if (exists('views/summary.ejs')) {
     ensureIncludes('views/summary.ejs', [
       'sharedPurchaseProjectionSummary',
-      'Compras compartilhadas aceitas',
-      'Central de Acertos'
+      'sharedSummaryCardRows',
+      'data-summary-card-shared-row',
+      'Compartilhada',
+      'Ver acerto'
     ]);
+    ensure(!read('views/summary.ejs').includes('data-summary-shared-purchases-panel'), 'summary.ejs nao deve manter painel separado de compartilhadas');
   }
 
   if (exists('views/detalhamento.ejs')) {
+    const detailView = read('views/detalhamento.ejs');
     ensureIncludes('views/detalhamento.ejs', [
       'sharedPurchaseProjectionDetailSummary',
-      'Compras compartilhadas aceitas',
-      'Somente leitura'
+      'Recebidas de amigos',
+      'Compras compartilhadas no mês'
     ]);
+    const alertsIndex = detailView.indexOf('Pontos de atenção');
+    const sharedIndex = detailView.indexOf('Compras compartilhadas no mês');
+    ensure(alertsIndex === -1 || sharedIndex === -1 || alertsIndex < sharedIndex, 'detalhamento.ejs deve mostrar Pontos de atencao antes do bloco de compartilhadas');
   }
 
   if (exists('views/analytics.ejs')) {

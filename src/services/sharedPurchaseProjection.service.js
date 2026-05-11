@@ -1,4 +1,5 @@
 const { createSharedPurchaseProjectionRepository } = require('../repositories/sharedPurchaseProjection.repository');
+const { computeDueDate } = require('../dueDate');
 
 const SHARED_PURCHASE_PROJECTION_FEATURE_FLAG = 'ENABLE_SHARED_PURCHASE_PROJECTIONS';
 const SHARED_PURCHASE_PROJECTION_KIND = 'shared_received';
@@ -35,6 +36,29 @@ function buildVirtualCardName(row = {}) {
   const requesterName = sanitizeText(row.requester_name, row.requester_email || 'amigo');
   const cardName = sanitizeText(row.card_name_snapshot || row.source_card_name, 'cartão compartilhado');
   return `Compartilhado por ${requesterName} - ${cardName}`;
+}
+
+function buildSharedCardLabel(row = {}) {
+  const requesterName = sanitizeText(row.requester_name, row.requester_email || 'Amigo');
+  const cardName = sanitizeText(row.card_name_snapshot || row.source_card_name, 'cartão');
+  return `${requesterName} - ${cardName}`;
+}
+
+function buildInheritedDueDate(row = {}, period = {}) {
+  const dueDay = Number(row.source_card_due_day || 0);
+  const month = Number(period.month || 0);
+  const year = Number(period.year || 0);
+  if (!dueDay || !month || !year) return null;
+  try {
+    return computeDueDate({
+      year,
+      month,
+      dueDay,
+      holidayScope: row.source_card_holiday_scope || 'BR'
+    });
+  } catch (error) {
+    return null;
+  }
 }
 
 function buildActionsUrl(row = {}) {
@@ -83,7 +107,10 @@ function normalizeProjectionRow(row = {}, reportedCents = 0) {
     rawStatus: row.status
   });
   const requesterName = sanitizeText(row.requester_name, row.requester_email || 'Amigo');
+  const cardName = sanitizeText(row.card_name_snapshot || row.source_card_name, 'Cartão compartilhado');
   const categoryName = sanitizeText(row.category_name, 'Compartilhadas');
+  const inheritedDueDate = buildInheritedDueDate(row, period);
+  const sharedCardLabel = buildSharedCardLabel(row);
 
   return {
     id: `${SHARED_PURCHASE_PROJECTION_ID_PREFIX}${requestId}`,
@@ -111,10 +138,24 @@ function normalizeProjectionRow(row = {}, reportedCents = 0) {
     statusTone: statusMeta.statusTone,
     rawStatus: row.status || '',
     virtualCardName: buildVirtualCardName(row),
-    cardName: sanitizeText(row.card_name_snapshot || row.source_card_name, 'Cartão compartilhado'),
+    sharedCardLabel,
+    ledgerCardName: sharedCardLabel,
+    summaryCardName: sharedCardLabel,
+    cardName,
+    cardNumber: sanitizeText(row.source_card_number, ''),
+    sourceCardId: Number(row.shared_card_id || 0) || null,
+    sourceCardDueDay: Number(row.source_card_due_day || 0) || null,
+    sourceCardCloseDay: Number(row.source_card_close_day || 0) || null,
+    sourceCardHolidayScope: row.source_card_holiday_scope || 'BR',
+    inheritedDueDate,
+    inheritedDueLabel: inheritedDueDate || '',
+    categoryId: Number(row.category_id || 0) || null,
+    purchaseCategoryId: Number(row.category_id || 0) || null,
     categoryName,
     purchaseCategoryName: categoryName,
     originLabel: 'Compra compartilhada recebida',
+    badgeLabel: 'Compartilhada',
+    readOnlyLabel: 'Consulta',
     requesterName,
     requesterEmail: row.requester_email || '',
     receiverName: sanitizeText(row.receiver_name, row.receiver_email || ''),

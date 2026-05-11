@@ -14999,6 +14999,160 @@ function resolveChronologicalDirection(order, fallback = "recent") {
   return normalized === "oldest" ? "asc" : "desc";
 }
 
+function normalizeLedgerFilterText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function ledgerTextIncludes(value, query) {
+  const q = normalizeLedgerFilterText(query);
+  if (!q) return true;
+  return normalizeLedgerFilterText(value).includes(q);
+}
+
+function getMoneyFilterDigits(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function filterSharedPurchaseProjectionRowsForMonth(rows = [], filters = {}) {
+  const items = Array.isArray(rows) ? rows.slice() : [];
+  const amountDigits = getMoneyFilterDigits(filters.f_amount);
+  const allocatedFilter = String(filters.f_allocated || '').trim().toLowerCase();
+  const categoryFilter = String(filters.f_category || '').trim();
+  const personFilter = String(filters.f_person || '').trim();
+
+  return items.filter((item) => {
+    if (!item || item.kind !== 'shared_received') return false;
+
+    if (filters.f_desc) {
+      const haystack = [
+        item.description,
+        item.requesterName,
+        item.categoryName,
+        item.cardName,
+        item.sharedCardLabel,
+        item.virtualCardName,
+        item.statusLabel
+      ].filter(Boolean).join(' ');
+      if (!ledgerTextIncludes(haystack, filters.f_desc)) return false;
+    }
+
+    if (filters.f_card) {
+      const haystack = [item.sharedCardLabel, item.virtualCardName, item.cardName, item.requesterName].filter(Boolean).join(' ');
+      if (!ledgerTextIncludes(haystack, filters.f_card)) return false;
+    }
+
+    if (filters.f_number) {
+      if (!ledgerTextIncludes(item.cardNumber || '', filters.f_number)) return false;
+    }
+
+    if (filters.f_date) {
+      if (!String(item.date || '').includes(String(filters.f_date || '').trim())) return false;
+    }
+
+    if (amountDigits) {
+      const amountText = String(Math.abs(Number(item.amountCents || 0)));
+      if (!amountText.includes(amountDigits)) return false;
+    }
+
+    if (categoryFilter) {
+      if (categoryFilter === 'none') {
+        if (Number(item.purchaseCategoryId || item.categoryId || 0) > 0) return false;
+      } else {
+        const categoryId = Number(categoryFilter || 0);
+        if (categoryId > 0 && Number(item.purchaseCategoryId || item.categoryId || 0) !== categoryId) return false;
+      }
+    }
+
+    if (allocatedFilter) {
+      if (allocatedFilter.startsWith('n')) return false;
+      if (!allocatedFilter.startsWith('s')) return false;
+    }
+
+    // O filtro de pessoa atual usa IDs locais do cadastro do recebedor. Como a compra compartilhada vem de outro usuário,
+    // mantemos a busca por remetente no campo de texto e evitamos cruzar IDs de bases diferentes.
+    if (personFilter) return false;
+
+    return true;
+  });
+}
+
+function buildMonthLedgerRows(txns = [], sharedRows = [], { sort = 'date', dir = 'asc' } = {}) {
+  const ownRows = (Array.isArray(txns) ? txns : []).map((txn) => ({
+    kind: 'own',
+    id: `txn:${Number(txn?.id || 0)}`,
+    isShared: false,
+    isReadOnly: false,
+    txn,
+    date: txn?.txn_date || '',
+    description: txn?.description || '',
+    cardName: txn?.card_name || '',
+    cardNumber: txn?.card_number || '',
+    amountCents: Number(txn?.amount_cents || 0),
+    categoryName: txn?.purchase_category_name || '',
+    categoryId: Number(txn?.purchase_category_id || 0) || null,
+    allocatedScore: Number(txn?.alloc_count || 0) > 0 ? 1 : 0,
+    stableId: Number(txn?.id || 0)
+  }));
+
+  const projectedRows = (Array.isArray(sharedRows) ? sharedRows : []).map((item) => ({
+    kind: 'shared',
+    id: item?.id || `shared-request:${Number(item?.sourceRequestId || 0)}`,
+    isShared: true,
+    isReadOnly: true,
+    shared: item,
+    date: item?.date || '',
+    description: item?.description || '',
+    cardName: item?.sharedCardLabel || item?.ledgerCardName || item?.virtualCardName || item?.cardName || '',
+    cardNumber: item?.cardNumber || '',
+    amountCents: Number(item?.amountCents || 0),
+    categoryName: item?.categoryName || item?.purchaseCategoryName || 'Compartilhadas',
+    categoryId: Number(item?.purchaseCategoryId || item?.categoryId || 0) || null,
+    allocatedScore: 1,
+    stableId: Number(item?.sourceRequestId || 0)
+  }));
+
+  const rows = ownRows.concat(projectedRows);
+  const normalizedSort = ['date', 'amount', 'card', 'desc', 'allocated', 'number'].includes(String(sort || '')) ? String(sort) : 'date';
+  const direction = String(dir || 'asc').toLowerCase() === 'desc' ? -1 : 1;
+  const collator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
+
+  function valueFor(row) {
+    switch (normalizedSort) {
+      case 'amount': return Number(row.amountCents || 0);
+      case 'card': return String(row.cardName || '');
+      case 'desc': return String(row.description || '');
+      case 'allocated': return Number(row.allocatedScore || 0);
+      case 'number': return String(row.cardNumber || '');
+      case 'date':
+      default: return String(row.date || '');
+    }
+  }
+
+  rows.sort((a, b) => {
+    const av = valueFor(a);
+    const bv = valueFor(b);
+    let cmp = 0;
+    if (typeof av === 'number' && typeof bv === 'number') {
+      cmp = av === bv ? 0 : (av < bv ? -1 : 1);
+    } else {
+      cmp = collator.compare(String(av || ''), String(bv || ''));
+    }
+    if (cmp !== 0) return cmp * direction;
+
+    const dateCmp = collator.compare(String(a.date || ''), String(b.date || ''));
+    if (dateCmp !== 0) return dateCmp * (normalizedSort === 'date' ? direction : -1);
+    if (a.kind !== b.kind) return a.kind === 'own' ? -1 : 1;
+    return (Number(a.stableId || 0) - Number(b.stableId || 0)) * (normalizedSort === 'date' ? direction : 1);
+  });
+
+  return rows;
+}
+
 
 // Rota Principal do detalhamento
 function buildOverduePaymentAlertDescription(items) {
@@ -16210,14 +16364,17 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
 
   const draftQueueSummaryForMonth = getSharedDebtSendQueueDraftSummary(userId, { month, year });
   const sharedPurchaseProjectionSummary = getAcceptedSharedPurchaseProjectionSummarySafe(userId, month, year);
-  const sharedPurchaseProjections = Array.isArray(sharedPurchaseProjectionSummary.rows)
+  const sharedPurchaseProjectionAllRows = Array.isArray(sharedPurchaseProjectionSummary.rows)
     ? sharedPurchaseProjectionSummary.rows
     : [];
+  const sharedPurchaseProjections = filterSharedPurchaseProjectionRowsForMonth(sharedPurchaseProjectionAllRows, filters);
+  const monthLedgerRows = buildMonthLedgerRows(txns, sharedPurchaseProjections, { sort, dir });
 
   return safeRenderView(res, "month", {
     month,
     year,
     txns,
+    monthLedgerRows,
     sharedPurchaseProjections,
     sharedPurchaseProjectionSummary,
     people,

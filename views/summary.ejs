@@ -63,6 +63,55 @@
         acc.remaining_cents += Number(cp?.total_cents || 0) - Number(cp?.paid_cents || 0);
         return acc;
       }, { total_cents: 0, paid_cents: 0, remaining_cents: 0 });
+      const sharedSummaryCardMap = new Map();
+      sharedProjectionRowsForSummary.forEach((item) => {
+        const requesterName = String(item?.requesterName || 'Amigo').trim() || 'Amigo';
+        const cardLabel = String(item?.cardName || item?.cardNameSnapshot || 'Cartão compartilhado').trim() || 'Cartão compartilhado';
+        const rowLabel = String(item?.summaryCardName || item?.sharedCardLabel || `${requesterName} - ${cardLabel}`).trim();
+        const dueDate = String(item?.inheritedDueDate || '').trim();
+        const periodMonth = Number(item?.month || month || 0);
+        const periodYear = Number(item?.year || year || 0);
+        const periodLabel = periodMonth && periodYear ? `${String(periodMonth).padStart(2, '0')}/${periodYear}` : `${String(month).padStart(2, '0')}/${year}`;
+        const dueLabel = dueDate ? formatDateBR(dueDate) : periodLabel;
+        const key = `${rowLabel}|${dueDate || periodLabel}`;
+        const current = sharedSummaryCardMap.get(key) || {
+          label: rowLabel,
+          requesterName,
+          cardLabel,
+          dueDate,
+          dueLabel,
+          dueSource: dueDate ? 'Vencimento do cartão de origem' : 'Competência da cobrança',
+          actionsUrl: item?.actionsUrl || '/shared-debts#received',
+          total_cents: 0,
+          paid_cents: 0,
+          pending_cents: 0,
+          remaining_cents: 0,
+          count: 0
+        };
+        current.total_cents += Number(item?.amountCents || 0);
+        current.paid_cents += Number(item?.confirmedPaidCents || 0);
+        current.pending_cents += Number(item?.pendingReportedCents || 0);
+        current.remaining_cents += Number(item?.openCents ?? item?.remainingCents ?? Math.max(0, Number(item?.amountCents || 0) - Number(item?.confirmedPaidCents || 0)));
+        current.count += 1;
+        sharedSummaryCardMap.set(key, current);
+      });
+      const sharedSummaryCardRows = Array.from(sharedSummaryCardMap.values()).sort((a, b) => {
+        const dueCompare = String(a.dueDate || a.dueLabel || '').localeCompare(String(b.dueDate || b.dueLabel || ''), 'pt-BR', { sensitivity: 'base' });
+        if (dueCompare !== 0) return dueCompare;
+        return String(a.label || '').localeCompare(String(b.label || ''), 'pt-BR', { sensitivity: 'base' });
+      });
+      const sharedSummaryCardTotals = sharedSummaryCardRows.reduce((acc, row) => {
+        acc.total_cents += Number(row.total_cents || 0);
+        acc.paid_cents += Number(row.paid_cents || 0);
+        acc.pending_cents += Number(row.pending_cents || 0);
+        acc.remaining_cents += Number(row.remaining_cents || 0);
+        return acc;
+      }, { total_cents: 0, paid_cents: 0, pending_cents: 0, remaining_cents: 0 });
+      const cardsPanelTotalsWithShared = {
+        total_cents: cardsPanelTotals.total_cents + sharedSummaryCardTotals.total_cents,
+        paid_cents: cardsPanelTotals.paid_cents + sharedSummaryCardTotals.paid_cents,
+        remaining_cents: cardsPanelTotals.remaining_cents + sharedSummaryCardTotals.remaining_cents
+      };
       const personPanelTotals = visiblePersonPanel.reduce((acc, pp) => {
         const totalCents = Number(pp?.total_cents || 0);
         const paidCents = Number(pp?.paid_cents || 0);
@@ -75,11 +124,11 @@
         return acc;
       }, { total_cents: 0, paid_cents: 0, manual_paid_cents: 0, auto_paid_cents: 0, remaining_cents: 0, overpaid_cents: 0 });
       const hasAutoPersonPayments = visiblePersonPanel.some((pp) => Number(pp?.auto_paid_cents || 0) > 0);
-      const summaryCardsRemainingCents = visibleCardsPanel.reduce((acc, cp) => acc + Math.max(0, Number(cp?.total_cents || 0) - Number(cp?.paid_cents || 0)), 0);
+      const summaryCardsRemainingCents = cardsPanelTotalsWithShared.remaining_cents;
       const summaryPeopleRemainingCents = visiblePersonPanel.reduce((acc, pp) => acc + Math.max(0, Number(pp?.total_cents || 0) - Number(pp?.paid_cents || 0)), 0);
       const nextDueCard = visibleCardsPanel[0] || null;
       const nextDueLabel = nextDueCard?.due_date ? new Date(`${nextDueCard.due_date}T12:00:00`).toLocaleDateString('pt-BR') : 'Sem data salva';
-      const cashReserveCents = personPanelTotals.paid_cents - cardsPanelTotals.paid_cents;
+      const cashReserveCents = personPanelTotals.paid_cents - cardsPanelTotalsWithShared.paid_cents;
       const cashReserveToneClass = cashReserveCents > 0
         ? 'text-emerald-600 dark:text-emerald-300'
         : (cashReserveCents < 0 ? 'text-red-500 dark:text-red-300' : 'text-slate-700 dark:text-slate-200');
@@ -136,92 +185,7 @@
       </div>
     <% } %>
 
-    <% if (hasSharedAcceptedPurchases) { %>
-      <section class="mb-8 overflow-hidden rounded-3xl border border-violet-200 bg-violet-50/70 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/20" data-summary-shared-purchases-panel>
-        <div class="flex flex-col gap-4 border-b border-violet-200/80 bg-white/80 px-5 py-5 dark:border-violet-900/50 dark:bg-slate-900/60 lg:flex-row lg:items-start lg:justify-between">
-          <div class="min-w-0">
-            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-200">Compras compartilhadas aceitas</div>
-            <h2 class="mt-1 text-xl font-extrabold text-slate-900 dark:text-white">Também entrou no seu mês</h2>
-            <p class="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
-              Essas compras foram aceitas por você e entram no seu retrato financeiro. Elas continuam em modo somente leitura: quem manda nos detalhes é a Central de Acertos.
-            </p>
-          </div>
-          <a href="/shared-debts#received" class="inline-flex items-center justify-center rounded-2xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600">
-            Ir para Central de Acertos
-          </a>
-        </div>
 
-        <div class="p-5">
-          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <article class="rounded-2xl border border-violet-200 bg-white px-4 py-4 dark:border-violet-900/60 dark:bg-slate-900/70">
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-200">Total aceito</div>
-              <div class="op-summary-kpi-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(sharedProjectionTotalCents) %></div>
-              <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400"><%= sharedProjectionSummary.count %> compra<%= Number(sharedProjectionSummary.count || 0) === 1 ? '' : 's' %> compartilhada<%= Number(sharedProjectionSummary.count || 0) === 1 ? '' : 's' %>.</p>
-            </article>
-            <article class="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-4 dark:border-emerald-800 dark:bg-emerald-950/20">
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Pago confirmado</div>
-              <div class="op-summary-kpi-value mt-2 text-emerald-700 dark:text-emerald-200"><%= formatBRLFromCents(sharedProjectionConfirmedCents) %></div>
-              <p class="op-summary-kpi-note mt-2 text-emerald-900/80 dark:text-emerald-100/80">Confirmado por quem enviou.</p>
-            </article>
-            <article class="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-4 dark:border-amber-800 dark:bg-amber-950/20">
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-200">Aguardando confirmação</div>
-              <div class="op-summary-kpi-value mt-2 text-amber-700 dark:text-amber-200"><%= formatBRLFromCents(sharedProjectionPendingCents) %></div>
-              <p class="op-summary-kpi-note mt-2 text-amber-900/80 dark:text-amber-100/80">Avisado, mas ainda em conferência.</p>
-            </article>
-            <article class="rounded-2xl border border-rose-200 bg-rose-50/80 px-4 py-4 dark:border-rose-800 dark:bg-rose-950/20">
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-rose-700 dark:text-rose-200">Ainda falta</div>
-              <div class="op-summary-kpi-value mt-2 text-rose-700 dark:text-rose-200"><%= formatBRLFromCents(sharedProjectionOpenCents) %></div>
-              <p class="op-summary-kpi-note mt-2 text-rose-900/80 dark:text-rose-100/80">Fora do que já foi informado.</p>
-            </article>
-          </div>
-
-          <div class="mt-4 rounded-2xl border border-violet-200 bg-white px-4 py-4 dark:border-violet-900/60 dark:bg-slate-900/70">
-            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Retrato pessoal do mês</div>
-                <p class="mt-1 text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">
-                  Suas compras no cartão somam <strong><%= formatBRLFromCents(personalOwnShareCents) %></strong>. Com as compartilhadas aceitas, seu mês fica em <strong><%= formatBRLFromCents(personalWithSharedCents) %></strong>.
-                </p>
-              </div>
-              <span class="inline-flex w-fit items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] text-violet-700 dark:border-violet-800 dark:bg-violet-900/30 dark:text-violet-100">Somente leitura</span>
-            </div>
-          </div>
-
-          <% if (sharedProjectionTopRows.length > 0) { %>
-            <div class="mt-5">
-              <h3 class="text-sm font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Top compartilhadas do mês</h3>
-              <div class="mt-3 grid gap-3 lg:grid-cols-2">
-                <% sharedProjectionTopRows.forEach((item) => { %>
-                  <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
-                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div class="min-w-0">
-                        <div class="truncate text-base font-extrabold text-slate-900 dark:text-white"><%= item.description %></div>
-                        <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                          Enviado por <span class="font-black text-slate-700 dark:text-slate-200"><%= item.requesterName %></span> · <%= item.categoryName || 'Compartilhadas' %>
-                        </div>
-                        <div class="mt-2 flex flex-wrap gap-2">
-                          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-300"><%= item.virtualCardName %></span>
-                          <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold <%= sharedStatusToneClass(item.statusTone) %>"><%= item.statusLabel %></span>
-                        </div>
-                      </div>
-                      <div class="text-left sm:text-right">
-                        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Sua parte</div>
-                        <div class="mt-1 whitespace-nowrap text-lg font-black text-violet-700 dark:text-violet-200"><%= formatBRLFromCents(item.amountCents) %></div>
-                      </div>
-                    </div>
-                    <div class="mt-3 grid gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 sm:grid-cols-3">
-                      <span>Confirmado: <strong class="text-emerald-700 dark:text-emerald-200"><%= formatBRLFromCents(item.confirmedPaidCents) %></strong></span>
-                      <span>Em conferência: <strong class="text-amber-700 dark:text-amber-200"><%= formatBRLFromCents(item.pendingReportedCents) %></strong></span>
-                      <span>Falta: <strong class="text-rose-700 dark:text-rose-200"><%= formatBRLFromCents(item.openCents) %></strong></span>
-                    </div>
-                  </article>
-                <% }) %>
-              </div>
-            </div>
-          <% } %>
-        </div>
-      </section>
-    <% } %>
 
     <% if (unassigned && unassigned.length> 0) { %>
       <div class="mb-8 p-5 rounded-2xl bg-amber-50 border border-amber-200 shadow-sm flex items-start gap-4">
@@ -264,7 +228,7 @@
             </h2>
             <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
               <div data-summary-cards-panel>
-                <% if (visibleCardsPanel.length > 0) { %>
+                <% if (visibleCardsPanel.length > 0 || sharedSummaryCardRows.length > 0) { %>
                 <div class="overflow-x-auto op-summary-scroll-shell">
                   <table class="w-full text-sm text-left">
                     <thead
@@ -308,21 +272,50 @@
                           </td>
                         </tr>
                         <% }) %>
+                      <% sharedSummaryCardRows.forEach((row) => { %>
+                        <tr class="hover:bg-violet-50/60 dark:hover:bg-violet-900/20 transition-colors" data-summary-card-shared-row data-total-cents="<%= row.total_cents || 0 %>" data-paid-cents="<%= row.paid_cents || 0 %>" data-remaining-cents="<%= row.remaining_cents || 0 %>">
+                          <td class="px-3 py-3 font-bold text-slate-800 dark:text-white">
+                            <div class="flex flex-col gap-1.5">
+                              <span class="break-words"><%= row.label %></span>
+                              <span class="inline-flex w-fit items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-black text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Compartilhada</span>
+                              <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Recebida de <%= row.requesterName %> · <a href="<%= row.actionsUrl %>" class="font-black text-violet-700 hover:underline dark:text-violet-200">Ver acerto</a></span>
+                            </div>
+                          </td>
+                          <td class="px-2 py-3 text-center align-top">
+                            <div class="text-sm font-black text-slate-700 dark:text-slate-200"><%= row.dueLabel %></div>
+                            <div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500"><%= row.dueSource %></div>
+                          </td>
+                          <td class="px-3 py-3 text-right font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap op-summary-amount-cell">
+                            <%= formatBRLFromCents(row.total_cents) %>
+                          </td>
+                          <td class="px-3 py-3 text-right align-top">
+                            <div class="font-black text-emerald-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(row.paid_cents) %></div>
+                            <% if (row.pending_cents > 0) { %>
+                              <div class="mt-1 text-[11px] font-bold text-amber-600 dark:text-amber-300">Em conferência: <%= formatBRLFromCents(row.pending_cents) %></div>
+                            <% } else { %>
+                              <div class="mt-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500">Pago confirmado</div>
+                            <% } %>
+                          </td>
+                          <td class="px-3 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= row.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>">
+                            <%= formatBRLFromCents(row.remaining_cents) %>
+                          </td>
+                        </tr>
+                      <% }) %>
                     </tbody>
                     <tfoot class="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
                       <tr>
                         <td class="px-3 py-3 font-black text-slate-800 dark:text-white">Total</td>
                         <td class="px-2 py-3 text-center text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Ordenado por vencimento</td>
-                        <td class="px-3 py-3 text-right font-black text-slate-900 dark:text-white whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(cardsPanelTotals.total_cents) %></td>
-                        <td data-summary-cards-total-paid class="px-3 py-3 text-right font-black text-emerald-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(cardsPanelTotals.paid_cents) %></td>
-                        <td data-summary-cards-total-remaining class="px-3 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= cardsPanelTotals.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(cardsPanelTotals.remaining_cents) %></td>
+                        <td class="px-3 py-3 text-right font-black text-slate-900 dark:text-white whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(cardsPanelTotalsWithShared.total_cents) %></td>
+                        <td data-summary-cards-total-paid class="px-3 py-3 text-right font-black text-emerald-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(cardsPanelTotalsWithShared.paid_cents) %></td>
+                        <td data-summary-cards-total-remaining class="px-3 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= cardsPanelTotalsWithShared.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(cardsPanelTotalsWithShared.remaining_cents) %></td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
                 <% } else { %>
                   <div class="px-5 py-8 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">
-                    Nenhum cartão entrou no fechamento deste mês, então este quadro permanece vazio.
+                    Nenhum cartão ou compra recebida de amigo entrou neste fechamento.
                   </div>
                 <% } %>
               </div>
@@ -338,8 +331,8 @@
                 <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 op-summary-cash-grid">
                   <article class="rounded-2xl border border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70 op-summary-cash-card">
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Faturas do mês</div>
-                    <div data-summary-cash-total-bills class="op-summary-kpi-value op-summary-cash-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotals.total_cents) %></div>
-                    <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400">Total dos cartões.</p>
+                    <div data-summary-cash-total-bills class="op-summary-kpi-value op-summary-cash-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotalsWithShared.total_cents) %></div>
+                    <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400"><%= sharedSummaryCardRows.length ? 'Cartões e recebidas de amigos.' : 'Total dos cartões.' %></p>
                   </article>
                   <article class="rounded-2xl border border-cyan-200 bg-cyan-50/70 px-4 py-4 dark:border-cyan-800 dark:bg-cyan-950/20 op-summary-cash-card">
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-200">Já reunido</div>
@@ -348,7 +341,7 @@
                   </article>
                   <article class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/80 op-summary-cash-card">
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Já saiu nas faturas</div>
-                    <div data-summary-cash-outflow class="op-summary-kpi-value op-summary-cash-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotals.paid_cents) %></div>
+                    <div data-summary-cash-outflow class="op-summary-kpi-value op-summary-cash-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotalsWithShared.paid_cents) %></div>
                     <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400">Já foi pago.</p>
                   </article>
                   <article class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 dark:border-emerald-800 dark:bg-emerald-950/20 op-summary-cash-card">

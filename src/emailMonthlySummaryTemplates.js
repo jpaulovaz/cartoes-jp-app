@@ -151,9 +151,21 @@ function buildMonthlySummaryEmailTemplate({ viewModel = {}, sections = {}, attac
   const financeAnalytics = viewModel.financeAnalytics || {};
   const financeTotals = financeAnalytics.totals || {};
   const kpis = analytics.kpis || {};
+  const sharedSummary = viewModel.sharedPurchaseProjectionSummary || analytics.sharedAccepted || {};
+  const sharedRowsSource = Array.isArray(viewModel.sharedPurchaseProjectionRows)
+    ? viewModel.sharedPurchaseProjectionRows
+    : (Array.isArray(sharedSummary.rows) ? sharedSummary.rows : (Array.isArray(sharedSummary.topRows) ? sharedSummary.topRows : []));
+  const sharedAcceptedCents = toSafeNumber(sharedSummary.totalCents || sharedSummary.total_cents || kpis.sharedAcceptedCents);
+  const sharedConfirmedPaidCents = toSafeNumber(sharedSummary.confirmedPaidCents || kpis.sharedConfirmedPaidCents);
+  const sharedPendingReportedCents = toSafeNumber(sharedSummary.pendingReportedCents || kpis.sharedPendingReportedCents);
+  const sharedOpenSource = sharedSummary.openCents !== undefined && sharedSummary.openCents !== null ? sharedSummary.openCents : (sharedSummary.remainingCents || kpis.sharedRemainingCents);
+  const sharedOpenCents = toSafeNumber(sharedOpenSource);
+  const hasSharedAccepted = sharedRowsSource.length > 0 || sharedAcceptedCents > 0;
   const personalSpentCents = toSafeNumber(kpis.totalSpentCents);
   const personalPaidCents = toSafeNumber(kpis.totalPaidCardsCents);
   const personalRemainingCents = toSafeNumber(kpis.totalRemainingCardsCents);
+  const ownCardSpentCents = toSafeNumber(kpis.ownCardSpentCents || Math.max(0, personalSpentCents - sharedAcceptedCents));
+  const ownPaidCardsCents = toSafeNumber(kpis.ownPaidCardsCents || Math.max(0, personalPaidCents - sharedConfirmedPaidCents));
   const outsideExpenseCents = toSafeNumber(financeTotals.expenseCents);
   const incomeCents = toSafeNumber(financeTotals.incomeCents);
   const estimatedNetCents = incomeCents - outsideExpenseCents - personalSpentCents;
@@ -171,22 +183,27 @@ function buildMonthlySummaryEmailTemplate({ viewModel = {}, sections = {}, attac
     cards: sections.cards !== false,
     analytics: sections.analytics !== false,
     financeFlow: sections.financeFlow !== false,
-    people: sections.people !== false
+    people: sections.people !== false,
+    sharedAccepted: sections.sharedAccepted !== false
   };
 
-  const introCards = buildKpiGrid([
-    buildKpiCard('Cartoes no mes', formatBRLFromCents(cardsSummary.totalCents), `${cardsSummary.count} cartao(oes) no radar`),
-    buildKpiCard('Ja pago', formatBRLFromCents(cardsSummary.paidCents), `${formatBRLFromCents(cardsSummary.remainingCents)} ainda falta`),
-    buildKpiCard('Meu pedaco', formatBRLFromCents(personalSpentCents), `${formatBRLFromCents(personalRemainingCents)} pendente para voce`),
+  const introCardItems = [
+    buildKpiCard('Cartoes no mes', formatBRLFromCents(cardsSummary.totalCents), `${cardsSummary.count} cartao(oes) proprio(s) no radar`),
+    buildKpiCard('Ja pago', formatBRLFromCents(cardsSummary.paidCents + sharedConfirmedPaidCents), `${formatBRLFromCents(cardsSummary.remainingCents + sharedOpenCents)} ainda falta`),
+    buildKpiCard('Meu mes', formatBRLFromCents(personalSpentCents), `${formatBRLFromCents(personalRemainingCents)} pendente para voce`),
     buildKpiCard('Saldo previsto', formatBRLFromCents(estimatedNetCents), `${statusLabel} - entradas menos saidas mapeadas`)
-  ]);
+  ];
+  if (hasSharedAccepted) {
+    introCardItems.splice(1, 0, buildKpiCard('Compartilhadas aceitas', formatBRLFromCents(sharedAcceptedCents), `${Number(sharedSummary.count || sharedRowsSource.length || 0)} item(ns) somente leitura`));
+  }
+  const introCards = buildKpiGrid(introCardItems);
 
   const overviewHtml = enabledSections.overview ? renderSection(
     'Retrato do mes',
     'Um resumo executivo para bater o olho antes de encarar a planilha.',
     `${introCards}
     <div style="margin-top:14px;padding:14px;border-radius:16px;background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;font-size:13px;line-height:1.6;">
-      ${escapeHtml(csvMeta && attachments.transactionsCsv ? `CSV anexado com ${csvMeta.rowCount} compra(s).` : 'CSV nao foi anexado neste envio.')}
+      ${escapeHtml(csvMeta && attachments.transactionsCsv ? `CSV anexado com ${csvMeta.rowCount} linha(s).` : 'CSV nao foi anexado neste envio.')}
       ${analyticsUrl ? ` <a href="${escapeHtml(analyticsUrl)}" style="color:#1d4ed8;font-weight:900;text-decoration:none;">Abrir analises no app</a>` : ''}
     </div>`
   ) : '';
@@ -207,6 +224,30 @@ function buildMonthlySummaryEmailTemplate({ viewModel = {}, sections = {}, attac
     renderSimpleTable(['Cartao', 'Total', 'Pago', 'Falta', 'Vencimento'], cardRows)
   ) : '';
 
+  const sharedRows = sharedRowsSource.slice()
+    .sort((a, b) => toSafeNumber(b.amountCents || b.totalCents) - toSafeNumber(a.amountCents || a.totalCents))
+    .slice(0, 8)
+    .map((item) => [
+      item.description || 'Compra compartilhada',
+      item.requesterName || 'Amigo',
+      formatBRLFromCents(item.amountCents || item.totalCents),
+      formatBRLFromCents(item.confirmedPaidCents || item.paidCents),
+      formatBRLFromCents(item.pendingReportedCents),
+      formatBRLFromCents(item.openCents !== undefined && item.openCents !== null ? item.openCents : item.remainingCents),
+      item.statusLabel || 'Aceita'
+    ]);
+  const sharedSummaryCards = buildKpiGrid([
+    buildKpiCard('Total aceito', formatBRLFromCents(sharedAcceptedCents), `${Number(sharedSummary.count || sharedRowsSource.length || 0)} item(ns) no mes`),
+    buildKpiCard('Pago confirmado', formatBRLFromCents(sharedConfirmedPaidCents), 'Confirmado na Central de Acertos'),
+    buildKpiCard('Em conferencia', formatBRLFromCents(sharedPendingReportedCents), 'Informado e aguardando confirmacao'),
+    buildKpiCard('Ainda falta', formatBRLFromCents(sharedOpenCents), 'Saldo aberto dessa origem')
+  ]);
+  const sharedHtml = enabledSections.sharedAccepted && hasSharedAccepted ? renderSection(
+    'Compras compartilhadas aceitas',
+    'Entraram no seu mes, mas seguem em modo somente leitura e com controle na Central de Acertos.',
+    `${sharedSummaryCards}<div style="margin-top:14px;">${renderSimpleTable(['Compra', 'Enviado por', 'Valor', 'Pago', 'Em conferencia', 'Falta', 'Status'], sharedRows)}</div>`
+  ) : '';
+
   const categoryHtml = renderBarList(analytics.categories || [], { emptyText: 'Ainda nao tem categorias suficientes nesse mes.' });
   const topMerchant = analytics.insights && analytics.insights.topMerchant ? analytics.insights.topMerchant : null;
   const merchantHtml = topMerchant
@@ -224,7 +265,8 @@ function buildMonthlySummaryEmailTemplate({ viewModel = {}, sections = {}, attac
   const flowRows = [
     ['Entradas do mes', formatBRLFromCents(incomeCents), `${toSafeNumber(financeTotals.incomeRowCount)} item(ns)`],
     ['Saidas fora do cartao', formatBRLFromCents(outsideExpenseCents), `${toSafeNumber(financeTotals.expenseRowCount)} item(ns)`],
-    ['Cartoes - meu pedaco', formatBRLFromCents(personalSpentCents), `${formatBRLFromCents(personalPaidCents)} ja pago`],
+    ['Cartoes - meu pedaco', formatBRLFromCents(ownCardSpentCents), `${formatBRLFromCents(ownPaidCardsCents)} ja pago`],
+    ...(hasSharedAccepted ? [['Compartilhadas aceitas', formatBRLFromCents(sharedAcceptedCents), `${formatBRLFromCents(sharedConfirmedPaidCents)} pago confirmado`]] : []),
     ['Saldo previsto', formatBRLFromCents(estimatedNetCents), estimatedNetCents >= 0 ? 'Ficou no azul' : 'Pediu freio de mao']
   ];
   const financeHtml = enabledSections.financeFlow ? renderSection(
@@ -268,6 +310,7 @@ function buildMonthlySummaryEmailTemplate({ viewModel = {}, sections = {}, attac
         <div style="display:inline-block;border-radius:999px;background:#e0f2fe;color:#075985;padding:8px 12px;font-size:12px;font-weight:900;">${escapeHtml(statusLabel)} - gerado em ${escapeHtml(generatedAtLabel)}</div>
         ${overviewHtml}
         ${cardsHtml}
+        ${sharedHtml}
         ${analyticsHtml}
         ${financeHtml}
         ${peopleHtml}
@@ -284,17 +327,19 @@ function buildMonthlySummaryEmailTemplate({ viewModel = {}, sections = {}, attac
     `Seu resumo financeiro de ${monthLabel} chegou.`,
     `${statusLabel} - gerado em ${generatedAtLabel}`,
     ...buildTextLines('Retrato do mes', enabledSections.overview ? [
-      `Cartoes: ${formatBRLFromCents(cardsSummary.totalCents)}`,
-      `Ja pago: ${formatBRLFromCents(cardsSummary.paidCents)}`,
-      `Meu pedaco: ${formatBRLFromCents(personalSpentCents)}`,
+      `Cartoes proprios: ${formatBRLFromCents(cardsSummary.totalCents)}`,
+      hasSharedAccepted ? `Compartilhadas aceitas: ${formatBRLFromCents(sharedAcceptedCents)}` : null,
+      `Ja pago: ${formatBRLFromCents(cardsSummary.paidCents + sharedConfirmedPaidCents)}`,
+      `Meu mes: ${formatBRLFromCents(personalSpentCents)}`,
       `Saldo previsto: ${formatBRLFromCents(estimatedNetCents)}`
     ] : []),
     ...buildTextLines('Cartoes', enabledSections.cards ? cardRows.map((row) => `${row[0]} - total ${row[1]}, pago ${row[2]}, falta ${row[3]}`) : []),
+    ...buildTextLines('Compras compartilhadas aceitas', enabledSections.sharedAccepted && hasSharedAccepted ? sharedRows.map((row) => `${row[0]} - ${row[2]} enviado por ${row[1]}, pago ${row[3]}, falta ${row[5]} (${row[6]})`) : []),
     ...buildTextLines('Categorias', enabledSections.analytics ? (analytics.categories || []).slice(0, 5).map((item) => `${item.label}: ${formatBRLFromCents(item.total_cents)}`) : []),
     ...buildTextLines('Fluxo financeiro', enabledSections.financeFlow ? flowRows.map((row) => `${row[0]}: ${row[1]} (${row[2]})`) : []),
     ...buildTextLines('Pessoas e acertos', enabledSections.people ? peopleRows.map((row) => `${row[0]} - total ${row[1]}, pago ${row[2]}, pendente ${row[3]}`) : []),
     attachments.transactionsCsv && csvMeta ? '' : '',
-    attachments.transactionsCsv && csvMeta ? `CSV anexado: ${csvMeta.filename} com ${csvMeta.rowCount} compra(s).` : '',
+    attachments.transactionsCsv && csvMeta ? `CSV anexado: ${csvMeta.filename} com ${csvMeta.rowCount} linha(s).` : '',
     analyticsUrl ? `Abrir analises: ${analyticsUrl}` : '',
     appUrl ? `Abrir app: ${appUrl}` : ''
   ].filter((line) => line !== false && line != null).join('\n');
@@ -310,6 +355,8 @@ function buildMonthlySummaryEmailTemplate({ viewModel = {}, sections = {}, attac
       statusLabel,
       cardsTotalCents: cardsSummary.totalCents,
       personalSpentCents,
+      sharedAcceptedCents,
+      sharedAcceptedCount: Number(sharedSummary.count || sharedRowsSource.length || 0),
       csvAttached: !!(attachments.transactionsCsv && csvMeta),
       csvRowCount: csvMeta ? csvMeta.rowCount : 0,
       sections: enabledSections

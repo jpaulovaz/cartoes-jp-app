@@ -11741,7 +11741,64 @@ function enrichMonthTransactionsCsvRows(userId, rows) {
       installment_position: isInstallment ? installmentPosition : '',
       installment_total: isInstallment ? installmentTotal : '',
       base_description: baseDescription,
-      due_label: dueMonth && dueYear ? monthLabel(dueMonth, dueYear) : ''
+      due_label: dueMonth && dueYear ? monthLabel(dueMonth, dueYear) : '',
+      read_only_label: 'N\u00e3o',
+      shared_requester_name: '',
+      shared_status_label: '',
+      shared_confirmed_paid_cents: '',
+      shared_pending_reported_cents: '',
+      shared_open_cents: ''
+    };
+  });
+}
+
+
+function buildSharedPurchaseProjectionCsvRows(userId, month, year) {
+  const summary = getAcceptedSharedPurchaseProjectionSummarySafe(userId, month, year);
+  const rows = Array.isArray(summary?.rows) ? summary.rows : [];
+  if (!rows.length) return [];
+
+  return rows.map((item) => {
+    const projectionMonth = Number(item.month || month || 0);
+    const projectionYear = Number(item.year || year || 0);
+    const requesterName = String(item.requesterName || '').replace(/\s+/g, ' ').trim() || 'Amigo';
+    const amountCents = Math.max(0, Number(item.amountCents || item.totalCents || 0));
+    const confirmedPaidCents = Math.max(0, Number(item.confirmedPaidCents || item.paidCents || 0));
+    const pendingReportedCents = Math.max(0, Number(item.pendingReportedCents || 0));
+    const openSource = item.openCents !== undefined && item.openCents !== null ? item.openCents : item.remainingCents;
+    const openCents = Math.max(0, Number(openSource || 0));
+
+    return {
+      id: item.id || `shared-request:${item.sourceRequestId || ''}`,
+      txn_date: item.date || item.sourceTxnDateSnapshot || '',
+      description: item.description || 'Compra compartilhada',
+      card_name: item.virtualCardName || item.cardName || 'Compra compartilhada',
+      card_number: '',
+      amount_cents: amountCents,
+      raw_json: '',
+      parent_txn_id: null,
+      recurring_rule_id: null,
+      effective_due_month: projectionMonth,
+      effective_due_year: projectionYear,
+      purchase_category_name: item.categoryName || item.purchaseCategoryName || 'Compartilhadas',
+      allocated: 'N\u00e3o',
+      people_names: requesterName,
+      allocation_details: `${requesterName}: ${formatBRLFromCents(amountCents)}`,
+      entry_type: 'Compra compartilhada recebida',
+      purchase_mode: 'Compartilhada',
+      installment_label: '',
+      installment_position: '',
+      installment_total: '',
+      base_description: item.description || '',
+      due_label: projectionMonth && projectionYear ? monthLabel(projectionMonth, projectionYear) : monthLabel(month, year),
+      origem: item.originLabel || 'Compra compartilhada recebida',
+      read_only_label: 'Sim',
+      isReadOnly: true,
+      shared_requester_name: requesterName,
+      shared_status_label: item.statusLabel || 'Aceita',
+      shared_confirmed_paid_cents: confirmedPaidCents,
+      shared_pending_reported_cents: pendingReportedCents,
+      shared_open_cents: openCents
     };
   });
 }
@@ -11784,7 +11841,9 @@ function getMonthTransactionsCsvRows(userId, month, year) {
     ORDER BY c.name, COALESCE(t.txn_date, ''), t.description
   `).all(userId, month, year);
 
-  return enrichMonthTransactionsCsvRows(userId, rows);
+  const ownRows = enrichMonthTransactionsCsvRows(userId, rows);
+  const sharedRows = buildSharedPurchaseProjectionCsvRows(userId, month, year);
+  return ownRows.concat(sharedRows);
 }
 
 function buildMonthTransactionsCsvExport(userId, month, year) {

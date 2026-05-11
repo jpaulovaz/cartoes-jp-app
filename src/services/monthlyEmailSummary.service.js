@@ -43,6 +43,7 @@ function normalizeSections(rawSections = {}) {
     people: source.people !== false
   };
   if (!Object.values(sections).some(Boolean)) sections.overview = true;
+  sections.sharedAccepted = source.sharedAccepted !== false;
   return sections;
 }
 
@@ -77,6 +78,7 @@ function buildSafePayloadForAudit({ month, year, sections, attachments, csvMeta,
       csvByteLength: Number(csvMeta?.byteLength || 0)
     },
     urls,
+    audit: template?.audit || null,
     accepted: sendResult?.accepted,
     rejected: sendResult?.rejected,
     response: sendResult?.response

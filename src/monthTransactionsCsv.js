@@ -20,6 +20,21 @@ function monthLabel(month, year) {
   return `${String(month).padStart(2, '0')}/${year}`;
 }
 
+function hasOptionalValue(value) {
+  return value !== undefined && value !== null && value !== '';
+}
+
+function formatOptionalBRLFromCents(value) {
+  if (!hasOptionalValue(value)) return '';
+  return formatBRLFromCents(Number(value || 0));
+}
+
+function resolveReadOnlyLabel(row = {}) {
+  if (hasOptionalValue(row.read_only_label)) return row.read_only_label;
+  if (hasOptionalValue(row.somente_leitura)) return row.somente_leitura;
+  return row.isReadOnly || row.is_read_only ? 'Sim' : 'N\u00e3o';
+}
+
 function buildMonthTransactionsCsv(rows = [], { month, year } = {}) {
   const safeRows = Array.isArray(rows) ? rows : [];
   const safeMonth = Number(month || 0);
@@ -42,7 +57,13 @@ function buildMonthTransactionsCsv(rows = [], { month, year } = {}) {
     'Compra base',
     'Fatura',
     'Origem',
-    'Compet\u00eancia'
+    'Compet\u00eancia',
+    'Somente leitura',
+    'Enviado por',
+    'Status do acerto',
+    'Pago confirmado (R$)',
+    'Aguardando confirma\u00e7\u00e3o (R$)',
+    'Ainda falta (R$)'
   ];
   const lines = [header.map(csvEscape).join(';')];
 
@@ -65,7 +86,13 @@ function buildMonthTransactionsCsv(rows = [], { month, year } = {}) {
       row.base_description,
       row.due_label,
       row.origem,
-      monthLabel(safeMonth, safeYear)
+      monthLabel(safeMonth, safeYear),
+      resolveReadOnlyLabel(row),
+      row.shared_requester_name,
+      row.shared_status_label,
+      formatOptionalBRLFromCents(row.shared_confirmed_paid_cents),
+      formatOptionalBRLFromCents(row.shared_pending_reported_cents),
+      formatOptionalBRLFromCents(row.shared_open_cents)
     ].map(csvEscape).join(';'));
   });
 
@@ -81,5 +108,7 @@ function buildMonthTransactionsCsv(rows = [], { month, year } = {}) {
 }
 
 module.exports = {
-  buildMonthTransactionsCsv
+  buildMonthTransactionsCsv,
+  formatOptionalBRLFromCents,
+  resolveReadOnlyLabel
 };

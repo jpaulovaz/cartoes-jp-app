@@ -15024,8 +15024,10 @@ function filterSharedPurchaseProjectionRowsForMonth(rows = [], filters = {}) {
   const allocatedFilter = String(filters.f_allocated || '').trim().toLowerCase();
   const categoryFilter = String(filters.f_category || '').trim();
   const personFilter = String(filters.f_person || '').trim();
+  const originFilter = String(filters.f_origin || '').trim().toLowerCase();
 
   return items.filter((item) => {
+    if (originFilter === 'own') return false;
     if (!item || item.kind !== 'shared_received') return false;
 
     if (filters.f_desc) {
@@ -16236,8 +16238,11 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     f_number: (req.query.f_number || "").toString().trim(),
     f_amount: (req.query.f_amount || "").toString().trim(),
     f_allocated: (req.query.f_allocated || "").toString().trim(),
+    f_origin: (req.query.f_origin || "").toString().trim(),
     f_person: (req.query.f_person || "").toString().trim()
   };
+
+  if (!["", "own", "shared"].includes(filters.f_origin)) filters.f_origin = "";
 
   const allocCountExpr = "(SELECT COUNT(*) FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id)";
   const selectedCsvExpr = "(SELECT GROUP_CONCAT(a.person_id) FROM allocations a WHERE a.transaction_id = t.id AND a.user_id = t.user_id)";
@@ -16368,7 +16373,9 @@ app.get("/month/:year/:month", ensureAuthenticated, (req, res) => {
     ? sharedPurchaseProjectionSummary.rows
     : [];
   const sharedPurchaseProjections = filterSharedPurchaseProjectionRowsForMonth(sharedPurchaseProjectionAllRows, filters);
-  const monthLedgerRows = buildMonthLedgerRows(txns, sharedPurchaseProjections, { sort, dir });
+  const ownTxnsForLedger = filters.f_origin === 'shared' ? [] : txns;
+  const sharedRowsForLedger = filters.f_origin === 'own' ? [] : sharedPurchaseProjections;
+  const monthLedgerRows = buildMonthLedgerRows(ownTxnsForLedger, sharedRowsForLedger, { sort, dir });
 
   return safeRenderView(res, "month", {
     month,

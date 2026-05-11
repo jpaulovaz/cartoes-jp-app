@@ -386,7 +386,7 @@
         <div>
           <div class="op-month-filter-card__eyebrow">Busca e filtros</div>
           <h2 class="op-month-filter-card__title">Filtrar lançamentos</h2>
-          <p class="op-month-filter-card__text">Refine a lista por data, descrição, cartão, categoria, pessoa e status.</p>
+          <p class="op-month-filter-card__text">Refine a lista por data, descrição, cartão, categoria, pessoa, origem e status.</p>
         </div>
         <div class="op-month-filter-card__meta">
           <span class="badge"><%= ledgerItemCount %> item(ns) no período</span>
@@ -449,6 +449,18 @@
           </select>
         </div>
 
+        <% if (sharedReceivedCount > 0) { %>
+          <div class="md:col-span-2 lg:col-span-1">
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Origem</label>
+            <select name="f_origin"
+              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none">
+              <option value="" <%= String(filters.f_origin || '') === '' ? 'selected' : '' %>>Todas</option>
+              <option value="own" <%= String(filters.f_origin || '') === 'own' ? 'selected' : '' %>>Próprias</option>
+              <option value="shared" <%= String(filters.f_origin || '') === 'shared' ? 'selected' : '' %>>Compartilhadas</option>
+            </select>
+          </div>
+        <% } %>
+
         <div class="md:col-span-2 lg:col-span-1">
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Pessoa</label>
           <select name="f_person"
@@ -470,7 +482,7 @@
           <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Ao aplicar, a lista volta a ser organizada por data.</p>
         </div>
 
-        <div class="md:col-span-2 lg:col-span-4 xl:col-span-4 flex flex-col sm:flex-row sm:items-end gap-3">
+        <div class="op-month-filter-actions md:col-span-2 lg:col-span-4 xl:col-span-4 flex flex-col sm:flex-row sm:items-end gap-3">
           <button
             class="w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 transition-all shadow-sm">Filtrar</button>
           <a class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-2.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 transition-all shadow-sm"
@@ -488,7 +500,7 @@
               <% if (isClosed) { %>
                 Período em leitura. Abra um item para consultar os detalhes sem alterar a distribuição.
               <% } else { %>
-                Toque em uma compra própria para abrir ações. Compras compartilhadas aparecem junto na lista com o chip <strong class="font-bold text-slate-700 dark:text-slate-200">Compartilhada</strong>.
+                Compras próprias e compartilhadas aparecem juntas na lista. Use o chip <strong class="font-bold text-slate-700 dark:text-slate-200">Compartilhada</strong> para identificar o que veio de amigos.
               <% } %>
             </p>
           </div>
@@ -590,9 +602,8 @@
                             <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Em conferência</span>
                           <% } %>
                         </div>
-                        <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Alterações e pagamentos ficam na Central de Acertos.</span>
-                          <a href="<%= item.actionsUrl || '/shared-debts#received' %>" class="inline-flex w-fit items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Ver acerto</a>
+                        <div class="mt-2 flex justify-end">
+                          <a href="<%= item.actionsUrl || '/shared-debts#received' %>" class="inline-flex min-w-max items-center justify-center whitespace-nowrap rounded-full border border-slate-200 bg-white px-3.5 py-2 text-[11px] font-black leading-none text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Ver acerto</a>
                         </div>
                       </div>
                     </div>
@@ -704,14 +715,7 @@
                         <% } %>
                       </div>
 
-                      <div class="mt-2 text-[11px] font-medium text-slate-400 dark:text-slate-500">
-                        <% if (isClosed) { %>
-                          Abra o item para consultar a divisão.
-                        <% } else { %>
-                          <span class="op-month-row__hint md:hidden">Toque para abrir ações · Segure para selecionar</span>
-                          <span class="op-month-row__hint hidden md:inline">Clique para abrir ações · Ctrl/Cmd+clique para selecionar</span>
-                        <% } %>
-                      </div>
+
                     </div>
                   </div>
                 </td>

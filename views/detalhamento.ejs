@@ -508,10 +508,10 @@
                         </div>
                     </article>
 
-                    <article class="op-dashboard-kpi-card rounded-3xl border border-violet-200 bg-violet-50/90 p-5 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/20">
-                        <p class="op-dashboard-kpi-card__label text-violet-700 dark:text-violet-200">Compartilhadas</p>
-                        <h3 class="op-dashboard-kpi-card__value mt-2 text-violet-900 dark:text-violet-100"><%= formatBRLFromCents(sharedProjectionTotalCents) %></h3>
-                        <p class="op-dashboard-kpi-card__note mt-3 text-violet-800/80 dark:text-violet-100/80"><%= hasSharedProjectionDetail ? `${sharedProjectionDetail.count} recebida${Number(sharedProjectionDetail.count || 0) === 1 ? '' : 's'} de amigos.` : 'Sem compras recebidas de amigos neste mês.' %></p>
+                    <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-card">
+                        <p class="op-dashboard-kpi-card__label">Compartilhadas</p>
+                        <h3 class="op-dashboard-kpi-card__value mt-2"><%= formatBRLFromCents(sharedProjectionTotalCents) %></h3>
+                        <p class="op-dashboard-kpi-card__note mt-3"><%= hasSharedProjectionDetail ? `${sharedProjectionDetail.count} recebida${Number(sharedProjectionDetail.count || 0) === 1 ? '' : 's'} de amigos.` : 'Sem compras recebidas de amigos neste mês.' %></p>
                     </article>
 
                     <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-committed">
@@ -520,10 +520,10 @@
                         <p class="op-dashboard-kpi-card__note mt-3">Despesas, cartões e compras recebidas de amigos.</p>
                     </article>
 
-                    <% const balanceTopLabel = formatBRLFromCents(saldoCents); %>
+                    <% const balanceTopLabel = formatBRLFromCents(saldoCents); const balanceTopDisplayLabel = String(balanceTopLabel || '').replace(/\s+/g, '\u00a0'); %>
                     <article class="op-dashboard-kpi-card op-dashboard-kpi-card--balance <%= saldoCents < 0 ? 'op-dashboard-kpi-card--tone-critical' : 'op-dashboard-kpi-card--tone-balance' %>">
                         <p class="op-dashboard-kpi-card__label">Saldo previsto</p>
-                        <h3 class="op-dashboard-kpi-card__value mt-2" data-sensitive-text data-sensitive-visible-value="<%= balanceTopLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(balanceTopLabel, true) %>"><%= balanceTopLabel %></h3>
+                        <h3 class="op-dashboard-kpi-card__value mt-2" data-sensitive-text data-sensitive-visible-value="<%= balanceTopDisplayLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(balanceTopLabel, true) %>"><%= balanceTopDisplayLabel %></h3>
                         <p class="op-dashboard-kpi-card__note mt-3"><%= detailBalanceCaption %></p>
                     </article>
                 </div>
@@ -556,60 +556,38 @@
 
 
                 <% if (hasSharedProjectionDetail) { %>
-                    <section class="mt-8 mb-8 rounded-3xl border border-violet-200 bg-white shadow-sm dark:border-violet-900/60 dark:bg-slate-900/70 overflow-hidden">
-                        <div class="flex flex-col gap-4 border-b border-violet-100 bg-violet-50/80 px-5 py-5 dark:border-violet-900/60 dark:bg-violet-950/20 lg:flex-row lg:items-center lg:justify-between">
+                    <section class="mt-8 mb-8 rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900/70 overflow-hidden">
+                        <div class="flex flex-col gap-4 border-b border-slate-200 bg-slate-50 px-5 py-5 dark:border-slate-700 dark:bg-slate-950/30 lg:flex-row lg:items-center lg:justify-between">
                             <div>
-                                <div class="text-[11px] font-black uppercase tracking-[0.2em] text-violet-700 dark:text-violet-200">Recebidas de amigos</div>
+                                <div class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Recebidas de amigos</div>
                                 <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Compras compartilhadas no mês</h2>
-                                <p class="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Compras que amigos dividiram com você e que já entram no seu retrato financeiro.</p>
+                                <p class="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Valores que amigos dividiram com você e que já entram no seu mês.</p>
                             </div>
                             <a href="/shared-debts#received" class="op-btn op-btn-ghost shrink-0">Abrir Central de Acertos</a>
                         </div>
                         <div class="p-5">
-                            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                                <div class="rounded-2xl border border-violet-200 bg-violet-50/80 px-4 py-4 dark:border-violet-900/60 dark:bg-violet-950/20">
-                                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-200">Sua parte</div>
-                                    <div class="mt-2 text-xl font-black text-violet-900 dark:text-violet-100"><%= formatBRLFromCents(sharedProjectionTotalCents) %></div>
-                                    <p class="mt-2 text-xs font-semibold leading-5 text-violet-800/80 dark:text-violet-100/80"><%= sharedProjectionCategoryLabel ? `Categoria destaque: ${sharedProjectionCategoryLabel}.` : 'Classificadas como compartilhadas.' %></p>
-                                </div>
-                                <div class="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-4 dark:border-emerald-800 dark:bg-emerald-950/20">
-                                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Pago confirmado</div>
-                                    <div class="mt-2 text-xl font-black text-emerald-800 dark:text-emerald-100"><%= formatBRLFromCents(sharedProjectionConfirmedCents) %></div>
-                                    <p class="mt-2 text-xs font-semibold leading-5 text-emerald-900/80 dark:text-emerald-100/80">Pagamento já confirmado.</p>
-                                </div>
-                                <div class="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-4 dark:border-amber-800 dark:bg-amber-950/20">
-                                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-200">Em conferência</div>
-                                    <div class="mt-2 text-xl font-black text-amber-800 dark:text-amber-100"><%= formatBRLFromCents(sharedProjectionPendingCents) %></div>
-                                    <p class="mt-2 text-xs font-semibold leading-5 text-amber-900/80 dark:text-amber-100/80">Pagamento informado e em análise.</p>
-                                </div>
-                                <div class="rounded-2xl border border-rose-200 bg-rose-50/80 px-4 py-4 dark:border-rose-800 dark:bg-rose-950/20">
-                                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-rose-700 dark:text-rose-200">Ainda falta</div>
-                                    <div class="mt-2 text-xl font-black text-rose-800 dark:text-rose-100"><%= formatBRLFromCents(sharedProjectionOpenCents) %></div>
-                                    <p class="mt-2 text-xs font-semibold leading-5 text-rose-900/80 dark:text-rose-100/80">Saldo ainda em aberto.</p>
-                                </div>
+                            <div class="op-dashboard-kpi-strip grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                                <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-card">
+                                    <p class="op-dashboard-kpi-card__label">Sua parte</p>
+                                    <h3 class="op-dashboard-kpi-card__value mt-2"><%= formatBRLFromCents(sharedProjectionTotalCents) %></h3>
+                                    <p class="op-dashboard-kpi-card__note mt-3"><%= sharedProjectionDetail.count %> recebida<%= Number(sharedProjectionDetail.count || 0) === 1 ? '' : 's' %> de amigos.</p>
+                                </article>
+                                <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-income">
+                                    <p class="op-dashboard-kpi-card__label">Pago confirmado</p>
+                                    <h3 class="op-dashboard-kpi-card__value mt-2"><%= formatBRLFromCents(sharedProjectionConfirmedCents) %></h3>
+                                    <p class="op-dashboard-kpi-card__note mt-3">Valor já confirmado no acerto.</p>
+                                </article>
+                                <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-card">
+                                    <p class="op-dashboard-kpi-card__label">Em conferência</p>
+                                    <h3 class="op-dashboard-kpi-card__value mt-2"><%= formatBRLFromCents(sharedProjectionPendingCents) %></h3>
+                                    <p class="op-dashboard-kpi-card__note mt-3">Pagamento informado e aguardando confirmação.</p>
+                                </article>
+                                <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-critical">
+                                    <p class="op-dashboard-kpi-card__label">Ainda falta</p>
+                                    <h3 class="op-dashboard-kpi-card__value mt-2"><%= formatBRLFromCents(sharedProjectionOpenCents) %></h3>
+                                    <p class="op-dashboard-kpi-card__note mt-3">Valor em aberto nesse mês.</p>
+                                </article>
                             </div>
-                            <% if (sharedProjectionTopRows.length) { %>
-                                <div class="mt-5 grid gap-3 lg:grid-cols-2">
-                                    <% sharedProjectionTopRows.forEach((item) => { %>
-                                        <article class="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/60">
-                                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                                <div class="min-w-0">
-                                                    <div class="truncate text-base font-black text-slate-900 dark:text-white"><%= item.description %></div>
-                                                    <p class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">Enviado por <strong class="text-slate-700 dark:text-slate-200"><%= item.requesterName %></strong> · <%= item.categoryName || 'Compartilhadas' %></p>
-                                                    <div class="mt-2 flex flex-wrap gap-2">
-                                                        <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">Compartilhada</span>
-                                                        <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold <%= sharedProjectionStatusClasses(item.statusTone) %>"><%= item.statusLabel %></span>
-                                                    </div>
-                                                </div>
-                                                <div class="text-left sm:text-right">
-                                                    <div class="text-[11px] font-black uppercase tracking-[0.16em] text-violet-700 dark:text-violet-200">Sua parte</div>
-                                                    <div class="mt-1 whitespace-nowrap text-lg font-black text-violet-800 dark:text-violet-100"><%= formatBRLFromCents(item.amountCents) %></div>
-                                                </div>
-                                            </div>
-                                        </article>
-                                    <% }) %>
-                                </div>
-                            <% } %>
                         </div>
                     </section>
                 <% } %>

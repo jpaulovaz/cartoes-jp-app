@@ -154,7 +154,7 @@
 
   function buildMonthGroups(items) {
     const sorted = (items || []).slice().sort((a, b) => {
-      const rankDiff = monthRank(b) - monthRank(a);
+      const rankDiff = monthRank(a) - monthRank(b);
       if (rankDiff !== 0) return rankDiff;
       const statusDiff = statusWeight(a?.status) - statusWeight(b?.status);
       if (statusDiff !== 0) return statusDiff;
@@ -187,7 +187,9 @@
     });
 
     return Array.from(groups.values()).sort((a, b) => {
-      if (b.rank !== a.rank) return b.rank - a.rank;
+      const rankA = a.rank || Number.MAX_SAFE_INTEGER;
+      const rankB = b.rank || Number.MAX_SAFE_INTEGER;
+      if (rankA !== rankB) return rankA - rankB;
       return a.label.localeCompare(b.label);
     });
   }
@@ -893,12 +895,7 @@
   const sentHasActionableGroup = sentGroups.some(group => countGroupActions(group, 'sent') > 0);
 
   function shouldOpenGroup(group, index, scope) {
-    if (groupContainsRequest(group, requestIdToHighlight) || groupContainsSettlement(group, settlementIdToHighlight)) return true;
-    const actionCountForGroup = countGroupActions(group, scope);
-    if (actionCountForGroup > 0) return true;
-    if (scope === 'received' && !receivedHasActionableGroup && index === 0) return true;
-    if (scope === 'sent' && !sentHasActionableGroup && index === 0) return true;
-    return false;
+    return groupContainsRequest(group, requestIdToHighlight) || groupContainsSettlement(group, settlementIdToHighlight);
   }
 
   function groupsContainFocus(groups, requestId, settlementId) {
@@ -2057,7 +2054,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
             const monthActionCount = countGroupActions(group, 'received');
             const groupOpen = shouldOpenGroup(group, groupIndex, 'received');
           %>
-            <details class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 overflow-hidden" <%= groupOpen ? 'open' : '' %>>
+            <details class="op-shared-month-group rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 overflow-hidden" <%= groupOpen ? 'open' : '' %>>
               <summary class="list-none cursor-pointer px-5 py-4 bg-white/70 dark:bg-slate-950/30">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -2907,7 +2904,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
             const monthActionCount = countGroupActions(group, 'sent');
             const groupOpen = shouldOpenGroup(group, groupIndex, 'sent');
           %>
-            <details class="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 overflow-hidden" <%= groupOpen ? 'open' : '' %>>
+            <details class="op-shared-month-group rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 overflow-hidden" <%= groupOpen ? 'open' : '' %>>
               <summary class="list-none cursor-pointer px-5 py-4 bg-white/70 dark:bg-slate-950/30">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>

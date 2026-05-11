@@ -3,6 +3,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const errors = [];
+const { runSharedPurchaseProjectionVerification } = require('./verify-shared-purchase-projections');
 
 function read(rel) {
   return fs.readFileSync(path.join(root, rel), 'utf8');
@@ -108,6 +109,16 @@ ensure(read('public/app.css').includes('.op-chip-nav-shell--people-grid') && rea
 ['registerAuthRoutes', 'registerSecurityRoutes', 'registerCardsRoutes', 'registerFinancesRoutes', 'registerImportRoutes', 'registerSummaryRoutes', 'registerSharedDebtsRoutes', 'registerPeopleRoutes', 'registerSocialShareRoutes'].forEach((token) => {
   ensure(runtime.includes(token), `server.runtime.js precisa registrar ${token}`);
 });
+
+try {
+  runSharedPurchaseProjectionVerification({ silent: true });
+} catch (error) {
+  if (Array.isArray(error.details)) {
+    error.details.forEach((detail) => errors.push(detail));
+  } else {
+    errors.push(error.message || String(error));
+  }
+}
 
 if (errors.length) {
   console.error('Falhas na verificação estrutural da refatoração final:');

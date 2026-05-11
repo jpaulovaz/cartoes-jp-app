@@ -239,6 +239,40 @@ function createSharedDebtsService(deps = {}) {
     };
   }
 
+
+  function sendDraftQueues({ userId, queueIds = [], returnTo, fallback }) {
+    const fallbackRedirect = deps.resolveSharedDebtViewPath(returnTo, fallback || '/shared-debts#draft-queues');
+    const ids = Array.from(new Set((Array.isArray(queueIds) ? queueIds : []).map((value) => Number(value || 0)).filter(Boolean)));
+
+    if (!ids.length) {
+      return { redirectTo: fallbackRedirect, flash: { type: 'error', message: 'Escolha pelo menos uma cobrança da caixa de saída para enviar.' } };
+    }
+
+    let sentQueues = 0;
+    let sentItems = 0;
+    ids.forEach((queueId) => {
+      try {
+        const result = deps.sendSharedDebtDraftQueue(userId, queueId);
+        sentQueues += 1;
+        sentItems += Number(result?.itemCount || 0);
+      } catch (error) {
+        // Se uma fila já saiu da caixa por outro caminho, seguimos com as demais.
+      }
+    });
+
+    if (!sentQueues) {
+      return { redirectTo: fallbackRedirect, flash: { type: 'info', message: 'Essas cobranças já tinham saído da caixa ou não estavam disponíveis.' } };
+    }
+
+    return {
+      redirectTo: fallbackRedirect,
+      flash: {
+        type: 'success',
+        message: `Pronto! ${deps.formatCountLabel(sentItems || sentQueues, 'item saiu', 'itens saíram')} da caixa de saída.`
+      }
+    };
+  }
+
   function createManual({ userId, body = {} }) {
     const mode = deps.normalizeManualSharedDebtMode(body.mode || body.delivery_mode || body.kind);
     const personId = Number(body.person_id || 0);
@@ -1597,93 +1631,239 @@ function createSharedDebtsService(deps = {}) {
   }
 
 
-  function bulkConfirmOutsideApp({ userId, requestIds, note, returnTo, fallback }) {
+  function bulkConfirmOutsideApp({ userId, requestIds, note, amountMode = 'full', rawAmount, returnTo, fallback }) {
     const fallbackRedirect = deps.resolveSharedDebtViewPath(returnTo, fallback || '/shared-debts');
 
     if (!requestIds.length) {
-      return { redirectTo: fallbackRedirect, flash: { type: 'error', message: 'Nenhum acerto válido foi escolhido para encerrar.' } };
+      return { redirectTo: fallbackRedirect, flash: { type: 'error', message: 'Nenhum acerto válido foi escolhido para registrar.' } };
     }
 
     const rows = repository.getAcceptedOpenRequestsForRequester(requestIds, userId);
     if (!rows.length) {
-      return { redirectTo: fallbackRedirect, flash: { type: 'info', message: 'Não achei acertos em aberto desse mês para encerrar por fora.' } };
+      return { redirectTo: fallbackRedirect, flash: { type: 'info', message: 'Não achei acertos em aberto desse mês para registrar por fora.' } };
+    }
+
+    const totalOpenCents = rows.reduce((sum, row) => {
+      const total = Math.max(0, Number(row?.amount_cents || 0));
+      const paid = Math.min(total, Math.max(0, Number(row?.amount_paid_cents || 0)));
+      return sum + Math.max(0, total - paid);
+    }, 0);
+
+    if (totalOpenCents <= 0) {
+      return { redirectTo: fallbackRedirect, flash: { type: 'info', message: 'Esses acertos já estão sem saldo aberto.' } };
+    }
+
+    const normalizedMode = String(amountMode || 'full').trim().toLowerCase();
+    const requestedAmountCents = normalizedMode === 'custom'
+      ? deps.coerceMoneyValueToCents(rawAmount, 0)
+      : totalOpenCents;
+    const amountToConfirmCents = Math.min(totalOpenCents, Math.max(0, Number(requestedAmountCents || 0)));
+
+    if (amountToConfirmCents <= 0) {
+      return { redirectTo: fallbackRedirect, flash: { type: 'error', message: 'Informe um valor maior que zero para registrar esse pagamento.' } };
     }
 
     const actor = deps.getUserRecord(userId);
     const actorName = actor?.name || actor?.email || 'Quem enviou';
     const now = deps.nowIso();
-    const defaultNote = 'Pagamento acertado fora do app.';
+    const defaultNote = normalizedMode === 'custom'
+      ? 'Pagamento parcial acertado fora do app.'
+      : 'Pagamento acertado fora do app.';
     const finalNote = note || defaultNote;
+    const sortedRows = [...rows].sort((a, b) => {
+      const ay = Number(a?.source_due_year || 0);
+      const by = Number(b?.source_due_year || 0);
+      if (ay !== by) return ay - by;
+      const am = Number(a?.source_due_month || 0);
+      const bm = Number(b?.source_due_month || 0);
+      if (am !== bm) return am - bm;
+      return Number(a?.id || 0) - Number(b?.id || 0);
+    });
+
+    let remaining = amountToConfirmCents;
+    const allocations = [];
+    sortedRows.forEach((row) => {
+      if (remaining <= 0) return;
+      const total = Math.max(0, Number(row?.amount_cents || 0));
+      const paid = Math.min(total, Math.max(0, Number(row?.amount_paid_cents || 0)));
+      const open = Math.max(0, total - paid);
+      const applied = Math.min(open, remaining);
+      if (applied <= 0) return;
+      remaining -= applied;
+      allocations.push({ row, appliedCents: applied, beforePaidCents: paid, afterPaidCents: Math.min(total, paid + applied), totalCents: total });
+    });
+
+    if (!allocations.length) {
+      return { redirectTo: fallbackRedirect, flash: { type: 'info', message: 'Não encontrei saldo aberto para registrar nesse grupo.' } };
+    }
+
+    const settlementGroups = new Map();
+    allocations.forEach((allocation) => {
+      const row = allocation.row;
+      const key = [row.requester_user_id, row.receiver_user_id, row.source_due_year, row.source_due_month].join(':');
+      if (!settlementGroups.has(key)) {
+        settlementGroups.set(key, {
+          requesterUserId: Number(row.requester_user_id || 0),
+          receiverUserId: Number(row.receiver_user_id || 0),
+          year: Number(row.source_due_year || 0),
+          month: Number(row.source_due_month || 0),
+          allocations: [],
+          totalAppliedCents: 0
+        });
+      }
+      const group = settlementGroups.get(key);
+      group.allocations.push(allocation);
+      group.totalAppliedCents += allocation.appliedCents;
+    });
+
+    const notifications = [];
+    const touchedBatches = new Set();
+    const fullySettledRequestIds = [];
 
     repository.withTransaction(() => {
-      rows.forEach((row) => {
-        const result = repository.db.prepare(`
-          UPDATE shared_debt_requests
-          SET status = 'settled',
-              amount_paid_cents = amount_cents,
-              payment_marked_at = NULL,
-              payment_note = NULL,
-              updated_at = ?,
-              resolved_at = ?
-          WHERE id = ?
-            AND requester_user_id = ?
-            AND status = 'accepted'
-            AND COALESCE(request_kind, 'card') = 'card'
-        `).run(now, now, row.id, userId);
+      Array.from(settlementGroups.values()).forEach((group) => {
+        const snapshotBefore = deps.getSharedDebtCardMonthlySettlementSnapshot({
+          requesterUserId: group.requesterUserId,
+          receiverUserId: group.receiverUserId,
+          month: group.month,
+          year: group.year
+        });
+        const settlementId = Number(snapshotBefore?.id || 0);
+        if (!settlementId) throw new Error('Não consegui localizar a carteira mensal desse acerto.');
 
-        if (!result.changes) return;
-
-        deps.addSharedDebtEvent({ requestId: row.id, actorUserId: userId, eventType: 'settled_outside_app_by_sender', note: finalNote });
-        deps.upsertSharedDebtArchiveState({
-          requestId: row.id,
+        const intentResult = repository.db.prepare(`
+          INSERT INTO shared_debt_payment_intents (
+            settlement_id, requester_user_id, receiver_user_id, month, year, request_kind,
+            requested_by_user_id, amount_cents, status, payer_note, creditor_note,
+            created_at, updated_at, generated_at, reported_at, confirmed_at
+          ) VALUES (?, ?, ?, ?, ?, 'card', ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          settlementId,
+          group.requesterUserId,
+          group.receiverUserId,
+          group.month,
+          group.year,
           userId,
-          isArchived: true,
-          archivedFromStatus: 'settled',
-          timestamp: now
+          group.totalAppliedCents,
+          'Pagamento registrado diretamente por quem recebeu.',
+          finalNote,
+          now,
+          now,
+          now,
+          now,
+          now
+        );
+        const intentId = Number(intentResult.lastInsertRowid || 0);
+
+        group.allocations.forEach((allocation) => {
+          const row = allocation.row;
+          const nextPaidCents = allocation.afterPaidCents;
+          const nextStatus = nextPaidCents >= allocation.totalCents ? 'settled' : 'accepted';
+          const resolvedAt = nextStatus === 'settled' ? now : null;
+
+          repository.db.prepare(`
+            INSERT OR REPLACE INTO shared_debt_payment_allocations (settlement_id, intent_id, request_id, allocated_cents, created_at)
+            VALUES (?, ?, ?, ?, ?)
+          `).run(settlementId, intentId, row.id, allocation.appliedCents, now);
+
+          repository.db.prepare(`
+            UPDATE shared_debt_requests
+            SET amount_paid_cents = ?,
+                status = ?,
+                payment_marked_at = NULL,
+                payment_note = NULL,
+                updated_at = ?,
+                resolved_at = ?
+            WHERE id = ?
+              AND requester_user_id = ?
+              AND receiver_user_id = ?
+              AND status = 'accepted'
+              AND COALESCE(request_kind, 'card') = 'card'
+          `).run(
+            nextPaidCents,
+            nextStatus,
+            now,
+            resolvedAt,
+            row.id,
+            group.requesterUserId,
+            group.receiverUserId
+          );
+
+          deps.addSharedDebtEvent({
+            requestId: row.id,
+            actorUserId: userId,
+            eventType: nextStatus === 'settled' ? 'settled_outside_app_by_sender' : 'partial_payment_confirmed_outside_app_by_sender',
+            note: finalNote
+          });
+
+          if (row.batch_id) touchedBatches.add(Number(row.batch_id));
+          if (nextStatus === 'settled') {
+            fullySettledRequestIds.push(Number(row.id));
+            deps.upsertSharedDebtArchiveState({
+              requestId: row.id,
+              userId,
+              isArchived: true,
+              archivedFromStatus: 'settled',
+              timestamp: now
+            });
+          }
+        });
+
+        deps.cancelSharedDebtGeneratedMonthlyIntents(settlementId, group.receiverUserId, intentId);
+        const snapshotAfter = deps.getSharedDebtCardMonthlySettlementSnapshot({
+          requesterUserId: group.requesterUserId,
+          receiverUserId: group.receiverUserId,
+          month: group.month,
+          year: group.year
+        });
+        const monthText = deps.monthLabel(group.month, group.year);
+        const receiverRecord = deps.getUserRecord(group.receiverUserId);
+        const receiverName = receiverRecord?.name || receiverRecord?.email || 'você';
+        const settledCount = group.allocations.filter((allocation) => allocation.afterPaidCents >= allocation.totalCents).length;
+        const partialCount = Math.max(0, group.allocations.length - settledCount);
+        const summaryPieces = [
+          `${actorName} registrou ${deps.formatBRLFromCents(group.totalAppliedCents)} fora do app em ${monthText}.`
+        ];
+        if (settledCount) summaryPieces.push(`${deps.formatCountLabel(settledCount, 'acerto foi fechado', 'acertos foram fechados')}.`);
+        if (partialCount) summaryPieces.push(`${deps.formatCountLabel(partialCount, 'acerto ficou parcialmente pago', 'acertos ficaram parcialmente pagos')}.`);
+        if (snapshotAfter) summaryPieces.push(`Ainda ficam ${deps.formatBRLFromCents(snapshotAfter.openCents || 0)} em aberto.`);
+
+        notifications.push({
+          receiverUserId: group.receiverUserId,
+          settlementId,
+          intentId,
+          title: group.totalAppliedCents >= totalOpenCents ? 'Pagamento registrado' : 'Pagamento parcial registrado',
+          body: `${summaryPieces.join(' ')}${deps.buildNoteSuffix(finalNote)}`,
+          receiverName
         });
       });
 
-      groupSharedDebtRowsByBatch(rows).forEach((group) => {
-        const periodLabel = deps.buildSharedDebtBulkPeriodLabel(group.rows);
-        if (group.batchId) deps.touchSharedDebtBatch(group.batchId, now);
+      touchedBatches.forEach((batchId) => deps.touchSharedDebtBatch(batchId, now));
 
-        const chargeCountLabel = deps.formatCountLabel(group.rows.length, 'acerto', 'acertos');
-        const firstRow = group.rows[0];
-        const receiverName = firstRow?.receiver_name || firstRow?.receiver_email || 'você';
-        const resolvedMessage = deps.resolveCatalogText('notification.shared_debt.payment_confirmed_outside_app.bulk', {
-          credor: actorName,
-          destinatario: receiverName,
-          n_cobrancas: chargeCountLabel,
-          periodo: periodLabel || '',
-          valor_total: deps.formatBRLFromCents(group.totalCents),
-          nota: finalNote
-        }, {
-          fallbackTitle: group.rows.length > 1 ? 'Acertos encerrados' : 'Acerto encerrado',
-          fallbackBody: `${actorName} registrou o recebimento de ${chargeCountLabel}${periodLabel ? ` no período ${periodLabel}` : ''}, somando ${deps.formatBRLFromCents(group.totalCents)}.${deps.buildNoteSuffix(finalNote)}`
-        });
-
+      notifications.forEach((notification) => {
         deps.createNotification({
-          userId: firstRow.receiver_user_id,
-          type: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
-          title: resolvedMessage.title,
-          body: resolvedMessage.body,
-          href: group.batchId ? `/shared-debts?batch=${group.batchId}` : `/shared-debts?request=${firstRow.id}`,
-          relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
-          relatedId: group.batchId || firstRow.id,
-          groupKey: 'shared_debt_payments'
+          userId: notification.receiverUserId,
+          type: 'shared_debt_request',
+          title: notification.title,
+          body: notification.body,
+          href: '/shared-debts?settlement=' + notification.settlementId,
+          relatedType: 'shared_debt_payment_intent',
+          relatedId: notification.intentId,
+          groupKey: 'monthly_pix_updates'
         });
       });
     });
 
+    const remainingOpenCents = Math.max(0, totalOpenCents - amountToConfirmCents);
+    const message = remainingOpenCents > 0
+      ? `Registrei ${deps.formatBRLFromCents(amountToConfirmCents)} fora do app. Ainda ficam ${deps.formatBRLFromCents(remainingOpenCents)} em aberto.`
+      : `Pronto! ${deps.formatCountLabel(fullySettledRequestIds.length || allocations.length, 'acerto foi encerrado', 'acertos foram encerrados')} e arquivado.`;
+
     return {
       redirectTo: fallbackRedirect,
-      flash: {
-        type: 'success',
-        message: `Pronto! ${deps.formatCountLabel(rows.length, 'acerto foi encerrado e arquivado', 'acertos foram encerrados e arquivados')}.`
-      }
+      flash: { type: 'success', message }
     };
   }
-
   function bulkConfirmReceipt({ userId, requestIds, note, redirectTo }) {
     if (!requestIds.length) {
       return { redirectTo, flash: { type: 'error', message: 'Nenhum acerto válido foi escolhido para confirmar o recebimento.' } };
@@ -1744,6 +1924,7 @@ function createSharedDebtsService(deps = {}) {
     };
   }
 
+
   return {
     archiveRequest,
     unarchiveRequest,
@@ -1752,6 +1933,7 @@ function createSharedDebtsService(deps = {}) {
     bulkArchive,
     bulkUnarchive,
     sendDraftQueue,
+    sendDraftQueues,
     discardDraftQueue,
     createManual,
     settlePrivateReminder,

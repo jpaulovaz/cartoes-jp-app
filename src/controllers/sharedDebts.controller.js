@@ -97,6 +97,16 @@ function createSharedDebtsController(deps = {}) {
       return redirectWithResult(req, res, result);
     },
 
+    bulkSendDraftQueues(req, res) {
+      const result = service.sendDraftQueues({
+        userId: req.user.id,
+        queueIds: deps.parseSharedDebtRequestIds(req.body.queue_ids || req.body.queueIds || req.body.queue_id),
+        returnTo: req.body.return_to,
+        fallback: redirectBackOr(req, '/shared-debts#draft-queues')
+      });
+      return redirectWithResult(req, res, result);
+    },
+
     createManual(req, res) {
       const result = service.createManual({ userId: req.user.id, body: req.body });
       return redirectWithResult(req, res, result);
@@ -288,6 +298,8 @@ function createSharedDebtsController(deps = {}) {
         userId: req.user.id,
         requestIds: deps.parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id),
         note: String(req.body.note || '').trim() || null,
+        amountMode: String(req.body.amount_mode || req.body.mode || 'full').trim().toLowerCase(),
+        rawAmount: req.body.amount_cents ?? req.body.amount ?? req.body.amountCents,
         returnTo: req.body.return_to,
         fallback: redirectBackOr(req, '/shared-debts')
       });

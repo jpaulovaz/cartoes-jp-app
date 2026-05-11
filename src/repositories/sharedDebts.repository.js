@@ -219,8 +219,9 @@ function createSharedDebtsRepository(deps = {}) {
         AND r.requester_user_id = ?
         AND r.status = 'accepted'
         AND COALESCE(r.request_kind, 'card') = 'card'
+        AND r.payment_marked_at IS NULL
         AND COALESCE(r.amount_cents, 0) > COALESCE(r.amount_paid_cents, 0)
-      ORDER BY COALESCE(r.source_due_year, 0) DESC, COALESCE(r.source_due_month, 0) DESC, r.id ASC
+      ORDER BY COALESCE(r.source_due_year, 0) ASC, COALESCE(r.source_due_month, 0) ASC, r.id ASC
     `).all(...requestIds, userId);
   }
 

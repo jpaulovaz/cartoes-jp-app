@@ -75,6 +75,8 @@
         return { label: 'Pix do mês confirmou esse acerto', dot: 'bg-cyan-500' };
       case 'settled_outside_app_by_sender':
         return { label: 'Recebimento registrado por fora', dot: 'bg-cyan-500' };
+      case 'partial_payment_confirmed_outside_app_by_sender':
+        return { label: 'Pagamento parcial registrado por fora', dot: 'bg-amber-500' };
       case 'settled':
         return { label: 'Recebimento confirmado', dot: 'bg-cyan-500' };
       default:
@@ -132,6 +134,54 @@
           classes: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200'
         };
     }
+  }
+
+
+
+  function draftQueueFriendKey(queue) {
+    const receiverId = Number(queue?.receiver_user_id || 0);
+    if (receiverId) return `user:${receiverId}`;
+    const email = String(queue?.receiver_user_email || queue?.receiver_email_snapshot || '').trim().toLowerCase();
+    if (email) return `email:${email}`;
+    return `name:${String(queue?.receiverDisplayName || queue?.receiver_name_snapshot || 'sem-nome').trim().toLowerCase()}`;
+  }
+
+  function buildDraftQueueFriendGroups(queues) {
+    const groups = new Map();
+    (Array.isArray(queues) ? queues : []).forEach((queue) => {
+      const key = draftQueueFriendKey(queue);
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          receiverDisplayName: queue?.receiverDisplayName || queue?.receiver_name_snapshot || queue?.receiver_user_name || queue?.receiver_user_email || 'Essa pessoa',
+          receiverEmail: queue?.receiver_user_email || queue?.receiver_email_snapshot || null,
+          queues: [],
+          queueCount: 0,
+          itemCount: 0,
+          totalCents: 0
+        });
+      }
+      const group = groups.get(key);
+      group.queues.push(queue);
+      group.queueCount += 1;
+      group.itemCount += Number(queue?.itemCount || 0);
+      group.totalCents += Number(queue?.totalCents || 0);
+    });
+
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        queues: group.queues.slice().sort((a, b) => {
+          const ay = Number(a?.source_due_year || 0);
+          const by = Number(b?.source_due_year || 0);
+          if (ay !== by) return ay - by;
+          const am = Number(a?.source_due_month || 0);
+          const bm = Number(b?.source_due_month || 0);
+          if (am !== bm) return am - bm;
+          return Number(a?.id || 0) - Number(b?.id || 0);
+        })
+      }))
+      .sort((a, b) => String(a.receiverDisplayName || '').localeCompare(String(b.receiverDisplayName || ''), 'pt-BR', { sensitivity: 'base' }));
   }
 
   function statusWeight(status) {
@@ -231,6 +281,49 @@
   function groupContainsRequest(group, requestId) {
     if (!group || !requestId) return false;
     return (group.items || []).some(item => Number(item.id) === Number(requestId));
+  }
+
+
+
+  function counterpartItemKey(item, scope) {
+    const prefix = scope === 'sent' ? 'receiver' : 'requester';
+    const userId = Number(item?.[`${prefix}_user_id`] || 0);
+    if (userId) return `user:${userId}`;
+    const email = String(item?.[`${prefix}_email`] || item?.[`${prefix}_email_snapshot`] || '').trim().toLowerCase();
+    if (email) return `email:${email}`;
+    const name = String(item?.[`${prefix}_name`] || item?.[`${prefix}_name_snapshot`] || 'sem-nome').trim().toLowerCase();
+    return `name:${name}`;
+  }
+
+  function counterpartItemName(item, scope) {
+    if (scope === 'sent') return item?.receiver_name || item?.receiver_email || item?.receiver_email_snapshot || 'Essa pessoa';
+    return item?.requester_name || item?.requester_email || 'Essa pessoa';
+  }
+
+  function buildCounterpartItemGroups(items, scope) {
+    const groups = new Map();
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      const key = counterpartItemKey(item, scope);
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          counterpartName: counterpartItemName(item, scope),
+          items: [],
+          totalCents: 0,
+          pendingCents: 0,
+          paidCents: 0,
+          actionCount: 0
+        });
+      }
+      const group = groups.get(key);
+      group.items.push(item);
+      group.totalCents += itemTotalCents(item);
+      group.pendingCents += itemPendingCents(item);
+      group.paidCents += itemPaidCents(item);
+      group.actionCount += actionStateForItem(item, scope) ? 1 : 0;
+    });
+
+    return Array.from(groups.values()).sort((a, b) => String(a.counterpartName || '').localeCompare(String(b.counterpartName || ''), 'pt-BR', { sensitivity: 'base' }));
   }
 
   function countGroupActions(group, scope) {
@@ -916,11 +1009,8 @@
   const receivedActionCount = (trackingFiltersActive ? receivedVisibleActionEntries : receivedAllActionEntries).length;
   const sentActionCount = (trackingFiltersActive ? sentVisibleActionEntries : sentAllActionEntries).length;
   const sentFriendActionGroups = buildSentFriendActionGroups(trackingFiltersActive ? sentBaseItems : sent);
-  const receivedScopeOpen = groupsContainFocus(receivedGroups, requestIdToHighlight, settlementIdToHighlight) || receivedHasActionableGroup || receivedManualSectionOpen;
-  const sentScopeOpen = groupsContainFocus(sentGroups, requestIdToHighlight, settlementIdToHighlight)
-    || sentHasActionableGroup
-    || sentManualSectionOpen
-    || sentPrivateReminderSectionOpen;
+  const receivedScopeOpen = groupsContainFocus(receivedGroups, requestIdToHighlight, settlementIdToHighlight);
+  const sentScopeOpen = groupsContainFocus(sentGroups, requestIdToHighlight, settlementIdToHighlight);
 
   function buildQuickActions() {
     const sourceReceivedItems = trackingFiltersActive ? receivedVisibleActionEntries : receivedAllActionEntries;
@@ -942,6 +1032,7 @@
   const firstQuickAction = quickActions[0] || null;
   const draftQueueSummaryMeta = draftSendQueueSummary || { queueCount: 0, itemCount: 0, totalCents: 0 };
   const draftQueueRows = Array.isArray(draftSendQueues) ? draftSendQueues : [];
+  const draftFriendGroups = buildDraftQueueFriendGroups(draftQueueRows);
 %>
 
 <div hidden data-offline-snapshot
@@ -1064,72 +1155,6 @@
   </section>
 
   <% if (!isArchiveMode) { %>
-  <section class="op-fade-up op-debts-insight-section">
-    <div class="grid gap-4 xl:grid-cols-[1.25fr,0.95fr]">
-      <article class="op-debts-overview-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div class="max-w-2xl">
-            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-500 dark:text-emerald-300">Fluxo do cartão por competência</div>
-            <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Leitura mensal do cartão</h2>
-            <p class="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">O histórico do envio continua aqui, mas o pagamento conversa com o mês do cartão entre vocês. Fica mais fácil entender quanto falta, o que já entrou e o que ainda espera confirmação.</p>
-          </div>
-          <div class="flex flex-wrap gap-2 lg:justify-end op-shared-action-row op-shared-action-row--compact">
-            <a href="#received" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Ver o que chegou</a>
-            <a href="#sent" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Ver o que você mandou</a>
-            <a href="<%= monthlyGuideHref %>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Guia completo</a>
-          </div>
-        </div>
-
-        <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70">
-            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pra pagar</div>
-            <div class="mt-1 text-2xl font-black text-slate-900 dark:text-white"><%= monthlyReceiverOpenCount %></div>
-            <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= monthlyReceiverOpenCount ? `${countLabel(monthlyReceiverOpenCount, 'mês aberto', 'meses abertos')} esperando seu pagamento ou complemento.` : 'Nada aberto do seu lado agora.' %></p>
-          </div>
-          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70">
-            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Esperando seu ok</div>
-            <div class="mt-1 text-2xl font-black text-slate-900 dark:text-white"><%= monthlySenderReviewCount %></div>
-            <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= monthlySenderReviewCount ? `${countLabel(monthlySenderReviewCount, 'mês', 'meses')} com Pix avisado e esperando sua confirmação.` : 'Nenhum Pix do mês esperando sua confirmação.' %></p>
-          </div>
-          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70">
-            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Você já avisou</div>
-            <div class="mt-1 text-2xl font-black text-slate-900 dark:text-white"><%= monthlyReceiverAwaitingCount %></div>
-            <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= monthlyReceiverAwaitingCount ? `${countLabel(monthlyReceiverAwaitingCount, 'mês', 'meses')} em que você já avisou o Pix e agora só falta o outro lado confirmar.` : 'Quando você avisar um Pix do mês, ele aparece aqui até receber o ok.' %></p>
-          </div>
-          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70">
-            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Resolvidos</div>
-            <div class="mt-1 text-2xl font-black text-slate-900 dark:text-white"><%= monthlyMovementHistoryCount %></div>
-            <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= monthlyMovementHistoryCount ? 'Pix e revisões já fechados nesse mês.' : 'Quando um Pix do mês for confirmado, ele passa a aparecer aqui.' %></p>
-          </div>
-        </div>
-      </article>
-
-      <article class="op-debts-guide-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
-        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Como usar sem se perder</div>
-        <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Hoje funciona assim</h2>
-        <div class="mt-4 space-y-3">
-          <details class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70" open>
-            <summary class="cursor-pointer list-none text-sm font-black text-slate-900 dark:text-white">1. Salvou a divisão? Ela vai para a Caixa de saída</summary>
-            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Nada é enviado na hora. Você revisa por pessoa e por mês antes de mandar, com calma e sem surpresa do outro lado.</p>
-          </details>
-          <details class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
-            <summary class="cursor-pointer list-none text-sm font-black text-slate-900 dark:text-white">2. Só vira acerto quando você enviar</summary>
-            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando fizer sentido, você abre a Caixa de saída e manda. Aí sim a outra pessoa recebe no app e o combinado começa a andar entre vocês.</p>
-          </details>
-          <details class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
-            <summary class="cursor-pointer list-none text-sm font-black text-slate-900 dark:text-white">3. Depois você acompanha por aqui</summary>
-            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">O que chegou para você fica em “Chegou pra você”. O que você mandou fica em “Você enviou”. E os acertos do cartão ficam reunidos por mês.</p>
-          </details>
-          <details class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/20">
-            <summary class="cursor-pointer list-none text-sm font-black text-slate-900 dark:text-white">4. Aceitou? Também aparece no mês</summary>
-            <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Compras aceitas aparecem junto dos lançamentos do mês. Pagamento, confirmação e contestação continuam por aqui.</p>
-          </details>
-        </div>
-        <a href="<%= monthlyGuideHref %>" target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Abrir guia completo</a>
-      </article>
-    </div>
-  </section>
-
   <section class="op-fade-up">
     <div class="op-debts-outbox-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -1190,57 +1215,98 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
       </div>
 
       <% if (draftQueueRows.length) { %>
-        <div class="mt-5 grid gap-4 xl:grid-cols-2">
-          <% draftQueueRows.forEach((queue) => { %>
-            <% const queueItems = Array.isArray(queue.items) ? queue.items : []; %>
-            <% const visibleItems = queueItems.slice(0, 4); %>
-            <% const moreItemsCount = Math.max(0, queueItems.length - visibleItems.length); %>
-            <article class="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
-              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div class="mt-5 space-y-4">
+          <% draftFriendGroups.forEach((friendGroup) => { %>
+            <% const safeQueueIds = friendGroup.queues.map((queue) => Number(queue.id || 0)).filter(Boolean); %>
+            <details class="op-shared-friend-group rounded-[28px] border border-slate-200 bg-slate-50/80 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+              <summary class="flex cursor-pointer list-none flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pronto para enviar</div>
-                  <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white"><%= queue.receiverDisplayName %> · <%= queue.periodLabel %></h3>
-                  <p class="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Atualizado em <strong><%= queue.updatedAtLabel || 'agora há pouco' %></strong><%= queue.updatedAtTimeLabel ? ` às ${queue.updatedAtTimeLabel}` : '' %>. Quando você enviar, essa pessoa passa a ver o combinado no app. Se tiver ajuste ou cancelamento, ele vai junto.</p>
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pessoa</div>
+                  <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white"><%= friendGroup.receiverDisplayName %></h3>
+                  <% if (friendGroup.receiverEmail) { %>
+                    <p class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= friendGroup.receiverEmail %></p>
+                  <% } %>
                 </div>
                 <div class="flex flex-wrap gap-2 lg:justify-end op-shared-action-row op-shared-action-row--compact">
-                  <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200"><%= queue.totalFormatted %></span>
-                  <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><%= countLabel(queue.itemCount, 'movimento', 'movimentos') %></span>
+                  <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200"><%= formatBRLFromCents(friendGroup.totalCents) %></span>
+                  <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><%= countLabel(friendGroup.queueCount, 'período', 'períodos') %></span>
+                  <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200"><%= countLabel(friendGroup.itemCount, 'movimento', 'movimentos') %></span>
+                </div>
+              </summary>
+              <div class="border-t border-slate-200 p-5 pt-4 dark:border-slate-700">
+                <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <p class="text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Envie tudo dessa pessoa de uma vez ou revise mês a mês antes do disparo.</p>
+                  <% if (safeQueueIds.length > 1) { %>
+                    <form method="post" action="/shared-debts/draft-queues/bulk/send" class="w-full lg:w-auto">
+                      <input type="hidden" name="return_to" value="<%= currentPath %>#draft-queues">
+                      <% safeQueueIds.forEach((queueId) => { %>
+                        <input type="hidden" name="queue_ids" value="<%= queueId %>">
+                      <% }) %>
+                      <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 lg:w-auto">Enviar tudo</button>
+                    </form>
+                  <% } %>
+                </div>
+
+                <div class="grid gap-4 xl:grid-cols-2">
+                  <% friendGroup.queues.forEach((queue) => { %>
+                    <% const queueItems = Array.isArray(queue.items) ? queue.items : []; %>
+                    <% const visibleItems = queueItems.slice(0, 4); %>
+                    <% const moreItemsCount = Math.max(0, queueItems.length - visibleItems.length); %>
+                    <article class="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
+                      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Competência</div>
+                          <h4 class="mt-1 text-base font-black text-slate-900 dark:text-white"><%= queue.periodLabel %></h4>
+                          <p class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">Atualizado em <strong><%= queue.updatedAtLabel || 'agora há pouco' %></strong><%= queue.updatedAtTimeLabel ? ` às ${queue.updatedAtTimeLabel}` : '' %>.</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2 sm:justify-end op-shared-action-row op-shared-action-row--compact">
+                          <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200"><%= queue.totalFormatted %></span>
+                          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"><%= countLabel(queue.itemCount, 'movimento', 'movimentos') %></span>
+                        </div>
+                      </div>
+
+                      <div class="mt-4 space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/70">
+                        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Prévia</div>
+                        <% if (visibleItems.length) { %>
+                          <div class="space-y-2">
+                            <% visibleItems.forEach((item) => { %>
+                              <% const actionMeta = draftActionMeta(item.actionKind); %>
+                              <div class="flex items-start justify-between gap-3 text-sm">
+                                <div>
+                                  <div class="flex flex-wrap items-center gap-2">
+                                    <div class="font-bold text-slate-900 dark:text-slate-100"><%= item.description_snapshot || 'Compra sem descrição' %></div>
+                                    <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] <%= actionMeta.classes %>"><%= actionMeta.label %></span>
+                                  </div>
+                                  <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= item.txnDateLabel || queue.periodLabel %></div>
+                                </div>
+                                <div class="shrink-0 text-right font-black text-slate-900 dark:text-slate-100"><%= item.amountFormatted %></div>
+                              </div>
+                            <% }) %>
+                          </div>
+                          <% if (moreItemsCount > 0) { %>
+                            <div class="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Mais <%= countLabel(moreItemsCount, 'movimento guardado', 'movimentos guardados') %> nesse mês.</div>
+                          <% } %>
+                        <% } else { %>
+                          <div class="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-3 text-sm font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Esse rascunho ficou sem itens visíveis por aqui.</div>
+                        <% } %>
+                      </div>
+
+                      <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap op-shared-action-row">
+                        <form method="post" action="/shared-debts/draft-queues/<%= queue.id %>/send" class="sm:flex-1">
+                          <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Enviar agora</button>
+                        </form>
+                        <form method="post" action="/shared-debts/draft-queues/<%= queue.id %>/discard" class="sm:flex-1">
+                          <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Descartar</button>
+                        </form>
+                      </div>
+                    </article>
+                  <% }) %>
                 </div>
               </div>
-
-              <% if (queue.previewDescriptions && queue.previewDescriptions.length) { %>
-                <div class="mt-4 flex flex-wrap gap-2">
-                  <% queue.previewDescriptions.forEach((description) => { %>
-                    <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><%= description %></span>
-                  <% }) %>
-                  <% if (queue.itemCount > queue.previewDescriptions.length) { %>
-                    <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">+ <%= queue.itemCount - queue.previewDescriptions.length %> item(ns)</span>
-                  <% } %>
-                </div>
-              <% } %>
-
-              <div class="mt-4 space-y-2 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/80">
-                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Prévia do envio</div>
-                <% if (visibleItems.length) { %>
-                  <div class="space-y-2">
-                    <% visibleItems.forEach((item) => { %>
-                      <% const actionMeta = draftActionMeta(item.actionKind); %>
-                      <div class="flex items-start justify-between gap-3 text-sm">
-                        <div>
-                          <div class="flex flex-wrap items-center gap-2">
-                            <div class="font-bold text-slate-900 dark:text-slate-100"><%= item.description_snapshot || 'Compra sem descrição' %></div>
-                            <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] <%= actionMeta.classes %>"><%= actionMeta.label %></span>
-                          </div>
-                          <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= item.txnDateLabel || queue.periodLabel %></div>
-                        </div>
-                        <div class="text-right font-black text-slate-900 dark:text-slate-100"><%= item.amountFormatted %></div>
-                      </div>
-                    <% }) %>
-                  </div>
-                  <% if (moreItemsCount > 0) { %>
-                    <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">E ainda tem mais <%= countLabel(moreItemsCount, 'movimento guardado', 'movimentos guardados') %> nesse rascunho.</div>
-                  <% } %>
-                <% } else { %>
+            </details>
+          <% }) %>
+        </div>
+      <% } else { %>
                   <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">Esse rascunho ficou sem itens visíveis por aqui. Se ele estiver estranho, pode descartar sem dó.</div>
                 <% } %>
               </div>
@@ -2242,12 +2308,28 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                 </div>
               </div>
 
-              <div class="divide-y divide-slate-200 dark:divide-slate-700">
-                <% group.items.forEach(item => {
-                  const meta = statusMeta(item);
-                  const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
-                  const timeline = timelineFor(item.id);
-                %>
+              <div class="space-y-3">
+                <% buildCounterpartItemGroups(group.items, 'received').forEach((friendGroup) => { const friendOpen = friendGroup.items.some((friendItem) => requestIdToHighlight && Number(requestIdToHighlight) === Number(friendItem.id)); %>
+                  <details class="op-shared-friend-group rounded-[26px] border border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/40 overflow-hidden" <%= friendOpen ? 'open' : '' %>>
+                    <summary class="list-none cursor-pointer px-5 py-4 bg-white/70 dark:bg-slate-950/20">
+                      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pessoa</div>
+                          <div class="mt-1 text-base font-black text-slate-900 dark:text-white"><%= friendGroup.counterpartName %></div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 sm:justify-end op-shared-action-row op-shared-action-row--compact">
+                          <% if (friendGroup.actionCount) { %><span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"><%= friendGroup.actionCount %> ação(ões)</span><% } %>
+                          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><%= countLabel(friendGroup.items.length, 'acerto', 'acertos') %></span>
+                          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><%= formatBRLFromCents(friendGroup.pendingCents) %> em aberto</span>
+                        </div>
+                      </div>
+                    </summary>
+                    <div class="divide-y divide-slate-200 dark:divide-slate-700">
+                      <% friendGroup.items.forEach(item => {
+                        const meta = statusMeta(item);
+                        const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
+                        const timeline = timelineFor(item.id);
+                      %>
                   <details id="request-<%= item.id %>" class="<%= isHighlighted ? 'bg-blue-50/70 dark:bg-blue-900/10' : 'bg-white/80 dark:bg-slate-900/20' %>" <%= isHighlighted ? 'open' : '' %>>
                     <summary class="list-none cursor-pointer px-5 py-4">
                       <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -2901,6 +2983,9 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                       <% } %>
                     </div>
                   </details>
+                      <% }) %>
+                    </div>
+                  </details>
                 <% }) %>
               </div>
             </details>
@@ -3226,21 +3311,41 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                   </div>
-                  <form method="POST" action="/shared-debts/bulk/confirm-outside-app" class="space-y-4 px-5 py-4">
+                  <form method="POST" action="/shared-debts/bulk/confirm-outside-app" class="space-y-4 px-5 py-4" data-outside-app-payment-form>
                     <% sentMonthOutsideItems.forEach((item) => { %>
                       <input type="hidden" name="request_ids" value="<%= item.id %>">
                     <% }) %>
                     <input type="hidden" name="return_to" value="<%= currentPath %>">
                     <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-                      Use quando o pagamento já aconteceu fora do app. Esses acertos serão marcados como pagos e sairão da lista ativa para você.<% if (sentMonthOutsideCounterparts > 1) { %> O aviso será separado por pessoa envolvida.<% } %>
+                      Registre valores recebidos fora do app. Você pode quitar tudo ou informar só uma parte; o restante continua em aberto.<% if (sentMonthOutsideCounterparts > 1) { %> O aviso será separado por pessoa envolvida.<% } %>
                     </div>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                      <label class="flex cursor-pointer gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+                        <input type="radio" name="amount_mode" value="full" class="mt-1" data-outside-app-payment-mode checked>
+                        <span>
+                          <span class="block text-sm font-black text-slate-900 dark:text-white">Quitar saldo aberto</span>
+                          <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Fecha os acertos escolhidos.</span>
+                        </span>
+                      </label>
+                      <label class="flex cursor-pointer gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+                        <input type="radio" name="amount_mode" value="custom" class="mt-1" data-outside-app-payment-mode>
+                        <span>
+                          <span class="block text-sm font-black text-slate-900 dark:text-white">Escolher valor</span>
+                          <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Registra pagamento parcial.</span>
+                        </span>
+                      </label>
+                    </div>
+                    <label class="block hidden" data-outside-app-custom-wrap>
+                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor recebido</span>
+                      <input name="amount" type="text" inputmode="decimal" autocomplete="off" data-money-mask data-outside-app-custom-input placeholder="R$ 0,00" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-amber-500 dark:focus:ring-amber-500/20">
+                    </label>
                     <label class="block">
                       <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação (opcional)</span>
                       <textarea name="note" rows="3" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-amber-500 dark:focus:ring-amber-500/20" placeholder="Ex.: Recebido por Pix fora do app."></textarea>
                     </label>
                     <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
                       <button type="button" data-close-sheet class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
-                      <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-600">Encerrar e arquivar</button>
+                      <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-600">Registrar pagamento</button>
                     </div>
                   </form>
                 </div>
@@ -3294,12 +3399,28 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                 </div>
               </div>
 
-              <div class="divide-y divide-slate-200 dark:divide-slate-700">
-                <% group.items.forEach(item => {
-                  const meta = statusMeta(item);
-                  const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
-                  const timeline = timelineFor(item.id);
-                %>
+              <div class="space-y-3">
+                <% buildCounterpartItemGroups(group.items, 'sent').forEach((friendGroup) => { const friendOpen = friendGroup.items.some((friendItem) => requestIdToHighlight && Number(requestIdToHighlight) === Number(friendItem.id)); %>
+                  <details class="op-shared-friend-group rounded-[26px] border border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/40 overflow-hidden" <%= friendOpen ? 'open' : '' %>>
+                    <summary class="list-none cursor-pointer px-5 py-4 bg-white/70 dark:bg-slate-950/20">
+                      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pessoa</div>
+                          <div class="mt-1 text-base font-black text-slate-900 dark:text-white"><%= friendGroup.counterpartName %></div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 sm:justify-end op-shared-action-row op-shared-action-row--compact">
+                          <% if (friendGroup.actionCount) { %><span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"><%= friendGroup.actionCount %> ação(ões)</span><% } %>
+                          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><%= countLabel(friendGroup.items.length, 'acerto', 'acertos') %></span>
+                          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><%= formatBRLFromCents(friendGroup.pendingCents) %> em aberto</span>
+                        </div>
+                      </div>
+                    </summary>
+                    <div class="divide-y divide-slate-200 dark:divide-slate-700">
+                      <% friendGroup.items.forEach(item => {
+                        const meta = statusMeta(item);
+                        const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
+                        const timeline = timelineFor(item.id);
+                      %>
                   <details id="request-<%= item.id %>" class="<%= isHighlighted ? 'bg-blue-50/70 dark:bg-blue-900/10' : 'bg-white/80 dark:bg-slate-900/20' %>" <%= isHighlighted ? 'open' : '' %>>
                     <summary class="list-none cursor-pointer px-5 py-4">
                       <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -3445,6 +3566,9 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                           </div>
                         </div>
                       <% } %>
+                    </div>
+                  </details>
+                      <% }) %>
                     </div>
                   </details>
                 <% }) %>
@@ -3715,6 +3839,25 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
     const amount = Number(decimalSafe);
     if (!Number.isFinite(amount) || amount <= 0) return 0;
     return Math.round(amount * 100);
+  }
+
+
+
+  function syncOutsideAppPaymentMode(form) {
+    if (!form) return;
+    const selectedMode = form.querySelector('[data-outside-app-payment-mode]:checked')?.value || 'full';
+    const customWrap = form.querySelector('[data-outside-app-custom-wrap]');
+    const customInput = form.querySelector('[data-outside-app-custom-input]');
+    const isCustom = selectedMode === 'custom';
+    if (customWrap) customWrap.classList.toggle('hidden', !isCustom);
+    if (customInput) {
+      customInput.disabled = !isCustom;
+      if (isCustom) {
+        window.setTimeout(() => customInput.focus(), 60);
+      } else {
+        customInput.value = '';
+      }
+    }
   }
 
   function buildCardMonthlyPreview(rows, rawAmountCents) {
@@ -4192,10 +4335,25 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
     }
   });
 
+
+
+  document.addEventListener('change', (event) => {
+    const modeInput = event.target.closest('[data-outside-app-payment-mode]');
+    if (modeInput) {
+      syncOutsideAppPaymentMode(modeInput.closest('[data-outside-app-payment-form]'));
+    }
+  });
+
   document.addEventListener('input', (event) => {
     const customInput = event.target.closest('[data-card-monthly-custom-input]');
     if (customInput) {
       window.requestAnimationFrame(renderCardMonthlyPreview);
+      return;
+    }
+
+    const outsideInput = event.target.closest('[data-outside-app-custom-input]');
+    if (outsideInput) {
+      outsideInput.dataset.lastRawValue = outsideInput.value || '';
     }
   });
 
@@ -4205,6 +4363,13 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
       const cents = parseMoneyInputToCents(customInput.value);
       customInput.value = cents ? formatClientBRL(cents) : '';
       renderCardMonthlyPreview();
+      return;
+    }
+
+    const outsideInput = event.target.closest('[data-outside-app-custom-input]');
+    if (outsideInput) {
+      const cents = parseMoneyInputToCents(outsideInput.value);
+      outsideInput.value = cents ? formatClientBRL(cents) : '';
     }
   }, true);
 
@@ -4304,6 +4469,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
   });
 
   window.addEventListener('load', () => {
+    document.querySelectorAll('[data-outside-app-payment-form]').forEach(syncOutsideAppPaymentMode);
     openSharedDebtScopeFromHash();
 
     <% if (batchIdToHighlight) { %>

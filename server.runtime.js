@@ -10225,7 +10225,7 @@ function getSharedDebtSendQueueDraftsForUser(userId) {
     WHERE q.requester_user_id = ?
       AND q.request_kind = 'card'
       AND q.status = 'draft'
-    ORDER BY q.source_due_year DESC, q.source_due_month DESC, q.updated_at DESC, q.id DESC
+    ORDER BY LOWER(COALESCE(q.receiver_name_snapshot, u.name, u.email, '')) ASC, q.source_due_year ASC, q.source_due_month ASC, q.updated_at ASC, q.id ASC
   `).all(userId);
 
   if (!queues.length) return [];

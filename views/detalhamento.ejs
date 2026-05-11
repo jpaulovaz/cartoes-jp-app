@@ -472,7 +472,7 @@
                     </div>
                 </div>
 
-                <div class="op-dashboard-kpi-grid op-dashboard-kpi-strip grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
+                <div class="op-dashboard-kpi-grid op-dashboard-kpi-strip grid grid-cols-1 gap-4 sm:grid-cols-2 <%= sharedProjectionTotalCents > 0 ? 'xl:grid-cols-6' : 'xl:grid-cols-5' %>">
                     <% const incomeTopLabel = formatBRLFromCents(incCents); %>
                     <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-income">
                         <p class="op-dashboard-kpi-card__label">Entradas</p>
@@ -508,11 +508,13 @@
                         </div>
                     </article>
 
+                    <% if (sharedProjectionTotalCents > 0) { %>
                     <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-card">
                         <p class="op-dashboard-kpi-card__label">Compartilhadas</p>
                         <h3 class="op-dashboard-kpi-card__value mt-2"><%= formatBRLFromCents(sharedProjectionTotalCents) %></h3>
-                        <p class="op-dashboard-kpi-card__note mt-3"><%= hasSharedProjectionDetail ? `${sharedProjectionDetail.count} recebida${Number(sharedProjectionDetail.count || 0) === 1 ? '' : 's'} de amigos.` : 'Sem compras recebidas de amigos neste mês.' %></p>
+                        <p class="op-dashboard-kpi-card__note mt-3"><%= `${sharedProjectionDetail.count} recebida${Number(sharedProjectionDetail.count || 0) === 1 ? '' : 's'} de amigos.` %></p>
                     </article>
+                    <% } %>
 
                     <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-committed">
                         <p class="op-dashboard-kpi-card__label">Comprometido</p>

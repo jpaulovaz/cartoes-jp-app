@@ -1596,6 +1596,94 @@ function createSharedDebtsService(deps = {}) {
     };
   }
 
+
+  function bulkConfirmOutsideApp({ userId, requestIds, note, returnTo, fallback }) {
+    const fallbackRedirect = deps.resolveSharedDebtViewPath(returnTo, fallback || '/shared-debts');
+
+    if (!requestIds.length) {
+      return { redirectTo: fallbackRedirect, flash: { type: 'error', message: 'Nenhum acerto válido foi escolhido para encerrar.' } };
+    }
+
+    const rows = repository.getAcceptedOpenRequestsForRequester(requestIds, userId);
+    if (!rows.length) {
+      return { redirectTo: fallbackRedirect, flash: { type: 'info', message: 'Não achei acertos em aberto desse mês para encerrar por fora.' } };
+    }
+
+    const actor = deps.getUserRecord(userId);
+    const actorName = actor?.name || actor?.email || 'Quem enviou';
+    const now = deps.nowIso();
+    const defaultNote = 'Pagamento acertado fora do app.';
+    const finalNote = note || defaultNote;
+
+    repository.withTransaction(() => {
+      rows.forEach((row) => {
+        const result = repository.db.prepare(`
+          UPDATE shared_debt_requests
+          SET status = 'settled',
+              amount_paid_cents = amount_cents,
+              payment_marked_at = NULL,
+              payment_note = NULL,
+              updated_at = ?,
+              resolved_at = ?
+          WHERE id = ?
+            AND requester_user_id = ?
+            AND status = 'accepted'
+            AND COALESCE(request_kind, 'card') = 'card'
+        `).run(now, now, row.id, userId);
+
+        if (!result.changes) return;
+
+        deps.addSharedDebtEvent({ requestId: row.id, actorUserId: userId, eventType: 'settled_outside_app_by_sender', note: finalNote });
+        deps.upsertSharedDebtArchiveState({
+          requestId: row.id,
+          userId,
+          isArchived: true,
+          archivedFromStatus: 'settled',
+          timestamp: now
+        });
+      });
+
+      groupSharedDebtRowsByBatch(rows).forEach((group) => {
+        const periodLabel = deps.buildSharedDebtBulkPeriodLabel(group.rows);
+        if (group.batchId) deps.touchSharedDebtBatch(group.batchId, now);
+
+        const chargeCountLabel = deps.formatCountLabel(group.rows.length, 'acerto', 'acertos');
+        const firstRow = group.rows[0];
+        const receiverName = firstRow?.receiver_name || firstRow?.receiver_email || 'você';
+        const resolvedMessage = deps.resolveCatalogText('notification.shared_debt.payment_confirmed_outside_app.bulk', {
+          credor: actorName,
+          destinatario: receiverName,
+          n_cobrancas: chargeCountLabel,
+          periodo: periodLabel || '',
+          valor_total: deps.formatBRLFromCents(group.totalCents),
+          nota: finalNote
+        }, {
+          fallbackTitle: group.rows.length > 1 ? 'Acertos encerrados' : 'Acerto encerrado',
+          fallbackBody: `${actorName} registrou o recebimento de ${chargeCountLabel}${periodLabel ? ` no período ${periodLabel}` : ''}, somando ${deps.formatBRLFromCents(group.totalCents)}.${deps.buildNoteSuffix(finalNote)}`
+        });
+
+        deps.createNotification({
+          userId: firstRow.receiver_user_id,
+          type: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
+          title: resolvedMessage.title,
+          body: resolvedMessage.body,
+          href: group.batchId ? `/shared-debts?batch=${group.batchId}` : `/shared-debts?request=${firstRow.id}`,
+          relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
+          relatedId: group.batchId || firstRow.id,
+          groupKey: 'shared_debt_payments'
+        });
+      });
+    });
+
+    return {
+      redirectTo: fallbackRedirect,
+      flash: {
+        type: 'success',
+        message: `Pronto! ${deps.formatCountLabel(rows.length, 'acerto foi encerrado e arquivado', 'acertos foram encerrados e arquivados')}.`
+      }
+    };
+  }
+
   function bulkConfirmReceipt({ userId, requestIds, note, redirectTo }) {
     if (!requestIds.length) {
       return { redirectTo, flash: { type: 'error', message: 'Nenhum acerto válido foi escolhido para confirmar o recebimento.' } };
@@ -1614,7 +1702,7 @@ function createSharedDebtsService(deps = {}) {
       rows.forEach((row) => {
         repository.db.prepare(`
           UPDATE shared_debt_requests
-          SET status = 'settled', updated_at = ?, resolved_at = ?
+          SET status = 'settled', amount_paid_cents = amount_cents, updated_at = ?, resolved_at = ?
           WHERE id = ? AND requester_user_id = ? AND status = 'accepted' AND payment_marked_at IS NOT NULL
         `).run(now, now, row.id, userId);
         deps.addSharedDebtEvent({ requestId: row.id, actorUserId: userId, eventType: 'settled', note });
@@ -1680,7 +1768,8 @@ function createSharedDebtsService(deps = {}) {
     confirmReceipt,
     bulkSenderAction,
     bulkMarkPaid,
-    bulkConfirmReceipt
+    bulkConfirmReceipt,
+    bulkConfirmOutsideApp
   };
 }
 

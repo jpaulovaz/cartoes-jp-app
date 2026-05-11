@@ -73,6 +73,8 @@
         return { label: 'Pix do mês confirmado em parte', dot: 'bg-amber-500' };
       case 'settled_via_monthly_pix':
         return { label: 'Pix do mês confirmou esse acerto', dot: 'bg-cyan-500' };
+      case 'settled_outside_app_by_sender':
+        return { label: 'Recebimento registrado por fora', dot: 'bg-cyan-500' };
       case 'settled':
         return { label: 'Recebimento confirmado', dot: 'bg-cyan-500' };
       default:
@@ -242,6 +244,10 @@
 
   function getSentMonthConfirmableItems(group) {
     return (group?.items || []).filter(item => item?.status === 'accepted' && !!item?.payment_marked_at);
+  }
+
+  function getSentMonthOutsideAppItems(group) {
+    return (group?.items || []).filter(item => item?.status === 'accepted' && !item?.payment_marked_at && !isManualItem(item) && itemPendingCents(item) > 0);
   }
 
   function sumAmountCents(items) {
@@ -1334,7 +1340,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
         </label>
 
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
-          <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+          <button type="button" data-close-sheet class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
           <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600" data-manual-debt-submit>Enviar no app</button>
         </div>
         </div>
@@ -1397,8 +1403,8 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
 
               <div class="flex flex-wrap gap-2">
                 <button type="button" data-pix-sheet-action="copy" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Copiar Pix</button>
-                <button type="button" data-pix-sheet-action="share" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Compartilhar</button>
-                <button type="button" data-pix-sheet-action="copy-key" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Copiar chave</button>
+                <button type="button" data-pix-sheet-action="share" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Compartilhar</button>
+                <button type="button" data-pix-sheet-action="copy-key" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Copiar chave</button>
               </div>
 
               <div class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-800 dark:border-sky-900 dark:bg-sky-900/20 dark:text-sky-200">
@@ -1492,7 +1498,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
           </div>
 
           <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
-            <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+            <button type="button" data-close-sheet class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
             <button type="button" data-card-monthly-generate class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-500 dark:hover:bg-emerald-600">Gerar Pix</button>
           </div>
         </div>
@@ -1540,12 +1546,12 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
 
               <div class="flex flex-wrap gap-2">
                 <button type="button" data-card-monthly-pix-action="copy" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">Copiar Pix</button>
-                <button type="button" data-card-monthly-pix-action="share" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Compartilhar</button>
-                <button type="button" data-card-monthly-back class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Gerar outro valor</button>
+                <button type="button" data-card-monthly-pix-action="share" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Compartilhar</button>
+                <button type="button" data-card-monthly-back class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Gerar outro valor</button>
               </div>
 
               <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
-                <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Fechar</button>
+                <button type="button" data-close-sheet class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Fechar</button>
                 <button type="button" data-card-monthly-report class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-sky-500 dark:hover:bg-sky-600">Já fiz o Pix</button>
               </div>
             </div>
@@ -1952,7 +1958,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                           <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= item.pix_unavailable_reason %></div>
                           <% if (item.pix_is_current_user_creditor) { %>
                             <div class="mt-3">
-                              <a href="/people" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir Minha Rede</a>
+                              <a href="/people" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir Minha Rede</a>
                             </div>
                           <% } %>
                         </div>
@@ -2016,7 +2022,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                         <div class="flex justify-end">
                           <form method="POST" action="<%= archiveToggleAction(item) %>" class="contents">
                             <input type="hidden" name="return_to" value="<%= currentPath %>">
-                            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
+                            <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
                           </form>
                         </div>
                       <% } %>
@@ -2077,21 +2083,21 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><span class="md:hidden">Visão do mês</span><span class="hidden md:inline">Visão do período</span></div>
-                    <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= receivedSettlementEntries.length ? 'Aqui o pagamento anda por pessoa, dentro do mês. O histórico por envio continua ali embaixo para consulta item a item.' : 'Abra a lista completa do mês para revisar todos os acertos recebidos de uma vez e depois abrir só o que precisar.' %></div>
+                    <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= receivedSettlementEntries.length ? 'Resumo do mês por pessoa, com a lista completa logo ao lado.' : 'Abra a lista do mês para conferir os acertos desse período.' %></div>
                   </div>
                   <div class="flex flex-col gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
-                    <button type="button" data-open-sheet="<%= receivedMonthSheetId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-100 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700">
+                    <button type="button" data-open-sheet="<%= receivedMonthSheetId %>" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-100 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700">
                       <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
                       Ver lista do mês
                     </button>
                     <% if (receivedGroupMonthHref) { %>
-                      <a href="<%= receivedGroupMonthHref %>" class="inline-flex items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:bg-emerald-900/35">Ver no mês</a>
+                      <a href="<%= receivedGroupMonthHref %>" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:bg-emerald-900/35">Ver no mês</a>
                     <% } %>
                     <% if (receivedMonthArchiveItems.length) { %>
                       <form method="POST" action="<%= isArchiveMode ? '/shared-debts/bulk/unarchive' : '/shared-debts/bulk/archive' %>" class="contents">
                         <% receivedMonthArchiveItems.forEach((archiveItem) => { %><input type="hidden" name="request_ids" value="<%= archiveItem.id %>"><% }) %>
                         <input type="hidden" name="return_to" value="<%= currentPath %>">
-                        <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleGroupLabel(receivedMonthArchiveItems) %></button>
+                        <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleGroupLabel(receivedMonthArchiveItems) %></button>
                       </form>
                     <% } %>
                   </div>
@@ -2356,7 +2362,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                         <div class="flex justify-end">
                           <form method="POST" action="<%= archiveToggleAction(item) %>" class="contents">
                             <input type="hidden" name="return_to" value="<%= currentPath %>">
-                            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
+                            <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
                           </form>
                         </div>
                       <% } %>
@@ -2494,12 +2500,12 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                             <% }) %>
                           </div>
                           <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-                            <a href="<%= reviewHref %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir itens</a>
+                            <a href="<%= reviewHref %>" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir itens</a>
                             <form method="POST" action="/shared-debts/bulk/sender-action" class="contents">
                               <% group.decisionItems.forEach((item) => { %><input type="hidden" name="request_ids" value="<%= item.id %>"><% }) %>
                               <input type="hidden" name="return_to" value="<%= currentPath %>">
                               <input type="hidden" name="action" value="accept_rejection">
-                              <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= group.decisionCount > 1 ? 'Aceitar todas' : 'Aceitar recusa' %></button>
+                              <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= group.decisionCount > 1 ? 'Aceitar todas' : 'Aceitar recusa' %></button>
                             </form>
                             <form method="POST" action="/shared-debts/bulk/sender-action" class="contents">
                               <% group.decisionItems.forEach((item) => { %><input type="hidden" name="request_ids" value="<%= item.id %>"><% }) %>
@@ -2532,7 +2538,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                             <% }) %>
                           </div>
                           <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-                            <a href="<%= reviewHref %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir itens</a>
+                            <a href="<%= reviewHref %>" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir itens</a>
                             <form method="POST" action="/shared-debts/bulk/confirm-receipt" class="contents">
                               <% group.receiptItems.forEach((item) => { %><input type="hidden" name="request_ids" value="<%= item.id %>"><% }) %>
                               <input type="hidden" name="return_to" value="<%= currentPath %>">
@@ -2673,7 +2679,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                           <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= item.pix_unavailable_reason %></div>
                           <% if (item.pix_is_current_user_creditor) { %>
                             <div class="mt-3">
-                              <a href="/people" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir Minha Rede</a>
+                              <a href="/people" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Abrir Minha Rede</a>
                             </div>
                           <% } %>
                         </div>
@@ -2737,7 +2743,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                         <div class="flex justify-end">
                           <form method="POST" action="<%= archiveToggleAction(item) %>" class="contents">
                             <input type="hidden" name="return_to" value="<%= currentPath %>">
-                            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
+                            <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
                           </form>
                         </div>
                       <% } %>
@@ -2889,7 +2895,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                         <div class="flex justify-end">
                           <form method="POST" action="<%= archiveToggleAction(item) %>" class="contents">
                             <input type="hidden" name="return_to" value="<%= currentPath %>">
-                            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
+                            <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
                           </form>
                         </div>
                       <% } %>
@@ -2922,31 +2928,36 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                 </div>
               </summary>
 
-              <% const sentMonthSheetId = `sent-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmSheetId = `sent-month-confirm-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmableItems = getSentMonthConfirmableItems(group); const sentMonthConfirmableTotal = sumAmountCents(sentMonthConfirmableItems); const sentMonthCounterparts = countDistinctCounterparts(sentMonthConfirmableItems, 'sent'); const sentMonthArchiveItems = (group.items || []).filter(canArchiveItem); const sentSettlementEntries = buildGroupSettlementEntries(group, 'sent'); const sentGroupMonthHref = groupMonthHref(group, 'sent'); %>
+              <% const sentMonthSheetId = `sent-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmSheetId = `sent-month-confirm-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthOutsideSheetId = `sent-month-outside-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmableItems = getSentMonthConfirmableItems(group); const sentMonthConfirmableTotal = sumAmountCents(sentMonthConfirmableItems); const sentMonthCounterparts = countDistinctCounterparts(sentMonthConfirmableItems, 'sent'); const sentMonthOutsideItems = getSentMonthOutsideAppItems(group); const sentMonthOutsideTotal = sumAmountCents(sentMonthOutsideItems); const sentMonthOutsideCounterparts = countDistinctCounterparts(sentMonthOutsideItems, 'sent'); const sentMonthArchiveItems = (group.items || []).filter(canArchiveItem); const sentSettlementEntries = buildGroupSettlementEntries(group, 'sent'); const sentGroupMonthHref = groupMonthHref(group, 'sent'); %>
               <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4 space-y-4">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><span class="md:hidden">Visão do mês</span><span class="hidden md:inline">Visão do período</span></div>
-                    <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= sentSettlementEntries.length ? 'Daqui você enxerga o saldo real do mês por pessoa, mesmo quando o acerto nasceu em vários envios separados.' : 'Abra a lista completa do mês para ver todos os acertos enviados de uma vez e acompanhar o panorama do período.' %></div>
+                    <div class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300"><%= sentSettlementEntries.length ? 'Resumo do mês por pessoa, com todos os envios dessa competência.' : 'Abra a lista do mês para conferir os acertos enviados nesse período.' %></div>
                   </div>
                   <div class="flex flex-col gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
-                    <button type="button" data-open-sheet="<%= sentMonthSheetId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-100 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700">
+                    <button type="button" data-open-sheet="<%= sentMonthSheetId %>" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-100 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700">
                       <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
                       Ver lista do mês
                     </button>
                     <% if (sentGroupMonthHref) { %>
-                      <a href="<%= sentGroupMonthHref %>" class="inline-flex items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition-colors hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200 dark:hover:bg-blue-900/35">Ver mês de origem</a>
+                      <a href="<%= sentGroupMonthHref %>" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition-colors hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200 dark:hover:bg-blue-900/35">Ver mês de origem</a>
                     <% } %>
                     <% if (sentMonthArchiveItems.length) { %>
                       <form method="POST" action="<%= isArchiveMode ? '/shared-debts/bulk/unarchive' : '/shared-debts/bulk/archive' %>" class="contents">
                         <% sentMonthArchiveItems.forEach((archiveItem) => { %><input type="hidden" name="request_ids" value="<%= archiveItem.id %>"><% }) %>
                         <input type="hidden" name="return_to" value="<%= currentPath %>">
-                        <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleGroupLabel(sentMonthArchiveItems) %></button>
+                        <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleGroupLabel(sentMonthArchiveItems) %></button>
                       </form>
                     <% } %>
                     <% if (!isArchiveMode && sentMonthConfirmableItems.length) { %>
-                      <button type="button" data-open-sheet="<%= sentMonthConfirmSheetId %>" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">
+                      <button type="button" data-open-sheet="<%= sentMonthConfirmSheetId %>" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">
                         Confirmar recebimento do mês
+                      </button>
+                    <% } %>
+                    <% if (!isArchiveMode && sentMonthOutsideItems.length) { %>
+                      <button type="button" data-open-sheet="<%= sentMonthOutsideSheetId %>" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 shadow-sm transition-colors hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">
+                        Encerrar por fora
                       </button>
                     <% } %>
                   </div>
@@ -3033,7 +3044,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                                     <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
                                       <button type="button" data-open-sheet="<%= rejectSheetId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Não recebi este valor</button>
                                       <% if (!intent.isStale) { %>
-                                        <button type="button" data-open-sheet="<%= confirmSheetId %>" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">Confirmar recebimento</button>
+                                        <button type="button" data-open-sheet="<%= confirmSheetId %>" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">Confirmar recebimento</button>
                                       <% } else { %>
                                         <button type="button" data-jump-request="settlement-<%= entry.id %>" class="inline-flex items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-600">Revisar carteira do mês</button>
                                       <% } %>
@@ -3128,8 +3139,8 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                                 <textarea name="note" rows="3" data-shared-debt-manual-focus class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20" placeholder="Ex.: Conferi o Pix no banco e está tudo certinho."></textarea>
                               </label>
                               <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
-                                <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
-                                <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">Confirmar recebimento</button>
+                                <button type="button" data-close-sheet class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+                                <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">Confirmar recebimento</button>
                               </div>
                             </form>
                           </div>
@@ -3157,7 +3168,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                                 <textarea name="note" rows="3" data-shared-debt-manual-focus class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-amber-500 dark:focus:ring-amber-500/20" placeholder="Ex.: Ainda não encontrei esse Pix no banco."></textarea>
                               </label>
                               <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
-                                <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+                                <button type="button" data-close-sheet class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
                                 <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-600">Devolver para o saldo</button>
                               </div>
                             </form>
@@ -3194,8 +3205,42 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                       <textarea name="note" rows="3" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20" placeholder="Ex.: Recebimento conferido no extrato deste mês."></textarea>
                     </label>
                     <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
-                      <button type="button" data-close-sheet class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
-                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">Confirmar <%= countLabel(sentMonthConfirmableItems.length, 'recebimento', 'recebimentos') %></button>
+                      <button type="button" data-close-sheet class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+                      <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">Confirmar <%= countLabel(sentMonthConfirmableItems.length, 'recebimento', 'recebimentos') %></button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+              <% } %>
+              <% if (sentMonthOutsideItems.length) { %>
+              <div id="<%= sentMonthOutsideSheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
+                <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
+                <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-w-xl sm:rounded-[32px]">
+                  <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                    <div>
+                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Você enviou · <%= group.label %></div>
+                      <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Encerrar pagamento feito por fora</h3>
+                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= countLabel(sentMonthOutsideItems.length, 'acerto em aberto', 'acertos em aberto') %> · <%= formatBRLFromCents(sentMonthOutsideTotal) %></p>
+                    </div>
+                    <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar encerramento por fora">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                  </div>
+                  <form method="POST" action="/shared-debts/bulk/confirm-outside-app" class="space-y-4 px-5 py-4">
+                    <% sentMonthOutsideItems.forEach((item) => { %>
+                      <input type="hidden" name="request_ids" value="<%= item.id %>">
+                    <% }) %>
+                    <input type="hidden" name="return_to" value="<%= currentPath %>">
+                    <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                      Use quando o pagamento já aconteceu fora do app. Esses acertos serão marcados como pagos e sairão da lista ativa para você.<% if (sentMonthOutsideCounterparts > 1) { %> O aviso será separado por pessoa envolvida.<% } %>
+                    </div>
+                    <label class="block">
+                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação (opcional)</span>
+                      <textarea name="note" rows="3" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-amber-500 dark:focus:ring-amber-500/20" placeholder="Ex.: Recebido por Pix fora do app."></textarea>
+                    </label>
+                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
+                      <button type="button" data-close-sheet class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+                      <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-600">Encerrar e arquivar</button>
                     </div>
                   </form>
                 </div>
@@ -3373,7 +3418,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                         <div class="flex justify-end">
                           <form method="POST" action="<%= archiveToggleAction(item) %>" class="contents">
                             <input type="hidden" name="return_to" value="<%= currentPath %>">
-                            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
+                            <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"><%= archiveToggleLabel(item) %></button>
                           </form>
                         </div>
                       <% } %>

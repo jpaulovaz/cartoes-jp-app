@@ -281,6 +281,17 @@ function createSharedDebtsController(deps = {}) {
         redirectTo: redirectBackOr(req, req.body.return_to || '/shared-debts')
       });
       return redirectWithResult(req, res, result);
+    },
+
+    bulkConfirmOutsideApp(req, res) {
+      const result = service.bulkConfirmOutsideApp({
+        userId: req.user.id,
+        requestIds: deps.parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id),
+        note: String(req.body.note || '').trim() || null,
+        returnTo: req.body.return_to,
+        fallback: redirectBackOr(req, '/shared-debts')
+      });
+      return redirectWithResult(req, res, result);
     }
   };
 }

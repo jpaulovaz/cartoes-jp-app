@@ -209,6 +209,21 @@ function createSharedDebtsRepository(deps = {}) {
     `).all(...requestIds, userId);
   }
 
+  function getAcceptedOpenRequestsForRequester(requestIds, userId) {
+    const placeholders = requestIds.map(() => '?').join(', ');
+    return db.prepare(`
+      SELECT r.*, u.name AS receiver_name, u.email AS receiver_email
+      FROM shared_debt_requests r
+      JOIN users u ON u.id = r.receiver_user_id
+      WHERE r.id IN (${placeholders})
+        AND r.requester_user_id = ?
+        AND r.status = 'accepted'
+        AND COALESCE(r.request_kind, 'card') = 'card'
+        AND COALESCE(r.amount_cents, 0) > COALESCE(r.amount_paid_cents, 0)
+      ORDER BY COALESCE(r.source_due_year, 0) DESC, COALESCE(r.source_due_month, 0) DESC, r.id ASC
+    `).all(...requestIds, userId);
+  }
+
   function getAcceptedMarkedRequestsForRequester(requestIds, userId) {
     const placeholders = requestIds.map(() => '?').join(', ');
     return db.prepare(`
@@ -255,6 +270,7 @@ function createSharedDebtsRepository(deps = {}) {
     getManualSharedDebtRequestForParticipant,
     updateManualSharedDebtLastPix,
     getAcceptedRequestsForReceiver,
+    getAcceptedOpenRequestsForRequester,
     getAcceptedMarkedRequestsForRequester,
     getRejectedRequestsForRequester
   };

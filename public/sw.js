@@ -1,5 +1,5 @@
-const STATIC_CACHE = 'acerttapay-static-v20260511-6';
-const RUNTIME_CACHE = 'acerttapay-runtime-v20260511-6';
+const STATIC_CACHE = 'acerttapay-static-v20260511-7';
+const RUNTIME_CACHE = 'acerttapay-runtime-v20260511-7';
 const OFFLINE_FALLBACK_URL = '/offline.html';
 const PRECACHE_URLS = [
   OFFLINE_FALLBACK_URL,

@@ -278,11 +278,11 @@
   </style>
   <div data-import-review-modal data-initial-open="1" class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-0 sm:items-center sm:p-5">
     <div class="absolute inset-0 backdrop-blur-[2px]" data-import-review-backdrop></div>
-    <section class="op-import-review-modal relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-slate-900 sm:h-auto sm:max-h-[94vh] sm:max-w-[96vw] 2xl:max-w-[1480px] sm:rounded-[30px] sm:border sm:border-slate-200 sm:ring-1 sm:ring-slate-200 dark:sm:border-slate-700 dark:sm:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="import-review-title">
+    <section class="op-import-review-modal op-import-review-modal--adaptive relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-slate-900 sm:h-auto sm:max-h-[94vh] sm:max-w-[96vw] 2xl:max-w-[1480px] sm:rounded-[30px] sm:border sm:border-slate-200 sm:ring-1 sm:ring-slate-200 dark:sm:border-slate-700 dark:sm:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="import-review-title">
       <form id="import-review-form" method="post" action="/import/confirm" class="flex min-h-0 flex-1 flex-col">
         <input type="hidden" name="preview_id" value="<%= preview.id %>">
 
-        <div class="border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-6 lg:px-7">
+        <div class="op-import-review-header border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-6 lg:px-7">
           <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div class="min-w-0">
               <div class="text-[11px] font-black uppercase tracking-[0.22em] text-violet-600 dark:text-violet-300">Revisao antes de importar</div>
@@ -299,7 +299,7 @@
             </div>
           </div>
 
-          <div class="mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+          <div class="op-import-review-kpis mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3.5 dark:border-slate-700 dark:bg-slate-950/70">
               <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">No arquivo</div>
               <div class="mt-2 text-[1.65rem] font-black leading-none text-slate-900 dark:text-slate-100"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></div>
@@ -323,7 +323,7 @@
           </div>
         </div>
 
-        <div class="border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-6 lg:px-7">
+        <div class="op-import-review-tabs border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-6 lg:px-7">
           <div class="flex gap-2 overflow-x-auto pb-1">
             <button type="button" data-review-tab-trigger="app" class="min-w-[220px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800">
               <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">1. Suspeitas no app</div>
@@ -352,7 +352,7 @@
           </div>
         </div>
 
-        <div class="min-h-0 flex-1 overflow-y-auto bg-slate-50/85 px-4 py-4 dark:bg-slate-950/45 sm:px-6 lg:px-7" data-review-tab-container data-default-tab="<%= defaultReviewTab %>" data-file-total-cents="<%= previewSummary.parsedTotalCents || 0 %>" data-existing-total-cents="<%= previewSummary.existingTotalCents || 0 %>" data-existing-count="<%= previewSummary.existingCount || 0 %>">
+        <div class="op-import-review-body min-h-0 flex-1 overflow-y-auto bg-slate-50/85 px-4 py-4 dark:bg-slate-950/45 sm:px-6 lg:px-7" data-review-tab-container data-default-tab="<%= defaultReviewTab %>" data-file-total-cents="<%= previewSummary.parsedTotalCents || 0 %>" data-existing-total-cents="<%= previewSummary.existingTotalCents || 0 %>" data-existing-count="<%= previewSummary.existingCount || 0 %>">
           <section data-review-tab-panel="app" class="space-y-3.5">
             <% if (!previewAppCandidates.length) { %>
               <div class="rounded-[24px] border border-dashed border-slate-300 bg-white px-5 py-8 text-center text-sm font-medium text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">
@@ -812,7 +812,7 @@
             </div>
           </section>
 
-        <div class="border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-6 lg:px-7">
+        <div class="op-import-review-footer border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-6 lg:px-7">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="max-w-4xl text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Agora o espelho compara o valor do arquivo com o total que esse cartao vai ter depois da importacao. Assim fica mais fácil decidir se a fatura fechada realmente vai bater.</div>
             <div class="flex shrink-0 flex-col gap-2.5 sm:flex-row">

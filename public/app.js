@@ -4421,5 +4421,25 @@
     });
   }
 
+
+  function bindDraftPreviewToggles() {
+    document.querySelectorAll('[data-draft-preview-toggle]').forEach((button) => {
+      if (!(button instanceof HTMLButtonElement) || button.dataset.draftPreviewBound === '1') return;
+      button.dataset.draftPreviewBound = '1';
+      button.addEventListener('click', () => {
+        const preview = button.closest('[data-draft-preview]');
+        if (!preview) return;
+        const shouldExpand = button.getAttribute('aria-expanded') !== 'true';
+        preview.querySelectorAll('[data-draft-preview-extra]').forEach((item) => {
+          item.classList.toggle('hidden', !shouldExpand);
+        });
+        button.setAttribute('aria-expanded', shouldExpand ? 'true' : 'false');
+        const label = button.querySelector('[data-draft-preview-toggle-label]');
+        if (label) label.textContent = shouldExpand ? 'Ocultar' : 'Exibir todos';
+      });
+    });
+  }
+
+  onReady(bindDraftPreviewToggles);
   onReady(bindComprasComigoChargeButtons);
 })();

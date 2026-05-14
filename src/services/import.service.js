@@ -172,9 +172,24 @@ function createImportService(deps = {}) {
         ? repository.getTransactionScopeRowsByIds(userId, persistResult.overwrittenIds)
         : [];
 
+      let sharedDebtPolicySummary = null;
       if (overwrittenRows.length) {
         repository.syncEqualAllocationsForEditedTransactions(userId, overwrittenRows);
-        repository.queueSharedDebtDraftsForTransactions(userId, overwrittenRows);
+        if (typeof repository.applyImportOverwriteSharedDebtPolicy === 'function') {
+          sharedDebtPolicySummary = repository.applyImportOverwriteSharedDebtPolicy(
+            userId,
+            overwrittenRows,
+            persistResult.overwriteChanges || []
+          );
+          const rowsNeedingDraft = Array.isArray(sharedDebtPolicySummary?.rowsNeedingDraft)
+            ? sharedDebtPolicySummary.rowsNeedingDraft
+            : overwrittenRows;
+          if (rowsNeedingDraft.length) {
+            repository.queueSharedDebtDraftsForTransactions(userId, rowsNeedingDraft);
+          }
+        } else {
+          repository.queueSharedDebtDraftsForTransactions(userId, overwrittenRows);
+        }
       }
 
       const feedback = repository.buildImportConfirmationMessage(preview, {
@@ -184,6 +199,12 @@ function createImportService(deps = {}) {
         futureCreatedCount: persistResult.futureCreatedCount,
         blockedFutureExpansionCount: persistResult.blockedFutureExpansionCount
       });
+      const silentSharedDebtCount = Number(sharedDebtPolicySummary?.updatedRequestCount || 0)
+        + Number(sharedDebtPolicySummary?.updatedDraftItemCount || 0)
+        + Number(sharedDebtPolicySummary?.removedDraftItemCount || 0);
+      if (silentSharedDebtCount > 0 && feedback && typeof feedback.message === 'string') {
+        feedback.message += ` Também ajustamos ${repository.formatCountLabel(silentSharedDebtCount, 'cobrança vinculada', 'cobranças vinculadas')} sem mexer nos valores.`;
+      }
       repository.clearImportPreview(req);
       repository.setImportFormSeed(req, preview.formSeed || null);
       return {

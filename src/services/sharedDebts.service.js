@@ -250,15 +250,21 @@ function createSharedDebtsService(deps = {}) {
 
     let sentQueues = 0;
     let sentItems = 0;
-    ids.forEach((queueId) => {
-      try {
-        const result = deps.sendSharedDebtDraftQueue(userId, queueId);
-        sentQueues += 1;
-        sentItems += Number(result?.itemCount || 0);
-      } catch (error) {
-        // Se uma fila já saiu da caixa por outro caminho, seguimos com as demais.
-      }
-    });
+    if (typeof deps.sendSharedDebtDraftQueuesBulk === 'function') {
+      const result = deps.sendSharedDebtDraftQueuesBulk(userId, ids);
+      sentQueues = Number(result?.sentQueueCount || 0);
+      sentItems = Number(result?.sentItemCount || 0);
+    } else {
+      ids.forEach((queueId) => {
+        try {
+          const result = deps.sendSharedDebtDraftQueue(userId, queueId);
+          sentQueues += 1;
+          sentItems += Number(result?.itemCount || 0);
+        } catch (error) {
+          // Se uma fila já saiu da caixa por outro caminho, seguimos com as demais.
+        }
+      });
+    }
 
     if (!sentQueues) {
       return { redirectTo: fallbackRedirect, flash: { type: 'info', message: 'Essas cobranças já tinham saído da caixa ou não estavam disponíveis.' } };
@@ -640,20 +646,33 @@ function createSharedDebtsService(deps = {}) {
 
     rows.forEach((row) => {
       const requesterId = Number(row?.requester_user_id || 0);
-      const batchId = Number(row?.batch_id || 0);
-      const key = `${requesterId || 'sem-remetente'}:${batchId || 'sem-lote'}`;
+      const key = String(requesterId || 'sem-remetente');
       if (!groups.has(key)) {
         groups.set(key, {
           requesterUserId: requesterId,
           requesterName: row?.requester_name || row?.requester_email || 'quem enviou',
-          batchId: batchId || null,
           rows: [],
-          totalCents: 0
+          batchIds: new Set(),
+          periods: new Map(),
+          totalCents: 0,
+          regularCount: 0,
+          manualCount: 0
         });
       }
       const group = groups.get(key);
+      const batchId = Number(row?.batch_id || 0);
+      const requestKind = deps.normalizeSharedDebtRequestKind(row?.request_kind);
+      const month = Number(row?.source_due_month || 0);
+      const year = Number(row?.source_due_year || 0);
       group.rows.push(row);
       group.totalCents += Number(row?.amount_cents || 0);
+      if (batchId) group.batchIds.add(batchId);
+      if (requestKind === 'manual') group.manualCount += 1;
+      else group.regularCount += 1;
+      if (month && year) {
+        const periodKey = `${year}-${String(month).padStart(2, '0')}`;
+        if (!group.periods.has(periodKey)) group.periods.set(periodKey, { source_due_month: month, source_due_year: year });
+      }
     });
 
     repository.withTransaction(() => {
@@ -670,22 +689,59 @@ function createSharedDebtsService(deps = {}) {
       Array.from(groups.values()).forEach((group) => {
         if (!group.requesterUserId) return;
         const firstRow = group.rows[0];
-        const countLabel = deps.formatCountLabel(group.rows.length, 'cobrança', 'cobranças');
-        const title = accepted
-          ? (group.rows.length > 1 ? 'Cobranças aceitas' : 'Cobrança aceita')
-          : (group.rows.length > 1 ? 'Cobranças recusadas' : 'Cobrança recusada');
-        const body = accepted
-          ? `${actorName} aceitou ${countLabel}, somando ${deps.formatBRLFromCents(group.totalCents)}.${deps.buildNoteSuffix(note)}`
-          : `${actorName} recusou ${countLabel}, somando ${deps.formatBRLFromCents(group.totalCents)}.${deps.buildNoteSuffix(note)}`;
+        const batchIds = Array.from(group.batchIds).filter(Boolean);
+        const periodRows = Array.from(group.periods.values()).sort((a, b) => {
+          const rankA = (Number(a.source_due_year || 0) * 100) + Number(a.source_due_month || 0);
+          const rankB = (Number(b.source_due_year || 0) * 100) + Number(b.source_due_month || 0);
+          return rankA - rankB;
+        });
+        const periodLabel = deps.buildSharedDebtBulkPeriodLabel(periodRows) || '';
+        const periodCountLabel = periodRows.length ? deps.formatCountLabel(periodRows.length, 'período', 'períodos') : '';
+        const kindVariant = group.manualCount > 0 && group.regularCount > 0
+          ? 'mixed'
+          : group.manualCount > 0
+            ? 'manual'
+            : 'regular';
+        const actionKey = accepted ? 'accept' : 'reject';
+        const isSingleRequest = group.rows.length === 1;
+        const isSingleBatch = batchIds.length === 1 && group.rows.every((row) => Number(row?.batch_id || 0) === batchIds[0]);
+        const messageScope = isSingleRequest && !isSingleBatch
+          ? 'single'
+          : (isSingleBatch && kindVariant !== 'mixed' ? 'batch' : 'bulk_response');
+        const messageKey = messageScope === 'bulk_response'
+          ? `notification.shared_debt.bulk_response.${actionKey}.${kindVariant}`
+          : `notification.shared_debt.${messageScope}.response.${actionKey}.${kindVariant === 'manual' ? 'manual' : 'regular'}`;
+        const regularCountLabel = deps.formatCountLabel(group.regularCount || group.rows.length, 'cobrança', 'cobranças');
+        const manualCountLabel = deps.formatCountLabel(group.manualCount || group.rows.length, 'lembrete avulso', 'lembretes avulsos');
+        const totalCountLabel = kindVariant === 'manual' ? manualCountLabel : regularCountLabel;
+        const fallbackTitle = accepted
+          ? (kindVariant === 'manual' ? 'Lembretes aceitos' : 'Cobranças aceitas')
+          : (kindVariant === 'manual' ? 'Lembretes recusados' : 'Cobranças recusadas');
+        const fallbackBody = `${actorName} ${accepted ? 'aceitou' : 'recusou'} ${totalCountLabel}, somando ${deps.formatBRLFromCents(group.totalCents)}${periodLabel ? ` em ${periodLabel}` : ''}.${deps.buildNoteSuffix(note)}`;
+        const resolvedMessage = deps.resolveCatalogText(messageKey, {
+          destinatario: actorName,
+          n_cobrancas: regularCountLabel,
+          n_lembretes: manualCountLabel,
+          valor_total: deps.formatBRLFromCents(group.totalCents),
+          n_periodos: periodCountLabel,
+          periodos: periodLabel,
+          nota: note || '',
+          valor: deps.formatBRLFromCents(firstRow?.amount_cents || 0),
+          descricao: firstRow?.description_snapshot || ''
+        }, {
+          fallbackTitle,
+          fallbackBody
+        });
+        const relatedBatchId = isSingleBatch ? batchIds[0] : null;
 
         deps.createNotification({
           userId: group.requesterUserId,
-          type: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
-          title,
-          body,
-          href: firstRow?.id ? `/shared-debts?request=${firstRow.id}` : '/shared-debts',
-          relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
-          relatedId: group.batchId || firstRow?.id || null,
+          type: relatedBatchId ? 'shared_debt_batch' : 'shared_debt_request',
+          title: resolvedMessage.title,
+          body: resolvedMessage.body,
+          href: messageScope === 'bulk_response' ? '/shared-debts#sent' : (firstRow?.id ? `/shared-debts?request=${firstRow.id}` : '/shared-debts#sent'),
+          relatedType: relatedBatchId ? 'shared_debt_batch' : 'shared_debt_request',
+          relatedId: relatedBatchId || firstRow?.id || null,
           groupKey: 'shared_debt_updates'
         });
       });

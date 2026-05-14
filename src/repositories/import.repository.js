@@ -20,6 +20,7 @@ function createImportRepository(deps = {}) {
     getTransactionScopeRowsByIds,
     syncEqualAllocationsForEditedTransactions,
     queueSharedDebtDraftsForTransactions,
+    applyImportOverwriteSharedDebtPolicy,
     buildImportConfirmationMessage
   } = deps;
 
@@ -143,6 +144,7 @@ function createImportRepository(deps = {}) {
       `);
 
       const overwrittenIds = [];
+      const overwriteChanges = [];
       (transactionPayload.overwriteActions || []).forEach((action) => {
         const currentTarget = getImportOverwriteTargetRow(userId, action.targetTransactionId);
         if (!currentTarget) {
@@ -256,6 +258,13 @@ function createImportRepository(deps = {}) {
           now
         );
         overwrittenIds.push(action.targetTransactionId);
+        overwriteChanges.push({
+          transactionId: Number(action.targetTransactionId || 0),
+          beforeSnapshot,
+          afterSnapshot,
+          importId: importId || null,
+          previewItemId: action.item.id || null
+        });
 
         if (installmentPlan && !installmentPlan.hasConflict) {
           const rootParentTxnId = installmentPlan.overwriteCurrentParentTxnId
@@ -277,6 +286,7 @@ function createImportRepository(deps = {}) {
       return {
         importId,
         overwrittenIds: Array.from(new Set(overwrittenIds)),
+        overwriteChanges,
         createdTransactionCount,
         importedCurrentCount,
         futureCreatedCount,
@@ -308,6 +318,7 @@ function createImportRepository(deps = {}) {
     getTransactionScopeRowsByIds,
     syncEqualAllocationsForEditedTransactions,
     queueSharedDebtDraftsForTransactions,
+    applyImportOverwriteSharedDebtPolicy,
     buildImportConfirmationMessage,
     findActiveCardById,
     persistImportConfirmation

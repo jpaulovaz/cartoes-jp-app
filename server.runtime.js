@@ -6133,6 +6133,7 @@ function recordSharedDebtBatchChange(context, payload) {
       requestIds: new Set(),
       receiverName: payload?.receiverName || null,
       descriptions: [],
+      periods: new Map(),
       totalCents: 0,
       createdCount: 0,
       updatedCount: 0,
@@ -6147,6 +6148,15 @@ function recordSharedDebtBatchChange(context, payload) {
   entry.totalCents += Number(payload?.amountCents || 0);
   if (payload?.description && entry.descriptions.length < 3 && !entry.descriptions.includes(payload.description)) {
     entry.descriptions.push(payload.description);
+  }
+
+  const sourceDueMonth = Number(payload?.sourceDueMonth || 0);
+  const sourceDueYear = Number(payload?.sourceDueYear || 0);
+  if (sourceDueMonth && sourceDueYear) {
+    const periodKey = `${sourceDueYear}-${String(sourceDueMonth).padStart(2, '0')}`;
+    if (!entry.periods.has(periodKey)) {
+      entry.periods.set(periodKey, { source_due_month: sourceDueMonth, source_due_year: sourceDueYear });
+    }
   }
 
   if (payload?.kind === 'updated') entry.updatedCount += 1;
@@ -6215,6 +6225,128 @@ function flushSharedDebtBatchNotifications(context) {
       groupKey: onlyCreated ? 'shared_debt_new' : 'shared_debt_updates'
     });
   });
+}
+
+function buildSharedDebtBulkSendNotificationPayload({ requesterDisplayName, itemCount, totalCents, descriptions, periods, createdCount, updatedCount, cancelledCount, messageKey }) {
+  const safeCount = Math.max(0, Number(itemCount || 0));
+  const preview = (descriptions || []).filter(Boolean).slice(0, 3).join(' · ');
+  const formattedTotal = formatBRLFromCents(Number(totalCents || 0));
+  const countLabel = formatCountLabel(safeCount, 'cobrança', 'cobranças');
+  const periodLabel = buildSharedDebtBulkPeriodLabel(periods || []) || '';
+  const periodCount = Array.isArray(periods) ? periods.length : 0;
+  const periodCountLabel = periodCount ? formatCountLabel(periodCount, 'período', 'períodos') : '';
+  const resolved = resolveCatalogText(messageKey, {
+    remetente: requesterDisplayName,
+    n_cobrancas: countLabel,
+    valor_total: formattedTotal,
+    n_periodos: periodCountLabel,
+    periodos: periodLabel,
+    previsao_descricoes: preview,
+    n_novas: formatCountLabel(Math.max(0, Number(createdCount || 0)), 'nova', 'novas'),
+    n_atualizadas: formatCountLabel(Math.max(0, Number(updatedCount || 0)), 'atualizada', 'atualizadas'),
+    n_canceladas: formatCountLabel(Math.max(0, Number(cancelledCount || 0)), 'cancelada', 'canceladas')
+  }, {
+    fallbackTitle: 'Atualização compartilhada sem chuva de avisos',
+    fallbackBody: `${requesterDisplayName} enviou ${countLabel}${periodLabel ? ` de ${periodLabel}` : ''}, somando ${formattedTotal}${preview ? `. Entraram nessa leva: ${preview}.` : '.'}`
+  });
+
+  return {
+    title: resolved.title,
+    body: resolved.body
+  };
+}
+
+function flushSharedDebtBulkNotifications(context) {
+  if (!context || !context.changesByBatch || !context.changesByBatch.size) return { notificationCount: 0 };
+
+  const byReceiver = new Map();
+  context.changesByBatch.forEach((entry) => {
+    const itemCount = entry.requestIds?.size || 0;
+    if (!itemCount) return;
+    const receiverUserId = Number(entry.receiverUserId || 0);
+    if (!receiverUserId) return;
+
+    if (!byReceiver.has(receiverUserId)) {
+      byReceiver.set(receiverUserId, {
+        receiverUserId,
+        batchIds: new Set(),
+        requestIds: new Set(),
+        descriptions: [],
+        periods: new Map(),
+        totalCents: 0,
+        createdCount: 0,
+        updatedCount: 0,
+        cancelledCount: 0
+      });
+    }
+
+    const receiverEntry = byReceiver.get(receiverUserId);
+    if (entry.batchId) receiverEntry.batchIds.add(Number(entry.batchId));
+    (entry.requestIds || new Set()).forEach((requestId) => receiverEntry.requestIds.add(Number(requestId)));
+    receiverEntry.totalCents += Number(entry.totalCents || 0);
+    receiverEntry.createdCount += Number(entry.createdCount || 0);
+    receiverEntry.updatedCount += Number(entry.updatedCount || 0);
+    receiverEntry.cancelledCount += Number(entry.cancelledCount || 0);
+    (entry.descriptions || []).forEach((description) => {
+      if (description && receiverEntry.descriptions.length < 3 && !receiverEntry.descriptions.includes(description)) {
+        receiverEntry.descriptions.push(description);
+      }
+    });
+    if (entry.periods && typeof entry.periods.forEach === 'function') {
+      entry.periods.forEach((period, key) => {
+        if (!receiverEntry.periods.has(key)) receiverEntry.periods.set(key, period);
+      });
+    }
+  });
+
+  let notificationCount = 0;
+  byReceiver.forEach((entry) => {
+    const batchIds = Array.from(entry.batchIds).filter(Boolean);
+    batchIds.forEach((batchId) => refreshSharedDebtBatch(batchId));
+
+    const itemCount = entry.requestIds.size;
+    const onlyCreated = entry.createdCount > 0 && entry.updatedCount === 0 && entry.cancelledCount === 0;
+    const onlyUpdated = entry.updatedCount > 0 && entry.createdCount === 0 && entry.cancelledCount === 0;
+    const onlyCancelled = entry.cancelledCount > 0 && entry.createdCount === 0 && entry.updatedCount === 0;
+    const messageKey = onlyCreated
+      ? 'notification.shared_debt.bulk_send.new'
+      : onlyUpdated
+        ? 'notification.shared_debt.bulk_send.updated'
+        : onlyCancelled
+          ? 'notification.shared_debt.bulk_send.adjusted'
+          : 'notification.shared_debt.bulk_send.mixed';
+
+    const periods = Array.from(entry.periods.values()).sort((a, b) => {
+      const rankA = (Number(a.source_due_year || 0) * 100) + Number(a.source_due_month || 0);
+      const rankB = (Number(b.source_due_year || 0) * 100) + Number(b.source_due_month || 0);
+      return rankA - rankB;
+    });
+    const resolvedMessage = buildSharedDebtBulkSendNotificationPayload({
+      requesterDisplayName: context.requesterDisplayName || 'Um usuário',
+      itemCount,
+      totalCents: entry.totalCents,
+      descriptions: entry.descriptions,
+      periods,
+      createdCount: entry.createdCount,
+      updatedCount: entry.updatedCount,
+      cancelledCount: entry.cancelledCount,
+      messageKey
+    });
+
+    createNotification({
+      userId: entry.receiverUserId,
+      type: 'shared_debt_batch',
+      title: resolvedMessage.title,
+      body: resolvedMessage.body,
+      href: batchIds.length === 1 ? `/shared-debts?batch=${batchIds[0]}` : '/shared-debts#received-inbox',
+      relatedType: 'shared_debt_batch',
+      relatedId: batchIds[0] || null,
+      groupKey: onlyCreated ? 'shared_debt_new' : 'shared_debt_updates'
+    });
+    notificationCount += 1;
+  });
+
+  return { notificationCount };
 }
 
 function buildSharedDebtBatchCards(items, scope) {
@@ -10203,6 +10335,358 @@ function queueSharedDebtDraftsForTransactions(userId, targetRows = []) {
   return summary;
 }
 
+
+
+function buildSharedDebtSilentMetadataSnapshot(userId, txn, allocationRow) {
+  const sourceTransactionId = Number(txn?.id || 0);
+  const sourcePersonId = Number(allocationRow?.person_id || 0);
+  const receiverUserId = Number(allocationRow?.receiver_user_id || 0);
+  const sourceDueMonth = Number(txn?.due_month || 0);
+  const sourceDueYear = Number(txn?.due_year || 0);
+  if (!sourceTransactionId || !sourcePersonId || !receiverUserId || !sourceDueMonth || !sourceDueYear) return null;
+
+  return {
+    requesterUserId: Number(userId || 0),
+    receiverUserId,
+    sourceTransactionId,
+    sourceAllocationId: Number(allocationRow?.allocation_id || 0) || null,
+    sourcePersonId,
+    sourceDueMonth,
+    sourceDueYear,
+    sourceTxnDateSnapshot: txn?.txn_date || null,
+    cardId: Number(txn?.card_id || 0) || null,
+    cardNameSnapshot: txn?.card_name || null,
+    descriptionSnapshot: txn?.description || '(sem descrição)',
+    amountCents: Number(allocationRow?.share_cents || 0),
+    receiverEmailSnapshot: normalizeEmail(allocationRow?.person_email || allocationRow?.receiver_user_email),
+    receiverNameSnapshot: allocationRow?.person_name || allocationRow?.receiver_user_name || null
+  };
+}
+
+function sharedDebtSilentMetadataDiffers(currentRow, nextSnapshot) {
+  if (!currentRow || !nextSnapshot) return false;
+  return [
+    Number(currentRow.source_allocation_id || 0) !== Number(nextSnapshot.sourceAllocationId || 0),
+    String(currentRow.source_txn_date_snapshot || '') !== String(nextSnapshot.sourceTxnDateSnapshot || ''),
+    Number(currentRow.card_id || 0) !== Number(nextSnapshot.cardId || 0),
+    String(currentRow.card_name_snapshot || '') !== String(nextSnapshot.cardNameSnapshot || ''),
+    String(currentRow.description_snapshot || '') !== String(nextSnapshot.descriptionSnapshot || ''),
+    String(currentRow.receiver_email_snapshot || '') !== String(nextSnapshot.receiverEmailSnapshot || ''),
+    String(currentRow.receiver_name_snapshot || '') !== String(nextSnapshot.receiverNameSnapshot || '')
+  ].some(Boolean);
+}
+
+function sharedDebtSilentFinancialIdentityMatches(row, nextSnapshot) {
+  if (!row || !nextSnapshot) return false;
+  return Number(row.receiver_user_id || 0) === Number(nextSnapshot.receiverUserId || 0)
+    && Number(row.source_transaction_id || 0) === Number(nextSnapshot.sourceTransactionId || 0)
+    && Number(row.source_person_id || 0) === Number(nextSnapshot.sourcePersonId || 0)
+    && Number(row.source_due_month || 0) === Number(nextSnapshot.sourceDueMonth || 0)
+    && Number(row.source_due_year || 0) === Number(nextSnapshot.sourceDueYear || 0)
+    && Number(row.amount_cents || 0) === Number(nextSnapshot.amountCents || 0);
+}
+
+function hasProtectedSharedDebtActivityForSilentMetadataSync(requestRow) {
+  const status = String(requestRow?.status || '').trim().toLowerCase();
+  if (status !== 'accepted') return false;
+  if (Number(requestRow?.amount_paid_cents || 0) > 0) return true;
+  if (requestRow?.payment_marked_at || requestRow?.resolved_at) return true;
+
+  const month = Number(requestRow?.source_due_month || 0);
+  const year = Number(requestRow?.source_due_year || 0);
+  const requesterUserId = Number(requestRow?.requester_user_id || 0);
+  const receiverUserId = Number(requestRow?.receiver_user_id || 0);
+  if (!requesterUserId || !receiverUserId || !month || !year) return true;
+
+  const snapshot = getSharedDebtCardMonthlySettlementSnapshot({ requesterUserId, receiverUserId, month, year });
+  return !!snapshot?.hasProtectedActivity;
+}
+
+function loadSilentSharedDebtSyncDraftItems(userId, txnId) {
+  return db.prepare(`
+    SELECT i.*, q.receiver_email_snapshot AS queue_receiver_email_snapshot, q.receiver_name_snapshot AS queue_receiver_name_snapshot
+    FROM shared_debt_send_queue_items i
+    JOIN shared_debt_send_queues q ON q.id = i.queue_id
+    WHERE q.requester_user_id = ?
+      AND q.request_kind = 'card'
+      AND q.status = 'draft'
+      AND i.cancelled_at IS NULL
+      AND i.source_transaction_id = ?
+    ORDER BY i.id ASC
+  `).all(userId, txnId);
+}
+
+function loadSilentSharedDebtSyncActiveRequests(userId, txnId) {
+  return db.prepare(`
+    SELECT *
+    FROM shared_debt_requests
+    WHERE requester_user_id = ?
+      AND COALESCE(request_kind, 'card') = 'card'
+      AND source_transaction_id = ?
+      AND status IN ('pending', 'accepted')
+    ORDER BY id ASC
+  `).all(userId, txnId);
+}
+
+function evaluateImportOverwriteSilentSharedDebtSyncForTransaction(userId, txnId) {
+  const cleanTxnId = Number(txnId || 0);
+  if (!cleanTxnId) return { safe: true, reason: 'empty' };
+
+  const txn = getSharedDebtCardTransactionSnapshot(userId, cleanTxnId);
+  if (!txn) return { safe: true, reason: 'missing_transaction' };
+
+  const eligibleRows = getSharedDebtEligibleAllocationRows(userId, cleanTxnId);
+  const nextByPersonId = new Map();
+  eligibleRows.forEach((row) => {
+    const personId = Number(row?.person_id || 0);
+    const nextSnapshot = buildSharedDebtSilentMetadataSnapshot(userId, txn, row);
+    if (personId && nextSnapshot) nextByPersonId.set(personId, nextSnapshot);
+  });
+
+  const activeRequests = loadSilentSharedDebtSyncActiveRequests(userId, cleanTxnId);
+  const draftItems = loadSilentSharedDebtSyncDraftItems(userId, cleanTxnId);
+  const activeByPersonId = new Map();
+  activeRequests.forEach((requestRow) => {
+    const personId = Number(requestRow?.source_person_id || 0);
+    if (!personId) return;
+    if (!activeByPersonId.has(personId)) activeByPersonId.set(personId, []);
+    activeByPersonId.get(personId).push(requestRow);
+  });
+
+  const effectPersonIds = new Set();
+  activeRequests.forEach((requestRow) => {
+    const personId = Number(requestRow?.source_person_id || 0);
+    if (personId) effectPersonIds.add(personId);
+  });
+  draftItems.forEach((item) => {
+    const personId = Number(item?.source_person_id || 0);
+    if (personId) effectPersonIds.add(personId);
+  });
+
+  if (!effectPersonIds.size) {
+    return nextByPersonId.size
+      ? { safe: false, reason: 'new_shareable_participant' }
+      : { safe: true, txn, nextByPersonId, activeRequests, draftItems };
+  }
+
+  if (effectPersonIds.size !== nextByPersonId.size) {
+    return { safe: false, reason: 'participant_count_changed' };
+  }
+
+  for (const personId of effectPersonIds) {
+    if (!nextByPersonId.has(personId)) {
+      return { safe: false, reason: 'participant_changed' };
+    }
+  }
+
+  for (const requestRow of activeRequests) {
+    const status = String(requestRow?.status || '').trim().toLowerCase();
+    const nextSnapshot = nextByPersonId.get(Number(requestRow?.source_person_id || 0));
+    if (!['pending', 'accepted'].includes(status)) {
+      return { safe: false, reason: 'unsupported_status' };
+    }
+    if (!sharedDebtSilentFinancialIdentityMatches(requestRow, nextSnapshot)) {
+      return { safe: false, reason: 'request_financial_identity_changed' };
+    }
+    if (status === 'accepted' && hasProtectedSharedDebtActivityForSilentMetadataSync(requestRow)) {
+      return { safe: false, reason: 'accepted_request_protected' };
+    }
+  }
+
+  for (const item of draftItems) {
+    const actionKind = normalizeSharedDebtQueueActionKind(item?.action_kind);
+    const personId = Number(item?.source_person_id || 0);
+    const nextSnapshot = nextByPersonId.get(personId);
+    if (!nextSnapshot) return { safe: false, reason: 'draft_participant_changed' };
+    if (!['create', 'update'].includes(actionKind)) return { safe: false, reason: 'draft_cancel_or_unknown' };
+    if (!sharedDebtSilentFinancialIdentityMatches(item, nextSnapshot)) {
+      return { safe: false, reason: 'draft_financial_identity_changed' };
+    }
+    const activeRowsForPerson = activeByPersonId.get(personId) || [];
+    if (actionKind === 'create' && activeRowsForPerson.length) {
+      return { safe: false, reason: 'draft_create_over_active_request' };
+    }
+    if (actionKind === 'update') {
+      const targetRequestId = Number(item?.target_request_id || item?.sent_request_id || 0);
+      if (!targetRequestId || !activeRowsForPerson.some((row) => Number(row.id || 0) === targetRequestId)) {
+        return { safe: false, reason: 'draft_update_target_changed' };
+      }
+    }
+  }
+
+  return {
+    safe: true,
+    txn,
+    nextByPersonId,
+    activeRequests,
+    draftItems
+  };
+}
+
+function applySilentSharedDebtMetadataSyncForTransaction(userId, evaluation) {
+  if (!evaluation || !evaluation.safe) {
+    return { updatedRequestCount: 0, updatedDraftItemCount: 0, removedDraftItemCount: 0 };
+  }
+
+  const now = nowIso();
+  const updateRequest = db.prepare(`
+    UPDATE shared_debt_requests
+    SET source_allocation_id = ?,
+        source_txn_date_snapshot = ?,
+        card_id = ?,
+        card_name_snapshot = ?,
+        description_snapshot = ?,
+        receiver_email_snapshot = ?,
+        receiver_name_snapshot = ?,
+        updated_at = ?
+    WHERE id = ?
+      AND requester_user_id = ?
+      AND status IN ('pending', 'accepted')
+  `);
+  const updateDraftItem = db.prepare(`
+    UPDATE shared_debt_send_queue_items
+    SET source_allocation_id = ?,
+        source_txn_date_snapshot = ?,
+        card_id = ?,
+        card_name_snapshot = ?,
+        description_snapshot = ?,
+        receiver_email_snapshot = ?,
+        receiver_name_snapshot = ?,
+        updated_at = ?
+    WHERE id = ?
+      AND requester_user_id = ?
+      AND cancelled_at IS NULL
+  `);
+  const removeDraftItem = db.prepare(`DELETE FROM shared_debt_send_queue_items WHERE id = ? AND requester_user_id = ?`);
+  const updateDraftQueueReceiver = db.prepare(`
+    UPDATE shared_debt_send_queues
+    SET receiver_email_snapshot = COALESCE(?, receiver_email_snapshot),
+        receiver_name_snapshot = COALESCE(?, receiver_name_snapshot),
+        updated_at = ?
+    WHERE id = ?
+      AND requester_user_id = ?
+      AND status = 'draft'
+  `);
+
+  let updatedRequestCount = 0;
+  let updatedDraftItemCount = 0;
+  let removedDraftItemCount = 0;
+  const queueIdsToRefresh = new Set();
+  const batchIdsToRefresh = new Set();
+  const eventNote = 'Sincronização automática após conciliação da fatura; valor e divisão permaneceram iguais.';
+
+  db.transaction(() => {
+    (evaluation.activeRequests || []).forEach((requestRow) => {
+      const nextSnapshot = evaluation.nextByPersonId.get(Number(requestRow?.source_person_id || 0));
+      if (!nextSnapshot || !sharedDebtSilentMetadataDiffers(requestRow, nextSnapshot)) return;
+      const info = updateRequest.run(
+        nextSnapshot.sourceAllocationId,
+        nextSnapshot.sourceTxnDateSnapshot,
+        nextSnapshot.cardId,
+        nextSnapshot.cardNameSnapshot,
+        nextSnapshot.descriptionSnapshot,
+        nextSnapshot.receiverEmailSnapshot,
+        nextSnapshot.receiverNameSnapshot,
+        now,
+        requestRow.id,
+        userId
+      );
+      if (Number(info.changes || 0) > 0) {
+        updatedRequestCount += 1;
+        addSharedDebtEvent({ requestId: requestRow.id, actorUserId: userId, eventType: 'updated', note: eventNote });
+        if (requestRow.batch_id) batchIdsToRefresh.add(Number(requestRow.batch_id || 0));
+      }
+    });
+
+    (evaluation.draftItems || []).forEach((item) => {
+      const nextSnapshot = evaluation.nextByPersonId.get(Number(item?.source_person_id || 0));
+      if (!nextSnapshot) return;
+      const actionKind = normalizeSharedDebtQueueActionKind(item?.action_kind);
+      const queueId = Number(item?.queue_id || 0);
+      if (queueId) queueIdsToRefresh.add(queueId);
+
+      if (actionKind === 'update') {
+        const info = removeDraftItem.run(item.id, userId);
+        if (Number(info.changes || 0) > 0) removedDraftItemCount += 1;
+        return;
+      }
+
+      if (!sharedDebtSilentMetadataDiffers(item, nextSnapshot)) return;
+      const info = updateDraftItem.run(
+        nextSnapshot.sourceAllocationId,
+        nextSnapshot.sourceTxnDateSnapshot,
+        nextSnapshot.cardId,
+        nextSnapshot.cardNameSnapshot,
+        nextSnapshot.descriptionSnapshot,
+        nextSnapshot.receiverEmailSnapshot,
+        nextSnapshot.receiverNameSnapshot,
+        now,
+        item.id,
+        userId
+      );
+      if (Number(info.changes || 0) > 0) {
+        updatedDraftItemCount += 1;
+        if (queueId) {
+          updateDraftQueueReceiver.run(nextSnapshot.receiverEmailSnapshot, nextSnapshot.receiverNameSnapshot, now, queueId, userId);
+        }
+      }
+    });
+  })();
+
+  queueIdsToRefresh.forEach((queueId) => refreshSharedDebtSendQueue(queueId, now));
+  batchIdsToRefresh.forEach((batchId) => refreshSharedDebtBatch(batchId, now));
+
+  return { updatedRequestCount, updatedDraftItemCount, removedDraftItemCount };
+}
+
+function applyImportOverwriteSharedDebtPolicy(userId, targetRows = [], overwriteChanges = []) {
+  const rows = dedupeTxnRows(targetRows);
+  const changeByTxnId = new Map((Array.isArray(overwriteChanges) ? overwriteChanges : [])
+    .map((change) => [Number(change?.transactionId || 0), change])
+    .filter(([txnId]) => txnId));
+  const summary = {
+    rowsNeedingDraft: [],
+    safeRowIds: [],
+    updatedRequestCount: 0,
+    updatedDraftItemCount: 0,
+    removedDraftItemCount: 0,
+    skippedCount: 0,
+    details: []
+  };
+
+  rows.forEach((row) => {
+    const txnId = Number(row?.id || 0);
+    if (!txnId) return;
+    const evaluation = evaluateImportOverwriteSilentSharedDebtSyncForTransaction(userId, txnId);
+    if (!evaluation.safe) {
+      summary.rowsNeedingDraft.push(row);
+      summary.details.push({ transactionId: txnId, action: 'queue', reason: evaluation.reason || 'unsafe' });
+      return;
+    }
+
+    const applied = applySilentSharedDebtMetadataSyncForTransaction(userId, evaluation);
+    const touchedCount = Number(applied.updatedRequestCount || 0)
+      + Number(applied.updatedDraftItemCount || 0)
+      + Number(applied.removedDraftItemCount || 0);
+    if (touchedCount > 0) {
+      summary.safeRowIds.push(txnId);
+    } else {
+      summary.skippedCount += 1;
+    }
+    summary.updatedRequestCount += Number(applied.updatedRequestCount || 0);
+    summary.updatedDraftItemCount += Number(applied.updatedDraftItemCount || 0);
+    summary.removedDraftItemCount += Number(applied.removedDraftItemCount || 0);
+    summary.details.push({
+      transactionId: txnId,
+      action: 'silent_metadata_sync',
+      hasOverwriteChange: changeByTxnId.has(txnId),
+      ...applied
+    });
+  });
+
+  return summary;
+}
+
 function getSharedDebtSendQueueDraftSummary(userId, options = {}) {
   const where = [`requester_user_id = ?`, `request_kind = 'card'`, `status = 'draft'`];
   const params = [userId];
@@ -10282,7 +10766,7 @@ function getSharedDebtSendQueueDraftsForUser(userId) {
   });
 }
 
-function sendSharedDebtDraftQueue(userId, queueId) {
+function sendSharedDebtDraftQueue(userId, queueId, options = {}) {
   const cleanQueueId = Number(queueId || 0);
   if (!cleanQueueId) {
     const error = new Error('Esse rascunho não parece válido.');
@@ -10325,10 +10809,10 @@ function sendSharedDebtDraftQueue(userId, queueId) {
   const actor = getUserRecord(userId);
   const requesterDisplayName = requesterPerson?.name || actor?.name || actor?.email || 'Um usuário';
   const now = nowIso();
-  const notificationContext = createSharedDebtSyncContext(userId, {
+  const notificationContext = options?.notificationContext || createSharedDebtSyncContext(userId, {
     originKind: queueItems.length > 1 ? 'multiple' : 'single'
   });
-  notificationContext.requesterDisplayName = requesterDisplayName;
+  if (!notificationContext.requesterDisplayName) notificationContext.requesterDisplayName = requesterDisplayName;
 
   const loadTargetRequest = db.prepare(`
     SELECT *
@@ -10443,7 +10927,9 @@ function sendSharedDebtDraftQueue(userId, queueId) {
           requestId,
           kind: 'created',
           amountCents: Number(item.amount_cents || 0),
-          description: item.description_snapshot
+          description: item.description_snapshot,
+          sourceDueMonth: item.source_due_month,
+          sourceDueYear: item.source_due_year
         });
         return;
       }
@@ -10518,7 +11004,9 @@ function sendSharedDebtDraftQueue(userId, queueId) {
           requestId: targetRequestId,
           kind: 'updated',
           amountCents: Number(item.amount_cents || 0),
-          description: item.description_snapshot
+          description: item.description_snapshot,
+          sourceDueMonth: item.source_due_month,
+          sourceDueYear: item.source_due_year
         });
         return;
       }
@@ -10549,7 +11037,9 @@ function sendSharedDebtDraftQueue(userId, queueId) {
         requestId: targetRequestId,
         kind: 'cancelled',
         amountCents: Number(targetRequest.amount_cents || item.amount_cents || 0),
-        description: targetRequest.description_snapshot || item.description_snapshot
+        description: targetRequest.description_snapshot || item.description_snapshot,
+        sourceDueMonth: targetRequest.source_due_month || item.source_due_month,
+        sourceDueYear: targetRequest.source_due_year || item.source_due_year
       });
     });
 
@@ -10560,7 +11050,9 @@ function sendSharedDebtDraftQueue(userId, queueId) {
   affectedBatchIds.forEach((batchId) => {
     if (batchId) refreshSharedDebtBatch(batchId, now);
   });
-  flushSharedDebtBatchNotifications(notificationContext);
+  if (!options?.suppressNotifications) {
+    flushSharedDebtBatchNotifications(notificationContext);
+  }
 
   return {
     queueRow,
@@ -10568,8 +11060,65 @@ function sendSharedDebtDraftQueue(userId, queueId) {
     requestIds,
     itemCount: queueItems.length,
     totalCents: Number(queueRow.total_cents || 0),
-    actionCounts
+    actionCounts,
+    notificationContext
   };
+}
+
+
+function sendSharedDebtDraftQueuesBulk(userId, queueIds = []) {
+  const ids = Array.from(new Set((Array.isArray(queueIds) ? queueIds : [])
+    .map((value) => Number(value || 0))
+    .filter(Boolean)));
+  const result = {
+    sentQueueCount: 0,
+    sentItemCount: 0,
+    totalCents: 0,
+    batchIds: [],
+    requestIds: [],
+    notificationCount: 0,
+    errorCount: 0
+  };
+  if (!ids.length) return result;
+
+  const requesterPerson = getOwnerPerson(userId);
+  const actor = getUserRecord(userId);
+  const requesterDisplayName = requesterPerson?.name || actor?.name || actor?.email || 'Um usuário';
+  const notificationContext = createSharedDebtSyncContext(userId, { originKind: 'multiple' });
+  notificationContext.requesterDisplayName = requesterDisplayName;
+
+  ids.forEach((queueId) => {
+    try {
+      const queueResult = sendSharedDebtDraftQueue(userId, queueId, {
+        suppressNotifications: true
+      });
+      if (queueResult?.notificationContext?.changesByBatch) {
+        queueResult.notificationContext.changesByBatch.forEach((entry, batchId) => {
+          notificationContext.changesByBatch.set(batchId, entry);
+        });
+      }
+      result.sentQueueCount += 1;
+      result.sentItemCount += Number(queueResult?.itemCount || 0);
+      result.totalCents += Number(queueResult?.totalCents || 0);
+      (queueResult?.batchIds || []).forEach((batchId) => {
+        const cleanBatchId = Number(batchId || 0);
+        if (cleanBatchId && !result.batchIds.includes(cleanBatchId)) result.batchIds.push(cleanBatchId);
+      });
+      (queueResult?.requestIds || []).forEach((requestId) => {
+        const cleanRequestId = Number(requestId || 0);
+        if (cleanRequestId && !result.requestIds.includes(cleanRequestId)) result.requestIds.push(cleanRequestId);
+      });
+    } catch (error) {
+      result.errorCount += 1;
+    }
+  });
+
+  if (result.sentQueueCount > 0) {
+    const notificationResult = flushSharedDebtBulkNotifications(notificationContext);
+    result.notificationCount = Number(notificationResult?.notificationCount || 0);
+  }
+
+  return result;
 }
 
 function discardSharedDebtDraftQueue(userId, queueId) {
@@ -10758,7 +11307,9 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
               requestId: existing.id,
               kind: 'updated',
               amountCents: row.share_cents,
-              description: txn.description
+              description: txn.description,
+              sourceDueMonth: txn.due_month,
+              sourceDueYear: txn.due_year
             });
           } else {
             const resolvedMessage = resolveCatalogText('notification.shared_debt.single.updated', {
@@ -10841,7 +11392,9 @@ function syncSharedDebtRequestForTransactionWithContext(userId, txnId, context) 
               requestId,
               kind: 'created',
               amountCents: row.share_cents,
-              description: txn.description
+              description: txn.description,
+              sourceDueMonth: txn.due_month,
+              sourceDueYear: txn.due_year
             });
           } else {
             const resolvedMessage = resolveCatalogText('notification.shared_debt.single.created', {
@@ -13979,6 +14532,7 @@ registerSharedDebtsRoutes(app, {
   parseSharedDebtRequestIds,
   formatCountLabel,
   sendSharedDebtDraftQueue,
+  sendSharedDebtDraftQueuesBulk,
   discardSharedDebtDraftQueue,
   normalizeManualSharedDebtMode,
   sanitizePrivateDebtDescription,
@@ -15635,6 +16189,7 @@ registerImportRoutes(app, {
   getTransactionScopeRowsByIds,
   syncEqualAllocationsForEditedTransactions,
   queueSharedDebtDraftsForTransactions,
+  applyImportOverwriteSharedDebtPolicy,
   buildImportConfirmationMessage,
   createNotification,
   setFlash

@@ -157,7 +157,10 @@
       const summaryPeopleRemainingCents = visiblePersonPanel.reduce((acc, pp) => acc + Math.max(0, Number(pp?.total_cents || 0) - Number(pp?.paid_cents || 0)), 0);
       const nextDueCard = visibleCardsPanel[0] || null;
       const nextDueLabel = nextDueCard?.due_date ? new Date(`${nextDueCard.due_date}T12:00:00`).toLocaleDateString('pt-BR') : 'Sem data salva';
-      const cashReserveCents = personPanelTotals.paid_cents - cardsPanelTotalsWithShared.paid_cents;
+      const cashBoxCardTotals = cardsPanelTotals;
+      const cashSharedOutsideBoxTotalCents = sharedSummaryCardTotals.total_cents;
+      const cashSharedOutsideBoxPaidCents = sharedSummaryCardTotals.paid_cents;
+      const cashReserveCents = personPanelTotals.paid_cents - cashBoxCardTotals.paid_cents;
       const cashReserveToneClass = cashReserveCents > 0
         ? 'text-emerald-600 dark:text-emerald-300'
         : (cashReserveCents < 0 ? 'text-red-500 dark:text-red-300' : 'text-slate-700 dark:text-slate-200');
@@ -391,9 +394,9 @@
               <div class="p-5">
                 <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 op-summary-cash-grid">
                   <article class="rounded-2xl border border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70 op-summary-cash-card">
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Faturas do mês</div>
-                    <div data-summary-cash-total-bills class="op-summary-kpi-value op-summary-cash-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotalsWithShared.total_cents) %></div>
-                    <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400"><%= sharedSummaryCardRows.length ? 'Cartões e recebidas de amigos.' : 'Total dos cartões.' %></p>
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Faturas próprias</div>
+                    <div data-summary-cash-total-bills class="op-summary-kpi-value op-summary-cash-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cashBoxCardTotals.total_cents) %></div>
+                    <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400">Só seus cartões entram nessa caixinha.</p>
                   </article>
                   <article class="rounded-2xl border border-cyan-200 bg-cyan-50/70 px-4 py-4 dark:border-cyan-800 dark:bg-cyan-950/20 op-summary-cash-card">
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-200">Já reunido</div>
@@ -401,9 +404,9 @@
                     <p class="op-summary-kpi-note mt-2 text-cyan-900/80 dark:text-cyan-100/80">Já entrou.</p>
                   </article>
                   <article class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/80 op-summary-cash-card">
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Já saiu nas faturas</div>
-                    <div data-summary-cash-outflow class="op-summary-kpi-value op-summary-cash-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cardsPanelTotalsWithShared.paid_cents) %></div>
-                    <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400">Já foi pago.</p>
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Já saiu nos cartões</div>
+                    <div data-summary-cash-outflow class="op-summary-kpi-value op-summary-cash-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cashBoxCardTotals.paid_cents) %></div>
+                    <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400">Pago nas suas faturas.</p>
                   </article>
                   <article class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 dark:border-emerald-800 dark:bg-emerald-950/20 op-summary-cash-card">
                     <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Saldo em caixa</div>
@@ -411,6 +414,12 @@
                     <p data-summary-cash-balance-caption class="op-summary-kpi-note mt-2 text-slate-600 dark:text-slate-300"><%= cashReserveHint %></p>
                   </article>
                 </div>
+                <% if (cashSharedOutsideBoxTotalCents > 0) { %>
+                  <div class="mt-4 rounded-2xl border border-violet-100 bg-violet-50/70 px-4 py-3 text-sm font-semibold leading-6 text-violet-900 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-violet-100">
+                    Compartilhadas recebidas continuam em <strong>Cartões do período</strong>, mas ficam fora desta caixinha porque não geram entrada em <strong>Como está cada parceria</strong>.
+                    Neste mês são <strong><%= formatBRLFromCents(cashSharedOutsideBoxTotalCents) %></strong><% if (cashSharedOutsideBoxPaidCents > 0) { %>, com <strong><%= formatBRLFromCents(cashSharedOutsideBoxPaidCents) %></strong> já confirmado fora do saldo da caixinha<% } %>.
+                  </div>
+                <% } %>
               </div>
             </div>
           </div>

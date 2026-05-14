@@ -1823,33 +1823,50 @@
   }
 
   function syncCardsSummary(root) {
-    let totalTotal = 0;
-    let paidTotal = 0;
-    let remainingTotal = 0;
+    let ownTotal = 0;
+    let ownPaid = 0;
+    let ownRemaining = 0;
+    let sharedTotal = 0;
+    let sharedPaid = 0;
+    let sharedRemaining = 0;
+
     root.querySelectorAll('[data-summary-card-row]').forEach((row) => {
       const totalCents = Number(row.getAttribute('data-total-cents') || 0);
       const cardId = row.getAttribute('data-card-id');
       const paidInput = root.querySelector(`[data-summary-card-paid][data-card-id="${cardId}"]`);
       const paidCents = centsFromValue(paidInput ? paidInput.value : '');
       const remainingCents = totalCents - paidCents;
-      totalTotal += totalCents;
-      paidTotal += paidCents;
-      remainingTotal += remainingCents;
+      ownTotal += totalCents;
+      ownPaid += paidCents;
+      ownRemaining += remainingCents;
       syncRemainingCell(root.querySelector(`[data-summary-card-remaining][data-card-id="${cardId}"]`), remainingCents);
     });
 
     root.querySelectorAll('[data-summary-card-shared-row]').forEach((row) => {
-      totalTotal += Number(row.getAttribute('data-total-cents') || 0);
-      paidTotal += Number(row.getAttribute('data-paid-cents') || 0);
-      remainingTotal += Number(row.getAttribute('data-remaining-cents') || 0);
+      sharedTotal += Number(row.getAttribute('data-total-cents') || 0);
+      sharedPaid += Number(row.getAttribute('data-paid-cents') || 0);
+      sharedRemaining += Number(row.getAttribute('data-remaining-cents') || 0);
     });
 
+    const totalTotal = ownTotal + sharedTotal;
+    const paidTotal = ownPaid + sharedPaid;
+    const remainingTotal = ownRemaining + sharedRemaining;
     const paidCell = root.querySelector('[data-summary-cards-total-paid]');
     const remainingCell = root.querySelector('[data-summary-cards-total-remaining]');
     if (paidCell) paidCell.textContent = formatCents(paidTotal);
     syncRemainingCell(remainingCell, remainingTotal);
 
-    return { totalTotal, paidTotal, remainingTotal };
+    return {
+      totalTotal,
+      paidTotal,
+      remainingTotal,
+      ownTotal,
+      ownPaid,
+      ownRemaining,
+      sharedTotal,
+      sharedPaid,
+      sharedRemaining
+    };
   }
 
   function syncPeopleSummary(root) {
@@ -1889,7 +1906,9 @@
   }
 
   function syncCashSummary(root, cardsState, peopleState) {
-    const balanceCents = Number(peopleState?.paidTotal || 0) - Number(cardsState?.paidTotal || 0);
+    const ownCardTotal = Number(cardsState?.ownTotal ?? cardsState?.totalTotal ?? 0);
+    const ownCardPaid = Number(cardsState?.ownPaid ?? cardsState?.paidTotal ?? 0);
+    const balanceCents = Number(peopleState?.paidTotal || 0) - ownCardPaid;
     const totalBillsCell = root.querySelector('[data-summary-cash-total-bills]');
     const inflowCell = root.querySelector('[data-summary-cash-inflow]');
     const outflowCell = root.querySelector('[data-summary-cash-outflow]');
@@ -1898,9 +1917,9 @@
     const peopleOverpaidNote = root.querySelector('[data-summary-people-overpaid-note]');
     const peopleOverpaidCell = root.querySelector('[data-summary-people-overpaid]');
 
-    if (totalBillsCell) totalBillsCell.textContent = formatCents(cardsState?.totalTotal || 0);
+    if (totalBillsCell) totalBillsCell.textContent = formatCents(ownCardTotal);
     if (inflowCell) inflowCell.textContent = formatCents(peopleState?.paidTotal || 0);
-    if (outflowCell) outflowCell.textContent = formatCents(cardsState?.paidTotal || 0);
+    if (outflowCell) outflowCell.textContent = formatCents(ownCardPaid);
     if (peopleOverpaidCell) peopleOverpaidCell.textContent = formatCents(peopleState?.overpaidTotal || 0);
     if (peopleOverpaidNote) peopleOverpaidNote.hidden = Number(peopleState?.overpaidTotal || 0) <= 0;
 

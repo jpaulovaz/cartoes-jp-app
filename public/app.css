@@ -3313,12 +3313,12 @@ html.dark .op-surface-card table tbody th {
 }
 
 .op-summary-date-input {
-  width: min(100%, 8.15rem);
-  min-width: 0;
-  max-width: 8.15rem;
+  width: min(100%, 8.8rem);
+  min-width: 8.35rem;
+  max-width: 8.8rem;
   padding-left: 0.55rem;
   padding-right: 0.55rem;
-  font-size: 0.86rem;
+  font-size: 0.9rem;
 }
 
 [data-summary-cards-panel] .op-summary-money-input {
@@ -3334,11 +3334,11 @@ html.dark .op-surface-card table tbody th {
 }
 
 .op-summary-cards-table .op-summary-cards-col-card {
-  width: 27%;
+  width: 26%;
 }
 
 .op-summary-cards-table .op-summary-cards-col-due {
-  width: 17%;
+  width: 18%;
 }
 
 .op-summary-cards-table .op-summary-cards-col-total {
@@ -3359,13 +3359,38 @@ html.dark .op-surface-card table tbody th {
   padding-right: 0.75rem;
 }
 
+.op-summary-shared-card-id {
+  display: inline-flex;
+  max-width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.op-summary-shared-card-name {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
 .op-summary-shared-badge-stack {
+  align-self: center;
+  align-items: center;
+  margin-top: 0.35rem;
   line-height: 1.1;
+  text-align: center;
+}
+
+.op-summary-people-footnote-line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem 0.75rem;
 }
 
 @media (min-width: 640px) {
   .op-summary-card-shared-summary {
-    grid-template-columns: 27% 17% 16% 20% 20%;
+    grid-template-columns: 26% 18% 16% 20% 20%;
     gap: 0;
     padding-left: 0;
     padding-right: 0;

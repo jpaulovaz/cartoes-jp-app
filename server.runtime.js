@@ -7247,7 +7247,7 @@ function buildExpensePaymentProgress(userId, month, year, hydratedFinances = nul
   summary.hasValue = summary.totalCents > 0;
   summary.label = summary.totalCents > 0
     ? `Pago ${formatBRLFromCents(summary.paidCents)} de ${formatBRLFromCents(summary.totalCents)} · ${summary.progressPct}%`
-    : 'Quando pintar saída, o progresso aparece aqui.';
+    : 'Sem saídas no mês.';
   return summary;
 }
 
@@ -7294,7 +7294,7 @@ function buildSelfCardPaymentProgress(userId, month, year, { ownerPersonId = nul
     hasValue: resolvedTotalCents > 0,
     label: resolvedTotalCents > 0
       ? `Já entrou ${formatBRLFromCents(paidCents)} de ${formatBRLFromCents(resolvedTotalCents)} · ${progressPct}%`
-      : 'Quando aparecer parcela sua nos cartões, o progresso mora aqui.'
+      : 'Sem parcela sua no mês.'
   };
 }
 
@@ -15855,7 +15855,7 @@ function buildCardHealthDetailModuleSummary(userId, month, year, {
   const baseSummary = {
     eyebrow: 'Saúde dos cartões',
     title: 'Saúde dos cartões',
-    subtitle: 'Aqui entra a visão operacional do crédito: fatura do mês, próximos meses, o pedaço que depende de terceiros e o que pede sua mão agora.',
+    subtitle: 'Fatura, próximos meses e rateios em um só lugar.',
     primaryCta: {
       href: `/summary/${safeYear}/${safeMonth}`,
       label: 'Fechamento do mês'

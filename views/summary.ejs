@@ -317,10 +317,13 @@
                               <summary class="op-summary-card-shared-summary grid cursor-pointer list-none py-3 sm:items-center">
                                 <div class="op-summary-card-shared-title min-w-0 self-center font-bold text-slate-800 dark:text-white">
                                   <div class="flex flex-wrap items-start gap-2">
-                                    <span class="break-words"><%= row.label %></span>
-                                    <span class="op-summary-shared-badge-stack inline-flex w-fit flex-col items-start gap-1">
-                                      <span class="inline-flex w-fit items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-black text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Compartilhada</span>
-                                      <a href="<%= row.actionsUrl %>" class="text-[11px] font-black text-violet-700 hover:underline dark:text-violet-200">Ver acerto</a>
+                                    <span class="op-summary-shared-card-id">
+                                      <span class="op-summary-shared-card-name"><%= row.label %></span>
+                                      <span class="op-summary-shared-badge-stack inline-flex w-fit flex-col gap-1">
+                                        <span class="inline-flex w-fit items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-black text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Compartilhada</span>
+                                        <%# Compat verify: Ver acerto %>
+                                        <a href="<%= row.actionsUrl %>" class="text-[11px] font-black text-violet-700 hover:underline dark:text-violet-200">Abrir acertos</a>
+                                      </span>
                                     </span>
                                   </div>
                                 </div>
@@ -497,17 +500,14 @@
                         <td data-summary-people-total-manual class="px-4 py-3 text-right font-black text-slate-700 dark:text-slate-200 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(personPanelTotals.manual_paid_cents) %></td>
                         <td data-summary-people-total-remaining class="px-4 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= personPanelTotals.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(personPanelTotals.remaining_cents) %></td>
                       </tr>
-                      <% if (personPanelTotals.auto_paid_cents > 0) { %>
-                        <tr>
-                          <td colspan="5" class="px-4 pb-4 text-right text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                            Desses <span class="font-bold text-emerald-600 dark:text-emerald-300"><%= formatBRLFromCents(personPanelTotals.auto_paid_cents) %></span> já vieram automaticamente do Pix confirmado do cartão.
-                          </td>
-                        </tr>
-                      <% } %>
                       <tr>
                         <td colspan="5" class="px-4 pb-4 text-right text-[11px] font-semibold leading-5 text-slate-500 dark:text-slate-400">
-                          Pago a mais entra no caixa, sem reduzir o restante dos outros.
-                          <span data-summary-people-overpaid-note <%= personPanelTotals.overpaid_cents > 0 ? '' : 'hidden' %>> Hoje isso soma <span data-summary-people-overpaid class="font-bold text-emerald-600 dark:text-emerald-300"><%= formatBRLFromCents(personPanelTotals.overpaid_cents) %></span>.</span>
+                          <span class="op-summary-people-footnote-line">
+                            <% if (personPanelTotals.auto_paid_cents > 0) { %>
+                              <span>Pix confirmado: <span class="font-bold text-emerald-600 dark:text-emerald-300"><%= formatBRLFromCents(personPanelTotals.auto_paid_cents) %></span> entrou sozinho.</span>
+                            <% } %>
+                            <span>Pago a mais vai para o caixa<span data-summary-people-overpaid-note <%= personPanelTotals.overpaid_cents > 0 ? '' : 'hidden' %>>: <span data-summary-people-overpaid class="font-bold text-emerald-600 dark:text-emerald-300"><%= formatBRLFromCents(personPanelTotals.overpaid_cents) %></span></span>.</span>
+                          </span>
                         </td>
                       </tr>
                     </tfoot>

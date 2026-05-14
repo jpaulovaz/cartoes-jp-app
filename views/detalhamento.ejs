@@ -58,8 +58,8 @@
         const detailSharedCount = Number(sharedDebtTrailPay.count || 0) + Number(sharedDebtTrailReceive.count || 0);
         const detailMonthStateLabel = isClosed ? 'Mês fechado' : 'Mês em edição';
         const detailBalanceCaption = saldoCents >= 0
-            ? 'Saldo previsto para fechar o mês.'
-            : 'Saldo previsto abaixo do ideal para este mês.';
+            ? 'Previsão do fechamento.'
+            : 'Fechamento abaixo do ideal.';
 
         function clampProgressPct(value) {
             const pct = Number(value || 0);
@@ -195,27 +195,20 @@
             return total === 1 ? '1 acerto em aberto por aqui' : `${total} acertos em aberto por aqui`;
         }
 
-        function buildSharedDebtTrailBreakdown(scope) {
-            const parts = [];
+        function stripSharedDebtTrailDot(value) {
+            const text = String(value || '').trim();
+            return text.endsWith('.') ? text.slice(0, -1) : text;
+        }
 
-            if (scope === 'pay') {
-                const cardCount = Number(sharedDebtTrailCard.owedItemCount || 0);
-                const manualCount = Number(sharedDebtTrailManual.owedCount || 0);
+        function buildSharedDebtTrailMetaLine(scope) {
+            const info = scope === 'pay' ? sharedDebtTrailPay : sharedDebtTrailReceive;
+            const count = Number(info && info.count || 0);
+            const status = stripSharedDebtTrailDot(info && info.status && info.status.label);
+            if (count <= 0) return status || 'Nenhum acerto em aberto por aqui.';
 
-                if (cardCount > 0) parts.push(cardCount === 1 ? '1 item do cartão' : `${cardCount} itens do cartão`);
-                if (manualCount > 0) parts.push(manualCount === 1 ? '1 acerto avulso' : `${manualCount} acertos avulsos`);
-            } else {
-                const cardCount = Number(sharedDebtTrailCard.receivableItemCount || 0);
-                const manualCount = Number(sharedDebtTrailManual.receivableCount || 0);
-                const privateCount = Number(sharedDebtTrailManual.privateActiveCount || 0);
-
-                if (cardCount > 0) parts.push(cardCount === 1 ? '1 item do cartão' : `${cardCount} itens do cartão`);
-                if (manualCount > 0) parts.push(manualCount === 1 ? '1 acerto avulso' : `${manualCount} acertos avulsos`);
-                if (privateCount > 0) parts.push(privateCount === 1 ? '1 lembrete privado' : `${privateCount} lembretes privados`);
-            }
-
-            if (!parts.length) return 'Fica em acompanhamento e não entra no saldo principal.';
-            return `${parts.join(' • ')}. Fica em acompanhamento e não entra no saldo principal.`;
+            const countLabel = count === 1 ? '1 acerto em aberto' : `${count} acertos em aberto`;
+            if (!status || /^nada/i.test(status)) return countLabel;
+            return `${countLabel} • ${status}`;
         }
 
         function buildSharedDebtTrailCtaLabel(scope) {
@@ -477,7 +470,7 @@
                     <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-income">
                         <p class="op-dashboard-kpi-card__label">Entradas</p>
                         <h3 class="op-dashboard-kpi-card__value mt-2" data-sensitive-text data-sensitive-visible-value="<%= incomeTopLabel %>" data-sensitive-masked-value="<%= buildMaskedMoneyLabel(incomeTopLabel, true) %>"><%= incomeTopLabel %></h3>
-                        <p class="op-dashboard-kpi-card__note mt-3">Total previsto para entrar no mês.</p>
+                        <p class="op-dashboard-kpi-card__note mt-3">Entradas previstas no mês.</p>
                     </article>
 
                     <article class="op-dashboard-kpi-card op-paid-progress-card op-paid-progress-card--expense op-dashboard-kpi-card--tone-expense" data-progress-card="expense" style="<%= getProgressCardStyle(expenseProgress) %>">
@@ -490,7 +483,7 @@
                         <div class="op-paid-progress-card__content">
                             <p class="op-dashboard-kpi-card__label">Saídas</p>
                             <h3 class="op-dashboard-kpi-card__value mt-2" data-progress-total><%= formatBRLFromCents(expCents) %></h3>
-                            <p class="op-dashboard-kpi-card__note mt-3" data-progress-label><%= expenseProgress.label || 'Acompanhe o que já saiu e o que ainda falta pagar.' %></p>
+                            <p class="op-dashboard-kpi-card__note mt-3" data-progress-label><%= expenseProgress.label || 'Pago e falta do mês.' %></p>
                         </div>
                     </article>
 
@@ -504,7 +497,7 @@
                         <div class="op-paid-progress-card__content">
                             <p class="op-dashboard-kpi-card__label">Cartão do mês</p>
                             <h3 class="op-dashboard-kpi-card__value mt-2" data-progress-total><%= formatBRLFromCents(cardTotalCents) %></h3>
-                            <p class="op-dashboard-kpi-card__note mt-3" data-progress-label><%= cardProgress.label || 'Valor previsto para a fatura deste mês.' %></p>
+                            <p class="op-dashboard-kpi-card__note mt-3" data-progress-label><%= cardProgress.label || 'Sua fatura do mês.' %></p>
                         </div>
                     </article>
 
@@ -512,14 +505,14 @@
                     <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-card">
                         <p class="op-dashboard-kpi-card__label">Compartilhadas</p>
                         <h3 class="op-dashboard-kpi-card__value mt-2"><%= formatBRLFromCents(sharedProjectionTotalCents) %></h3>
-                        <p class="op-dashboard-kpi-card__note mt-3"><%= `${sharedProjectionDetail.count} recebida${Number(sharedProjectionDetail.count || 0) === 1 ? '' : 's'} de amigos.` %></p>
+                        <p class="op-dashboard-kpi-card__note mt-3">Recebidas de amigos.</p>
                     </article>
                     <% } %>
 
                     <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-committed">
                         <p class="op-dashboard-kpi-card__label">Comprometido</p>
                         <h3 class="op-dashboard-kpi-card__value mt-2"><%= formatBRLFromCents(expCents + cardTotalCents + sharedProjectionTotalCents) %></h3>
-                        <p class="op-dashboard-kpi-card__note mt-3">Despesas, cartões e compras recebidas de amigos.</p>
+                        <p class="op-dashboard-kpi-card__note mt-3">Despesas, cartões e recebidas.</p>
                     </article>
 
                     <% const balanceTopLabel = formatBRLFromCents(saldoCents); const balanceTopDisplayLabel = String(balanceTopLabel || '').replace(/\s+/g, '\u00a0'); %>
@@ -556,50 +549,14 @@
                     </div>
                 <% } %>
 
-
-                <% if (hasSharedProjectionDetail) { %>
-                    <section class="mt-8 mb-8 rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900/70 overflow-hidden">
-                        <div class="flex flex-col gap-4 border-b border-slate-200 bg-slate-50 px-5 py-5 dark:border-slate-700 dark:bg-slate-950/30 lg:flex-row lg:items-center lg:justify-between">
-                            <div>
-                                <div class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Recebidas de amigos</div>
-                                <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Compras compartilhadas no mês</h2>
-                                <p class="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Valores que amigos dividiram com você e que já entram no seu mês.</p>
-                            </div>
-                            <a href="/shared-debts#received" class="op-btn op-btn-ghost shrink-0">Abrir Central de Acertos</a>
-                        </div>
-                        <div class="p-5">
-                            <div class="op-dashboard-kpi-strip grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                                <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-card">
-                                    <p class="op-dashboard-kpi-card__label">Sua parte</p>
-                                    <h3 class="op-dashboard-kpi-card__value mt-2"><%= formatBRLFromCents(sharedProjectionTotalCents) %></h3>
-                                    <p class="op-dashboard-kpi-card__note mt-3"><%= sharedProjectionDetail.count %> recebida<%= Number(sharedProjectionDetail.count || 0) === 1 ? '' : 's' %> de amigos.</p>
-                                </article>
-                                <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-income">
-                                    <p class="op-dashboard-kpi-card__label">Pago confirmado</p>
-                                    <h3 class="op-dashboard-kpi-card__value mt-2"><%= formatBRLFromCents(sharedProjectionConfirmedCents) %></h3>
-                                    <p class="op-dashboard-kpi-card__note mt-3">Valor já confirmado no acerto.</p>
-                                </article>
-                                <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-card">
-                                    <p class="op-dashboard-kpi-card__label">Em conferência</p>
-                                    <h3 class="op-dashboard-kpi-card__value mt-2"><%= formatBRLFromCents(sharedProjectionPendingCents) %></h3>
-                                    <p class="op-dashboard-kpi-card__note mt-3">Pagamento informado e aguardando confirmação.</p>
-                                </article>
-                                <article class="op-dashboard-kpi-card op-dashboard-kpi-card--tone-critical">
-                                    <p class="op-dashboard-kpi-card__label">Ainda falta</p>
-                                    <h3 class="op-dashboard-kpi-card__value mt-2"><%= formatBRLFromCents(sharedProjectionOpenCents) %></h3>
-                                    <p class="op-dashboard-kpi-card__note mt-3">Valor em aberto nesse mês.</p>
-                                </article>
-                            </div>
-                        </div>
-                    </section>
-                <% } %>
+                <%# Compat verify: Compras compartilhadas no mês %>
 
                 <section class="op-detalhamento-dues-section mt-8 mb-8 space-y-4">
                     <div class="op-detalhamento-section-head flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                         <div class="min-w-0">
                             <div class="op-detalhamento-section-kicker">Acertos do mês</div>
-                            <h2 class="op-detalhamento-section-title mt-1">O que ainda está em andamento com outras pessoas</h2>
-                            <p class="op-detalhamento-section-copy mt-2">Esses valores ficam fora do saldo principal e ajudam a acompanhar o que ainda depende de envio, aceite ou recebimento.</p>
+                            <h2 class="op-detalhamento-section-title mt-1">Acertos com outras pessoas</h2>
+                            <p class="op-detalhamento-section-copy mt-2">Veja o que precisa pagar, receber ou confirmar neste mês.</p>
                         </div>
                         <a href="<%= sharedDebtTrailHeaderHref %>" class="op-btn op-btn-ghost shrink-0">Abrir acertos</a>
                     </div>
@@ -620,9 +577,7 @@
                                 <div class="min-w-0">
                                     <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Acertos a pagar</p>
                                     <h2 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(sharedDebtTrailPay.amountCents || 0)) %></h2>
-                                    <p class="mt-2 text-sm font-semibold opacity-95"><%= buildSharedDebtTrailCountLabel(sharedDebtTrailPay.count) %></p>
-                                    <p class="mt-2 text-[13px] font-semibold leading-5 opacity-95"><%= (sharedDebtTrailPay.status && sharedDebtTrailPay.status.label) || 'Nada puxando seu mês desse lado.' %></p>
-                                    <p class="mt-2 text-[11px] font-medium leading-5 opacity-80"><%= buildSharedDebtTrailBreakdown('pay') %></p>
+                                    <p class="mt-2 text-sm font-semibold leading-5 opacity-95"><%= buildSharedDebtTrailMetaLine('pay') %></p>
                                     <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= buildSharedDebtTrailCtaLabel('pay') %></p>
                                 </div>
                                 <div class="op-detalhamento-dues-card__icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" aria-hidden="true"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M7 3h7l5 5v13a1 1 0 01-1 1H7a2 2 0 01-2-2V5a2 2 0 012-2z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M14 3v5h5"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M9 13h6M9 17h6"></path></svg></div>
@@ -634,9 +589,7 @@
                                 <div class="min-w-0">
                                     <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-80">Acertos a receber</p>
                                     <h2 class="mt-2 text-2xl font-black sm:text-[1.9rem]"><%= formatBRLFromCents(Number(sharedDebtTrailReceive.amountCents || 0)) %></h2>
-                                    <p class="mt-2 text-sm font-semibold opacity-95"><%= buildSharedDebtTrailCountLabel(sharedDebtTrailReceive.count) %></p>
-                                    <p class="mt-2 text-[13px] font-semibold leading-5 opacity-95"><%= (sharedDebtTrailReceive.status && sharedDebtTrailReceive.status.label) || 'Nada pendurado do lado de cá.' %></p>
-                                    <p class="mt-2 text-[11px] font-medium leading-5 opacity-80"><%= buildSharedDebtTrailBreakdown('receive') %></p>
+                                    <p class="mt-2 text-sm font-semibold leading-5 opacity-95"><%= buildSharedDebtTrailMetaLine('receive') %></p>
                                     <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] opacity-90"><%= buildSharedDebtTrailCtaLabel('receive') %></p>
                                 </div>
                                 <div class="op-detalhamento-dues-card__icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" aria-hidden="true"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-10V6m0 12v-2"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M4 7h16M5 11h14M5 17h14"></path></svg></div>

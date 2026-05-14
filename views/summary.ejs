@@ -275,10 +275,10 @@
                         const falta = (cp.total_cents || 0) - (cp.paid_cents || 0);
                         %>
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors" data-summary-card-row data-card-id="<%= cp.card_id %>" data-total-cents="<%= cp.total_cents || 0 %>">
-                          <td class="px-3 py-3 font-bold text-slate-800 dark:text-white">
+                          <td class="px-3 py-3 align-middle font-bold text-slate-800 dark:text-white">
                             <%= cp.card_name %>
                           </td>
-                          <td class="px-2 py-3 text-center">
+                          <td class="px-2 py-3 align-middle text-center">
                             <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1">A gente calculou: <%=
                                 formatDateBR(cp.computed_due_date) %>
                             </div>
@@ -286,17 +286,17 @@
                               data-summary-card-due data-card-id="<%= cp.card_id %>"
                               class="border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none w-full min-w-[110px] text-center" />
                           </td>
-                          <td class="px-3 py-3 text-right font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap op-summary-amount-cell">
+                          <td class="px-3 py-3 align-middle text-right font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap op-summary-amount-cell">
                             <%= formatBRLFromCents(cp.total_cents) %>
                           </td>
-                          <td class="px-3 py-3 text-right">
+                          <td class="px-3 py-3 align-middle text-right">
                             <input name="paid" inputmode="numeric" type="text"
                               value="<%= formatBRLFromCents(cp.paid_cents || 0) %>" <%= isClosed ? 'disabled' : '' %>
                               data-money-mask data-summary-card-paid data-card-id="<%= cp.card_id %>"
                               class="op-summary-money-input text-right border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none" />
                           </td>
                           <td data-summary-card-remaining data-card-id="<%= cp.card_id %>"
-                            class="px-3 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">
+                            class="px-3 py-3 align-middle text-right font-black whitespace-nowrap op-summary-amount-cell <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">
                             <%= formatBRLFromCents(falta) %>
                           </td>
                         </tr>
@@ -305,17 +305,17 @@
                         <tr class="hover:bg-violet-50/60 dark:hover:bg-violet-900/20 transition-colors" data-summary-card-shared-row data-total-cents="<%= row.total_cents || 0 %>" data-paid-cents="<%= row.paid_cents || 0 %>" data-remaining-cents="<%= row.remaining_cents || 0 %>">
                           <td colspan="5" class="p-0">
                             <details class="group" <%= rowIndex === 0 ? '' : '' %>>
-                              <summary class="grid cursor-pointer list-none gap-3 px-3 py-3 sm:grid-cols-[minmax(0,2.4fr)_minmax(7rem,0.9fr)_minmax(7rem,0.85fr)_minmax(7rem,0.95fr)_minmax(7rem,0.9fr)] sm:items-center">
-                                <div class="min-w-0 font-bold text-slate-800 dark:text-white">
+                              <summary class="grid cursor-pointer list-none gap-3 px-3 py-3 sm:grid-cols-[minmax(0,1.45fr)_minmax(8.5rem,1fr)_minmax(7rem,0.85fr)_minmax(7rem,0.95fr)_minmax(7rem,0.9fr)] sm:items-center">
+                                <div class="min-w-0 self-center font-bold text-slate-800 dark:text-white">
                                   <div class="flex flex-wrap items-center gap-2">
                                     <span class="break-words"><%= row.label %></span>
                                     <span class="inline-flex w-fit items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-black text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Compartilhada</span>
                                   </div>
-                                  <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Recebida de <%= row.requesterName %> · <a href="<%= row.actionsUrl %>" class="font-black text-violet-700 hover:underline dark:text-violet-200">Ver acerto</a></div>
+                                  <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400"><a href="<%= row.actionsUrl %>" class="font-black text-violet-700 hover:underline dark:text-violet-200">Ver acerto</a></div>
                                 </div>
-                                <div class="text-left text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 sm:text-center"><%= summaryCountLabel(row.cards.length, 'cartão', 'cartões') %></div>
-                                <div class="text-left font-bold text-slate-700 dark:text-slate-200 sm:text-right whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(row.total_cents) %></div>
-                                <div class="text-left sm:text-right">
+                                <div class="self-center text-left text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 sm:text-center"><%= summaryCountLabel(row.cards.length, 'cartão', 'cartões') %></div>
+                                <div class="self-center text-left font-bold text-slate-700 dark:text-slate-200 sm:text-right whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(row.total_cents) %></div>
+                                <div class="self-center text-left sm:text-right">
                                   <div class="font-black text-emerald-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(row.paid_cents) %></div>
                                   <% if (row.pending_cents > 0) { %>
                                     <div class="mt-1 text-[11px] font-bold text-amber-600 dark:text-amber-300">Em conferência: <%= formatBRLFromCents(row.pending_cents) %></div>
@@ -323,12 +323,12 @@
                                     <div class="mt-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500">Pago confirmado</div>
                                   <% } %>
                                 </div>
-                                <div class="text-left font-black whitespace-nowrap op-summary-amount-cell sm:text-right <%= row.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(row.remaining_cents) %></div>
+                                <div class="self-center text-left font-black whitespace-nowrap op-summary-amount-cell sm:text-right <%= row.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(row.remaining_cents) %></div>
                               </summary>
                               <div class="border-t border-violet-100 bg-violet-50/40 px-3 py-3 dark:border-violet-900/50 dark:bg-violet-900/10">
                                 <div class="grid gap-2">
                                   <% row.cards.forEach((cardRow) => { %>
-                                    <div class="grid gap-2 rounded-2xl border border-violet-100 bg-white px-3 py-3 text-sm dark:border-violet-900/50 dark:bg-slate-900/60 sm:grid-cols-[minmax(0,2fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)] sm:items-center">
+                                    <div class="grid gap-2 rounded-2xl border border-violet-100 bg-white px-3 py-3 text-sm dark:border-violet-900/50 dark:bg-slate-900/60 sm:grid-cols-[minmax(0,1.8fr)_minmax(8.5rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)] sm:items-center">
                                       <div class="min-w-0">
                                         <div class="font-black text-slate-800 dark:text-white"><%= cardRow.cardLabel %></div>
                                         <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400"><%= summaryCountLabel(cardRow.count, 'compra', 'compras') %></div>

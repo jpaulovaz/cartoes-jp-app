@@ -12573,7 +12573,7 @@ function getSharedDebtDetailModuleSummary(userId, month, year) {
     summary.chips.push({
       tone: 'warning',
       label: summary.pendingReceivedCount === 1 ? '1 aguardando decisão' : `${summary.pendingReceivedCount} aguardando decisão`,
-      href: '/shared-debts#received'
+      href: '/shared-debts#received-inbox'
     });
   }
 
@@ -16556,7 +16556,7 @@ app.get("/detalhamento/:year/:month", ensureAuthenticated, (req, res) => {
         icon: '📨',
         title: resolvedPendingSharedDebtAlert.title,
         description: resolvedPendingSharedDebtAlert.body,
-        href: '/shared-debts#received'
+        href: '/shared-debts#received-inbox'
       });
     }
   }

@@ -9,11 +9,6 @@
         <p class="op-page-hero__subtitle mt-3">Acompanhe cartões, repasses e pagamentos do período em um único painel.</p>
       </div>
       <div class="op-page-hero__actions">
-        <div class="op-page-hero__meta mt-4 mb-4 lg:mb-0">
-          <span class="badge"><%= cardsPanel ? cardsPanel.length : 0 %> cartões no fechamento</span>
-          <span class="badge"><%= personPanel ? personPanel.length : 0 %> pessoas no repasse</span>
-          <% if (isClosed) { %><span class="badge">Mês fechado para consulta</span><% } %>
-        </div>
         <a href="/month/<%= year %>/<%= month %>"
           class="op-btn op-btn--compact op-hero-link op-hero-link--month whitespace-nowrap">
           Ver mês
@@ -316,16 +311,14 @@
                             <details class="group" <%= rowIndex === 0 ? '' : '' %>>
                               <summary class="op-summary-card-shared-summary grid cursor-pointer list-none py-3 sm:items-center">
                                 <div class="op-summary-card-shared-title min-w-0 self-center font-bold text-slate-800 dark:text-white">
-                                  <div class="flex flex-wrap items-start gap-2">
-                                    <span class="op-summary-shared-card-id">
-                                      <span class="op-summary-shared-card-name"><%= row.label %></span>
-                                      <span class="op-summary-shared-badge-stack inline-flex w-fit flex-col gap-1">
-                                        <span class="inline-flex w-fit items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-black text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Compartilhada</span>
-                                        <%# Compat verify: Ver acerto %>
-                                        <a href="<%= row.actionsUrl %>" class="text-[11px] font-black text-violet-700 hover:underline dark:text-violet-200">Abrir acertos</a>
-                                      </span>
+                                  <span class="op-summary-shared-card-id">
+                                    <span class="op-summary-shared-card-name"><%= row.label %></span>
+                                    <span class="op-summary-shared-badge-stack inline-flex w-fit flex-col gap-1">
+                                      <span class="inline-flex w-fit items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-black text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Compartilhada</span>
+                                      <%# Compat verify: Ver acerto %>
+                                      <a href="<%= row.actionsUrl %>" class="text-[11px] font-black text-violet-700 hover:underline dark:text-violet-200">Abrir acertos</a>
                                     </span>
-                                  </div>
+                                  </span>
                                 </div>
                                 <div class="op-summary-card-shared-due self-center text-left text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 sm:text-center"><%= summaryCountLabel(row.cards.length, 'cartão', 'cartões') %></div>
                                 <div class="op-summary-card-shared-total self-center text-left font-bold text-slate-700 dark:text-slate-200 sm:text-right whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(row.total_cents) %></div>

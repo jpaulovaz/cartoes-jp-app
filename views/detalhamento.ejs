@@ -262,18 +262,6 @@
                             <span class="op-page-hero__eyebrow">Painel do mês</span>
                             <h1 class="op-page-hero__title mt-4">Meu Controle</h1>
                             <p class="op-page-hero__subtitle mt-3">Olá, <span class="font-bold text-blue-600 dark:text-blue-300"><%= heroOwnerName %></span>. Aqui você acompanha o que entra, o que sai, o cartão do mês e o saldo previsto sem sair do mesmo painel.</p>
-                            <div class="op-page-hero__meta mt-4">
-                                <span class="badge"><%= detailMonthStateLabel %></span>
-                                <span class="badge"><%= detailSharedCount > 0 ? `${detailSharedCount} acertos em andamento` : 'Acertos em dia' %></span>
-                                <% if (hasSharedProjectionDetail) { %>
-                                    <span class="badge border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-800 dark:bg-violet-900/30 dark:text-violet-100"><%= sharedProjectionDetail.count %> compartilhada<%= Number(sharedProjectionDetail.count || 0) === 1 ? '' : 's' %> no mês</span>
-                                <% } %>
-                                <% if (detailAlertCount > 0) { %>
-                                    <span class="badge border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100"><%= detailAlertCount === 1 ? '1 ponto de atenção' : `${detailAlertCount} pontos de atenção` %></span>
-                                <% } else { %>
-                                    <span class="badge border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100">Sem alertas no momento</span>
-                                <% } %>
-                            </div>
                         </div>
                         <button type="button"
                             class="op-icon-btn op-sensitive-toggle op-sensitive-toggle--mobile"

@@ -159,7 +159,6 @@
       const nextDueLabel = nextDueCard?.due_date ? new Date(`${nextDueCard.due_date}T12:00:00`).toLocaleDateString('pt-BR') : 'Sem data salva';
       const cashBoxCardTotals = cardsPanelTotals;
       const cashSharedOutsideBoxTotalCents = sharedSummaryCardTotals.total_cents;
-      const cashSharedOutsideBoxPaidCents = sharedSummaryCardTotals.paid_cents;
       const cashReserveCents = personPanelTotals.paid_cents - cashBoxCardTotals.paid_cents;
       const cashReserveToneClass = cashReserveCents > 0
         ? 'text-emerald-600 dark:text-emerald-300'
@@ -286,15 +285,15 @@
                         %>
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors" data-summary-card-row data-card-id="<%= cp.card_id %>" data-total-cents="<%= cp.total_cents || 0 %>">
                           <td class="px-3 py-3 align-middle font-bold text-slate-800 dark:text-white">
-                            <%= cp.card_name %>
+                            <span class="op-summary-card-name"><%= cp.card_name %></span>
                           </td>
                           <td class="px-2 py-3 align-middle text-center">
-                            <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1">A gente calculou: <%=
+                            <div class="op-summary-date-hint text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1">Calculado: <%=
                                 formatDateBR(cp.computed_due_date) %>
                             </div>
                             <input name="override_due" type="date" value="<%= (cp.due_date || '') %>" <%= isClosed ? 'disabled' : '' %>
                               data-summary-card-due data-card-id="<%= cp.card_id %>"
-                              class="border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none w-full min-w-[110px] text-center" />
+                              class="op-summary-date-input border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none w-full min-w-[110px] text-center" />
                           </td>
                           <td class="px-3 py-3 align-middle text-right font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap op-summary-amount-cell">
                             <%= formatBRLFromCents(cp.total_cents) %>
@@ -416,8 +415,7 @@
                 </div>
                 <% if (cashSharedOutsideBoxTotalCents > 0) { %>
                   <div class="mt-4 rounded-2xl border border-violet-100 bg-violet-50/70 px-4 py-3 text-sm font-semibold leading-6 text-violet-900 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-violet-100">
-                    Compartilhadas recebidas continuam em <strong>Cartões do período</strong>, mas ficam fora desta caixinha porque não geram entrada em <strong>Como está cada parceria</strong>.
-                    Neste mês são <strong><%= formatBRLFromCents(cashSharedOutsideBoxTotalCents) %></strong><% if (cashSharedOutsideBoxPaidCents > 0) { %>, com <strong><%= formatBRLFromCents(cashSharedOutsideBoxPaidCents) %></strong> já confirmado fora do saldo da caixinha<% } %>.
+                    Compras compartilhadas recebidas aparecem no cartão, mas não entram nessa caixinha. Assim o saldo mostra só o dinheiro reunido para pagar suas faturas.
                   </div>
                 <% } %>
               </div>

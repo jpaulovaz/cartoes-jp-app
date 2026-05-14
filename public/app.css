@@ -3282,6 +3282,65 @@ html.dark .op-surface-card table tbody th {
   font-variant-numeric: tabular-nums;
 }
 
+.op-summary-cards-table {
+  min-width: 52rem;
+  table-layout: fixed;
+}
+
+.op-summary-cards-table .op-summary-cards-col-card {
+  width: 30%;
+}
+
+.op-summary-cards-table .op-summary-cards-col-due {
+  width: 20%;
+}
+
+.op-summary-cards-table .op-summary-cards-col-total {
+  width: 16%;
+}
+
+.op-summary-cards-table .op-summary-cards-col-paid {
+  width: 17%;
+}
+
+.op-summary-cards-table .op-summary-cards-col-remaining {
+  width: 17%;
+}
+
+.op-summary-card-shared-summary {
+  gap: 0.75rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.op-summary-shared-badge-stack {
+  line-height: 1.1;
+}
+
+@media (min-width: 640px) {
+  .op-summary-card-shared-summary {
+    grid-template-columns: 30% 20% 16% 17% 17%;
+    gap: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .op-summary-card-shared-summary > * {
+    min-width: 0;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .op-summary-card-shared-summary > .op-summary-card-shared-due {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .op-summary-card-shared-summary > :is(.op-summary-card-shared-total, .op-summary-card-shared-paid, .op-summary-card-shared-remaining) {
+    text-align: right;
+  }
+}
+
 
 .op-summary-kpi-value {
   font-size: clamp(1.15rem, 0.7rem + 1vw, 1.55rem);

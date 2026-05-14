@@ -1126,6 +1126,8 @@
   const draftQueueSummaryMeta = draftSendQueueSummary || { queueCount: 0, itemCount: 0, totalCents: 0 };
   const draftQueueRows = Array.isArray(draftSendQueues) ? draftSendQueues : [];
   const draftFriendGroups = buildDraftQueueFriendGroups(draftQueueRows);
+  const hasReceivedInboxItems = !isArchiveMode && receivedInboxFriendGroups.length > 0 && Number(receivedInboxSummary.itemCount || 0) > 0;
+  const hasDraftQueueItems = !isArchiveMode && draftQueueRows.length > 0 && Number(draftQueueSummaryMeta.queueCount || 0) > 0;
 %>
 
 <div hidden data-offline-snapshot
@@ -1166,7 +1168,7 @@
         <% if (isArchiveMode) { %>
           <a href="<%= otherPath %>" class="op-btn op-hero-link op-hero-link--debts">Voltar para ativas</a>
         <% } else { %>
-          <% if (draftQueueSummaryMeta.queueCount) { %>
+          <% if (hasDraftQueueItems) { %>
             <a href="#draft-queues" class="op-btn op-hero-link op-hero-link--debts">
               Caixa de saída
               <span class="ml-2 inline-flex min-w-[1.8rem] items-center justify-center rounded-full bg-sky-700 px-2 py-0.5 text-[11px] font-black text-white dark:bg-sky-200 dark:text-sky-900"><%= draftQueueSummaryMeta.queueCount %></span>
@@ -1225,14 +1227,18 @@
           <span class="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400"><%= countLabel(sentHeroCount, 'acerto', 'acertos') %> no seu radar</span>
         </a>
         <% if (!isArchiveMode) { %>
-          <a href="#received-inbox" class="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-800 transition hover:-translate-y-0.5 hover:bg-white dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100 dark:hover:bg-blue-900/30">
-            Caixa de entrada
-            <span class="mt-1 block text-xs font-semibold text-blue-700/80 dark:text-blue-100/80"><%= countLabel(receivedInboxSummary.itemCount, 'cobrança', 'cobranças') %> para responder</span>
-          </a>
-          <a href="#draft-queues" class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-black text-sky-800 transition hover:-translate-y-0.5 hover:bg-white dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-100 dark:hover:bg-sky-900/30">
-            Caixa de saída
-            <span class="mt-1 block text-xs font-semibold text-sky-700/80 dark:text-sky-100/80"><%= countLabel(draftQueueSummaryMeta.queueCount, 'rascunho', 'rascunhos') %> antes do envio</span>
-          </a>
+          <% if (hasReceivedInboxItems) { %>
+            <a href="#received-inbox" class="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-800 transition hover:-translate-y-0.5 hover:bg-white dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100 dark:hover:bg-blue-900/30">
+              Caixa de entrada
+              <span class="mt-1 block text-xs font-semibold text-blue-700/80 dark:text-blue-100/80"><%= countLabel(receivedInboxSummary.itemCount, 'cobrança', 'cobranças') %> para responder</span>
+            </a>
+          <% } %>
+          <% if (hasDraftQueueItems) { %>
+            <a href="#draft-queues" class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-black text-sky-800 transition hover:-translate-y-0.5 hover:bg-white dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-100 dark:hover:bg-sky-900/30">
+              Caixa de saída
+              <span class="mt-1 block text-xs font-semibold text-sky-700/80 dark:text-sky-100/80"><%= countLabel(draftQueueSummaryMeta.queueCount, 'rascunho', 'rascunhos') %> antes do envio</span>
+            </a>
+          <% } %>
           <a href="<%= otherPath %>" class="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-black text-violet-800 transition hover:-translate-y-0.5 hover:bg-white dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-100 dark:hover:bg-violet-900/30">
             Arquivo
             <span class="mt-1 block text-xs font-semibold text-violet-700/80 dark:text-violet-100/80"><%= countLabel(archiveTotalCount || 0, 'item guardado', 'itens guardados') %></span>
@@ -1292,6 +1298,7 @@
     </div>
   </section>
 
+  <% if (hasReceivedInboxItems) { %>
   <section id="received-inbox" class="op-fade-up op-debts-outbox-section scroll-mt-24">
     <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
       <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -1403,7 +1410,9 @@
       <% } %>
     </div>
   </section>
+  <% } %>
 
+  <% if (hasDraftQueueItems) { %>
   <section id="draft-queues" class="op-fade-up op-debts-outbox-section scroll-mt-24">
     <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
       <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -1525,6 +1534,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
       <% } %>
     </div>
   </section>
+  <% } %>
 
   <div id="manual-shared-debt-sheet" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
     <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>

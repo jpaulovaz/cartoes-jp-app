@@ -5765,8 +5765,19 @@ function buildSharedDebtCardMutationBlockerMessage(blockers = []) {
 
 function resolveSharedDebtViewPath(rawPath, fallback = '/shared-debts') {
   const normalized = String(rawPath || '').trim();
-  if (normalized === '/shared-debts' || normalized === '/shared-debts/archive') return normalized;
-  return fallback;
+  const fallbackPath = String(fallback || '/shared-debts').trim() || '/shared-debts';
+  if (!normalized) return fallbackPath;
+
+  try {
+    const parsed = new URL(normalized, 'http://acerttapay.local');
+    if (parsed.origin !== 'http://acerttapay.local') return fallbackPath;
+    if (parsed.pathname !== '/shared-debts' && parsed.pathname !== '/shared-debts/archive') return fallbackPath;
+    const search = parsed.search || '';
+    const hash = parsed.hash || '';
+    return `${parsed.pathname}${search}${hash}`;
+  } catch (error) {
+    return fallbackPath;
+  }
 }
 
 function getSharedDebtArchivedRequestIdSet(userId) {

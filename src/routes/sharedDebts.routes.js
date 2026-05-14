@@ -11,6 +11,7 @@ function createSharedDebtsRouter(deps = {}) {
   router.post('/shared-debts/bulk/archive', deps.ensureAuthenticated, controller.bulkArchive);
   router.post('/shared-debts/bulk/unarchive', deps.ensureAuthenticated, controller.bulkUnarchive);
   router.post('/shared-debts/bulk/mark-paid', deps.ensureAuthenticated, controller.bulkMarkPaid);
+  router.post('/shared-debts/bulk/respond', deps.ensureAuthenticated, controller.bulkRespond);
   router.post('/shared-debts/bulk/sender-action', deps.ensureAuthenticated, controller.bulkSenderAction);
   router.post('/shared-debts/bulk/confirm-receipt', deps.ensureAuthenticated, controller.bulkConfirmReceipt);
   router.post('/shared-debts/bulk/confirm-outside-app', deps.ensureAuthenticated, controller.bulkConfirmOutsideApp);

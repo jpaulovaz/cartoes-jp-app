@@ -123,6 +123,33 @@ function createSharedDebtsRepository(deps = {}) {
     `).all(batchId, userId);
   }
 
+  function getPendingRequestsForReceiver(requestIds, userId) {
+    const cleanIds = Array.from(new Set((Array.isArray(requestIds) ? requestIds : [])
+      .map((value) => Number(value || 0))
+      .filter(Boolean)));
+    const safeUserId = Number(userId || 0);
+    if (!cleanIds.length || !safeUserId) return [];
+
+    const placeholders = cleanIds.map(() => '?').join(', ');
+    return db.prepare(`
+      SELECT
+        r.*,
+        u.name AS requester_name,
+        u.email AS requester_email
+      FROM shared_debt_requests r
+      JOIN users u ON u.id = r.requester_user_id
+      WHERE r.id IN (${placeholders})
+        AND r.receiver_user_id = ?
+        AND r.status = 'pending'
+      ORDER BY
+        r.requester_user_id ASC,
+        COALESCE(r.source_due_year, 0) ASC,
+        COALESCE(r.source_due_month, 0) ASC,
+        COALESCE(r.source_txn_date_snapshot, r.created_at) ASC,
+        r.id ASC
+    `).all(...cleanIds, safeUserId);
+  }
+
   function getRequestForReceiver(requestId, userId) {
     return db.prepare(`
       SELECT r.*, u.name AS requester_name, u.email AS requester_email
@@ -264,6 +291,7 @@ function createSharedDebtsRepository(deps = {}) {
     createManualSharedDebtRequest,
     getBatchForReceiver,
     getPendingBatchItems,
+    getPendingRequestsForReceiver,
     getRequestForReceiver,
     getRequestForRequester,
     getMonthlySettlementIntentForReceiver,

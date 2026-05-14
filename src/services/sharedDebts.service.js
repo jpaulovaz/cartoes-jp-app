@@ -613,6 +613,95 @@ function createSharedDebtsService(deps = {}) {
     };
   }
 
+  function bulkRespondToRequests({ userId, requestIds = [], action, note, redirectTo }) {
+    const ids = Array.from(new Set((Array.isArray(requestIds) ? requestIds : [])
+      .map((value) => Number(value || 0))
+      .filter(Boolean)));
+
+    if (!ids.length) {
+      return { redirectTo, flash: { type: 'error', message: 'Escolha pelo menos uma cobrança da caixa de entrada.' } };
+    }
+
+    if (!['accept', 'reject'].includes(action)) {
+      return { redirectTo, flash: { type: 'error', message: 'Essa ação não combina com essas cobranças.' } };
+    }
+
+    const rows = repository.getPendingRequestsForReceiver(ids, userId);
+    if (!rows.length) {
+      return { redirectTo, flash: { type: 'info', message: 'Essas cobranças já foram respondidas ou não estão mais disponíveis.' } };
+    }
+
+    const actor = deps.getUserRecord(userId);
+    const actorName = actor?.name || actor?.email || 'O destinatário';
+    const now = deps.nowIso();
+    const accepted = action === 'accept';
+    const nextStatus = accepted ? 'accepted' : 'rejected_by_receiver';
+    const groups = new Map();
+
+    rows.forEach((row) => {
+      const requesterId = Number(row?.requester_user_id || 0);
+      const batchId = Number(row?.batch_id || 0);
+      const key = `${requesterId || 'sem-remetente'}:${batchId || 'sem-lote'}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          requesterUserId: requesterId,
+          requesterName: row?.requester_name || row?.requester_email || 'quem enviou',
+          batchId: batchId || null,
+          rows: [],
+          totalCents: 0
+        });
+      }
+      const group = groups.get(key);
+      group.rows.push(row);
+      group.totalCents += Number(row?.amount_cents || 0);
+    });
+
+    repository.withTransaction(() => {
+      rows.forEach((row) => {
+        repository.db.prepare(`
+          UPDATE shared_debt_requests
+          SET status = ?, response_note = ?, updated_at = ?, responded_at = ?
+          WHERE id = ? AND receiver_user_id = ? AND status = 'pending'
+        `).run(nextStatus, note, now, now, row.id, userId);
+        deps.addSharedDebtEvent({ requestId: row.id, actorUserId: userId, eventType: nextStatus, note });
+        if (row.batch_id) deps.touchSharedDebtBatch(row.batch_id, now);
+      });
+
+      Array.from(groups.values()).forEach((group) => {
+        if (!group.requesterUserId) return;
+        const firstRow = group.rows[0];
+        const countLabel = deps.formatCountLabel(group.rows.length, 'cobrança', 'cobranças');
+        const title = accepted
+          ? (group.rows.length > 1 ? 'Cobranças aceitas' : 'Cobrança aceita')
+          : (group.rows.length > 1 ? 'Cobranças recusadas' : 'Cobrança recusada');
+        const body = accepted
+          ? `${actorName} aceitou ${countLabel}, somando ${deps.formatBRLFromCents(group.totalCents)}.${deps.buildNoteSuffix(note)}`
+          : `${actorName} recusou ${countLabel}, somando ${deps.formatBRLFromCents(group.totalCents)}.${deps.buildNoteSuffix(note)}`;
+
+        deps.createNotification({
+          userId: group.requesterUserId,
+          type: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
+          title,
+          body,
+          href: firstRow?.id ? `/shared-debts?request=${firstRow.id}` : '/shared-debts',
+          relatedType: group.batchId ? 'shared_debt_batch' : 'shared_debt_request',
+          relatedId: group.batchId || firstRow?.id || null,
+          groupKey: 'shared_debt_updates'
+        });
+      });
+    });
+
+    return {
+      redirectTo,
+      flash: {
+        type: 'success',
+        message: accepted
+          ? `Pronto! ${deps.formatCountLabel(rows.length, 'cobrança foi aceita', 'cobranças foram aceitas')}.`
+          : `Pronto! ${deps.formatCountLabel(rows.length, 'cobrança foi recusada', 'cobranças foram recusadas')}.`
+      }
+    };
+  }
+
   function senderAction({ userId, requestId, action, note, redirectTo }) {
     if (!requestId) {
       return { redirectTo: '/shared-debts', flash: { type: 'error', message: 'Ops, essa solicitação não é válida.' } };
@@ -1939,6 +2028,7 @@ function createSharedDebtsService(deps = {}) {
     settlePrivateReminder,
     respondToBatch,
     respondToRequest,
+    bulkRespondToRequests,
     senderAction,
     prepareMonthlySettlement,
     createMonthlySettlementPix,

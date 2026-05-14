@@ -13,6 +13,14 @@ function createSharedDebtsController(deps = {}) {
     return res.redirect(result.redirectTo || fallback);
   }
 
+  function getReturnTarget(req, fallback = '/shared-debts') {
+    const explicitTarget = req.body?.return_to || req.body?.returnTo || null;
+    if (explicitTarget && typeof deps.resolveSharedDebtViewPath === 'function') {
+      return deps.resolveSharedDebtViewPath(explicitTarget, fallback);
+    }
+    return redirectBackOr(req, fallback);
+  }
+
   return {
     activePage(req, res) {
       return renderSharedDebtsPage(req, res, { archiveMode: false });
@@ -27,7 +35,7 @@ function createSharedDebtsController(deps = {}) {
         userId: req.user.id,
         requestId: Number(req.params.id),
         returnTo: req.body.return_to,
-        fallback: redirectBackOr(req, '/shared-debts')
+        fallback: getReturnTarget(req, '/shared-debts')
       });
       return redirectWithResult(req, res, result);
     },
@@ -47,7 +55,7 @@ function createSharedDebtsController(deps = {}) {
         userId: req.user.id,
         reminderId: Number(req.params.id || 0),
         returnTo: req.body.return_to,
-        fallback: redirectBackOr(req, '/shared-debts')
+        fallback: getReturnTarget(req, '/shared-debts')
       });
       return redirectWithResult(req, res, result);
     },
@@ -67,7 +75,7 @@ function createSharedDebtsController(deps = {}) {
         userId: req.user.id,
         requestIds: deps.parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id),
         returnTo: req.body.return_to,
-        fallback: redirectBackOr(req, '/shared-debts')
+        fallback: getReturnTarget(req, '/shared-debts')
       });
       return redirectWithResult(req, res, result);
     },
@@ -83,17 +91,20 @@ function createSharedDebtsController(deps = {}) {
     },
 
     sendDraftQueue(req, res) {
+      const returnTarget = getReturnTarget(req, '/shared-debts#draft-queues');
       try {
         const result = service.sendDraftQueue(req.user.id, Number(req.params.id));
+        result.redirectTo = returnTarget || result.redirectTo;
         return redirectWithResult(req, res, result);
       } catch (error) {
         setFlash(req, 'error', error.message || 'Não consegui disparar esse rascunho agora.');
-        return res.redirect('/shared-debts#draft-queues');
+        return res.redirect(returnTarget || '/shared-debts#draft-queues');
       }
     },
 
     discardDraftQueue(req, res) {
       const result = service.discardDraftQueue(req.user.id, Number(req.params.id));
+      result.redirectTo = getReturnTarget(req, result.redirectTo || '/shared-debts#draft-queues');
       return redirectWithResult(req, res, result);
     },
 
@@ -130,7 +141,7 @@ function createSharedDebtsController(deps = {}) {
         batchId,
         action: String(req.body.action || '').trim().toLowerCase(),
         note: String(req.body.note || '').trim() || null,
-        redirectTo: redirectBackOr(req, fallbackRedirect)
+        redirectTo: getReturnTarget(req, fallbackRedirect)
       });
       return redirectWithResult(req, res, result);
     },
@@ -143,7 +154,7 @@ function createSharedDebtsController(deps = {}) {
         requestId,
         action: String(req.body.action || '').trim().toLowerCase(),
         note: String(req.body.note || '').trim() || null,
-        redirectTo: redirectBackOr(req, fallbackRedirect)
+        redirectTo: getReturnTarget(req, fallbackRedirect)
       });
       return redirectWithResult(req, res, result);
     },
@@ -156,7 +167,7 @@ function createSharedDebtsController(deps = {}) {
         requestId,
         action: String(req.body.action || '').trim().toLowerCase(),
         note: String(req.body.note || '').trim() || null,
-        redirectTo: redirectBackOr(req, fallbackRedirect)
+        redirectTo: getReturnTarget(req, fallbackRedirect)
       });
       return redirectWithResult(req, res, result);
     },
@@ -245,7 +256,7 @@ function createSharedDebtsController(deps = {}) {
         userId: req.user.id,
         requestId,
         note: String(req.body.note || '').trim() || null,
-        redirectTo: redirectBackOr(req, fallbackRedirect)
+        redirectTo: getReturnTarget(req, fallbackRedirect)
       });
       return redirectWithResult(req, res, result);
     },
@@ -257,7 +268,18 @@ function createSharedDebtsController(deps = {}) {
         userId: req.user.id,
         requestId,
         note: String(req.body.note || '').trim() || null,
-        redirectTo: redirectBackOr(req, fallbackRedirect)
+        redirectTo: getReturnTarget(req, fallbackRedirect)
+      });
+      return redirectWithResult(req, res, result);
+    },
+
+    bulkRespond(req, res) {
+      const result = service.bulkRespondToRequests({
+        userId: req.user.id,
+        requestIds: deps.parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id),
+        action: String(req.body.action || '').trim().toLowerCase(),
+        note: String(req.body.note || '').trim() || null,
+        redirectTo: getReturnTarget(req, '/shared-debts#received-inbox')
       });
       return redirectWithResult(req, res, result);
     },
@@ -267,7 +289,7 @@ function createSharedDebtsController(deps = {}) {
         userId: req.user.id,
         requestIds: deps.parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id),
         note: String(req.body.note || '').trim() || null,
-        redirectTo: redirectBackOr(req, req.body.return_to || '/shared-debts')
+        redirectTo: getReturnTarget(req, '/shared-debts')
       });
       return redirectWithResult(req, res, result);
     },
@@ -278,7 +300,7 @@ function createSharedDebtsController(deps = {}) {
         requestIds: deps.parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id),
         action: String(req.body.action || '').trim().toLowerCase(),
         note: String(req.body.note || '').trim() || null,
-        redirectTo: redirectBackOr(req, req.body.return_to || '/shared-debts')
+        redirectTo: getReturnTarget(req, '/shared-debts')
       });
       return redirectWithResult(req, res, result);
     },
@@ -288,7 +310,7 @@ function createSharedDebtsController(deps = {}) {
         userId: req.user.id,
         requestIds: deps.parseSharedDebtRequestIds(req.body.request_ids || req.body.requestIds || req.body.request_id),
         note: String(req.body.note || '').trim() || null,
-        redirectTo: redirectBackOr(req, req.body.return_to || '/shared-debts')
+        redirectTo: getReturnTarget(req, '/shared-debts')
       });
       return redirectWithResult(req, res, result);
     },
@@ -301,7 +323,7 @@ function createSharedDebtsController(deps = {}) {
         amountMode: String(req.body.amount_mode || req.body.mode || 'full').trim().toLowerCase(),
         rawAmount: req.body.amount_cents ?? req.body.amount ?? req.body.amountCents,
         returnTo: req.body.return_to,
-        fallback: redirectBackOr(req, '/shared-debts')
+        fallback: getReturnTarget(req, '/shared-debts')
       });
       return redirectWithResult(req, res, result);
     }

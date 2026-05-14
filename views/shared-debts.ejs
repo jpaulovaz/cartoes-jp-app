@@ -184,6 +184,92 @@
       .sort((a, b) => String(a.receiverDisplayName || '').localeCompare(String(b.receiverDisplayName || ''), 'pt-BR', { sensitivity: 'base' }));
   }
 
+
+  function safeDomIdSuffix(value) {
+    return String(value || 'item')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'item';
+  }
+
+  function receivedInboxFriendKey(item) {
+    const requesterId = Number(item?.requester_user_id || 0);
+    if (requesterId) return `user:${requesterId}`;
+    const email = String(item?.requester_email || '').trim().toLowerCase();
+    if (email) return `email:${email}`;
+    return `name:${String(item?.requester_name || 'sem-nome').trim().toLowerCase()}`;
+  }
+
+  function receivedInboxItemMonthRank(item) {
+    const year = Number(item?.source_due_year || 0);
+    const month = Number(item?.source_due_month || 0);
+    return year && month ? (year * 100) + month : Number.MAX_SAFE_INTEGER;
+  }
+
+  function buildReceivedInboxFriendGroups(items) {
+    const friendGroups = new Map();
+
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      const key = receivedInboxFriendKey(item);
+      if (!friendGroups.has(key)) {
+        friendGroups.set(key, {
+          key,
+          domId: `inbox-friend-${safeDomIdSuffix(key)}`,
+          requesterDisplayName: item?.requester_name || item?.requester_email || 'Essa pessoa',
+          requesterEmail: item?.requester_email || null,
+          items: [],
+          monthGroups: [],
+          itemCount: 0,
+          totalCents: 0
+        });
+      }
+
+      const group = friendGroups.get(key);
+      group.items.push(item);
+      group.itemCount += 1;
+      group.totalCents += itemTotalCents(item);
+    });
+
+    return Array.from(friendGroups.values()).map((friendGroup) => {
+      const months = new Map();
+      friendGroup.items.slice().sort((a, b) => {
+        const rankDiff = receivedInboxItemMonthRank(a) - receivedInboxItemMonthRank(b);
+        if (rankDiff !== 0) return rankDiff;
+        return String(a?.source_txn_date || a?.source_txn_date_snapshot || a?.created_at || '').localeCompare(String(b?.source_txn_date || b?.source_txn_date_snapshot || b?.created_at || ''));
+      }).forEach((item) => {
+        const month = Number(item?.source_due_month || 0);
+        const year = Number(item?.source_due_year || 0);
+        const monthKey = month && year ? `${year}-${String(month).padStart(2, '0')}` : 'sem-competencia';
+        if (!months.has(monthKey)) {
+          months.set(monthKey, {
+            key: monthKey,
+            domId: `${friendGroup.domId}-${safeDomIdSuffix(monthKey)}`,
+            month,
+            year,
+            rank: month && year ? (year * 100 + month) : Number.MAX_SAFE_INTEGER,
+            periodLabel: month && year ? monthLabel(month, year) : 'Sem mês informado',
+            items: [],
+            itemCount: 0,
+            totalCents: 0
+          });
+        }
+        const monthGroup = months.get(monthKey);
+        monthGroup.items.push(item);
+        monthGroup.itemCount += 1;
+        monthGroup.totalCents += itemTotalCents(item);
+      });
+
+      friendGroup.monthGroups = Array.from(months.values()).sort((a, b) => a.rank - b.rank);
+      return friendGroup;
+    }).sort((a, b) => String(a.requesterDisplayName || '').localeCompare(String(b.requesterDisplayName || ''), 'pt-BR', { sensitivity: 'base' }));
+  }
+
+  function requestDisplayDateLabel(item, fallback = '') {
+    const value = item?.source_txn_date || item?.source_txn_date_snapshot || item?.created_at || null;
+    return value ? formatDateBR(value) : (fallback || 'Sem data');
+  }
+
   function statusWeight(status) {
     switch (status) {
       case 'pending': return 0;
@@ -666,7 +752,14 @@
   const sentBaseItems = Array.isArray(sentTracking) ? sentTracking : (sent || []);
   const receivedManualItems = receivedBaseItems.filter(isManualItem);
   const sentManualItems = sentBaseItems.filter(isManualItem);
-  const receivedTrackingItems = receivedBaseItems.filter(item => !isManualItem(item));
+  const receivedInboxItems = isArchiveMode ? [] : receivedBaseItems.filter(item => !isManualItem(item) && String(item?.status || '') === 'pending');
+  const receivedInboxFriendGroups = buildReceivedInboxFriendGroups(receivedInboxItems);
+  const receivedInboxSummary = receivedInboxItems.reduce((acc, item) => {
+    acc.itemCount += 1;
+    acc.totalCents += itemTotalCents(item);
+    return acc;
+  }, { itemCount: 0, totalCents: 0 });
+  const receivedTrackingItems = receivedBaseItems.filter(item => !isManualItem(item) && String(item?.status || '') !== 'pending');
   const sentTrackingItems = sentBaseItems.filter(item => !isManualItem(item));
   const rawReceivedGroups = buildMonthGroups((received || []).filter(item => !isManualItem(item)));
   const rawSentGroups = buildMonthGroups((sent || []).filter(item => !isManualItem(item)));
@@ -1122,7 +1215,7 @@
 
   <section class="op-fade-up" aria-label="Atalhos da Central de Acertos">
     <div class="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
-      <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         <a href="#received" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:bg-white dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-slate-900">
           Recebidas
           <span class="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400"><%= countLabel(received.length, 'acerto', 'acertos') %> chegando pra você</span>
@@ -1132,6 +1225,10 @@
           <span class="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400"><%= countLabel(sentHeroCount, 'acerto', 'acertos') %> no seu radar</span>
         </a>
         <% if (!isArchiveMode) { %>
+          <a href="#received-inbox" class="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-800 transition hover:-translate-y-0.5 hover:bg-white dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100 dark:hover:bg-blue-900/30">
+            Caixa de entrada
+            <span class="mt-1 block text-xs font-semibold text-blue-700/80 dark:text-blue-100/80"><%= countLabel(receivedInboxSummary.itemCount, 'cobrança', 'cobranças') %> para responder</span>
+          </a>
           <a href="#draft-queues" class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-black text-sky-800 transition hover:-translate-y-0.5 hover:bg-white dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-100 dark:hover:bg-sky-900/30">
             Caixa de saída
             <span class="mt-1 block text-xs font-semibold text-sky-700/80 dark:text-sky-100/80"><%= countLabel(draftQueueSummaryMeta.queueCount, 'rascunho', 'rascunhos') %> antes do envio</span>
@@ -1190,6 +1287,118 @@
           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70">Data de hoje automática</span>
           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70">Lembrete em data combinada</span>
           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-900/70">Acompanha até quitar</span>
+        </div>
+      <% } %>
+    </div>
+  </section>
+
+  <section id="received-inbox" class="op-fade-up op-debts-outbox-section scroll-mt-24">
+    <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
+      <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div class="max-w-3xl">
+          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500 dark:text-blue-300">Caixa de entrada</div>
+          <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Responder cobranças recebidas</h2>
+          <p class="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Tudo o que está aqui ainda aguarda sua resposta. Você pode aceitar por pessoa, por mês ou revisar item por item.</p>
+        </div>
+        <div class="flex flex-wrap gap-2 xl:justify-end">
+          <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200"><%= countLabel(receivedInboxFriendGroups.length, 'pessoa', 'pessoas') %></span>
+          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"><%= countLabel(receivedInboxSummary.itemCount, 'cobrança pendente', 'cobranças pendentes') %></span>
+          <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200"><%= formatBRLFromCents(receivedInboxSummary.totalCents) %> para decidir</span>
+        </div>
+      </div>
+
+      <% if (receivedInboxFriendGroups.length) { %>
+        <div class="mt-5 space-y-4">
+          <% receivedInboxFriendGroups.forEach((friendGroup) => { %>
+            <% const friendRequestIds = friendGroup.items.map((item) => Number(item.id || 0)).filter(Boolean); %>
+            <% const friendOpen = friendGroup.items.some((item) => requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id)); %>
+            <details id="<%= friendGroup.domId %>" class="op-shared-friend-group rounded-[28px] border border-slate-200 bg-slate-50/80 shadow-sm dark:border-slate-700 dark:bg-slate-900/60" <%= friendOpen ? 'open' : '' %>>
+              <summary class="flex cursor-pointer list-none flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Pessoa</div>
+                  <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white"><%= friendGroup.requesterDisplayName %></h3>
+                  <% if (friendGroup.requesterEmail) { %>
+                    <p class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= friendGroup.requesterEmail %></p>
+                  <% } %>
+                </div>
+                <div class="flex flex-wrap gap-2 lg:justify-end op-shared-action-row op-shared-action-row--compact">
+                  <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200"><%= formatBRLFromCents(friendGroup.totalCents) %></span>
+                  <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><%= countLabel(friendGroup.monthGroups.length, 'período', 'períodos') %></span>
+                  <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200"><%= countLabel(friendGroup.itemCount, 'cobrança', 'cobranças') %></span>
+                </div>
+              </summary>
+              <div class="border-t border-slate-200 p-5 pt-4 dark:border-slate-700">
+                <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <p class="text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Aceite tudo dessa pessoa de uma vez ou decida mês a mês.</p>
+                  <% if (friendRequestIds.length) { %>
+                    <form method="post" action="/shared-debts/bulk/respond" class="w-full lg:w-auto">
+                      <input type="hidden" name="return_to" value="<%= currentPath %>#<%= friendGroup.domId %>">
+                      <input type="hidden" name="action" value="accept">
+                      <% friendRequestIds.forEach((requestId) => { %>
+                        <input type="hidden" name="request_ids" value="<%= requestId %>">
+                      <% }) %>
+                      <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 lg:w-auto">Aceitar tudo</button>
+                    </form>
+                  <% } %>
+                </div>
+
+                <div class="grid gap-4 xl:grid-cols-2">
+                  <% friendGroup.monthGroups.forEach((monthGroup) => { %>
+                    <% const monthRequestIds = monthGroup.items.map((item) => Number(item.id || 0)).filter(Boolean); %>
+                    <article id="<%= monthGroup.domId %>" class="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
+                      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Competência</div>
+                          <h4 class="mt-1 text-base font-black text-slate-900 dark:text-white"><%= monthGroup.periodLabel %></h4>
+                          <p class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= countLabel(monthGroup.itemCount, 'cobrança recebida', 'cobranças recebidas') %> nessa competência.</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2 sm:justify-end op-shared-action-row op-shared-action-row--compact">
+                          <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200"><%= formatBRLFromCents(monthGroup.totalCents) %></span>
+                          <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"><%= countLabel(monthGroup.itemCount, 'item', 'itens') %></span>
+                        </div>
+                      </div>
+
+                      <div class="mt-4 space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/70">
+                        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Prévia</div>
+                        <% monthGroup.items.forEach((item) => { %>
+                          <div class="flex items-start justify-between gap-3 text-sm">
+                            <div class="min-w-0">
+                              <div class="font-bold text-slate-900 dark:text-slate-100"><%= item.description_snapshot || 'Compra sem descrição' %></div>
+                              <div class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400"><%= requestDisplayDateLabel(item, monthGroup.periodLabel) %></div>
+                            </div>
+                            <div class="shrink-0 text-right font-black text-slate-900 dark:text-slate-100"><%= formatBRLFromCents(itemTotalCents(item)) %></div>
+                          </div>
+                        <% }) %>
+                      </div>
+
+                      <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap op-shared-action-row">
+                        <form method="post" action="/shared-debts/bulk/respond" class="sm:flex-1">
+                          <input type="hidden" name="return_to" value="<%= currentPath %>#<%= monthGroup.domId %>">
+                          <input type="hidden" name="action" value="accept">
+                          <% monthRequestIds.forEach((requestId) => { %>
+                            <input type="hidden" name="request_ids" value="<%= requestId %>">
+                          <% }) %>
+                          <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"><%= monthRequestIds.length > 1 ? 'Aceitar mês' : 'Aceitar' %></button>
+                        </form>
+                        <form method="post" action="/shared-debts/bulk/respond" class="sm:flex-1">
+                          <input type="hidden" name="return_to" value="<%= currentPath %>#<%= monthGroup.domId %>">
+                          <input type="hidden" name="action" value="reject">
+                          <% monthRequestIds.forEach((requestId) => { %>
+                            <input type="hidden" name="request_ids" value="<%= requestId %>">
+                          <% }) %>
+                          <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 bg-white px-5 py-3 text-sm font-bold text-rose-700 shadow-sm transition-colors hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-950/30"><%= monthRequestIds.length > 1 ? 'Recusar mês' : 'Recusar' %></button>
+                        </form>
+                      </div>
+                    </article>
+                  <% }) %>
+                </div>
+              </div>
+            </details>
+          <% }) %>
+        </div>
+      <% } else { %>
+        <div class="mt-5 rounded-[26px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm font-medium leading-6 text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
+          Nada esperando resposta agora. Quando alguém te enviar uma cobrança, ela aparece aqui primeiro.
         </div>
       <% } %>
     </div>
@@ -1615,78 +1824,9 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
   </div>
 
 
-  <% if (receivedBatchCards.length || sentBatchCards.length) { %>
-
+  <% if (sentBatchCards.length) { %>
     <section class="space-y-6 op-fade-up">
-      <% if (receivedBatchCards.length) { %>
-        <div class="space-y-4">
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <div class="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500 dark:text-blue-300">Chegaram em bloco</div>
-              <h2 class="mt-1 text-2xl font-black text-slate-900 dark:text-white">Resolver de uma vez</h2>
-              <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Quando vários acertos chegam no mesmo envio, você resolve tudo sem repetir passo por passo.</p>
-            </div>
-            <div class="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"><%= countLabel(receivedBatchCards.length, 'envio aguardando sua decisão', 'envios aguardando sua decisão') %></div>
-          </div>
 
-          <div class="grid gap-4 xl:grid-cols-2">
-            <% receivedBatchCards.forEach((batch) => { const batchHighlighted = batchIdToHighlight && Number(batchIdToHighlight) === Number(batch.id); const batchStatus = batchStatusMeta(batch); const batchUpdatedText = batchUpdateText(batch); %>
-              <article id="batch-<%= batch.id %>" class="rounded-[28px] border <%= batchHighlighted ? 'border-blue-300 bg-blue-50/70 shadow-blue-200/60 dark:border-blue-700 dark:bg-blue-900/20 dark:shadow-blue-950/40' : 'border-slate-200 bg-white shadow-slate-200/60 dark:border-slate-700 dark:bg-slate-800/80 dark:shadow-slate-950/40' %> p-5 shadow-sm transition-colors">
-                <div class="flex flex-col gap-4">
-                  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div class="min-w-0 flex-1">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-bold text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200"><%= batchOriginLabel(batch.originKind, batch.totalCount) %></span>
-                        <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold <%= batchStatus.classes %>"><%= batchStatus.label %></span>
-                        <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"><%= batchPendingSummary(batch) %></span>
-                        <% if (batchUpdatedText) { %><span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Atualizado</span><% } %>
-                      </div>
-                      <h3 class="mt-3 text-lg font-black text-slate-900 dark:text-white">Envio de <%= batch.counterpartName %></h3>
-                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= batchPreviewText(batch) %></p>
-                      <% if (batchUpdatedText) { %><p class="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-200"><%= batchUpdatedText %></p><% } %>
-                    </div>
-                    <div class="sm:text-right">
-                      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Total pendente</div>
-                      <div class="mt-1 text-xl font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(batch.pendingCents || batch.totalCents) %></div>
-                    </div>
-                  </div>
-
-                  <div class="grid gap-3 sm:grid-cols-3">
-                    <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500"><span class="md:hidden">Mês</span><span class="hidden md:inline">Competência</span></div>
-                      <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= batchRangeLabel(batch) %></div>
-                    </div>
-                    <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Itens no envio</div>
-                      <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= countLabel(batch.totalCount, 'acerto', 'acertos') %></div>
-                    </div>
-                    <div class="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Ação sugerida</div>
-                      <div class="mt-1 text-sm font-bold text-slate-900 dark:text-white"><%= batchStatusText(batch) %></div>
-                    </div>
-                  </div>
-
-                  <div class="flex flex-col gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
-                    <% if (batch.reviewRequestId) { %>
-                      <button type="button" data-jump-request="request-<%= batch.reviewRequestId %>" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Revisar itens</button>
-                    <% } %>
-                    <form method="POST" action="/shared-debts/batches/<%= batch.id %>/respond" class="contents">
-                      <input type="hidden" name="action" value="reject">
-                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-bold text-rose-700 shadow-sm transition-colors hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-950/30">Recusar tudo</button>
-                    </form>
-                    <form method="POST" action="/shared-debts/batches/<%= batch.id %>/respond" class="contents">
-                      <input type="hidden" name="action" value="accept">
-                      <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"><%= batch.pendingCount > 1 ? 'Aceitar tudo' : 'Aceitar acerto' %></button>
-                    </form>
-                  </div>
-                </div>
-              </article>
-            <% }) %>
-          </div>
-        </div>
-      <% } %>
-
-      <% if (sentBatchCards.length) { %>
         <div class="space-y-4">
           <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -1744,11 +1884,8 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
             <% }) %>
           </div>
         </div>
-      <% } %>
     </section>
   <% } %>
-  <% } %>
-
   <% if (!isArchiveMode && actionCount > 0) { %>
     <section class="md:hidden op-fade-up">
       <div class="op-surface-card rounded-3xl border border-amber-200/80 bg-amber-50/90 p-4 shadow-sm dark:border-amber-800 dark:bg-amber-900/20">
@@ -3574,9 +3711,13 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
     if (!hash) return;
 
     const scope = document.querySelector(hash);
+    if (!scope) return;
     if (scope instanceof HTMLDetailsElement) {
       scope.open = true;
+      scope.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
     }
+    openRequestChain(scope);
   }
 
   function openRequestChain(target) {
@@ -4445,6 +4586,40 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
 
     sync();
   }
+
+  function resolveSharedDebtReturnAnchor(form) {
+    if (!form) return '';
+    const explicitAnchor = form.getAttribute('data-return-anchor');
+    if (explicitAnchor) return explicitAnchor;
+    const target = form.closest('[data-return-anchor], details[id], article[id], section[id]');
+    if (!target) return '';
+    const attrAnchor = target.getAttribute('data-return-anchor');
+    if (attrAnchor) return attrAnchor;
+    return target.id || '';
+  }
+
+  function ensureSharedDebtReturnTarget(form) {
+    if (!form || !form.closest('.op-screen--shared-debts')) return;
+    const method = String(form.getAttribute('method') || '').toLowerCase();
+    if (method !== 'post') return;
+
+    let input = form.querySelector('input[name="return_to"]');
+    if (input && input.value) return;
+    if (!input) {
+      input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'return_to';
+      form.appendChild(input);
+    }
+
+    const basePath = '<%= currentPath %>';
+    const anchor = resolveSharedDebtReturnAnchor(form);
+    input.value = anchor ? `${basePath}#${anchor}` : basePath;
+  }
+
+  document.addEventListener('submit', (event) => {
+    ensureSharedDebtReturnTarget(event.target);
+  }, true);
 
   initManualDebtComposer();
 

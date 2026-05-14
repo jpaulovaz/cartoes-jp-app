@@ -433,6 +433,10 @@
     return (items || []).reduce((sum, item) => sum + Number(item?.amount_cents || 0), 0);
   }
 
+  function sumPendingCents(items) {
+    return (items || []).reduce((sum, item) => sum + itemPendingCents(item), 0);
+  }
+
   function countDistinctCounterparts(items, scope) {
     return new Set((items || []).map(item => {
       if (scope === 'received') return Number(item?.requester_user_id || 0) || String(item?.requester_email || '');
@@ -3147,7 +3151,7 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                 </div>
               </summary>
 
-              <% const sentMonthSheetId = `sent-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmSheetId = `sent-month-confirm-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthOutsideSheetId = `sent-month-outside-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmableItems = getSentMonthConfirmableItems(group); const sentMonthConfirmableTotal = sumAmountCents(sentMonthConfirmableItems); const sentMonthCounterparts = countDistinctCounterparts(sentMonthConfirmableItems, 'sent'); const sentMonthOutsideItems = getSentMonthOutsideAppItems(group); const sentMonthOutsideTotal = sumAmountCents(sentMonthOutsideItems); const sentMonthOutsideCounterparts = countDistinctCounterparts(sentMonthOutsideItems, 'sent'); const sentMonthArchiveItems = (group.items || []).filter(canArchiveItem); const sentSettlementEntries = buildGroupSettlementEntries(group, 'sent'); const sentGroupMonthHref = groupMonthHref(group, 'sent'); %>
+              <% const sentMonthSheetId = `sent-month-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmSheetId = `sent-month-confirm-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const sentMonthConfirmableItems = getSentMonthConfirmableItems(group); const sentMonthConfirmableTotal = sumAmountCents(sentMonthConfirmableItems); const sentMonthCounterparts = countDistinctCounterparts(sentMonthConfirmableItems, 'sent'); const sentMonthArchiveItems = (group.items || []).filter(canArchiveItem); const sentSettlementEntries = buildGroupSettlementEntries(group, 'sent'); const sentGroupMonthHref = groupMonthHref(group, 'sent'); %>
               <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/20 px-5 py-4 space-y-4">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -3172,11 +3176,6 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                     <% if (!isArchiveMode && sentMonthConfirmableItems.length) { %>
                       <button type="button" data-open-sheet="<%= sentMonthConfirmSheetId %>" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600">
                         Confirmar recebimento do mês
-                      </button>
-                    <% } %>
-                    <% if (!isArchiveMode && sentMonthOutsideItems.length) { %>
-                      <button type="button" data-open-sheet="<%= sentMonthOutsideSheetId %>" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 shadow-sm transition-colors hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">
-                        Encerrar por fora
                       </button>
                     <% } %>
                   </div>
@@ -3431,60 +3430,6 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                 </div>
               </div>
               <% } %>
-              <% if (sentMonthOutsideItems.length) { %>
-              <div id="<%= sentMonthOutsideSheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
-                <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
-                <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-w-xl sm:rounded-[32px]">
-                  <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-                    <div>
-                      <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Você enviou · <%= group.label %></div>
-                      <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Encerrar pagamento feito por fora</h3>
-                      <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= countLabel(sentMonthOutsideItems.length, 'acerto em aberto', 'acertos em aberto') %> · <%= formatBRLFromCents(sentMonthOutsideTotal) %></p>
-                    </div>
-                    <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar encerramento por fora">
-                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
-                  </div>
-                  <form method="POST" action="/shared-debts/bulk/confirm-outside-app" class="space-y-4 px-5 py-4" data-outside-app-payment-form>
-                    <% sentMonthOutsideItems.forEach((item) => { %>
-                      <input type="hidden" name="request_ids" value="<%= item.id %>">
-                    <% }) %>
-                    <input type="hidden" name="return_to" value="<%= currentPath %>">
-                    <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-                      Registre valores recebidos fora do app. Você pode quitar tudo ou informar só uma parte; o restante continua em aberto.<% if (sentMonthOutsideCounterparts > 1) { %> O aviso será separado por pessoa envolvida.<% } %>
-                    </div>
-                    <div class="grid gap-3 sm:grid-cols-2">
-                      <label class="flex cursor-pointer gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-                        <input type="radio" name="amount_mode" value="full" class="mt-1" data-outside-app-payment-mode checked>
-                        <span>
-                          <span class="block text-sm font-black text-slate-900 dark:text-white">Quitar saldo aberto</span>
-                          <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Fecha os acertos escolhidos.</span>
-                        </span>
-                      </label>
-                      <label class="flex cursor-pointer gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-                        <input type="radio" name="amount_mode" value="custom" class="mt-1" data-outside-app-payment-mode>
-                        <span>
-                          <span class="block text-sm font-black text-slate-900 dark:text-white">Escolher valor</span>
-                          <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Registra pagamento parcial.</span>
-                        </span>
-                      </label>
-                    </div>
-                    <label class="block hidden" data-outside-app-custom-wrap>
-                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor recebido</span>
-                      <input name="amount" type="text" inputmode="decimal" autocomplete="off" data-money-mask data-outside-app-custom-input placeholder="R$ 0,00" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-amber-500 dark:focus:ring-amber-500/20">
-                    </label>
-                    <label class="block">
-                      <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação (opcional)</span>
-                      <textarea name="note" rows="3" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-amber-500 dark:focus:ring-amber-500/20" placeholder="Ex.: Recebido por Pix fora do app."></textarea>
-                    </label>
-                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
-                      <button type="button" data-close-sheet class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
-                      <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-600">Registrar pagamento</button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-              <% } %>
               <div id="<%= sentMonthSheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
                 <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
                 <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-h-[82vh] sm:max-w-3xl sm:rounded-[32px]">
@@ -3534,8 +3479,8 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
               </div>
 
               <div class="space-y-3">
-                <% buildCounterpartItemGroups(group.items, 'sent').forEach((friendGroup) => { const friendOpen = friendGroup.items.some((friendItem) => requestIdToHighlight && Number(requestIdToHighlight) === Number(friendItem.id)); %>
-                  <details class="op-shared-friend-group rounded-[26px] border border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/40 overflow-hidden" <%= friendOpen ? 'open' : '' %>>
+                <% buildCounterpartItemGroups(group.items, 'sent').forEach((friendGroup) => { const friendOpen = friendGroup.items.some((friendItem) => requestIdToHighlight && Number(requestIdToHighlight) === Number(friendItem.id)); const friendOutsideItems = getSentMonthOutsideAppItems(friendGroup); const friendOutsideTotal = sumPendingCents(friendOutsideItems); const sentFriendGroupDomId = `sent-friend-${group.key}-${friendGroup.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const friendOutsideSheetId = `sent-outside-friend-${group.key}-${friendGroup.key}`.replace(/[^a-zA-Z0-9_-]/g, '-'); const friendOutsideReturnTo = friendOutsideItems.length ? `${currentPath}?request=${friendOutsideItems[0].id}#request-${friendOutsideItems[0].id}` : `${currentPath}#sent`; %>
+                  <details id="<%= sentFriendGroupDomId %>" class="op-shared-friend-group rounded-[26px] border border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/40 overflow-hidden" <%= friendOpen ? 'open' : '' %>>
                     <summary class="list-none cursor-pointer px-5 py-4 bg-white/70 dark:bg-slate-950/20">
                       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
@@ -3546,6 +3491,11 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                           <% if (friendGroup.actionCount) { %><span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"><%= friendGroup.actionCount %> ação(ões)</span><% } %>
                           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><%= countLabel(friendGroup.items.length, 'acerto', 'acertos') %></span>
                           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><%= formatBRLFromCents(friendGroup.pendingCents) %> em aberto</span>
+                          <% if (!isArchiveMode && friendOutsideItems.length) { %>
+                            <button type="button" data-open-sheet="<%= friendOutsideSheetId %>" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700 shadow-sm transition-colors hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/35">
+                              Encerrar por fora
+                            </button>
+                          <% } %>
                         </div>
                       </div>
                     </summary>
@@ -3554,6 +3504,8 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                         const meta = statusMeta(item);
                         const isHighlighted = requestIdToHighlight && Number(requestIdToHighlight) === Number(item.id);
                         const timeline = timelineFor(item.id);
+                        const itemOutsideAppEligible = !isArchiveMode && item?.status === 'accepted' && !item?.payment_marked_at && !isManualItem(item) && itemPendingCents(item) > 0;
+                        const itemOutsideAppSheetId = `sent-outside-item-${item.id}`.replace(/[^a-zA-Z0-9_-]/g, '-');
                       %>
                   <details id="request-<%= item.id %>" class="<%= isHighlighted ? 'bg-blue-50/70 dark:bg-blue-900/10' : 'bg-white/80 dark:bg-slate-900/20' %>" <%= isHighlighted ? 'open' : '' %>>
                     <summary class="list-none cursor-pointer px-5 py-4">
@@ -3633,6 +3585,14 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                               <% if (Number(itemSettlement.reservedCents || 0) > 0) { %><span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-3 py-1 text-sky-700 dark:border-sky-800 dark:bg-slate-900/60 dark:text-sky-200"><%= formatBRLFromCents(itemSettlement.reservedCents || 0) %> aguardando seu ok</span><% } %>
                             </div>
                           <% } %>
+                          <% if (itemOutsideAppEligible) { %>
+                            <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <p class="text-xs font-semibold text-emerald-700 dark:text-emerald-200">Recebeu essa compra por outro caminho? Dá para fechar só ela, sem mexer no resto do mês.</p>
+                              <button type="button" data-open-sheet="<%= itemOutsideAppSheetId %>" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-700 shadow-sm transition-colors hover:bg-amber-50 dark:border-amber-800 dark:bg-slate-900/60 dark:text-amber-200 dark:hover:bg-amber-900/20">
+                                Encerrar esta compra por fora
+                              </button>
+                            </div>
+                          <% } %>
                         </div>
                       <% } else if (item.status === 'accepted' && item.payment_marked_at) { %>
                         <div class="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 px-4 py-4">
@@ -3702,9 +3662,115 @@ Enquanto estiver aqui, nada é avisado para a outra pessoa e nada entra no contr
                       <% } %>
                     </div>
                   </details>
+                  <% if (itemOutsideAppEligible) { %>
+                    <div id="<%= itemOutsideAppSheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
+                      <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
+                      <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-w-xl sm:rounded-[32px]">
+                        <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                          <div>
+                            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Você enviou · <%= item.source_due_month && item.source_due_year ? monthLabel(item.source_due_month, item.source_due_year) : 'Sem mês informado' %></div>
+                            <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Encerrar esta compra por fora</h3>
+                            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= item.description_snapshot || 'Compra sem descrição' %> · <%= formatBRLFromCents(itemPendingCents(item)) %> em aberto</p>
+                          </div>
+                          <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar encerramento por fora">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                          </button>
+                        </div>
+                        <form method="POST" action="/shared-debts/bulk/confirm-outside-app" class="space-y-4 px-5 py-4" data-outside-app-payment-form>
+                          <input type="hidden" name="request_ids" value="<%= item.id %>">
+                          <input type="hidden" name="return_to" value="<%= `${currentPath}?request=${item.id}#request-${item.id}` %>">
+                          <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                            Esse registro vale só para esta compra com <strong><%= item.receiver_name || item.receiver_email || item.receiver_email_snapshot || 'essa pessoa' %></strong>. Se escolher um valor parcial, o restante continua aberto nessa mesma compra.
+                          </div>
+                          <div class="grid gap-3 sm:grid-cols-2">
+                            <label class="flex cursor-pointer gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+                              <input type="radio" name="amount_mode" value="full" class="mt-1" data-outside-app-payment-mode checked>
+                              <span>
+                                <span class="block text-sm font-black text-slate-900 dark:text-white">Quitar saldo aberto</span>
+                                <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Fecha essa compra.</span>
+                              </span>
+                            </label>
+                            <label class="flex cursor-pointer gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+                              <input type="radio" name="amount_mode" value="custom" class="mt-1" data-outside-app-payment-mode>
+                              <span>
+                                <span class="block text-sm font-black text-slate-900 dark:text-white">Escolher valor</span>
+                                <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Registra pagamento parcial.</span>
+                              </span>
+                            </label>
+                          </div>
+                          <label class="block hidden" data-outside-app-custom-wrap>
+                            <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor recebido</span>
+                            <input name="amount" type="text" inputmode="decimal" autocomplete="off" data-money-mask data-outside-app-custom-input placeholder="R$ 0,00" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-amber-500 dark:focus:ring-amber-500/20">
+                          </label>
+                          <label class="block">
+                            <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação (opcional)</span>
+                            <textarea name="note" rows="3" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-amber-500 dark:focus:ring-amber-500/20" placeholder="Ex.: Recebido por Pix fora do app."></textarea>
+                          </label>
+                          <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
+                            <button type="button" data-close-sheet class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+                            <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-600">Registrar pagamento</button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  <% } %>
                       <% }) %>
                     </div>
                   </details>
+                  <% if (!isArchiveMode && friendOutsideItems.length) { %>
+                    <div id="<%= friendOutsideSheetId %>" data-shared-debts-sheet class="fixed inset-0 z-[80] hidden">
+                      <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-close-sheet></div>
+                      <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-[30px] bg-white shadow-2xl dark:bg-slate-900 sm:inset-0 sm:m-auto sm:max-w-xl sm:rounded-[32px]">
+                        <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                          <div>
+                            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Você enviou · <%= group.label %></div>
+                            <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Encerrar pagamento feito por fora</h3>
+                            <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= friendGroup.counterpartName %> · <%= countLabel(friendOutsideItems.length, 'acerto em aberto', 'acertos em aberto') %> · <%= formatBRLFromCents(friendOutsideTotal) %></p>
+                          </div>
+                          <button type="button" data-close-sheet class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="Fechar encerramento por fora">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                          </button>
+                        </div>
+                        <form method="POST" action="/shared-debts/bulk/confirm-outside-app" class="space-y-4 px-5 py-4" data-outside-app-payment-form>
+                          <% friendOutsideItems.forEach((item) => { %>
+                            <input type="hidden" name="request_ids" value="<%= item.id %>">
+                          <% }) %>
+                          <input type="hidden" name="return_to" value="<%= friendOutsideReturnTo %>">
+                          <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                            Esse registro vale só para <strong><%= friendGroup.counterpartName %></strong> em <strong><%= group.label %></strong>. Você pode quitar tudo ou informar só uma parte; o app abate nas compras selecionadas dessa pessoa e mantém o restante em aberto.
+                          </div>
+                          <div class="grid gap-3 sm:grid-cols-2">
+                            <label class="flex cursor-pointer gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+                              <input type="radio" name="amount_mode" value="full" class="mt-1" data-outside-app-payment-mode checked>
+                              <span>
+                                <span class="block text-sm font-black text-slate-900 dark:text-white">Quitar saldo aberto</span>
+                                <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Fecha os acertos dessa pessoa.</span>
+                              </span>
+                            </label>
+                            <label class="flex cursor-pointer gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+                              <input type="radio" name="amount_mode" value="custom" class="mt-1" data-outside-app-payment-mode>
+                              <span>
+                                <span class="block text-sm font-black text-slate-900 dark:text-white">Escolher valor</span>
+                                <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Registra pagamento parcial.</span>
+                              </span>
+                            </label>
+                          </div>
+                          <label class="block hidden" data-outside-app-custom-wrap>
+                            <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Valor recebido</span>
+                            <input name="amount" type="text" inputmode="decimal" autocomplete="off" data-money-mask data-outside-app-custom-input placeholder="R$ 0,00" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-amber-500 dark:focus:ring-amber-500/20">
+                          </label>
+                          <label class="block">
+                            <span class="mb-1 block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Observação (opcional)</span>
+                            <textarea name="note" rows="3" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-amber-500 dark:focus:ring-amber-500/20" placeholder="Ex.: Recebido por Pix fora do app."></textarea>
+                          </label>
+                          <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end op-shared-action-row op-shared-action-row--compact">
+                            <button type="button" data-close-sheet class="op-shared-action-control inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+                            <button type="submit" class="op-shared-action-control inline-flex items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-600">Registrar pagamento</button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  <% } %>
                 <% }) %>
               </div>
             </details>

@@ -1788,6 +1788,29 @@ function createSharedDebtsService(deps = {}) {
       return { redirectTo: fallbackRedirect, flash: { type: 'info', message: 'Não achei acertos em aberto desse mês para registrar por fora.' } };
     }
 
+    const outsideAppScopeKeys = new Set();
+    let hasInvalidOutsideAppScope = false;
+    rows.forEach((row) => {
+      const receiverUserId = Number(row?.receiver_user_id || 0);
+      const year = Number(row?.source_due_year || 0);
+      const month = Number(row?.source_due_month || 0);
+      if (!receiverUserId || !year || !month) {
+        hasInvalidOutsideAppScope = true;
+        return;
+      }
+      outsideAppScopeKeys.add(`${receiverUserId}:${year}:${month}`);
+    });
+
+    if (hasInvalidOutsideAppScope || outsideAppScopeKeys.size !== 1) {
+      return {
+        redirectTo: fallbackRedirect,
+        flash: {
+          type: 'error',
+          message: 'Para não misturar os combinados, registre pagamentos por fora uma pessoa e um mês por vez.'
+        }
+      };
+    }
+
     const totalOpenCents = rows.reduce((sum, row) => {
       const total = Math.max(0, Number(row?.amount_cents || 0));
       const paid = Math.min(total, Math.max(0, Number(row?.amount_paid_cents || 0)));

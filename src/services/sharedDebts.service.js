@@ -1989,44 +1989,19 @@ function createSharedDebtsService(deps = {}) {
         const receiverName = receiverRecord?.name || receiverRecord?.email || 'você';
         const settledCount = group.allocations.filter((allocation) => allocation.afterPaidCents >= allocation.totalCents).length;
         const partialCount = Math.max(0, group.allocations.length - settledCount);
-        const openAfterCents = snapshotAfter ? Math.max(0, Number(snapshotAfter.openCents || 0)) : 0;
-        const settledCountLabel = settledCount ? deps.formatCountLabel(settledCount, 'acerto foi fechado', 'acertos foram fechados') : '';
-        const partialCountLabel = partialCount ? deps.formatCountLabel(partialCount, 'acerto ficou parcialmente pago', 'acertos ficaram parcialmente pagos') : '';
-        const formattedAppliedTotal = deps.formatBRLFromCents(group.totalAppliedCents);
-        const formattedOpenAfter = snapshotAfter && openAfterCents > 0 ? deps.formatBRLFromCents(openAfterCents) : '';
-        const isPartialOutsideAppConfirmation = openAfterCents > 0;
         const summaryPieces = [
-          `${actorName} registrou ${formattedAppliedTotal} fora do app em ${monthText}.`
+          `${actorName} registrou ${deps.formatBRLFromCents(group.totalAppliedCents)} fora do app em ${monthText}.`
         ];
-        if (settledCountLabel) summaryPieces.push(`${settledCountLabel}.`);
-        if (partialCountLabel) summaryPieces.push(`${partialCountLabel}.`);
-        if (formattedOpenAfter) summaryPieces.push(`Ainda ficam ${formattedOpenAfter} em aberto.`);
-
-        const resolvedOutsideAppMessage = deps.resolveCatalogText(
-          isPartialOutsideAppConfirmation
-            ? 'notification.shared_debt.outside_app.confirmed.partial'
-            : 'notification.shared_debt.outside_app.confirmed.full',
-          {
-            credor: actorName,
-            valor: formattedAppliedTotal,
-            mes_referencia: monthText,
-            n_acertos_fechados: settledCountLabel,
-            n_acertos_parciais: partialCountLabel,
-            valor_em_aberto: formattedOpenAfter,
-            nota: finalNote || ''
-          },
-          {
-            fallbackTitle: isPartialOutsideAppConfirmation ? 'Pagamento parcial registrado' : 'Pagamento registrado',
-            fallbackBody: `${summaryPieces.join(' ')}${deps.buildNoteSuffix(finalNote)}`
-          }
-        );
+        if (settledCount) summaryPieces.push(`${deps.formatCountLabel(settledCount, 'acerto foi fechado', 'acertos foram fechados')}.`);
+        if (partialCount) summaryPieces.push(`${deps.formatCountLabel(partialCount, 'acerto ficou parcialmente pago', 'acertos ficaram parcialmente pagos')}.`);
+        if (snapshotAfter) summaryPieces.push(`Ainda ficam ${deps.formatBRLFromCents(snapshotAfter.openCents || 0)} em aberto.`);
 
         notifications.push({
           receiverUserId: group.receiverUserId,
           settlementId,
           intentId,
-          title: resolvedOutsideAppMessage.title,
-          body: resolvedOutsideAppMessage.body,
+          title: group.totalAppliedCents >= totalOpenCents ? 'Pagamento registrado' : 'Pagamento parcial registrado',
+          body: `${summaryPieces.join(' ')}${deps.buildNoteSuffix(finalNote)}`,
           receiverName
         });
       });

@@ -14474,3 +14474,14 @@ html[data-op-ui="v4"] .op-debts-screen-v4 .op-shared-action-row--compact > butto
   }
 }
 
+
+/* Ajuste cirurgico: remove a sombra/halo do hero do resumo apenas no desktop em tema escuro. */
+@media (min-width: 1024px) {
+  html.dark .op-screen--summary.op-summary-screen-v5::before {
+    display: none;
+  }
+
+  html.dark .op-screen--summary .op-page-hero.op-summary-hero-v5 {
+    box-shadow: none !important;
+  }
+}

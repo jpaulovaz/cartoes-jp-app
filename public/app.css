@@ -14093,3 +14093,197 @@ html[data-op-ui="v4"] .op-debts-screen-v4 .op-shared-action-row--compact > butto
     line-height: 1.45 !important;
   }
 }
+
+/* Desktop fit: summary/detalhamento em zoom ou escala de exibicao alta */
+@media (min-width: 1024px) {
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-primary-grid > *,
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-operational-grid > *,
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-stack > * {
+    min-width: 0;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-scroll-shell {
+    max-width: 100%;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 :is(.op-summary-cards-table, .op-summary-people-table) {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+    font-size: clamp(0.78rem, 0.68rem + 0.16vw, 0.9rem);
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 :is(.op-summary-cards-table, .op-summary-people-table) :is(th, td) {
+    padding-left: clamp(0.42rem, 0.2rem + 0.36vw, 0.75rem);
+    padding-right: clamp(0.42rem, 0.2rem + 0.36vw, 0.75rem);
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 :is(.op-summary-cards-table, .op-summary-people-table) thead {
+    font-size: clamp(0.62rem, 0.52rem + 0.14vw, 0.75rem);
+    letter-spacing: clamp(0.045em, 0.03em + 0.03vw, 0.09em);
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-cards-table .op-summary-cards-col-card {
+    width: 23%;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-cards-table .op-summary-cards-col-due {
+    width: 24%;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-cards-table .op-summary-cards-col-total {
+    width: 16%;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-cards-table .op-summary-cards-col-paid {
+    width: 20%;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-cards-table .op-summary-cards-col-remaining {
+    width: 17%;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-date-hint {
+    font-size: clamp(0.6rem, 0.52rem + 0.14vw, 0.72rem);
+    line-height: 1.08;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-date-input {
+    width: min(100%, 10.75rem);
+    min-width: 0;
+    max-width: 10.75rem;
+    padding-left: 0.35rem;
+    padding-right: 0.28rem;
+    font-size: clamp(0.82rem, 0.74rem + 0.14vw, 0.92rem);
+    letter-spacing: -0.03em;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-money-input {
+    width: min(100%, 6.65rem);
+    min-width: 0;
+    max-width: 6.65rem;
+    padding-left: 0.42rem;
+    padding-right: 0.42rem;
+    font-size: clamp(0.82rem, 0.74rem + 0.14vw, 0.92rem);
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-amount-cell {
+    font-size: clamp(0.78rem, 0.68rem + 0.18vw, 0.94rem);
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-card-name {
+    font-size: clamp(0.8rem, 0.68rem + 0.18vw, 0.95rem);
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-people-table .op-summary-people-col-name {
+    width: 23%;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-people-table .op-summary-people-col-total {
+    width: 17%;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-people-table .op-summary-people-col-paid {
+    width: 23%;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-people-table .op-summary-people-col-manual {
+    width: 20%;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-people-table .op-summary-people-col-remaining {
+    width: 17%;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-people-table td:first-child {
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-people-table :is(th:nth-child(3), td:nth-child(3)) {
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-people-table :is(th:nth-child(4), td:nth-child(4)) {
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-people-table td:nth-child(3) .inline-flex {
+    max-width: 100%;
+    padding-left: 0.6rem;
+    padding-right: 0.6rem;
+  }
+
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-card-shared-summary {
+    grid-template-columns: 23% 24% 16% 20% 17%;
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-dashboard-kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13.75rem), 1fr)) !important;
+    gap: clamp(0.85rem, 0.45rem + 0.6vw, 1rem) !important;
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-dashboard-kpi-strip > .op-dashboard-kpi-card {
+    min-height: auto;
+    padding: clamp(0.92rem, 0.68rem + 0.38vw, 1.08rem);
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-dashboard-kpi-strip .op-dashboard-kpi-card__value {
+    font-size: clamp(1.35rem, 0.95rem + 0.85vw, 1.92rem);
+    overflow-wrap: anywhere;
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-dashboard-kpi-strip .op-dashboard-kpi-card__note {
+    font-size: clamp(0.72rem, 0.62rem + 0.14vw, 0.78rem);
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-card-health .op-card-health-card {
+    min-width: 0;
+    padding: clamp(1rem, 0.7rem + 0.46vw, 1.25rem) !important;
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-card-health .op-card-health-card h3 {
+    font-size: clamp(1.25rem, 0.86rem + 0.82vw, 1.85rem) !important;
+    line-height: 1.08;
+    overflow-wrap: anywhere;
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-card-health .op-card-health-card p {
+    text-wrap: pretty;
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-card-health .op-card-health-card__icon {
+    width: 2.75rem;
+    height: 2.75rem;
+    flex-basis: 2.75rem;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1535px),
+       (min-width: 1024px) and (min-resolution: 1.25dppx) and (max-width: 1919px),
+       (min-width: 1024px) and (-webkit-min-device-pixel-ratio: 1.25) and (max-width: 1919px) {
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-primary-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-operational-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-card-health .xl\:grid-cols-3,
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-card-health .xl\:grid-cols-2 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-detalhamento-card-health .xl\:col-span-2 {
+    grid-column: auto !important;
+  }
+}
+
+@media (min-width: 1536px) {
+  html[data-op-ui="v4"] .op-summary-screen-v4 .op-summary-primary-grid {
+    align-items: start;
+  }
+}

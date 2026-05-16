@@ -14297,13 +14297,56 @@ html[data-op-ui="v4"] .op-debts-screen-v4 .op-shared-action-row--compact > butto
   }
 }
 
-@media (min-width: 1280px) {
-  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-dashboard-kpi-strip.xl\:grid-cols-5 {
+@media (min-width: 1024px) {
+  html[data-op-ui="v4"] .op-screen--detalhamento.op-dashboard-screen-v4 .op-dashboard-kpi-strip.xl\:grid-cols-5 {
     grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   }
 
-  html[data-op-ui="v4"] .op-dashboard-screen-v4 .op-dashboard-kpi-strip.xl\:grid-cols-6 {
+  html[data-op-ui="v4"] .op-screen--detalhamento.op-dashboard-screen-v4 .op-dashboard-kpi-strip.xl\:grid-cols-6 {
     grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
+
+  html[data-op-ui="v4"] .op-screen--detalhamento.op-dashboard-screen-v4 .op-dashboard-kpi-strip > .op-dashboard-kpi-card,
+  html[data-op-ui="v4"] .op-screen--detalhamento.op-dashboard-screen-v4 .op-dashboard-kpi-strip > .op-dashboard-kpi-card--balance {
+    grid-column: auto !important;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  html[data-op-ui="v4"] .op-screen--detalhamento.op-dashboard-screen-v4 .op-dashboard-kpi-strip {
+    gap: 0.6rem !important;
+  }
+
+  html[data-op-ui="v4"] .op-screen--detalhamento.op-dashboard-screen-v4 .op-dashboard-kpi-strip > .op-dashboard-kpi-card {
+    min-height: 7.15rem;
+    padding: 0.74rem 0.68rem;
+    border-radius: 18px;
+  }
+
+  html[data-op-ui="v4"] .op-screen--detalhamento.op-dashboard-screen-v4 .op-dashboard-kpi-strip > .op-dashboard-kpi-card::before {
+    left: 0.68rem;
+    top: 0.68rem;
+    width: 2rem;
+  }
+
+  html[data-op-ui="v4"] .op-screen--detalhamento.op-dashboard-screen-v4 .op-dashboard-kpi-strip .op-dashboard-kpi-card__label {
+    padding-top: 0.34rem;
+    font-size: 0.56rem;
+    letter-spacing: 0.09em;
+    line-height: 1.12;
+  }
+
+  html[data-op-ui="v4"] .op-screen--detalhamento.op-dashboard-screen-v4 .op-dashboard-kpi-strip .op-dashboard-kpi-card__value {
+    font-size: clamp(1.05rem, 1.25vw, 1.2rem);
+    line-height: 1.02;
+    letter-spacing: -0.06em;
+  }
+
+  html[data-op-ui="v4"] .op-screen--detalhamento.op-dashboard-screen-v4 .op-dashboard-kpi-strip .op-dashboard-kpi-card__note,
+  html[data-op-ui="v4"] .op-screen--detalhamento.op-dashboard-screen-v4 .op-dashboard-kpi-strip .op-paid-progress-card__meta {
+    margin-top: 0.46rem !important;
+    font-size: 0.62rem;
+    line-height: 1.25;
   }
 }
 

@@ -7652,6 +7652,14 @@ function syncRecurringTransactions(userId, targetYear, targetMonth, {
         }
 
         const txnDate = occurrenceDateFromStart(rule.start_txn_date, offset) || rule.start_txn_date;
+        if (!includeCurrentMonthBeforeDate) {
+          const occurrence = dayjs(txnDate);
+          const currentReference = dayjs(referenceDate);
+          if (occurrence.isValid() && currentReference.isValid() && currentReference.isBefore(occurrence, 'day')) {
+            return;
+          }
+        }
+
         const info = insTxn.run(userId, rule.card_id, txnDate, rule.description, rule.amount_cents, due.month, due.year, rule.id, rule.purchase_category_id || null, nowIso());
 
         if (activePeople.length === 1) {
@@ -7677,18 +7685,85 @@ function syncRecurringTransactions(userId, targetYear, targetMonth, {
   })();
 }
 
+function getLaterMonthYear(left, right) {
+  const leftYear = Number(left?.year || 0);
+  const leftMonth = Number(left?.month || 0);
+  const rightYear = Number(right?.year || 0);
+  const rightMonth = Number(right?.month || 0);
+
+  if (!leftYear || !leftMonth) {
+    return rightYear && rightMonth ? { year: rightYear, month: rightMonth } : null;
+  }
+  if (!rightYear || !rightMonth) {
+    return { year: leftYear, month: leftMonth };
+  }
+
+  return compareMonthYear(rightYear, rightMonth, leftYear, leftMonth) > 0
+    ? { year: rightYear, month: rightMonth }
+    : { year: leftYear, month: leftMonth };
+}
+
+function getLatestReadyRecurringDuePeriodForRule(userId, rule, referenceDate = dayjs()) {
+  const safeUserId = Number(userId || 0);
+  const startYear = Number(rule?.start_due_year || 0);
+  const startMonth = Number(rule?.start_due_month || 0);
+  if (!safeUserId || !startYear || !startMonth) return null;
+
+  const currentDate = dayjs(referenceDate);
+  const baseDate = currentDate.isValid() ? currentDate : dayjs();
+  let latest = null;
+
+  for (let offset = 0; offset < 240; offset += 1) {
+    const due = shiftMonth(startYear, startMonth, offset);
+
+    if (compareMonthYear(due.year, due.month, rule.active_from_year, rule.active_from_month) < 0) {
+      continue;
+    }
+
+    const occurrenceDate = occurrenceDateFromStart(rule.start_txn_date, offset);
+    const occurrence = occurrenceDate ? dayjs(occurrenceDate) : null;
+    if (occurrence && occurrence.isValid() && baseDate.isBefore(occurrence, 'day')) {
+      break;
+    }
+
+    if (!isMonthClosed(safeUserId, due.month, due.year)) {
+      latest = due;
+    }
+  }
+
+  return latest;
+}
+
+function getLatestReadyRecurringDuePeriodForUser(userId, referenceDate = dayjs()) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return null;
+
+  const rules = db.prepare(`
+    SELECT r.*
+    FROM recurring_rules r
+    JOIN cards c ON c.id = r.card_id AND c.user_id = r.user_id
+    WHERE r.user_id = ? AND r.status = 'active' AND COALESCE(c.active, 1) = 1
+    ORDER BY r.id
+  `).all(safeUserId);
+
+  return rules.reduce((latest, rule) => {
+    const readyPeriod = getLatestReadyRecurringDuePeriodForRule(safeUserId, rule, referenceDate);
+    return getLaterMonthYear(latest, readyPeriod);
+  }, null);
+}
+
 function resolveRecurringSyncTargetForUser(userId, referenceDate = dayjs()) {
   const currentDate = dayjs(referenceDate);
   const baseDate = currentDate.isValid() ? currentDate : dayjs();
   const currentYear = baseDate.year();
   const currentMonth = baseDate.month() + 1;
   const preferred = getPreferredDashboardMonth(userId, currentYear, currentMonth);
+  const fallback = preferred && Number(preferred.year || 0) && Number(preferred.month || 0)
+    ? { year: Number(preferred.year), month: Number(preferred.month) }
+    : { year: currentYear, month: currentMonth };
+  const readyTarget = getLatestReadyRecurringDuePeriodForUser(userId, baseDate);
 
-  if (preferred && Number(preferred.year || 0) && Number(preferred.month || 0)) {
-    return { year: Number(preferred.year), month: Number(preferred.month) };
-  }
-
-  return { year: currentYear, month: currentMonth };
+  return getLaterMonthYear(fallback, readyTarget) || fallback;
 }
 
 function syncRecurringTransactionsForUserOpenPeriod(userId, referenceDate = dayjs()) {
@@ -7701,9 +7776,9 @@ function syncRecurringTransactionsForUserOpenPeriod(userId, referenceDate = dayj
 
   syncRecurringTransactions(safeUserId, target.year, target.month, {
     referenceDate: baseDate,
-    includeCurrentMonthBeforeDate: true,
-    allowFutureOpenMonth: true,
-    scope: 'target_only'
+    includeCurrentMonthBeforeDate: false,
+    allowFutureOpenMonth: false,
+    scope: 'up_to_target'
   });
 
   return target;
@@ -7728,16 +7803,14 @@ function syncRecurringTransactionsForRequest(req, referenceDate = dayjs()) {
   const currentDate = dayjs(referenceDate);
   const baseDate = currentDate.isValid() ? currentDate : dayjs();
   const requestedPeriod = getRecurringRequestPeriod(req);
-  const openPeriod = resolveRecurringSyncTargetForUser(safeUserId, baseDate);
-  const target = requestedPeriod || openPeriod;
-  const targetIsOpenPeriod = Number(target.year || 0) === Number(openPeriod.year || 0)
-    && Number(target.month || 0) === Number(openPeriod.month || 0);
+  const automaticTarget = resolveRecurringSyncTargetForUser(safeUserId, baseDate);
+  const target = getLaterMonthYear(requestedPeriod, automaticTarget) || requestedPeriod || automaticTarget;
 
   syncRecurringTransactions(safeUserId, target.year, target.month, {
     referenceDate: baseDate,
-    includeCurrentMonthBeforeDate: true,
-    allowFutureOpenMonth: targetIsOpenPeriod,
-    scope: 'target_only'
+    includeCurrentMonthBeforeDate: false,
+    allowFutureOpenMonth: false,
+    scope: 'up_to_target'
   });
 
   return target;
@@ -7773,15 +7846,21 @@ function getRecurringSyncLimitForRule(rule, targetYear, targetMonth, referenceDa
 
   let limit = { year: requestedYear, month: requestedMonth };
   if (!allowFutureOpenMonth && compareMonthYear(limit.year, limit.month, currentYear, currentMonth) > 0) {
-    limit = { year: currentYear, month: currentMonth };
+    const targetOccurrenceDate = getRecurringOccurrenceDateForMonth(rule, limit.year, limit.month);
+    const targetOccurrence = targetOccurrenceDate ? dayjs(targetOccurrenceDate) : null;
+    const targetOccurrenceReady = targetOccurrence && targetOccurrence.isValid() && !currentDate.isBefore(targetOccurrence, 'day');
+
+    if (!targetOccurrenceReady) {
+      limit = { year: currentYear, month: currentMonth };
+    }
   }
 
-  if (!includeCurrentMonthBeforeDate && compareMonthYear(limit.year, limit.month, currentYear, currentMonth) === 0) {
-    const occurrenceDate = getRecurringOccurrenceDateForMonth(rule, currentYear, currentMonth);
+  if (!includeCurrentMonthBeforeDate) {
+    const occurrenceDate = getRecurringOccurrenceDateForMonth(rule, limit.year, limit.month);
     if (occurrenceDate) {
       const occurrence = dayjs(occurrenceDate);
       if (occurrence.isValid() && currentDate.isBefore(occurrence, 'day')) {
-        limit = shiftMonth(currentYear, currentMonth, -1);
+        limit = shiftMonth(limit.year, limit.month, -1);
       }
     }
   }

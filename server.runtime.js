@@ -2083,8 +2083,6 @@ async function runRecurringTransactionSweep(referenceDate = dayjs()) {
     const currentDate = dayjs(referenceDate);
     if (!currentDate.isValid()) return;
 
-    const currentYear = currentDate.year();
-    const currentMonth = currentDate.month() + 1;
     const users = db.prepare(`
       SELECT DISTINCT r.user_id
       FROM recurring_rules r
@@ -2097,11 +2095,7 @@ async function runRecurringTransactionSweep(referenceDate = dayjs()) {
       const targetUserId = Number(row?.user_id || 0);
       if (!targetUserId) return;
       try {
-        syncRecurringTransactions(targetUserId, currentYear, currentMonth, {
-          referenceDate: currentDate,
-          includeCurrentMonthBeforeDate: true,
-          scope: 'target_only'
-        });
+        syncRecurringTransactionsForUserOpenPeriod(targetUserId, currentDate);
       } catch (error) {
         console.error(`[recurring-scheduler] Falha ao sincronizar o usuario ${targetUserId}:`, error?.message || error);
       }
@@ -4580,6 +4574,20 @@ app.use((req, res, next) => {
   }
 
   syncRequestUserPresence(req);
+  return next();
+});
+
+app.use((req, res, next) => {
+  if (!shouldSyncRecurringTransactionsForRequest(req)) {
+    return next();
+  }
+
+  try {
+    syncRecurringTransactionsForRequest(req);
+  } catch (error) {
+    console.error(`[recurring-request-sync] Falha ao sincronizar recorrentes do usuario ${req.user?.id || 'desconhecido'}:`, error?.message || error);
+  }
+
   return next();
 });
 
@@ -7578,6 +7586,7 @@ function getRecurringRules(userId, { includeEnded = false } = {}) {
 function syncRecurringTransactions(userId, targetYear, targetMonth, {
   referenceDate = dayjs(),
   includeCurrentMonthBeforeDate = false,
+  allowFutureOpenMonth = false,
   scope = 'up_to_target'
 } = {}) {
   const year = Number(targetYear);
@@ -7622,7 +7631,7 @@ function syncRecurringTransactions(userId, targetYear, targetMonth, {
 
   db.transaction(() => {
     rules.forEach(rule => {
-      const syncLimit = getRecurringSyncLimitForRule(rule, year, month, referenceDate, { includeCurrentMonthBeforeDate });
+      const syncLimit = getRecurringSyncLimitForRule(rule, year, month, referenceDate, { includeCurrentMonthBeforeDate, allowFutureOpenMonth });
       if (!syncLimit) return;
       if (compareMonthYear(rule.start_due_year, rule.start_due_month, syncLimit.year, syncLimit.month) > 0) return;
 
@@ -7668,7 +7677,90 @@ function syncRecurringTransactions(userId, targetYear, targetMonth, {
   })();
 }
 
-function getRecurringSyncLimitForRule(rule, targetYear, targetMonth, referenceDate = dayjs(), { includeCurrentMonthBeforeDate = false } = {}) {
+function resolveRecurringSyncTargetForUser(userId, referenceDate = dayjs()) {
+  const currentDate = dayjs(referenceDate);
+  const baseDate = currentDate.isValid() ? currentDate : dayjs();
+  const currentYear = baseDate.year();
+  const currentMonth = baseDate.month() + 1;
+  const preferred = getPreferredDashboardMonth(userId, currentYear, currentMonth);
+
+  if (preferred && Number(preferred.year || 0) && Number(preferred.month || 0)) {
+    return { year: Number(preferred.year), month: Number(preferred.month) };
+  }
+
+  return { year: currentYear, month: currentMonth };
+}
+
+function syncRecurringTransactionsForUserOpenPeriod(userId, referenceDate = dayjs()) {
+  const safeUserId = Number(userId || 0);
+  if (!safeUserId) return null;
+
+  const currentDate = dayjs(referenceDate);
+  const baseDate = currentDate.isValid() ? currentDate : dayjs();
+  const target = resolveRecurringSyncTargetForUser(safeUserId, baseDate);
+
+  syncRecurringTransactions(safeUserId, target.year, target.month, {
+    referenceDate: baseDate,
+    includeCurrentMonthBeforeDate: true,
+    allowFutureOpenMonth: true,
+    scope: 'target_only'
+  });
+
+  return target;
+}
+
+function getRecurringRequestPeriod(req) {
+  const pathName = String(req?.path || '');
+  const match = pathName.match(/^\/(?:detalhamento|month|summary|analytics)\/(\d{4})\/(\d{1,2})(?:\/)?$/);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (!year || !month || month < 1 || month > 12) return null;
+
+  return { year, month };
+}
+
+function syncRecurringTransactionsForRequest(req, referenceDate = dayjs()) {
+  const safeUserId = Number(req?.user?.id || 0);
+  if (!safeUserId) return null;
+
+  const currentDate = dayjs(referenceDate);
+  const baseDate = currentDate.isValid() ? currentDate : dayjs();
+  const requestedPeriod = getRecurringRequestPeriod(req);
+  const openPeriod = resolveRecurringSyncTargetForUser(safeUserId, baseDate);
+  const target = requestedPeriod || openPeriod;
+  const targetIsOpenPeriod = Number(target.year || 0) === Number(openPeriod.year || 0)
+    && Number(target.month || 0) === Number(openPeriod.month || 0);
+
+  syncRecurringTransactions(safeUserId, target.year, target.month, {
+    referenceDate: baseDate,
+    includeCurrentMonthBeforeDate: true,
+    allowFutureOpenMonth: targetIsOpenPeriod,
+    scope: 'target_only'
+  });
+
+  return target;
+}
+
+function shouldSyncRecurringTransactionsForRequest(req) {
+  if (!req || !req.isAuthenticated || !req.isAuthenticated() || !req.user?.id) return false;
+
+  const method = String(req.method || 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') return false;
+
+  if (isAjaxLikeRequest(req)) return false;
+
+  const pathName = String(req.path || '/');
+  if (pathName === '/' || pathName === '/geral' || pathName === '/month') return true;
+
+  return /^\/detalhamento\/\d{4}\/\d{1,2}(?:\/)?$/.test(pathName)
+    || /^\/month\/\d{4}\/\d{1,2}(?:\/)?$/.test(pathName)
+    || /^\/summary\/\d{4}\/\d{1,2}(?:\/)?$/.test(pathName)
+    || /^\/analytics\/\d{4}\/\d{1,2}(?:\/)?$/.test(pathName);
+}
+
+function getRecurringSyncLimitForRule(rule, targetYear, targetMonth, referenceDate = dayjs(), { includeCurrentMonthBeforeDate = false, allowFutureOpenMonth = false } = {}) {
   const requestedYear = Number(targetYear || 0);
   const requestedMonth = Number(targetMonth || 0);
   if (!requestedYear || !requestedMonth) return null;
@@ -7680,7 +7772,7 @@ function getRecurringSyncLimitForRule(rule, targetYear, targetMonth, referenceDa
   const currentMonth = currentDate.month() + 1;
 
   let limit = { year: requestedYear, month: requestedMonth };
-  if (compareMonthYear(limit.year, limit.month, currentYear, currentMonth) > 0) {
+  if (!allowFutureOpenMonth && compareMonthYear(limit.year, limit.month, currentYear, currentMonth) > 0) {
     limit = { year: currentYear, month: currentMonth };
   }
 

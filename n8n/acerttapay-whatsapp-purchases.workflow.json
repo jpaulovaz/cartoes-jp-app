@@ -1,0 +1,645 @@
+{
+  "name": "AcerttaPay - WhatsApp Compra Assistida",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "acerttapay-wa-inbound",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "wa-incoming",
+      "name": "WA Incoming",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const root = $json || {};\nconst data = root.data || root;\nconst key = data.key || {};\nconst msg = data.message || root.message || {};\nconst remoteJid = String(key.remoteJid || data.remoteJid || data.from || root.from || data.sender || '').trim();\nlet phone = String(data.number || data.sender || data.phone || root.number || remoteJid.split('@')[0] || '').replace(/\\D/g, '');\nif (phone.startsWith('0') && phone.length > 11) phone = phone.replace(/^0+/, '');\nconst text = String(\n  data.text ||\n  root.text ||\n  data.body ||\n  root.body ||\n  msg.conversation ||\n  msg.extendedTextMessage?.text ||\n  msg.imageMessage?.caption ||\n  msg.videoMessage?.caption ||\n  ''\n).trim();\nconst messageId = String(key.id || data.messageId || data.id || root.messageId || root.id || '').trim() || `${phone}:${Date.now()}`;\nconst fromMe = Boolean(key.fromMe || data.fromMe || root.fromMe);\nreturn [{\n  json: {\n    phone,\n    message_text: text,\n    message_id: messageId,\n    push_name: data.pushName || root.pushName || data.push_name || '',\n    instance: data.instance || root.instance || $env.EVOLUTION_INSTANCE_NAME || '',\n    from_me: fromMe,\n    is_valid_user_message: Boolean(phone && text && !fromMe),\n    current_date: new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }),\n    raw: root\n  }\n}];"
+      },
+      "id": "normalize-evolution-payload",
+      "name": "Normalize Evolution Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.is_valid_user_message}}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "is-valid-user-message?",
+      "name": "Is Valid User Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.EVOLUTION_API_URL}}/message/sendText/{{$env.EVOLUTION_INSTANCE_NAME}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.EVOLUTION_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { number: $('Normalize Evolution Payload').item.json.phone, textMessage: { text: 'Ainda não consigo entender áudio, imagem ou figurinha por aqui. Me manda a compra em texto?' } } }}",
+        "options": {}
+      },
+      "id": "send-unsupported-message",
+      "name": "Send Unsupported Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -460,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ACERTTAPAY_URL}}/api/automation/v1/whatsapp/resolve",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { phone: $('Normalize Evolution Payload').item.json.phone, channel: 'whatsapp', instance: $('Normalize Evolution Payload').item.json.instance, message_id: $('Normalize Evolution Payload').item.json.message_id, push_name: $('Normalize Evolution Payload').item.json.push_name } }}",
+        "options": {}
+      },
+      "id": "resolve-acerttapay-user",
+      "name": "Resolve AcerttaPay User",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -460,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.authorized === true}}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "authorized?",
+      "name": "Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.EVOLUTION_API_URL}}/message/sendText/{{$env.EVOLUTION_INSTANCE_NAME}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.EVOLUTION_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { number: $('Normalize Evolution Payload').item.json.phone, textMessage: { text: $json.whatsapp?.text || 'Esse número ainda não está liberado no AcerttaPay. Ative o WhatsApp nas Configurações do app.' } } }}",
+        "options": {}
+      },
+      "id": "send-authorization-result",
+      "name": "Send Authorization Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        0,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{!!$json.conversation?.state}}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "has-pending-conversation?",
+      "name": "Has Pending Conversation?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.OPENAI_API_URL || 'https://api.openai.com/v1/chat/completions'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { model: $env.OPENAI_MODEL || 'gpt-4.1-mini', temperature: 0, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'Você interpreta mensagens de WhatsApp para criar compras no AcerttaPay. Retorne somente JSON válido. Nunca invente cartão, participante, categoria, parcela ou recorrência. Se houver ambiguidade, marque needs_clarification=true e faça uma pergunta curta. Valores devem ser amount_cents em centavos. Datas devem ser YYYY-MM-DD usando America/Sao_Paulo e a data atual fornecida no contexto. Schema: {\"intent\":\"create_purchase\",\"confidence\":0.0,\"needs_clarification\":false,\"clarifying_question\":null,\"purchase\":{\"date\":\"YYYY-MM-DD\",\"description\":\"\",\"amount_cents\":0,\"installments\":1,\"is_recurring\":false,\"card_hint\":null,\"category_hint\":null}}' }, { role: 'user', content: JSON.stringify({ current_date: $('Normalize Evolution Payload').item.json.current_date, message: $('Normalize Evolution Payload').item.json.message_text }) } ] } }}",
+        "options": {}
+      },
+      "id": "ai-parse-new-purchase",
+      "name": "AI Parse New Purchase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        240,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $json.choices?.[0]?.message?.content || $json.output || $json.text || '';\nlet parsed;\ntry {\n  parsed = typeof content === 'object' ? content : JSON.parse(String(content).replace(/^```json\\s*/i, '').replace(/```$/i, '').trim());\n} catch (error) {\n  parsed = {\n    intent: 'create_purchase',\n    confidence: 0,\n    needs_clarification: true,\n    clarifying_question: 'Não consegui entender essa compra. Me manda no formato: Nova compra hoje de R$ 199,90 em Casas Bahia.'\n  };\n}\nreturn [{ json: parsed }];"
+      },
+      "id": "parse-purchase-json",
+      "name": "Parse Purchase JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.needs_clarification === true || !$json.purchase?.amount_cents || !$json.purchase?.description}}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "needs-clarification?",
+      "name": "Needs Clarification?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        700,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.EVOLUTION_API_URL}}/message/sendText/{{$env.EVOLUTION_INSTANCE_NAME}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.EVOLUTION_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { number: $('Normalize Evolution Payload').item.json.phone, textMessage: { text: $json.clarifying_question || 'Fiquei em dúvida nessa compra. Me manda valor, loja e data?' } } }}",
+        "options": {}
+      },
+      "id": "send-clarifying-question",
+      "name": "Send Clarifying Question",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        940,
+        -500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ACERTTAPAY_URL}}/api/automation/v1/purchases",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "=whatsapp:{{$('Normalize Evolution Payload').item.json.instance}}:{{$('Normalize Evolution Payload').item.json.message_id}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { phone: $('Normalize Evolution Payload').item.json.phone, purchase: { date: $json.purchase.date, description: $json.purchase.description, amount_cents: $json.purchase.amount_cents, card_id: null, installments: $json.purchase.installments || 1, is_recurring: $json.purchase.is_recurring === true, purchase_category_id: null }, source: { channel: 'whatsapp', instance: $('Normalize Evolution Payload').item.json.instance, message_id: $('Normalize Evolution Payload').item.json.message_id, raw_text: $('Normalize Evolution Payload').item.json.message_text } } }}",
+        "options": {}
+      },
+      "id": "create-purchase",
+      "name": "Create Purchase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        940,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.EVOLUTION_API_URL}}/message/sendText/{{$env.EVOLUTION_INSTANCE_NAME}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.EVOLUTION_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { number: $('Normalize Evolution Payload').item.json.phone, textMessage: { text: $json.whatsapp?.text || $json.message || 'Pedido processado no AcerttaPay.' } } }}",
+        "options": {}
+      },
+      "id": "send-acerttapay-message",
+      "name": "Send AcerttaPay Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1180,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.OPENAI_API_URL || 'https://api.openai.com/v1/chat/completions'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { model: $env.OPENAI_MODEL || 'gpt-4.1-mini', temperature: 0, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'Você interpreta respostas de WhatsApp para continuar uma conversa pendente do AcerttaPay. Retorne somente JSON válido. Use apenas opções recebidas no contexto; nunca invente cartão, participante ou valor. Para sim/não use intents yes/no. Para cartão use select_card com card_id ou option. Para divisão use select_split_participants, select_split_mode ou exact_split. Valores em centavos. Se ficar ambíguo, retorne intent clarification.' }, { role: 'user', content: JSON.stringify({ current_date: $('Normalize Evolution Payload').item.json.current_date, conversation: $('Resolve AcerttaPay User').item.json.conversation, message: $('Normalize Evolution Payload').item.json.message_text }) } ] } }}",
+        "options": {}
+      },
+      "id": "ai-parse-context-reply",
+      "name": "AI Parse Context Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        240,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $json.choices?.[0]?.message?.content || $json.output || $json.text || '';\nlet parsed;\ntry {\n  parsed = typeof content === 'object' ? content : JSON.parse(String(content).replace(/^```json\\s*/i, '').replace(/```$/i, '').trim());\n} catch (error) {\n  parsed = { intent: 'clarification', confidence: 0, raw_text: $('Normalize Evolution Payload').item.json.message_text };\n}\nreturn [{ json: parsed }];"
+      },
+      "id": "parse-context-json",
+      "name": "Parse Context JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ACERTTAPAY_URL}}/api/automation/v1/conversations/reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "=whatsapp-reply:{{$('Normalize Evolution Payload').item.json.instance}}:{{$('Normalize Evolution Payload').item.json.message_id}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { phone: $('Normalize Evolution Payload').item.json.phone, source: { channel: 'whatsapp', instance: $('Normalize Evolution Payload').item.json.instance, message_id: $('Normalize Evolution Payload').item.json.message_id, raw_text: $('Normalize Evolution Payload').item.json.message_text }, reply: $json } }}",
+        "options": {}
+      },
+      "id": "send-conversation-reply",
+      "name": "Send Conversation Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        720,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.EVOLUTION_API_URL}}/message/sendText/{{$env.EVOLUTION_INSTANCE_NAME}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.EVOLUTION_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { number: $('Normalize Evolution Payload').item.json.phone, textMessage: { text: $json.whatsapp?.text || $json.message || 'Conversa atualizada no AcerttaPay.' } } }}",
+        "options": {}
+      },
+      "id": "send-conversation-result",
+      "name": "Send Conversation Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        960,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "WA Incoming": {
+      "main": [
+        [
+          {
+            "node": "Normalize Evolution Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Evolution Payload": {
+      "main": [
+        [
+          {
+            "node": "Is Valid User Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid User Message?": {
+      "main": [
+        [
+          {
+            "node": "Resolve AcerttaPay User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Unsupported Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve AcerttaPay User": {
+      "main": [
+        [
+          {
+            "node": "Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorized?": {
+      "main": [
+        [
+          {
+            "node": "Has Pending Conversation?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Authorization Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Pending Conversation?": {
+      "main": [
+        [
+          {
+            "node": "AI Parse Context Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Parse New Purchase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Parse New Purchase": {
+      "main": [
+        [
+          {
+            "node": "Parse Purchase JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Purchase JSON": {
+      "main": [
+        [
+          {
+            "node": "Needs Clarification?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Clarification?": {
+      "main": [
+        [
+          {
+            "node": "Send Clarifying Question",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Purchase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Purchase": {
+      "main": [
+        [
+          {
+            "node": "Send AcerttaPay Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Parse Context Reply": {
+      "main": [
+        [
+          {
+            "node": "Parse Context JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Context JSON": {
+      "main": [
+        [
+          {
+            "node": "Send Conversation Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Conversation Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Conversation Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "pinData": {},
+  "active": false,
+  "versionId": "1"
+}

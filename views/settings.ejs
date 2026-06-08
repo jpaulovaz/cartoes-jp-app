@@ -49,6 +49,7 @@
   const selfPixLabel = selfProfile?.pix_label || '';
   const signatureMaxLength = Number(profileSignatureMaxLength || 60) || 60;
   const notificationPreferenceState = notificationPreferences || {};
+  const automationWhatsappState = automationWhatsapp || {};
   const notificationPreferenceGroups = Array.isArray(notificationPreferenceState.groups) ? notificationPreferenceState.groups : [];
   const notificationPreferenceEnabledCount = Number(notificationPreferenceState.enabledCount || 0) || 0;
   const notificationPreferenceTotalCount = Number(notificationPreferenceState.totalCount || 0) || notificationPreferenceGroups.length;
@@ -248,7 +249,7 @@
     preferredPhoneCountryOptions, otherPhoneCountryOptions, phoneDefaultCountryCode, selfName, selfPhoneCountry, selfPhone, selfPhoneDisplay, selfPhoneStored, selfEmail,
     appPinEnabled, appPinIdleLabel, appPinIdleOptions, appPinMinLength, appPinMaxLength, appPasskeyState, appPasskeyItems, appPasskeyCount, appPasskeyMaxCount,
     selfPixEnabled, selfPixKeyType, selfPixKeyValueInput, selfPixState, selfPixCity, selfPixLabel, pixStateList, signatureMaxLength, notificationPreferenceCopy,
-    notificationPreferenceEnabledCount, notificationPreferenceGroups, notificationPreferenceTotalCount, signatureVibeOptions, selfSignatureText, selfSignatureVibe, selfSignatureMeta,
+    notificationPreferenceEnabledCount, notificationPreferenceGroups, notificationPreferenceTotalCount, automationWhatsappState, signatureVibeOptions, selfSignatureText, selfSignatureVibe, selfSignatureMeta,
     getAvatarUrl, getAvatarInitials, renderPersonStatusChips, getNetworkState, getPixStateMeta, getPixStateCode, getPixStateLabel
   };
 %>
@@ -257,6 +258,7 @@
   const settingsNavItems = [
     { href: '#profile', label: 'Perfil' },
     { href: '#alerts', label: 'Alertas' },
+    { href: '#whatsapp-automation', label: 'WhatsApp' },
     { href: '#pix', label: 'Pix' },
     { href: '#security', label: 'Segurança' },
     { href: '/people#my-profile', label: 'Minha Rede' }
@@ -264,6 +266,7 @@
 
   const settingsHeroMetaHtml = [
     `<span class="badge">${notificationPreferenceEnabledCount}/${notificationPreferenceTotalCount} alertas ativos</span>`,
+    `<span class="badge">${automationWhatsappState.enabled ? 'WhatsApp ativo' : 'WhatsApp desligado'}</span>`,
     `<span class="badge">${selfPixEnabled && selfProfile?.pix_valid ? 'Pix pronto' : (selfPixEnabled ? 'Pix em ajuste' : 'Pix desligado')}</span>`,
     `<span class="badge">${appPinEnabled ? 'PIN ativo' : 'PIN desligado'}</span>`,
     `<span class="badge">${appPasskeyCount}/${appPasskeyMaxCount || 6} aparelho(s)</span>`
@@ -284,6 +287,7 @@
   <% if (selfProfile) { %>
     <%- include('partials/settings/profile-section', settingsPartialLocals) %>
     <%- include('partials/settings/alerts-section', settingsPartialLocals) %>
+    <%- include('partials/settings/whatsapp-automation-section', settingsPartialLocals) %>
     <%- include('partials/settings/pix-section', settingsPartialLocals) %>
     <%- include('partials/settings/security-section', settingsPartialLocals) %>
   <% } %>

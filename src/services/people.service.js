@@ -1,7 +1,9 @@
 const { createPeopleRepository } = require('../repositories/people.repository');
+const { createAutomationApiService } = require('./automationApi.service');
 
 function createPeopleService(deps = {}) {
   const repository = deps.repository || createPeopleRepository(deps);
+  const automationService = deps.automationService || createAutomationApiService(deps);
 
   function getPeoplePageViewModel(req) {
     return deps.buildPeoplePageViewModel(req);
@@ -218,6 +220,50 @@ function createPeopleService(deps = {}) {
     }
   }
 
+  function enableWhatsappAutomation({ userId, req }) {
+    const redirectTo = deps.resolvePeopleSettingsRedirectTarget(req, '/settings#whatsapp-automation');
+    try {
+      const result = automationService.enableWhatsappForUser(userId);
+      return {
+        redirectTo,
+        flash: {
+          type: 'success',
+          message: `WhatsApp do AcerttaPay ligado para ${result.display_phone || result.phone_e164}. Pode mandar compra que a gente tenta acertar a fatura sem drama.`
+        }
+      };
+    } catch (error) {
+      return {
+        redirectTo,
+        flash: {
+          type: 'error',
+          message: error?.message || 'Não consegui ativar o WhatsApp automático agora.'
+        }
+      };
+    }
+  }
+
+  function disableWhatsappAutomation({ userId, req }) {
+    const redirectTo = deps.resolvePeopleSettingsRedirectTarget(req, '/settings#whatsapp-automation');
+    try {
+      automationService.disableWhatsappForUser(userId);
+      return {
+        redirectTo,
+        flash: {
+          type: 'success',
+          message: 'WhatsApp automático desligado. O app segue na paz, só sem lançar compras por mensagem.'
+        }
+      };
+    } catch (error) {
+      return {
+        redirectTo,
+        flash: {
+          type: 'error',
+          message: error?.message || 'Não consegui desligar o WhatsApp automático agora.'
+        }
+      };
+    }
+  }
+
   function savePerson({ userId, body, req, currentUser }) {
     const id = Number(body.id) || null;
     const targetPerson = id ? repository.getEditablePerson(userId, id) : null;
@@ -323,6 +369,16 @@ function createPeopleService(deps = {}) {
       return { redirectTo, flash: { type: 'error', message: normalizedPhone.reason || 'Não consegui entender esse telefone ainda. Confere o país e o número e tenta de novo.' } };
     }
 
+    if (isSelfTarget && requestedSection === 'identity') {
+      const availability = automationService.ensurePhoneAvailableForUser(userId, phone);
+      if (!availability.ok) {
+        return {
+          redirectTo,
+          flash: { type: 'error', message: availability.message || 'Esse telefone já está autorizado em outro usuário do AcerttaPay.' }
+        };
+      }
+    }
+
     if (pixEnabled && requestedSection !== 'identity' && !pixProfile.valid) {
       return { redirectTo, flash: { type: 'error', message: pixProfile.reason || 'Faltou acertar um detalhe do Pix antes de salvar.' } };
     }
@@ -347,10 +403,17 @@ function createPeopleService(deps = {}) {
       repository.createPerson(userId, payload);
     }
 
+    const automationPhoneSync = isSelfTarget && requestedSection === 'identity'
+      ? automationService.syncAuthorizationAfterSelfPhoneChange(userId, phone)
+      : { disabled: false };
+
     let successMessage = 'Contato salvo direitinho por aqui. Quando rolar amizade e pagamento, o Pix vem do perfil da própria pessoa.';
     if (isSelfTarget) {
       if (requestedSection === 'identity') {
         successMessage = 'Seu perfil por aqui foi salvo direitinho.';
+        if (automationPhoneSync.disabled) {
+          successMessage += ' Como o telefone mudou, pausei o WhatsApp automático até você reativar por segurança.';
+        }
       } else if (requestedSection === 'pix') {
         successMessage = pixEnabled
           ? 'Seu Pix ficou salvo e prontinho para entrar em cena nas cobranças.'
@@ -639,6 +702,8 @@ function createPeopleService(deps = {}) {
     getComprasComigoPage,
     createComprasComigoChargeDraft,
     saveNotificationPreferences,
+    enableWhatsappAutomation,
+    disableWhatsappAutomation,
     savePerson,
     sendFriendRequest,
     cancelFriendRequest,

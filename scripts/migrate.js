@@ -978,6 +978,69 @@ function runMigrations() {
   `);
 
   db.exec(`
+  CREATE TABLE IF NOT EXISTS automation_whatsapp_authorizations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    phone_e164 TEXT NOT NULL UNIQUE,
+    whatsapp_number TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    label TEXT,
+    allowed_actions_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_used_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS automation_conversation_states (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    phone_e164 TEXT NOT NULL,
+    channel TEXT NOT NULL DEFAULT 'whatsapp',
+    state TEXT NOT NULL,
+    related_purchase_id INTEGER,
+    payload_json TEXT,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    resolved_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (related_purchase_id) REFERENCES transactions(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS automation_idempotency_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    channel TEXT NOT NULL DEFAULT 'whatsapp',
+    idempotency_key TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    request_hash TEXT,
+    response_json TEXT,
+    status TEXT NOT NULL DEFAULT 'started',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(channel, idempotency_key),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS automation_request_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    phone_e164 TEXT,
+    channel TEXT NOT NULL DEFAULT 'whatsapp',
+    operation TEXT NOT NULL,
+    status_code INTEGER,
+    result_code TEXT,
+    source_message_id TEXT,
+    request_meta_json TEXT,
+    response_meta_json TEXT,
+    ip_address TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+  `);
+
+  db.exec(`
   CREATE TABLE IF NOT EXISTS backup_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     backup_name TEXT NOT NULL,
@@ -1451,6 +1514,13 @@ function runMigrations() {
   CREATE INDEX IF NOT EXISTS idx_person_app_links_owner_linked ON person_app_links(owner_user_id, linked_user_id);
   CREATE INDEX IF NOT EXISTS idx_user_passkeys_user_created ON user_passkeys(user_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_user_passkeys_user_last_used ON user_passkeys(user_id, last_used_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_automation_whatsapp_user ON automation_whatsapp_authorizations(user_id, enabled);
+  CREATE INDEX IF NOT EXISTS idx_automation_whatsapp_phone_enabled ON automation_whatsapp_authorizations(phone_e164, enabled);
+  CREATE INDEX IF NOT EXISTS idx_automation_conversations_user_state ON automation_conversation_states(user_id, state, expires_at);
+  CREATE INDEX IF NOT EXISTS idx_automation_conversations_phone_state ON automation_conversation_states(phone_e164, channel, state, expires_at);
+  CREATE INDEX IF NOT EXISTS idx_automation_idempotency_user ON automation_idempotency_keys(user_id, operation, created_at);
+  CREATE INDEX IF NOT EXISTS idx_automation_request_logs_created ON automation_request_logs(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_automation_request_logs_user_channel ON automation_request_logs(user_id, channel, created_at DESC);
   `);
 
   ensureIndexWithAliases(

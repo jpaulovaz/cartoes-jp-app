@@ -141,7 +141,7 @@ const {
   buildImportPreviewFromBuffer,
   applyImportPreview
 } = require('./src/messageCsvService');
-const { registerAuthRoutes, registerSecurityRoutes, registerNotificationsRoutes, registerAdminCoreRoutes, registerAdminMessagesRoutes, registerCardsRoutes, registerFinancesRoutes, registerImportRoutes, registerSummaryRoutes, registerSharedDebtsRoutes, registerPeopleRoutes, registerSocialShareRoutes, registerMonthlyEmailSummaryRoutes } = require('./src/routes');
+const { registerAuthRoutes, registerSecurityRoutes, registerNotificationsRoutes, registerAdminCoreRoutes, registerAdminMessagesRoutes, registerAutomationApiRoutes, registerCardsRoutes, registerFinancesRoutes, registerImportRoutes, registerSummaryRoutes, registerSharedDebtsRoutes, registerPeopleRoutes, registerSocialShareRoutes, registerMonthlyEmailSummaryRoutes } = require('./src/routes');
 
 // Migração oficial executada explicitamente pelo bootstrap do runtime.
 // Seed opcional permanece fora do bootstrap automático.
@@ -217,6 +217,7 @@ const { parseCsvByCardName } = require("./src/importers");
 const { formatBRLFromCents, parseMonthYear, toISOFromBRDate, centsFromPtBrMoney } = require("./src/utils");
 const { buildMonthTransactionsCsv } = require("./src/monthTransactionsCsv");
 const { createSharedPurchaseProjectionService } = require("./src/services/sharedPurchaseProjection.service");
+const { createAutomationApiService } = require("./src/services/automationApi.service");
 const {
   PIX_DEFAULT_STATE,
   PIX_DEFAULT_CITY,
@@ -421,6 +422,7 @@ function replaceAllocationsForTransactions(userId, targetRows, allocationPlan) {
 
 const app = express();
 const sharedPurchaseProjectionService = createSharedPurchaseProjectionService({ db });
+const automationApiService = createAutomationApiService({ db });
 
 function getAcceptedSharedPurchaseProjections(userId, month, year, options = {}) {
   return sharedPurchaseProjectionService.getAcceptedSharedPurchaseProjections(userId, month, year, options);
@@ -15088,7 +15090,8 @@ function buildPeoplePageViewModel(req) {
     profileSignatureMaxLength: PROFILE_SIGNATURE_MAX_LENGTH,
     appPinSecurity: buildAppPinViewModel(getUserSecuritySettings(userId), { reauthFresh: hasFreshPinReauthSession(req, userId) }),
     appPasskeys: buildPasskeyManagementViewModel(req, userId),
-    notificationPreferences: buildUserNotificationPreferenceViewModel(userId)
+    notificationPreferences: buildUserNotificationPreferenceViewModel(userId),
+    automationWhatsapp: automationApiService.getWhatsappActivationViewModel(userId)
   };
 }
 
@@ -20897,7 +20900,12 @@ registerAdminCoreRoutes(app, {
   fs,
   fsp,
   path,
-  appRoot: __dirname
+  appRoot: __dirname,
+  automationService: automationApiService
+});
+
+registerAutomationApiRoutes(app, {
+  service: automationApiService
 });
 
 registerAdminMessagesRoutes(app, {

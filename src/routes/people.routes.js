@@ -14,6 +14,8 @@ function createPeopleRouter(deps = {}) {
   router.get('/people/:id/compras-comigo/:year/:month', deps.ensureAuthenticated, controller.renderComprasComigoPage);
   router.post('/people/:id/compras-comigo/:year/:month/create-charge', deps.ensureAuthenticated, controller.createComprasComigoChargeDraft);
   router.post('/people/notification-preferences', deps.ensureAuthenticated, controller.saveNotificationPreferences);
+  router.post('/settings/automation-whatsapp/enable', deps.ensureAuthenticated, controller.enableWhatsappAutomation);
+  router.post('/settings/automation-whatsapp/disable', deps.ensureAuthenticated, controller.disableWhatsappAutomation);
   router.post('/people', deps.ensureAuthenticated, controller.savePerson);
   router.post('/people/:id/send-friend-request', deps.ensureAuthenticated, controller.sendFriendRequest);
   router.post('/friend-requests/:id/cancel', deps.ensureAuthenticated, controller.cancelFriendRequest);

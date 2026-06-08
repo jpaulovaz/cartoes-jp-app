@@ -11,6 +11,7 @@ const { createSharedDebtsRouter } = require('./sharedDebts.routes');
 const { createPeopleRouter } = require('./people.routes');
 const { createSocialShareRouter } = require('./socialShare.routes');
 const { createMonthlyEmailSummaryRouter } = require('./monthlyEmailSummary.routes');
+const { createAutomationApiRouter } = require('./automationApi.routes');
 
 function registerAuthRoutes(app, deps = {}) {
   app.use(createAuthRouter(deps));
@@ -64,6 +65,10 @@ function registerMonthlyEmailSummaryRoutes(app, deps = {}) {
   app.use(createMonthlyEmailSummaryRouter(deps));
 }
 
+function registerAutomationApiRoutes(app, deps = {}) {
+  app.use('/api/automation/v1', createAutomationApiRouter(deps));
+}
+
 module.exports = {
   registerAuthRoutes,
   registerSecurityRoutes,
@@ -78,6 +83,7 @@ module.exports = {
   registerPeopleRoutes,
   registerSocialShareRoutes,
   registerMonthlyEmailSummaryRoutes,
+  registerAutomationApiRoutes,
   createAuthRouter,
   createSecurityRouter,
   createNotificationsRouter,
@@ -90,5 +96,6 @@ module.exports = {
   createSharedDebtsRouter,
   createPeopleRouter,
   createSocialShareRouter,
-  createMonthlyEmailSummaryRouter
+  createMonthlyEmailSummaryRouter,
+  createAutomationApiRouter
 };

@@ -94,6 +94,16 @@ function createPeopleController(deps = {}) {
       return redirectWithResult(req, res, result, '/settings#alerts');
     },
 
+    enableWhatsappAutomation(req, res) {
+      const result = service.enableWhatsappAutomation({ userId: req.user.id, req });
+      return redirectWithResult(req, res, result, '/settings#whatsapp-automation');
+    },
+
+    disableWhatsappAutomation(req, res) {
+      const result = service.disableWhatsappAutomation({ userId: req.user.id, req });
+      return redirectWithResult(req, res, result, '/settings#whatsapp-automation');
+    },
+
     savePerson(req, res) {
       const result = service.savePerson({ userId: req.user.id, body: req.body, req, currentUser: req.user });
       return redirectWithResult(req, res, result);

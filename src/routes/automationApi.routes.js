@@ -1,9 +1,11 @@
 const express = require('express');
 const { createAutomationApiController } = require('../controllers/automationApi.controller');
+const { createAutomationQueriesController } = require('../controllers/automationQueries.controller');
 
 function createAutomationApiRouter(deps = {}) {
   const router = express.Router();
   const controller = createAutomationApiController(deps);
+  const queriesController = createAutomationQueriesController(deps);
 
   router.use(controller.authenticate);
   router.get('/health', controller.health);
@@ -13,6 +15,12 @@ function createAutomationApiRouter(deps = {}) {
   router.post('/purchases/:id/split-options', controller.getSplitOptions);
   router.post('/purchases/:id/split', controller.splitPurchase);
   router.post('/conversations/reply', controller.conversationReply);
+
+  router.post('/queries/month-summary', queriesController.monthSummary);
+  router.post('/queries/card-summary', queriesController.cardSummary);
+  router.post('/queries/recent-purchases', queriesController.recentPurchases);
+  router.post('/queries/person-summary', queriesController.personSummary);
+  router.post('/queries/debt-summary', queriesController.debtSummary);
 
   return router;
 }

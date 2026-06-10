@@ -153,3 +153,51 @@ acerttapay-wa:<telefone>
 ```
 
 A memória serve apenas para contexto conversacional. Estado financeiro sensível, confirmação de cartão, confirmação de divisão e idempotência ficam no AcerttaPay.
+
+---
+
+# AcerttaPay - Workflow N8N WhatsApp Consultas Financeiras
+
+Identificador do fluxo: `2.1 - ACERTTAPAY_CONSULTAS_FINANCEIRAS`
+
+Este é o primeiro fluxo da família **2.x - Consultas Financeiras**. Ele usa IA Agent para entender perguntas do usuário e chama endpoints read-only da Automation API do AcerttaPay.
+
+## O que o fluxo 2.1 consulta
+
+```txt
+Quanto gastei esse mês?
+Quanto está a fatura do Nubank?
+Quais compras fiz hoje?
+Últimas compras do Itaú
+Quanto a Ana tem comigo?
+Quem me deve?
+O que eu devo?
+```
+
+## Webhook de teste do fluxo 2.1
+
+```txt
+acerttapay-wa-queries
+```
+
+O workflow também possui `EntradaWhatsapp`, permitindo que um fluxo orquestrador principal chame esta família por `Execute Workflow` no futuro.
+
+## Endpoints usados
+
+```txt
+POST /api/automation/v1/queries/month-summary
+POST /api/automation/v1/queries/card-summary
+POST /api/automation/v1/queries/recent-purchases
+POST /api/automation/v1/queries/person-summary
+POST /api/automation/v1/queries/debt-summary
+```
+
+## Memória
+
+O workflow usa memória curta própria:
+
+```txt
+acerttapay-wa-queries:<telefone>
+```
+
+Essa memória serve apenas para contexto conversacional. As consultas continuam sempre buscando dados reais no AcerttaPay.

@@ -1,0 +1,705 @@
+{
+  "name": "2.1 - ACERTTAPAY_CONSULTAS_FINANCEIRAS",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "acerttapay-wa-queries",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "0065786b-589b-4232-8d11-958d8e282da1",
+      "name": "WA Incoming",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -3600,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "fe859215-1c19-447d-8dbe-5d5bcaf44f7b",
+      "name": "EntradaWhatsapp",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -3600,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const root = $json || {};\nconst envelope = root.body && typeof root.body === 'object' ? root.body : root;\nconst data = envelope.data && typeof envelope.data === 'object' ? envelope.data : (root.data || envelope);\nconst key = data.key || envelope.key || root.key || {};\nconst msg = data.message || envelope.message || root.message || {};\n\nfunction onlyDigits(value) {\n  return String(value || '').split('@')[0].replace(/\\D/g, '');\n}\n\nfunction firstPhone(candidates) {\n  for (const candidate of candidates) {\n    const digits = onlyDigits(candidate);\n    if (digits.length >= 10) return digits;\n  }\n  return '';\n}\n\nconst remoteJid = String(\n  key.remoteJid ||\n  key.remoteJidAlt ||\n  data.remoteJid ||\n  data.from ||\n  envelope.from ||\n  root.from ||\n  ''\n).trim();\n\nconst phone = firstPhone([\n  key.remoteJid,\n  key.remoteJidAlt,\n  data.remoteJid,\n  data.number,\n  envelope.number,\n  root.number,\n  data.phone,\n  envelope.phone,\n  root.phone,\n  data.sender,\n  envelope.sender,\n  root.sender\n]);\n\nconst text = String(\n  data.text ||\n  envelope.text ||\n  root.text ||\n  data.bodyText ||\n  envelope.bodyText ||\n  msg.conversation ||\n  msg.extendedTextMessage?.text ||\n  msg.imageMessage?.caption ||\n  msg.videoMessage?.caption ||\n  msg.documentMessage?.caption ||\n  msg.buttonsResponseMessage?.selectedDisplayText ||\n  msg.listResponseMessage?.title ||\n  msg.templateButtonReplyMessage?.selectedDisplayText ||\n  ''\n).trim();\n\nconst messageId = String(\n  key.id ||\n  data.messageId ||\n  data.id ||\n  envelope.message_id ||\n  root.message_id ||\n  root.messageId ||\n  root.id ||\n  ''\n).trim() || `${phone || 'unknown'}:${Date.now()}`;\n\nconst fromMe = Boolean(key.fromMe || data.fromMe || envelope.fromMe || root.fromMe);\nconst messageType = String(data.messageType || envelope.messageType || root.messageType || '').trim();\nconst instance = String(envelope.instance || data.instance || root.instance || $env.EVOLUTION_INSTANCE_NAME || '').trim();\nconst isGroup = remoteJid.includes('@g.us');\nconst canReply = Boolean(phone && !fromMe && !isGroup);\nconst isSupportedText = Boolean(text);\n\nreturn [{\n  json: {\n    phone,\n    remote_jid: remoteJid,\n    message_text: text,\n    message_id: messageId,\n    message_type: messageType,\n    push_name: data.pushName || envelope.pushName || root.pushName || data.push_name || envelope.push_name || '',\n    instance,\n    from_me: fromMe,\n    is_group: isGroup,\n    can_reply: canReply,\n    is_supported_text: isSupportedText,\n    is_valid_user_message: Boolean(canReply && isSupportedText),\n    current_date: new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }),\n    raw: root\n  }\n}];\n"
+      },
+      "id": "29584d24-db4e-45b5-b28b-5302dc484dab",
+      "name": "Normalize Evolution Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3340,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6c60be60-5055-4b30-8caa-e409d1938dfd",
+              "leftValue": "={{ $json.is_valid_user_message === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "31aef06d-d971-440f-b3f9-b601b8f618f2",
+      "name": "Is Valid User Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3100,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f3fb1c2a-e064-4f31-86fa-071112244962",
+              "leftValue": "={{ $json.can_reply === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "83e600ed-9dd0-415e-8022-ea8150c335d8",
+      "name": "Can Reply Unsupported?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2860,
+        840
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ 'Ainda não consigo ler esse tipo de mensagem por aqui. Me manda em texto, combinado?\n\nEx.: *Quanto gastei esse mês?* ou *Quais compras fiz hoje?*' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "14591129-a1e9-4c14-9931-7d8234ff348e",
+      "name": "Send Unsupported Message",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        -2620,
+        800
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "5901a637-8a8b-4064-93cc-d1863cafcd7f",
+      "name": "Ignore Message",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -2620,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '') + '/api/automation/v1/whatsapp/resolve' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { phone: $('Normalize Evolution Payload').first().json.phone, channel: 'whatsapp', instance: $('Normalize Evolution Payload').first().json.instance, message_id: $('Normalize Evolution Payload').first().json.message_id, push_name: $('Normalize Evolution Payload').first().json.push_name } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "3921c064-4922-4299-8957-2a80c42fff01",
+      "name": "Resolve AcerttaPay User",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -2860,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e0f43c19-d515-40fc-98d8-00845b8678dc",
+              "leftValue": "={{ $json.authorized === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a595584f-04ef-4058-b722-9b373aff0271",
+      "name": "Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2620,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.whatsapp?.text || 'Esse número ainda não está liberado no AcerttaPay. Ative o WhatsApp nas Configurações do app para eu consultar seus dados com segurança. 🔐' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "c60cc894-224d-41ac-8b68-e4ff0a91a496",
+      "name": "Send Authorization Result",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        -2380,
+        760
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify({ current_date: $('Normalize Evolution Payload').first().json.current_date, timezone: 'America/Sao_Paulo', user_message: $('Normalize Evolution Payload').first().json.message_text }) }}",
+        "options": {
+          "systemMessage": "Você é o concierge financeiro do AcerttaPay no WhatsApp, focado nesta família 2.1 de consultas financeiras.\n\nSeu papel:\n- Conversar com naturalidade, com charme leve, mensagens curtas e úteis.\n- Identificar quando o usuário quer consultar dados financeiros já existentes.\n- Retornar SOMENTE JSON válido, sem markdown, sem texto antes ou depois.\n- Não inventar valores, cartões, pessoas, faturas ou compras.\n- Quando for uma consulta, apenas classifique a intenção e extraia filtros. O AcerttaPay vai buscar os dados reais.\n- Se o usuário pedir para cadastrar, editar, apagar, pagar, marcar como pago ou enviar cobrança, responda out_of_scope para este fluxo e explique que esse comando pertence a outra função.\n- Se a pergunta for vaga demais, use needs_clarification=true.\n- Use timezone America/Sao_Paulo e a data atual enviada no contexto.\n\nIntents aceitas:\n- greeting: saudação simples, sem consulta.\n- help: pedido de ajuda/lista do que você faz.\n- month_summary: resumo do mês/fatura geral.\n- card_summary: resumo/fatura de um cartão específico ou lista de cartões se não houver cartão.\n- recent_purchases: últimas compras ou compras do mês.\n- purchases_by_day: compras de hoje, ontem ou uma data específica.\n- purchases_by_card: compras de um cartão.\n- purchases_by_person/person_summary: valores/compras de uma pessoa.\n- who_owes_me: quem deve ao usuário.\n- what_do_i_owe: o que o usuário deve.\n- debt_summary: visão geral de pendências.\n- out_of_scope: pedidos que não são consulta financeira desta família.\n\nFormato obrigatório:\n{\n  \"intent\": \"month_summary\",\n  \"confidence\": 0.0,\n  \"needs_clarification\": false,\n  \"clarifying_question\": null,\n  \"reply_text\": null,\n  \"query\": {\n    \"period\": \"current_month\",\n    \"month\": null,\n    \"year\": null,\n    \"date\": null,\n    \"card_hint\": null,\n    \"person_hint\": null,\n    \"direction\": null,\n    \"limit\": 10\n  }\n}\n\nRegras de data:\n- hoje => date = current_date e intent purchases_by_day, se o usuário perguntar por compras de hoje.\n- ontem => date = current_date menos 1 dia.\n- mês passado => period = \"last_month\".\n- se não informar mês em consulta mensal, period = \"current_month\".\n\nRespostas diretas:\n- Para greeting, needs_clarification=false, reply_text com saudação e lista breve do que você consulta.\n- Para help, reply_text com exemplos.\n- Para out_of_scope, reply_text curto explicando o que este fluxo sabe consultar agora.\n\nExemplos de consultas:\n- \"Quanto gastei esse mês?\" => month_summary.\n- \"Quanto está a fatura do Nubank?\" => card_summary com card_hint=\"Nubank\".\n- \"Quais compras fiz hoje?\" => purchases_by_day com date=current_date.\n- \"Últimas compras do Itaú\" => purchases_by_card com card_hint=\"Itaú\".\n- \"Quanto a Ana tem comigo?\" => purchases_by_person com person_hint=\"Ana\".\n- \"Quem me deve?\" => who_owes_me.\n- \"O que eu devo?\" => what_do_i_owe.\n",
+          "maxIterations": 2,
+          "returnIntermediateSteps": false
+        }
+      },
+      "id": "8d84fb94-f952-4e40-932f-812109e545f0",
+      "name": "AI Query Router",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -2380,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "db7942c7-9686-4279-aae6-ea871476c59a",
+      "name": "Gemini Chat Model - Queries",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -2380,
+        720
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "mZ7rvYR2BFrE4r9l",
+          "name": "Google Gemini Geral"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "d5f75308-d255-48f1-95de-81f876d3ec5b",
+      "name": "Think Tool - Queries",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        -2200,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ 'acerttapay-wa-queries:' + ($('Normalize Evolution Payload').first().json.phone || 'unknown') }}",
+        "contextWindowLength": 8
+      },
+      "id": "f6dc89ce-cc12-49c0-b451-7473e8feb0b5",
+      "name": "WhatsApp Query Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -2020,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function cleanJsonContent(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  if (!raw) return '';\n  const withoutFence = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  const first = withoutFence.indexOf('{');\n  const last = withoutFence.lastIndexOf('}');\n  if (first >= 0 && last > first) return withoutFence.slice(first, last + 1);\n  return withoutFence;\n}\n\nconst content = $json.output ?? $json.text ?? $json.response ?? $json.choices?.[0]?.message?.content ?? '';\nlet parsed;\ntry {\n  const cleaned = cleanJsonContent(content);\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  parsed = {\n    intent: 'help',\n    confidence: 0,\n    needs_clarification: false,\n    reply_text: 'Posso te ajudar com consultas financeiras do AcerttaPay. Por enquanto, me pergunte coisas como: *quanto gastei esse mês?*, *quanto está a fatura do Nubank?* ou *quais compras fiz hoje?*',\n    query: {}\n  };\n}\n\nif (!parsed || typeof parsed !== 'object') {\n  parsed = { intent: 'help', confidence: 0, needs_clarification: false, query: {} };\n}\n\nparsed.intent = String(parsed.intent || 'help').trim();\nparsed.confidence = Number(parsed.confidence || 0);\nparsed.query = parsed.query && typeof parsed.query === 'object' ? parsed.query : {};\nparsed.needs_clarification = parsed.needs_clarification === true;\nif (parsed.query.month) parsed.query.month = Number(parsed.query.month || 0);\nif (parsed.query.year) parsed.query.year = Number(parsed.query.year || 0);\nif (parsed.query.limit) parsed.query.limit = Number(parsed.query.limit || 0);\n\nconst directIntents = new Set(['help', 'greeting', 'out_of_scope']);\nparsed.should_call_api = !parsed.needs_clarification && !directIntents.has(parsed.intent);\n\nif (!parsed.should_call_api && !parsed.reply_text) {\n  parsed.reply_text = parsed.clarifying_question || 'Me diz melhor o que você quer consultar: mês, cartão, pessoa ou pendências?';\n}\n\nreturn [{ json: parsed }];"
+      },
+      "id": "cad10d00-0bbc-4824-998c-e26345df8672",
+      "name": "Parse Query JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2020,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "94da6fdf-2655-414e-aefa-82b8c3d0f9b0",
+              "leftValue": "={{ $json.should_call_api === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "81c3836d-b4aa-41ff-89e9-a95ac12dd79d",
+      "name": "Should Call Query API?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1760,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.reply_text || $json.clarifying_question || 'Posso consultar gastos do mês, faturas por cartão, compras recentes, valores por pessoa e pendências. Me pergunta do seu jeito. 😉' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "301ca894-6c3d-472a-97cd-35e196a6f99e",
+      "name": "Send AI Query Reply",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        -1500,
+        660
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $json || {};\nconst intent = String(parsed.intent || '').trim();\nconst query = parsed.query && typeof parsed.query === 'object' ? parsed.query : {};\nconst phone = $('Normalize Evolution Payload').first().json.phone;\nconst source = {\n  channel: 'whatsapp',\n  instance: $('Normalize Evolution Payload').first().json.instance,\n  message_id: $('Normalize Evolution Payload').first().json.message_id,\n  raw_text: $('Normalize Evolution Payload').first().json.message_text\n};\n\nconst map = {\n  month_summary: '/api/automation/v1/queries/month-summary',\n  card_summary: '/api/automation/v1/queries/card-summary',\n  recent_purchases: '/api/automation/v1/queries/recent-purchases',\n  purchases_by_day: '/api/automation/v1/queries/recent-purchases',\n  purchases_by_card: '/api/automation/v1/queries/recent-purchases',\n  purchases_by_person: '/api/automation/v1/queries/person-summary',\n  person_summary: '/api/automation/v1/queries/person-summary',\n  who_owes_me: '/api/automation/v1/queries/debt-summary',\n  what_do_i_owe: '/api/automation/v1/queries/debt-summary',\n  debt_summary: '/api/automation/v1/queries/debt-summary'\n};\n\nconst endpoint = map[intent] || '/api/automation/v1/queries/month-summary';\nconst body = { phone, source, query: { ...query } };\nif (intent === 'who_owes_me') body.query.direction = 'owed_to_me';\nif (intent === 'what_do_i_owe') body.query.direction = 'i_owe';\nif (intent === 'debt_summary' && !body.query.direction) body.query.direction = 'overview';\nif (intent === 'purchases_by_card' && !body.query.limit) body.query.limit = 10;\nif (intent === 'purchases_by_day' && !body.query.limit) body.query.limit = 12;\n\nreturn [{ json: { intent, endpoint, body } }];"
+      },
+      "id": "4db92b80-d9ae-4443-962e-91a78cf8d9eb",
+      "name": "Prepare Query Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1500,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '') + $json.endpoint }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "be919dd2-5d83-4c5d-9cb9-90b9926d8cb1",
+      "name": "Call AcerttaPay Query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -1240,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $json || {};\nlet text = result.whatsapp?.text || result.message || result.reply_text || '';\nif (!text) {\n  text = 'Consulta feita no AcerttaPay, mas a resposta veio tímida demais. Tenta de novo em instantes.';\n}\n\nreturn [{\n  json: {\n    ...result,\n    outbound_text: text\n  }\n}];"
+      },
+      "id": "8695411a-e7f0-4ddd-a54c-2971877c53e0",
+      "name": "Style Query Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -980,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.outbound_text || $json.whatsapp?.text || $json.message || 'Consulta processada no AcerttaPay.' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "0f6b0e9a-8150-4b9e-8ee7-5ff13503d6c9",
+      "name": "Send Query Result",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        -720,
+        380
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WA Incoming": {
+      "main": [
+        [
+          {
+            "node": "Normalize Evolution Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EntradaWhatsapp": {
+      "main": [
+        [
+          {
+            "node": "Normalize Evolution Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Evolution Payload": {
+      "main": [
+        [
+          {
+            "node": "Is Valid User Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid User Message?": {
+      "main": [
+        [
+          {
+            "node": "Resolve AcerttaPay User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Can Reply Unsupported?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Can Reply Unsupported?": {
+      "main": [
+        [
+          {
+            "node": "Send Unsupported Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignore Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve AcerttaPay User": {
+      "main": [
+        [
+          {
+            "node": "Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorized?": {
+      "main": [
+        [
+          {
+            "node": "AI Query Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Authorization Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Query Router": {
+      "main": [
+        [
+          {
+            "node": "Parse Query JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Query JSON": {
+      "main": [
+        [
+          {
+            "node": "Should Call Query API?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Call Query API?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Query Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send AI Query Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Query Request": {
+      "main": [
+        [
+          {
+            "node": "Call AcerttaPay Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call AcerttaPay Query": {
+      "main": [
+        [
+          {
+            "node": "Style Query Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Style Query Response": {
+      "main": [
+        [
+          {
+            "node": "Send Query Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model - Queries": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Query Router",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think Tool - Queries": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Query Router",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Query Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Query Router",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "ea116d2f-09cf-4380-a96a-6241a49b8439",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    {
+      "name": "ACERTTAPAY",
+      "id": "pQ0ytyDUaBKZDloP",
+      "updatedAt": "2026-06-08T17:04:41.481Z",
+      "createdAt": "2026-06-08T17:04:41.481Z"
+    }
+  ]
+}

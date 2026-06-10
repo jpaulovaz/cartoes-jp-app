@@ -162,3 +162,76 @@ EXACT_SPLIT_UNSUPPORTED_FOR_INSTALLMENTS
 ## Pendência avaliada para etapa futura
 
 Divisão por valores definidos em compras parceladas com parcelas de centavos diferentes ainda deve continuar conservadora. A melhoria futura recomendada é permitir que o usuário informe o valor total de cada pessoa e o backend distribua proporcionalmente entre parcelas, preservando a soma exata.
+
+---
+
+## Fluxo 2.1 - Consultas Financeiras
+
+```txt
+2.1 - ACERTTAPAY_CONSULTAS_FINANCEIRAS.json
+```
+
+Responsabilidades:
+
+- receber mensagens de consulta financeira por WhatsApp;
+- normalizar payload da Evolution API;
+- validar o número autorizado pelo AcerttaPay;
+- usar IA Agent apenas para classificar intenção e extrair filtros;
+- consultar endpoints read-only da Automation API;
+- responder com mensagens curtas e claras no WhatsApp;
+- não modificar dados financeiros.
+
+### Intents do fluxo 2.1
+
+```txt
+greeting
+help
+month_summary
+card_summary
+recent_purchases
+purchases_by_day
+purchases_by_card
+purchases_by_person
+person_summary
+who_owes_me
+what_do_i_owe
+debt_summary
+out_of_scope
+```
+
+### Endpoints read-only da Etapa 2
+
+```txt
+POST /api/automation/v1/queries/month-summary
+POST /api/automation/v1/queries/card-summary
+POST /api/automation/v1/queries/recent-purchases
+POST /api/automation/v1/queries/person-summary
+POST /api/automation/v1/queries/debt-summary
+```
+
+### Códigos de resposta de consultas
+
+```txt
+MONTH_SUMMARY
+CARD_SUMMARY
+CARD_SUMMARY_LIST
+RECENT_PURCHASES
+PURCHASES_BY_DAY
+PERSON_SUMMARY
+PERSON_SUMMARY_LIST
+DEBT_SUMMARY
+CARD_NOT_FOUND
+NEEDS_CARD_CLARIFICATION
+PERSON_NOT_FOUND
+NEEDS_PERSON_CLARIFICATION
+QUERY_VALIDATION_ERROR
+QUERY_INTERNAL_ERROR
+```
+
+### Regras da família 2.x
+
+- Consultas não criam, editam, removem, pagam ou enviam cobranças.
+- Quando o usuário não informar período, usar o mês atual em `America/Sao_Paulo`.
+- Cartões e pessoas citadas por nome são resolvidos no backend.
+- Em caso de ambiguidade, o backend pede esclarecimento.
+- O N8N pode dar tom de concierge, mas não inventa dados financeiros.

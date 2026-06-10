@@ -303,8 +303,9 @@ function createAutomationApiRepository() {
   }
 
   function getSplitEligiblePeople(userId) {
-    const self = getSelfPerson(userId);
-    const friends = db.prepare(`
+    const safeUserId = Number(userId || 0);
+    const self = getSelfPerson(safeUserId);
+    const contacts = db.prepare(`
       SELECT
         p.id,
         p.name,
@@ -313,22 +314,32 @@ function createAutomationApiRepository() {
         pal.linked_user_id,
         u.name AS linked_user_name,
         u.email AS linked_user_email,
-        1 AS friendship_active,
-        1 AS can_share_charge
+        f.id AS friendship_id,
+        CASE
+          WHEN pal.linked_user_id IS NOT NULL
+           AND pal.linked_user_id <> p.user_id
+           AND u.id IS NOT NULL
+           AND f.id IS NOT NULL
+          THEN 1 ELSE 0
+        END AS can_share_charge
       FROM people p
-      JOIN person_app_links pal ON pal.owner_user_id = p.user_id AND pal.person_id = p.id
-      JOIN users u ON u.id = pal.linked_user_id AND COALESCE(u.status, 'active') <> 'deleted'
-      JOIN friendships f
+      LEFT JOIN person_app_links pal
+        ON pal.owner_user_id = p.user_id
+       AND pal.person_id = p.id
+      LEFT JOIN users u
+        ON u.id = pal.linked_user_id
+       AND COALESCE(u.status, 'active') <> 'deleted'
+      LEFT JOIN friendships f
         ON f.status = 'active'
+       AND pal.linked_user_id IS NOT NULL
        AND f.user_low_id = CASE WHEN p.user_id < pal.linked_user_id THEN p.user_id ELSE pal.linked_user_id END
        AND f.user_high_id = CASE WHEN p.user_id < pal.linked_user_id THEN pal.linked_user_id ELSE p.user_id END
       WHERE p.user_id = ?
         AND COALESCE(p.active, 1) = 1
         AND COALESCE(p.status, CASE WHEN COALESCE(p.active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
         AND COALESCE(p.profile_kind, CASE WHEN COALESCE(p.is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) <> 'self'
-        AND pal.linked_user_id <> ?
-      ORDER BY lower(p.name), p.id ASC
-    `).all(Number(userId || 0), Number(userId || 0));
+      ORDER BY can_share_charge DESC, lower(p.name), p.id ASC
+    `).all(safeUserId);
 
     const options = [];
     if (self) {
@@ -338,22 +349,34 @@ function createAutomationApiRepository() {
         label: 'Apenas eu',
         name: 'Apenas eu',
         can_create_shared_debt: false,
-        is_self: true
+        can_share_charge: false,
+        friendship_active: false,
+        is_self: true,
+        group: 'self',
+        section: 'self',
+        section_label: 'Apenas eu'
       });
     }
 
-    friends.forEach((row) => {
+    contacts.forEach((row) => {
+      const canShareCharge = Number(row.can_share_charge || 0) === 1;
       options.push({
         id: Number(row.id || 0),
         person_id: Number(row.id || 0),
-        label: row.name || row.linked_user_name || 'Amizade',
-        name: row.name || row.linked_user_name || 'Amizade',
-        linked_user_id: Number(row.linked_user_id || 0),
+        label: row.name || row.linked_user_name || 'Contato',
+        name: row.name || row.linked_user_name || 'Contato',
+        email: row.email || row.linked_user_email || null,
+        phone: row.phone || null,
+        linked_user_id: Number(row.linked_user_id || 0) || null,
         linked_user_name: row.linked_user_name || null,
         linked_user_email: row.linked_user_email || null,
-        can_create_shared_debt: true,
-        friendship_active: true,
-        is_self: false
+        can_create_shared_debt: canShareCharge,
+        can_share_charge: canShareCharge,
+        friendship_active: canShareCharge,
+        is_self: false,
+        group: canShareCharge ? 'shared_debt' : 'local_contact',
+        section: canShareCharge ? 'shared_debt' : 'local_contact',
+        section_label: canShareCharge ? 'Amigos com Acerto disponível' : 'Contatos locais'
       });
     });
 

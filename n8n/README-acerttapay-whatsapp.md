@@ -1,124 +1,150 @@
-# AcerttaPay - Workflow N8N para compras via WhatsApp
+# AcerttaPay - Workflow N8N WhatsApp Compra Assistida
 
-Este workflow importa a conversa do WhatsApp pela Evolution API, usa IA para transformar a mensagem em JSON e chama a API protegida do AcerttaPay em `/api/automation/v1`.
+Versão do fluxo: `1.5 - ACERTTAPAY_COMPRA_ASSISTIDA_CONCIERGE`
 
-## Variáveis necessárias no N8N
+## O que mudou nesta revisão
 
-Configure estas variáveis no ambiente do N8N antes de ativar o workflow:
+- O fluxo agora segue um tom mais próximo do modelo analisado nos vídeos: mensagens curtas, blocos bem separados, títulos em negrito, emojis como ícones e chamadas claras para a próxima ação.
+- O agente `AI Concierge Router` deixou de ser apenas um parser de compra e passou a funcionar como concierge conversacional:
+  - responde saudações como `Oi`, `Olá`, `bom dia`;
+  - explica o que consegue fazer no MVP;
+  - conversa para pedir dados faltantes;
+  - usa memória curta por telefone para completar contexto recente.
+- As respostas de sucesso, escolha de cartão, divisão e próximos passos agora passam por formatação dedicada:
+  - `Style Purchase Response`;
+  - `Style Conversation Response`.
+- Os nós de envio pela Evolution API usam `.first()` para buscar telefone/instância normalizados, reduzindo risco de número vazio quando o item pareado não existe no branch atual.
+- O envio para mensagens não suportadas foi mantido, mas com texto mais amigável e exemplo prático.
+- As URLs e tokens do AcerttaPay voltaram para variáveis de ambiente, evitando manter segredo dentro do JSON exportado.
+- Se o usuário citar o cartão na mensagem, o concierge envia `card_hint` ao AcerttaPay. Quando houver correspondência com um cartão ativo, o app pede confirmação em vez de listar todos os cartões.
+- A lista de divisão agora deve exibir também contatos locais: eles entram no controle interno, enquanto somente amigos com Acerto disponível geram rascunho na Central de Acertos.
 
-```env
-ACERTTAPAY_URL=https://seu-acerttapay.com
-ACERTTAPAY_AUTOMATION_API_TOKEN=token-configurado-no-acerttapay
-EVOLUTION_API_URL=https://sua-evolution-api.com
-EVOLUTION_API_KEY=api-key-da-evolution
-EVOLUTION_INSTANCE_NAME=nome-da-instancia
-OPENAI_API_KEY=chave-do-provedor-de-ia
-OPENAI_MODEL=gpt-4.1-mini
-OPENAI_API_URL=https://api.openai.com/v1/chat/completions
-```
+## Estilo de resposta aplicado
 
-`OPENAI_API_URL` é opcional se o provedor for compatível com Chat Completions. Caso use outro provedor, ajuste os nós `AI Parse New Purchase` e `AI Parse Context Reply`.
-
-## Importação
-
-1. No N8N, vá em `Workflows`.
-2. Escolha `Import from file`.
-3. Importe `acerttapay-whatsapp-purchases.workflow.json`.
-4. Abra o nó `WA Incoming` e copie a Production URL.
-5. Configure essa URL como webhook da Evolution API.
-6. Ative o workflow apenas depois de testar com a Test URL.
-
-## Fluxo principal
-
-1. `WA Incoming` recebe o evento da Evolution API.
-2. `Normalize Evolution Payload` extrai número, texto, ID da mensagem e instância.
-3. `Resolve AcerttaPay User` chama:
+Referência visual extraída dos vídeos enviados:
 
 ```txt
-POST /api/automation/v1/whatsapp/resolve
+✅ título curto
+
+🧾 bloco de resumo
+━━━━━━━━━━━━━━━━
+🏬 Descrição: *Casas Bahia*
+💰 Valor: *R$ 199,90*
+💳 Cartão: *Nubank*
+🗓️ Fatura: *06/2026*
+
+Próxima ação clara:
+Responde *sim* para dividir ou *não* para deixar só com você.
 ```
 
-4. Se o número não estiver autorizado, o usuário recebe orientação para ativar o WhatsApp no app.
-5. Se houver conversa pendente, a IA interpreta a resposta contextual e chama:
+Para saudação, o concierge segue esta linha:
 
 ```txt
-POST /api/automation/v1/conversations/reply
+Oi! Eu sou o concierge do AcerttaPay. 🟢
+
+Por aqui, neste piloto, eu já consigo:
+• *registrar uma nova compra no cartão*
+  Ex.: "Nova compra hoje de R$ 199,90 em Casas Bahia"
+
+Me manda a compra do jeito que você fala mesmo. Se faltar algo, eu pergunto antes de lançar. ✅
 ```
 
-6. Se não houver conversa pendente, a IA interpreta uma nova compra e chama:
+## Credenciais necessárias
 
-```txt
-POST /api/automation/v1/purchases
-```
+Após importar o workflow, confira estes pontos:
 
-7. O AcerttaPay devolve `whatsapp.text` e o N8N envia a resposta pela Evolution API.
+1. Configure as credenciais do nó `Evolution API` em todos os nós de envio.
+2. Confirme a credencial do Gemini nos nós:
+   - `Gemini Chat Model - Concierge`
+   - `Gemini Chat Model - Context Reply`
+3. Mantenha as variáveis de ambiente do N8N:
+   - `ACERTTAPAY_URL`
+   - `ACERTTAPAY_AUTOMATION_API_TOKEN`
+   - `EVOLUTION_INSTANCE_NAME`
 
-## Regras de IA
+O fluxo usa fallback local para `http://127.0.0.1:3000` se `ACERTTAPAY_URL` não estiver definido, mas o recomendado em pre-prod/prod é usar variável de ambiente.
 
-A IA não decide dados sensíveis quando houver ambiguidade. Ela deve perguntar quando faltar valor, descrição, data interpretável, parcelamento claro ou recorrência clara.
+## Teste rápido
 
-Exemplo de saída para compra nova:
+Payload recebido da Evolution com:
 
 ```json
 {
-  "intent": "create_purchase",
-  "confidence": 0.92,
-  "needs_clarification": false,
-  "clarifying_question": null,
-  "purchase": {
-    "date": "2026-06-08",
-    "description": "Casas Bahia",
-    "amount_cents": 19990,
-    "installments": 1,
-    "is_recurring": false,
-    "card_hint": null,
-    "category_hint": null
+  "body": {
+    "event": "messages.upsert",
+    "instance": "ACERTTAPAY",
+    "data": {
+      "key": {
+        "remoteJid": "5521987993415@s.whatsapp.net",
+        "fromMe": false,
+        "id": "AC44B07D1657BBC6441FCDAD251CFCC4"
+      },
+      "message": {
+        "conversation": "Oi"
+      },
+      "messageType": "conversation"
+    }
   }
 }
 ```
 
-Exemplo de saída contextual:
+Deve normalizar para:
 
 ```json
 {
-  "intent": "select_split_participants",
-  "confidence": 0.94,
-  "participants": [8, 12],
-  "include_self": false,
-  "mode": "equal",
-  "shares": []
+  "phone": "5521987993415",
+  "message_text": "Oi",
+  "is_valid_user_message": true
 }
 ```
 
-## Segurança operacional
+E seguir para o `AI Concierge Router`, que deve responder como concierge, não tentar criar compra.
 
-- O AcerttaPay exige `Authorization: Bearer <token>`.
-- A criação de compra usa `Idempotency-Key` com ID da mensagem do WhatsApp.
-- O AcerttaPay resolve o usuário pelo telefone autorizado, nunca por `user_id` enviado pelo N8N.
-- O AcerttaPay valida cartão, mês fechado, valor, participantes, divisão e duplicidade.
-- A cobrança para amigos fica como rascunho na Central de Acertos no MVP.
-
-## Testes mínimos
-
-Teste estes cenários antes de ativar para mais usuários:
+## Testes de conversa sugeridos
 
 ```txt
-Número não autorizado -> recebe aviso para ativar no app.
-Usuário com um cartão ativo -> cria compra direto.
-Usuário com vários cartões ativos -> pergunta qual cartão usar.
-Resposta de cartão -> cria compra.
-Compra criada -> pergunta se deseja dividir.
-Resposta "não" -> encerra a conversa.
-Resposta "sim" -> mostra opções de participantes.
-Resposta com nomes + partes iguais -> aplica divisão.
-Resposta com valores definidos -> valida soma exata.
-Mensagem repetida com mesmo ID -> não duplica compra.
+Oi
 ```
 
-## Rollback
+Resposta esperada: apresentação do concierge e exemplo de compra.
 
-1. No AcerttaPay, desligue `AUTOMATION_API_ENABLED`.
-2. Desative o workflow no N8N.
-3. Remova ou pause o webhook da Evolution API.
+```txt
+Nova compra hoje de R$ 199,90 em Casas Bahia
+```
 
-As tabelas novas podem permanecer no banco sem impactar o app principal.
+Resposta esperada: cria compra ou pergunta cartão, conforme quantidade de cartões ativos.
+
+
+```txt
+Nova compra hoje de R$ 199,90 em Casas Bahia no Nubank
+```
+
+Resposta esperada: se o cartão Nubank existir e não houver ambiguidade, pergunta confirmação do cartão antes de lançar.
+
+```txt
+sim
+```
+
+Resposta esperada: cria a compra no cartão confirmado e pergunta se deseja definir participantes.
+
+```txt
+Comprei na Amazon
+```
+
+Resposta esperada: pergunta valor e/ou data antes de criar qualquer lançamento.
+
+```txt
+R$ 300 em 3x na Amazon hoje
+```
+
+Resposta esperada: interpreta parcelamento claro e envia ao AcerttaPay.
+
+## Observação sobre memória
+
+O nó usado é `Window Buffer Memory` por não exigir credenciais extras. Para produção com múltiplos workers ou queue mode, considere trocar para Redis/Postgres Chat Memory usando a mesma session key:
+
+```txt
+acerttapay-wa:<telefone>
+```
+
+A memória do N8N serve só para contexto conversacional. O estado financeiro sensível continua no AcerttaPay.

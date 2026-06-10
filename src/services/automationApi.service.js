@@ -79,16 +79,25 @@ function normalizeIntentText(value) {
 
 function isAffirmativeText(value) {
   const text = normalizeIntentText(value);
-  return /^(sim|s|quero|bora|pode|ok|claro|vamos|dividir|quero dividir|manda|isso)$/i.test(text)
+  return /^(sim|s|quero|bora|pode|ok|claro|vamos|dividir|quero dividir|manda|isso|isso mesmo|correto|confere|confirmo|e esse|é esse|esse mesmo)$/i.test(text)
     || text.includes('quero dividir')
-    || text.includes('pode dividir');
+    || text.includes('pode dividir')
+    || text.includes('isso mesmo')
+    || text.includes('esse mesmo')
+    || text.includes('pode ser esse');
 }
 
 function isNegativeText(value) {
   const text = normalizeIntentText(value);
-  return /^(nao|n|não|deixa|deixa assim|so eu|só eu|apenas eu|eu mesmo)$/i.test(text)
+  return /^(nao|n|não|deixa|deixa assim|so eu|só eu|apenas eu|eu mesmo|outro|outro cartao|outro cartão)$/i.test(text)
     || text.includes('nao quero')
     || text.includes('não quero')
+    || text.includes('nao e esse')
+    || text.includes('não é esse')
+    || text.includes('nao foi esse')
+    || text.includes('não foi esse')
+    || text.includes('outro cartao')
+    || text.includes('outro cartão')
     || text.includes('apenas eu');
 }
 
@@ -104,6 +113,7 @@ function parseCardIdFromReply(reply = {}, text = '', cards = []) {
   if (direct && cards.some((card) => Number(card.id || 0) === direct)) return direct;
 
   const raw = normalizeIntentText(text || reply.text || reply.raw_text || '');
+  if (!raw) return 0;
   const asNumber = Number.parseInt(raw, 10);
   if (Number.isFinite(asNumber) && asNumber > 0) {
     const byIndex = cards[asNumber - 1];
@@ -135,8 +145,42 @@ function buildCardOptions(cards = []) {
     id: Number(card.id || 0),
     name: card.name,
     label: card.name,
+    brand: card.brand || null,
     option: index + 1
   }));
+}
+
+function normalizeLookupText(value) {
+  return normalizeIntentText(value)
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function resolveCardByHint(cards = [], hint = '') {
+  const needle = normalizeLookupText(hint);
+  if (!needle || needle.length < 2) return null;
+
+  const matches = cards
+    .map((card) => {
+      const name = normalizeLookupText(card.name || card.label || '');
+      const brand = normalizeLookupText(card.brand || '');
+      let score = 0;
+      if (name && name === needle) score = Math.max(score, 100);
+      if (name && name.startsWith(needle)) score = Math.max(score, 92);
+      if (name && (name.includes(needle) || needle.includes(name))) score = Math.max(score, 82);
+      if (brand && brand === needle) score = Math.max(score, 64);
+      if (brand && (brand.includes(needle) || needle.includes(brand))) score = Math.max(score, 54);
+      return { card, score };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || Number(a.card.id || 0) - Number(b.card.id || 0));
+
+  if (!matches.length) return null;
+  const topScore = matches[0].score;
+  const topMatches = matches.filter((entry) => entry.score === topScore);
+  if (topMatches.length > 1) return null;
+  return matches[0].card;
 }
 
 function createAutomationApiService(deps = {}) {
@@ -302,6 +346,39 @@ function createAutomationApiService(deps = {}) {
     }, 200);
   }
 
+
+  function buildCardConfirmationResponse({ userId, phoneE164, purchase, source, cards, suggestedCard, cardHint }) {
+    const options = buildCardOptions(cards);
+    const suggested = options.find((card) => Number(card.id || 0) === Number(suggestedCard?.id || 0));
+    if (!suggested) {
+      return buildCardSelectionResponse({ userId, phoneE164, purchase, source, cards });
+    }
+    const conversation = repository.createConversationState({
+      userId,
+      phoneE164,
+      channel: source?.channel || 'whatsapp',
+      state: 'awaiting_card_confirmation',
+      payload: {
+        purchase,
+        source,
+        cards: options,
+        suggested_card_id: Number(suggested.id || 0),
+        suggested_card: suggested,
+        card_hint: cardHint || null
+      }
+    });
+    return makeResult({
+      ok: false,
+      code: 'NEEDS_CARD_CONFIRMATION',
+      conversation: publicConversation(conversation, repository),
+      card: suggested,
+      cards: options,
+      whatsapp: {
+        text: `Pelo que entendi, foi no cartão ${suggested.label}. Confirma para eu lançar sem bagunçar a fatura?`
+      }
+    }, 200);
+  }
+
   function createPurchaseWithResolvedCard({ userId, phoneE164, purchase, source, cardId }) {
     const created = purchaseService.createAutomationPurchase({
       userId,
@@ -449,6 +526,7 @@ function createAutomationApiService(deps = {}) {
 
       const purchase = payload.purchase || {};
       const requestedCardId = Number(purchase.card_id || purchase.cardId || 0) || null;
+      const cardHint = purchase.card_hint || purchase.cardHint || payload.card_hint || payload.cardHint || '';
       let response;
       if (!requestedCardId) {
         const activeCards = repository.getActiveCards(resolved.user.id);
@@ -458,6 +536,25 @@ function createAutomationApiService(deps = {}) {
             code: 'NO_ACTIVE_CARD',
             whatsapp: { text: 'Você ainda não tem cartão ativo para lançar essa compra. Crie ou reative um cartão no AcerttaPay primeiro.' }
           }, 409);
+        } else if (cardHint) {
+          const suggestedCard = resolveCardByHint(activeCards, cardHint);
+          response = suggestedCard
+            ? buildCardConfirmationResponse({
+              userId: resolved.user.id,
+              phoneE164: resolved.normalized.e164,
+              purchase,
+              source: payload.source || {},
+              cards: activeCards,
+              suggestedCard,
+              cardHint
+            })
+            : buildCardSelectionResponse({
+              userId: resolved.user.id,
+              phoneE164: resolved.normalized.e164,
+              purchase,
+              source: payload.source || {},
+              cards: activeCards
+            });
         } else if (activeCards.length === 1) {
           response = createPurchaseWithResolvedCard({
             userId: resolved.user.id,
@@ -532,7 +629,7 @@ function createAutomationApiService(deps = {}) {
         ok: true,
         code: 'SPLIT_OPTIONS',
         ...options,
-        whatsapp: { text: `Quem participa dessa compra? ${names}` }
+        whatsapp: { text: `Quem participa dessa compra? ${names}. Contatos locais entram só no seu controle interno; amigos com Acerto disponível geram rascunho na Central de Acertos.` }
       });
     } catch (error) {
       return handleServiceError(error);
@@ -628,6 +725,59 @@ function createAutomationApiService(deps = {}) {
       const rawText = payload.source?.raw_text || payload.source?.rawText || reply.text || payload.text || '';
       const state = String(conversation.state || '').trim();
 
+      if (state === 'awaiting_card_confirmation') {
+        const cards = Array.isArray(data.cards) ? data.cards : [];
+        const suggestedCardId = Number(data.suggested_card_id || data.suggested_card?.id || 0);
+        const selectedCardId = parseCardIdFromReply(reply, rawText, cards);
+
+        if (selectedCardId && selectedCardId !== suggestedCardId) {
+          repository.resolveConversationState(conversation.id);
+          return createPurchaseWithResolvedCard({
+            userId: resolved.user.id,
+            phoneE164: resolved.normalized.e164,
+            purchase: data.purchase || {},
+            source: payload.source || data.source || {},
+            cardId: selectedCardId
+          });
+        }
+
+        if (isNegativeText(rawText) || reply.confirm === false || reply.intent === 'decline_card' || reply.intent === 'change_card') {
+          const next = repository.updateConversationState(conversation.id, {
+            state: 'awaiting_card_choice',
+            payload: { ...data, cards },
+            relatedPurchaseId: null
+          });
+          const cardList = cards.map((card) => `${card.option}. ${card.label}`).join(' ');
+          return makeResult({
+            ok: false,
+            code: 'NEEDS_CARD_SELECTION',
+            conversation: publicConversation(next, repository),
+            cards,
+            whatsapp: { text: `Sem problema. Qual cartão foi então? ${cardList}` }
+          });
+        }
+
+        if (selectedCardId || isAffirmativeText(rawText) || reply.confirm === true || reply.intent === 'confirm_card') {
+          repository.resolveConversationState(conversation.id);
+          return createPurchaseWithResolvedCard({
+            userId: resolved.user.id,
+            phoneE164: resolved.normalized.e164,
+            purchase: data.purchase || {},
+            source: payload.source || data.source || {},
+            cardId: selectedCardId || suggestedCardId
+          });
+        }
+
+        return makeResult({
+          ok: false,
+          code: 'NEEDS_CARD_CONFIRMATION',
+          conversation: publicConversation(conversation, repository),
+          card: data.suggested_card || cards.find((card) => Number(card.id || 0) === suggestedCardId) || null,
+          cards,
+          whatsapp: { text: `Confirma se foi no cartão ${data.suggested_card?.label || 'que eu identifiquei'}? Responde sim ou não.` }
+        });
+      }
+
       if (state === 'awaiting_card_choice') {
         const cards = Array.isArray(data.cards) ? data.cards : [];
         const selectedCardId = parseCardIdFromReply(reply, rawText, cards);
@@ -681,7 +831,7 @@ function createAutomationApiService(deps = {}) {
           code: 'NEEDS_SPLIT_PARTICIPANTS',
           conversation: publicConversation(next, repository),
           options: options.options,
-          whatsapp: { text: `Com quem vai dividir? ${names}. Pode responder "Apenas eu" ou os nomes dos amigos.` }
+          whatsapp: { text: `Com quem vai dividir? ${names}. Pode responder "Apenas eu" ou os nomes dos amigos. Contatos locais entram só no seu controle interno.` }
         });
       }
 

@@ -629,7 +629,7 @@ function createAutomationApiService(deps = {}) {
         ok: true,
         code: 'SPLIT_OPTIONS',
         ...options,
-        whatsapp: { text: `Quem participa dessa compra? ${names}. Contatos locais entram só no seu controle interno; amigos com Acerto disponível geram rascunho na Central de Acertos.` }
+        whatsapp: { text: `Quem participa dessa compra? ${names}. Se você também entra no rateio, responda "Eu" junto com os nomes. Ex.: "Eu, Ana e Bruno". Para deixar só com você, responda "Apenas eu". Contatos locais entram só no seu controle interno; amigos com Acerto disponível geram rascunho na Central de Acertos.` }
       });
     } catch (error) {
       return handleServiceError(error);
@@ -650,7 +650,7 @@ function createAutomationApiService(deps = {}) {
         userId: resolved.user.id,
         purchaseId: payload.purchaseId || payload.purchase_id,
         mode: payload.mode,
-        participants: payload.participants,
+        participants: mergeSelfParticipant(payload.participants || [], payload, payload.source?.raw_text || payload.raw_text || payload.text || ''),
         shares: payload.shares
       });
       const queueCount = Number(result.queue_summary?.itemCount || 0);
@@ -669,25 +669,87 @@ function createAutomationApiService(deps = {}) {
     }
   }
 
+  function participantToken(entry) {
+    if (entry && typeof entry === 'object') {
+      return entry.participant ?? entry.id ?? entry.person_id ?? entry.personId ?? entry.name ?? entry.label;
+    }
+    return entry;
+  }
+
+  function normalizeParticipantToken(entry) {
+    const token = participantToken(entry);
+    const normalized = normalizeIntentText(token);
+    if (['self', 'eu', 'mim', 'me', 'apenas eu', 'so eu', 'só eu', 'somente eu'].includes(normalized)) return 'self';
+    return token;
+  }
+
+  function uniqueParticipants(values = []) {
+    const seen = new Set();
+    const out = [];
+    (Array.isArray(values) ? values : [values]).forEach((entry) => {
+      const token = normalizeParticipantToken(entry);
+      const key = String(token ?? '').trim();
+      if (!key) return;
+      const normalizedKey = key.toLowerCase();
+      if (seen.has(normalizedKey)) return;
+      seen.add(normalizedKey);
+      out.push(token);
+    });
+    return out;
+  }
+
+  function hasOnlySelfIntent(reply = {}, normalizedText = '') {
+    if (reply.only_self === true || reply.intent === 'only_self') return true;
+    const text = normalizedText || '';
+    return text === 'eu'
+      || text === 'so eu'
+      || text === 'só eu'
+      || text === 'somente eu'
+      || text.includes('apenas eu')
+      || text.includes('so comigo')
+      || text.includes('só comigo');
+  }
+
+  function hasSelfParticipantIntent(reply = {}, normalizedText = '') {
+    if (reply.include_self === true || reply.with_self === true) return true;
+    const text = ` ${normalizedText || ''} `;
+    if (!text.trim()) return false;
+    if (hasOnlySelfIntent(reply, normalizedText)) return true;
+    return /(^|[\s,;+/&])(eu|mim)(?=$|[\s,;+/&])/.test(text);
+  }
+
+  function mergeSelfParticipant(participants = [], reply = {}, rawText = '') {
+    const normalized = normalizeIntentText(rawText || reply.text || reply.raw_text || '');
+    const selected = uniqueParticipants(participants);
+    if (hasSelfParticipantIntent(reply, normalized)) {
+      return uniqueParticipants(['self', ...selected]);
+    }
+    return selected;
+  }
+
   function parseParticipantsFromReply(reply = {}, text = '', options = []) {
-    if (Array.isArray(reply.participants) && reply.participants.length) return reply.participants;
+    const normalized = normalizeIntentText(text || reply.text || reply.raw_text || '');
+    if (hasOnlySelfIntent(reply, normalized)) return ['self'];
+
+    if (Array.isArray(reply.participants) && reply.participants.length) {
+      return mergeSelfParticipant(reply.participants, reply, normalized);
+    }
+
     if (Array.isArray(reply.shares) && reply.shares.length) {
       return reply.shares.map((row) => row.participant ?? row.id ?? row.person_id ?? row.name).filter(Boolean);
     }
-    if (reply.include_self === true || reply.only_self === true) return ['self'];
-
-    const normalized = normalizeIntentText(text || reply.text || reply.raw_text || '');
-    if (!normalized) return [];
-    if (normalized.includes('apenas eu') || normalized === 'eu' || normalized === 'so eu' || normalized === 'só eu') return ['self'];
 
     const selected = [];
-    options.forEach((option, index) => {
-      const label = normalizeIntentText(option.label || option.name);
-      if (!label) return;
-      if (normalized.includes(label) || normalized.split(/[,+/& e]+/).includes(label)) selected.push(option.id);
-      if (normalized === String(index + 1)) selected.push(option.id);
-    });
-    return Array.from(new Set(selected));
+    if (normalized) {
+      options.forEach((option, index) => {
+        const label = normalizeIntentText(option.label || option.name);
+        if (!label) return;
+        if (normalized.includes(label) || normalized.split(/[,+/& e]+/).includes(label)) selected.push(option.id);
+        if (normalized === String(index + 1)) selected.push(option.id);
+      });
+    }
+
+    return mergeSelfParticipant(selected, reply, normalized);
   }
 
   function parseModeFromReply(reply = {}, text = '') {
@@ -831,7 +893,7 @@ function createAutomationApiService(deps = {}) {
           code: 'NEEDS_SPLIT_PARTICIPANTS',
           conversation: publicConversation(next, repository),
           options: options.options,
-          whatsapp: { text: `Com quem vai dividir? ${names}. Pode responder "Apenas eu" ou os nomes dos amigos. Contatos locais entram só no seu controle interno.` }
+          whatsapp: { text: `Com quem vai dividir? ${names}. Pode responder "Apenas eu", "Eu, Ana e Bruno" ou só os nomes dos amigos. Se você quiser entrar no rateio, escreva "Eu" na resposta. Contatos locais entram só no seu controle interno.` }
         });
       }
 
@@ -845,7 +907,7 @@ function createAutomationApiService(deps = {}) {
             code: 'NEEDS_SPLIT_PARTICIPANTS',
             conversation: publicConversation(conversation, repository),
             options,
-            whatsapp: { text: `Não achei esses participantes na sua rede. Tenta com: ${names}` }
+            whatsapp: { text: `Não achei esses participantes na sua rede. Tenta com: ${names}. Se você também participa, escreva "Eu" junto com os nomes.` }
           });
         }
         const mode = parseModeFromReply(reply, rawText);

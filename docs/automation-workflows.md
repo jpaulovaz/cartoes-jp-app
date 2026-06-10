@@ -1,0 +1,164 @@
+# Governança dos Workflows de Automação do AcerttaPay
+
+Este documento padroniza a expansão do concierge WhatsApp do AcerttaPay.
+
+## Convenção de famílias
+
+```txt
+1.x = Compra Assistida
+2.x = Consultas Financeiras
+3.x = Lembretes e Alertas
+4.x = Central de Acertos
+5.x = Finanças Mensais
+6.x = Fechamento Mensal
+7.x = Importações por WhatsApp
+8.x = Inteligência, Categorias e Resumos
+9.x = Governança, observabilidade e hardening
+```
+
+O número do workflow não é a versão do app. A versão do app continua em `package.json`.
+
+## Fluxo atual
+
+```txt
+1.1 - ACERTTAPAY_COMPRA_ASSISTIDA_CONCIERGE.json
+```
+
+Responsabilidades:
+
+- receber mensagem da Evolution API;
+- normalizar telefone, mensagem e id da mensagem;
+- usar IA Agent com memória curta para conversa;
+- interpretar compras de cartão;
+- chamar a Automation API;
+- formatar respostas amigáveis para WhatsApp;
+- nunca executar regra financeira fora do AcerttaPay.
+
+## Intents do fluxo 1.1
+
+### Concierge
+
+```txt
+greeting
+help
+clarification
+out_of_scope
+create_purchase
+```
+
+### Respostas contextuais
+
+```txt
+select_card
+confirm_card
+decline_card
+confirm_split
+skip_split
+select_split_participants
+exact_split
+clarification
+```
+
+## Regra de participantes
+
+O usuário pode dividir uma compra com uma ou várias pessoas.
+
+Exemplos:
+
+```txt
+Apenas eu
+Eu, Ana e Bruno
+Ana e Bruno
+Eu 99,90, Ana 50, Bruno 50
+```
+
+Regras:
+
+- `Apenas eu` salva a compra somente no perfil próprio do usuário.
+- `Ana e Bruno` não inclui o usuário automaticamente.
+- `Eu, Ana e Bruno` inclui o usuário no rateio.
+- Contatos locais podem participar para controle interno.
+- Somente amigos elegíveis geram rascunhos na Central de Acertos.
+- Nenhum rascunho é enviado automaticamente pelo WhatsApp no MVP.
+
+## Contrato recomendado de resposta da Automation API
+
+```json
+{
+  "ok": true,
+  "code": "SOME_RESULT_CODE",
+  "data": {},
+  "conversation": {},
+  "whatsapp": {
+    "text": "mensagem pronta para o usuário"
+  }
+}
+```
+
+## Códigos de resposta padronizados
+
+### Autorização e operação
+
+```txt
+AUTOMATION_DISABLED
+AUTOMATION_TOKEN_MISSING
+UNAUTHORIZED
+IP_NOT_ALLOWED
+RATE_LIMITED
+NOT_AUTHORIZED
+NO_PENDING_CONVERSATION
+UNKNOWN_CONVERSATION_STATE
+```
+
+### Compra
+
+```txt
+PURCHASE_CREATED
+NEEDS_CARD_SELECTION
+NEEDS_CARD_CONFIRMATION
+NO_ACTIVE_CARD
+MONTH_CLOSED
+VALIDATION_ERROR
+DUPLICATE_MESSAGE
+```
+
+### Divisão
+
+```txt
+SPLIT_OPTIONS
+NEEDS_SPLIT_CONFIRMATION
+NEEDS_SPLIT_PARTICIPANTS
+NEEDS_SPLIT_MODE
+NEEDS_EXACT_AMOUNTS
+SPLIT_SKIPPED
+SPLIT_APPLIED
+INVALID_PARTICIPANT
+MISSING_PARTICIPANTS
+SPLIT_TOTAL_MISMATCH
+EXACT_SPLIT_UNSUPPORTED_FOR_INSTALLMENTS
+```
+
+## Matriz de risco
+
+| Tipo de ação | Exemplos | Risco | Exigência |
+|---|---|---:|---|
+| Consulta | resumo do mês, compras recentes | Baixo | usuário autorizado |
+| Criação simples | nova compra | Médio | idempotência e validação backend |
+| Edição | corrigir valor, cartão, data | Alto | confirmação explícita |
+| Remoção | apagar compra | Alto | confirmação forte e janela de tempo |
+| Ação social/financeira | enviar cobrança, marcar pago | Alto | confirmação forte, status válido e logs |
+| Fechamento mensal | fechar mês | Muito alto | preferir confirmação no app ou dupla confirmação |
+| Importação por arquivo | PDF de fatura | Médio/alto | job, revisão e confirmação |
+
+## Princípios obrigatórios
+
+1. A IA pode conversar e interpretar, mas não é fonte de verdade financeira.
+2. O AcerttaPay valida permissões, cartão, pessoa, amizade, mês fechado, soma e duplicidade.
+3. Toda escrita precisa ser idempotente ou confirmada.
+4. Ações críticas devem deixar log técnico.
+5. O N8N pode manter memória conversacional; estados financeiros sensíveis ficam no AcerttaPay.
+6. Mensagens precisam ser curtas, claras e compatíveis com WhatsApp.
+
+## Pendência avaliada para etapa futura
+
+Divisão por valores definidos em compras parceladas com parcelas de centavos diferentes ainda deve continuar conservadora. A melhoria futura recomendada é permitir que o usuário informe o valor total de cada pessoa e o backend distribua proporcionalmente entre parcelas, preservando a soma exata.

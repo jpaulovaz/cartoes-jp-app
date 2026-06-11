@@ -1825,6 +1825,11 @@ function createAutomationApiService(deps = {}) {
 
       const requestedCardId = Number(purchase.card_id || purchase.cardId || 0) || null;
       const cardHint = purchase.card_hint || purchase.cardHint || payload.card_hint || payload.cardHint || '';
+      const cardHintAlreadyConfirmed = payload.card_hint_confirmed === true
+        || payload.confirmed_card_hint === true
+        || payload.skip_card_confirmation === true
+        || purchase.card_hint_confirmed === true
+        || purchase.confirmed_card_hint === true;
       let response;
       if (!requestedCardId) {
         const activeCards = repository.getActiveCards(resolved.user.id);
@@ -1837,15 +1842,23 @@ function createAutomationApiService(deps = {}) {
         } else if (cardHint) {
           const suggestedCard = resolveCardByHint(activeCards, cardHint);
           response = suggestedCard
-            ? buildCardConfirmationResponse({
-              userId: resolved.user.id,
-              phoneE164: resolved.normalized.e164,
-              purchase,
-              source: payload.source || {},
-              cards: activeCards,
-              suggestedCard,
-              cardHint
-            })
+            ? (cardHintAlreadyConfirmed
+              ? createPurchaseWithResolvedCard({
+                userId: resolved.user.id,
+                phoneE164: resolved.normalized.e164,
+                purchase,
+                source: payload.source || {},
+                cardId: suggestedCard.id
+              })
+              : buildCardConfirmationResponse({
+                userId: resolved.user.id,
+                phoneE164: resolved.normalized.e164,
+                purchase,
+                source: payload.source || {},
+                cards: activeCards,
+                suggestedCard,
+                cardHint
+              }))
             : buildCardSelectionResponse({
               userId: resolved.user.id,
               phoneE164: resolved.normalized.e164,
@@ -2112,11 +2125,14 @@ function createAutomationApiService(deps = {}) {
           });
         }
         repository.resolveConversationState(conversation.id);
+        const confirmedPurchase = data.purchase || {};
+        const confirmedCardHint = confirmedPurchase.card_hint || confirmedPurchase.cardHint || '';
         return createPurchaseFromAutomation({
           phone: resolved.normalized.e164,
-          purchase: data.purchase || {},
+          purchase: confirmedPurchase,
           source: payload.source || data.source || {},
-          confirmed: true
+          confirmed: true,
+          card_hint_confirmed: Boolean(confirmedCardHint)
         }, meta);
       }
 

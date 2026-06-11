@@ -502,6 +502,34 @@ function createAutomationApiService(deps = {}) {
     });
   }
 
+
+  function buildPurchaseCreateConfirmationResponse({ userId, phoneE164, purchase, source }) {
+    const conversation = repository.createConversationState({
+      userId,
+      phoneE164,
+      channel: source?.channel || 'whatsapp',
+      state: 'awaiting_purchase_create_confirmation',
+      payload: { purchase, source }
+    });
+    const lines = [
+      '🧾 *Confirmar nova compra?*',
+      '',
+      `Compra: *${purchase.description || 'sem descrição'}*`,
+      `Valor: *${formatBRLFromCents(purchase.amount_cents || 0)}*`,
+      purchase.date ? `Data: *${purchase.date}*` : '',
+      purchase.installments && Number(purchase.installments) > 1 ? `Parcelas: *${purchase.installments}x*` : 'Parcelas: *1x*',
+      purchase.card_hint ? `Cartão informado: *${purchase.card_hint}*` : 'Cartão: vou confirmar antes de lançar.',
+      '',
+      'Responde *confirmar* para eu seguir ou *cancelar* para descartar. Sem chute na fatura. 😉'
+    ].filter(Boolean);
+    return makeResult({
+      ok: false,
+      code: 'NEEDS_PURCHASE_CREATE_CONFIRMATION',
+      conversation: publicConversation(conversation, repository),
+      whatsapp: { text: lines.join('\n') }
+    }, 202);
+  }
+
   function buildCardSelectionResponse({ userId, phoneE164, purchase, source, cards }) {
     const options = buildCardOptions(cards);
     const conversation = repository.createConversationState({
@@ -741,7 +769,7 @@ function createAutomationApiService(deps = {}) {
         mutation_window_open: Number(row.is_mutation_window_open || 0) === 1
       }));
       const lines = purchases.length
-        ? purchases.map((purchase) => `${purchase.option}. ${purchase.description} — *${formatBRLFromCents(purchase.amount_cents)}* no ${purchase.card_name || 'cartão'}${purchase.date ? ` (${purchase.date})` : ''}`)
+        ? purchases.map((purchase) => `${purchase.option}. #${purchase.id} — ${purchase.description} — *${formatBRLFromCents(purchase.amount_cents)}* no ${purchase.card_name || 'cartão'}${purchase.date ? ` (${purchase.date})` : ''}`)
         : ['Não encontrei compras recentes para ajustar por aqui.'];
       const response = makeResult({
         ok: true,
@@ -749,7 +777,7 @@ function createAutomationApiService(deps = {}) {
         purchases,
         whatsapp: {
           text: purchases.length
-            ? [`🧾 *Compras recentes*`, '', ...lines, '', 'Quer corrigir alguma? Pode dizer: *corrige a 1 para R$ 189,90* ou *apaga a última compra*.'].join('\n')
+            ? [`🧾 *Compras recentes*`, '', ...lines, '', 'Quer corrigir alguma? Pode dizer: *corrige #123 para R$ 189,90*, *apaga #123* ou *dividir #123 com Ana*.'].join('\n')
             : 'Não encontrei compras recentes para ajustar por aqui. Me manda uma compra nova ou faça o ajuste pelo app.'
         }
       });
@@ -1394,7 +1422,7 @@ function createAutomationApiService(deps = {}) {
         relatedPurchaseId: purchaseId,
         payload: { purchase_id: purchaseId, options: options.options }
       });
-      const names = options.options.map((option, index) => `${index + 1}. ${option.label || option.name}`).join(' ');
+      const names = options.options.map((option, index) => `${index + 1}. ${option.label || option.name}`).join('\n');
       const response = makeResult({
         ok: false,
         code: 'NEEDS_SPLIT_PARTICIPANTS',
@@ -1660,6 +1688,27 @@ function createAutomationApiService(deps = {}) {
       }
       checkRateLimit(resolved.normalized.e164);
 
+      const purchase = payload.purchase || {};
+      if (payload.confirmed !== true && payload.skip_create_confirmation !== true) {
+        const response = buildPurchaseCreateConfirmationResponse({
+          userId: resolved.user.id,
+          phoneE164: resolved.normalized.e164,
+          purchase,
+          source: payload.source || {}
+        });
+        repository.logRequest({
+          userId: resolved.user.id,
+          phoneE164: resolved.normalized.e164,
+          channel,
+          operation: 'purchase.create.prepare',
+          statusCode: response.statusCode,
+          resultCode: response.code,
+          sourceMessageId,
+          ipAddress: meta.ipAddress || null
+        });
+        return response;
+      }
+
       const idempotency = repository.tryCreateIdempotency({
         userId: resolved.user.id,
         channel,
@@ -1678,7 +1727,6 @@ function createAutomationApiService(deps = {}) {
       }
       idempotencyCreated = true;
 
-      const purchase = payload.purchase || {};
       const requestedCardId = Number(purchase.card_id || purchase.cardId || 0) || null;
       const cardHint = purchase.card_hint || purchase.cardHint || payload.card_hint || payload.cardHint || '';
       let response;
@@ -1778,7 +1826,7 @@ function createAutomationApiService(deps = {}) {
         });
       }
       const options = purchaseService.getSplitOptions({ userId: resolved.user.id, purchaseId: payload.purchaseId || payload.purchase_id });
-      const names = options.options.map((option, index) => `${index + 1}. ${option.label || option.name}`).join(' ');
+      const names = options.options.map((option, index) => `${index + 1}. ${option.label || option.name}`).join('\n');
       return makeResult({
         ok: true,
         code: 'SPLIT_OPTIONS',
@@ -1941,6 +1989,32 @@ function createAutomationApiService(deps = {}) {
       const rawText = payload.source?.raw_text || payload.source?.rawText || reply.text || payload.text || '';
       const state = String(conversation.state || '').trim();
 
+      if (state === 'awaiting_purchase_create_confirmation') {
+        if (isNegativeText(rawText) || reply.confirm === false || reply.intent === 'cancel_purchase_create') {
+          repository.resolveConversationState(conversation.id);
+          return makeResult({
+            ok: true,
+            code: 'PURCHASE_CREATE_CANCELLED',
+            whatsapp: { text: 'Fechado, não lancei essa compra. Cartão salvo do susto. 😉' }
+          });
+        }
+        if (!isAffirmativeText(rawText) && reply.confirm !== true && reply.intent !== 'confirm_purchase_create') {
+          return makeResult({
+            ok: false,
+            code: 'NEEDS_PURCHASE_CREATE_CONFIRMATION',
+            conversation: publicConversation(conversation, repository),
+            whatsapp: { text: 'Para lançar essa compra, responde *confirmar*. Para desistir, responde *cancelar*.' }
+          });
+        }
+        repository.resolveConversationState(conversation.id);
+        return createPurchaseFromAutomation({
+          phone: resolved.normalized.e164,
+          purchase: data.purchase || {},
+          source: payload.source || data.source || {},
+          confirmed: true
+        }, meta);
+      }
+
       if (state === 'awaiting_card_confirmation') {
         const cards = Array.isArray(data.cards) ? data.cards : [];
         const suggestedCardId = Number(data.suggested_card_id || data.suggested_card?.id || 0);
@@ -1963,7 +2037,7 @@ function createAutomationApiService(deps = {}) {
             payload: { ...data, cards },
             relatedPurchaseId: null
           });
-          const cardList = cards.map((card) => `${card.option}. ${card.label}`).join(' ');
+          const cardList = cards.map((card) => `${card.option}. ${card.label}`).join('\n');
           return makeResult({
             ok: false,
             code: 'NEEDS_CARD_SELECTION',
@@ -1998,7 +2072,7 @@ function createAutomationApiService(deps = {}) {
         const cards = Array.isArray(data.cards) ? data.cards : [];
         const selectedCardId = parseCardIdFromReply(reply, rawText, cards);
         if (!selectedCardId) {
-          const cardList = cards.map((card) => `${card.option}. ${card.label}`).join(' ');
+          const cardList = cards.map((card) => `${card.option}. ${card.label}`).join('\n');
           return makeResult({
             ok: false,
             code: 'NEEDS_CARD_SELECTION',
@@ -2041,7 +2115,7 @@ function createAutomationApiService(deps = {}) {
           payload: { ...data, options: options.options, purchase_id: purchaseId },
           relatedPurchaseId: purchaseId
         });
-        const names = options.options.map((option, index) => `${index + 1}. ${option.label || option.name}`).join(' ');
+        const names = options.options.map((option, index) => `${index + 1}. ${option.label || option.name}`).join('\n');
         return makeResult({
           ok: false,
           code: 'NEEDS_SPLIT_PARTICIPANTS',
@@ -2055,7 +2129,7 @@ function createAutomationApiService(deps = {}) {
         const options = Array.isArray(data.options) ? data.options : purchaseService.getSplitOptions({ userId: resolved.user.id, purchaseId: data.purchase_id }).options;
         const participants = parseParticipantsFromReply(reply, rawText, options);
         if (!participants.length) {
-          const names = options.map((option, index) => `${index + 1}. ${option.label || option.name}`).join(' ');
+          const names = options.map((option, index) => `${index + 1}. ${option.label || option.name}`).join('\n');
           return makeResult({
             ok: false,
             code: 'NEEDS_SPLIT_PARTICIPANTS',

@@ -8,6 +8,21 @@ const MONTH_NAMES = [
   'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
 ];
 
+const MONTH_ALIASES = {
+  janeiro: 1, jan: 1,
+  fevereiro: 2, fev: 2,
+  marco: 3, março: 3, mar: 3,
+  abril: 4, abr: 4,
+  maio: 5, mai: 5,
+  junho: 6, jun: 6,
+  julho: 7, jul: 7,
+  agosto: 8, ago: 8,
+  setembro: 9, set: 9,
+  outubro: 10, out: 10,
+  novembro: 11, nov: 11,
+  dezembro: 12, dez: 12
+};
+
 function makeResult(payload = {}, statusCode = 200) {
   return { statusCode, ...payload };
 }
@@ -30,10 +45,28 @@ function resolvePeriod(input = {}) {
   const [todayYear, todayMonth] = today.split('-').map(Number);
   const rawPeriod = String(input.period || input.when || '').trim().toLowerCase();
   if (['last_month', 'previous_month', 'mes_passado', 'mês passado'].includes(rawPeriod)) return addMonths(todayYear, todayMonth, -1);
-  if (['next_month', 'proximo_mes', 'próximo mês'].includes(rawPeriod)) return addMonths(todayYear, todayMonth, 1);
+  if (['next_month', 'proximo_mes', 'próximo mês', 'mes_que_vem', 'mês que vem'].includes(rawPeriod)) return addMonths(todayYear, todayMonth, 1);
   const month = Number(input.month || input.mes || input.due_month || 0);
   const year = Number(input.year || input.ano || input.due_year || 0);
   if (month >= 1 && month <= 12 && year >= 2000 && year <= 2100) return { month, year };
+  const text = normalizeText([
+    input.raw_text,
+    input.text,
+    input.message_text,
+    input.source?.raw_text,
+    input.whatsapp?.message_text,
+    input.query_text
+  ].filter(Boolean).join(' '));
+  if (text.includes('mes que vem')) return addMonths(todayYear, todayMonth, 1);
+  if (text.includes('mes passado')) return addMonths(todayYear, todayMonth, -1);
+  for (const [alias, aliasMonth] of Object.entries(MONTH_ALIASES)) {
+    const re = new RegExp(`\\b${alias}\\b`, 'i');
+    if (!re.test(text)) continue;
+    const yearMatch = text.match(/\b(20\d{2}|21\d{2})\b/);
+    let resolvedYear = yearMatch ? Number(yearMatch[1]) : todayYear;
+    if (!yearMatch && aliasMonth < todayMonth && /proximo|prox|futuro|seguinte/.test(text)) resolvedYear += 1;
+    return { month: aliasMonth, year: resolvedYear };
+  }
   return { month: todayMonth, year: todayYear };
 }
 
@@ -276,7 +309,7 @@ function createAutomationMonthlyFinancesService(deps = {}) {
 
   function normalizeFinancePayload(input = {}) {
     const raw = input.finance || input.monthly_finance || input;
-    const period = resolvePeriod(raw);
+    const period = resolvePeriod({ ...payload, ...raw });
     const type = normalizeFinanceType(raw.type || raw.kind || raw.direction) || 'expense';
     const description = sanitizeDescription(raw.description || raw.title || raw.name);
     const amountMode = normalizeAmountMode(raw.amount_mode || raw.amountMode || raw.mode);

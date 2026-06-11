@@ -307,6 +307,53 @@ function createAutomationQueriesRepository() {
     `).all(Number(userId || 0), Number(month || 0), Number(year || 0));
   }
 
+
+
+  function getMonthlyFinancesSummary(userId, month, year) {
+    const rows = db.prepare(`
+      SELECT
+        mf.*,
+        COALESCE(item_totals.total_cents, mf.amount_cents, 0) AS resolved_amount_cents,
+        COALESCE(item_totals.paid_cents, CASE WHEN COALESCE(mf.is_paid, 0) = 1 THEN COALESCE(mf.amount_cents, 0) ELSE 0 END, 0) AS resolved_paid_cents,
+        COALESCE(item_totals.item_count, 0) AS item_count
+      FROM monthly_finances mf
+      LEFT JOIN (
+        SELECT
+          finance_id,
+          user_id,
+          SUM(COALESCE(amount_cents, 0)) AS total_cents,
+          SUM(CASE WHEN COALESCE(is_paid, 0) = 1 THEN COALESCE(amount_cents, 0) ELSE 0 END) AS paid_cents,
+          COUNT(*) AS item_count
+        FROM monthly_finance_items
+        WHERE user_id = ?
+        GROUP BY finance_id, user_id
+      ) item_totals ON item_totals.finance_id = mf.id AND item_totals.user_id = mf.user_id
+      WHERE mf.user_id = ?
+        AND mf.month = ?
+        AND mf.year = ?
+      ORDER BY CASE WHEN mf.type = 'income' THEN 0 ELSE 1 END,
+               COALESCE(mf.day_of_month, 99), lower(COALESCE(mf.description, '')), mf.id ASC
+    `).all(Number(userId || 0), Number(userId || 0), Number(month || 0), Number(year || 0));
+
+    return rows.map((row) => {
+      const amount = Number(row.resolved_amount_cents || row.amount_cents || 0);
+      const paid = Number(row.resolved_paid_cents || 0);
+      return {
+        id: Number(row.id || 0),
+        description: row.description || 'Item mensal',
+        type: row.type || 'expense',
+        amount_cents: amount,
+        paid_cents: paid,
+        open_cents: Math.max(0, amount - paid),
+        amount_mode: row.amount_mode || 'fixed',
+        day_of_month: row.day_of_month ? Number(row.day_of_month) : null,
+        schedule_kind: row.schedule_kind || null,
+        item_count: Number(row.item_count || 0),
+        is_paid: Number(row.is_paid || 0) === 1 || (amount > 0 && paid >= amount)
+      };
+    });
+  }
+
   function getPrivateDebtReminders(userId, month, year) {
     return db.prepare(`
       SELECT
@@ -337,7 +384,8 @@ function createAutomationQueriesRepository() {
     getSharedDebtOutgoing,
     getSharedDebtIncoming,
     getDraftQueues,
-    getPrivateDebtReminders
+    getPrivateDebtReminders,
+    getMonthlyFinancesSummary
   };
 }
 

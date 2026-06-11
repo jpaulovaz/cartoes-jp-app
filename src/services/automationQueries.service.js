@@ -8,6 +8,21 @@ const MONTH_NAMES = [
   'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
 ];
 
+const MONTH_ALIASES = {
+  janeiro: 1, jan: 1,
+  fevereiro: 2, fev: 2,
+  marco: 3, março: 3, mar: 3,
+  abril: 4, abr: 4,
+  maio: 5, mai: 5,
+  junho: 6, jun: 6,
+  julho: 7, jul: 7,
+  agosto: 8, ago: 8,
+  setembro: 9, set: 9,
+  outubro: 10, out: 10,
+  novembro: 11, nov: 11,
+  dezembro: 12, dez: 12
+};
+
 function currentSaoPauloDate() {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
 }
@@ -32,12 +47,31 @@ function resolvePeriod(input = {}) {
   if (rawPeriod === 'last_month' || rawPeriod === 'previous_month' || rawPeriod === 'mes_passado' || rawPeriod === 'mês passado') {
     return addMonths(todayYear, todayMonth, -1);
   }
-  if (rawPeriod === 'next_month' || rawPeriod === 'proximo_mes' || rawPeriod === 'próximo mês') {
+  if (rawPeriod === 'next_month' || rawPeriod === 'proximo_mes' || rawPeriod === 'próximo mês' || rawPeriod === 'mes_que_vem' || rawPeriod === 'mês que vem') {
     return addMonths(todayYear, todayMonth, 1);
   }
   const month = Number(input.month || input.due_month || input.mes || 0);
   const year = Number(input.year || input.due_year || input.ano || 0);
   if (month >= 1 && month <= 12 && year >= 2000 && year <= 2100) return { month, year };
+
+  const text = normalizeText([
+    input.raw_text,
+    input.text,
+    input.message_text,
+    input.source?.raw_text,
+    input.whatsapp?.message_text,
+    input.query_text
+  ].filter(Boolean).join(' '));
+  if (text.includes('mes que vem')) return addMonths(todayYear, todayMonth, 1);
+  if (text.includes('mes passado')) return addMonths(todayYear, todayMonth, -1);
+  for (const [alias, aliasMonth] of Object.entries(MONTH_ALIASES)) {
+    const re = new RegExp(`\\b${alias}\\b`, 'i');
+    if (!re.test(text)) continue;
+    const yearMatch = text.match(/\b(20\d{2}|21\d{2})\b/);
+    let resolvedYear = yearMatch ? Number(yearMatch[1]) : todayYear;
+    if (!yearMatch && aliasMonth < todayMonth && /proximo|prox|futuro|seguinte/.test(text)) resolvedYear += 1;
+    return { month: aliasMonth, year: resolvedYear };
+  }
   return { month: todayMonth, year: todayYear };
 }
 
@@ -233,13 +267,26 @@ function createAutomationQueriesService(deps = {}) {
     };
   }
 
-  function buildMonthSummaryText({ month, year, cards, people, topPurchases, debt }) {
+  function buildMonthSummaryText({ month, year, cards, people, topPurchases, debt, monthlyFinances }) {
     const totalCards = sumBy(cards, 'total_cents');
     const paidCards = sumBy(cards, 'paid_cents');
     const openCards = Math.max(0, totalCards - paidCards);
+    const finances = Array.isArray(monthlyFinances) ? monthlyFinances : [];
+    const incomeFinances = finances.filter((row) => row.type === 'income');
+    const expenseFinances = finances.filter((row) => row.type !== 'income');
+    const incomeTotal = sumBy(incomeFinances, 'amount_cents');
+    const expenseTotal = sumBy(expenseFinances, 'amount_cents');
+    const openExpenseTotal = sumBy(expenseFinances, 'open_cents');
+    const generalTotal = totalCards + expenseTotal;
     const cardLines = cards.length
       ? truncateRows(cards, 5).map((card) => `• ${card.name}: *${formatBRLFromCents(card.total_cents)}*${card.due_date ? ` · vence ${formatDateBR(card.due_date)}` : ''}`)
       : ['• Nenhuma compra de cartão nesse período.'];
+    const incomeLines = incomeFinances.length
+      ? truncateRows(incomeFinances, 5).map((row) => `• #${row.id} — ${row.description}: *${formatBRLFromCents(row.amount_cents)}*${row.day_of_month ? ` · dia ${String(row.day_of_month).padStart(2, '0')}` : ''}`)
+      : ['• Nenhuma entrada registrada no mês.'];
+    const expenseLines = expenseFinances.length
+      ? truncateRows(expenseFinances, 6).map((row) => `• #${row.id} — ${row.description}: *${formatBRLFromCents(row.amount_cents)}*${row.open_cents ? ` · aberto ${formatBRLFromCents(row.open_cents)}` : ' · pago'}`)
+      : ['• Nenhuma despesa fora do cartão registrada.'];
     const personLines = people.length
       ? truncateRows(people, 5).map((person) => `• ${person.name}: *${formatBRLFromCents(person.total_cents)}*`)
       : ['• Sem participantes com valores nesse período.'];
@@ -254,28 +301,38 @@ function createAutomationQueriesService(deps = {}) {
       `📊 *Resumo de ${periodLabel(month, year)}*`,
       '',
       `💳 Cartões: *${formatBRLFromCents(totalCards)}*`,
-      `✅ Pago registrado: *${formatBRLFromCents(paidCards)}*`,
-      `🧾 Em aberto: *${formatBRLFromCents(openCards)}*`,
+      `📒 Saídas fora do cartão: *${formatBRLFromCents(expenseTotal)}*`,
+      `✨ Entradas do mês: *${formatBRLFromCents(incomeTotal)}*`,
+      `🧮 Total de gastos do mês: *${formatBRLFromCents(generalTotal)}*`,
+      `✅ Pago registrado em cartões: *${formatBRLFromCents(paidCards)}*`,
+      `🧾 Aberto em cartões: *${formatBRLFromCents(openCards)}*`,
+      `⏳ Saídas mensais em aberto: *${formatBRLFromCents(openExpenseTotal)}*`,
       '',
       '*Por cartão*',
       ...cardLines,
       '',
+      '*Entradas do mês*',
+      ...incomeLines,
+      '',
+      '*Despesas fora do cartão*',
+      ...expenseLines,
+      '',
       '*Por participante*',
       ...personLines,
       '',
-      '*Maiores compras*',
+      '*Maiores compras no cartão*',
       ...purchaseLines,
       '',
       `👥 A receber: *${formatBRLFromCents(outgoing)}*${drafts ? ` · rascunhos: *${formatBRLFromCents(drafts)}*` : ''}`,
       `🙋 A pagar: *${formatBRLFromCents(incoming)}*`,
       '',
-      'Quer abrir por *cartão*, *pessoa* ou ver as *compras de hoje*?'
+      'Quer abrir por *cartão*, *pessoa*, *finanças mensais* ou ver as *compras de hoje*?'
     ].join('\n');
   }
 
   function getMonthSummary(payload = {}, meta = {}) {
     return withQueryHandling(payload, meta, 'queries.month_summary', ({ user }) => {
-      const period = resolvePeriod(payload.query || payload);
+      const period = resolvePeriod({ ...payload, ...(payload.query || {}) });
       const rawCards = repository.getCardMonthTotals(user.id, period.month, period.year);
       const cards = rawCards.map(serializeCard);
       const people = repository.getPersonMonthTotals(user.id, period.month, period.year).map(serializePerson);
@@ -283,6 +340,7 @@ function createAutomationQueriesService(deps = {}) {
       const outgoing = repository.getSharedDebtOutgoing(user.id, period.month, period.year);
       const incoming = repository.getSharedDebtIncoming(user.id, period.month, period.year);
       const drafts = repository.getDraftQueues(user.id, period.month, period.year);
+      const monthlyFinances = repository.getMonthlyFinancesSummary(user.id, period.month, period.year);
       const debt = {
         outgoing_open_cents: sumBy(outgoing, 'open_cents'),
         incoming_open_cents: sumBy(incoming, 'open_cents'),
@@ -291,8 +349,8 @@ function createAutomationQueriesService(deps = {}) {
       return makeResult({
         ok: true,
         code: 'MONTH_SUMMARY',
-        data: { period, cards, people, top_purchases: topPurchases, debt },
-        whatsapp: { text: buildMonthSummaryText({ ...period, cards, people, topPurchases, debt }) }
+        data: { period, cards, people, top_purchases: topPurchases, debt, monthly_finances: monthlyFinances },
+        whatsapp: { text: buildMonthSummaryText({ ...period, cards, people, topPurchases, debt, monthlyFinances }) }
       });
     });
   }
@@ -320,7 +378,7 @@ function createAutomationQueriesService(deps = {}) {
   function getCardSummary(payload = {}, meta = {}) {
     return withQueryHandling(payload, meta, 'queries.card_summary', ({ user }) => {
       const query = payload.query || payload;
-      const period = resolvePeriod(query);
+      const period = resolvePeriod({ ...payload, ...query });
       const cards = repository.getCardMonthTotals(user.id, period.month, period.year).map(serializeCard);
       const allCards = repository.listCards(user.id);
       const hint = query.card_hint || query.card || query.card_name || '';
@@ -399,7 +457,7 @@ function createAutomationQueriesService(deps = {}) {
   function getRecentPurchases(payload = {}, meta = {}) {
     return withQueryHandling(payload, meta, 'queries.recent_purchases', ({ user }) => {
       const query = payload.query || payload;
-      const period = resolvePeriod(query);
+      const period = resolvePeriod({ ...payload, ...query });
       const date = parseIsoDate(query.date || query.day || '');
       let cardId = 0;
       const hint = query.card_hint || query.card || query.card_name || '';
@@ -448,7 +506,7 @@ function createAutomationQueriesService(deps = {}) {
   function getPersonSummary(payload = {}, meta = {}) {
     return withQueryHandling(payload, meta, 'queries.person_summary', ({ user }) => {
       const query = payload.query || payload;
-      const period = resolvePeriod(query);
+      const period = resolvePeriod({ ...payload, ...query });
       const people = repository.listPeople(user.id);
       const hint = query.person_hint || query.person || query.person_name || '';
       if (!hint) {
@@ -545,7 +603,7 @@ function createAutomationQueriesService(deps = {}) {
   function getDebtSummary(payload = {}, meta = {}) {
     return withQueryHandling(payload, meta, 'queries.debt_summary', ({ user }) => {
       const query = payload.query || payload;
-      const period = resolvePeriod(query);
+      const period = resolvePeriod({ ...payload, ...query });
       const direction = ['owed_to_me', 'i_owe', 'overview'].includes(query.direction) ? query.direction : 'overview';
       const outgoing = repository.getSharedDebtOutgoing(user.id, period.month, period.year);
       const incoming = repository.getSharedDebtIncoming(user.id, period.month, period.year);

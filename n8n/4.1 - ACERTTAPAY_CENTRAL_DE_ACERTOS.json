@@ -1,0 +1,840 @@
+{
+  "name": "4.1 - ACERTTAPAY_CENTRAL_DE_ACERTOS",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "acerttapay-wa-shared-debts",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "08ba10e6-609c-4c1a-a866-6a4a64ddf3ec",
+      "name": "WA Incoming",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1200,
+        260
+      ],
+      "webhookId": "26b14474-738e-4f02-aad9-d8c7e4c48745"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "8f64cbae-9a69-4244-bb7d-c6e614c4c945",
+      "name": "EntradaWhatsapp",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1200,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const root = $json || {};\nconst envelope = root.body && typeof root.body === 'object' ? root.body : root;\nconst data = envelope.data && typeof envelope.data === 'object' ? envelope.data : (root.data || envelope);\nconst key = data.key || envelope.key || root.key || {};\nconst msg = data.message || envelope.message || root.message || {};\n\nfunction onlyDigits(value) {\n  return String(value || '').split('@')[0].replace(/\\D/g, '');\n}\n\nfunction firstPhone(candidates) {\n  for (const candidate of candidates) {\n    const digits = onlyDigits(candidate);\n    if (digits.length >= 10) return digits;\n  }\n  return '';\n}\n\nconst remoteJid = String(\n  key.remoteJid || key.remoteJidAlt || data.remoteJid || data.from || envelope.from || root.from || ''\n).trim();\nconst phone = firstPhone([\n  key.remoteJid, key.remoteJidAlt, data.remoteJid, data.number, envelope.number,\n  root.number, data.phone, envelope.phone, root.phone, data.sender, envelope.sender, root.sender\n]);\nconst text = String(\n  data.text || envelope.text || root.text || data.bodyText || envelope.bodyText ||\n  msg.conversation || msg.extendedTextMessage?.text || msg.imageMessage?.caption ||\n  msg.videoMessage?.caption || msg.documentMessage?.caption ||\n  msg.buttonsResponseMessage?.selectedDisplayText || msg.listResponseMessage?.title ||\n  msg.templateButtonReplyMessage?.selectedDisplayText || ''\n).trim();\nconst messageId = String(\n  key.id || data.messageId || data.id || envelope.message_id || root.message_id ||\n  root.messageId || root.id || ''\n).trim() || `${phone || 'unknown'}:${Date.now()}`;\nconst fromMe = Boolean(key.fromMe || data.fromMe || envelope.fromMe || root.fromMe);\nconst messageType = String(data.messageType || envelope.messageType || root.messageType || '').trim();\nconst instance = String(envelope.instance || data.instance || root.instance || $env.EVOLUTION_INSTANCE_NAME || '').trim();\nconst isGroup = remoteJid.includes('@g.us');\nconst canReply = Boolean(phone && !fromMe && !isGroup);\nconst isSupportedText = Boolean(text);\nreturn [{ json: {\n  phone,\n  remote_jid: remoteJid,\n  message_text: text,\n  message_id: messageId,\n  message_type: messageType,\n  push_name: data.pushName || envelope.pushName || root.pushName || data.push_name || envelope.push_name || '',\n  instance,\n  from_me: fromMe,\n  is_group: isGroup,\n  can_reply: canReply,\n  is_supported_text: isSupportedText,\n  is_valid_user_message: Boolean(canReply && isSupportedText),\n  current_date: new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }),\n  current_datetime: new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo', hour12: false }).replace(' ', 'T'),\n  raw: root\n} }];"
+      },
+      "id": "6c829312-82e1-4cfc-9c4c-f9b46af0539e",
+      "name": "Normalize Evolution Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -960,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6e8bdcbd-47c4-45be-8d6a-0be4f8468191",
+              "leftValue": "={{ $json.is_valid_user_message === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8bdb6cc4-65d5-4400-9457-24ac8c5b56f2",
+      "name": "Is Valid User Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -720,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6faa860e-8661-4072-9dc7-7fd0f25e9bb7",
+              "leftValue": "={{ $json.can_reply === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7532155d-ff93-49fc-a4f7-63fdb37354ff",
+      "name": "Can Reply Unsupported?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -480,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ 'Ainda não consigo ler esse tipo de mensagem por aqui. Me manda em texto, combinado?\\n\\nEx.: *quem me deve esse mês?*, *enviar rascunho #12* ou *marcar acerto #8 como pago*' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "78475f49-2de8-402a-ae79-879da3ca75fb",
+      "name": "Send Unsupported Message",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        520
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "fe5eb8db-83ca-4f59-977d-433f3328fe0b",
+      "name": "Ignore Message",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '') + '/api/automation/v1/whatsapp/resolve' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { phone: $('Normalize Evolution Payload').first().json.phone, channel: 'whatsapp', instance: $('Normalize Evolution Payload').first().json.instance, message_id: $('Normalize Evolution Payload').first().json.message_id, push_name: $('Normalize Evolution Payload').first().json.push_name } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "3d9b5ed8-1b7e-431d-ae99-7fe30f4bce4b",
+      "name": "Resolve AcerttaPay User",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -480,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "865e63e6-2eca-4876-926e-f02f7f2385f6",
+              "leftValue": "={{ $json.authorized === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ae7d5313-8469-4528-a5fb-0ee3d450f8d0",
+      "name": "Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -240,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.whatsapp?.text || 'Esse número ainda não está liberado no AcerttaPay. Ative o WhatsApp nas Configurações do app para mexer na Central de Acertos com segurança. 🔐' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "3b0febd0-e040-4dff-b170-0f58e4d07c85",
+      "name": "Send Authorization Result",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        0,
+        420
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify({ current_date: $('Normalize Evolution Payload').first().json.current_date, current_datetime: $('Normalize Evolution Payload').first().json.current_datetime, timezone: 'America/Sao_Paulo', user_message: $('Normalize Evolution Payload').first().json.message_text }) }}",
+        "options": {
+          "systemMessage": "Você é o concierge financeiro do AcerttaPay no WhatsApp, focado na família 4.1 da Central de Acertos.\n\nResponda SOMENTE com JSON válido, sem markdown.\n\nVocê pode conversar com charme leve, mas nunca inventa ID, pessoa, valor ou status. O AcerttaPay é a fonte de verdade e vai validar tudo.\n\nIntents aceitas:\n- greeting: saudação simples.\n- help: ajuda/lista do que você faz nesta família.\n- shared_debt_summary: resumo geral da Central de Acertos.\n- list_incoming_debts: listar o que o usuário deve.\n- list_outgoing_debts: listar quem deve ao usuário.\n- list_draft_queues: listar rascunhos da caixa de saída.\n- send_draft_queue: preparar envio de rascunho.\n- accept_debt: aceitar cobrança recebida.\n- reject_debt: recusar cobrança recebida.\n- contest_debt: contestar uma recusa recebida pelo usuário que enviou.\n- mark_as_paid: marcar acerto como pago pelo usuário devedor.\n- confirm_received: confirmar recebimento pelo usuário credor.\n- generate_pix: preparar Pix de acerto mensal.\n- out_of_scope: algo fora desta família.\n\nFormato obrigatório:\n{\n  \"intent\": \"shared_debt_summary\",\n  \"confidence\": 0.0,\n  \"needs_clarification\": false,\n  \"clarifying_question\": null,\n  \"reply_text\": null,\n  \"query\": {\n    \"period\": null,\n    \"month\": null,\n    \"year\": null,\n    \"person_hint\": null,\n    \"direction\": null,\n    \"limit\": 10\n  },\n  \"target\": {\n    \"request_id\": null,\n    \"queue_id\": null,\n    \"settlement_id\": null,\n    \"person_hint\": null\n  },\n  \"action\": {\n    \"name\": null,\n    \"note\": null,\n    \"amount_cents\": null\n  }\n}\n\nRegras:\n- Para greeting/help, use reply_text com uma resposta curta e exemplos.\n- \"quem me deve\" => list_outgoing_debts.\n- \"o que eu devo\" / \"quanto devo\" => list_incoming_debts.\n- \"listar rascunhos\" => list_draft_queues.\n- \"enviar rascunho #12\" => send_draft_queue target.queue_id=12.\n- \"enviar rascunhos da Ana\" => send_draft_queue target.person_hint=\"Ana\".\n- \"aceitar cobrança #8\" => accept_debt target.request_id=8.\n- \"recusar #8 porque já paguei\" => reject_debt target.request_id=8 action.note=\"já paguei\".\n- Para recusar ou contestar, peça nota se não houver motivo.\n- \"marcar #8 como pago\" => mark_as_paid target.request_id=8.\n- \"confirmar recebimento #8\" => confirm_received target.request_id=8.\n- \"gerar Pix do acerto com Bruno\" => generate_pix target.person_hint=\"Bruno\".\n- Se faltar ID ou pessoa, ainda pode enviar person_hint; o AcerttaPay vai resolver ou pedir esclarecimento.\n- Ações sensíveis serão confirmadas pelo AcerttaPay. Não confirme sozinho.\n- Se houver ambiguidade, needs_clarification=true e faça pergunta curta.\n",
+          "maxIterations": 2,
+          "returnIntermediateSteps": false
+        }
+      },
+      "id": "9624daf1-93a1-4c25-9992-bfb09207e828",
+      "name": "AI Shared Debts Router",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        240,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "0f29b45d-1c17-443e-ae56-d15131838fa9",
+      "name": "Gemini Chat Model - Shared Debts",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        540
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "mZ7rvYR2BFrE4r9l",
+          "name": "Google Gemini Geral"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ 'acerttapay-wa-shared-debts:' + ($('Normalize Evolution Payload').first().json.phone || 'unknown') }}",
+        "contextWindowLength": 10
+      },
+      "id": "8d1f7b0b-66b5-4750-8e2c-3743e26bf0af",
+      "name": "WhatsApp Shared Debt Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        420,
+        540
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "58b93dad-f350-4328-bf73-a6afd1435bc9",
+      "name": "Think Tool - Shared Debts",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        600,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function cleanJsonContent(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  if (!raw) return '';\n  const withoutFence = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  const first = withoutFence.indexOf('{');\n  const last = withoutFence.lastIndexOf('}');\n  if (first >= 0 && last > first) return withoutFence.slice(first, last + 1);\n  return withoutFence;\n}\nconst content = $json.output ?? $json.text ?? $json.response ?? $json.choices?.[0]?.message?.content ?? '';\nlet parsed;\ntry {\n  const cleaned = cleanJsonContent(content);\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  parsed = {\n    intent: 'help',\n    confidence: 0,\n    needs_clarification: false,\n    reply_text: 'Posso te ajudar com a Central de Acertos: quem te deve, o que você deve, rascunhos, aceite/recusa, pagamento e Pix mensal. Me manda do seu jeito. 😉'\n  };\n}\nif (!parsed || typeof parsed !== 'object') parsed = { intent: 'help', reply_text: 'Me manda o que você quer ver na Central de Acertos.' };\nconst apiIntents = new Set(['shared_debt_summary','list_incoming_debts','list_outgoing_debts','list_draft_queues','send_draft_queue','accept_debt','reject_debt','contest_debt','mark_as_paid','confirm_received','generate_pix']);\nparsed.should_call_api = apiIntents.has(String(parsed.intent || '')) && parsed.needs_clarification !== true;\nif (parsed.needs_clarification === true && !parsed.clarifying_question) parsed.clarifying_question = 'Me dá mais um detalhe para eu não mexer errado na Central de Acertos?';\nif (['greeting','help'].includes(String(parsed.intent || '')) && !parsed.reply_text) {\n  parsed.reply_text = 'Oi! Aqui é seu concierge da Central de Acertos do AcerttaPay. Posso mostrar quem te deve, o que você deve, listar rascunhos, preparar envio, aceitar/recusar acertos, marcar pagamento e gerar Pix mensal. 🤝';\n}\nif (String(parsed.intent || '') === 'out_of_scope' && !parsed.reply_text) parsed.reply_text = 'Essa função ainda não entrou na Central de Acertos por WhatsApp. Por enquanto, cuido de pendências, rascunhos, pagamentos e Pix mensal.';\nreturn [{ json: parsed }];"
+      },
+      "id": "17bce736-3447-475d-98d6-9a5ea85abb0b",
+      "name": "Parse Shared Debt JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        580,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8a1c52a7-b164-4063-ab02-a457e63fccf3",
+              "leftValue": "={{ $json.should_call_api === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a39405ae-6d83-4efe-abee-f3a4541ee11f",
+      "name": "Should Call Shared Debt API?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        840,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.reply_text || $json.clarifying_question || 'Posso consultar acertos, listar rascunhos, preparar envio, aceitar/recusar cobranças, marcar pagamento e gerar Pix mensal. Me manda do seu jeito. 😉' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "d00eccb1-ace1-482b-a910-e17cc61f0c28",
+      "name": "Send AI Shared Debt Reply",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        460
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $json || {};\nconst intent = String(parsed.intent || '').trim();\nconst phone = $('Normalize Evolution Payload').first().json.phone;\nconst source = {\n  channel: 'whatsapp',\n  instance: $('Normalize Evolution Payload').first().json.instance,\n  message_id: $('Normalize Evolution Payload').first().json.message_id,\n  raw_text: $('Normalize Evolution Payload').first().json.message_text\n};\nconst query = parsed.query || {};\nconst target = parsed.target || {};\nconst action = parsed.action || {};\nlet endpoint = '/api/automation/v1/shared-debts/summary';\nlet body = { phone, source, query };\nlet idempotencySuffix = intent;\nfunction cleanId(value) {\n  return String(value || '0').replace(/[^0-9]/g, '') || '0';\n}\nif (intent === 'shared_debt_summary') {\n  endpoint = '/api/automation/v1/shared-debts/summary';\n} else if (intent === 'list_incoming_debts') {\n  endpoint = '/api/automation/v1/shared-debts/requests';\n  body.query = { ...query, direction: 'incoming' };\n} else if (intent === 'list_outgoing_debts') {\n  endpoint = '/api/automation/v1/shared-debts/requests';\n  body.query = { ...query, direction: 'outgoing' };\n} else if (intent === 'list_draft_queues') {\n  endpoint = '/api/automation/v1/shared-debts/drafts';\n} else if (intent === 'send_draft_queue') {\n  const id = cleanId(target.queue_id || target.id);\n  endpoint = `/api/automation/v1/shared-debts/drafts/${id}/prepare-send`;\n  body.query = { ...query, person_hint: target.person_hint || query.person_hint || null };\n  idempotencySuffix += ':' + id;\n} else if (intent === 'accept_debt' || intent === 'reject_debt' || intent === 'contest_debt') {\n  const id = cleanId(target.request_id || target.id);\n  endpoint = `/api/automation/v1/shared-debts/requests/${id}/respond`;\n  body.action = intent === 'accept_debt' ? 'accept' : intent === 'reject_debt' ? 'reject' : 'contest';\n  body.note = action.note || null;\n  body.query = { ...query, person_hint: target.person_hint || query.person_hint || null };\n  idempotencySuffix += ':' + id;\n} else if (intent === 'mark_as_paid') {\n  const id = cleanId(target.request_id || target.id);\n  endpoint = `/api/automation/v1/shared-debts/requests/${id}/mark-paid`;\n  body.note = action.note || null;\n  body.query = { ...query, person_hint: target.person_hint || query.person_hint || null };\n  idempotencySuffix += ':' + id;\n} else if (intent === 'confirm_received') {\n  const id = cleanId(target.request_id || target.id);\n  endpoint = `/api/automation/v1/shared-debts/requests/${id}/confirm-received`;\n  body.note = action.note || null;\n  body.query = { ...query, person_hint: target.person_hint || query.person_hint || null };\n  idempotencySuffix += ':' + id;\n} else if (intent === 'generate_pix') {\n  const id = cleanId(target.settlement_id || target.id);\n  endpoint = `/api/automation/v1/shared-debts/settlements/${id}/pix/prepare`;\n  body.amount_cents = action.amount_cents || null;\n  body.query = { ...query, person_hint: target.person_hint || query.person_hint || null };\n  idempotencySuffix += ':' + id;\n}\nreturn [{ json: { intent, endpoint, body, idempotency_key: `whatsapp-shared-debt:${$('Normalize Evolution Payload').first().json.instance}:${$('Normalize Evolution Payload').first().json.message_id}:${idempotencySuffix}` } }];"
+      },
+      "id": "7e5f0ede-06c8-4753-adc4-50cd73c2b906",
+      "name": "Prepare Shared Debt Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '') + $json.endpoint }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $json.idempotency_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "4fd11fe9-f006-4307-b840-5a2914b2641b",
+      "name": "Call AcerttaPay Shared Debt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1360,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $json || {};\nlet text = result.whatsapp?.text || result.message || result.reply_text || '';\nif (!text) text = 'Central de Acertos processada no AcerttaPay, mas a resposta veio tímida. Tenta de novo em instantes.';\nreturn [{ json: { ...result, outbound_text: text } }];"
+      },
+      "id": "116eac85-342a-4b2d-afcf-b48ca03a5824",
+      "name": "Style Shared Debt Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1620,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.outbound_text || $json.whatsapp?.text || $json.message || 'Central de Acertos processada no AcerttaPay.' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "7b4fffb1-5fe1-4779-bfee-732406d42a83",
+      "name": "Send Shared Debt Result",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1880,
+        220
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "06c3ef02-dad0-49aa-9c72-152c66684cf8",
+              "leftValue": "={{ $json.conversation?.state === 'awaiting_shared_debt_action_confirmation' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0b4fa10b-ee5b-4aef-8a4e-02a7cdb41bcc",
+      "name": "Has Pending Shared Debt Conversation?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const phone = $('Normalize Evolution Payload').first().json.phone;\nconst source = {\n  channel: 'whatsapp',\n  instance: $('Normalize Evolution Payload').first().json.instance,\n  message_id: $('Normalize Evolution Payload').first().json.message_id,\n  raw_text: $('Normalize Evolution Payload').first().json.message_text\n};\nreturn [{ json: {\n  endpoint: '/api/automation/v1/shared-debts/conversations/reply',\n  idempotency_key: `whatsapp-shared-debt-reply:${$('Normalize Evolution Payload').first().json.instance}:${$('Normalize Evolution Payload').first().json.message_id}`,\n  body: { phone, source, reply: { raw_text: $('Normalize Evolution Payload').first().json.message_text } }\n} }];"
+      },
+      "id": "51c52a78-472a-4c99-b454-d2709ab61da7",
+      "name": "Prepare Shared Debt Conversation Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '') + $json.endpoint }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $json.idempotency_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "9cf459b6-9353-4b6a-acbc-aff2a070f8cf",
+      "name": "Call Shared Debt Conversation Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        500,
+        40
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WA Incoming": {
+      "main": [
+        [
+          {
+            "node": "Normalize Evolution Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EntradaWhatsapp": {
+      "main": [
+        [
+          {
+            "node": "Normalize Evolution Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Evolution Payload": {
+      "main": [
+        [
+          {
+            "node": "Is Valid User Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid User Message?": {
+      "main": [
+        [
+          {
+            "node": "Resolve AcerttaPay User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Can Reply Unsupported?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Can Reply Unsupported?": {
+      "main": [
+        [
+          {
+            "node": "Send Unsupported Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignore Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve AcerttaPay User": {
+      "main": [
+        [
+          {
+            "node": "Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorized?": {
+      "main": [
+        [
+          {
+            "node": "Has Pending Shared Debt Conversation?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Authorization Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Shared Debts Router": {
+      "main": [
+        [
+          {
+            "node": "Parse Shared Debt JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model - Shared Debts": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Shared Debts Router",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Shared Debt Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Shared Debts Router",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think Tool - Shared Debts": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Shared Debts Router",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Shared Debt JSON": {
+      "main": [
+        [
+          {
+            "node": "Should Call Shared Debt API?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Call Shared Debt API?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Shared Debt Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send AI Shared Debt Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Shared Debt Request": {
+      "main": [
+        [
+          {
+            "node": "Call AcerttaPay Shared Debt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call AcerttaPay Shared Debt": {
+      "main": [
+        [
+          {
+            "node": "Style Shared Debt Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Style Shared Debt Response": {
+      "main": [
+        [
+          {
+            "node": "Send Shared Debt Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Pending Shared Debt Conversation?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Shared Debt Conversation Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Shared Debts Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Shared Debt Conversation Reply": {
+      "main": [
+        [
+          {
+            "node": "Call Shared Debt Conversation Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Shared Debt Conversation Reply": {
+      "main": [
+        [
+          {
+            "node": "Style Shared Debt Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "858dc9bf-78aa-4f3c-9703-f82ffc9c76f1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    {
+      "name": "ACERTTAPAY",
+      "id": "pQ0ytyDUaBKZDloP",
+      "updatedAt": "2026-06-08T17:04:41.481Z",
+      "createdAt": "2026-06-08T17:04:41.481Z"
+    }
+  ],
+  "id": ""
+}

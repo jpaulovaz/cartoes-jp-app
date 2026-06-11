@@ -387,3 +387,129 @@ Concluir lembrete #3
 Adiar lembrete #3 por 1 hora
 Cancelar lembrete #3
 ```
+
+---
+
+# AcerttaPay - Workflow N8N WhatsApp Central de Acertos
+
+## Fluxo 4.1 - Central de Acertos
+
+Identificador do fluxo:
+
+```txt
+4.1 - ACERTTAPAY_CENTRAL_DE_ACERTOS
+```
+
+Este workflow pertence à família **4.x - Central de Acertos**. Ele permite consultar pendências, listar rascunhos, preparar envio de rascunhos, aceitar/recusar acertos, contestar recusas, marcar pagamento, confirmar recebimento e preparar Pix mensal pelo WhatsApp.
+
+Exemplos:
+
+```txt
+Quem me deve esse mês?
+O que eu devo para Ana?
+Listar rascunhos
+Enviar rascunho #12
+Aceitar cobrança #8
+Recusar #8 porque já paguei por fora
+Marcar acerto #8 como pago
+Confirmar recebimento #8
+Gerar Pix do acerto com Bruno
+```
+
+Webhook de teste:
+
+```txt
+acerttapay-wa-shared-debts
+```
+
+Endpoints usados:
+
+```txt
+POST /api/automation/v1/shared-debts/summary
+POST /api/automation/v1/shared-debts/drafts
+POST /api/automation/v1/shared-debts/requests
+POST /api/automation/v1/shared-debts/drafts/:queueId/prepare-send
+POST /api/automation/v1/shared-debts/drafts/:queueId/confirm-send
+POST /api/automation/v1/shared-debts/requests/:id/respond
+POST /api/automation/v1/shared-debts/requests/:id/mark-paid
+POST /api/automation/v1/shared-debts/requests/:id/confirm-received
+POST /api/automation/v1/shared-debts/settlements/:id/pix/prepare
+POST /api/automation/v1/shared-debts/settlements/:id/pix/create
+POST /api/automation/v1/shared-debts/conversations/reply
+```
+
+Memória do fluxo:
+
+```txt
+acerttapay-wa-shared-debts:<telefone>
+```
+
+A memória é apenas conversacional. Confirmações sensíveis ficam persistidas no AcerttaPay como estado de conversa.
+
+Regras importantes:
+
+- Enviar rascunho exige confirmação explícita.
+- Aceitar, recusar, contestar, marcar pagamento e confirmar recebimento exigem confirmação explícita.
+- Recusa e contestação precisam de nota/motivo.
+- Pix mensal só é gerado quando há carteira mensal aberta e Pix válido no perfil de quem vai receber.
+- Nenhuma cobrança é enviada automaticamente sem confirmação do usuário.
+
+---
+
+# AcerttaPay - Workflow N8N WhatsApp Finanças Mensais
+
+Identificador do fluxo: `5.1 - ACERTTAPAY_FINANCAS_MENSAIS`
+
+Este é o primeiro fluxo da família **5.x - Finanças Mensais**. Ele cuida de entradas e saídas fora do cartão, como aluguel, salário, internet, conta de luz, recebimentos e despesas mensais que o usuário controla no detalhamento do mês.
+
+## O que o fluxo 5.1 faz
+
+```txt
+Lançar aluguel de R$ 2.500 para junho
+Adicionar salário de R$ 5.000 este mês
+Conta de luz R$ 180 vencendo dia 12
+Quais contas tenho esse mês?
+Marcar internet como paga
+Voltar internet para aberta
+Corrigir aluguel para R$ 2.600
+Apagar conta de luz
+```
+
+## Webhook de teste do fluxo 5.1
+
+```txt
+acerttapay-wa-monthly-finances
+```
+
+O workflow também possui `EntradaWhatsapp`, permitindo que um fluxo orquestrador principal chame esta família por `Execute Workflow` no futuro.
+
+## Endpoints usados
+
+```txt
+POST /api/automation/v1/monthly-finances
+POST /api/automation/v1/monthly-finances/search
+POST /api/automation/v1/monthly-finances/:id/mark-paid
+POST /api/automation/v1/monthly-finances/:id/mark-unpaid
+POST /api/automation/v1/monthly-finances/:id/update
+POST /api/automation/v1/monthly-finances/:id/delete
+POST /api/automation/v1/monthly-finances/conversations/reply
+```
+
+## Regras importantes
+
+- O N8N interpreta intenção e conversa; o AcerttaPay valida mês, valor, tipo, status e telefone autorizado.
+- Lançamentos fixos, recorrentes ou sensíveis pedem confirmação antes de salvar.
+- Edição e exclusão pedem confirmação explícita.
+- Alterações usam `Idempotency-Key`.
+- Se o mês estiver fechado, o backend bloqueia.
+- Compra no cartão não entra neste fluxo; deve ir para `1.1 - ACERTTAPAY_COMPRA_ASSISTIDA_CONCIERGE`.
+
+## Memória
+
+O workflow usa memória curta própria:
+
+```txt
+acerttapay-wa-monthly-finances:<telefone>
+```
+
+A memória serve para contexto conversacional. Confirmações de escrita ficam persistidas no AcerttaPay em `automation_conversation_states`.

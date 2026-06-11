@@ -408,3 +408,165 @@ NEEDS_REMINDER_SELECTION
 - Lembrete disparado por WhatsApp continua aberto até o usuário concluir, cancelar ou adiar.
 - O workflow `3.2 - ACERTTAPAY_LEMBRETES_DISPAROS` é responsável pelo disparo agendado.
 - O disparo via WhatsApp cria também uma notificação local simples no AcerttaPay.
+
+---
+
+## Fluxo 4.1 - Central de Acertos
+
+```txt
+4.1 - ACERTTAPAY_CENTRAL_DE_ACERTOS.json
+```
+
+Responsabilidades:
+
+- consultar pendências da Central de Acertos;
+- listar cobranças recebidas e enviadas;
+- listar rascunhos da caixa de saída;
+- preparar e confirmar envio de rascunhos;
+- aceitar ou recusar cobranças recebidas;
+- contestar recusas quando o usuário é o remetente;
+- marcar pagamento como feito quando o usuário é devedor;
+- confirmar recebimento quando o usuário é credor;
+- preparar e gerar Pix mensal para acertos de cartão.
+
+### Intents do fluxo 4.1
+
+```txt
+greeting
+help
+shared_debt_summary
+list_incoming_debts
+list_outgoing_debts
+list_draft_queues
+send_draft_queue
+accept_debt
+reject_debt
+contest_debt
+mark_as_paid
+confirm_received
+generate_pix
+out_of_scope
+```
+
+### Endpoints da Etapa 5
+
+```txt
+POST /api/automation/v1/shared-debts/summary
+POST /api/automation/v1/shared-debts/drafts
+POST /api/automation/v1/shared-debts/requests
+POST /api/automation/v1/shared-debts/drafts/:queueId/prepare-send
+POST /api/automation/v1/shared-debts/drafts/:queueId/confirm-send
+POST /api/automation/v1/shared-debts/requests/:id/respond
+POST /api/automation/v1/shared-debts/requests/:id/mark-paid
+POST /api/automation/v1/shared-debts/requests/:id/confirm-received
+POST /api/automation/v1/shared-debts/settlements/:id/pix/prepare
+POST /api/automation/v1/shared-debts/settlements/:id/pix/create
+POST /api/automation/v1/shared-debts/conversations/reply
+```
+
+### Códigos de resposta da Central de Acertos
+
+```txt
+SHARED_DEBT_SUMMARY
+SHARED_DEBT_REQUESTS
+DRAFT_QUEUES
+NEEDS_DRAFT_SEND_CONFIRMATION
+DRAFT_QUEUE_SENT
+NEEDS_SHARED_DEBT_CONFIRMATION
+SHARED_DEBT_REQUEST_UPDATED
+NEEDS_PAYMENT_MARK_CONFIRMATION
+PAYMENT_MARKED
+NEEDS_RECEIPT_CONFIRMATION
+PAYMENT_RECEIVED_CONFIRMED
+NEEDS_PIX_CONFIRMATION
+PIX_CREATED
+SHARED_DEBT_ACTION_CANCELLED
+REQUEST_NOT_FOUND
+DRAFT_QUEUE_NOT_FOUND
+SETTLEMENT_NOT_FOUND
+PIX_NOT_CONFIGURED
+PIX_INVALID
+IDEMPOTENCY_KEY_REQUIRED
+```
+
+### Regras da família 4.x
+
+- A IA interpreta intenção e filtros, mas o AcerttaPay valida o lado correto da relação: quem deve, quem enviou e quem pode confirmar.
+- Toda escrita exige confirmação explícita e `Idempotency-Key`.
+- Rascunhos continuam em rascunho até o usuário responder `enviar`.
+- Recusa e contestação exigem nota/motivo.
+- Pagamento marcado pelo devedor não encerra sozinho: quem recebeu precisa confirmar.
+- Pix mensal usa a chave Pix do perfil `self` de quem vai receber.
+- Se a pessoa, rascunho ou acerto for ambíguo, o backend pede o ID em vez de adivinhar.
+
+---
+
+## Fluxo 5.1 - Finanças Mensais
+
+```txt
+5.1 - ACERTTAPAY_FINANCAS_MENSAIS.json
+```
+
+Responsabilidades:
+
+- lançar entradas e saídas mensais fora do cartão;
+- listar finanças mensais por período, tipo e status;
+- marcar saídas como pagas ou abertas;
+- preparar correções e exclusões com confirmação explícita;
+- bloquear alterações em mês fechado;
+- diferenciar compra de cartão de conta mensal.
+
+### Intents do fluxo 5.1
+
+```txt
+greeting
+help
+create_monthly_finance
+list_monthly_finances
+mark_finance_paid
+mark_finance_unpaid
+update_monthly_finance
+delete_monthly_finance
+out_of_scope
+```
+
+### Endpoints da Etapa 6
+
+```txt
+POST /api/automation/v1/monthly-finances
+POST /api/automation/v1/monthly-finances/search
+POST /api/automation/v1/monthly-finances/:id/mark-paid
+POST /api/automation/v1/monthly-finances/:id/mark-unpaid
+POST /api/automation/v1/monthly-finances/:id/update
+POST /api/automation/v1/monthly-finances/:id/delete
+POST /api/automation/v1/monthly-finances/conversations/reply
+```
+
+### Códigos de resposta de finanças mensais
+
+```txt
+MONTHLY_FINANCE_CREATED
+MONTHLY_FINANCES_LIST
+MONTHLY_FINANCE_MARKED_PAID
+MONTHLY_FINANCE_MARKED_UNPAID
+MONTHLY_FINANCE_UPDATED
+MONTHLY_FINANCE_DELETED
+NEEDS_MONTHLY_FINANCE_CONFIRMATION
+MONTHLY_FINANCE_ACTION_CANCELLED
+MONTHLY_FINANCE_NOT_FOUND
+NEEDS_FINANCE_CLARIFICATION
+MONTH_CLOSED
+MISSING_UPDATE_PATCH
+MONTHLY_FINANCE_VALIDATION_ERROR
+MONTHLY_FINANCE_INTERNAL_ERROR
+```
+
+### Regras da família 5.x
+
+- Finanças mensais são lançamentos fora do cartão.
+- Compras de cartão devem continuar no fluxo 1.x.
+- Se o mês estiver fechado, qualquer escrita deve ser bloqueada.
+- Criações fixas/recorrentes, edições e exclusões pedem confirmação.
+- `Idempotency-Key` é obrigatório para escritas confirmadas ou diretas.
+- O usuário pode referenciar itens por código, como `#3`, ou por nome, como `internet`.
+- Quando houver mais de um item parecido, o backend deve pedir esclarecimento e listar opções.

@@ -1158,7 +1158,22 @@ function createAutomationApiService(deps = {}) {
       })();
 
       const afterRows = repository.getPurchaseScopeRows(userId, plan.rootId);
-      const queueSummary = purchaseService.queueSharedDebtDraftsForRows(userId, afterRows);
+      let queueSummary = { queueCount: 0, itemCount: 0, totalCents: 0, shareableCount: 0, createCount: 0 };
+      try {
+        queueSummary = purchaseService.queueSharedDebtDraftsForRows(userId, afterRows) || queueSummary;
+      } catch (queueError) {
+        // A compra ja foi corrigida. Falha ao recriar rascunhos nao deve transformar a correcao em erro para o usuario.
+        repository.insertAutomationMutationEvent({
+          userId,
+          phoneE164,
+          operation: 'purchase.edit.queue_warning',
+          entityType: 'transaction',
+          entityId: plan.rootId,
+          before: { warning: 'queue_shared_debt_drafts_failed' },
+          after: { message: queueError?.message || String(queueError) },
+          sourceMessageId: source.message_id || source.messageId || null
+        });
+      }
       const after = buildPurchaseSnapshot(userId, afterRows);
       repository.insertAutomationMutationEvent({
         userId,
@@ -1563,8 +1578,42 @@ function createAutomationApiService(deps = {}) {
       channel: payload.source?.channel || payload.channel || 'whatsapp',
       instance: payload.source?.instance || whatsapp.instance || payload.instance || '',
       message_id: payload.source?.message_id || whatsapp.message_id || payload.message_id || '',
-      push_name: payload.push_name || whatsapp.push_name || ''
+      push_name: payload.push_name || whatsapp.push_name || '',
+      raw_text: payload.source?.raw_text || payload.source?.rawText || whatsapp.message_text || payload.message_text || payload.text || ''
     };
+  }
+
+  function normalizeRouterText(value) {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  }
+
+  function looksLikeRouterNewTopic(rawText) {
+    const text = normalizeRouterText(rawText);
+    if (!text) return false;
+    const queryLike = /(quanto|qto|gastei|gasto|gastos|ultimas compras|ultimos lancamentos|listar.*compras|lista.*compras|compras?.*(dezembro|janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|mes|ano)|fatura|resumo|quem me deve|o que devo)/i.test(text);
+    const newActionLike = /(nova compra|comprei|passei no cartao|corrigir uma compra|corrige uma compra|apagar uma compra|dividir uma compra|dividir compras|lancar|lanca|lança|adicionar|cadastrar|criar lembrete|me lembra|enviar.*fatura|mandar.*fatura|pdf|importar.*fatura)/i.test(text);
+    return queryLike || newActionLike;
+  }
+
+  function looksLikeRouterContinuation(state, rawText) {
+    const text = normalizeRouterText(rawText);
+    if (!state || !text) return true;
+    if (/^(sim|s|ok|confirmar|confirma|pode|pode sim|aplica|aplicar|manda|enviar|cancelar|cancela|nao|não|n)$/.test(text)) return true;
+    if (/awaiting_card/.test(state)) return /(cartao|cartao|nubank|itau|itaucard|visa|master|elo|\b\d+\b|sim|nao|não|trocar|outro)/i.test(text);
+    if (/awaiting_split|awaiting_exact/.test(state)) return /(eu|apenas eu|partes iguais|igual|valores|definidos|ana|bruno|,|\b\d+[,.]?\d*\b)/i.test(text);
+    if (/awaiting_pdf_import_details/.test(state)) return /(cartao|nubank|itau|mes|ano|janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|\b20\d{2}\b)/i.test(text);
+    if (/awaiting_purchase_(edit|delete|create)_confirmation/.test(state)) return /^(sim|s|ok|confirmar|confirma|pode|aplica|apagar|excluir|deletar|cancelar|cancela|nao|não|n)$/.test(text);
+    return /^(sim|s|ok|confirmar|cancelar|nao|não|n)$/.test(text);
+  }
+
+  function shouldInterruptRouterConversation(conversation, rawText) {
+    const state = String(conversation?.state || '').trim();
+    if (!state) return false;
+    return looksLikeRouterNewTopic(rawText) && !looksLikeRouterContinuation(state, rawText);
   }
 
   function buildRouterContext(payload = {}, meta = {}) {
@@ -1599,7 +1648,13 @@ function createAutomationApiService(deps = {}) {
         }, 200);
       }
       checkRateLimit(resolved.normalized.e164);
-      const conversation = repository.getOpenConversationForUser(resolved.user.id, resolved.normalized.e164);
+      let conversation = repository.getOpenConversationForUser(resolved.user.id, resolved.normalized.e164);
+      let interruptedConversation = null;
+      if (conversation && shouldInterruptRouterConversation(conversation, source.raw_text)) {
+        interruptedConversation = publicConversation(conversation, repository);
+        repository.resolveConversationState(conversation.id);
+        conversation = null;
+      }
       const capabilities = buildRouterCapabilitiesForUser(resolved.user.id);
       return makeResult({
         ...base,
@@ -1609,6 +1664,7 @@ function createAutomationApiService(deps = {}) {
           email: resolved.user.email
         },
         conversation: publicConversation(conversation, repository),
+        interrupted_conversation: interruptedConversation,
         capabilities,
         menu: { text: buildRouterMenuText(capabilities) },
         router: { workflow_key: '0.0', family_key: '0.x' }
@@ -1988,6 +2044,15 @@ function createAutomationApiService(deps = {}) {
       const reply = payload.reply || {};
       const rawText = payload.source?.raw_text || payload.source?.rawText || reply.text || payload.text || '';
       const state = String(conversation.state || '').trim();
+
+      if (reply.abandon === true || reply.intent === 'new_topic') {
+        repository.resolveConversationState(conversation.id);
+        return makeResult({
+          ok: true,
+          code: 'CONVERSATION_INTERRUPTED',
+          whatsapp: { text: 'Parei aquela ação pendente para não misturar assuntos. Me manda o novo pedido do jeito que você quer seguir.' }
+        });
+      }
 
       if (state === 'awaiting_purchase_create_confirmation') {
         if (isNegativeText(rawText) || reply.confirm === false || reply.intent === 'cancel_purchase_create') {

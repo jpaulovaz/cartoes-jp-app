@@ -50,7 +50,7 @@
           "conditions": [
             {
               "id": "005a9264-ee81-41ed-ba06-714840584d4f",
-              "leftValue": "={ $json.is_valid_user_message === true }",
+              "leftValue": "={{ $json.is_valid_user_message === true }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -84,7 +84,7 @@
           "conditions": [
             {
               "id": "c1f089ef-c2e8-4339-a46f-47dd923e128a",
-              "leftValue": "={ $json.should_reply_unsupported === true }",
+              "leftValue": "={{ $json.should_reply_unsupported === true }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -144,7 +144,7 @@
           "conditions": [
             {
               "id": "11898201-58aa-435b-bbf2-fb4b850539f5",
-              "leftValue": "={ $json.authorized === true }",
+              "leftValue": "={{ $json.authorized === true }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -191,7 +191,7 @@
           "conditions": [
             {
               "id": "e87c4be6-2857-4ca8-8ac5-ee3603dab264",
-              "leftValue": "={ $json.conversation?.state === 'awaiting_pdf_import_details' }",
+              "leftValue": "={{ $json.conversation?.state === 'awaiting_pdf_import_details' }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -225,7 +225,7 @@
           "conditions": [
             {
               "id": "c12235ff-47d1-4f1f-821f-042c269b6baf",
-              "leftValue": "={ $('Normalize Evolution Payload').first().json.is_pdf === true }",
+              "leftValue": "={{ $('Normalize Evolution Payload').first().json.is_pdf === true }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -517,7 +517,7 @@
           "conditions": [
             {
               "id": "e170d627-efb1-458c-b9e1-efc9c47ad06b",
-              "leftValue": "={ !!$json.file_base64 }",
+              "leftValue": "={{ !!$json.file_base64 }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -684,7 +684,7 @@
           "conditions": [
             {
               "id": "512b09f3-8e95-4086-879a-4144a08420d5",
-              "leftValue": "={ $json.needs_backend === true }",
+              "leftValue": "={{ $json.needs_backend === true }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",

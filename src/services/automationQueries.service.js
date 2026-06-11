@@ -138,6 +138,52 @@ function plural(count, singular, pluralText) {
   return Number(count || 0) === 1 ? singular : pluralText;
 }
 
+function formatDisplayTitle(value, options = {}) {
+  const raw = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return '';
+  const lowerWords = new Set(['a', 'as', 'o', 'os', 'de', 'da', 'das', 'do', 'dos', 'e']);
+  const preserveWords = new Set(['pix', 'ted', 'doc', 'iof', 'ipva', 'iptu', 'tim', 'claro', 'vivo', 'nubank', 'ifood', 'uber', '99', 'c6', 'bb']);
+  return raw.split(/(\s+)/).map((part, index) => {
+    if (/^\s+$/.test(part)) return part;
+    return part.split('-').map((piece, pieceIndex) => {
+      if (!piece) return piece;
+      const normalized = normalizeText(piece);
+      if (preserveWords.has(normalized)) {
+        const canonical = {
+          pix: 'Pix',
+          ted: 'TED',
+          doc: 'DOC',
+          iof: 'IOF',
+          ipva: 'IPVA',
+          iptu: 'IPTU',
+          tim: 'TIM',
+          claro: 'Claro',
+          vivo: 'Vivo',
+          nubank: 'Nubank',
+          ifood: 'iFood',
+          uber: 'Uber',
+          '99': '99',
+          c6: 'C6',
+          bb: 'BB'
+        };
+        return canonical[normalized] || piece;
+      }
+      if ((index > 0 || pieceIndex > 0) && lowerWords.has(normalized)) return normalized;
+      return piece.toLocaleLowerCase('pt-BR').replace(/^([\p{L}\p{N}])/u, (match) => match.toLocaleUpperCase('pt-BR'));
+    }).join('-');
+  }).join('');
+}
+
+function formatCardName(value) {
+  return formatDisplayTitle(value || 'Cartão');
+}
+
+function formatMerchantName(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 'Compra';
+  return formatDisplayTitle(raw);
+}
+
 function sumBy(rows = [], field) {
   return rows.reduce((total, row) => total + Number(row[field] || 0), 0);
 }
@@ -242,7 +288,7 @@ function createAutomationQueriesService(deps = {}) {
       : null;
     return {
       id: Number(row.card_id || row.id || 0),
-      name: row.card_name || row.name || 'Cartão',
+      name: formatCardName(row.card_name || row.name || 'Cartão'),
       brand: row.brand || null,
       total_cents: Number(row.total_cents || 0),
       paid_cents: Number(row.paid_cents || 0),
@@ -284,7 +330,7 @@ function createAutomationQueriesService(deps = {}) {
     const personalCommittedTotal = Math.max(0, Number(personalSummary?.personal_committed_cents ?? (selfCardTotal + expenseTotal + sharedReceivedTotal)));
     const forecastBalance = Number(personalSummary?.forecast_balance_cents ?? (incomeTotal - personalCommittedTotal));
     const cardLines = cards.length
-      ? truncateRows(cards, 5).map((card) => `• ${card.name}: *${formatBRLFromCents(card.total_cents)}*${card.due_date ? ` · vence ${formatDateBR(card.due_date)}` : ''}`)
+      ? truncateRows(cards, 8).map((card) => `• ${formatCardName(card.name)}: *${formatBRLFromCents(card.total_cents)}*${card.due_date ? ` · vence ${formatDateBR(card.due_date)}` : ''}`)
       : ['• Nenhuma compra de cartão nesse período.'];
     const incomeLines = incomeFinances.length
       ? truncateRows(incomeFinances, 5).map((row) => `• #${row.id} — ${row.description}: *${formatBRLFromCents(row.amount_cents)}*${row.day_of_month ? ` · dia ${String(row.day_of_month).padStart(2, '0')}` : ''}`)
@@ -293,17 +339,15 @@ function createAutomationQueriesService(deps = {}) {
       ? truncateRows(expenseFinances, 6).map((row) => `• #${row.id} — ${row.description}: *${formatBRLFromCents(row.amount_cents)}*${row.open_cents ? ` · aberto ${formatBRLFromCents(row.open_cents)}` : ' · pago'}`)
       : ['• Nenhuma despesa fora do cartão registrada.'];
     const personLines = people.length
-      ? truncateRows(people, 5).map((person) => `• ${person.name}: *${formatBRLFromCents(person.total_cents)}*`)
+      ? people.map((person) => `• ${formatDisplayTitle(person.name)}: *${formatBRLFromCents(person.total_cents)}*`)
       : ['• Sem participantes com valores nesse período.'];
     const purchaseLines = topPurchases.length
-      ? truncateRows(topPurchases, 5).map((purchase, index) => `${index + 1}. ${purchase.description} — *${formatBRLFromCents(purchase.amount_cents)}* no ${purchase.card_name}`)
+      ? truncateRows(topPurchases, 5).map((purchase, index) => `${index + 1}. ${formatMerchantName(purchase.description)} — *${formatBRLFromCents(purchase.amount_cents)}* no ${formatCardName(purchase.card_name)}`)
       : ['• Sem compras para destacar.'];
     const outgoing = Number(debt?.outgoing_open_cents || 0);
     const incoming = Number(debt?.incoming_open_cents || 0);
     const drafts = Number(debt?.draft_cents || 0);
-    const personalIntro = personalSummary?.self_name
-      ? `Sua parte em cartões considera o participante *${personalSummary.self_name}* em /detalhamento.`
-      : 'Sua parte em cartões considera o participante principal em /detalhamento.';
+    const personalIntro = 'Inclui apenas a sua parte nos cartões.';
     const sharedReceivedLine = sharedReceivedTotal > 0
       ? [`🤝 Compras compartilhadas aceitas: *${formatBRLFromCents(sharedReceivedTotal)}*`]
       : [];
@@ -323,11 +367,11 @@ function createAutomationQueriesService(deps = {}) {
       `⏳ Despesas mensais em aberto: *${formatBRLFromCents(openExpenseTotal)}*`,
       `_ ${personalIntro}_`,
       '',
-      '*Por cartão — fatura cheia*',
+      '*Por cartão — total das faturas*',
       ...cardLines,
-      `💳 Total das faturas: *${formatBRLFromCents(cardsTotal)}*`,
-      `✅ Pago nas faturas: *${formatBRLFromCents(cardsPaid)}*`,
-      `🧾 Faturas em aberto: *${formatBRLFromCents(cardsOpen)}*`,
+      `💳 Total dos cartões: *${formatBRLFromCents(cardsTotal)}*`,
+      `✅ Já pago nos cartões: *${formatBRLFromCents(cardsPaid)}*`,
+      `🧾 Ainda em aberto nos cartões: *${formatBRLFromCents(cardsOpen)}*`,
       '',
       '*Entradas do mês*',
       ...incomeLines,

@@ -128,6 +128,40 @@ function periodLabel(month, year) {
   return `${MONTH_NAMES[Number(month || 0)] || String(month).padStart(2, '0')}/${year}`;
 }
 
+
+function hasExplicitPurchasePeriod(input = {}) {
+  const source = input.query && typeof input.query === 'object'
+    ? { ...input, ...input.query }
+    : input;
+
+  if (source.date || source.day) return true;
+  if (source.month || source.due_month || source.mes || source.year || source.due_year || source.ano) return true;
+
+  const rawPeriod = String(source.period || source.when || '').trim().toLowerCase();
+  if (['last_month', 'previous_month', 'mes_passado', 'mês passado', 'next_month', 'proximo_mes', 'próximo mês', 'mes_que_vem', 'mês que vem'].includes(rawPeriod)) {
+    return true;
+  }
+
+  const text = normalizeText([
+    source.raw_text,
+    source.text,
+    source.message_text,
+    source.source?.raw_text,
+    source.whatsapp?.message_text,
+    source.query_text
+  ].filter(Boolean).join(' '));
+  if (!text) return false;
+
+  const monthNames = Object.keys(MONTH_ALIASES).join('|');
+  if (new RegExp(`\\b(${monthNames})\\b`, 'i').test(text)) return true;
+  if (/\b(20\d{2}|21\d{2})\b/.test(text)) return true;
+  if (/\b(este|esse|deste|desse|atual|passado|proximo|prox|seguinte)\s+mes\b/.test(text)) return true;
+  if (/\bmes\s+(atual|passado|que vem|seguinte)\b/.test(text)) return true;
+  if (/\b(compras?|gastos?|lancamentos?)\s+(do|de|da|para|em)\s+mes\b/.test(text)) return true;
+
+  return false;
+}
+
 function formatDateBR(value) {
   const raw = String(value || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return '';
@@ -556,6 +590,7 @@ function createAutomationQueriesService(deps = {}) {
       const query = payload.query || payload;
       const period = resolvePeriod({ ...payload, ...query });
       const date = parseIsoDate(query.date || query.day || '');
+      const hasPeriodFilter = !date && hasExplicitPurchasePeriod({ ...payload, ...query });
       let cardId = 0;
       const hint = query.card_hint || query.card || query.card_name || '';
       if (hint) {
@@ -567,17 +602,19 @@ function createAutomationQueriesService(deps = {}) {
       const rows = repository.getRecentPurchases(user.id, {
         limit: query.limit || 10,
         date,
-        month: date ? 0 : period.month,
-        year: date ? 0 : period.year,
+        month: hasPeriodFilter ? period.month : 0,
+        year: hasPeriodFilter ? period.year : 0,
         cardId
       });
       const title = date
         ? `🧾 *Compras de ${formatDateBR(date)}*${hint ? ` no ${hint}` : ''}`
-        : `🧾 *Compras de ${periodLabel(period.month, period.year)}*${hint ? ` no ${hint}` : ''}`;
+        : hasPeriodFilter
+          ? `🧾 *Compras de ${periodLabel(period.month, period.year)}*${hint ? ` no ${hint}` : ''}`
+          : `🧾 *Últimas compras*${hint ? ` no ${hint}` : ''}`;
       return makeResult({
         ok: true,
         code: date ? 'PURCHASES_BY_DAY' : 'RECENT_PURCHASES',
-        data: { period, date, purchases: rows },
+        data: { period: hasPeriodFilter ? period : null, date, purchases: rows, chronological: !date && !hasPeriodFilter },
         whatsapp: { text: buildPurchasesText({ rows, title }) }
       });
     });
